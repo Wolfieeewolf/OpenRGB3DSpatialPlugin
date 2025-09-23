@@ -22,11 +22,13 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QQuickWidget>
+#include <QQmlContext>
 
 #include "ResourceManagerInterface.h"
-#include "SpatialGrid3D.h"
 #include "SpatialEffects.h"
-#include "Grid3DWidget.h"
+#include "Viewport3DBridge.h"
+#include "LEDPosition3D.h"
 
 namespace Ui
 {
@@ -45,10 +47,6 @@ public slots:
     void UpdateDeviceList();
 
 private slots:
-    void on_grid_width_changed(int value);
-    void on_grid_height_changed(int value);
-    void on_grid_depth_changed(int value);
-
     void on_effect_type_changed(int index);
     void on_effect_speed_changed(int value);
     void on_effect_brightness_changed(int value);
@@ -58,6 +56,8 @@ private slots:
     void on_color_start_clicked();
     void on_color_end_clicked();
 
+    void on_gizmo_mode_changed(int index);
+
 private:
     void SetupUI();
     void LoadDevices();
@@ -65,13 +65,11 @@ private:
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
 
-    SpatialGrid3D*              grid;
     SpatialEffects*             effects;
-    Grid3DWidget*               grid_widget;
+    Viewport3DBridge*           viewport_bridge;
+    QQuickWidget*               viewport_widget;
 
-    QSpinBox*                   grid_width_spin;
-    QSpinBox*                   grid_height_spin;
-    QSpinBox*                   grid_depth_spin;
+    std::vector<ControllerTransform*> controller_transforms;
 
     QComboBox*                  effect_type_combo;
     QSlider*                    effect_speed_slider;

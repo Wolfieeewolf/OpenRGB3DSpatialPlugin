@@ -10,14 +10,15 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialTab.h"
+#include "ControllerLayout3D.h"
 #include <QColorDialog>
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
     resource_manager(rm)
 {
-    grid = new SpatialGrid3D(10, 10, 10);
-    effects = new SpatialEffects(grid);
+    effects = new SpatialEffects();
+    viewport_bridge = nullptr;
 
     current_color_start = 0xFF0000;
     current_color_end = 0x0000FF;
@@ -34,47 +35,50 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
     }
 
     delete effects;
-    delete grid;
+
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        delete controller_transforms[i];
+    }
+    controller_transforms.clear();
+
+    if(viewport_bridge)
+    {
+        delete viewport_bridge;
+    }
 }
 
 void OpenRGB3DSpatialTab::SetupUI()
 {
     QVBoxLayout* main_layout = new QVBoxLayout(this);
 
-    QGroupBox* grid_settings_group = new QGroupBox("Grid Settings");
-    QHBoxLayout* grid_settings_layout = new QHBoxLayout();
+    viewport_widget = new QQuickWidget();
+    viewport_widget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    viewport_widget->setSource(QUrl("qrc:/ui/Viewport3D.qml"));
+    viewport_widget->setMinimumHeight(500);
 
-    grid_settings_layout->addWidget(new QLabel("Width:"));
-    grid_width_spin = new QSpinBox();
-    grid_width_spin->setMinimum(1);
-    grid_width_spin->setMaximum(50);
-    grid_width_spin->setValue(10);
-    connect(grid_width_spin, SIGNAL(valueChanged(int)), this, SLOT(on_grid_width_changed(int)));
-    grid_settings_layout->addWidget(grid_width_spin);
+    QQuickItem* root_item = viewport_widget->rootObject();
+    if(root_item)
+    {
+        viewport_bridge = new Viewport3DBridge(root_item, this);
+    }
 
-    grid_settings_layout->addWidget(new QLabel("Height:"));
-    grid_height_spin = new QSpinBox();
-    grid_height_spin->setMinimum(1);
-    grid_height_spin->setMaximum(50);
-    grid_height_spin->setValue(10);
-    connect(grid_height_spin, SIGNAL(valueChanged(int)), this, SLOT(on_grid_height_changed(int)));
-    grid_settings_layout->addWidget(grid_height_spin);
+    main_layout->addWidget(viewport_widget);
 
-    grid_settings_layout->addWidget(new QLabel("Depth:"));
-    grid_depth_spin = new QSpinBox();
-    grid_depth_spin->setMinimum(1);
-    grid_depth_spin->setMaximum(50);
-    grid_depth_spin->setValue(10);
-    connect(grid_depth_spin, SIGNAL(valueChanged(int)), this, SLOT(on_grid_depth_changed(int)));
-    grid_settings_layout->addWidget(grid_depth_spin);
+    QGroupBox* gizmo_group = new QGroupBox("Transform Tools");
+    QHBoxLayout* gizmo_layout = new QHBoxLayout();
 
-    grid_settings_layout->addStretch();
-    grid_settings_group->setLayout(grid_settings_layout);
-    main_layout->addWidget(grid_settings_group);
+    QComboBox* gizmo_mode_combo = new QComboBox();
+    gizmo_mode_combo->addItem("Translate");
+    gizmo_mode_combo->addItem("Rotate");
+    gizmo_mode_combo->addItem("Scale");
+    connect(gizmo_mode_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_gizmo_mode_changed(int)));
+    gizmo_layout->addWidget(new QLabel("Gizmo Mode:"));
+    gizmo_layout->addWidget(gizmo_mode_combo);
+    gizmo_layout->addStretch();
 
-    grid_widget = new Grid3DWidget(grid);
-    grid_widget->setMinimumHeight(400);
-    main_layout->addWidget(grid_widget);
+    gizmo_group->setLayout(gizmo_layout);
+    main_layout->addWidget(gizmo_group);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -152,7 +156,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
 void OpenRGB3DSpatialTab::LoadDevices()
 {
-    if(!resource_manager)
+    if(!resource_manager || !viewport_bridge)
     {
         return;
     }
@@ -163,18 +167,19 @@ void OpenRGB3DSpatialTab::LoadDevices()
     {
         RGBController* controller = controllers[i];
 
-        GridPosition pos;
-        pos.x = i % 10;
-        pos.y = i / 10;
-        pos.z = 0;
+        ControllerTransform* ctrl_transform = new ControllerTransform();
+        ctrl_transform->controller = controller;
+        ctrl_transform->transform.position = {(float)(i * 15), 0.0f, 0.0f};
+        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+        ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+        ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
 
-        grid->AddDevice(controller, pos);
+        controller_transforms.push_back(ctrl_transform);
+
+        viewport_bridge->addController(controller);
     }
 
-    if(grid_widget)
-    {
-        grid_widget->update();
-    }
+    effects->SetControllerTransforms(&controller_transforms);
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
@@ -182,39 +187,13 @@ void OpenRGB3DSpatialTab::UpdateDeviceList()
     LoadDevices();
 }
 
-void OpenRGB3DSpatialTab::on_grid_width_changed(int value)
+void OpenRGB3DSpatialTab::on_gizmo_mode_changed(int index)
 {
-    unsigned int h, d;
-    grid->GetGridDimensions(nullptr, &h, &d);
-    grid->SetGridDimensions(value, h, d);
-
-    if(grid_widget)
+    if(viewport_widget && viewport_widget->rootObject())
     {
-        grid_widget->update();
-    }
-}
-
-void OpenRGB3DSpatialTab::on_grid_height_changed(int value)
-{
-    unsigned int w, d;
-    grid->GetGridDimensions(&w, nullptr, &d);
-    grid->SetGridDimensions(w, value, d);
-
-    if(grid_widget)
-    {
-        grid_widget->update();
-    }
-}
-
-void OpenRGB3DSpatialTab::on_grid_depth_changed(int value)
-{
-    unsigned int w, h;
-    grid->GetGridDimensions(&w, &h, nullptr);
-    grid->SetGridDimensions(w, h, value);
-
-    if(grid_widget)
-    {
-        grid_widget->update();
+        QMetaObject::invokeMethod(viewport_widget->rootObject(), "setProperty",
+                                 Q_ARG(QVariant, "gizmoMode"),
+                                 Q_ARG(QVariant, index));
     }
 }
 
@@ -253,7 +232,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     params.color_end = current_color_end;
     params.use_gradient = true;
     params.scale = 1.0f;
-    params.origin = {5, 5, 5};
+    params.origin = {0.0f, 0.0f, 0.0f};
 
     effects->StartEffect(params);
 

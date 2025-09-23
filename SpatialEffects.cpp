@@ -16,8 +16,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-SpatialEffects::SpatialEffects(SpatialGrid3D* g) : grid(g)
+SpatialEffects::SpatialEffects()
 {
+    controller_transforms = nullptr;
     running = false;
     time_counter = 0;
 
@@ -28,7 +29,13 @@ SpatialEffects::SpatialEffects(SpatialGrid3D* g) : grid(g)
     params.color_end = 0x0000FF;
     params.use_gradient = true;
     params.scale = 1.0f;
-    params.origin = {0, 0, 0};
+    params.origin = {0.0f, 0.0f, 0.0f};
+}
+
+void SpatialEffects::SetControllerTransforms(std::vector<ControllerTransform*>* transforms)
+{
+    QMutexLocker lock(&mutex);
+    controller_transforms = transforms;
 }
 
 SpatialEffects::~SpatialEffects()
@@ -82,7 +89,7 @@ void SpatialEffects::run()
 {
     while(running)
     {
-        UpdateDeviceColors();
+        UpdateLEDColors();
 
         time_counter++;
 
@@ -90,85 +97,88 @@ void SpatialEffects::run()
     }
 }
 
-void SpatialEffects::UpdateDeviceColors()
+void SpatialEffects::UpdateLEDColors()
 {
     QMutexLocker lock(&mutex);
 
-    std::vector<DeviceGridEntry*> devices = grid->GetAllDevices();
+    if(controller_transforms == nullptr)
+    {
+        return;
+    }
 
     float time_offset = (float)time_counter * (params.speed / 100.0f);
 
-    for(unsigned int i = 0; i < devices.size(); i++)
+    for(unsigned int i = 0; i < controller_transforms->size(); i++)
     {
-        if(!devices[i]->enabled)
+        ControllerTransform* ctrl_transform = (*controller_transforms)[i];
+        RGBController* controller = ctrl_transform->controller;
+
+        for(unsigned int j = 0; j < ctrl_transform->led_positions.size(); j++)
         {
-            continue;
-        }
+            LEDPosition3D& led_pos = ctrl_transform->led_positions[j];
 
-        RGBColor color = 0;
+            led_pos.world_position.x = led_pos.local_position.x + ctrl_transform->transform.position.x;
+            led_pos.world_position.y = led_pos.local_position.y + ctrl_transform->transform.position.y;
+            led_pos.world_position.z = led_pos.local_position.z + ctrl_transform->transform.position.z;
 
-        switch(params.type)
-        {
-            case SPATIAL_EFFECT_WAVE_X:
-            case SPATIAL_EFFECT_WAVE_Y:
-            case SPATIAL_EFFECT_WAVE_Z:
-                color = CalculateWaveColor(devices[i]->position, time_offset);
-                break;
+            RGBColor color = 0;
 
-            case SPATIAL_EFFECT_WAVE_RADIAL:
-                color = CalculateRadialWaveColor(devices[i]->position, time_offset);
-                break;
-
-            case SPATIAL_EFFECT_RAIN:
-                color = CalculateRainColor(devices[i]->position, time_offset);
-                break;
-
-            case SPATIAL_EFFECT_FIRE:
-                color = CalculateFireColor(devices[i]->position, time_offset);
-                break;
-
-            case SPATIAL_EFFECT_PLASMA:
-                color = CalculatePlasmaColor(devices[i]->position, time_offset);
-                break;
-
-            case SPATIAL_EFFECT_RIPPLE:
-                color = CalculateRippleColor(devices[i]->position, time_offset);
-                break;
-
-            case SPATIAL_EFFECT_SPIRAL:
-                color = CalculateSpiralColor(devices[i]->position, time_offset);
-                break;
-        }
-
-        RGBController* controller = devices[i]->controller;
-
-        for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
-        {
-            for(unsigned int led_idx = 0; led_idx < controller->zones[zone_idx].leds_count; led_idx++)
+            switch(params.type)
             {
-                controller->colors[controller->zones[zone_idx].start_idx + led_idx] = color;
+                case SPATIAL_EFFECT_WAVE_X:
+                case SPATIAL_EFFECT_WAVE_Y:
+                case SPATIAL_EFFECT_WAVE_Z:
+                    color = CalculateWaveColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_WAVE_RADIAL:
+                    color = CalculateRadialWaveColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_RAIN:
+                    color = CalculateRainColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_FIRE:
+                    color = CalculateFireColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_PLASMA:
+                    color = CalculatePlasmaColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_RIPPLE:
+                    color = CalculateRippleColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_SPIRAL:
+                    color = CalculateSpiralColor(led_pos.world_position, time_offset);
+                    break;
             }
+
+            unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
+            controller->colors[led_global_idx] = color;
         }
 
         controller->UpdateLEDs();
     }
 }
 
-RGBColor SpatialEffects::CalculateWaveColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateWaveColor(Vector3D pos, float time_offset)
 {
     float position_val = 0;
 
     if(params.type == SPATIAL_EFFECT_WAVE_X)
     {
-        position_val = (float)pos.x * params.scale;
+        position_val = pos.x * params.scale;
     }
     else if(params.type == SPATIAL_EFFECT_WAVE_Y)
     {
-        position_val = (float)pos.y * params.scale;
+        position_val = pos.y * params.scale;
     }
     else if(params.type == SPATIAL_EFFECT_WAVE_Z)
     {
-        position_val = (float)pos.z * params.scale;
+        position_val = pos.z * params.scale;
     }
 
     float wave = (sin((position_val + time_offset) / 10.0f) + 1.0f) / 2.0f;
@@ -183,7 +193,7 @@ RGBColor SpatialEffects::CalculateWaveColor(GridPosition pos, float time_offset)
     }
 }
 
-RGBColor SpatialEffects::CalculateRadialWaveColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateRadialWaveColor(Vector3D pos, float time_offset)
 {
     float dist = Distance3D(pos, params.origin);
 
@@ -199,19 +209,19 @@ RGBColor SpatialEffects::CalculateRadialWaveColor(GridPosition pos, float time_o
     }
 }
 
-RGBColor SpatialEffects::CalculateRainColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateRainColor(Vector3D pos, float time_offset)
 {
-    float y_pos = (float)pos.y + time_offset;
+    float y_pos = pos.y + time_offset;
     float intensity = fmod(y_pos * params.scale, 10.0f) / 10.0f;
 
     return LerpColor(0x000000, params.color_start, intensity);
 }
 
-RGBColor SpatialEffects::CalculateFireColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateFireColor(Vector3D pos, float time_offset)
 {
-    float base = sin((float)pos.x * 0.5f + time_offset * 0.1f) * 0.3f;
-    float flicker = sin(time_offset * 0.8f + (float)pos.x) * 0.2f;
-    float height_factor = 1.0f - ((float)pos.y / 10.0f);
+    float base = sin(pos.x * 0.5f + time_offset * 0.1f) * 0.3f;
+    float flicker = sin(time_offset * 0.8f + pos.x) * 0.2f;
+    float height_factor = 1.0f - (pos.y / 10.0f);
 
     float intensity = (base + flicker + height_factor) / 2.0f;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
@@ -222,18 +232,18 @@ RGBColor SpatialEffects::CalculateFireColor(GridPosition pos, float time_offset)
     return LerpColor(orange, yellow, intensity);
 }
 
-RGBColor SpatialEffects::CalculatePlasmaColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculatePlasmaColor(Vector3D pos, float time_offset)
 {
-    float v1 = sin(((float)pos.x + time_offset) * 0.1f);
-    float v2 = sin(((float)pos.y + time_offset) * 0.1f);
-    float v3 = sin(((float)pos.z + time_offset) * 0.1f);
+    float v1 = sin((pos.x + time_offset) * 0.1f);
+    float v2 = sin((pos.y + time_offset) * 0.1f);
+    float v3 = sin((pos.z + time_offset) * 0.1f);
 
     float value = (v1 + v2 + v3 + 3.0f) / 6.0f;
 
     return LerpColor(params.color_start, params.color_end, value);
 }
 
-RGBColor SpatialEffects::CalculateRippleColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateRippleColor(Vector3D pos, float time_offset)
 {
     float dist = Distance3D(pos, params.origin);
 
@@ -245,9 +255,9 @@ RGBColor SpatialEffects::CalculateRippleColor(GridPosition pos, float time_offse
     return LerpColor(params.color_start, params.color_end, intensity);
 }
 
-RGBColor SpatialEffects::CalculateSpiralColor(GridPosition pos, float time_offset)
+RGBColor SpatialEffects::CalculateSpiralColor(Vector3D pos, float time_offset)
 {
-    float angle = atan2((float)(pos.y - params.origin.y), (float)(pos.x - params.origin.x));
+    float angle = atan2(pos.y - params.origin.y, pos.x - params.origin.x);
     float dist = Distance3D(pos, params.origin);
 
     float spiral = angle + (dist * params.scale / 5.0f) - (time_offset / 10.0f);
@@ -280,11 +290,11 @@ RGBColor SpatialEffects::LerpColor(RGBColor a, RGBColor b, float t)
     return (r << 16) | (g << 8) | b_out;
 }
 
-float SpatialEffects::Distance3D(GridPosition a, GridPosition b)
+float SpatialEffects::Distance3D(Vector3D a, Vector3D b)
 {
-    float dx = (float)(a.x - b.x);
-    float dy = (float)(a.y - b.y);
-    float dz = (float)(a.z - b.z);
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
 
     return sqrt(dx * dx + dy * dy + dz * dz);
 }

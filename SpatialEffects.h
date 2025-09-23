@@ -15,7 +15,7 @@
 #include <QThread>
 #include <QMutex>
 #include <vector>
-#include "SpatialGrid3D.h"
+#include "LEDPosition3D.h"
 #include "RGBController.h"
 
 enum SpatialEffectType
@@ -40,7 +40,7 @@ struct SpatialEffectParams
     RGBColor            color_end;
     bool                use_gradient;
     float               scale;
-    GridPosition        origin;
+    Vector3D            origin;
 };
 
 class SpatialEffects : public QThread
@@ -48,8 +48,10 @@ class SpatialEffects : public QThread
     Q_OBJECT
 
 public:
-    SpatialEffects(SpatialGrid3D* grid);
+    SpatialEffects();
     ~SpatialEffects();
+
+    void                SetControllerTransforms(std::vector<ControllerTransform*>* transforms);
 
     void                StartEffect(SpatialEffectParams params);
     void                StopEffect();
@@ -63,20 +65,20 @@ protected:
     void                run() override;
 
 private:
-    void                UpdateDeviceColors();
-    RGBColor            CalculateWaveColor(GridPosition pos, float time_offset);
-    RGBColor            CalculateRadialWaveColor(GridPosition pos, float time_offset);
-    RGBColor            CalculateRainColor(GridPosition pos, float time_offset);
-    RGBColor            CalculateFireColor(GridPosition pos, float time_offset);
-    RGBColor            CalculatePlasmaColor(GridPosition pos, float time_offset);
-    RGBColor            CalculateRippleColor(GridPosition pos, float time_offset);
-    RGBColor            CalculateSpiralColor(GridPosition pos, float time_offset);
+    void                UpdateLEDColors();
+    RGBColor            CalculateWaveColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateRadialWaveColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateRainColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateFireColor(Vector3D pos, float time_offset);
+    RGBColor            CalculatePlasmaColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateRippleColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateSpiralColor(Vector3D pos, float time_offset);
 
     RGBColor            LerpColor(RGBColor a, RGBColor b, float t);
-    float               Distance3D(GridPosition a, GridPosition b);
+    float               Distance3D(Vector3D a, Vector3D b);
 
-    SpatialGrid3D*      grid;
-    SpatialEffectParams params;
+    std::vector<ControllerTransform*>*  controller_transforms;
+    SpatialEffectParams                 params;
 
     bool                running;
     unsigned int        time_counter;
