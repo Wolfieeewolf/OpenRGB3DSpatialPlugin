@@ -147,23 +147,42 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateSingleLayout(RGBControlle
 
 Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transform3D transform)
 {
-    float qx = transform.rotation.x;
-    float qy = transform.rotation.y;
-    float qz = transform.rotation.z;
-    float qw = transform.rotation.w;
+    float rad_x = transform.rotation.x * M_PI / 180.0f;
+    float rad_y = transform.rotation.y * M_PI / 180.0f;
+    float rad_z = transform.rotation.z * M_PI / 180.0f;
 
-    float x = local_pos.x * transform.scale.x;
-    float y = local_pos.y * transform.scale.y;
-    float z = local_pos.z * transform.scale.z;
+    Vector3D scaled;
+    scaled.x = local_pos.x * transform.scale.x;
+    scaled.y = local_pos.y * transform.scale.y;
+    scaled.z = local_pos.z * transform.scale.z;
 
-    float rx = x * (1 - 2*qy*qy - 2*qz*qz) + y * (2*qx*qy - 2*qz*qw) + z * (2*qx*qz + 2*qy*qw);
-    float ry = x * (2*qx*qy + 2*qz*qw) + y * (1 - 2*qx*qx - 2*qz*qz) + z * (2*qy*qz - 2*qx*qw);
-    float rz = x * (2*qx*qz - 2*qy*qw) + y * (2*qy*qz + 2*qx*qw) + z * (1 - 2*qx*qx - 2*qy*qy);
+    Vector3D rotated = scaled;
+
+    float cos_x = cos(rad_x);
+    float sin_x = sin(rad_x);
+    float y = rotated.y * cos_x - rotated.z * sin_x;
+    float z = rotated.y * sin_x + rotated.z * cos_x;
+    rotated.y = y;
+    rotated.z = z;
+
+    float cos_y = cos(rad_y);
+    float sin_y = sin(rad_y);
+    float x = rotated.x * cos_y + rotated.z * sin_y;
+    z = -rotated.x * sin_y + rotated.z * cos_y;
+    rotated.x = x;
+    rotated.z = z;
+
+    float cos_z = cos(rad_z);
+    float sin_z = sin(rad_z);
+    x = rotated.x * cos_z - rotated.y * sin_z;
+    y = rotated.x * sin_z + rotated.y * cos_z;
+    rotated.x = x;
+    rotated.y = y;
 
     Vector3D world_pos;
-    world_pos.x = rx + transform.position.x;
-    world_pos.y = ry + transform.position.y;
-    world_pos.z = rz + transform.position.z;
+    world_pos.x = rotated.x + transform.position.x;
+    world_pos.y = rotated.y + transform.position.y;
+    world_pos.z = rotated.z + transform.position.z;
 
     return world_pos;
 }
