@@ -10,7 +10,6 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialPlugin.h"
-#include "NetworkServer.h"
 #include <cstring>
 
 enum
@@ -50,17 +49,6 @@ unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
 void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
-
-    OpenRGBPluginInfo info = OpenRGB3DSpatialPlugin::GetPluginInfo();
-    NetworkPlugin net_plugin;
-    net_plugin.name = info.Name;
-    net_plugin.description = info.Description;
-    net_plugin.protocol_version = 1;
-    net_plugin.version = info.Version;
-    net_plugin.callback = OpenRGB3DSpatialPlugin::HandleSDK;
-    net_plugin.callback_arg = nullptr;
-
-    RMPointer->GetServer()->RegisterPlugin(net_plugin);
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -84,9 +72,6 @@ QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 void OpenRGB3DSpatialPlugin::Unload()
 {
     RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
-
-    OpenRGBPluginInfo info = OpenRGB3DSpatialPlugin::GetPluginInfo();
-    RMPointer->GetServer()->UnregisterPlugin(info.Name);
 }
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)

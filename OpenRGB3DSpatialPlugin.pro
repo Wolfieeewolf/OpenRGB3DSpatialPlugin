@@ -102,15 +102,13 @@ HEADERS +=                                                                      
     OpenRGB/Colors.h                                                                            \
     OpenRGB/OpenRGBPluginInterface.h                                                            \
     OpenRGB/ResourceManagerInterface.h                                                          \
+    OpenRGB/RGBController/RGBController.h                                                       \
+    OpenRGB/LogManager.h                                                                        \
+    OpenRGB/NetworkServer.h                                                                     \
 
 SOURCES +=                                                                                      \
     OpenRGB/RGBController/RGBController.cpp                                                     \
-    OpenRGB/RGBController/RGBController_Network.cpp                                             \
-    OpenRGB/NetworkServer.cpp                                                                   \
-    OpenRGB/NetworkClient.cpp                                                                   \
-    OpenRGB/NetworkProtocol.cpp                                                                 \
     OpenRGB/LogManager.cpp                                                                      \
-    OpenRGB/net_port/net_port.cpp                                                               \
     OpenRGB/qt/hsv.cpp
 
 #-------------------------------------------------------------------#

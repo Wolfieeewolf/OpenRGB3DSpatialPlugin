@@ -157,9 +157,11 @@ void OpenRGB3DSpatialTab::LoadDevices()
         return;
     }
 
-    for(unsigned int i = 0; i < resource_manager->GetRGBControllerCount(); i++)
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    for(unsigned int i = 0; i < controllers.size(); i++)
     {
-        RGBController* controller = resource_manager->GetRGBController(i);
+        RGBController* controller = controllers[i];
 
         GridPosition pos;
         pos.x = i % 10;
