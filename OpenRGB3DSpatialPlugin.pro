@@ -122,19 +122,15 @@ HEADERS +=                                                                      
     OpenRGB3DSpatialPlugin.h                                                                    \
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
-    SpatialGrid3D.h                                                                             \
     SpatialEffects.h                                                                            \
     ui/OpenRGB3DSpatialTab.h                                                                    \
-    ui/Grid3DWidget.h                                                                           \
     ui/LEDViewport3D.h                                                                          \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
-    SpatialGrid3D.cpp                                                                           \
     SpatialEffects.cpp                                                                          \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
-    ui/Grid3DWidget.cpp                                                                         \
     ui/LEDViewport3D.cpp                                                                        \
 
 #-----------------------------------------------------------------------------------------------#
