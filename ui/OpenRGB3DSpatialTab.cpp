@@ -68,6 +68,13 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     controller_list = new QListWidget();
     controller_list->setMaximumHeight(150);
+    connect(controller_list, &QListWidget::currentRowChanged, [this](int row) {
+        if(row >= 0)
+        {
+            viewport->SelectController(row);
+            on_controller_selected(row);
+        }
+    });
     controller_layout->addWidget(controller_list);
 
     QGridLayout* position_layout = new QGridLayout();
@@ -75,18 +82,42 @@ void OpenRGB3DSpatialTab::SetupUI()
     pos_x_spin = new QDoubleSpinBox();
     pos_x_spin->setRange(-100, 100);
     pos_x_spin->setDecimals(1);
+    connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.x = value;
+            viewport->update();
+        }
+    });
     position_layout->addWidget(pos_x_spin, 0, 1);
 
     position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
     pos_y_spin = new QDoubleSpinBox();
     pos_y_spin->setRange(-100, 100);
     pos_y_spin->setDecimals(1);
+    connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.y = value;
+            viewport->update();
+        }
+    });
     position_layout->addWidget(pos_y_spin, 1, 1);
 
     position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
     pos_z_spin = new QDoubleSpinBox();
     pos_z_spin->setRange(-100, 100);
     pos_z_spin->setDecimals(1);
+    connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.z = value;
+            viewport->update();
+        }
+    });
     position_layout->addWidget(pos_z_spin, 2, 1);
 
     controller_layout->addLayout(position_layout);
@@ -199,7 +230,14 @@ void OpenRGB3DSpatialTab::LoadDevices()
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
         controller_list->addItem(QString::fromStdString(controllers[i]->name));
+        qDebug() << "Loaded controller:" << QString::fromStdString(controllers[i]->name)
+                 << "LEDs:" << controller_transforms[i]->led_positions.size()
+                 << "Position:" << controller_transforms[i]->transform.position.x
+                 << controller_transforms[i]->transform.position.y
+                 << controller_transforms[i]->transform.position.z;
     }
+
+    qDebug() << "Total controllers loaded:" << controller_transforms.size();
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()

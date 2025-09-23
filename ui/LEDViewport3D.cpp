@@ -202,7 +202,7 @@ void LEDViewport3D::DrawControllers()
 
 void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 {
-    glPointSize(6.0f);
+    glPointSize(8.0f);
     glBegin(GL_POINTS);
 
     for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
@@ -215,6 +215,13 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
+
+        if(r < 0.1f && g < 0.1f && b < 0.1f)
+        {
+            r = 0.5f;
+            g = 0.5f;
+            b = 0.5f;
+        }
 
         glColor3f(r, g, b);
         glVertex3f(led.local_position.x, led.local_position.y, led.local_position.z);
@@ -276,19 +283,17 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
     if(event->button() == Qt::LeftButton)
     {
+        int picked = PickController(event->x(), event->y());
+        if(picked >= 0)
+        {
+            selected_controller_idx = picked;
+            emit ControllerSelected(picked);
+            update();
+        }
+
         if(selected_controller_idx >= 0)
         {
             dragging_gizmo = true;
-        }
-        else
-        {
-            int picked = PickController(event->x(), event->y());
-            if(picked >= 0)
-            {
-                selected_controller_idx = picked;
-                emit ControllerSelected(picked);
-                update();
-            }
         }
     }
     else if(event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)
@@ -337,9 +342,48 @@ void LEDViewport3D::wheelEvent(QWheelEvent *event)
     update();
 }
 
-int LEDViewport3D::PickController(int /*mouse_x*/, int /*mouse_y*/)
+int LEDViewport3D::PickController(int mouse_x, int mouse_y)
 {
-    return -1;
+    if(!controller_transforms || controller_transforms->empty())
+    {
+        return -1;
+    }
+
+    makeCurrent();
+
+    GLint viewport[4];
+    GLdouble modelview[16];
+    GLdouble projection[16];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+    glGetDoublev(GL_PROJECTION_MATRIX, projection);
+
+    GLfloat winX = (float)mouse_x;
+    GLfloat winY = (float)(viewport[3] - mouse_y);
+
+    int closest_idx = -1;
+    float closest_dist = 1000000.0f;
+
+    for(unsigned int i = 0; i < controller_transforms->size(); i++)
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[i];
+
+        GLdouble objX, objY, objZ;
+        gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
+                   modelview, projection, viewport, &objX, &objY, &objZ);
+
+        float dx = winX - objX;
+        float dy = winY - objY;
+        float dist = sqrt(dx*dx + dy*dy);
+
+        if(dist < 50.0f && dist < closest_dist)
+        {
+            closest_dist = dist;
+            closest_idx = i;
+        }
+    }
+
+    return closest_idx;
 }
 
 void LEDViewport3D::UpdateGizmo(int dx, int dy)
