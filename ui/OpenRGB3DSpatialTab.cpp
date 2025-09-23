@@ -12,7 +12,6 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerLayout3D.h"
 #include <QColorDialog>
-#include <QDebug>
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -57,7 +56,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_panel->addWidget(viewport, 1);
 
     QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
-    controls_label->setStyleSheet("padding: 5px; background: #333; color: #aaa;");
     left_panel->addWidget(controls_label);
 
     main_layout->addLayout(left_panel, 3);
@@ -269,12 +267,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     QHBoxLayout* color_layout = new QHBoxLayout();
     color_layout->addWidget(new QLabel("Colors:"));
     color_start_button = new QPushButton("Start Color");
-    color_start_button->setStyleSheet("background-color: #FF0000;");
     connect(color_start_button, SIGNAL(clicked()), this, SLOT(on_color_start_clicked()));
     color_layout->addWidget(color_start_button);
 
     color_end_button = new QPushButton("End Color");
-    color_end_button->setStyleSheet("background-color: #0000FF;");
     connect(color_end_button, SIGNAL(clicked()), this, SLOT(on_color_end_clicked()));
     color_layout->addWidget(color_end_button);
     effect_layout->addLayout(color_layout);
@@ -422,10 +418,6 @@ void OpenRGB3DSpatialTab::on_color_start_clicked()
     {
         current_color_start = (color.blue() << 16) | (color.green() << 8) | color.red();
 
-        QString style = QString("background-color: #%1;")
-                        .arg(current_color_start, 6, 16, QChar('0'));
-        color_start_button->setStyleSheet(style);
-
         if(effects->IsRunning())
         {
             effects->SetColors(current_color_start, current_color_end, true);
@@ -445,10 +437,6 @@ void OpenRGB3DSpatialTab::on_color_end_clicked()
     if(color.isValid())
     {
         current_color_end = (color.blue() << 16) | (color.green() << 8) | color.red();
-
-        QString style = QString("background-color: #%1;")
-                        .arg(current_color_end, 6, 16, QChar('0'));
-        color_end_button->setStyleSheet(style);
 
         if(effects->IsRunning())
         {
@@ -584,8 +572,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
-
-    qDebug() << "Added:" << name << "LEDs:" << ctrl_transform->led_positions.size();
 }
 
 void OpenRGB3DSpatialTab::on_remove_controller_clicked()
