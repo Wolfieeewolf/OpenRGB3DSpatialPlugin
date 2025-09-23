@@ -676,7 +676,7 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
         }
         else if(dragging_axis == 2)
         {
-            ctrl->transform.position.z -= dy * move_scale;
+            ctrl->transform.position.z += dy * move_scale;
         }
         else
         {
