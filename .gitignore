@@ -1,0 +1,43 @@
+# Build directories
+build/
+debug/
+release/
+_intermediate_debug/
+_intermediate_release/
+
+# Qt files
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.autosave
+
+# Object files
+*.o
+*.obj
+
+# Libraries
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
