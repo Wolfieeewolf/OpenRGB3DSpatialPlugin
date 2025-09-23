@@ -10,6 +10,7 @@ QT +=                                                                           
     gui                                                                                         \
     widgets                                                                                     \
     quick                                                                                       \
+    quickwidgets                                                                                \
     quick3d
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY

@@ -14,6 +14,10 @@
 #include <QQmlProperty>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 ControllerModel3D::ControllerModel3D(RGBController* ctrl, QObject *parent)
     : QObject(parent), controller(ctrl)
 {
