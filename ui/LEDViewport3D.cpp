@@ -172,10 +172,6 @@ void LEDViewport3D::DrawControllers()
 
         DrawLEDs(ctrl);
 
-        glDisable(GL_DEPTH_TEST);
-        renderText(0, 7, 0, QString::fromStdString(ctrl->controller->name),
-                   QFont("Arial", 10, QFont::Bold));
-        glEnable(GL_DEPTH_TEST);
 
         if((int)i == selected_controller_idx)
         {

@@ -151,9 +151,9 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateSingleLayout(RGBControlle
 
 Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transform3D transform)
 {
-    float rad_x = transform.rotation.x * M_PI / 180.0f;
-    float rad_y = transform.rotation.y * M_PI / 180.0f;
-    float rad_z = transform.rotation.z * M_PI / 180.0f;
+    float rad_x = transform.rotation.x * (float)M_PI / 180.0f;
+    float rad_y = transform.rotation.y * (float)M_PI / 180.0f;
+    float rad_z = transform.rotation.z * (float)M_PI / 180.0f;
 
     Vector3D scaled;
     scaled.x = local_pos.x * transform.scale.x;

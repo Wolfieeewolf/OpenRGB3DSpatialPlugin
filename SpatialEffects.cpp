@@ -653,7 +653,7 @@ RGBColor SpatialEffects::CalculateWipeFrontBackColor(Vector3D pos, float time_of
     return 0x000000;
 }
 
-RGBColor SpatialEffects::CalculateLEDSparkleColor(Vector3D pos, float time_offset, unsigned int led_idx)
+RGBColor SpatialEffects::CalculateLEDSparkleColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
 {
     unsigned int seed = led_idx + (unsigned int)(time_offset / 10.0f);
     srand(seed);
@@ -666,7 +666,7 @@ RGBColor SpatialEffects::CalculateLEDSparkleColor(Vector3D pos, float time_offse
     return 0x000000;
 }
 
-RGBColor SpatialEffects::CalculateLEDChaseColor(Vector3D pos, float time_offset, unsigned int led_idx)
+RGBColor SpatialEffects::CalculateLEDChaseColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
 {
     unsigned int chase_pos = (unsigned int)(time_offset / 2.0f) % 10;
 
@@ -682,7 +682,7 @@ RGBColor SpatialEffects::CalculateLEDChaseColor(Vector3D pos, float time_offset,
     return 0x000000;
 }
 
-RGBColor SpatialEffects::CalculateLEDTwinkleColor(Vector3D pos, float time_offset, unsigned int led_idx)
+RGBColor SpatialEffects::CalculateLEDTwinkleColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
 {
     float led_phase = (led_idx * 0.37f);
     float twinkle = (sin((time_offset / 20.0f) + led_phase) + 1.0f) / 2.0f;

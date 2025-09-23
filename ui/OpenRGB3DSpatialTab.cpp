@@ -21,8 +21,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effects = new SpatialEffects();
     connect(effects, SIGNAL(EffectUpdated()), this, SLOT(on_effect_updated()));
 
-    current_color_start = 0xFF0000;
-    current_color_end = 0x0000FF;
+    current_color_start = 0x0000FF;
+    current_color_end = 0xFF0000;
 
     SetupUI();
     LoadDevices();
@@ -72,11 +72,27 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     available_controllers_list = new QListWidget();
     available_controllers_list->setMaximumHeight(100);
+    connect(available_controllers_list, &QListWidget::currentRowChanged, [this](int) {
+        on_granularity_changed(granularity_combo->currentIndex());
+    });
     controller_layout->addWidget(available_controllers_list);
+
+    QHBoxLayout* granularity_layout = new QHBoxLayout();
+    granularity_layout->addWidget(new QLabel("Add:"));
+    granularity_combo = new QComboBox();
+    granularity_combo->addItem("Whole Device");
+    granularity_combo->addItem("Zone");
+    granularity_combo->addItem("LED");
+    connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
+    granularity_layout->addWidget(granularity_combo);
+    controller_layout->addLayout(granularity_layout);
+
+    item_combo = new QComboBox();
+    controller_layout->addWidget(item_combo);
 
     QHBoxLayout* add_remove_layout = new QHBoxLayout();
     QPushButton* add_button = new QPushButton("Add to 3D View");
-    connect(add_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_controller_clicked);
+    connect(add_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_clicked);
     add_remove_layout->addWidget(add_button);
 
     QPushButton* remove_button = new QPushButton("Remove");
@@ -92,7 +108,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     controller_layout->addWidget(active_label);
 
     controller_list = new QListWidget();
-    controller_list->setMaximumHeight(100);
+    controller_list->setMaximumHeight(80);
     connect(controller_list, &QListWidget::currentRowChanged, [this](int row) {
         if(row >= 0)
         {
@@ -396,15 +412,15 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 void OpenRGB3DSpatialTab::on_color_start_clicked()
 {
     QColor initial_color;
-    initial_color.setRgb((current_color_start >> 16) & 0xFF,
+    initial_color.setRgb(current_color_start & 0xFF,
                          (current_color_start >> 8) & 0xFF,
-                         current_color_start & 0xFF);
+                         (current_color_start >> 16) & 0xFF);
 
     QColor color = QColorDialog::getColor(initial_color, this, "Select Start Color");
 
     if(color.isValid())
     {
-        current_color_start = (color.red() << 16) | (color.green() << 8) | color.blue();
+        current_color_start = (color.blue() << 16) | (color.green() << 8) | color.red();
 
         QString style = QString("background-color: #%1;")
                         .arg(current_color_start, 6, 16, QChar('0'));
@@ -420,15 +436,15 @@ void OpenRGB3DSpatialTab::on_color_start_clicked()
 void OpenRGB3DSpatialTab::on_color_end_clicked()
 {
     QColor initial_color;
-    initial_color.setRgb((current_color_end >> 16) & 0xFF,
+    initial_color.setRgb(current_color_end & 0xFF,
                          (current_color_end >> 8) & 0xFF,
-                         current_color_end & 0xFF);
+                         (current_color_end >> 16) & 0xFF);
 
     QColor color = QColorDialog::getColor(initial_color, this, "Select End Color");
 
     if(color.isValid())
     {
-        current_color_end = (color.red() << 16) | (color.green() << 8) | color.blue();
+        current_color_end = (color.blue() << 16) | (color.green() << 8) | color.red();
 
         QString style = QString("background-color: #%1;")
                         .arg(current_color_end, 6, 16, QChar('0'));
@@ -446,28 +462,113 @@ void OpenRGB3DSpatialTab::on_effect_updated()
     viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::on_add_controller_clicked()
+void OpenRGB3DSpatialTab::on_granularity_changed(int index)
 {
-    int selected_row = available_controllers_list->currentRow();
-    if(selected_row < 0)
+    item_combo->clear();
+
+    int ctrl_row = available_controllers_list->currentRow();
+    if(ctrl_row < 0 || ctrl_row >= (int)resource_manager->GetRGBControllers().size())
+    {
+        return;
+    }
+
+    RGBController* controller = resource_manager->GetRGBControllers()[ctrl_row];
+
+    if(index == 0)
+    {
+        item_combo->addItem(QString::fromStdString(controller->name));
+    }
+    else if(index == 1)
+    {
+        for(unsigned int i = 0; i < controller->zones.size(); i++)
+        {
+            item_combo->addItem(QString::fromStdString(controller->zones[i].name));
+        }
+    }
+    else if(index == 2)
+    {
+        for(unsigned int i = 0; i < controller->leds.size(); i++)
+        {
+            item_combo->addItem(QString::fromStdString(controller->leds[i].name));
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::on_add_clicked()
+{
+    int ctrl_row = available_controllers_list->currentRow();
+    int granularity = granularity_combo->currentIndex();
+    int item_row = item_combo->currentIndex();
+
+    if(ctrl_row < 0 || item_row < 0)
     {
         return;
     }
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    if(selected_row >= (int)controllers.size())
+    if(ctrl_row >= (int)controllers.size())
     {
         return;
     }
 
-    RGBController* controller = controllers[selected_row];
+    RGBController* controller = controllers[ctrl_row];
 
     ControllerTransform* ctrl_transform = new ControllerTransform();
     ctrl_transform->controller = controller;
     ctrl_transform->transform.position = {(float)(controller_transforms.size() * 15), 0.0f, 0.0f};
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
-    ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+
+    QString name;
+
+    if(granularity == 0)
+    {
+        ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+        name = QString::fromStdString(controller->name);
+    }
+    else if(granularity == 1)
+    {
+        if(item_row >= (int)controller->zones.size())
+        {
+            delete ctrl_transform;
+            return;
+        }
+
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+        zone* z = &controller->zones[item_row];
+
+        for(unsigned int i = 0; i < all_positions.size(); i++)
+        {
+            if(all_positions[i].zone_idx == (unsigned int)item_row)
+            {
+                ctrl_transform->led_positions.push_back(all_positions[i]);
+            }
+        }
+
+        name = QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
+    }
+    else if(granularity == 2)
+    {
+        if(item_row >= (int)controller->leds.size())
+        {
+            delete ctrl_transform;
+            return;
+        }
+
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+
+        for(unsigned int i = 0; i < all_positions.size(); i++)
+        {
+            unsigned int global_led_idx = controller->zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+            if(global_led_idx == (unsigned int)item_row)
+            {
+                ctrl_transform->led_positions.push_back(all_positions[i]);
+                break;
+            }
+        }
+
+        name = QString::fromStdString(controller->name) + " - " + QString::fromStdString(controller->leds[item_row].name);
+    }
 
     int hue = (controller_transforms.size() * 137) % 360;
     QColor color = QColor::fromHsv(hue, 200, 255);
@@ -475,7 +576,7 @@ void OpenRGB3DSpatialTab::on_add_controller_clicked()
 
     controller_transforms.push_back(ctrl_transform);
 
-    QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(controller->name));
+    QListWidgetItem* item = new QListWidgetItem(name);
     item->setBackground(QBrush(color));
     item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
     controller_list->addItem(item);
@@ -484,8 +585,7 @@ void OpenRGB3DSpatialTab::on_add_controller_clicked()
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
 
-    qDebug() << "Added controller:" << QString::fromStdString(controller->name)
-             << "LEDs:" << ctrl_transform->led_positions.size();
+    qDebug() << "Added:" << name << "LEDs:" << ctrl_transform->led_positions.size();
 }
 
 void OpenRGB3DSpatialTab::on_remove_controller_clicked()

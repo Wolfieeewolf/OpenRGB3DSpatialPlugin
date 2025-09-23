@@ -59,7 +59,8 @@ private slots:
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
 
-    void on_add_controller_clicked();
+    void on_add_clicked();
+    void on_granularity_changed(int index);
     void on_remove_controller_clicked();
     void on_clear_all_clicked();
 
@@ -78,6 +79,8 @@ private:
     std::vector<ControllerTransform*> controller_transforms;
 
     QListWidget*                available_controllers_list;
+    QComboBox*                  granularity_combo;
+    QComboBox*                  item_combo;
     QListWidget*                controller_list;
     QDoubleSpinBox*             pos_x_spin;
     QDoubleSpinBox*             pos_y_spin;
