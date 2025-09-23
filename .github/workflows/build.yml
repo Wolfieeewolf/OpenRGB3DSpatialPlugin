@@ -1,0 +1,56 @@
+name: Build OpenRGB 3D Spatial Plugin
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+
+    - name: Build
+      run: |
+        qmake OpenRGB3DSpatialPlugin.pro
+        nmake
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: OpenRGB3DSpatialPlugin-Windows
+        path: release/*.dll
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install Qt
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qt5-qmake qtbase5-dev
+
+    - name: Build
+      run: |
+        qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+        make
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: OpenRGB3DSpatialPlugin-Linux
+        path: '*.so'
