@@ -287,7 +287,7 @@ RGBColor SpatialEffects::LerpColor(RGBColor a, RGBColor b, float t)
     g = (unsigned char)(g * brightness_scale);
     b_out = (unsigned char)(b_out * brightness_scale);
 
-    return (r << 16) | (g << 8) | b_out;
+    return (b_out << 16) | (g << 8) | r;
 }
 
 float SpatialEffects::Distance3D(Vector3D a, Vector3D b)
