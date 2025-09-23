@@ -38,6 +38,10 @@ enum SpatialEffectType
     SPATIAL_EFFECT_CORNERS          = 15,
     SPATIAL_EFFECT_VERTICAL_BARS    = 16,
     SPATIAL_EFFECT_BREATHING_SPHERE = 17,
+    SPATIAL_EFFECT_EXPLOSION        = 18,
+    SPATIAL_EFFECT_WIPE_TOP_BOTTOM  = 19,
+    SPATIAL_EFFECT_WIPE_LEFT_RIGHT  = 20,
+    SPATIAL_EFFECT_WIPE_FRONT_BACK  = 21,
 };
 
 struct SpatialEffectParams
@@ -94,6 +98,10 @@ private:
     RGBColor            CalculateCornersColor(Vector3D pos, float time_offset);
     RGBColor            CalculateVerticalBarsColor(Vector3D pos, float time_offset);
     RGBColor            CalculateBreathingSphereColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateExplosionColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateWipeTopBottomColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateWipeLeftRightColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateWipeFrontBackColor(Vector3D pos, float time_offset);
 
     RGBColor            LerpColor(RGBColor a, RGBColor b, float t);
     float               Distance3D(Vector3D a, Vector3D b);

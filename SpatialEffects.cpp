@@ -188,6 +188,22 @@ void SpatialEffects::UpdateLEDColors()
                 case SPATIAL_EFFECT_BREATHING_SPHERE:
                     color = CalculateBreathingSphereColor(led_pos.world_position, time_offset);
                     break;
+
+                case SPATIAL_EFFECT_EXPLOSION:
+                    color = CalculateExplosionColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_WIPE_TOP_BOTTOM:
+                    color = CalculateWipeTopBottomColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_WIPE_LEFT_RIGHT:
+                    color = CalculateWipeLeftRightColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_WIPE_FRONT_BACK:
+                    color = CalculateWipeFrontBackColor(led_pos.world_position, time_offset);
+                    break;
             }
 
             unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
@@ -541,6 +557,85 @@ RGBColor SpatialEffects::CalculateBreathingSphereColor(Vector3D pos, float time_
     {
         float brightness = 1.0f - fabs(dist - radius) / 3.0f;
         return LerpColor(params.color_start, params.color_end, breath * brightness);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateExplosionColor(Vector3D pos, float time_offset)
+{
+    float dist = Distance3D(pos, params.origin);
+    float explosion_radius = time_offset / 3.0f;
+
+    float diff = fabs(dist - explosion_radius);
+
+    if(diff < 5.0f)
+    {
+        float brightness = 1.0f - (diff / 5.0f);
+        float fade = fmax(0.0f, 1.0f - (explosion_radius / 50.0f));
+        brightness *= fade;
+
+        return LerpColor(params.color_end, params.color_start, brightness);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateWipeTopBottomColor(Vector3D pos, float time_offset)
+{
+    float wipe_pos = 50.0f - (time_offset / 3.0f);
+
+    float diff = pos.y - wipe_pos;
+
+    if(diff > 0 && diff < 8.0f)
+    {
+        float brightness = 1.0f - (diff / 8.0f);
+        return LerpColor(0x000000, params.color_start, brightness);
+    }
+
+    if(diff >= 8.0f)
+    {
+        return params.color_end;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateWipeLeftRightColor(Vector3D pos, float time_offset)
+{
+    float wipe_pos = -50.0f + (time_offset / 3.0f);
+
+    float diff = wipe_pos - pos.x;
+
+    if(diff > 0 && diff < 8.0f)
+    {
+        float brightness = 1.0f - (diff / 8.0f);
+        return LerpColor(0x000000, params.color_start, brightness);
+    }
+
+    if(diff >= 8.0f)
+    {
+        return params.color_end;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateWipeFrontBackColor(Vector3D pos, float time_offset)
+{
+    float wipe_pos = -50.0f + (time_offset / 3.0f);
+
+    float diff = wipe_pos - pos.z;
+
+    if(diff > 0 && diff < 8.0f)
+    {
+        float brightness = 1.0f - (diff / 8.0f);
+        return LerpColor(0x000000, params.color_start, brightness);
+    }
+
+    if(diff >= 8.0f)
+    {
+        return params.color_end;
     }
 
     return 0x000000;

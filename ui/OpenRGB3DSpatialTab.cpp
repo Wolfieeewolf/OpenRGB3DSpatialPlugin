@@ -215,6 +215,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_type_combo->addItem("Corners");
     effect_type_combo->addItem("Vertical Bars");
     effect_type_combo->addItem("Breathing Sphere");
+    effect_type_combo->addItem("Explosion");
+    effect_type_combo->addItem("Wipe Top to Bottom");
+    effect_type_combo->addItem("Wipe Left to Right");
+    effect_type_combo->addItem("Wipe Front to Back");
     connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_type_layout->addWidget(effect_type_combo);
     effect_layout->addLayout(effect_type_layout);
