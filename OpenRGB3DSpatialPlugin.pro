@@ -8,7 +8,8 @@
 QT +=                                                                                           \
     core                                                                                        \
     gui                                                                                         \
-    widgets
+    widgets                                                                                     \
+    opengl
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY
 TEMPLATE = lib
@@ -125,6 +126,7 @@ HEADERS +=                                                                      
     SpatialEffects.h                                                                            \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/Grid3DWidget.h                                                                           \
+    ui/LEDViewport3D.h                                                                          \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -133,6 +135,7 @@ SOURCES +=                                                                      
     SpatialEffects.cpp                                                                          \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/Grid3DWidget.cpp                                                                         \
+    ui/LEDViewport3D.cpp                                                                        \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
@@ -156,12 +159,16 @@ win32:contains(QMAKE_TARGET.arch, x86_64) {
     LIBS +=                                                                                     \
         -lws2_32                                                                                \
         -lole32                                                                                 \
+        -lopengl32                                                                              \
+        -lglu32                                                                                 \
 }
 
 win32:contains(QMAKE_TARGET.arch, x86) {
     LIBS +=                                                                                     \
         -lws2_32                                                                                \
         -lole32                                                                                 \
+        -lopengl32                                                                              \
+        -lglu32                                                                                 \
 }
 
 win32:DEFINES +=                                                                                \

@@ -45,11 +45,53 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 
 void OpenRGB3DSpatialTab::SetupUI()
 {
-    QVBoxLayout* main_layout = new QVBoxLayout(this);
+    QHBoxLayout* main_layout = new QHBoxLayout(this);
 
-    QLabel* info_label = new QLabel("3D Spatial LED Control - Position your controllers and run spatial effects");
-    info_label->setStyleSheet("font-weight: bold; padding: 5px;");
-    main_layout->addWidget(info_label);
+    QVBoxLayout* left_panel = new QVBoxLayout();
+
+    viewport = new LEDViewport3D();
+    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
+    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
+            this, SLOT(on_controller_position_changed(int,float,float,float)));
+    left_panel->addWidget(viewport, 1);
+
+    QLabel* controls_label = new QLabel("Camera: Middle/Right mouse to rotate, Scroll to zoom");
+    controls_label->setStyleSheet("padding: 5px; background: #333; color: #aaa;");
+    left_panel->addWidget(controls_label);
+
+    main_layout->addLayout(left_panel, 3);
+
+    QVBoxLayout* right_panel = new QVBoxLayout();
+
+    QGroupBox* controller_group = new QGroupBox("Controllers");
+    QVBoxLayout* controller_layout = new QVBoxLayout();
+
+    controller_list = new QListWidget();
+    controller_list->setMaximumHeight(150);
+    controller_layout->addWidget(controller_list);
+
+    QGridLayout* position_layout = new QGridLayout();
+    position_layout->addWidget(new QLabel("Position X:"), 0, 0);
+    pos_x_spin = new QDoubleSpinBox();
+    pos_x_spin->setRange(-100, 100);
+    pos_x_spin->setDecimals(1);
+    position_layout->addWidget(pos_x_spin, 0, 1);
+
+    position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
+    pos_y_spin = new QDoubleSpinBox();
+    pos_y_spin->setRange(-100, 100);
+    pos_y_spin->setDecimals(1);
+    position_layout->addWidget(pos_y_spin, 1, 1);
+
+    position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
+    pos_z_spin = new QDoubleSpinBox();
+    pos_z_spin->setRange(-100, 100);
+    pos_z_spin->setDecimals(1);
+    position_layout->addWidget(pos_z_spin, 2, 1);
+
+    controller_layout->addLayout(position_layout);
+    controller_group->setLayout(controller_layout);
+    right_panel->addWidget(controller_group);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -119,9 +161,11 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     effect_layout->addLayout(button_layout);
     effect_group->setLayout(effect_layout);
-    main_layout->addWidget(effect_group);
+    right_panel->addWidget(effect_group);
 
-    main_layout->addStretch();
+    right_panel->addStretch();
+    main_layout->addLayout(right_panel, 1);
+
     setLayout(main_layout);
 }
 
@@ -149,11 +193,46 @@ void OpenRGB3DSpatialTab::LoadDevices()
     }
 
     effects->SetControllerTransforms(&controller_transforms);
+    viewport->SetControllerTransforms(&controller_transforms);
+
+    controller_list->clear();
+    for(unsigned int i = 0; i < controllers.size(); i++)
+    {
+        controller_list->addItem(QString::fromStdString(controllers[i]->name));
+    }
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
 {
     LoadDevices();
+}
+
+void OpenRGB3DSpatialTab::on_controller_selected(int index)
+{
+    if(index >= 0 && index < (int)controller_transforms.size())
+    {
+        controller_list->setCurrentRow(index);
+
+        ControllerTransform* ctrl = controller_transforms[index];
+        pos_x_spin->setValue(ctrl->transform.position.x);
+        pos_y_spin->setValue(ctrl->transform.position.y);
+        pos_z_spin->setValue(ctrl->transform.position.z);
+    }
+}
+
+void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, float y, float z)
+{
+    if(index >= 0 && index < (int)controller_transforms.size())
+    {
+        ControllerTransform* ctrl = controller_transforms[index];
+        ctrl->transform.position.x = x;
+        ctrl->transform.position.y = y;
+        ctrl->transform.position.z = z;
+
+        pos_x_spin->setValue(x);
+        pos_y_spin->setValue(y);
+        pos_z_spin->setValue(z);
+    }
 }
 
 void OpenRGB3DSpatialTab::on_effect_type_changed(int /*index*/)

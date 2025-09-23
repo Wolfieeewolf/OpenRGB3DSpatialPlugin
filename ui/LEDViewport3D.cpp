@@ -1,0 +1,362 @@
+/*---------------------------------------------------------*\
+| LEDViewport3D.cpp                                         |
+|                                                           |
+|   OpenGL 3D viewport for LED visualization and control   |
+|                                                           |
+|   Date: 2025-09-23                                        |
+|                                                           |
+|   This file is part of the OpenRGB project                |
+|   SPDX-License-Identifier: GPL-2.0-only                   |
+\*---------------------------------------------------------*/
+
+#include "LEDViewport3D.h"
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
+{
+    controller_transforms = nullptr;
+    selected_controller_idx = -1;
+
+    camera_distance = 50.0f;
+    camera_yaw = 45.0f;
+    camera_pitch = 30.0f;
+    camera_target_x = 0.0f;
+    camera_target_y = 0.0f;
+    camera_target_z = 0.0f;
+
+    dragging = false;
+    dragging_gizmo = false;
+
+    setMinimumSize(800, 600);
+}
+
+LEDViewport3D::~LEDViewport3D()
+{
+}
+
+void LEDViewport3D::SetControllerTransforms(std::vector<ControllerTransform*>* transforms)
+{
+    controller_transforms = transforms;
+    selected_controller_idx = -1;
+    update();
+}
+
+void LEDViewport3D::SelectController(int index)
+{
+    selected_controller_idx = index;
+    update();
+}
+
+void LEDViewport3D::UpdateColors()
+{
+    update();
+}
+
+void LEDViewport3D::initializeGL()
+{
+    initializeOpenGLFunctions();
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POINT_SMOOTH);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+}
+
+void LEDViewport3D::resizeGL(int w, int h)
+{
+    glViewport(0, 0, w, h);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, (double)w / (double)h, 0.1, 500.0);
+
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void LEDViewport3D::paintGL()
+{
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    float yaw_rad = camera_yaw * M_PI / 180.0f;
+    float pitch_rad = camera_pitch * M_PI / 180.0f;
+
+    float cam_x = camera_target_x + camera_distance * cos(pitch_rad) * sin(yaw_rad);
+    float cam_y = camera_target_y + camera_distance * sin(pitch_rad);
+    float cam_z = camera_target_z + camera_distance * cos(pitch_rad) * cos(yaw_rad);
+
+    gluLookAt(cam_x, cam_y, cam_z,
+              camera_target_x, camera_target_y, camera_target_z,
+              0.0, 1.0, 0.0);
+
+    DrawGrid();
+    DrawAxes();
+    DrawControllers();
+
+    if(selected_controller_idx >= 0)
+    {
+        DrawGizmo();
+    }
+}
+
+void LEDViewport3D::DrawGrid()
+{
+    glColor3f(0.2f, 0.2f, 0.25f);
+    glBegin(GL_LINES);
+
+    for(int i = -50; i <= 50; i += 5)
+    {
+        glVertex3f(i, 0, -50);
+        glVertex3f(i, 0, 50);
+
+        glVertex3f(-50, 0, i);
+        glVertex3f(50, 0, i);
+    }
+
+    glEnd();
+}
+
+void LEDViewport3D::DrawAxes()
+{
+    glLineWidth(3.0f);
+    glBegin(GL_LINES);
+
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(10, 0, 0);
+
+    glColor3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 10, 0);
+
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 0, 10);
+
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+void LEDViewport3D::DrawControllers()
+{
+    if(!controller_transforms)
+    {
+        return;
+    }
+
+    for(unsigned int i = 0; i < controller_transforms->size(); i++)
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[i];
+
+        glPushMatrix();
+        glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
+
+        DrawLEDs(ctrl);
+
+        if((int)i == selected_controller_idx)
+        {
+            glLineWidth(2.0f);
+            glColor3f(1.0f, 1.0f, 0.0f);
+
+            float size = 5.0f;
+            glBegin(GL_LINE_LOOP);
+            glVertex3f(-size, -size, -size);
+            glVertex3f(size, -size, -size);
+            glVertex3f(size, size, -size);
+            glVertex3f(-size, size, -size);
+            glEnd();
+
+            glBegin(GL_LINE_LOOP);
+            glVertex3f(-size, -size, size);
+            glVertex3f(size, -size, size);
+            glVertex3f(size, size, size);
+            glVertex3f(-size, size, size);
+            glEnd();
+
+            glBegin(GL_LINES);
+            glVertex3f(-size, -size, -size); glVertex3f(-size, -size, size);
+            glVertex3f(size, -size, -size); glVertex3f(size, -size, size);
+            glVertex3f(size, size, -size); glVertex3f(size, size, size);
+            glVertex3f(-size, size, -size); glVertex3f(-size, size, size);
+            glEnd();
+
+            glLineWidth(1.0f);
+        }
+
+        glPopMatrix();
+    }
+}
+
+void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
+{
+    glPointSize(6.0f);
+    glBegin(GL_POINTS);
+
+    for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
+    {
+        LEDPosition3D& led = ctrl->led_positions[i];
+
+        unsigned int led_global_idx = ctrl->controller->zones[led.zone_idx].start_idx + led.led_idx;
+        RGBColor color = ctrl->controller->colors[led_global_idx];
+
+        float r = ((color >> 16) & 0xFF) / 255.0f;
+        float g = ((color >> 8) & 0xFF) / 255.0f;
+        float b = (color & 0xFF) / 255.0f;
+
+        glColor3f(r, g, b);
+        glVertex3f(led.local_position.x, led.local_position.y, led.local_position.z);
+    }
+
+    glEnd();
+}
+
+void LEDViewport3D::DrawGizmo()
+{
+    if(selected_controller_idx < 0 || !controller_transforms)
+    {
+        return;
+    }
+
+    ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+
+    glPushMatrix();
+    glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
+
+    glLineWidth(4.0f);
+    glBegin(GL_LINES);
+
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(5, 0, 0);
+
+    glColor3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 5, 0);
+
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 0, 5);
+
+    glEnd();
+
+    glPointSize(12.0f);
+    glBegin(GL_POINTS);
+
+    glColor3f(1.0f, 0.3f, 0.3f);
+    glVertex3f(5, 0, 0);
+
+    glColor3f(0.3f, 1.0f, 0.3f);
+    glVertex3f(0, 5, 0);
+
+    glColor3f(0.3f, 0.3f, 1.0f);
+    glVertex3f(0, 0, 5);
+
+    glEnd();
+
+    glLineWidth(1.0f);
+    glPopMatrix();
+}
+
+void LEDViewport3D::mousePressEvent(QMouseEvent *event)
+{
+    last_mouse_pos = event->pos();
+
+    if(event->button() == Qt::LeftButton)
+    {
+        if(selected_controller_idx >= 0)
+        {
+            dragging_gizmo = true;
+        }
+        else
+        {
+            int picked = PickController(event->x(), event->y());
+            if(picked >= 0)
+            {
+                selected_controller_idx = picked;
+                emit ControllerSelected(picked);
+                update();
+            }
+        }
+    }
+    else if(event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)
+    {
+        dragging = true;
+    }
+}
+
+void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
+{
+    QPoint delta = event->pos() - last_mouse_pos;
+
+    if(dragging_gizmo && selected_controller_idx >= 0)
+    {
+        UpdateGizmo(delta.x(), delta.y());
+        update();
+    }
+    else if(dragging)
+    {
+        camera_yaw += delta.x() * 0.5f;
+        camera_pitch -= delta.y() * 0.5f;
+
+        if(camera_pitch > 89.0f) camera_pitch = 89.0f;
+        if(camera_pitch < -89.0f) camera_pitch = -89.0f;
+
+        update();
+    }
+
+    last_mouse_pos = event->pos();
+}
+
+void LEDViewport3D::mouseReleaseEvent(QMouseEvent* /*event*/)
+{
+    dragging = false;
+    dragging_gizmo = false;
+}
+
+void LEDViewport3D::wheelEvent(QWheelEvent *event)
+{
+    float delta = event->angleDelta().y() / 120.0f;
+    camera_distance -= delta * 3.0f;
+
+    if(camera_distance < 10.0f) camera_distance = 10.0f;
+    if(camera_distance > 200.0f) camera_distance = 200.0f;
+
+    update();
+}
+
+int LEDViewport3D::PickController(int /*mouse_x*/, int /*mouse_y*/)
+{
+    return -1;
+}
+
+void LEDViewport3D::UpdateGizmo(int dx, int dy)
+{
+    if(!controller_transforms || selected_controller_idx < 0)
+    {
+        return;
+    }
+
+    ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+
+    float move_scale = 0.1f;
+    ctrl->transform.position.x += dx * move_scale;
+    ctrl->transform.position.y -= dy * move_scale;
+
+    emit ControllerPositionChanged(selected_controller_idx,
+                                   ctrl->transform.position.x,
+                                   ctrl->transform.position.y,
+                                   ctrl->transform.position.z);
+}

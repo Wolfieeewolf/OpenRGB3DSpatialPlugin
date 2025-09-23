@@ -18,14 +18,17 @@
 #include <QSlider>
 #include <QLabel>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QGroupBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QListWidget>
 
 #include "ResourceManagerInterface.h"
 #include "SpatialEffects.h"
 #include "LEDPosition3D.h"
+#include "LEDViewport3D.h"
 
 namespace Ui
 {
@@ -53,6 +56,9 @@ private slots:
     void on_color_start_clicked();
     void on_color_end_clicked();
 
+    void on_controller_selected(int index);
+    void on_controller_position_changed(int index, float x, float y, float z);
+
 private:
     void SetupUI();
     void LoadDevices();
@@ -61,8 +67,14 @@ private:
     ResourceManagerInterface*   resource_manager;
 
     SpatialEffects*             effects;
+    LEDViewport3D*              viewport;
 
     std::vector<ControllerTransform*> controller_transforms;
+
+    QListWidget*                controller_list;
+    QDoubleSpinBox*             pos_x_spin;
+    QDoubleSpinBox*             pos_y_spin;
+    QDoubleSpinBox*             pos_z_spin;
 
     QComboBox*                  effect_type_combo;
     QSlider*                    effect_speed_slider;
