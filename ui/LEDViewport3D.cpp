@@ -316,6 +316,10 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             dragging_rotate = true;
         }
     }
+    else if(event->button() == Qt::RightButton)
+    {
+        dragging_pan = true;
+    }
 }
 
 void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
@@ -339,9 +343,21 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     }
     else if(dragging_pan)
     {
+        float yaw_rad = camera_yaw * M_PI / 180.0f;
+        float pitch_rad = camera_pitch * M_PI / 180.0f;
+
+        float right_x = cos(yaw_rad);
+        float right_z = -sin(yaw_rad);
+
+        float up_x = -sin(yaw_rad) * sin(pitch_rad);
+        float up_y = cos(pitch_rad);
+        float up_z = -cos(yaw_rad) * sin(pitch_rad);
+
         float pan_scale = 0.05f;
-        camera_target_x -= delta.x() * pan_scale;
-        camera_target_y += delta.y() * pan_scale;
+
+        camera_target_x += (right_x * -delta.x() + up_x * delta.y()) * pan_scale;
+        camera_target_y += up_y * delta.y() * pan_scale;
+        camera_target_z += (right_z * -delta.x() + up_z * delta.y()) * pan_scale;
 
         update();
     }
@@ -420,9 +436,21 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
 
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
 
+    float yaw_rad = camera_yaw * M_PI / 180.0f;
+    float pitch_rad = camera_pitch * M_PI / 180.0f;
+
+    float right_x = cos(yaw_rad);
+    float right_z = -sin(yaw_rad);
+
+    float up_x = -sin(yaw_rad) * sin(pitch_rad);
+    float up_y = cos(pitch_rad);
+    float up_z = -cos(yaw_rad) * sin(pitch_rad);
+
     float move_scale = 0.1f;
-    ctrl->transform.position.x += dx * move_scale;
-    ctrl->transform.position.y -= dy * move_scale;
+
+    ctrl->transform.position.x += (right_x * dx + up_x * -dy) * move_scale;
+    ctrl->transform.position.y += up_y * -dy * move_scale;
+    ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
 
     emit ControllerPositionChanged(selected_controller_idx,
                                    ctrl->transform.position.x,

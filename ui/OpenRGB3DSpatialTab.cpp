@@ -56,7 +56,7 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_controller_position_changed(int,float,float,float)));
     left_panel->addWidget(viewport, 1);
 
-    QLabel* controls_label = new QLabel("Camera: Middle mouse to rotate | Shift+Middle mouse to pan | Scroll to zoom");
+    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
     controls_label->setStyleSheet("padding: 5px; background: #333; color: #aaa;");
     left_panel->addWidget(controls_label);
 
