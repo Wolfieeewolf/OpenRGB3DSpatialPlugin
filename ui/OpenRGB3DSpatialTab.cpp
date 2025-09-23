@@ -11,6 +11,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerLayout3D.h"
+#include "LogManager.h"
 #include <QColorDialog>
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
@@ -395,6 +396,8 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
 
     start_effect_button->setEnabled(false);
     stop_effect_button->setEnabled(true);
+
+    LOG_VERBOSE("[OpenRGB 3D Spatial] Started effect: %s (Speed: %u, Brightness: %u)", effect_type_combo->currentText().toStdString().c_str(), params.speed, params.brightness);
 }
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
@@ -403,6 +406,8 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 
     start_effect_button->setEnabled(true);
     stop_effect_button->setEnabled(false);
+
+    LOG_VERBOSE("[OpenRGB 3D Spatial] Stopped effect");
 }
 
 void OpenRGB3DSpatialTab::on_color_start_clicked()
@@ -572,6 +577,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+
+    LOG_VERBOSE("[OpenRGB 3D Spatial] Added %s (%u LEDs) to 3D view", name.toStdString().c_str(), ctrl_transform->led_positions.size());
 }
 
 void OpenRGB3DSpatialTab::on_remove_controller_clicked()

@@ -10,6 +10,7 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialPlugin.h"
+#include "LogManager.h"
 #include <cstring>
 
 enum
@@ -49,6 +50,8 @@ unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
 void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
+
+    LOG_INFO("[OpenRGB 3D Spatial] Plugin loaded successfully");
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -72,6 +75,8 @@ QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 void OpenRGB3DSpatialPlugin::Unload()
 {
     RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+
+    LOG_INFO("[OpenRGB 3D Spatial] Plugin unloaded");
 }
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
