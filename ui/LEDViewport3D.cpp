@@ -135,7 +135,7 @@ void LEDViewport3D::DrawAxes()
     glLineWidth(3.0f);
     glBegin(GL_LINES);
 
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(0.0f, 0.0f, 1.0f);
     glVertex3f(0, 0, 0);
     glVertex3f(10, 0, 0);
 
@@ -143,7 +143,7 @@ void LEDViewport3D::DrawAxes()
     glVertex3f(0, 0, 0);
     glVertex3f(0, 10, 0);
 
-    glColor3f(0.0f, 0.0f, 1.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0, 0, 0);
     glVertex3f(0, 0, 10);
 
@@ -252,7 +252,7 @@ void LEDViewport3D::DrawGizmo()
     glLineWidth(4.0f);
     glBegin(GL_LINES);
 
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(0.0f, 0.0f, 1.0f);
     glVertex3f(0, 0, 0);
     glVertex3f(5, 0, 0);
 
@@ -260,7 +260,7 @@ void LEDViewport3D::DrawGizmo()
     glVertex3f(0, 0, 0);
     glVertex3f(0, 5, 0);
 
-    glColor3f(0.0f, 0.0f, 1.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0, 0, 0);
     glVertex3f(0, 0, 5);
 
@@ -269,13 +269,13 @@ void LEDViewport3D::DrawGizmo()
     glPointSize(12.0f);
     glBegin(GL_POINTS);
 
-    glColor3f(1.0f, 0.3f, 0.3f);
+    glColor3f(0.3f, 0.3f, 1.0f);
     glVertex3f(5, 0, 0);
 
     glColor3f(0.3f, 1.0f, 0.3f);
     glVertex3f(0, 5, 0);
 
-    glColor3f(0.3f, 0.3f, 1.0f);
+    glColor3f(1.0f, 0.3f, 0.3f);
     glVertex3f(0, 0, 5);
 
     glEnd();
