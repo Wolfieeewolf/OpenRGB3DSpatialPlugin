@@ -36,7 +36,6 @@ public:
     virtual QWidget*            GetWidget()                                                         override;
     virtual QMenu*              GetTrayMenu()                                                       override;
     virtual void                Unload()                                                            override;
-    static unsigned char*       HandleSDK(void* instance, unsigned int pkt_id, unsigned char* data, unsigned int* data_size);
 
     static ResourceManagerInterface* RMPointer;
 

@@ -73,9 +73,3 @@ void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
 {
     QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
 }
-
-unsigned char* OpenRGB3DSpatialPlugin::HandleSDK(void* /*instance*/, unsigned int /*pkt_id*/, unsigned char* /*data*/, unsigned int* data_size)
-{
-    *data_size = 0;
-    return(nullptr);
-}
