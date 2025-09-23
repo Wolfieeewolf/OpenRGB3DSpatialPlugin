@@ -50,6 +50,7 @@ struct ControllerTransform
     RGBController*      controller;
     Transform3D         transform;
     std::vector<LEDPosition3D> led_positions;
+    RGBColor            display_color;
 };
 
 #endif

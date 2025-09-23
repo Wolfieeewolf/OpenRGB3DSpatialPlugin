@@ -204,6 +204,18 @@ void SpatialEffects::UpdateLEDColors()
                 case SPATIAL_EFFECT_WIPE_FRONT_BACK:
                     color = CalculateWipeFrontBackColor(led_pos.world_position, time_offset);
                     break;
+
+                case SPATIAL_EFFECT_LED_SPARKLE:
+                    color = CalculateLEDSparkleColor(led_pos.world_position, time_offset, j);
+                    break;
+
+                case SPATIAL_EFFECT_LED_CHASE:
+                    color = CalculateLEDChaseColor(led_pos.world_position, time_offset, j);
+                    break;
+
+                case SPATIAL_EFFECT_LED_TWINKLE:
+                    color = CalculateLEDTwinkleColor(led_pos.world_position, time_offset, j);
+                    break;
             }
 
             unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
@@ -636,6 +648,49 @@ RGBColor SpatialEffects::CalculateWipeFrontBackColor(Vector3D pos, float time_of
     if(diff >= 8.0f)
     {
         return params.color_end;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateLEDSparkleColor(Vector3D pos, float time_offset, unsigned int led_idx)
+{
+    unsigned int seed = led_idx + (unsigned int)(time_offset / 10.0f);
+    srand(seed);
+
+    if((rand() % 100) < 5)
+    {
+        return params.color_start;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateLEDChaseColor(Vector3D pos, float time_offset, unsigned int led_idx)
+{
+    unsigned int chase_pos = (unsigned int)(time_offset / 2.0f) % 10;
+
+    if(led_idx % 10 == chase_pos)
+    {
+        return params.color_start;
+    }
+    else if(led_idx % 10 == (chase_pos + 9) % 10)
+    {
+        return LerpColor(0x000000, params.color_start, 0.3f);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateLEDTwinkleColor(Vector3D pos, float time_offset, unsigned int led_idx)
+{
+    float led_phase = (led_idx * 0.37f);
+    float twinkle = (sin((time_offset / 20.0f) + led_phase) + 1.0f) / 2.0f;
+
+    if(twinkle > 0.7f)
+    {
+        float brightness = (twinkle - 0.7f) / 0.3f;
+        return LerpColor(0x000000, params.color_start, brightness);
     }
 
     return 0x000000;

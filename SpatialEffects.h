@@ -42,6 +42,9 @@ enum SpatialEffectType
     SPATIAL_EFFECT_WIPE_TOP_BOTTOM  = 19,
     SPATIAL_EFFECT_WIPE_LEFT_RIGHT  = 20,
     SPATIAL_EFFECT_WIPE_FRONT_BACK  = 21,
+    SPATIAL_EFFECT_LED_SPARKLE      = 22,
+    SPATIAL_EFFECT_LED_CHASE        = 23,
+    SPATIAL_EFFECT_LED_TWINKLE      = 24,
 };
 
 struct SpatialEffectParams
@@ -102,6 +105,9 @@ private:
     RGBColor            CalculateWipeTopBottomColor(Vector3D pos, float time_offset);
     RGBColor            CalculateWipeLeftRightColor(Vector3D pos, float time_offset);
     RGBColor            CalculateWipeFrontBackColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateLEDSparkleColor(Vector3D pos, float time_offset, unsigned int led_idx);
+    RGBColor            CalculateLEDChaseColor(Vector3D pos, float time_offset, unsigned int led_idx);
+    RGBColor            CalculateLEDTwinkleColor(Vector3D pos, float time_offset, unsigned int led_idx);
 
     RGBColor            LerpColor(RGBColor a, RGBColor b, float t);
     float               Distance3D(Vector3D a, Vector3D b);

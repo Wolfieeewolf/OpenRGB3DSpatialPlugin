@@ -219,6 +219,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_type_combo->addItem("Wipe Top to Bottom");
     effect_type_combo->addItem("Wipe Left to Right");
     effect_type_combo->addItem("Wipe Front to Back");
+    effect_type_combo->addItem("LED Sparkle");
+    effect_type_combo->addItem("LED Chase");
+    effect_type_combo->addItem("LED Twinkle");
     connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_type_layout->addWidget(effect_type_combo);
     effect_layout->addLayout(effect_type_layout);
@@ -466,9 +469,16 @@ void OpenRGB3DSpatialTab::on_add_controller_clicked()
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
     ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
 
+    int hue = (controller_transforms.size() * 137) % 360;
+    QColor color = QColor::fromHsv(hue, 200, 255);
+    ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+
     controller_transforms.push_back(ctrl_transform);
 
-    controller_list->addItem(QString::fromStdString(controller->name));
+    QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(controller->name));
+    item->setBackground(QBrush(color));
+    item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
+    controller_list->addItem(item);
 
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
