@@ -67,8 +67,32 @@ void OpenRGB3DSpatialTab::SetupUI()
     QGroupBox* controller_group = new QGroupBox("Controllers");
     QVBoxLayout* controller_layout = new QVBoxLayout();
 
+    QLabel* available_label = new QLabel("Available Controllers:");
+    controller_layout->addWidget(available_label);
+
+    available_controllers_list = new QListWidget();
+    available_controllers_list->setMaximumHeight(100);
+    controller_layout->addWidget(available_controllers_list);
+
+    QHBoxLayout* add_remove_layout = new QHBoxLayout();
+    QPushButton* add_button = new QPushButton("Add to 3D View");
+    connect(add_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_controller_clicked);
+    add_remove_layout->addWidget(add_button);
+
+    QPushButton* remove_button = new QPushButton("Remove");
+    connect(remove_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_remove_controller_clicked);
+    add_remove_layout->addWidget(remove_button);
+
+    QPushButton* clear_button = new QPushButton("Clear All");
+    connect(clear_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_clear_all_clicked);
+    add_remove_layout->addWidget(clear_button);
+    controller_layout->addLayout(add_remove_layout);
+
+    QLabel* active_label = new QLabel("Active in 3D View:");
+    controller_layout->addWidget(active_label);
+
     controller_list = new QListWidget();
-    controller_list->setMaximumHeight(150);
+    controller_list->setMaximumHeight(100);
     connect(controller_list, &QListWidget::currentRowChanged, [this](int row) {
         if(row >= 0)
         {
@@ -261,35 +285,14 @@ void OpenRGB3DSpatialTab::LoadDevices()
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
+    available_controllers_list->clear();
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
-        RGBController* controller = controllers[i];
-
-        ControllerTransform* ctrl_transform = new ControllerTransform();
-        ctrl_transform->controller = controller;
-        ctrl_transform->transform.position = {(float)(i * 15), 0.0f, 0.0f};
-        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
-        ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
-        ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
-
-        controller_transforms.push_back(ctrl_transform);
+        available_controllers_list->addItem(QString::fromStdString(controllers[i]->name));
     }
 
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
-
-    controller_list->clear();
-    for(unsigned int i = 0; i < controllers.size(); i++)
-    {
-        controller_list->addItem(QString::fromStdString(controllers[i]->name));
-        qDebug() << "Loaded controller:" << QString::fromStdString(controllers[i]->name)
-                 << "LEDs:" << controller_transforms[i]->led_positions.size()
-                 << "Position:" << controller_transforms[i]->transform.position.x
-                 << controller_transforms[i]->transform.position.y
-                 << controller_transforms[i]->transform.position.z;
-    }
-
-    qDebug() << "Total controllers loaded:" << controller_transforms.size();
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
@@ -434,4 +437,72 @@ void OpenRGB3DSpatialTab::on_color_end_clicked()
 void OpenRGB3DSpatialTab::on_effect_updated()
 {
     viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::on_add_controller_clicked()
+{
+    int selected_row = available_controllers_list->currentRow();
+    if(selected_row < 0)
+    {
+        return;
+    }
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    if(selected_row >= (int)controllers.size())
+    {
+        return;
+    }
+
+    RGBController* controller = controllers[selected_row];
+
+    ControllerTransform* ctrl_transform = new ControllerTransform();
+    ctrl_transform->controller = controller;
+    ctrl_transform->transform.position = {(float)(controller_transforms.size() * 15), 0.0f, 0.0f};
+    ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
+    ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+    ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+
+    controller_transforms.push_back(ctrl_transform);
+
+    controller_list->addItem(QString::fromStdString(controller->name));
+
+    effects->SetControllerTransforms(&controller_transforms);
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
+
+    qDebug() << "Added controller:" << QString::fromStdString(controller->name)
+             << "LEDs:" << ctrl_transform->led_positions.size();
+}
+
+void OpenRGB3DSpatialTab::on_remove_controller_clicked()
+{
+    int selected_row = controller_list->currentRow();
+    if(selected_row < 0 || selected_row >= (int)controller_transforms.size())
+    {
+        return;
+    }
+
+    delete controller_transforms[selected_row];
+    controller_transforms.erase(controller_transforms.begin() + selected_row);
+
+    controller_list->takeItem(selected_row);
+
+    effects->SetControllerTransforms(&controller_transforms);
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
+}
+
+void OpenRGB3DSpatialTab::on_clear_all_clicked()
+{
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        delete controller_transforms[i];
+    }
+    controller_transforms.clear();
+
+    controller_list->clear();
+
+    effects->SetControllerTransforms(&controller_transforms);
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
 }

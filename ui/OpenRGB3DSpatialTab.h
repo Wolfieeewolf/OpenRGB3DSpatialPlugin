@@ -59,6 +59,10 @@ private slots:
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
 
+    void on_add_controller_clicked();
+    void on_remove_controller_clicked();
+    void on_clear_all_clicked();
+
     void on_effect_updated();
 
 private:
@@ -73,6 +77,7 @@ private:
 
     std::vector<ControllerTransform*> controller_transforms;
 
+    QListWidget*                available_controllers_list;
     QListWidget*                controller_list;
     QDoubleSpinBox*             pos_x_spin;
     QDoubleSpinBox*             pos_y_spin;
