@@ -355,11 +355,6 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
     }
 }
 
-void OpenRGB3DSpatialTab::on_effect_type_changed(int /*index*/)
-{
-
-}
-
 void OpenRGB3DSpatialTab::on_effect_speed_changed(int value)
 {
     speed_label->setText(QString::number(value));

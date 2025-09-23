@@ -13,7 +13,6 @@
 #define LEDPOSITION3D_H
 
 #include "RGBController.h"
-#include <string>
 
 struct Vector3D
 {

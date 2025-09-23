@@ -47,7 +47,6 @@ public slots:
     void UpdateDeviceList();
 
 private slots:
-    void on_effect_type_changed(int index);
     void on_effect_speed_changed(int value);
     void on_effect_brightness_changed(int value);
     void on_start_effect_clicked();
