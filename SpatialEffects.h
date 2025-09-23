@@ -61,6 +61,9 @@ public:
     void                SetBrightness(unsigned int brightness);
     void                SetColors(RGBColor start, RGBColor end, bool gradient);
 
+signals:
+    void                EffectUpdated();
+
 protected:
     void                run() override;
 
@@ -76,6 +79,8 @@ private:
 
     RGBColor            LerpColor(RGBColor a, RGBColor b, float t);
     float               Distance3D(Vector3D a, Vector3D b);
+    Vector3D            RotateVector(Vector3D vec, Rotation3D rot);
+    Vector3D            TransformToWorld(Vector3D local_pos, Transform3D transform);
 
     std::vector<ControllerTransform*>*  controller_transforms;
     SpatialEffectParams                 params;

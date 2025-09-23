@@ -117,9 +117,7 @@ void SpatialEffects::UpdateLEDColors()
         {
             LEDPosition3D& led_pos = ctrl_transform->led_positions[j];
 
-            led_pos.world_position.x = led_pos.local_position.x + ctrl_transform->transform.position.x;
-            led_pos.world_position.y = led_pos.local_position.y + ctrl_transform->transform.position.y;
-            led_pos.world_position.z = led_pos.local_position.z + ctrl_transform->transform.position.z;
+            led_pos.world_position = TransformToWorld(led_pos.local_position, ctrl_transform->transform);
 
             RGBColor color = 0;
 
@@ -162,6 +160,8 @@ void SpatialEffects::UpdateLEDColors()
 
         controller->UpdateLEDs();
     }
+
+    emit EffectUpdated();
 }
 
 RGBColor SpatialEffects::CalculateWaveColor(Vector3D pos, float time_offset)
@@ -297,4 +297,48 @@ float SpatialEffects::Distance3D(Vector3D a, Vector3D b)
     float dz = a.z - b.z;
 
     return sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+Vector3D SpatialEffects::RotateVector(Vector3D vec, Rotation3D rot)
+{
+    float rad_x = rot.x * M_PI / 180.0f;
+    float rad_y = rot.y * M_PI / 180.0f;
+    float rad_z = rot.z * M_PI / 180.0f;
+
+    Vector3D result = vec;
+
+    float cos_x = cos(rad_x);
+    float sin_x = sin(rad_x);
+    float y = result.y * cos_x - result.z * sin_x;
+    float z = result.y * sin_x + result.z * cos_x;
+    result.y = y;
+    result.z = z;
+
+    float cos_y = cos(rad_y);
+    float sin_y = sin(rad_y);
+    float x = result.x * cos_y + result.z * sin_y;
+    z = -result.x * sin_y + result.z * cos_y;
+    result.x = x;
+    result.z = z;
+
+    float cos_z = cos(rad_z);
+    float sin_z = sin(rad_z);
+    x = result.x * cos_z - result.y * sin_z;
+    y = result.x * sin_z + result.y * cos_z;
+    result.x = x;
+    result.y = y;
+
+    return result;
+}
+
+Vector3D SpatialEffects::TransformToWorld(Vector3D local_pos, Transform3D transform)
+{
+    Vector3D rotated = RotateVector(local_pos, transform.rotation);
+
+    Vector3D world;
+    world.x = rotated.x * transform.scale.x + transform.position.x;
+    world.y = rotated.y * transform.scale.y + transform.position.y;
+    world.z = rotated.z * transform.scale.z + transform.position.z;
+
+    return world;
 }

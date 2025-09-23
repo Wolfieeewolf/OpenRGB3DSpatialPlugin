@@ -19,6 +19,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     resource_manager(rm)
 {
     effects = new SpatialEffects();
+    connect(effects, SIGNAL(EffectUpdated()), this, SLOT(on_effect_updated()));
 
     current_color_start = 0xFF0000;
     current_color_end = 0x0000FF;
@@ -419,4 +420,9 @@ void OpenRGB3DSpatialTab::on_color_end_clicked()
             effects->SetColors(current_color_start, current_color_end, true);
         }
     }
+}
+
+void OpenRGB3DSpatialTab::on_effect_updated()
+{
+    viewport->UpdateColors();
 }

@@ -59,6 +59,8 @@ private slots:
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
 
+    void on_effect_updated();
+
 private:
     void SetupUI();
     void LoadDevices();
