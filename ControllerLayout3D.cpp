@@ -12,6 +12,10 @@
 #include "ControllerLayout3D.h"
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 std::vector<LEDPosition3D> ControllerLayout3D::GenerateLEDPositions(RGBController* controller)
 {
     std::vector<LEDPosition3D> all_positions;
