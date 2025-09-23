@@ -55,7 +55,7 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_controller_position_changed(int,float,float,float)));
     left_panel->addWidget(viewport, 1);
 
-    QLabel* controls_label = new QLabel("Camera: Middle/Right mouse to rotate, Scroll to zoom");
+    QLabel* controls_label = new QLabel("Camera: Middle mouse to rotate | Shift+Middle mouse to pan | Scroll to zoom");
     controls_label->setStyleSheet("padding: 5px; background: #333; color: #aaa;");
     left_panel->addWidget(controls_label);
 
@@ -119,6 +119,48 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
     });
     position_layout->addWidget(pos_z_spin, 2, 1);
+
+    position_layout->addWidget(new QLabel("Rotation X:"), 3, 0);
+    rot_x_spin = new QDoubleSpinBox();
+    rot_x_spin->setRange(-180, 180);
+    rot_x_spin->setDecimals(1);
+    connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.x = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_x_spin, 3, 1);
+
+    position_layout->addWidget(new QLabel("Rotation Y:"), 4, 0);
+    rot_y_spin = new QDoubleSpinBox();
+    rot_y_spin->setRange(-180, 180);
+    rot_y_spin->setDecimals(1);
+    connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.y = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_y_spin, 4, 1);
+
+    position_layout->addWidget(new QLabel("Rotation Z:"), 5, 0);
+    rot_z_spin = new QDoubleSpinBox();
+    rot_z_spin->setRange(-180, 180);
+    rot_z_spin->setDecimals(1);
+    connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.z = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_z_spin, 5, 1);
 
     controller_layout->addLayout(position_layout);
     controller_group->setLayout(controller_layout);
@@ -216,7 +258,7 @@ void OpenRGB3DSpatialTab::LoadDevices()
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = controller;
         ctrl_transform->transform.position = {(float)(i * 15), 0.0f, 0.0f};
-        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
         ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
 
@@ -255,6 +297,13 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         pos_x_spin->setValue(ctrl->transform.position.x);
         pos_y_spin->setValue(ctrl->transform.position.y);
         pos_z_spin->setValue(ctrl->transform.position.z);
+        rot_x_spin->setValue(ctrl->transform.rotation.x);
+        rot_y_spin->setValue(ctrl->transform.rotation.y);
+        rot_z_spin->setValue(ctrl->transform.rotation.z);
+    }
+    else if(index == -1)
+    {
+        controller_list->setCurrentRow(-1);
     }
 }
 

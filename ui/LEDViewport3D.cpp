@@ -30,7 +30,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
     camera_target_y = 0.0f;
     camera_target_z = 0.0f;
 
-    dragging = false;
+    dragging_rotate = false;
+    dragging_pan = false;
     dragging_gizmo = false;
 
     setMinimumSize(800, 600);
@@ -163,6 +164,9 @@ void LEDViewport3D::DrawControllers()
 
         glPushMatrix();
         glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
+        glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
+        glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
+        glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
 
         DrawLEDs(ctrl);
 
@@ -241,6 +245,9 @@ void LEDViewport3D::DrawGizmo()
 
     glPushMatrix();
     glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
+    glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
+    glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
+    glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
 
     glLineWidth(4.0f);
     glBegin(GL_LINES);
@@ -288,17 +295,26 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             selected_controller_idx = picked;
             emit ControllerSelected(picked);
+            dragging_gizmo = true;
             update();
         }
-
-        if(selected_controller_idx >= 0)
+        else
         {
-            dragging_gizmo = true;
+            selected_controller_idx = -1;
+            emit ControllerSelected(-1);
+            update();
         }
     }
-    else if(event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)
+    else if(event->button() == Qt::MiddleButton)
     {
-        dragging = true;
+        if(event->modifiers() & Qt::ShiftModifier)
+        {
+            dragging_pan = true;
+        }
+        else
+        {
+            dragging_rotate = true;
+        }
     }
 }
 
@@ -311,7 +327,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         UpdateGizmo(delta.x(), delta.y());
         update();
     }
-    else if(dragging)
+    else if(dragging_rotate)
     {
         camera_yaw += delta.x() * 0.5f;
         camera_pitch -= delta.y() * 0.5f;
@@ -321,13 +337,22 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
         update();
     }
+    else if(dragging_pan)
+    {
+        float pan_scale = 0.05f;
+        camera_target_x -= delta.x() * pan_scale;
+        camera_target_y += delta.y() * pan_scale;
+
+        update();
+    }
 
     last_mouse_pos = event->pos();
 }
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent* /*event*/)
 {
-    dragging = false;
+    dragging_rotate = false;
+    dragging_pan = false;
     dragging_gizmo = false;
 }
 

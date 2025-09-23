@@ -22,18 +22,17 @@ struct Vector3D
     float z;
 };
 
-struct Quaternion
+struct Rotation3D
 {
     float x;
     float y;
     float z;
-    float w;
 };
 
 struct Transform3D
 {
     Vector3D    position;
-    Quaternion  rotation;
+    Rotation3D  rotation;
     Vector3D    scale;
 };
 

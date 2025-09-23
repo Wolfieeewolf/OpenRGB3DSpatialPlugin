@@ -65,7 +65,8 @@ private:
     float   camera_target_y;
     float   camera_target_z;
 
-    bool    dragging;
+    bool    dragging_rotate;
+    bool    dragging_pan;
     bool    dragging_gizmo;
     QPoint  last_mouse_pos;
 };

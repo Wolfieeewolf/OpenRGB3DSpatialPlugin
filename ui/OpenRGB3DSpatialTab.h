@@ -75,6 +75,9 @@ private:
     QDoubleSpinBox*             pos_x_spin;
     QDoubleSpinBox*             pos_y_spin;
     QDoubleSpinBox*             pos_z_spin;
+    QDoubleSpinBox*             rot_x_spin;
+    QDoubleSpinBox*             rot_y_spin;
+    QDoubleSpinBox*             rot_z_spin;
 
     QComboBox*                  effect_type_combo;
     QSlider*                    effect_speed_slider;
