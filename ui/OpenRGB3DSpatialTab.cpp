@@ -19,7 +19,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     resource_manager(rm)
 {
     effects = new SpatialEffects();
-    viewport_bridge = nullptr;
 
     current_color_start = 0xFF0000;
     current_color_end = 0x0000FF;
@@ -42,55 +41,15 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         delete controller_transforms[i];
     }
     controller_transforms.clear();
-
-    if(viewport_bridge)
-    {
-        delete viewport_bridge;
-    }
 }
 
 void OpenRGB3DSpatialTab::SetupUI()
 {
     QVBoxLayout* main_layout = new QVBoxLayout(this);
 
-    viewport_widget = new QQuickWidget();
-    viewport_widget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-
-    QUrl qml_url("qrc:/ui/Viewport3DSimple.qml");
-    viewport_widget->setSource(qml_url);
-    viewport_widget->setMinimumHeight(500);
-
-    if(viewport_widget->status() == QQuickWidget::Error)
-    {
-        qDebug() << "QML Load Error:" << viewport_widget->errors();
-    }
-
-    QQuickItem* root_item = viewport_widget->rootObject();
-    if(root_item)
-    {
-        viewport_bridge = new Viewport3DBridge(root_item, this);
-    }
-    else
-    {
-        qDebug() << "Failed to get root QML object";
-    }
-
-    main_layout->addWidget(viewport_widget);
-
-    QGroupBox* gizmo_group = new QGroupBox("Transform Tools");
-    QHBoxLayout* gizmo_layout = new QHBoxLayout();
-
-    QComboBox* gizmo_mode_combo = new QComboBox();
-    gizmo_mode_combo->addItem("Translate");
-    gizmo_mode_combo->addItem("Rotate");
-    gizmo_mode_combo->addItem("Scale");
-    connect(gizmo_mode_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_gizmo_mode_changed(int)));
-    gizmo_layout->addWidget(new QLabel("Gizmo Mode:"));
-    gizmo_layout->addWidget(gizmo_mode_combo);
-    gizmo_layout->addStretch();
-
-    gizmo_group->setLayout(gizmo_layout);
-    main_layout->addWidget(gizmo_group);
+    QLabel* info_label = new QLabel("3D Spatial LED Control - Position your controllers and run spatial effects");
+    info_label->setStyleSheet("font-weight: bold; padding: 5px;");
+    main_layout->addWidget(info_label);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -168,7 +127,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
 void OpenRGB3DSpatialTab::LoadDevices()
 {
-    if(!resource_manager || !viewport_bridge)
+    if(!resource_manager)
     {
         return;
     }
@@ -187,8 +146,6 @@ void OpenRGB3DSpatialTab::LoadDevices()
         ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
 
         controller_transforms.push_back(ctrl_transform);
-
-        viewport_bridge->addController(controller);
     }
 
     effects->SetControllerTransforms(&controller_transforms);
@@ -197,16 +154,6 @@ void OpenRGB3DSpatialTab::LoadDevices()
 void OpenRGB3DSpatialTab::UpdateDeviceList()
 {
     LoadDevices();
-}
-
-void OpenRGB3DSpatialTab::on_gizmo_mode_changed(int index)
-{
-    if(viewport_widget && viewport_widget->rootObject())
-    {
-        QMetaObject::invokeMethod(viewport_widget->rootObject(), "setProperty",
-                                 Q_ARG(QVariant, "gizmoMode"),
-                                 Q_ARG(QVariant, index));
-    }
 }
 
 void OpenRGB3DSpatialTab::on_effect_type_changed(int /*index*/)

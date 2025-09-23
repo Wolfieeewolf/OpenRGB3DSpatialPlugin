@@ -8,10 +8,7 @@
 QT +=                                                                                           \
     core                                                                                        \
     gui                                                                                         \
-    widgets                                                                                     \
-    quick                                                                                       \
-    quickwidgets                                                                                \
-    quick3d
+    widgets
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY
 TEMPLATE = lib
@@ -128,7 +125,6 @@ HEADERS +=                                                                      
     SpatialEffects.h                                                                            \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/Grid3DWidget.h                                                                           \
-    ui/Viewport3DBridge.h                                                                       \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -137,10 +133,6 @@ SOURCES +=                                                                      
     SpatialEffects.cpp                                                                          \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/Grid3DWidget.cpp                                                                         \
-    ui/Viewport3DBridge.cpp                                                                     \
-
-RESOURCES +=                                                                                    \
-    qml.qrc
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

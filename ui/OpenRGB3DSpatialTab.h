@@ -22,12 +22,9 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
-#include <QQuickWidget>
-#include <QQmlContext>
 
 #include "ResourceManagerInterface.h"
 #include "SpatialEffects.h"
-#include "Viewport3DBridge.h"
 #include "LEDPosition3D.h"
 
 namespace Ui
@@ -56,8 +53,6 @@ private slots:
     void on_color_start_clicked();
     void on_color_end_clicked();
 
-    void on_gizmo_mode_changed(int index);
-
 private:
     void SetupUI();
     void LoadDevices();
@@ -66,8 +61,6 @@ private:
     ResourceManagerInterface*   resource_manager;
 
     SpatialEffects*             effects;
-    Viewport3DBridge*           viewport_bridge;
-    QQuickWidget*               viewport_widget;
 
     std::vector<ControllerTransform*> controller_transforms;
 
