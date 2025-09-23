@@ -599,32 +599,63 @@ int LEDViewport3D::PickGizmoAxis(int mouse_x, int mouse_y)
     float closest_dist = 1000000.0f;
     int closest_axis = -1;
 
-    for(int i = 0; i < 3; i++)
+    if(gizmo_rotate_mode)
     {
-        GLdouble axisX, axisY, axisZ;
-        gluProject(ctrl->transform.position.x + axes[i].x,
-                   ctrl->transform.position.y + axes[i].y,
-                   ctrl->transform.position.z + axes[i].z,
-                   mv, proj, vp, &axisX, &axisY, &axisZ);
+        float radius = 50.0f;
+        float dist_from_center = sqrt((winX - centerX) * (winX - centerX) + (winY - centerY) * (winY - centerY));
 
-        float line_dx = axisX - centerX;
-        float line_dy = axisY - centerY;
-        float line_len = sqrt(line_dx*line_dx + line_dy*line_dy);
-
-        if(line_len < 0.1f) continue;
-
-        float u = ((winX - centerX) * line_dx + (winY - centerY) * line_dy) / (line_len * line_len);
-        u = fmax(0.0f, fmin(1.0f, u));
-
-        float proj_x = centerX + u * line_dx;
-        float proj_y = centerY + u * line_dy;
-
-        float dist = sqrt((winX - proj_x) * (winX - proj_x) + (winY - proj_y) * (winY - proj_y));
-
-        if(dist < 15.0f && dist < closest_dist)
+        if(dist_from_center <= radius)
         {
-            closest_dist = dist;
-            closest_axis = i;
+            for(int i = 0; i < 3; i++)
+            {
+                GLdouble axisX, axisY, axisZ;
+                gluProject(ctrl->transform.position.x + axes[i].x,
+                           ctrl->transform.position.y + axes[i].y,
+                           ctrl->transform.position.z + axes[i].z,
+                           mv, proj, vp, &axisX, &axisY, &axisZ);
+
+                float angle = atan2(winY - centerY, winX - centerX);
+                float axis_angle = atan2(axisY - centerY, axisX - centerX);
+                float angle_diff = fabs(angle - axis_angle);
+                if(angle_diff > M_PI) angle_diff = 2.0f * M_PI - angle_diff;
+
+                if(angle_diff < M_PI / 6.0f)
+                {
+                    closest_axis = i;
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        for(int i = 0; i < 3; i++)
+        {
+            GLdouble axisX, axisY, axisZ;
+            gluProject(ctrl->transform.position.x + axes[i].x,
+                       ctrl->transform.position.y + axes[i].y,
+                       ctrl->transform.position.z + axes[i].z,
+                       mv, proj, vp, &axisX, &axisY, &axisZ);
+
+            float line_dx = axisX - centerX;
+            float line_dy = axisY - centerY;
+            float line_len = sqrt(line_dx*line_dx + line_dy*line_dy);
+
+            if(line_len < 0.1f) continue;
+
+            float u = ((winX - centerX) * line_dx + (winY - centerY) * line_dy) / (line_len * line_len);
+            u = fmax(0.0f, fmin(1.0f, u));
+
+            float proj_x = centerX + u * line_dx;
+            float proj_y = centerY + u * line_dy;
+
+            float dist = sqrt((winX - proj_x) * (winX - proj_x) + (winY - proj_y) * (winY - proj_y));
+
+            if(dist < 15.0f && dist < closest_dist)
+            {
+                closest_dist = dist;
+                closest_axis = i;
+            }
         }
     }
 
@@ -646,7 +677,7 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
 
         if(dragging_axis == 0)
         {
-            ctrl->transform.rotation.x += dx * rot_scale;
+            ctrl->transform.rotation.x -= dy * rot_scale;
         }
         else if(dragging_axis == 1)
         {
