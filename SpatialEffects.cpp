@@ -152,6 +152,42 @@ void SpatialEffects::UpdateLEDColors()
                 case SPATIAL_EFFECT_SPIRAL:
                     color = CalculateSpiralColor(led_pos.world_position, time_offset);
                     break;
+
+                case SPATIAL_EFFECT_ORBIT:
+                    color = CalculateOrbitColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_SPHERE_PULSE:
+                    color = CalculateSpherePulseColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_CUBE_ROTATE:
+                    color = CalculateCubeRotateColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_METEOR:
+                    color = CalculateMeteorColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_DNA_HELIX:
+                    color = CalculateDNAHelixColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_ROOM_SWEEP:
+                    color = CalculateRoomSweepColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_CORNERS:
+                    color = CalculateCornersColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_VERTICAL_BARS:
+                    color = CalculateVerticalBarsColor(led_pos.world_position, time_offset);
+                    break;
+
+                case SPATIAL_EFFECT_BREATHING_SPHERE:
+                    color = CalculateBreathingSphereColor(led_pos.world_position, time_offset);
+                    break;
             }
 
             unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
@@ -341,4 +377,171 @@ Vector3D SpatialEffects::TransformToWorld(Vector3D local_pos, Transform3D transf
     world.z = rotated.z * transform.scale.z + transform.position.z;
 
     return world;
+}
+
+RGBColor SpatialEffects::CalculateOrbitColor(Vector3D pos, float time_offset)
+{
+    float angle = atan2(pos.z, pos.x) + time_offset / 20.0f;
+    float radius = sqrt(pos.x * pos.x + pos.z * pos.z);
+
+    float orbit_x = cos(angle) * radius;
+    float orbit_z = sin(angle) * radius;
+
+    float dist = sqrt((pos.x - orbit_x) * (pos.x - orbit_x) + (pos.z - orbit_z) * (pos.z - orbit_z));
+    float brightness = fmax(0.0f, 1.0f - dist / 5.0f);
+
+    return LerpColor(0x000000, params.color_start, brightness);
+}
+
+RGBColor SpatialEffects::CalculateSpherePulseColor(Vector3D pos, float time_offset)
+{
+    float dist = Distance3D(pos, params.origin);
+    float pulse_radius = fmod(time_offset / 5.0f, 50.0f);
+
+    float diff = fabs(dist - pulse_radius);
+    float brightness = fmax(0.0f, 1.0f - diff / 3.0f);
+
+    if(params.use_gradient)
+    {
+        float grad = (sin(time_offset / 20.0f) + 1.0f) / 2.0f;
+        return LerpColor(params.color_start, params.color_end, grad * brightness);
+    }
+
+    return LerpColor(0x000000, params.color_start, brightness);
+}
+
+RGBColor SpatialEffects::CalculateCubeRotateColor(Vector3D pos, float time_offset)
+{
+    float angle = time_offset / 30.0f;
+
+    float rotated_x = pos.x * cos(angle) - pos.z * sin(angle);
+    float rotated_z = pos.x * sin(angle) + pos.z * cos(angle);
+
+    float max_abs = fmax(fmax(fabs(rotated_x), fabs(pos.y)), fabs(rotated_z));
+
+    if(max_abs > 20.0f && max_abs < 25.0f)
+    {
+        return params.color_start;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateMeteorColor(Vector3D pos, float time_offset)
+{
+    float meteor_y = 50.0f - fmod(time_offset / 3.0f, 100.0f);
+    float meteor_x = time_offset / 5.0f;
+
+    float dist_x = pos.x - meteor_x;
+    float dist_y = pos.y - meteor_y;
+    float dist_z = pos.z;
+
+    float trail_length = 15.0f;
+    float dist = sqrt(dist_x * dist_x + dist_z * dist_z);
+
+    if(dist_y > 0 && dist_y < trail_length && dist < 3.0f)
+    {
+        float brightness = 1.0f - (dist_y / trail_length);
+        return LerpColor(params.color_end, params.color_start, brightness);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateDNAHelixColor(Vector3D pos, float time_offset)
+{
+    float y_offset = time_offset / 10.0f;
+
+    float angle1 = (pos.y + y_offset) / 5.0f;
+    float helix1_x = cos(angle1) * 10.0f;
+    float helix1_z = sin(angle1) * 10.0f;
+
+    float angle2 = angle1 + M_PI;
+    float helix2_x = cos(angle2) * 10.0f;
+    float helix2_z = sin(angle2) * 10.0f;
+
+    float dist1 = sqrt((pos.x - helix1_x) * (pos.x - helix1_x) + (pos.z - helix1_z) * (pos.z - helix1_z));
+    float dist2 = sqrt((pos.x - helix2_x) * (pos.x - helix2_x) + (pos.z - helix2_z) * (pos.z - helix2_z));
+
+    if(dist1 < 3.0f)
+    {
+        return params.color_start;
+    }
+    else if(dist2 < 3.0f)
+    {
+        return params.color_end;
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateRoomSweepColor(Vector3D pos, float time_offset)
+{
+    float sweep_pos = fmod(time_offset / 5.0f, 100.0f) - 50.0f;
+
+    float dist = fabs(pos.x - sweep_pos);
+
+    if(dist < 5.0f)
+    {
+        float brightness = 1.0f - (dist / 5.0f);
+        return LerpColor(0x000000, params.color_start, brightness);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateCornersColor(Vector3D pos, float time_offset)
+{
+    int corner = (int)(time_offset / 30.0f) % 8;
+
+    float target_x = (corner & 1) ? 25.0f : -25.0f;
+    float target_y = (corner & 2) ? 25.0f : -25.0f;
+    float target_z = (corner & 4) ? 25.0f : -25.0f;
+
+    float dist = sqrt(
+        (pos.x - target_x) * (pos.x - target_x) +
+        (pos.y - target_y) * (pos.y - target_y) +
+        (pos.z - target_z) * (pos.z - target_z)
+    );
+
+    if(dist < 10.0f)
+    {
+        float brightness = 1.0f - (dist / 10.0f);
+        return LerpColor(0x000000, params.color_start, brightness);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateVerticalBarsColor(Vector3D pos, float time_offset)
+{
+    float offset = time_offset / 10.0f;
+    float bar_width = 5.0f;
+    float spacing = 15.0f;
+
+    float x_mod = fmod(pos.x + offset, spacing);
+
+    if(x_mod < bar_width)
+    {
+        float t = x_mod / bar_width;
+        return LerpColor(params.color_start, params.color_end, t);
+    }
+
+    return 0x000000;
+}
+
+RGBColor SpatialEffects::CalculateBreathingSphereColor(Vector3D pos, float time_offset)
+{
+    float breath = (sin(time_offset / 30.0f) + 1.0f) / 2.0f;
+    float radius = 15.0f + breath * 15.0f;
+
+    float dist = Distance3D(pos, params.origin);
+
+    if(fabs(dist - radius) < 3.0f)
+    {
+        float brightness = 1.0f - fabs(dist - radius) / 3.0f;
+        return LerpColor(params.color_start, params.color_end, breath * brightness);
+    }
+
+    return 0x000000;
 }

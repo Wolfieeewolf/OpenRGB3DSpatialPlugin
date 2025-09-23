@@ -182,6 +182,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_type_combo->addItem("Plasma");
     effect_type_combo->addItem("Ripple");
     effect_type_combo->addItem("Spiral");
+    effect_type_combo->addItem("Orbit");
+    effect_type_combo->addItem("Sphere Pulse");
+    effect_type_combo->addItem("Cube Rotate");
+    effect_type_combo->addItem("Meteor");
+    effect_type_combo->addItem("DNA Helix");
+    effect_type_combo->addItem("Room Sweep");
+    effect_type_combo->addItem("Corners");
+    effect_type_combo->addItem("Vertical Bars");
+    effect_type_combo->addItem("Breathing Sphere");
     connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_type_layout->addWidget(effect_type_combo);
     effect_layout->addLayout(effect_type_layout);

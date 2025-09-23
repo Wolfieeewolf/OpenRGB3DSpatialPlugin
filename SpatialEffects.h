@@ -29,6 +29,15 @@ enum SpatialEffectType
     SPATIAL_EFFECT_PLASMA           = 6,
     SPATIAL_EFFECT_RIPPLE           = 7,
     SPATIAL_EFFECT_SPIRAL           = 8,
+    SPATIAL_EFFECT_ORBIT            = 9,
+    SPATIAL_EFFECT_SPHERE_PULSE     = 10,
+    SPATIAL_EFFECT_CUBE_ROTATE      = 11,
+    SPATIAL_EFFECT_METEOR           = 12,
+    SPATIAL_EFFECT_DNA_HELIX        = 13,
+    SPATIAL_EFFECT_ROOM_SWEEP       = 14,
+    SPATIAL_EFFECT_CORNERS          = 15,
+    SPATIAL_EFFECT_VERTICAL_BARS    = 16,
+    SPATIAL_EFFECT_BREATHING_SPHERE = 17,
 };
 
 struct SpatialEffectParams
@@ -76,6 +85,15 @@ private:
     RGBColor            CalculatePlasmaColor(Vector3D pos, float time_offset);
     RGBColor            CalculateRippleColor(Vector3D pos, float time_offset);
     RGBColor            CalculateSpiralColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateOrbitColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateSpherePulseColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateCubeRotateColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateMeteorColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateDNAHelixColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateRoomSweepColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateCornersColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateVerticalBarsColor(Vector3D pos, float time_offset);
+    RGBColor            CalculateBreathingSphereColor(Vector3D pos, float time_offset);
 
     RGBColor            LerpColor(RGBColor a, RGBColor b, float t);
     float               Distance3D(Vector3D a, Vector3D b);
