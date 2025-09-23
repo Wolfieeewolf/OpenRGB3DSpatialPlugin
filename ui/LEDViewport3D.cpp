@@ -33,6 +33,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
     dragging_rotate = false;
     dragging_pan = false;
     dragging_gizmo = false;
+    dragging_axis = -1;
+    gizmo_rotate_mode = false;
 
     setMinimumSize(800, 600);
 }
@@ -249,34 +251,120 @@ void LEDViewport3D::DrawGizmo()
     glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
     glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
 
-    glLineWidth(4.0f);
-    glBegin(GL_LINES);
+    if(gizmo_rotate_mode)
+    {
+        glLineWidth(3.0f);
+        glBegin(GL_LINE_LOOP);
+        glColor3f(0.0f, 0.0f, 1.0f);
+        for(int i = 0; i <= 32; i++)
+        {
+            float angle = (i / 32.0f) * 2.0f * M_PI;
+            glVertex3f(cos(angle) * 5.0f, sin(angle) * 5.0f, 0);
+        }
+        glEnd();
 
-    glColor3f(0.0f, 0.0f, 1.0f);
-    glVertex3f(0, 0, 0);
-    glVertex3f(5, 0, 0);
+        glBegin(GL_LINE_LOOP);
+        glColor3f(0.0f, 1.0f, 0.0f);
+        for(int i = 0; i <= 32; i++)
+        {
+            float angle = (i / 32.0f) * 2.0f * M_PI;
+            glVertex3f(cos(angle) * 5.0f, 0, sin(angle) * 5.0f);
+        }
+        glEnd();
 
-    glColor3f(0.0f, 1.0f, 0.0f);
-    glVertex3f(0, 0, 0);
-    glVertex3f(0, 5, 0);
+        glBegin(GL_LINE_LOOP);
+        glColor3f(1.0f, 0.0f, 0.0f);
+        for(int i = 0; i <= 32; i++)
+        {
+            float angle = (i / 32.0f) * 2.0f * M_PI;
+            glVertex3f(0, cos(angle) * 5.0f, sin(angle) * 5.0f);
+        }
+        glEnd();
+    }
+    else
+    {
+        glLineWidth(4.0f);
+        glBegin(GL_LINES);
 
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glVertex3f(0, 0, 0);
-    glVertex3f(0, 0, 5);
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(7, 0, 0);
 
-    glEnd();
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 7, 0);
 
-    glPointSize(12.0f);
-    glBegin(GL_POINTS);
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 0, 7);
 
-    glColor3f(0.3f, 0.3f, 1.0f);
-    glVertex3f(5, 0, 0);
+        glEnd();
 
-    glColor3f(0.3f, 1.0f, 0.3f);
-    glVertex3f(0, 5, 0);
+        glBegin(GL_TRIANGLES);
 
-    glColor3f(1.0f, 0.3f, 0.3f);
-    glVertex3f(0, 0, 5);
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(7, 0, 0);
+        glVertex3f(6, 0.3f, 0);
+        glVertex3f(6, -0.3f, 0);
+
+        glVertex3f(7, 0, 0);
+        glVertex3f(6, 0, 0.3f);
+        glVertex3f(6, 0, -0.3f);
+
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(0, 7, 0);
+        glVertex3f(0.3f, 6, 0);
+        glVertex3f(-0.3f, 6, 0);
+
+        glVertex3f(0, 7, 0);
+        glVertex3f(0, 6, 0.3f);
+        glVertex3f(0, 6, -0.3f);
+
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex3f(0, 0, 7);
+        glVertex3f(0.3f, 0, 6);
+        glVertex3f(-0.3f, 0, 6);
+
+        glVertex3f(0, 0, 7);
+        glVertex3f(0, 0.3f, 6);
+        glVertex3f(0, -0.3f, 6);
+
+        glEnd();
+    }
+
+    float cube_size = 0.8f;
+    glBegin(GL_QUADS);
+    glColor3f(1.0f, 0.5f, 0.0f);
+
+    glVertex3f(-cube_size, -cube_size, -cube_size);
+    glVertex3f(cube_size, -cube_size, -cube_size);
+    glVertex3f(cube_size, cube_size, -cube_size);
+    glVertex3f(-cube_size, cube_size, -cube_size);
+
+    glVertex3f(-cube_size, -cube_size, cube_size);
+    glVertex3f(cube_size, -cube_size, cube_size);
+    glVertex3f(cube_size, cube_size, cube_size);
+    glVertex3f(-cube_size, cube_size, cube_size);
+
+    glVertex3f(-cube_size, -cube_size, -cube_size);
+    glVertex3f(-cube_size, -cube_size, cube_size);
+    glVertex3f(-cube_size, cube_size, cube_size);
+    glVertex3f(-cube_size, cube_size, -cube_size);
+
+    glVertex3f(cube_size, -cube_size, -cube_size);
+    glVertex3f(cube_size, -cube_size, cube_size);
+    glVertex3f(cube_size, cube_size, cube_size);
+    glVertex3f(cube_size, cube_size, -cube_size);
+
+    glVertex3f(-cube_size, -cube_size, -cube_size);
+    glVertex3f(cube_size, -cube_size, -cube_size);
+    glVertex3f(cube_size, -cube_size, cube_size);
+    glVertex3f(-cube_size, -cube_size, cube_size);
+
+    glVertex3f(-cube_size, cube_size, -cube_size);
+    glVertex3f(cube_size, cube_size, -cube_size);
+    glVertex3f(cube_size, cube_size, cube_size);
+    glVertex3f(-cube_size, cube_size, cube_size);
 
     glEnd();
 
@@ -290,12 +378,32 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
     if(event->button() == Qt::LeftButton)
     {
+        if(selected_controller_idx >= 0)
+        {
+            if(PickGizmoCenter(event->x(), event->y()))
+            {
+                gizmo_rotate_mode = !gizmo_rotate_mode;
+                update();
+                return;
+            }
+
+            int axis = PickGizmoAxis(event->x(), event->y());
+            if(axis >= 0)
+            {
+                dragging_gizmo = true;
+                dragging_axis = axis;
+                update();
+                return;
+            }
+        }
+
         int picked = PickController(event->x(), event->y());
         if(picked >= 0)
         {
             selected_controller_idx = picked;
             emit ControllerSelected(picked);
             dragging_gizmo = true;
+            dragging_axis = -1;
             update();
         }
         else
@@ -427,6 +535,101 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     return closest_idx;
 }
 
+bool LEDViewport3D::PickGizmoCenter(int mouse_x, int mouse_y)
+{
+    if(selected_controller_idx < 0 || !controller_transforms)
+    {
+        return false;
+    }
+
+    makeCurrent();
+
+    GLint viewport[4];
+    GLdouble modelview[16];
+    GLdouble projection[16];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+    glGetDoublev(GL_PROJECTION_MATRIX, projection);
+
+    GLfloat winX = (float)mouse_x;
+    GLfloat winY = (float)(viewport[3] - mouse_y);
+
+    ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+
+    GLdouble objX, objY, objZ;
+    gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
+               modelview, projection, viewport, &objX, &objY, &objZ);
+
+    float dx = winX - objX;
+    float dy = winY - objY;
+    float dist = sqrt(dx*dx + dy*dy);
+
+    return dist < 20.0f;
+}
+
+int LEDViewport3D::PickGizmoAxis(int mouse_x, int mouse_y)
+{
+    if(selected_controller_idx < 0 || !controller_transforms)
+    {
+        return -1;
+    }
+
+    makeCurrent();
+
+    GLint vp[4];
+    GLdouble mv[16];
+    GLdouble proj[16];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    glGetDoublev(GL_MODELVIEW_MATRIX, mv);
+    glGetDoublev(GL_PROJECTION_MATRIX, proj);
+
+    GLfloat winX = (float)mouse_x;
+    GLfloat winY = (float)(vp[3] - mouse_y);
+
+    ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+
+    GLdouble centerX, centerY, centerZ;
+    gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
+               mv, proj, vp, &centerX, &centerY, &centerZ);
+
+    float axis_length = 7.0f;
+    Vector3D axes[3] = {{axis_length, 0, 0}, {0, axis_length, 0}, {0, 0, axis_length}};
+
+    float closest_dist = 1000000.0f;
+    int closest_axis = -1;
+
+    for(int i = 0; i < 3; i++)
+    {
+        GLdouble axisX, axisY, axisZ;
+        gluProject(ctrl->transform.position.x + axes[i].x,
+                   ctrl->transform.position.y + axes[i].y,
+                   ctrl->transform.position.z + axes[i].z,
+                   mv, proj, vp, &axisX, &axisY, &axisZ);
+
+        float line_dx = axisX - centerX;
+        float line_dy = axisY - centerY;
+        float line_len = sqrt(line_dx*line_dx + line_dy*line_dy);
+
+        if(line_len < 0.1f) continue;
+
+        float u = ((winX - centerX) * line_dx + (winY - centerY) * line_dy) / (line_len * line_len);
+        u = fmax(0.0f, fmin(1.0f, u));
+
+        float proj_x = centerX + u * line_dx;
+        float proj_y = centerY + u * line_dy;
+
+        float dist = sqrt((winX - proj_x) * (winX - proj_x) + (winY - proj_y) * (winY - proj_y));
+
+        if(dist < 15.0f && dist < closest_dist)
+        {
+            closest_dist = dist;
+            closest_axis = i;
+        }
+    }
+
+    return closest_axis;
+}
+
 void LEDViewport3D::UpdateGizmo(int dx, int dy)
 {
     if(!controller_transforms || selected_controller_idx < 0)
@@ -436,21 +639,61 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
 
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
 
-    float yaw_rad = camera_yaw * M_PI / 180.0f;
-    float pitch_rad = camera_pitch * M_PI / 180.0f;
+    if(gizmo_rotate_mode)
+    {
+        float rot_scale = 0.5f;
 
-    float right_x = cos(yaw_rad);
-    float right_z = -sin(yaw_rad);
+        if(dragging_axis == 0)
+        {
+            ctrl->transform.rotation.x += dx * rot_scale;
+        }
+        else if(dragging_axis == 1)
+        {
+            ctrl->transform.rotation.y += dx * rot_scale;
+        }
+        else if(dragging_axis == 2)
+        {
+            ctrl->transform.rotation.z += dx * rot_scale;
+        }
+        else
+        {
+            ctrl->transform.rotation.y += dx * rot_scale;
+            ctrl->transform.rotation.x -= dy * rot_scale;
+        }
+    }
+    else
+    {
+        float move_scale = 0.1f;
 
-    float up_x = -sin(yaw_rad) * sin(pitch_rad);
-    float up_y = cos(pitch_rad);
-    float up_z = -cos(yaw_rad) * sin(pitch_rad);
+        if(dragging_axis == 0)
+        {
+            ctrl->transform.position.x += dx * move_scale;
+        }
+        else if(dragging_axis == 1)
+        {
+            ctrl->transform.position.y -= dy * move_scale;
+        }
+        else if(dragging_axis == 2)
+        {
+            ctrl->transform.position.z -= dy * move_scale;
+        }
+        else
+        {
+            float yaw_rad = camera_yaw * M_PI / 180.0f;
+            float pitch_rad = camera_pitch * M_PI / 180.0f;
 
-    float move_scale = 0.1f;
+            float right_x = cos(yaw_rad);
+            float right_z = -sin(yaw_rad);
 
-    ctrl->transform.position.x += (right_x * dx + up_x * -dy) * move_scale;
-    ctrl->transform.position.y += up_y * -dy * move_scale;
-    ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
+            float up_x = -sin(yaw_rad) * sin(pitch_rad);
+            float up_y = cos(pitch_rad);
+            float up_z = -cos(yaw_rad) * sin(pitch_rad);
+
+            ctrl->transform.position.x += (right_x * dx + up_x * -dy) * move_scale;
+            ctrl->transform.position.y += up_y * -dy * move_scale;
+            ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
+        }
+    }
 
     emit ControllerPositionChanged(selected_controller_idx,
                                    ctrl->transform.position.x,

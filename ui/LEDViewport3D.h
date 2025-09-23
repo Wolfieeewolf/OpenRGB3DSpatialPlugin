@@ -53,6 +53,8 @@ private:
     void DrawGizmo();
 
     int PickController(int mouse_x, int mouse_y);
+    int PickGizmoAxis(int mouse_x, int mouse_y);
+    bool PickGizmoCenter(int mouse_x, int mouse_y);
     void UpdateGizmo(int dx, int dy);
 
     std::vector<ControllerTransform*>*  controller_transforms;
@@ -68,6 +70,8 @@ private:
     bool    dragging_rotate;
     bool    dragging_pan;
     bool    dragging_gizmo;
+    int     dragging_axis;
+    bool    gizmo_rotate_mode;
     QPoint  last_mouse_pos;
 };
 
