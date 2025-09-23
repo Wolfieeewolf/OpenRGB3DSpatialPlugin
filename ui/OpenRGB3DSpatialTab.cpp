@@ -12,6 +12,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerLayout3D.h"
 #include <QColorDialog>
+#include <QDebug>
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -54,13 +55,24 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     viewport_widget = new QQuickWidget();
     viewport_widget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    viewport_widget->setSource(QUrl("qrc:/ui/Viewport3D.qml"));
+
+    QUrl qml_url("qrc:/ui/Viewport3DSimple.qml");
+    viewport_widget->setSource(qml_url);
     viewport_widget->setMinimumHeight(500);
+
+    if(viewport_widget->status() == QQuickWidget::Error)
+    {
+        qDebug() << "QML Load Error:" << viewport_widget->errors();
+    }
 
     QQuickItem* root_item = viewport_widget->rootObject();
     if(root_item)
     {
         viewport_bridge = new Viewport3DBridge(root_item, this);
+    }
+    else
+    {
+        qDebug() << "Failed to get root QML object";
     }
 
     main_layout->addWidget(viewport_widget);

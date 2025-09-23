@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick3D 6.5
 import QtQuick.Controls 2.15
 
 Item {
