@@ -1,56 +1,54 @@
-name: Build OpenRGB 3D Spatial Plugin
+name: Build Plugin
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master ]
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '5.15.2'
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
 
-    - name: Build
-      run: |
-        qmake OpenRGB3DSpatialPlugin.pro
-        nmake
+      - name: Build
+        run: |
+          qmake OpenRGB3DSpatialPlugin.pro
+          nmake release
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: OpenRGB3DSpatialPlugin-Windows
-        path: release/*.dll
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: OpenRGB3DSpatialPlugin-Windows
+          path: release/OpenRGB3DSpatialPlugin.dll
 
   build-linux:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
-    - name: Install Qt
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y qt5-qmake qtbase5-dev
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qtbase5-dev qt5-qmake qtbase5-dev-tools libusb-1.0-0-dev libhidapi-dev
 
-    - name: Build
-      run: |
-        qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
-        make
+      - name: Build
+        run: |
+          qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+          make -j$(nproc)
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: OpenRGB3DSpatialPlugin-Linux
-        path: '*.so'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: OpenRGB3DSpatialPlugin-Linux
+          path: libOpenRGB3DSpatialPlugin.so

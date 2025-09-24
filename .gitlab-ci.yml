@@ -1,0 +1,24 @@
+# Simple CI - Linux build only (uses GitLab free runners)
+stages:
+  - build
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+build-linux:
+  stage: build
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y git build-essential qtbase5-dev qt5-qmake qtbase5-dev-tools libusb-1.0-0-dev libhidapi-dev
+  script:
+    - qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+    - make -j$(nproc)
+  artifacts:
+    name: "OpenRGB3DSpatialPlugin-Linux-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - libOpenRGB3DSpatialPlugin.so
+    expire_in: 30 days
+  only:
+    - master
+    - tags
