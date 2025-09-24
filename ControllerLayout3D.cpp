@@ -52,20 +52,20 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateMatrixLayout(RGBControlle
 {
     std::vector<LEDPosition3D> positions;
 
-    zone* current_zone = &controller->zones[zone_idx];
+    zone*                   current_zone    = &controller->zones[zone_idx];
 
     if(current_zone->matrix_map == nullptr)
     {
         return GenerateLinearLayout(controller, zone_idx);
     }
 
-    unsigned int width = current_zone->matrix_map->width;
-    unsigned int height = current_zone->matrix_map->height;
-    unsigned int* map = current_zone->matrix_map->map;
+    unsigned int            width           = current_zone->matrix_map->width;
+    unsigned int            height          = current_zone->matrix_map->height;
+    unsigned int*           map             = current_zone->matrix_map->map;
 
-    float led_spacing = 1.0f;
-    float center_x = (width - 1) * led_spacing / 2.0f;
-    float center_y = (height - 1) * led_spacing / 2.0f;
+    float                   led_spacing     = 1.0f;
+    float                   center_x        = (width - 1) * led_spacing / 2.0f;
+    float                   center_y        = (height - 1) * led_spacing / 2.0f;
 
     for(unsigned int y = 0; y < height; y++)
     {
@@ -98,12 +98,12 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateLinearLayout(RGBControlle
 {
     std::vector<LEDPosition3D> positions;
 
-    zone* current_zone = &controller->zones[zone_idx];
+    zone*                   current_zone    = &controller->zones[zone_idx];
 
-    float led_spacing = 1.0f;
-    unsigned int led_count = current_zone->leds_count;
-    float total_width = (led_count - 1) * led_spacing;
-    float center_x = total_width / 2.0f;
+    float                   led_spacing     = 1.0f;
+    unsigned int            led_count       = current_zone->leds_count;
+    float                   total_width     = (led_count - 1) * led_spacing;
+    float                   center_x        = total_width / 2.0f;
 
     for(unsigned int led_idx = 0; led_idx < led_count; led_idx++)
     {
@@ -128,7 +128,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateSingleLayout(RGBControlle
 {
     std::vector<LEDPosition3D> positions;
 
-    zone* current_zone = &controller->zones[zone_idx];
+    zone*                   current_zone    = &controller->zones[zone_idx];
 
     for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
     {

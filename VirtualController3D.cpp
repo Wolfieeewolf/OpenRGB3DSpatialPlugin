@@ -30,25 +30,25 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions()
 {
     std::vector<LEDPosition3D> positions;
 
-    for(const auto& mapping : led_mappings)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
-        if(mapping.controller == nullptr)
+        if(led_mappings[i].controller == nullptr)
         {
             continue;
         }
 
-        if(mapping.zone_idx >= mapping.controller->zones.size())
+        if(led_mappings[i].zone_idx >= led_mappings[i].controller->zones.size())
         {
             continue;
         }
 
         LEDPosition3D pos;
-        pos.controller = mapping.controller;
-        pos.zone_idx = mapping.zone_idx;
-        pos.led_idx = mapping.led_idx;
-        pos.local_position.x = (float)mapping.x;
-        pos.local_position.y = (float)mapping.y;
-        pos.local_position.z = (float)mapping.z;
+        pos.controller = led_mappings[i].controller;
+        pos.zone_idx = led_mappings[i].zone_idx;
+        pos.led_idx = led_mappings[i].led_idx;
+        pos.local_position.x = (float)led_mappings[i].x;
+        pos.local_position.y = (float)led_mappings[i].y;
+        pos.local_position.z = (float)led_mappings[i].z;
         pos.world_position = pos.local_position;
         positions.push_back(pos);
     }
@@ -58,17 +58,15 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions()
 
 void VirtualController3D::UpdateColors(std::vector<RGBController*>& controllers)
 {
-    for(const auto& mapping : led_mappings)
+    for(unsigned int m = 0; m < led_mappings.size(); m++)
     {
-        bool found = false;
         for(unsigned int i = 0; i < controllers.size(); i++)
         {
-            if(controllers[i] == mapping.controller)
+            if(controllers[i] == led_mappings[m].controller)
             {
-                unsigned int led_global_idx = controllers[i]->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                unsigned int led_global_idx = controllers[i]->zones[led_mappings[m].zone_idx].start_idx + led_mappings[m].led_idx;
                 if(led_global_idx < controllers[i]->colors.size())
                 {
-                    found = true;
                 }
                 break;
             }
@@ -85,16 +83,16 @@ json VirtualController3D::ToJson() const
     j["depth"] = depth;
 
     json mappings_array = json::array();
-    for(const auto& mapping : led_mappings)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
         json m;
-        m["x"] = mapping.x;
-        m["y"] = mapping.y;
-        m["z"] = mapping.z;
-        m["controller_name"] = mapping.controller->name;
-        m["controller_location"] = mapping.controller->location;
-        m["zone_idx"] = mapping.zone_idx;
-        m["led_idx"] = mapping.led_idx;
+        m["x"] = led_mappings[i].x;
+        m["y"] = led_mappings[i].y;
+        m["z"] = led_mappings[i].z;
+        m["controller_name"] = led_mappings[i].controller->name;
+        m["controller_location"] = led_mappings[i].controller->location;
+        m["zone_idx"] = led_mappings[i].zone_idx;
+        m["led_idx"] = led_mappings[i].led_idx;
         mappings_array.push_back(m);
     }
     j["mappings"] = mappings_array;
@@ -111,10 +109,11 @@ VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RG
 
     std::vector<GridLEDMapping> mappings;
 
-    for(const auto& m : j["mappings"])
+    json mappings_json = j["mappings"];
+    for(unsigned int i = 0; i < mappings_json.size(); i++)
     {
-        std::string ctrl_name = m["controller_name"];
-        std::string ctrl_location = m["controller_location"];
+        std::string ctrl_name = mappings_json[i]["controller_name"];
+        std::string ctrl_location = mappings_json[i]["controller_location"];
 
         RGBController* found_controller = nullptr;
         for(unsigned int i = 0; i < controllers.size(); i++)
@@ -129,12 +128,12 @@ VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RG
         if(found_controller)
         {
             GridLEDMapping mapping;
-            mapping.x = m["x"];
-            mapping.y = m["y"];
-            mapping.z = m["z"];
+            mapping.x = mappings_json[i]["x"];
+            mapping.y = mappings_json[i]["y"];
+            mapping.z = mappings_json[i]["z"];
             mapping.controller = found_controller;
-            mapping.zone_idx = m["zone_idx"];
-            mapping.led_idx = m["led_idx"];
+            mapping.zone_idx = mappings_json[i]["zone_idx"];
+            mapping.led_idx = mappings_json[i]["led_idx"];
             mappings.push_back(mapping);
         }
     }

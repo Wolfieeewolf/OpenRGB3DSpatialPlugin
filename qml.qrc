@@ -1,7 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>ui/Viewport3D.qml</file>
-        <file>ui/Viewport3DSimple.qml</file>
-        <file>ui/ControllerModel.qml</file>
-    </qresource>
-</RCC>

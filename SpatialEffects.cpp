@@ -233,6 +233,7 @@ void SpatialEffects::UpdateLEDColors()
 
         if(controller != nullptr)
         {
+            controller->SetCustomMode();
             controller->UpdateLEDs();
         }
         else
@@ -245,9 +246,10 @@ void SpatialEffects::UpdateLEDColors()
                     updated_controllers.insert(ctrl_transform->led_positions[j].controller);
                 }
             }
-            for(RGBController* ctrl : updated_controllers)
+            for(std::set<RGBController*>::iterator it = updated_controllers.begin(); it != updated_controllers.end(); ++it)
             {
-                ctrl->UpdateLEDs();
+                (*it)->SetCustomMode();
+                (*it)->UpdateLEDs();
             }
         }
     }
