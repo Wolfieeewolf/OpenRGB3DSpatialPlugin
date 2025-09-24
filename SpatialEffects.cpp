@@ -11,6 +11,7 @@
 
 #include "SpatialEffects.h"
 #include <cmath>
+#include <set>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -218,11 +219,37 @@ void SpatialEffects::UpdateLEDColors()
                     break;
             }
 
-            unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
-            controller->colors[led_global_idx] = color;
+            if(controller != nullptr)
+            {
+                unsigned int led_global_idx = controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
+                controller->colors[led_global_idx] = color;
+            }
+            else if(led_pos.controller != nullptr)
+            {
+                unsigned int led_global_idx = led_pos.controller->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
+                led_pos.controller->colors[led_global_idx] = color;
+            }
         }
 
-        controller->UpdateLEDs();
+        if(controller != nullptr)
+        {
+            controller->UpdateLEDs();
+        }
+        else
+        {
+            std::set<RGBController*> updated_controllers;
+            for(unsigned int j = 0; j < ctrl_transform->led_positions.size(); j++)
+            {
+                if(ctrl_transform->led_positions[j].controller != nullptr)
+                {
+                    updated_controllers.insert(ctrl_transform->led_positions[j].controller);
+                }
+            }
+            for(RGBController* ctrl : updated_controllers)
+            {
+                ctrl->UpdateLEDs();
+            }
+        }
     }
 
     emit EffectUpdated();

@@ -31,6 +31,7 @@
 #include "SpatialEffects.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
+#include "VirtualController3D.h"
 
 namespace Ui
 {
@@ -69,6 +70,10 @@ private slots:
     void on_load_layout_clicked();
     void on_delete_layout_clicked();
     void on_layout_profile_changed(int index);
+    void on_create_custom_controller_clicked();
+    void on_import_custom_controller_clicked();
+    void on_export_custom_controller_clicked();
+    void on_edit_custom_controller_clicked();
 
     void on_effect_updated();
 
@@ -81,6 +86,13 @@ private:
     void TryAutoLoadLayout();
     void PopulateLayoutDropdown();
     void SaveCurrentLayoutName();
+    void SaveCustomControllers();
+    void LoadCustomControllers();
+    void UpdateAvailableItemCombo();
+    void UpdateAvailableControllersList();
+    bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
+    int GetUnassignedZoneCount(RGBController* controller);
+    int GetUnassignedLEDCount(RGBController* controller);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -116,6 +128,8 @@ private:
     QCheckBox*                  auto_load_checkbox;
     QTimer*                     auto_load_timer;
     bool                        first_load;
+
+    std::vector<VirtualController3D*> virtual_controllers;
 
     RGBColor                    current_color_start;
     RGBColor                    current_color_end;

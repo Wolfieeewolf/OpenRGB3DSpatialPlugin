@@ -123,15 +123,19 @@ HEADERS +=                                                                      
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
     SpatialEffects.h                                                                            \
+    VirtualController3D.h                                                                       \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
+    ui/CustomControllerDialog.h                                                                 \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
     SpatialEffects.cpp                                                                          \
+    VirtualController3D.cpp                                                                     \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/LEDViewport3D.cpp                                                                        \
+    ui/CustomControllerDialog.cpp                                                               \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

@@ -12,13 +12,22 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
+#include "CustomControllerDialog.h"
 #include <QColorDialog>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
 #include <QMessageBox>
+#include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 #include <QFileInfo>
 #include <QInputDialog>
+#include <QFileDialog>
 #include <filesystem>
 #include "SettingsManager.h"
 
@@ -37,6 +46,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     SetupUI();
     LoadDevices();
+    LoadCustomControllers();
 
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
@@ -64,6 +74,12 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         delete controller_transforms[i];
     }
     controller_transforms.clear();
+
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+    {
+        delete virtual_controllers[i];
+    }
+    virtual_controllers.clear();
 }
 
 void OpenRGB3DSpatialTab::SetupUI()
@@ -97,6 +113,25 @@ void OpenRGB3DSpatialTab::SetupUI()
         on_granularity_changed(granularity_combo->currentIndex());
     });
     controller_layout->addWidget(available_controllers_list);
+
+    QPushButton* custom_controller_button = new QPushButton("Create Custom 3D Controller");
+    connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
+    controller_layout->addWidget(custom_controller_button);
+
+    QHBoxLayout* custom_io_layout = new QHBoxLayout();
+    QPushButton* import_button = new QPushButton("Import Custom Controller");
+    connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
+    custom_io_layout->addWidget(import_button);
+
+    QPushButton* export_button = new QPushButton("Export Custom Controller");
+    connect(export_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
+    custom_io_layout->addWidget(export_button);
+
+    QPushButton* edit_button = new QPushButton("Edit Custom Controller");
+    connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
+    custom_io_layout->addWidget(edit_button);
+
+    controller_layout->addLayout(custom_io_layout);
 
     QHBoxLayout* granularity_layout = new QHBoxLayout();
     granularity_layout->addWidget(new QLabel("Add:"));
@@ -369,16 +404,35 @@ void OpenRGB3DSpatialTab::LoadDevices()
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-
-    available_controllers_list->clear();
-    for(unsigned int i = 0; i < controllers.size(); i++)
-    {
-        available_controllers_list->addItem(QString::fromStdString(controllers[i]->name));
-    }
+    UpdateAvailableControllersList();
 
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
+}
+
+void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
+{
+    available_controllers_list->clear();
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    for(unsigned int i = 0; i < controllers.size(); i++)
+    {
+        int unassigned_zones = GetUnassignedZoneCount(controllers[i]);
+        int unassigned_leds = GetUnassignedLEDCount(controllers[i]);
+
+        if(unassigned_leds > 0)
+        {
+            QString display_text = QString::fromStdString(controllers[i]->name) +
+                                   QString(" [%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
+            available_controllers_list->addItem(display_text);
+        }
+    }
+
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+    {
+        available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_controllers[i]->GetName()));
+    }
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
@@ -516,56 +570,145 @@ void OpenRGB3DSpatialTab::on_effect_updated()
     viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::on_granularity_changed(int index)
+void OpenRGB3DSpatialTab::on_granularity_changed(int /*index*/)
+{
+    UpdateAvailableItemCombo();
+}
+
+void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
 {
     item_combo->clear();
 
-    int ctrl_row = available_controllers_list->currentRow();
-    if(ctrl_row < 0 || ctrl_row >= (int)resource_manager->GetRGBControllers().size())
-    {
-        return;
-    }
-
-    RGBController* controller = resource_manager->GetRGBControllers()[ctrl_row];
-
-    if(index == 0)
-    {
-        item_combo->addItem(QString::fromStdString(controller->name));
-    }
-    else if(index == 1)
-    {
-        for(unsigned int i = 0; i < controller->zones.size(); i++)
-        {
-            item_combo->addItem(QString::fromStdString(controller->zones[i].name));
-        }
-    }
-    else if(index == 2)
-    {
-        for(unsigned int i = 0; i < controller->leds.size(); i++)
-        {
-            item_combo->addItem(QString::fromStdString(controller->leds[i].name));
-        }
-    }
-}
-
-void OpenRGB3DSpatialTab::on_add_clicked()
-{
-    int ctrl_row = available_controllers_list->currentRow();
-    int granularity = granularity_combo->currentIndex();
-    int item_row = item_combo->currentIndex();
-
-    if(ctrl_row < 0 || item_row < 0)
+    int list_row = available_controllers_list->currentRow();
+    if(list_row < 0)
     {
         return;
     }
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    if(ctrl_row >= (int)controllers.size())
+
+    int actual_ctrl_idx = -1;
+    int visible_idx = 0;
+
+    for(unsigned int i = 0; i < controllers.size(); i++)
+    {
+        if(GetUnassignedLEDCount(controllers[i]) > 0)
+        {
+            if(visible_idx == list_row)
+            {
+                actual_ctrl_idx = i;
+                break;
+            }
+            visible_idx++;
+        }
+    }
+
+    if(actual_ctrl_idx >= 0)
+    {
+        RGBController* controller = controllers[actual_ctrl_idx];
+        int granularity = granularity_combo->currentIndex();
+
+        if(granularity == 0)
+        {
+            if(!IsItemInScene(controller, granularity, 0))
+            {
+                item_combo->addItem(QString::fromStdString(controller->name), QVariant::fromValue(qMakePair(actual_ctrl_idx, 0)));
+            }
+        }
+        else if(granularity == 1)
+        {
+            for(unsigned int i = 0; i < controller->zones.size(); i++)
+            {
+                if(!IsItemInScene(controller, granularity, i))
+                {
+                    item_combo->addItem(QString::fromStdString(controller->zones[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                }
+            }
+        }
+        else if(granularity == 2)
+        {
+            for(unsigned int i = 0; i < controller->leds.size(); i++)
+            {
+                if(!IsItemInScene(controller, granularity, i))
+                {
+                    item_combo->addItem(QString::fromStdString(controller->leds[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                }
+            }
+        }
+        return;
+    }
+
+    int virtual_offset = visible_idx;
+    if(list_row >= virtual_offset && list_row < virtual_offset + (int)virtual_controllers.size())
+    {
+        item_combo->addItem("Whole Device", QVariant::fromValue(qMakePair(-1, list_row - virtual_offset)));
+    }
+}
+
+void OpenRGB3DSpatialTab::on_add_clicked()
+{
+    int granularity = granularity_combo->currentIndex();
+    int combo_idx = item_combo->currentIndex();
+
+    if(combo_idx < 0)
     {
         return;
     }
 
-    RGBController* controller = controllers[ctrl_row];
+    QPair<int, int> data = item_combo->currentData().value<QPair<int, int>>();
+    int ctrl_idx = data.first;
+    int item_row = data.second;
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    if(ctrl_idx < 0)
+    {
+        if(item_row >= (int)virtual_controllers.size())
+        {
+            LOG_ERROR("[OpenRGB 3D Spatial] Invalid virtual controller index: %d (max: %d)", item_row, (int)virtual_controllers.size());
+            return;
+        }
+
+        VirtualController3D* virtual_ctrl = virtual_controllers[item_row];
+
+        LOG_INFO("[OpenRGB 3D Spatial] Adding virtual controller '%s' to scene", virtual_ctrl->GetName().c_str());
+
+        ControllerTransform* ctrl_transform = new ControllerTransform();
+        ctrl_transform->controller = nullptr;
+        ctrl_transform->transform.position = {(float)(controller_transforms.size() * 15), 0.0f, 0.0f};
+        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
+        ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+
+        LOG_INFO("[OpenRGB 3D Spatial] Generating LED positions for virtual controller");
+        ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
+        LOG_INFO("[OpenRGB 3D Spatial] Generated %d LED positions", (int)ctrl_transform->led_positions.size());
+
+        int hue = (controller_transforms.size() * 137) % 360;
+        QColor color = QColor::fromHsv(hue, 200, 255);
+        ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+
+        controller_transforms.push_back(ctrl_transform);
+
+        QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
+        QListWidgetItem* list_item = new QListWidgetItem(name);
+        list_item->setBackground(QBrush(color));
+        list_item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
+        controller_list->addItem(list_item);
+
+        effects->SetControllerTransforms(&controller_transforms);
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+        return;
+    }
+
+    if(ctrl_idx >= (int)controllers.size())
+    {
+        return;
+    }
+
+    RGBController* controller = controllers[ctrl_idx];
 
     ControllerTransform* ctrl_transform = new ControllerTransform();
     ctrl_transform->controller = controller;
@@ -638,6 +781,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
 
     LOG_VERBOSE("[OpenRGB 3D Spatial] Added %s (%u LEDs) to 3D view", name.toStdString().c_str(), ctrl_transform->led_positions.size());
 }
@@ -658,6 +803,8 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
 }
 
 void OpenRGB3DSpatialTab::on_clear_all_clicked()
@@ -673,6 +820,8 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
 }
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
@@ -761,6 +910,273 @@ void OpenRGB3DSpatialTab::on_delete_layout_clicked()
 void OpenRGB3DSpatialTab::on_layout_profile_changed(int /*index*/)
 {
     SaveCurrentLayoutName();
+}
+
+void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
+{
+    CustomControllerDialog dialog(resource_manager, this);
+
+    if(dialog.exec() == QDialog::Accepted)
+    {
+        VirtualController3D* virtual_ctrl = new VirtualController3D(
+            dialog.GetControllerName().toStdString(),
+            dialog.GetGridWidth(),
+            dialog.GetGridHeight(),
+            dialog.GetGridDepth(),
+            dialog.GetLEDMappings()
+        );
+
+        virtual_controllers.push_back(virtual_ctrl);
+
+        LOG_INFO("[OpenRGB 3D Spatial] Created custom controller: %s (%dx%dx%d)",
+                 virtual_ctrl->GetName().c_str(),
+                 virtual_ctrl->GetWidth(),
+                 virtual_ctrl->GetHeight(),
+                 virtual_ctrl->GetDepth());
+
+        available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
+
+        SaveCustomControllers();
+
+        QMessageBox::information(this, "Custom Controller Created",
+                                QString("Custom controller '%1' created successfully!\n\nYou can now add it to the 3D view.")
+                                .arg(QString::fromStdString(virtual_ctrl->GetName())));
+    }
+}
+
+void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
+{
+    if(virtual_controllers.empty())
+    {
+        QMessageBox::warning(this, "No Custom Controllers", "No custom controllers available to export");
+        return;
+    }
+
+    QStringList controller_names;
+    for(const auto& ctrl : virtual_controllers)
+    {
+        controller_names.append(QString::fromStdString(ctrl->GetName()));
+    }
+
+    bool ok;
+    QString selected = QInputDialog::getItem(this, "Export Custom Controller",
+                                            "Select controller to export:",
+                                            controller_names, 0, false, &ok);
+    if(!ok || selected.isEmpty())
+    {
+        return;
+    }
+
+    int selected_idx = controller_names.indexOf(selected);
+    VirtualController3D* ctrl = virtual_controllers[selected_idx];
+
+    QString filename = QFileDialog::getSaveFileName(this, "Export Custom Controller",
+                                                    QString::fromStdString(ctrl->GetName()) + ".3dctrl",
+                                                    "3D Controller Files (*.3dctrl)");
+    if(filename.isEmpty())
+    {
+        return;
+    }
+
+    json export_data = ctrl->ToJson();
+
+    std::ofstream file(filename.toStdString());
+    if(file.is_open())
+    {
+        file << export_data.dump(4);
+        file.close();
+        QMessageBox::information(this, "Export Successful",
+                                QString("Custom controller '%1' exported successfully to:\n%2")
+                                .arg(selected).arg(filename));
+        LOG_INFO("[OpenRGB 3D Spatial] Exported custom controller '%s' to %s",
+                 ctrl->GetName().c_str(), filename.toStdString().c_str());
+    }
+    else
+    {
+        QMessageBox::critical(this, "Export Failed",
+                            QString("Failed to export custom controller to:\n%1").arg(filename));
+    }
+}
+
+void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
+{
+    QString filename = QFileDialog::getOpenFileName(this, "Import Custom Controller",
+                                                    "",
+                                                    "3D Controller Files (*.3dctrl);;All Files (*)");
+    if(filename.isEmpty())
+    {
+        return;
+    }
+
+    std::ifstream file(filename.toStdString());
+    if(!file.is_open())
+    {
+        QMessageBox::critical(this, "Import Failed",
+                            QString("Failed to open file:\n%1").arg(filename));
+        return;
+    }
+
+    try
+    {
+        json import_data;
+        file >> import_data;
+        file.close();
+
+        std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+        VirtualController3D* virtual_ctrl = VirtualController3D::FromJson(import_data, controllers);
+
+        if(virtual_ctrl)
+        {
+            for(const auto& existing : virtual_controllers)
+            {
+                if(existing->GetName() == virtual_ctrl->GetName())
+                {
+                    QMessageBox::StandardButton reply = QMessageBox::question(this, "Duplicate Name",
+                        QString("A custom controller named '%1' already exists.\n\nDo you want to replace it?")
+                        .arg(QString::fromStdString(virtual_ctrl->GetName())),
+                        QMessageBox::Yes | QMessageBox::No);
+
+                    if(reply == QMessageBox::No)
+                    {
+                        delete virtual_ctrl;
+                        return;
+                    }
+                    else
+                    {
+                        auto it = std::find(virtual_controllers.begin(), virtual_controllers.end(), existing);
+                        if(it != virtual_controllers.end())
+                        {
+                            delete *it;
+                            virtual_controllers.erase(it);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            virtual_controllers.push_back(virtual_ctrl);
+            SaveCustomControllers();
+            UpdateAvailableControllersList();
+
+            LOG_INFO("[OpenRGB 3D Spatial] Imported custom controller: %s (%dx%dx%d)",
+                     virtual_ctrl->GetName().c_str(),
+                     virtual_ctrl->GetWidth(),
+                     virtual_ctrl->GetHeight(),
+                     virtual_ctrl->GetDepth());
+
+            QMessageBox::information(this, "Import Successful",
+                                    QString("Custom controller '%1' imported successfully!\n\n"
+                                           "Grid: %2x%3x%4\n"
+                                           "LEDs: %5\n\n"
+                                           "You can now add it to the 3D view.")
+                                    .arg(QString::fromStdString(virtual_ctrl->GetName()))
+                                    .arg(virtual_ctrl->GetWidth())
+                                    .arg(virtual_ctrl->GetHeight())
+                                    .arg(virtual_ctrl->GetDepth())
+                                    .arg(virtual_ctrl->GetMappings().size()));
+        }
+        else
+        {
+            QMessageBox::warning(this, "Import Warning",
+                                "Failed to import custom controller.\n\n"
+                                "The required physical controllers may not be connected.");
+        }
+    }
+    catch(const std::exception& e)
+    {
+        QMessageBox::critical(this, "Import Failed",
+                            QString("Failed to parse custom controller file:\n\n%1").arg(e.what()));
+        LOG_ERROR("[OpenRGB 3D Spatial] Failed to import custom controller: %s", e.what());
+    }
+}
+
+void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
+{
+    int list_row = available_controllers_list->currentRow();
+    if(list_row < 0)
+    {
+        QMessageBox::warning(this, "No Selection", "Please select a custom controller from the available controllers list");
+        return;
+    }
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    int visible_physical_count = 0;
+    for(unsigned int i = 0; i < controllers.size(); i++)
+    {
+        if(GetUnassignedLEDCount(controllers[i]) > 0)
+        {
+            visible_physical_count++;
+        }
+    }
+
+    int virtual_idx = list_row - visible_physical_count;
+
+    if(virtual_idx < 0 || virtual_idx >= (int)virtual_controllers.size())
+    {
+        QMessageBox::warning(this, "Not a Custom Controller", "Selected item is not a custom controller.\n\nOnly custom controllers can be edited.");
+        return;
+    }
+
+    VirtualController3D* virtual_ctrl = virtual_controllers[virtual_idx];
+
+    CustomControllerDialog dialog(resource_manager, this);
+    dialog.setWindowTitle("Edit Custom 3D Controller");
+    dialog.LoadExistingController(virtual_ctrl->GetName(),
+                                  virtual_ctrl->GetWidth(),
+                                  virtual_ctrl->GetHeight(),
+                                  virtual_ctrl->GetDepth(),
+                                  virtual_ctrl->GetMappings());
+
+    if(dialog.exec() == QDialog::Accepted)
+    {
+        std::string old_name = virtual_ctrl->GetName();
+        std::string new_name = dialog.GetControllerName().toStdString();
+
+        if(old_name != new_name)
+        {
+            std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+            std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+
+            std::string safe_old_name = old_name;
+            for(char& c : safe_old_name)
+            {
+                if(c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+                {
+                    c = '_';
+                }
+            }
+
+            std::string old_filepath = custom_dir + "/" + safe_old_name + ".json";
+            if(filesystem::exists(old_filepath))
+            {
+                filesystem::remove(old_filepath);
+                LOG_INFO("[OpenRGB 3D Spatial] Removed old custom controller file: %s", old_filepath.c_str());
+            }
+        }
+
+        delete virtual_ctrl;
+        virtual_controllers[virtual_idx] = new VirtualController3D(
+            new_name,
+            dialog.GetGridWidth(),
+            dialog.GetGridHeight(),
+            dialog.GetGridDepth(),
+            dialog.GetLEDMappings()
+        );
+
+        SaveCustomControllers();
+        UpdateAvailableControllersList();
+
+        LOG_INFO("[OpenRGB 3D Spatial] Edited custom controller: %s (%dx%dx%d)",
+                 virtual_controllers[virtual_idx]->GetName().c_str(),
+                 virtual_controllers[virtual_idx]->GetWidth(),
+                 virtual_controllers[virtual_idx]->GetHeight(),
+                 virtual_controllers[virtual_idx]->GetDepth());
+
+        QMessageBox::information(this, "Custom Controller Updated",
+                                QString("Custom controller '%1' updated successfully!")
+                                .arg(QString::fromStdString(virtual_controllers[virtual_idx]->GetName())));
+    }
 }
 
 void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
@@ -931,6 +1347,8 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
 
     LOG_INFO("[OpenRGB 3D Spatial] Loaded layout from %s (%d items)", filename.c_str(), (int)controller_transforms.size());
 }
@@ -1050,4 +1468,185 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     {
         LOG_INFO("[OpenRGB 3D Spatial] Auto-load is disabled, skipping");
     }
+}
+
+void OpenRGB3DSpatialTab::SaveCustomControllers()
+{
+    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+    std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+
+#ifdef _WIN32
+    CreateDirectoryA(custom_dir.c_str(), NULL);
+#else
+    mkdir(custom_dir.c_str(), 0755);
+#endif
+
+    for(const auto& ctrl : virtual_controllers)
+    {
+        std::string safe_name = ctrl->GetName();
+        for(char& c : safe_name)
+        {
+            if(c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+            {
+                c = '_';
+            }
+        }
+
+        std::string filepath = custom_dir + "/" + safe_name + ".json";
+        std::ofstream file(filepath);
+        if(file.is_open())
+        {
+            json ctrl_json = ctrl->ToJson();
+            file << ctrl_json.dump(4);
+            file.close();
+            LOG_INFO("[OpenRGB 3D Spatial] Saved custom controller '%s' to %s", ctrl->GetName().c_str(), filepath.c_str());
+        }
+        else
+        {
+            LOG_ERROR("[OpenRGB 3D Spatial] Failed to save custom controller '%s' to %s", ctrl->GetName().c_str(), filepath.c_str());
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::LoadCustomControllers()
+{
+    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+    std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+
+    filesystem::path dir_path(custom_dir);
+    if(!filesystem::exists(dir_path))
+    {
+        LOG_INFO("[OpenRGB 3D Spatial] Custom controllers directory does not exist: %s", custom_dir.c_str());
+        return;
+    }
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    int loaded_count = 0;
+
+    try
+    {
+        for(const auto& entry : filesystem::directory_iterator(dir_path))
+        {
+            if(entry.path().extension() == ".json")
+            {
+                std::ifstream file(entry.path().string());
+                if(file.is_open())
+                {
+                    try
+                    {
+                        json ctrl_json;
+                        file >> ctrl_json;
+                        file.close();
+
+                        VirtualController3D* virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
+                        if(virtual_ctrl)
+                        {
+                            virtual_controllers.push_back(virtual_ctrl);
+                            available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
+                            LOG_INFO("[OpenRGB 3D Spatial] Loaded custom controller: %s (%dx%dx%d) from %s",
+                                     virtual_ctrl->GetName().c_str(),
+                                     virtual_ctrl->GetWidth(),
+                                     virtual_ctrl->GetHeight(),
+                                     virtual_ctrl->GetDepth(),
+                                     entry.path().filename().string().c_str());
+                            loaded_count++;
+                        }
+                    }
+                    catch(const std::exception& e)
+                    {
+                        LOG_ERROR("[OpenRGB 3D Spatial] Failed to parse custom controller file %s: %s",
+                                 entry.path().filename().string().c_str(), e.what());
+                    }
+                }
+            }
+        }
+
+        LOG_INFO("[OpenRGB 3D Spatial] Loaded %d custom controllers from %s", loaded_count, custom_dir.c_str());
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB 3D Spatial] Failed to load custom controllers directory: %s", e.what());
+    }
+}
+
+bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granularity, int item_idx)
+{
+    for(const auto& ct : controller_transforms)
+    {
+        if(ct->controller == nullptr) continue;
+
+        if(granularity == 0)
+        {
+            if(ct->controller == controller)
+            {
+                bool is_whole_device = true;
+                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+                if(ct->led_positions.size() != all_positions.size())
+                {
+                    is_whole_device = false;
+                }
+                if(is_whole_device)
+                {
+                    return true;
+                }
+            }
+        }
+        else if(granularity == 1)
+        {
+            if(ct->controller == controller)
+            {
+                for(const auto& pos : ct->led_positions)
+                {
+                    if(pos.zone_idx == (unsigned int)item_idx)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        else if(granularity == 2)
+        {
+            if(ct->controller == controller)
+            {
+                for(const auto& pos : ct->led_positions)
+                {
+                    unsigned int global_led_idx = controller->zones[pos.zone_idx].start_idx + pos.led_idx;
+                    if(global_led_idx == (unsigned int)item_idx)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
+{
+    int unassigned_count = 0;
+    for(unsigned int i = 0; i < controller->zones.size(); i++)
+    {
+        if(!IsItemInScene(controller, 1, i))
+        {
+            unassigned_count++;
+        }
+    }
+    return unassigned_count;
+}
+
+int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
+{
+    int total_leds = (int)controller->leds.size();
+    int assigned_leds = 0;
+
+    for(const auto& ct : controller_transforms)
+    {
+        if(ct->controller == controller)
+        {
+            assigned_leds += (int)ct->led_positions.size();
+        }
+    }
+
+    return total_leds - assigned_leds;
 }

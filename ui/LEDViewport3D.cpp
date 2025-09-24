@@ -216,8 +216,21 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
     {
         LEDPosition3D& led = ctrl->led_positions[i];
 
-        unsigned int led_global_idx = ctrl->controller->zones[led.zone_idx].start_idx + led.led_idx;
-        RGBColor color = ctrl->controller->colors[led_global_idx];
+        RGBController* controller = ctrl->controller ? ctrl->controller : led.controller;
+
+        if(controller == nullptr || led.zone_idx >= controller->zones.size())
+        {
+            continue;
+        }
+
+        unsigned int led_global_idx = controller->zones[led.zone_idx].start_idx + led.led_idx;
+
+        if(led_global_idx >= controller->colors.size())
+        {
+            continue;
+        }
+
+        RGBColor color = controller->colors[led_global_idx];
 
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
