@@ -110,7 +110,7 @@ If you find this plugin useful, consider supporting development:
 
 ## Credits
 
-Created by Wolfie with assistance from Claude Code (Anthropic AI)
+Created by Wolfieee with assistance from Claude Code (Anthropic AI)
 
 Built for the OpenRGB community
 
