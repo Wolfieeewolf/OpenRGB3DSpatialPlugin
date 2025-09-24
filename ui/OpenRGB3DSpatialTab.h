@@ -24,6 +24,8 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QListWidget>
+#include <QCheckBox>
+#include <QTimer>
 
 #include "ResourceManagerInterface.h"
 #include "SpatialEffects.h"
@@ -65,6 +67,8 @@ private slots:
 
     void on_save_layout_clicked();
     void on_load_layout_clicked();
+    void on_delete_layout_clicked();
+    void on_layout_profile_changed(int index);
 
     void on_effect_updated();
 
@@ -73,6 +77,10 @@ private:
     void LoadDevices();
     void SaveLayout(const std::string& filename);
     void LoadLayout(const std::string& filename);
+    std::string GetLayoutPath(const std::string& layout_name);
+    void TryAutoLoadLayout();
+    void PopulateLayoutDropdown();
+    void SaveCurrentLayoutName();
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -103,6 +111,11 @@ private:
     QPushButton*                stop_effect_button;
     QPushButton*                color_start_button;
     QPushButton*                color_end_button;
+
+    QComboBox*                  layout_profiles_combo;
+    QCheckBox*                  auto_load_checkbox;
+    QTimer*                     auto_load_timer;
+    bool                        first_load;
 
     RGBColor                    current_color_start;
     RGBColor                    current_color_end;

@@ -13,13 +13,21 @@
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
 #include <QColorDialog>
-#include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
+#include <QDir>
+#include <QMessageBox>
+#include <QFileInfo>
+#include <QInputDialog>
+#include <filesystem>
+#include "SettingsManager.h"
+
+using namespace std;
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
-    resource_manager(rm)
+    resource_manager(rm),
+    first_load(true)
 {
     effects = new SpatialEffects();
     connect(effects, SIGNAL(EffectUpdated()), this, SLOT(on_effect_updated()));
@@ -29,10 +37,21 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     SetupUI();
     LoadDevices();
+
+    auto_load_timer = new QTimer(this);
+    auto_load_timer->setSingleShot(true);
+    connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
+    auto_load_timer->start(500);
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
+    if(auto_load_timer)
+    {
+        auto_load_timer->stop();
+        delete auto_load_timer;
+    }
+
     if(effects->IsRunning())
     {
         effects->StopEffect();
@@ -115,6 +134,41 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
     save_load_layout->addWidget(load_button);
     controller_layout->addLayout(save_load_layout);
+
+    QLabel* profile_label = new QLabel("Layout Profiles:");
+    controller_layout->addWidget(profile_label);
+
+    layout_profiles_combo = new QComboBox();
+    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
+    controller_layout->addWidget(layout_profiles_combo);
+
+    QHBoxLayout* profile_actions_layout = new QHBoxLayout();
+    QPushButton* delete_button = new QPushButton("Delete Profile");
+    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
+    profile_actions_layout->addWidget(delete_button);
+    controller_layout->addLayout(profile_actions_layout);
+
+    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
+
+    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    bool auto_load_enabled = false;
+    if(settings.contains("AutoLoad"))
+    {
+        auto_load_enabled = settings["AutoLoad"];
+    }
+    auto_load_checkbox->setChecked(auto_load_enabled);
+    LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting loaded: %s", auto_load_enabled ? "enabled" : "disabled");
+
+    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        settings["AutoLoad"] = checked;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        resource_manager->GetSettingsManager()->SaveSettings();
+        LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting changed to: %s", checked ? "enabled" : "disabled");
+    });
+    controller_layout->addWidget(auto_load_checkbox);
+
+    PopulateLayoutDropdown();
 
     QLabel* active_label = new QLabel("Active in 3D View:");
     controller_layout->addWidget(active_label);
@@ -250,7 +304,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_type_combo->addItem("LED Sparkle");
     effect_type_combo->addItem("LED Chase");
     effect_type_combo->addItem("LED Twinkle");
-    connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_type_layout->addWidget(effect_type_combo);
     effect_layout->addLayout(effect_type_layout);
 
@@ -624,22 +677,90 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
 {
-    QString filename = QFileDialog::getSaveFileName(this, "Save 3D Layout", "", "3D Layout Files (*.3dlayout)");
+    bool ok;
+    QString profile_name = QInputDialog::getText(this, "Save Layout Profile",
+                                                 "Profile name:", QLineEdit::Normal,
+                                                 layout_profiles_combo->currentText(), &ok);
 
-    if(!filename.isEmpty())
+    if(!ok || profile_name.isEmpty())
     {
-        SaveLayout(filename.toStdString());
+        return;
     }
+
+    std::string layout_path = GetLayoutPath(profile_name.toStdString());
+    SaveLayout(layout_path);
+
+    PopulateLayoutDropdown();
+
+    int index = layout_profiles_combo->findText(profile_name);
+    if(index >= 0)
+    {
+        layout_profiles_combo->setCurrentIndex(index);
+    }
+
+    QMessageBox::information(this, "Layout Saved",
+                            QString("Profile '%1' saved to plugins directory").arg(profile_name));
 }
 
 void OpenRGB3DSpatialTab::on_load_layout_clicked()
 {
-    QString filename = QFileDialog::getOpenFileName(this, "Load 3D Layout", "", "3D Layout Files (*.3dlayout)");
+    QString profile_name = layout_profiles_combo->currentText();
 
-    if(!filename.isEmpty())
+    if(profile_name.isEmpty())
     {
-        LoadLayout(filename.toStdString());
+        QMessageBox::warning(this, "No Profile Selected", "Please select a profile to load");
+        return;
     }
+
+    std::string layout_path = GetLayoutPath(profile_name.toStdString());
+    QFileInfo check_file(QString::fromStdString(layout_path));
+
+    if(!check_file.exists())
+    {
+        QMessageBox::warning(this, "Profile Not Found", "Selected profile file not found");
+        return;
+    }
+
+    LoadLayout(layout_path);
+    QMessageBox::information(this, "Layout Loaded",
+                            QString("Profile '%1' loaded successfully").arg(profile_name));
+}
+
+void OpenRGB3DSpatialTab::on_delete_layout_clicked()
+{
+    QString profile_name = layout_profiles_combo->currentText();
+
+    if(profile_name.isEmpty())
+    {
+        QMessageBox::warning(this, "No Profile Selected", "Please select a profile to delete");
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Delete Profile",
+                                        QString("Are you sure you want to delete profile '%1'?").arg(profile_name),
+                                        QMessageBox::Yes | QMessageBox::No);
+
+    if(reply == QMessageBox::Yes)
+    {
+        std::string layout_path = GetLayoutPath(profile_name.toStdString());
+        QFile file(QString::fromStdString(layout_path));
+
+        if(file.remove())
+        {
+            PopulateLayoutDropdown();
+            QMessageBox::information(this, "Profile Deleted",
+                                    QString("Profile '%1' deleted successfully").arg(profile_name));
+        }
+        else
+        {
+            QMessageBox::warning(this, "Delete Failed", "Failed to delete profile file");
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::on_layout_profile_changed(int /*index*/)
+{
+    SaveCurrentLayoutName();
 }
 
 void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
@@ -662,8 +783,8 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     {
         ControllerTransform* ct = controller_transforms[i];
 
-        out << ct->controller->name << "\n";
-        out << ct->controller->location << "\n";
+        out << ct->controller->name.c_str() << "\n";
+        out << ct->controller->location.c_str() << "\n";
         out << ct->led_positions.size() << "\n";
 
         for(unsigned int j = 0; j < ct->led_positions.size(); j++)
@@ -812,4 +933,121 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     viewport->update();
 
     LOG_INFO("[OpenRGB 3D Spatial] Loaded layout from %s (%d items)", filename.c_str(), (int)controller_transforms.size());
+}
+
+std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
+{
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path plugins_dir = config_dir / "plugins" / "3d_spatial_layouts";
+
+    QDir dir;
+    dir.mkpath(QString::fromStdString(plugins_dir.string()));
+
+    std::string filename = layout_name + ".3dlayout";
+    filesystem::path layout_file = plugins_dir / filename;
+
+    return layout_file.string();
+}
+
+void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
+{
+    QString current_text = layout_profiles_combo->currentText();
+
+    layout_profiles_combo->blockSignals(true);
+    layout_profiles_combo->clear();
+
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path layouts_dir = config_dir / "plugins" / "3d_spatial_layouts";
+
+    QDir dir(QString::fromStdString(layouts_dir.string()));
+    QStringList filters;
+    filters << "*.3dlayout";
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+
+    for(const QFileInfo& file_info : files)
+    {
+        QString base_name = file_info.baseName();
+        layout_profiles_combo->addItem(base_name);
+    }
+
+    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    QString saved_profile = "";
+    if(settings.contains("SelectedProfile"))
+    {
+        saved_profile = QString::fromStdString(settings["SelectedProfile"].get<std::string>());
+    }
+
+    if(!saved_profile.isEmpty())
+    {
+        int index = layout_profiles_combo->findText(saved_profile);
+        if(index >= 0)
+        {
+            layout_profiles_combo->setCurrentIndex(index);
+        }
+    }
+    else if(!current_text.isEmpty())
+    {
+        int index = layout_profiles_combo->findText(current_text);
+        if(index >= 0)
+        {
+            layout_profiles_combo->setCurrentIndex(index);
+        }
+    }
+
+    layout_profiles_combo->blockSignals(false);
+}
+
+void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
+{
+    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    settings["SelectedProfile"] = layout_profiles_combo->currentText().toStdString();
+    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->GetSettingsManager()->SaveSettings();
+}
+
+void OpenRGB3DSpatialTab::TryAutoLoadLayout()
+{
+    LOG_INFO("[OpenRGB 3D Spatial] TryAutoLoadLayout called, first_load=%s", first_load ? "true" : "false");
+
+    if(!first_load)
+    {
+        return;
+    }
+
+    first_load = false;
+
+    bool is_checked = auto_load_checkbox->isChecked();
+    LOG_INFO("[OpenRGB 3D Spatial] Auto-load checkbox is: %s", is_checked ? "checked" : "unchecked");
+
+    if(is_checked)
+    {
+        QString profile_name = layout_profiles_combo->currentText();
+        LOG_INFO("[OpenRGB 3D Spatial] Selected profile name: '%s'", profile_name.toStdString().c_str());
+
+        if(!profile_name.isEmpty())
+        {
+            std::string layout_path = GetLayoutPath(profile_name.toStdString());
+            QFileInfo check_file(QString::fromStdString(layout_path));
+            LOG_INFO("[OpenRGB 3D Spatial] Checking for layout file: %s", layout_path.c_str());
+
+            if(check_file.exists())
+            {
+                LoadLayout(layout_path);
+                LOG_INFO("[OpenRGB 3D Spatial] Auto-loaded profile '%s' on startup", profile_name.toStdString().c_str());
+            }
+            else
+            {
+                LOG_WARNING("[OpenRGB 3D Spatial] Auto-load profile '%s' not found at: %s",
+                           profile_name.toStdString().c_str(), layout_path.c_str());
+            }
+        }
+        else
+        {
+            LOG_WARNING("[OpenRGB 3D Spatial] Auto-load enabled but no profile selected");
+        }
+    }
+    else
+    {
+        LOG_INFO("[OpenRGB 3D Spatial] Auto-load is disabled, skipping");
+    }
 }
