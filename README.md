@@ -108,6 +108,12 @@ If you find this plugin useful, consider supporting development:
 - [Issues](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues)
 - [OpenRGB GitLab](https://gitlab.com/CalcProgrammer1/OpenRGB)
 
+## Credits
+
+Created by Wolfie with assistance from Claude Code (Anthropic AI)
+
+Built for the OpenRGB community
+
 ## License
 
 GPL-2.0-only
