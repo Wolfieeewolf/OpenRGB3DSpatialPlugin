@@ -1,0 +1,75 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: OpenRGB3DSpatialPlugin.dll
+            path: release/OpenRGB3DSpatialPlugin.dll
+          - os: ubuntu-latest
+            artifact: libOpenRGB3DSpatialPlugin.so
+            path: libOpenRGB3DSpatialPlugin.so
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install Qt (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
+
+      - name: Install Qt (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qtbase5-dev qt5-qmake qtbase5-dev-tools libusb-1.0-0-dev libhidapi-dev
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          qmake OpenRGB3DSpatialPlugin.pro
+          nmake release
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+          make -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            OpenRGB3DSpatialPlugin.dll/OpenRGB3DSpatialPlugin.dll
+            libOpenRGB3DSpatialPlugin.so/libOpenRGB3DSpatialPlugin.so
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
