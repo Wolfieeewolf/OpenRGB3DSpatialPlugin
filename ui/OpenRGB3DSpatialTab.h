@@ -63,11 +63,16 @@ private slots:
     void on_remove_controller_clicked();
     void on_clear_all_clicked();
 
+    void on_save_layout_clicked();
+    void on_load_layout_clicked();
+
     void on_effect_updated();
 
 private:
     void SetupUI();
     void LoadDevices();
+    void SaveLayout(const std::string& filename);
+    void LoadLayout(const std::string& filename);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;

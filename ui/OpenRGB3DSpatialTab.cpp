@@ -13,6 +13,9 @@
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
 #include <QColorDialog>
+#include <QFileDialog>
+#include <QFile>
+#include <QTextStream>
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -102,6 +105,16 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(clear_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_clear_all_clicked);
     add_remove_layout->addWidget(clear_button);
     controller_layout->addLayout(add_remove_layout);
+
+    QHBoxLayout* save_load_layout = new QHBoxLayout();
+    QPushButton* save_button = new QPushButton("Save Layout");
+    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+    save_load_layout->addWidget(save_button);
+
+    QPushButton* load_button = new QPushButton("Load Layout");
+    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
+    save_load_layout->addWidget(load_button);
+    controller_layout->addLayout(save_load_layout);
 
     QLabel* active_label = new QLabel("Active in 3D View:");
     controller_layout->addWidget(active_label);
@@ -607,4 +620,196 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
+}
+
+void OpenRGB3DSpatialTab::on_save_layout_clicked()
+{
+    QString filename = QFileDialog::getSaveFileName(this, "Save 3D Layout", "", "3D Layout Files (*.3dlayout)");
+
+    if(!filename.isEmpty())
+    {
+        SaveLayout(filename.toStdString());
+    }
+}
+
+void OpenRGB3DSpatialTab::on_load_layout_clicked()
+{
+    QString filename = QFileDialog::getOpenFileName(this, "Load 3D Layout", "", "3D Layout Files (*.3dlayout)");
+
+    if(!filename.isEmpty())
+    {
+        LoadLayout(filename.toStdString());
+    }
+}
+
+void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
+{
+    QFile file(QString::fromStdString(filename));
+
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        LOG_ERROR("[OpenRGB 3D Spatial] Failed to save layout to %s", filename.c_str());
+        return;
+    }
+
+    QTextStream out(&file);
+
+    out << "OpenRGB3DSpatialLayout\n";
+    out << "Version 1\n";
+    out << controller_transforms.size() << "\n";
+
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* ct = controller_transforms[i];
+
+        out << ct->controller->name << "\n";
+        out << ct->controller->location << "\n";
+        out << ct->led_positions.size() << "\n";
+
+        for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+        {
+            out << ct->led_positions[j].zone_idx << " " << ct->led_positions[j].led_idx << "\n";
+        }
+
+        out << ct->transform.position.x << " " << ct->transform.position.y << " " << ct->transform.position.z << "\n";
+        out << ct->transform.rotation.x << " " << ct->transform.rotation.y << " " << ct->transform.rotation.z << "\n";
+        out << ct->transform.scale.x << " " << ct->transform.scale.y << " " << ct->transform.scale.z << "\n";
+        out << ct->display_color << "\n";
+    }
+
+    file.close();
+
+    LOG_INFO("[OpenRGB 3D Spatial] Saved layout to %s", filename.c_str());
+}
+
+void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
+{
+    QFile file(QString::fromStdString(filename));
+
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        LOG_ERROR("[OpenRGB 3D Spatial] Failed to load layout from %s", filename.c_str());
+        return;
+    }
+
+    QTextStream in(&file);
+
+    QString header = in.readLine();
+    if(header != "OpenRGB3DSpatialLayout")
+    {
+        LOG_ERROR("[OpenRGB 3D Spatial] Invalid layout file format");
+        file.close();
+        return;
+    }
+
+    QString version_line = in.readLine();
+    int count = in.readLine().toInt();
+
+    on_clear_all_clicked();
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    for(int i = 0; i < count; i++)
+    {
+        QString ctrl_name = in.readLine();
+        QString ctrl_location = in.readLine();
+        int led_count = in.readLine().toInt();
+
+        RGBController* controller = nullptr;
+        for(unsigned int j = 0; j < controllers.size(); j++)
+        {
+            if(controllers[j]->name == ctrl_name.toStdString() &&
+               controllers[j]->location == ctrl_location.toStdString())
+            {
+                controller = controllers[j];
+                break;
+            }
+        }
+
+        if(!controller)
+        {
+            for(int j = 0; j < led_count; j++)
+            {
+                in.readLine();
+            }
+            in.readLine();
+            in.readLine();
+            in.readLine();
+            in.readLine();
+            continue;
+        }
+
+        ControllerTransform* ctrl_transform = new ControllerTransform();
+        ctrl_transform->controller = controller;
+
+        for(int j = 0; j < led_count; j++)
+        {
+            QStringList parts = in.readLine().split(" ");
+            unsigned int zone_idx = parts[0].toUInt();
+            unsigned int led_idx = parts[1].toUInt();
+
+            std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+
+            for(unsigned int k = 0; k < all_positions.size(); k++)
+            {
+                if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
+                {
+                    ctrl_transform->led_positions.push_back(all_positions[k]);
+                    break;
+                }
+            }
+        }
+
+        QStringList pos_parts = in.readLine().split(" ");
+        ctrl_transform->transform.position.x = pos_parts[0].toFloat();
+        ctrl_transform->transform.position.y = pos_parts[1].toFloat();
+        ctrl_transform->transform.position.z = pos_parts[2].toFloat();
+
+        QStringList rot_parts = in.readLine().split(" ");
+        ctrl_transform->transform.rotation.x = rot_parts[0].toFloat();
+        ctrl_transform->transform.rotation.y = rot_parts[1].toFloat();
+        ctrl_transform->transform.rotation.z = rot_parts[2].toFloat();
+
+        QStringList scale_parts = in.readLine().split(" ");
+        ctrl_transform->transform.scale.x = scale_parts[0].toFloat();
+        ctrl_transform->transform.scale.y = scale_parts[1].toFloat();
+        ctrl_transform->transform.scale.z = scale_parts[2].toFloat();
+
+        ctrl_transform->display_color = in.readLine().toUInt();
+
+        controller_transforms.push_back(ctrl_transform);
+
+        QColor color;
+        color.setRgb(ctrl_transform->display_color & 0xFF,
+                     (ctrl_transform->display_color >> 8) & 0xFF,
+                     (ctrl_transform->display_color >> 16) & 0xFF);
+
+        QString name = QString::fromStdString(controller->name);
+        if(ctrl_transform->led_positions.size() < controller->leds.size())
+        {
+            if(ctrl_transform->led_positions.size() == 1)
+            {
+                unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
+                                              ctrl_transform->led_positions[0].led_idx;
+                name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+            }
+            else
+            {
+                name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+            }
+        }
+
+        QListWidgetItem* item = new QListWidgetItem(name);
+        item->setBackground(QBrush(color));
+        item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
+        controller_list->addItem(item);
+    }
+
+    file.close();
+
+    effects->SetControllerTransforms(&controller_transforms);
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
+
+    LOG_INFO("[OpenRGB 3D Spatial] Loaded layout from %s (%d items)", filename.c_str(), (int)controller_transforms.size());
 }
