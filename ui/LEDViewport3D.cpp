@@ -10,12 +10,145 @@
 \*---------------------------------------------------------*/
 
 #include "LEDViewport3D.h"
+#include <cmath>
+#include <QtGlobal>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <GL/gl.h>
+#else
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <cmath>
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+
+#ifdef _WIN32
+// Manual GLU implementations for Windows to avoid header conflicts
+void gluPerspective(double fovy, double aspect, double zNear, double zFar) {
+    double fH = tan(fovy / 360 * M_PI) * zNear;
+    double fW = fH * aspect;
+    glFrustum(-fW, fW, -fH, fH, zNear, zFar);
+}
+
+void gluLookAt(double eyeX, double eyeY, double eyeZ,
+               double centerX, double centerY, double centerZ,
+               double upX, double upY, double upZ) {
+    double forward[3], side[3], up[3];
+    double m[4][4];
+
+    forward[0] = centerX - eyeX;
+    forward[1] = centerY - eyeY;
+    forward[2] = centerZ - eyeZ;
+
+    // Normalize forward
+    double len = sqrt(forward[0]*forward[0] + forward[1]*forward[1] + forward[2]*forward[2]);
+    if (len != 0.0) {
+        forward[0] /= len;
+        forward[1] /= len;
+        forward[2] /= len;
+    }
+
+    // Calculate side = forward x up
+    side[0] = forward[1] * upZ - forward[2] * upY;
+    side[1] = forward[2] * upX - forward[0] * upZ;
+    side[2] = forward[0] * upY - forward[1] * upX;
+
+    // Normalize side
+    len = sqrt(side[0]*side[0] + side[1]*side[1] + side[2]*side[2]);
+    if (len != 0.0) {
+        side[0] /= len;
+        side[1] /= len;
+        side[2] /= len;
+    }
+
+    // Calculate up = side x forward
+    up[0] = side[1] * forward[2] - side[2] * forward[1];
+    up[1] = side[2] * forward[0] - side[0] * forward[2];
+    up[2] = side[0] * forward[1] - side[1] * forward[0];
+
+    // Build matrix
+    m[0][0] = side[0];
+    m[1][0] = side[1];
+    m[2][0] = side[2];
+    m[3][0] = 0.0;
+
+    m[0][1] = up[0];
+    m[1][1] = up[1];
+    m[2][1] = up[2];
+    m[3][1] = 0.0;
+
+    m[0][2] = -forward[0];
+    m[1][2] = -forward[1];
+    m[2][2] = -forward[2];
+    m[3][2] = 0.0;
+
+    m[0][3] = 0.0;
+    m[1][3] = 0.0;
+    m[2][3] = 0.0;
+    m[3][3] = 1.0;
+
+    glMultMatrixd(&m[0][0]);
+    glTranslated(-eyeX, -eyeY, -eyeZ);
+}
+
+int gluProject(double objX, double objY, double objZ,
+               const double* model, const double* proj, const int* view,
+               double* winX, double* winY, double* winZ) {
+    double in[4];
+    double out[4];
+
+    in[0] = objX;
+    in[1] = objY;
+    in[2] = objZ;
+    in[3] = 1.0;
+
+    // Transform by modelview matrix
+    out[0] = model[0]*in[0] + model[4]*in[1] + model[8]*in[2] + model[12]*in[3];
+    out[1] = model[1]*in[0] + model[5]*in[1] + model[9]*in[2] + model[13]*in[3];
+    out[2] = model[2]*in[0] + model[6]*in[1] + model[10]*in[2] + model[14]*in[3];
+    out[3] = model[3]*in[0] + model[7]*in[1] + model[11]*in[2] + model[15]*in[3];
+
+    // Transform by projection matrix
+    in[0] = proj[0]*out[0] + proj[4]*out[1] + proj[8]*out[2] + proj[12]*out[3];
+    in[1] = proj[1]*out[0] + proj[5]*out[1] + proj[9]*out[2] + proj[13]*out[3];
+    in[2] = proj[2]*out[0] + proj[6]*out[1] + proj[10]*out[2] + proj[14]*out[3];
+    in[3] = proj[3]*out[0] + proj[7]*out[1] + proj[11]*out[2] + proj[15]*out[3];
+
+    if (in[3] == 0.0) return 0;
+
+    in[0] /= in[3];
+    in[1] /= in[3];
+    in[2] /= in[3];
+
+    // Map to range 0-1
+    in[0] = in[0] * 0.5 + 0.5;
+    in[1] = in[1] * 0.5 + 0.5;
+    in[2] = in[2] * 0.5 + 0.5;
+
+    // Map to viewport
+    *winX = in[0] * view[2] + view[0];
+    *winY = in[1] * view[3] + view[1];
+    *winZ = in[2];
+
+    return 1;
+}
+#endif
+
+// Qt version compatibility helpers
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt 6+ uses position()
+    #define MOUSE_X(event) ((int)(event)->position().x())
+    #define MOUSE_Y(event) ((int)(event)->position().y())
+#else
+    // Qt 5 uses x() and y()
+    #define MOUSE_X(event) (event)->x()
+    #define MOUSE_Y(event) (event)->y()
 #endif
 
 LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
@@ -394,14 +527,14 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     {
         if(selected_controller_idx >= 0)
         {
-            if(PickGizmoCenter(event->x(), event->y()))
+            if(PickGizmoCenter(MOUSE_X(event), MOUSE_Y(event)))
             {
                 gizmo_rotate_mode = !gizmo_rotate_mode;
                 update();
                 return;
             }
 
-            int axis = PickGizmoAxis(event->x(), event->y());
+            int axis = PickGizmoAxis(MOUSE_X(event), MOUSE_Y(event));
             if(axis >= 0)
             {
                 dragging_gizmo = true;
@@ -411,7 +544,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
-        int picked = PickController(event->x(), event->y());
+        int picked = PickController(MOUSE_X(event), MOUSE_Y(event));
         if(picked >= 0)
         {
             selected_controller_idx = picked;

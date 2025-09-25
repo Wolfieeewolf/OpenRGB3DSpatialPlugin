@@ -11,6 +11,9 @@ QT +=                                                                           
     widgets                                                                                     \
     opengl
 
+# Qt 6+ requires openglwidgets module
+greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
+
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY
 TEMPLATE = lib
 
@@ -29,7 +32,7 @@ MINOR       = 0
 SUFFIX      = git
 
 SHORTHASH   = $$system("git rev-parse --short=7 HEAD")
-LASTTAG     = "release_"$$MAJOR"."$$MINOR
+LASTTAG     = "v"$$MAJOR"."$$MINOR".0"
 COMMAND     = "git rev-list --count "$$LASTTAG"..HEAD"
 COMMITS     = $$system($$COMMAND)
 
@@ -160,7 +163,6 @@ win32:contains(QMAKE_TARGET.arch, x86_64) {
         -lws2_32                                                                                \
         -lole32                                                                                 \
         -lopengl32                                                                              \
-        -lglu32                                                                                 \
 }
 
 win32:contains(QMAKE_TARGET.arch, x86) {
@@ -168,7 +170,6 @@ win32:contains(QMAKE_TARGET.arch, x86) {
         -lws2_32                                                                                \
         -lole32                                                                                 \
         -lopengl32                                                                              \
-        -lglu32                                                                                 \
 }
 
 win32:DEFINES +=                                                                                \
