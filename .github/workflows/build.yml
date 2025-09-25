@@ -10,12 +10,12 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
 
@@ -25,7 +25,7 @@ jobs:
           nmake release
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: OpenRGB3DSpatialPlugin-Windows
           path: release/OpenRGB3DSpatialPlugin.dll
@@ -33,7 +33,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -48,7 +48,7 @@ jobs:
           make -j$(nproc)
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: OpenRGB3DSpatialPlugin-Linux
           path: libOpenRGB3DSpatialPlugin.so
@@ -58,7 +58,7 @@ jobs:
     needs: [build-windows, build-linux]
     if: github.ref == 'refs/heads/master'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
