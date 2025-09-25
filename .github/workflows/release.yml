@@ -64,6 +64,7 @@ jobs:
 
   create-release:
     needs: build-and-release
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,17 +86,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            OpenRGB3DSpatialPlugin.dll
-            libOpenRGB3DSpatialPlugin.so
+            *.dll
+            *.so
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitLab Release
-        if: ${{ secrets.GITLAB_TOKEN }}
+        continue-on-error: true
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
 
