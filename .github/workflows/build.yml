@@ -14,13 +14,18 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
 
       - name: Build
+        shell: cmd
         run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           qmake OpenRGB3DSpatialPlugin.pro
           nmake release
 
