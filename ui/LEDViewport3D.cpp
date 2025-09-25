@@ -365,9 +365,10 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 
         RGBColor color = controller->colors[led_global_idx];
 
-        float r = ((color >> 16) & 0xFF) / 255.0f;
-        float g = ((color >> 8) & 0xFF) / 255.0f;
-        float b = (color & 0xFF) / 255.0f;
+        // OpenRGB uses BGR format: 0x00BBGGRR
+        float r = (color & 0xFF) / 255.0f;          // Red is in bits 0-7
+        float g = ((color >> 8) & 0xFF) / 255.0f;   // Green is in bits 8-15
+        float b = ((color >> 16) & 0xFF) / 255.0f;  // Blue is in bits 16-23
 
         if(r < 0.1f && g < 0.1f && b < 0.1f)
         {

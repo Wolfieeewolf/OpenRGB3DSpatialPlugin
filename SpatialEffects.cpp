@@ -319,8 +319,9 @@ RGBColor SpatialEffects::CalculateFireColor(Vector3D pos, float time_offset)
     float intensity = (base + flicker + height_factor) / 2.0f;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
 
-    RGBColor orange = 0xFF4500;
-    RGBColor yellow = 0xFFFF00;
+    // Using BGR format: 0x00BBGGRR (Orange = RGB(255,69,0) -> BGR(0,69,255))
+    RGBColor orange = 0x0045FF;  // Orange: R=255, G=69, B=0 -> 0x00|00|45|FF
+    RGBColor yellow = 0x00FFFF;  // Yellow: R=255, G=255, B=0 -> 0x00|00|FF|FF
 
     return LerpColor(orange, yellow, intensity);
 }
@@ -363,13 +364,14 @@ RGBColor SpatialEffects::LerpColor(RGBColor a, RGBColor b, float t)
 {
     t = fmax(0.0f, fmin(1.0f, t));
 
-    unsigned char r_a = (a >> 16) & 0xFF;
-    unsigned char g_a = (a >> 8) & 0xFF;
-    unsigned char b_a = a & 0xFF;
+    // OpenRGB uses BGR format: 0x00BBGGRR
+    unsigned char r_a = a & 0xFF;          // Red is in bits 0-7
+    unsigned char g_a = (a >> 8) & 0xFF;   // Green is in bits 8-15
+    unsigned char b_a = (a >> 16) & 0xFF;  // Blue is in bits 16-23
 
-    unsigned char r_b = (b >> 16) & 0xFF;
-    unsigned char g_b = (b >> 8) & 0xFF;
-    unsigned char b_b = b & 0xFF;
+    unsigned char r_b = b & 0xFF;          // Red is in bits 0-7
+    unsigned char g_b = (b >> 8) & 0xFF;   // Green is in bits 8-15
+    unsigned char b_b = (b >> 16) & 0xFF;  // Blue is in bits 16-23
 
     unsigned char r = (unsigned char)(r_a + (r_b - r_a) * t);
     unsigned char g = (unsigned char)(g_a + (g_b - g_a) * t);
@@ -380,6 +382,7 @@ RGBColor SpatialEffects::LerpColor(RGBColor a, RGBColor b, float t)
     g = (unsigned char)(g * brightness_scale);
     b_out = (unsigned char)(b_out * brightness_scale);
 
+    // Return in BGR format: 0x00BBGGRR
     return (b_out << 16) | (g << 8) | r;
 }
 
