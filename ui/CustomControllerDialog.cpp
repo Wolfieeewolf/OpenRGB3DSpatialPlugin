@@ -16,6 +16,11 @@
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QPainter>
+#include <QStyledItemDelegate>
+#include <QTimer>
+#include <QIcon>
+#include <QPixmap>
 
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
@@ -64,6 +69,7 @@ void CustomControllerDialog::SetupUI()
     left_layout->addLayout(granularity_layout);
 
     item_combo = new QComboBox();
+    item_combo->setItemDelegate(new ColorComboDelegate(this));
     left_layout->addWidget(item_combo);
 
     assign_button = new QPushButton("Assign to Selected Cell");
@@ -143,6 +149,10 @@ void CustomControllerDialog::SetupUI()
         available_controllers->addItem(QString::fromStdString(controllers[i]->name));
     }
 
+    color_refresh_timer = new QTimer(this);
+    connect(color_refresh_timer, &QTimer::timeout, this, &CustomControllerDialog::refresh_colors);
+    color_refresh_timer->start(500);
+
     UpdateGridDisplay();
 }
 
@@ -173,7 +183,11 @@ void CustomControllerDialog::UpdateItemCombo()
     {
         if(!IsItemAssigned(controller, granularity, 0))
         {
-            item_combo->addItem("Whole Device", 0);
+            QColor color = GetItemColor(controller, granularity, 0);
+            QPixmap pixmap(16, 16);
+            pixmap.fill(color);
+            QIcon icon(pixmap);
+            item_combo->addItem(icon, "Whole Device", 0);
         }
     }
     else if(granularity == 1)
@@ -182,7 +196,11 @@ void CustomControllerDialog::UpdateItemCombo()
         {
             if(!IsItemAssigned(controller, granularity, i))
             {
-                item_combo->addItem(QString::fromStdString(controller->zones[i].name), i);
+                QColor color = GetItemColor(controller, granularity, i);
+                QPixmap pixmap(16, 16);
+                pixmap.fill(color);
+                QIcon icon(pixmap);
+                item_combo->addItem(icon, QString::fromStdString(controller->zones[i].name), i);
             }
         }
     }
@@ -192,7 +210,11 @@ void CustomControllerDialog::UpdateItemCombo()
         {
             if(!IsItemAssigned(controller, granularity, i))
             {
-                item_combo->addItem(QString::fromStdString(controller->leds[i].name), i);
+                QColor color = GetItemColor(controller, granularity, i);
+                QPixmap pixmap(16, 16);
+                pixmap.fill(color);
+                QIcon icon(pixmap);
+                item_combo->addItem(icon, QString::fromStdString(controller->leds[i].name), i);
             }
         }
     }
@@ -631,4 +653,113 @@ void CustomControllerDialog::LoadExistingController(const std::string& name, int
     led_mappings = mappings;
 
     UpdateGridDisplay();
+}
+
+QColor CustomControllerDialog::GetItemColor(RGBController* controller, int granularity, int item_idx)
+{
+    if(granularity == 0)
+    {
+        return GetAverageDeviceColor(controller);
+    }
+    else if(granularity == 1)
+    {
+        return GetAverageZoneColor(controller, item_idx);
+    }
+    else if(granularity == 2)
+    {
+        if(item_idx < (int)controller->colors.size())
+        {
+            return RGBToQColor(controller->colors[item_idx]);
+        }
+    }
+    return QColor(128, 128, 128);
+}
+
+QColor CustomControllerDialog::GetAverageZoneColor(RGBController* controller, unsigned int zone_idx)
+{
+    if(zone_idx >= controller->zones.size()) return QColor(128, 128, 128);
+
+    const zone& z = controller->zones[zone_idx];
+    if(z.leds_count == 0) return QColor(128, 128, 128);
+
+    unsigned int total_r = 0, total_g = 0, total_b = 0;
+    unsigned int led_count = 0;
+
+    for(unsigned int i = 0; i < z.leds_count && (z.start_idx + i) < controller->colors.size(); i++)
+    {
+        unsigned int color = controller->colors[z.start_idx + i];
+        total_r += (color >> 0) & 0xFF;
+        total_g += (color >> 8) & 0xFF;
+        total_b += (color >> 16) & 0xFF;
+        led_count++;
+    }
+
+    if(led_count == 0) return QColor(128, 128, 128);
+
+    return QColor(total_r / led_count, total_g / led_count, total_b / led_count);
+}
+
+QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
+{
+    if(controller->colors.empty()) return QColor(128, 128, 128);
+
+    unsigned int total_r = 0, total_g = 0, total_b = 0;
+
+    for(unsigned int color : controller->colors)
+    {
+        total_r += (color >> 0) & 0xFF;
+        total_g += (color >> 8) & 0xFF;
+        total_b += (color >> 16) & 0xFF;
+    }
+
+    size_t count = controller->colors.size();
+    return QColor(static_cast<int>(total_r / count), static_cast<int>(total_g / count), static_cast<int>(total_b / count));
+}
+
+QColor CustomControllerDialog::RGBToQColor(unsigned int rgb_value)
+{
+    unsigned int r = (rgb_value >> 0) & 0xFF;
+    unsigned int g = (rgb_value >> 8) & 0xFF;
+    unsigned int b = (rgb_value >> 16) & 0xFF;
+    return QColor(r, g, b);
+}
+
+ColorComboDelegate::ColorComboDelegate(QObject *parent)
+    : QStyledItemDelegate(parent)
+{
+}
+
+void ColorComboDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
+                              const QModelIndex &index) const
+{
+    QStyledItemDelegate::paint(painter, option, index);
+
+    if(index.data(Qt::DecorationRole).canConvert<QIcon>())
+    {
+        QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
+        QRect iconRect = option.rect;
+        iconRect.setWidth(20);
+        iconRect.adjust(4, 2, 0, -2);
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+
+        QPixmap pixmap = icon.pixmap(iconRect.size());
+        painter->drawPixmap(iconRect, pixmap);
+
+        painter->restore();
+    }
+}
+
+QSize ColorComboDelegate::sizeHint(const QStyleOptionViewItem &option,
+                                  const QModelIndex &index) const
+{
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+    size.setHeight(qMax(size.height(), 24));
+    return size;
+}
+
+void CustomControllerDialog::refresh_colors()
+{
+    UpdateItemCombo();
 }

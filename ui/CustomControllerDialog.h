@@ -21,6 +21,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QTabWidget>
+#include <QStyledItemDelegate>
+#include <QPainter>
+#include <QTimer>
 #include <vector>
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
@@ -33,6 +36,19 @@ struct GridLEDMapping
     RGBController* controller;
     unsigned int zone_idx;
     unsigned int led_idx;
+};
+
+class ColorComboDelegate : public QStyledItemDelegate
+{
+    Q_OBJECT
+
+public:
+    explicit ColorComboDelegate(QObject *parent = nullptr);
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option,
+                   const QModelIndex &index) const override;
 };
 
 class CustomControllerDialog : public QDialog
@@ -62,6 +78,7 @@ private slots:
     void on_clear_cell_clicked();
     void on_remove_from_grid_clicked();
     void on_save_clicked();
+    void refresh_colors();
 
 private:
     void SetupUI();
@@ -70,6 +87,10 @@ private:
     void UpdateCellInfo();
     void RebuildLayerTabs();
     bool IsItemAssigned(RGBController* controller, int granularity, int item_idx);
+    QColor GetItemColor(RGBController* controller, int granularity, int item_idx);
+    QColor GetAverageZoneColor(RGBController* controller, unsigned int zone_idx);
+    QColor GetAverageDeviceColor(RGBController* controller);
+    static QColor RGBToQColor(unsigned int rgb_value);
 
     ResourceManagerInterface* resource_manager;
 
@@ -90,6 +111,8 @@ private:
     QPushButton*    clear_button;
     QPushButton*    remove_from_grid_button;
     QPushButton*    save_button;
+
+    QTimer*         color_refresh_timer;
 
     std::vector<GridLEDMapping> led_mappings;
     int current_layer;
