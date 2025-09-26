@@ -308,26 +308,50 @@ void LEDViewport3D::DrawControllers()
             glLineWidth(2.0f);
             glColor3f(1.0f, 1.0f, 0.0f);
 
-            float size = 5.0f;
+            // Calculate bounding box of all LEDs
+            float min_x = 1000000.0f, max_x = -1000000.0f;
+            float min_y = 1000000.0f, max_y = -1000000.0f;
+            float min_z = 1000000.0f, max_z = -1000000.0f;
+
+            for(unsigned int j = 0; j < ctrl->led_positions.size(); j++)
+            {
+                LEDPosition3D& led = ctrl->led_positions[j];
+                Vector3D& pos = led.local_position;
+
+                if(pos.x < min_x) min_x = pos.x;
+                if(pos.x > max_x) max_x = pos.x;
+                if(pos.y < min_y) min_y = pos.y;
+                if(pos.y > max_y) max_y = pos.y;
+                if(pos.z < min_z) min_z = pos.z;
+                if(pos.z > max_z) max_z = pos.z;
+            }
+
+            // Add a small buffer around the LEDs
+            float buffer = 0.5f;
+            min_x -= buffer; max_x += buffer;
+            min_y -= buffer; max_y += buffer;
+            min_z -= buffer; max_z += buffer;
+
+            // Draw wireframe bounding box
             glBegin(GL_LINE_LOOP);
-            glVertex3f(-size, -size, -size);
-            glVertex3f(size, -size, -size);
-            glVertex3f(size, size, -size);
-            glVertex3f(-size, size, -size);
+            glVertex3f(min_x, min_y, min_z);
+            glVertex3f(max_x, min_y, min_z);
+            glVertex3f(max_x, max_y, min_z);
+            glVertex3f(min_x, max_y, min_z);
             glEnd();
 
             glBegin(GL_LINE_LOOP);
-            glVertex3f(-size, -size, size);
-            glVertex3f(size, -size, size);
-            glVertex3f(size, size, size);
-            glVertex3f(-size, size, size);
+            glVertex3f(min_x, min_y, max_z);
+            glVertex3f(max_x, min_y, max_z);
+            glVertex3f(max_x, max_y, max_z);
+            glVertex3f(min_x, max_y, max_z);
             glEnd();
 
             glBegin(GL_LINES);
-            glVertex3f(-size, -size, -size); glVertex3f(-size, -size, size);
-            glVertex3f(size, -size, -size); glVertex3f(size, -size, size);
-            glVertex3f(size, size, -size); glVertex3f(size, size, size);
-            glVertex3f(-size, size, -size); glVertex3f(-size, size, size);
+            glVertex3f(min_x, min_y, min_z); glVertex3f(min_x, min_y, max_z);
+            glVertex3f(max_x, min_y, min_z); glVertex3f(max_x, min_y, max_z);
+            glVertex3f(max_x, max_y, min_z); glVertex3f(max_x, max_y, max_z);
+            glVertex3f(min_x, max_y, min_z); glVertex3f(min_x, max_y, max_z);
             glEnd();
 
             glLineWidth(1.0f);
@@ -617,7 +641,7 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        glColor3f(1.0f, 1.0f, 0.0f);
+        glColor3f(1.0f, 0.5f, 0.0f);
         float center_size = 0.6f;
         glBegin(GL_QUADS);
 
