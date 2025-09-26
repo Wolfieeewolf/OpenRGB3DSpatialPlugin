@@ -27,7 +27,9 @@ class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
     Q_INTERFACES(OpenRGBPluginInterface)
 
 public:
-    ~OpenRGB3DSpatialPlugin() {};
+    ~OpenRGB3DSpatialPlugin()
+    {
+    }
 
     virtual OpenRGBPluginInfo   GetPluginInfo()                                                     override;
     virtual unsigned int        GetPluginAPIVersion()                                               override;

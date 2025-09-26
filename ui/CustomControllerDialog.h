@@ -36,6 +36,7 @@ struct GridLEDMapping
     RGBController* controller;
     unsigned int zone_idx;
     unsigned int led_idx;
+    int granularity; // 0=whole device, 1=zone, 2=LED
 };
 
 class ColorComboDelegate : public QStyledItemDelegate
@@ -93,6 +94,7 @@ private:
     QColor GetAverageDeviceColor(RGBController* controller);
     QColor GetMappingColor(const GridLEDMapping& mapping);
     static QColor RGBToQColor(unsigned int rgb_value);
+    void InferMappingGranularity();
 
     ResourceManagerInterface* resource_manager;
 

@@ -21,17 +21,16 @@
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
-#else
-#include <sys/stat.h>
-#include <sys/types.h>
 #endif
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QFileDialog>
 #include <filesystem>
 #include "SettingsManager.h"
+#include <nlohmann/json.hpp>
 
 using namespace std;
+using json = nlohmann::json;
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -181,12 +180,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     middle_panel->addWidget(controls_label);
 
     viewport = new LEDViewport3D();
+    viewport->SetControllerTransforms(&controller_transforms);
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
             this, SLOT(on_controller_position_changed(int,float,float,float)));
     connect(viewport, SIGNAL(ControllerScaleChanged(int,float,float,float)),
             this, SLOT(on_controller_scale_changed(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
+
+    effects->SetControllerTransforms(&controller_transforms);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -1452,8 +1454,19 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     {
         ControllerTransform* ct = controller_transforms[i];
 
-        out << ct->controller->name.c_str() << "\n";
-        out << ct->controller->location.c_str() << "\n";
+        if(ct->controller == nullptr)
+        {
+            QListWidgetItem* item = controller_list->item(i);
+            QString display_name = item ? item->text() : "Unknown Custom Controller";
+
+            out << display_name.toStdString().c_str() << "\n";
+            out << "VIRTUAL_CONTROLLER\n";
+        }
+        else
+        {
+            out << ct->controller->name.c_str() << "\n";
+            out << ct->controller->location.c_str() << "\n";
+        }
         out << ct->led_positions.size() << "\n";
 
         for(unsigned int j = 0; j < ct->led_positions.size(); j++)
@@ -1506,46 +1519,91 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
         int led_count = in.readLine().toInt();
 
         RGBController* controller = nullptr;
-        for(unsigned int j = 0; j < controllers.size(); j++)
-        {
-            if(controllers[j]->name == ctrl_name.toStdString() &&
-               controllers[j]->location == ctrl_location.toStdString())
-            {
-                controller = controllers[j];
-                break;
-            }
-        }
+        bool is_virtual = (ctrl_location == "VIRTUAL_CONTROLLER");
 
-        if(!controller)
+        if(!is_virtual)
         {
-            for(int j = 0; j < led_count; j++)
+            for(unsigned int j = 0; j < controllers.size(); j++)
             {
-                in.readLine();
+                if(controllers[j]->name == ctrl_name.toStdString() &&
+                   controllers[j]->location == ctrl_location.toStdString())
+                {
+                    controller = controllers[j];
+                    break;
+                }
             }
-            in.readLine();
-            in.readLine();
-            in.readLine();
-            in.readLine();
-            continue;
+
+            if(!controller)
+            {
+                LOG_WARNING("[OpenRGB 3D Spatial] Controller '%s' at '%s' not found, skipping",
+                           ctrl_name.toStdString().c_str(), ctrl_location.toStdString().c_str());
+                for(int j = 0; j < led_count; j++)
+                {
+                    in.readLine();
+                }
+                in.readLine();
+                in.readLine();
+                in.readLine();
+                in.readLine();
+                continue;
+            }
         }
 
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = controller;
 
-        for(int j = 0; j < led_count; j++)
+        if(is_virtual)
         {
-            QStringList parts = in.readLine().split(" ");
-            unsigned int zone_idx = parts[0].toUInt();
-            unsigned int led_idx = parts[1].toUInt();
-
-            std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
-
-            for(unsigned int k = 0; k < all_positions.size(); k++)
+            QString virtual_name = ctrl_name;
+            if(virtual_name.startsWith("[Custom] "))
             {
-                if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
+                virtual_name = virtual_name.mid(9);
+            }
+
+            VirtualController3D* virtual_ctrl = nullptr;
+            for(VirtualController3D* vc : virtual_controllers)
+            {
+                if(QString::fromStdString(vc->GetName()) == virtual_name)
                 {
-                    ctrl_transform->led_positions.push_back(all_positions[k]);
+                    virtual_ctrl = vc;
                     break;
+                }
+            }
+
+            if(virtual_ctrl)
+            {
+                ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
+                LOG_INFO("[OpenRGB 3D Spatial] Restored virtual controller '%s' with %d LEDs",
+                         virtual_name.toStdString().c_str(), (int)ctrl_transform->led_positions.size());
+            }
+            else
+            {
+                LOG_WARNING("[OpenRGB 3D Spatial] Virtual controller '%s' not found, creating placeholder",
+                           virtual_name.toStdString().c_str());
+            }
+
+            for(int j = 0; j < led_count; j++)
+            {
+                in.readLine();
+            }
+        }
+        else
+        {
+            for(int j = 0; j < led_count; j++)
+            {
+                QStringList parts = in.readLine().split(" ");
+                unsigned int zone_idx = parts[0].toUInt();
+                unsigned int led_idx = parts[1].toUInt();
+
+                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+
+                for(unsigned int k = 0; k < all_positions.size(); k++)
+                {
+                    if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
+                    {
+                        ctrl_transform->led_positions.push_back(all_positions[k]);
+                        break;
+                    }
                 }
             }
         }
@@ -1574,18 +1632,26 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
                      (ctrl_transform->display_color >> 8) & 0xFF,
                      (ctrl_transform->display_color >> 16) & 0xFF);
 
-        QString name = QString::fromStdString(controller->name);
-        if(ctrl_transform->led_positions.size() < controller->leds.size())
+        QString name;
+        if(is_virtual)
         {
-            if(ctrl_transform->led_positions.size() == 1)
+            name = ctrl_name;
+        }
+        else
+        {
+            name = QString::fromStdString(controller->name);
+            if(ctrl_transform->led_positions.size() < controller->leds.size())
             {
-                unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
-                                              ctrl_transform->led_positions[0].led_idx;
-                name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
-            }
-            else
-            {
-                name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                if(ctrl_transform->led_positions.size() == 1)
+                {
+                    unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
+                                                  ctrl_transform->led_positions[0].led_idx;
+                    name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                }
+                else
+                {
+                    name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                }
             }
         }
 

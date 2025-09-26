@@ -29,13 +29,15 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#define GIZMO_MODE_MOVE   0
-#define GIZMO_MODE_ROTATE 1
-#define GIZMO_MODE_SCALE  2
+#define GIZMO_MODE_MOVE     0
+#define GIZMO_MODE_ROTATE   1
+#define GIZMO_MODE_SCALE    2
+#define GIZMO_MODE_FREEROAM 3
 
 #ifdef _WIN32
 // Manual GLU implementations for Windows to avoid header conflicts
-void gluPerspective(double fovy, double aspect, double zNear, double zFar) {
+void gluPerspective(double fovy, double aspect, double zNear, double zFar)
+{
     double fH = tan(fovy / 360 * M_PI) * zNear;
     double fW = fH * aspect;
     glFrustum(-fW, fW, -fH, fH, zNear, zFar);
@@ -43,7 +45,8 @@ void gluPerspective(double fovy, double aspect, double zNear, double zFar) {
 
 void gluLookAt(double eyeX, double eyeY, double eyeZ,
                double centerX, double centerY, double centerZ,
-               double upX, double upY, double upZ) {
+               double upX, double upY, double upZ)
+{
     double forward[3], side[3], up[3];
     double m[4][4];
 
@@ -52,7 +55,8 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
     forward[2] = centerZ - eyeZ;
 
     double len = sqrt(forward[0]*forward[0] + forward[1]*forward[1] + forward[2]*forward[2]);
-    if (len != 0.0) {
+    if(len != 0.0)
+    {
         forward[0] /= len;
         forward[1] /= len;
         forward[2] /= len;
@@ -63,7 +67,8 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
     side[2] = forward[0] * upY - forward[1] * upX;
 
     len = sqrt(side[0]*side[0] + side[1]*side[1] + side[2]*side[2]);
-    if (len != 0.0) {
+    if(len != 0.0)
+    {
         side[0] /= len;
         side[1] /= len;
         side[2] /= len;
@@ -118,7 +123,7 @@ int gluProject(double objX, double objY, double objZ,
     in[2] = proj[2]*out[0] + proj[6]*out[1] + proj[10]*out[2] + proj[14]*out[3];
     in[3] = proj[3]*out[0] + proj[7]*out[1] + proj[11]*out[2] + proj[15]*out[3];
 
-    if (in[3] == 0.0) return 0;
+    if(in[3] == 0.0) return 0;
 
     in[0] /= in[3];
     in[1] /= in[3];
@@ -453,7 +458,7 @@ void LEDViewport3D::DrawGizmo()
         }
         glEnd();
 
-        float cube_size = 0.39f;
+        float cube_size = 0.48f;
 
         glColor3f(1.0f, 0.0f, 0.0f);
 
@@ -642,7 +647,7 @@ void LEDViewport3D::DrawGizmo()
         glPopMatrix();
 
         glColor3f(1.0f, 0.5f, 0.0f);
-        float center_size = 0.6f;
+        float center_size = 0.48f;
         glBegin(GL_QUADS);
 
         glVertex3f(-center_size, -center_size, -center_size);
@@ -696,7 +701,7 @@ void LEDViewport3D::DrawGizmo()
 
         glEnd();
 
-        float cube_size = 0.45f;
+        float cube_size = 0.56f;
         glBegin(GL_QUADS);
 
         glColor3f(0.0f, 0.0f, 1.0f);
@@ -794,7 +799,7 @@ void LEDViewport3D::DrawGizmo()
 
         glEnd();
     }
-    else
+    else if(gizmo_mode == GIZMO_MODE_MOVE)
     {
         glLineWidth(4.0f);
         glBegin(GL_LINES);
@@ -817,69 +822,190 @@ void LEDViewport3D::DrawGizmo()
 
         glColor3f(0.0f, 0.0f, 1.0f);
         glVertex3f(7, 0, 0);
-        glVertex3f(6, 0.3f, 0);
-        glVertex3f(6, -0.3f, 0);
+        glVertex3f(6, 0.48f, 0);
+        glVertex3f(6, -0.48f, 0);
 
         glVertex3f(7, 0, 0);
-        glVertex3f(6, 0, 0.3f);
-        glVertex3f(6, 0, -0.3f);
+        glVertex3f(6, 0, 0.48f);
+        glVertex3f(6, 0, -0.48f);
 
         glColor3f(0.0f, 1.0f, 0.0f);
         glVertex3f(0, 7, 0);
-        glVertex3f(0.3f, 6, 0);
-        glVertex3f(-0.3f, 6, 0);
+        glVertex3f(0.48f, 6, 0);
+        glVertex3f(-0.48f, 6, 0);
 
         glVertex3f(0, 7, 0);
-        glVertex3f(0, 6, 0.3f);
-        glVertex3f(0, 6, -0.3f);
+        glVertex3f(0, 6, 0.48f);
+        glVertex3f(0, 6, -0.48f);
 
         glColor3f(1.0f, 0.0f, 0.0f);
         glVertex3f(0, 0, 7);
-        glVertex3f(0.3f, 0, 6);
-        glVertex3f(-0.3f, 0, 6);
+        glVertex3f(0.48f, 0, 6);
+        glVertex3f(-0.48f, 0, 6);
 
         glVertex3f(0, 0, 7);
-        glVertex3f(0, 0.3f, 6);
-        glVertex3f(0, -0.3f, 6);
+        glVertex3f(0, 0.48f, 6);
+        glVertex3f(0, -0.48f, 6);
+
+        glEnd();
+
+        float cube_size = 0.48f;
+        glBegin(GL_QUADS);
+        glColor3f(1.0f, 0.5f, 0.0f);
+
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+
+        glEnd();
+
+        // Orange center cube for mode switching
+        glColor3f(1.0f, 0.5f, 0.0f);
+        float center_size = 0.48f;
+        glBegin(GL_QUADS);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+
+        glVertex3f(-center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
 
         glEnd();
     }
+    else if(gizmo_mode == GIZMO_MODE_FREEROAM)
+    {
+        // Draw line/stick for freeroam grab handle
+        glLineWidth(5.0f);
+        glBegin(GL_LINES);
 
-    float cube_size = 0.4f;
-    glBegin(GL_QUADS);
-    glColor3f(1.0f, 0.5f, 0.0f);
+        glColor3f(0.5f, 0.0f, 1.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 5, 0);
 
-    glVertex3f(-cube_size, -cube_size, -cube_size);
-    glVertex3f(cube_size, -cube_size, -cube_size);
-    glVertex3f(cube_size, cube_size, -cube_size);
-    glVertex3f(-cube_size, cube_size, -cube_size);
+        glEnd();
 
-    glVertex3f(-cube_size, -cube_size, cube_size);
-    glVertex3f(cube_size, -cube_size, cube_size);
-    glVertex3f(cube_size, cube_size, cube_size);
-    glVertex3f(-cube_size, cube_size, cube_size);
+        float cube_size = 0.48f;
+        glBegin(GL_QUADS);
 
-    glVertex3f(-cube_size, -cube_size, -cube_size);
-    glVertex3f(-cube_size, -cube_size, cube_size);
-    glVertex3f(-cube_size, cube_size, cube_size);
-    glVertex3f(-cube_size, cube_size, -cube_size);
+        // Purple grab cube on stick (like scale Y)
+        glColor3f(0.5f, 0.0f, 1.0f);
 
-    glVertex3f(cube_size, -cube_size, -cube_size);
-    glVertex3f(cube_size, -cube_size, cube_size);
-    glVertex3f(cube_size, cube_size, cube_size);
-    glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
 
-    glVertex3f(-cube_size, -cube_size, -cube_size);
-    glVertex3f(cube_size, -cube_size, -cube_size);
-    glVertex3f(cube_size, -cube_size, cube_size);
-    glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
 
-    glVertex3f(-cube_size, cube_size, -cube_size);
-    glVertex3f(cube_size, cube_size, -cube_size);
-    glVertex3f(cube_size, cube_size, cube_size);
-    glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
 
-    glEnd();
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
+
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
+
+        // Orange center cube for mode switching
+        glColor3f(1.0f, 0.5f, 0.0f);
+        float center_size = 0.48f;
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+
+        glVertex3f(-center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+
+        glEnd();
+    }
 
     glLineWidth(1.0f);
     glPopMatrix();
@@ -895,7 +1021,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             if(PickGizmoCenter(MOUSE_X(event), MOUSE_Y(event)))
             {
-                gizmo_mode = (gizmo_mode + 1) % 3;
+                gizmo_mode = (gizmo_mode + 1) % 4;
                 update();
                 return;
             }
@@ -915,8 +1041,6 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             selected_controller_idx = picked;
             emit ControllerSelected(picked);
-            dragging_gizmo = true;
-            dragging_axis = -1;
             update();
         }
         else
@@ -1122,16 +1246,22 @@ bool LEDViewport3D::RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& d
     float tmin = 0.0f;
     float tmax = 10000.0f; // Large number for "infinity"
 
-    for (int i = 0; i < 3; i++) {
-        if (fabs(ray.direction[i]) < 0.0001f) {
-            if (ray.origin[i] < box.min[i] || ray.origin[i] > box.max[i]) {
+    for(int i = 0; i < 3; i++)
+    {
+        if(fabs(ray.direction[i]) < 0.0001f)
+        {
+            if(ray.origin[i] < box.min[i] || ray.origin[i] > box.max[i])
+            {
                 return false;
             }
-        } else {
+        }
+        else
+        {
             float t1 = (box.min[i] - ray.origin[i]) / ray.direction[i];
             float t2 = (box.max[i] - ray.origin[i]) / ray.direction[i];
 
-            if (t1 > t2) {
+            if(t1 > t2)
+            {
                 float temp = t1;
                 t1 = t2;
                 t2 = temp;
@@ -1140,7 +1270,8 @@ bool LEDViewport3D::RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& d
             tmin = fmax(tmin, t1);
             tmax = fmin(tmax, t2);
 
-            if (tmin > tmax) {
+            if(tmin > tmax)
+            {
                 return false;
             }
         }
@@ -1165,7 +1296,7 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
     if(gizmo_mode == GIZMO_MODE_ROTATE)
     {
         float ring_radius = 5.0f;
-        float cube_size = 0.39f;
+        float cube_size = 0.48f;
 
         float handle_positions[3][2][3] = {
             {{0, ring_radius*0.7f, ring_radius*0.7f}, {0, -ring_radius*0.7f, -ring_radius*0.7f}},
@@ -1231,7 +1362,7 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
 
         // Test center cube for free rotation (axis = 3)
         Box3D center_box;
-        float center_size = 0.6f;
+        float center_size = 0.48f;
         center_box.min[0] = ctrl->transform.position.x - center_size;
         center_box.min[1] = ctrl->transform.position.y - center_size;
         center_box.min[2] = ctrl->transform.position.z - center_size;
@@ -1250,7 +1381,7 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
     {
         // Test scale cube handles - match drawing positions
         Vector3D axes[3] = {{5, 0, 0}, {0, 5, 0}, {0, 0, 5}};
-        float cube_size = 0.45f;
+        float cube_size = 0.56f;
 
         for(int i = 0; i < 3; i++)
         {
@@ -1302,8 +1433,25 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
                 closest_axis = i;
             }
         }
+
+        // Test orange center cube for mode switching
+        Box3D center_box;
+        float center_size = 0.48f;
+        center_box.min[0] = ctrl->transform.position.x - center_size;
+        center_box.min[1] = ctrl->transform.position.y - center_size;
+        center_box.min[2] = ctrl->transform.position.z - center_size;
+        center_box.max[0] = ctrl->transform.position.x + center_size;
+        center_box.max[1] = ctrl->transform.position.y + center_size;
+        center_box.max[2] = ctrl->transform.position.z + center_size;
+
+        float distance;
+        if(RayBoxIntersect(ray, center_box, distance) && distance < closest_distance)
+        {
+            closest_distance = distance;
+            closest_axis = -1; // Mode switching
+        }
     }
-    else // GIZMO_MODE_MOVE
+    else if(gizmo_mode == GIZMO_MODE_MOVE)
     {
         // Test move arrow handles with simplified box intersection for now
         Vector3D axes[3] = {{7, 0, 0}, {0, 7, 0}, {0, 0, 7}};
@@ -1362,7 +1510,7 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
 
         // Test orange center cube for free movement
         Box3D center_box;
-        float center_size = 0.4f;
+        float center_size = 0.48f;
         center_box.min[0] = ctrl->transform.position.x - center_size;
         center_box.min[1] = ctrl->transform.position.y - center_size;
         center_box.min[2] = ctrl->transform.position.z - center_size;
@@ -1375,6 +1523,45 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
         {
             closest_distance = distance;
             closest_axis = -1; // Free movement (no specific axis)
+        }
+    }
+    else if(gizmo_mode == GIZMO_MODE_FREEROAM)
+    {
+        // Test purple grab cube on stick for freeroam movement
+        Box3D grab_box;
+        float grab_cube_size = 0.48f;
+        float stick_height = 5.0f;
+
+        // Purple cube position (on stick at Y=5)
+        grab_box.min[0] = ctrl->transform.position.x - grab_cube_size;
+        grab_box.min[1] = ctrl->transform.position.y + stick_height - grab_cube_size;
+        grab_box.min[2] = ctrl->transform.position.z - grab_cube_size;
+        grab_box.max[0] = ctrl->transform.position.x + grab_cube_size;
+        grab_box.max[1] = ctrl->transform.position.y + stick_height + grab_cube_size;
+        grab_box.max[2] = ctrl->transform.position.z + grab_cube_size;
+
+        float distance;
+        if(RayBoxIntersect(ray, grab_box, distance))
+        {
+            closest_distance = distance;
+            closest_axis = 0; // Use axis 0 for freeroam grab cube
+        }
+
+        // Test orange center cube for mode switching
+        Box3D center_box;
+        float center_size = 0.48f;
+        center_box.min[0] = ctrl->transform.position.x - center_size;
+        center_box.min[1] = ctrl->transform.position.y - center_size;
+        center_box.min[2] = ctrl->transform.position.z - center_size;
+        center_box.max[0] = ctrl->transform.position.x + center_size;
+        center_box.max[1] = ctrl->transform.position.y + center_size;
+        center_box.max[2] = ctrl->transform.position.z + center_size;
+
+        float center_distance;
+        if(RayBoxIntersect(ray, center_box, center_distance) && center_distance < closest_distance)
+        {
+            closest_distance = center_distance;
+            closest_axis = -1; // Mode switching
         }
     }
 
@@ -1437,22 +1624,27 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
     else if(gizmo_mode == GIZMO_MODE_SCALE)
     {
         float scale_speed = 0.01f;
-        float delta_scale = (dx - dy) * scale_speed;
 
         if(dragging_axis == 0)
         {
+            // X axis (blue) - use dx only
+            float delta_scale = dx * scale_speed;
             ctrl->transform.scale.x += delta_scale;
             if(ctrl->transform.scale.x < 0.1f) ctrl->transform.scale.x = 0.1f;
             if(ctrl->transform.scale.x > 10.0f) ctrl->transform.scale.x = 10.0f;
         }
         else if(dragging_axis == 1)
         {
+            // Y axis - keep original direction
+            float delta_scale = (dx - dy) * scale_speed;
             ctrl->transform.scale.y += delta_scale;
             if(ctrl->transform.scale.y < 0.1f) ctrl->transform.scale.y = 0.1f;
             if(ctrl->transform.scale.y > 10.0f) ctrl->transform.scale.y = 10.0f;
         }
         else if(dragging_axis == 2)
         {
+            // Z axis - reverse direction to fix backward movement
+            float delta_scale = -(dx - dy) * scale_speed;
             ctrl->transform.scale.z += delta_scale;
             if(ctrl->transform.scale.z < 0.1f) ctrl->transform.scale.z = 0.1f;
             if(ctrl->transform.scale.z > 10.0f) ctrl->transform.scale.z = 10.0f;
@@ -1463,7 +1655,7 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
                                     ctrl->transform.scale.y,
                                     ctrl->transform.scale.z);
     }
-    else // GIZMO_MODE_MOVE
+    else if(gizmo_mode == GIZMO_MODE_MOVE)
     {
         float move_scale = 0.1f;
 
@@ -1477,7 +1669,7 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
         }
         else if(dragging_axis == 2) // Z-axis (red) - always move along world Z axis
         {
-            ctrl->transform.position.z -= dy * move_scale;
+            ctrl->transform.position.z += dy * move_scale;
         }
         else // Free movement in camera plane
         {
@@ -1496,6 +1688,31 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
             ctrl->transform.position.y += up_y * -dy * move_scale;
             ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
         }
+    }
+    else if(gizmo_mode == GIZMO_MODE_FREEROAM)
+    {
+        float move_scale = 0.1f;
+
+        // Freeroam movement in camera plane
+        float yaw_rad = camera_yaw * M_PI / 180.0f;
+        float pitch_rad = camera_pitch * M_PI / 180.0f;
+
+        float right_x = cos(yaw_rad);
+        float right_z = -sin(yaw_rad);
+
+        float up_x = -sin(yaw_rad) * sin(pitch_rad);
+        float up_y = cos(pitch_rad);
+        float up_z = -cos(yaw_rad) * sin(pitch_rad);
+
+        ctrl->transform.position.x += (right_x * dx + up_x * -dy) * move_scale;
+        ctrl->transform.position.y += up_y * -dy * move_scale;
+        ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
+    }
+
+    // Ground collision - prevent controllers from going below Y=0
+    if(ctrl->transform.position.y < 0.0f)
+    {
+        ctrl->transform.position.y = 0.0f;
     }
 
     emit ControllerPositionChanged(selected_controller_idx,

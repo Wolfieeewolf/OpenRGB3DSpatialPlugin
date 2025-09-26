@@ -183,6 +183,7 @@ void CustomControllerDialog::UpdateItemCombo()
     if(ctrl_idx >= (int)controllers.size()) return;
 
     RGBController* controller = controllers[ctrl_idx];
+    if(!controller) return;
     int granularity = granularity_combo->currentIndex();
 
     if(granularity == 0)
@@ -324,11 +325,11 @@ void CustomControllerDialog::UpdateGridDisplay()
             QTableWidgetItem* item = new QTableWidgetItem();
 
             std::vector<GridLEDMapping> cell_mappings;
-            for(const GridLEDMapping& mapping : led_mappings)
+            for(unsigned int k = 0; k < led_mappings.size(); k++)
             {
-                if(mapping.x == j && mapping.y == i && mapping.z == current_layer)
+                if(led_mappings[k].x == j && led_mappings[k].y == i && led_mappings[k].z == current_layer)
                 {
-                    cell_mappings.push_back(mapping);
+                    cell_mappings.push_back(led_mappings[k]);
                 }
             }
 
@@ -345,9 +346,9 @@ void CustomControllerDialog::UpdateGridDisplay()
                     unsigned int total_r = 0, total_g = 0, total_b = 0;
                     unsigned int valid_count = 0;
 
-                    for(const GridLEDMapping& mapping : cell_mappings)
+                    for(unsigned int m = 0; m < cell_mappings.size(); m++)
                     {
-                        QColor ledColor = GetMappingColor(mapping);
+                        QColor ledColor = GetMappingColor(cell_mappings[m]);
                         total_r += ledColor.red();
                         total_g += ledColor.green();
                         total_b += ledColor.blue();
@@ -365,10 +366,51 @@ void CustomControllerDialog::UpdateGridDisplay()
                 if(cell_mappings.size() == 1)
                 {
                     const GridLEDMapping& mapping = cell_mappings[0];
-                    tooltip_text = QString("Assigned: %1\nZone: %2\nLED: %3")
-                                   .arg(QString::fromStdString(mapping.controller->name))
-                                   .arg(mapping.zone_idx)
-                                   .arg(mapping.led_idx);
+
+                    if(!mapping.controller)
+                    {
+                        tooltip_text = "Invalid assignment";
+                    }
+                    else if(mapping.granularity == 0)
+                    {
+                        // Whole device assignment
+                        tooltip_text = QString("Assigned: %1 (Whole Device)")
+                                       .arg(QString::fromStdString(mapping.controller->name));
+                    }
+                    else if(mapping.granularity == 1)
+                    {
+                        // Zone assignment
+                        QString zone_name = "Unknown Zone";
+                        if(mapping.zone_idx < mapping.controller->zones.size())
+                        {
+                            zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
+                        }
+                        tooltip_text = QString("Assigned: %1\nZone: %2")
+                                       .arg(QString::fromStdString(mapping.controller->name))
+                                       .arg(zone_name);
+                    }
+                    else if(mapping.granularity == 2)
+                    {
+                        // LED assignment
+                        QString led_name = "Unknown LED";
+                        unsigned int global_led_idx = 0;
+                        if(mapping.zone_idx < mapping.controller->zones.size())
+                        {
+                            global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                            if(global_led_idx < mapping.controller->leds.size())
+                            {
+                                led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+                            }
+                        }
+                        tooltip_text = QString("Assigned: %1\nLED: %2")
+                                       .arg(QString::fromStdString(mapping.controller->name))
+                                       .arg(led_name);
+                    }
+                    else
+                    {
+                        tooltip_text = QString("Assigned: %1 (Unknown type)")
+                                       .arg(QString::fromStdString(mapping.controller->name));
+                    }
                 }
                 else
                 {
@@ -376,16 +418,41 @@ void CustomControllerDialog::UpdateGridDisplay()
                     for(size_t i = 0; i < cell_mappings.size() && i < 5; i++) // Limit to 5 for readability
                     {
                         const GridLEDMapping& mapping = cell_mappings[i];
-                        tooltip_text += QString("• %1 [Z%2:L%3]\n")
+                        if(!mapping.controller) continue;
+
+                        QString assignment_type;
+                        if(mapping.granularity == 0)
+                        {
+                            assignment_type = " (Whole Device)";
+                        }
+                        else if(mapping.granularity == 1 && mapping.zone_idx < mapping.controller->zones.size())
+                        {
+                            assignment_type = QString(" [Zone: %1]").arg(QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name));
+                        }
+                        else if(mapping.granularity == 2)
+                        {
+                            unsigned int global_led_idx = 0;
+                            if(mapping.zone_idx < mapping.controller->zones.size())
+                            {
+                                global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                                if(global_led_idx < mapping.controller->leds.size())
+                                {
+                                    assignment_type = QString(" [LED: %1]").arg(QString::fromStdString(mapping.controller->leds[global_led_idx].name));
+                                }
+                            }
+                        }
+
+                        tooltip_text += QString("• %1%2\n")
                                        .arg(QString::fromStdString(mapping.controller->name))
-                                       .arg(mapping.zone_idx)
-                                       .arg(mapping.led_idx);
+                                       .arg(assignment_type);
                     }
                     if(cell_mappings.size() > 5)
                     {
                         tooltip_text += QString("... and %1 more").arg(cell_mappings.size() - 5);
                     }
                 }
+
+
                 item->setToolTip(tooltip_text);
 
                 // Add indicator based on number of LEDs
@@ -404,6 +471,8 @@ void CustomControllerDialog::UpdateGridDisplay()
             else
             {
                 item->setText("");
+
+
                 item->setToolTip("Empty - click to assign");
             }
 
@@ -472,13 +541,70 @@ void CustomControllerDialog::UpdateCellInfo()
                     .arg(selected_row)
                     .arg(current_layer);
 
+    // Count all mappings for this cell
+    std::vector<GridLEDMapping> cell_mappings;
     for(const GridLEDMapping& mapping : led_mappings)
     {
         if(mapping.x == selected_col && mapping.y == selected_row && mapping.z == current_layer)
         {
-            info += QString(" - Assigned: %1").arg(QString::fromStdString(mapping.controller->name));
-            break;
+            cell_mappings.push_back(mapping);
         }
+    }
+
+    if(cell_mappings.empty())
+    {
+        info += " - Empty";
+    }
+    else if(cell_mappings.size() == 1)
+    {
+        const GridLEDMapping& mapping = cell_mappings[0];
+        if(!mapping.controller)
+        {
+            info += " - Invalid assignment";
+        }
+        else if(mapping.granularity == 0)
+        {
+            // Whole device assignment
+            info += QString(" - Assigned: %1 (Whole Device)")
+                    .arg(QString::fromStdString(mapping.controller->name));
+        }
+        else if(mapping.granularity == 1)
+        {
+            // Zone assignment
+            QString zone_name = "Unknown Zone";
+            if(mapping.zone_idx < mapping.controller->zones.size())
+            {
+                zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
+            }
+            info += QString(" - Assigned: %1, Zone: %2")
+                    .arg(QString::fromStdString(mapping.controller->name))
+                    .arg(zone_name);
+        }
+        else if(mapping.granularity == 2)
+        {
+            // LED assignment
+            QString led_name = "Unknown LED";
+            unsigned int global_led_idx = 0;
+            if(mapping.zone_idx < mapping.controller->zones.size())
+            {
+                global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                if(global_led_idx < mapping.controller->leds.size())
+                {
+                    led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+                }
+            }
+            info += QString(" - Assigned: %1, LED: %2")
+                    .arg(QString::fromStdString(mapping.controller->name))
+                    .arg(led_name);
+        }
+        else
+        {
+            info += QString(" - Assigned: %1").arg(QString::fromStdString(mapping.controller->name));
+        }
+    }
+    else
+    {
+        info += QString(" - Multiple LEDs (%1)").arg(cell_mappings.size());
     }
 
     cell_info_label->setText(info);
@@ -500,7 +626,10 @@ void CustomControllerDialog::on_assign_clicked()
     }
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    if(ctrl_idx >= (int)controllers.size()) return;
+
     RGBController* controller = controllers[ctrl_idx];
+    if(!controller) return;
 
     int granularity = granularity_combo->currentIndex();
     int combo_idx = item_combo->currentIndex();
@@ -529,40 +658,46 @@ void CustomControllerDialog::on_assign_clicked()
 
     if(granularity == 0)
     {
-        for(const LEDPosition3D& pos : positions)
+        for(unsigned int p = 0; p < positions.size(); p++)
         {
             GridLEDMapping mapping;
             mapping.x = selected_col;
             mapping.y = selected_row;
             mapping.z = current_layer;
             mapping.controller = controller;
-            mapping.zone_idx = pos.zone_idx;
-            mapping.led_idx = pos.led_idx;
+            mapping.zone_idx = positions[p].zone_idx;
+            mapping.led_idx = positions[p].led_idx;
+            mapping.granularity = 0; // Whole device
             led_mappings.push_back(mapping);
         }
     }
     else if(granularity == 1)
     {
-        for(const LEDPosition3D& pos : positions)
+        for(unsigned int p = 0; p < positions.size(); p++)
         {
-            if(pos.zone_idx == (unsigned int)item_idx)
+            if(positions[p].zone_idx == (unsigned int)item_idx)
             {
                 GridLEDMapping mapping;
                 mapping.x = selected_col;
                 mapping.y = selected_row;
                 mapping.z = current_layer;
                 mapping.controller = controller;
-                mapping.zone_idx = pos.zone_idx;
-                mapping.led_idx = pos.led_idx;
+                mapping.zone_idx = positions[p].zone_idx;
+                mapping.led_idx = positions[p].led_idx;
+                mapping.granularity = 1; // Zone
                 led_mappings.push_back(mapping);
             }
         }
     }
     else if(granularity == 2)
     {
-        for(const LEDPosition3D& pos : positions)
+        for(unsigned int p = 0; p < positions.size(); p++)
         {
-            unsigned int global_led_idx = controller->zones[pos.zone_idx].start_idx + pos.led_idx;
+            // Add bounds checking before accessing zones array
+            if(positions[p].zone_idx >= controller->zones.size())
+                continue;
+
+            unsigned int global_led_idx = controller->zones[positions[p].zone_idx].start_idx + positions[p].led_idx;
             if(global_led_idx == (unsigned int)item_idx)
             {
                 GridLEDMapping mapping;
@@ -570,8 +705,9 @@ void CustomControllerDialog::on_assign_clicked()
                 mapping.y = selected_row;
                 mapping.z = current_layer;
                 mapping.controller = controller;
-                mapping.zone_idx = pos.zone_idx;
-                mapping.led_idx = pos.led_idx;
+                mapping.zone_idx = positions[p].zone_idx;
+                mapping.led_idx = positions[p].led_idx;
+                mapping.granularity = 2; // LED
                 led_mappings.push_back(mapping);
             }
         }
@@ -673,9 +809,9 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
 {
     if(granularity == 0)
     {
-        for(const GridLEDMapping& mapping : led_mappings)
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
-            if(mapping.controller == controller)
+            if(led_mappings[i].controller == controller)
             {
                 return true;
             }
@@ -683,9 +819,9 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
     else if(granularity == 1)
     {
-        for(const GridLEDMapping& mapping : led_mappings)
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
-            if(mapping.controller == controller && mapping.zone_idx == (unsigned int)item_idx)
+            if(led_mappings[i].controller == controller && led_mappings[i].zone_idx == (unsigned int)item_idx)
             {
                 return true;
             }
@@ -693,10 +829,13 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
     else if(granularity == 2)
     {
-        for(const GridLEDMapping& mapping : led_mappings)
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
-            unsigned int global_led_idx = controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-            if(mapping.controller == controller && global_led_idx == (unsigned int)item_idx)
+            if(led_mappings[i].zone_idx >= controller->zones.size())
+                continue;
+
+            unsigned int global_led_idx = controller->zones[led_mappings[i].zone_idx].start_idx + led_mappings[i].led_idx;
+            if(led_mappings[i].controller == controller && global_led_idx == (unsigned int)item_idx)
             {
                 return true;
             }
@@ -714,22 +853,30 @@ void CustomControllerDialog::LoadExistingController(const std::string& name, int
     depth_spin->setValue(depth);
     led_mappings = mappings;
 
+    // Infer granularity for existing mappings that might not have it set
+    InferMappingGranularity();
+
     UpdateGridDisplay();
 }
 
 QColor CustomControllerDialog::GetItemColor(RGBController* controller, int granularity, int item_idx)
 {
+    if(!controller) return QColor(128, 128, 128);
+
     if(granularity == 0)
     {
         return GetAverageDeviceColor(controller);
     }
     else if(granularity == 1)
     {
-        return GetAverageZoneColor(controller, item_idx);
+        if(item_idx >= 0 && item_idx < (int)controller->zones.size())
+        {
+            return GetAverageZoneColor(controller, item_idx);
+        }
     }
     else if(granularity == 2)
     {
-        if(item_idx < (int)controller->colors.size())
+        if(item_idx >= 0 && item_idx < (int)controller->colors.size())
         {
             return RGBToQColor(controller->colors[item_idx]);
         }
@@ -758,14 +905,14 @@ QColor CustomControllerDialog::GetAverageZoneColor(RGBController* controller, un
 
     if(led_count == 0) return QColor(128, 128, 128);
 
-    return QColor(total_r / led_count, total_g / led_count, total_b / led_count);
+    return QColor(static_cast<int>(total_r / led_count), static_cast<int>(total_g / led_count), static_cast<int>(total_b / led_count));
 }
 
 QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
 {
-    if(controller->colors.empty()) return QColor(128, 128, 128);
+    if(!controller || controller->colors.empty()) return QColor(128, 128, 128);
 
-    unsigned int total_r = 0, total_g = 0, total_b = 0;
+    unsigned long long total_r = 0, total_g = 0, total_b = 0;  // Use larger type to prevent overflow
 
     for(unsigned int color : controller->colors)
     {
@@ -793,6 +940,17 @@ QColor CustomControllerDialog::GetMappingColor(const GridLEDMapping& mapping)
         return QColor(128, 128, 128);
 
     return RGBToQColor(mapping.controller->colors[global_led_idx]);
+}
+
+void CustomControllerDialog::InferMappingGranularity()
+{
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        if(led_mappings[i].granularity < 0 || led_mappings[i].granularity > 2)
+        {
+            led_mappings[i].granularity = 2;
+        }
+    }
 }
 
 QColor CustomControllerDialog::RGBToQColor(unsigned int rgb_value)
@@ -850,11 +1008,11 @@ void CustomControllerDialog::UpdateGridColors()
             if(!item) continue;
 
             std::vector<GridLEDMapping> cell_mappings;
-            for(const GridLEDMapping& mapping : led_mappings)
+            for(unsigned int k = 0; k < led_mappings.size(); k++)
             {
-                if(mapping.x == j && mapping.y == i && mapping.z == current_layer)
+                if(led_mappings[k].x == j && led_mappings[k].y == i && led_mappings[k].z == current_layer)
                 {
-                    cell_mappings.push_back(mapping);
+                    cell_mappings.push_back(led_mappings[k]);
                 }
             }
 
@@ -872,9 +1030,9 @@ void CustomControllerDialog::UpdateGridColors()
                     unsigned int total_r = 0, total_g = 0, total_b = 0;
                     unsigned int valid_count = 0;
 
-                    for(const GridLEDMapping& mapping : cell_mappings)
+                    for(unsigned int m = 0; m < cell_mappings.size(); m++)
                     {
-                        QColor ledColor = GetMappingColor(mapping);
+                        QColor ledColor = GetMappingColor(cell_mappings[m]);
                         total_r += ledColor.red();
                         total_g += ledColor.green();
                         total_b += ledColor.blue();
