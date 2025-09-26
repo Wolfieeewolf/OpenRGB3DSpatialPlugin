@@ -28,6 +28,10 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#define GIZMO_MODE_MOVE   0
+#define GIZMO_MODE_ROTATE 1
+#define GIZMO_MODE_SCALE  2
+
 #ifdef _WIN32
 // Manual GLU implementations for Windows to avoid header conflicts
 void gluPerspective(double fovy, double aspect, double zNear, double zFar) {
@@ -167,7 +171,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
     dragging_pan = false;
     dragging_gizmo = false;
     dragging_axis = -1;
-    gizmo_rotate_mode = false;
+    gizmo_mode = GIZMO_MODE_MOVE;
 
     setMinimumSize(800, 600);
 }
@@ -302,6 +306,7 @@ void LEDViewport3D::DrawControllers()
         glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
         glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
         glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
+        glScalef(ctrl->transform.scale.x, ctrl->transform.scale.y, ctrl->transform.scale.z);
 
         DrawLEDs(ctrl);
 
@@ -399,34 +404,405 @@ void LEDViewport3D::DrawGizmo()
     glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
     glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
 
-    if(gizmo_rotate_mode)
+    if(gizmo_mode == GIZMO_MODE_ROTATE)
     {
-        glLineWidth(3.0f);
-        glBegin(GL_LINE_LOOP);
-        glColor3f(0.0f, 0.0f, 1.0f);
-        for(int i = 0; i <= 32; i++)
-        {
-            float angle = (i / 32.0f) * 2.0f * M_PI;
-            glVertex3f(cos(angle) * 5.0f, sin(angle) * 5.0f, 0);
-        }
-        glEnd();
+        float radius = 5.0f;
 
-        glBegin(GL_LINE_LOOP);
-        glColor3f(0.0f, 1.0f, 0.0f);
-        for(int i = 0; i <= 32; i++)
-        {
-            float angle = (i / 32.0f) * 2.0f * M_PI;
-            glVertex3f(cos(angle) * 5.0f, 0, sin(angle) * 5.0f);
-        }
-        glEnd();
+        // Draw thin rings as visual guides
+        glLineWidth(2.0f);
 
-        glBegin(GL_LINE_LOOP);
+        // X-axis rotation ring (red) - YZ plane
         glColor3f(1.0f, 0.0f, 0.0f);
+        glBegin(GL_LINE_LOOP);
         for(int i = 0; i <= 32; i++)
         {
             float angle = (i / 32.0f) * 2.0f * M_PI;
-            glVertex3f(0, cos(angle) * 5.0f, sin(angle) * 5.0f);
+            glVertex3f(0, cos(angle) * radius, sin(angle) * radius);
         }
+        glEnd();
+
+        // Y-axis rotation ring (green) - XZ plane
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glBegin(GL_LINE_LOOP);
+        for(int i = 0; i <= 32; i++)
+        {
+            float angle = (i / 32.0f) * 2.0f * M_PI;
+            glVertex3f(cos(angle) * radius, 0, sin(angle) * radius);
+        }
+        glEnd();
+
+        // Z-axis rotation ring (blue) - XY plane
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glBegin(GL_LINE_LOOP);
+        for(int i = 0; i <= 32; i++)
+        {
+            float angle = (i / 32.0f) * 2.0f * M_PI;
+            glVertex3f(cos(angle) * radius, sin(angle) * radius, 0);
+        }
+        glEnd();
+
+        // Draw cube-shaped grab handles away from ring intersections
+        float cube_size = 0.39f; // 20% smaller than previous (0.49 * 0.8 = 0.39)
+
+        // X-axis handles (red) - positioned away from Y/Z ring intersections
+        glColor3f(1.0f, 0.0f, 0.0f);
+
+        // Handle 1: at (0, radius*0.7, radius*0.7)
+        glPushMatrix();
+        glTranslatef(0, radius*0.7f, radius*0.7f);
+        // Draw cube
+        glBegin(GL_QUADS);
+        // Front face
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        // Back face
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        // Left face
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        // Right face
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        // Top face
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        // Bottom face
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Handle 2: at (0, -radius*0.7, -radius*0.7)
+        glPushMatrix();
+        glTranslatef(0, -radius*0.7f, -radius*0.7f);
+        glBegin(GL_QUADS);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Y-axis handles (green) - positioned away from X/Z ring intersections
+        glColor3f(0.0f, 1.0f, 0.0f);
+
+        // Handle 1: at (radius*0.7, 0, radius*0.7)
+        glPushMatrix();
+        glTranslatef(radius*0.7f, 0, radius*0.7f);
+        glBegin(GL_QUADS);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Handle 2: at (-radius*0.7, 0, -radius*0.7)
+        glPushMatrix();
+        glTranslatef(-radius*0.7f, 0, -radius*0.7f);
+        glBegin(GL_QUADS);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Z-axis handles (blue) - positioned away from X/Y ring intersections
+        glColor3f(0.0f, 0.0f, 1.0f);
+
+        // Handle 1: at (radius*0.7, radius*0.7, 0)
+        glPushMatrix();
+        glTranslatef(radius*0.7f, radius*0.7f, 0);
+        glBegin(GL_QUADS);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Handle 2: at (-radius*0.7, -radius*0.7, 0)
+        glPushMatrix();
+        glTranslatef(-radius*0.7f, -radius*0.7f, 0);
+        glBegin(GL_QUADS);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, cube_size);
+        glVertex3f(cube_size, cube_size, -cube_size);
+        glVertex3f(-cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, -cube_size);
+        glVertex3f(cube_size, -cube_size, cube_size);
+        glVertex3f(-cube_size, -cube_size, cube_size);
+        glEnd();
+        glPopMatrix();
+
+        // Center sphere for free rotation in all directions
+        glColor3f(1.0f, 1.0f, 0.0f);
+        float center_size = 0.6f;
+        glBegin(GL_QUADS);
+
+        // Draw a simple cube as center handle
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, -center_size);
+
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(center_size, center_size, -center_size);
+
+        glVertex3f(-center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, -center_size);
+        glVertex3f(center_size, -center_size, center_size);
+        glVertex3f(-center_size, -center_size, center_size);
+
+        glVertex3f(-center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, -center_size);
+        glVertex3f(center_size, center_size, center_size);
+        glVertex3f(-center_size, center_size, center_size);
+
+        glEnd();
+    }
+    else if(gizmo_mode == GIZMO_MODE_SCALE)
+    {
+        glLineWidth(5.0f);
+        glBegin(GL_LINES);
+
+        // X-axis line (blue)
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(5, 0, 0);
+
+        // Y-axis line (green)
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 5, 0);
+
+        // Z-axis line (red)
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 0, 5);
+
+        glEnd();
+
+        // Reasonably sized cube handles for grabbing
+        float cube_size = 0.45f; // 10% smaller (0.5 * 0.9 = 0.45)
+        glBegin(GL_QUADS);
+
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(5-cube_size, -cube_size, -cube_size);
+        glVertex3f(5+cube_size, -cube_size, -cube_size);
+        glVertex3f(5+cube_size, +cube_size, -cube_size);
+        glVertex3f(5-cube_size, +cube_size, -cube_size);
+
+        glVertex3f(5-cube_size, -cube_size, +cube_size);
+        glVertex3f(5+cube_size, -cube_size, +cube_size);
+        glVertex3f(5+cube_size, +cube_size, +cube_size);
+        glVertex3f(5-cube_size, +cube_size, +cube_size);
+
+        glVertex3f(5-cube_size, -cube_size, -cube_size);
+        glVertex3f(5-cube_size, +cube_size, -cube_size);
+        glVertex3f(5-cube_size, +cube_size, +cube_size);
+        glVertex3f(5-cube_size, -cube_size, +cube_size);
+
+        glVertex3f(5+cube_size, -cube_size, -cube_size);
+        glVertex3f(5+cube_size, +cube_size, -cube_size);
+        glVertex3f(5+cube_size, +cube_size, +cube_size);
+        glVertex3f(5+cube_size, -cube_size, +cube_size);
+
+        glVertex3f(5-cube_size, -cube_size, -cube_size);
+        glVertex3f(5+cube_size, -cube_size, -cube_size);
+        glVertex3f(5+cube_size, -cube_size, +cube_size);
+        glVertex3f(5-cube_size, -cube_size, +cube_size);
+
+        glVertex3f(5-cube_size, +cube_size, -cube_size);
+        glVertex3f(5+cube_size, +cube_size, -cube_size);
+        glVertex3f(5+cube_size, +cube_size, +cube_size);
+        glVertex3f(5-cube_size, +cube_size, +cube_size);
+
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
+
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
+
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
+
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+
+        glVertex3f(-cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, -cube_size);
+        glVertex3f(+cube_size, 5-cube_size, +cube_size);
+        glVertex3f(-cube_size, 5-cube_size, +cube_size);
+
+        glVertex3f(-cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, -cube_size);
+        glVertex3f(+cube_size, 5+cube_size, +cube_size);
+        glVertex3f(-cube_size, 5+cube_size, +cube_size);
+
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex3f(-cube_size, -cube_size, 5-cube_size);
+        glVertex3f(+cube_size, -cube_size, 5-cube_size);
+        glVertex3f(+cube_size, +cube_size, 5-cube_size);
+        glVertex3f(-cube_size, +cube_size, 5-cube_size);
+
+        glVertex3f(-cube_size, -cube_size, 5+cube_size);
+        glVertex3f(+cube_size, -cube_size, 5+cube_size);
+        glVertex3f(+cube_size, +cube_size, 5+cube_size);
+        glVertex3f(-cube_size, +cube_size, 5+cube_size);
+
+        glVertex3f(-cube_size, -cube_size, 5-cube_size);
+        glVertex3f(-cube_size, +cube_size, 5-cube_size);
+        glVertex3f(-cube_size, +cube_size, 5+cube_size);
+        glVertex3f(-cube_size, -cube_size, 5+cube_size);
+
+        glVertex3f(+cube_size, -cube_size, 5-cube_size);
+        glVertex3f(+cube_size, +cube_size, 5-cube_size);
+        glVertex3f(+cube_size, +cube_size, 5+cube_size);
+        glVertex3f(+cube_size, -cube_size, 5+cube_size);
+
+        glVertex3f(-cube_size, -cube_size, 5-cube_size);
+        glVertex3f(+cube_size, -cube_size, 5-cube_size);
+        glVertex3f(+cube_size, -cube_size, 5+cube_size);
+        glVertex3f(-cube_size, -cube_size, 5+cube_size);
+
+        glVertex3f(-cube_size, +cube_size, 5-cube_size);
+        glVertex3f(+cube_size, +cube_size, 5-cube_size);
+        glVertex3f(+cube_size, +cube_size, 5+cube_size);
+        glVertex3f(-cube_size, +cube_size, 5+cube_size);
+
         glEnd();
     }
     else
@@ -480,7 +856,7 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
     }
 
-    float cube_size = 0.8f;
+    float cube_size = 0.4f;
     glBegin(GL_QUADS);
     glColor3f(1.0f, 0.5f, 0.0f);
 
@@ -530,7 +906,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             if(PickGizmoCenter(MOUSE_X(event), MOUSE_Y(event)))
             {
-                gizmo_rotate_mode = !gizmo_rotate_mode;
+                gizmo_mode = (gizmo_mode + 1) % 3;
                 update();
                 return;
             }
@@ -746,31 +1122,137 @@ int LEDViewport3D::PickGizmoAxis(int mouse_x, int mouse_y)
     float closest_dist = 1000000.0f;
     int closest_axis = -1;
 
-    if(gizmo_rotate_mode)
+    if(gizmo_mode == GIZMO_MODE_ROTATE)
     {
-        float radius = 50.0f;
-        float dist_from_center = sqrt((winX - centerX) * (winX - centerX) + (winY - centerY) * (winY - centerY));
+        float ring_radius = 5.0f;
 
-        if(dist_from_center <= radius)
+        // Define handle positions for each axis (2 handles per axis) - away from intersections
+        float handle_positions[3][2][3] = {
+            // X-axis handles (red) - positioned away from Y/Z ring intersections
+            {{0, ring_radius*0.7f, ring_radius*0.7f}, {0, -ring_radius*0.7f, -ring_radius*0.7f}},
+            // Y-axis handles (green) - positioned away from X/Z ring intersections
+            {{ring_radius*0.7f, 0, ring_radius*0.7f}, {-ring_radius*0.7f, 0, -ring_radius*0.7f}},
+            // Z-axis handles (blue) - positioned away from X/Y ring intersections
+            {{ring_radius*0.7f, ring_radius*0.7f, 0}, {-ring_radius*0.7f, -ring_radius*0.7f, 0}}
+        };
+
+        // Check each handle - need to transform through object's rotation matrix
+        for(int axis = 0; axis < 3; axis++)
         {
-            for(int i = 0; i < 3; i++)
+            for(int handle = 0; handle < 2; handle++)
             {
-                GLdouble axisX, axisY, axisZ;
-                gluProject(ctrl->transform.position.x + axes[i].x,
-                           ctrl->transform.position.y + axes[i].y,
-                           ctrl->transform.position.z + axes[i].z,
-                           mv, proj, vp, &axisX, &axisY, &axisZ);
+                // Apply the same transformations as in DrawGizmo
+                float local_x = handle_positions[axis][handle][0];
+                float local_y = handle_positions[axis][handle][1];
+                float local_z = handle_positions[axis][handle][2];
 
-                float angle = atan2(winY - centerY, winX - centerX);
-                float axis_angle = atan2(axisY - centerY, axisX - centerX);
-                float angle_diff = fabs(angle - axis_angle);
-                if(angle_diff > M_PI) angle_diff = 2.0f * M_PI - angle_diff;
+                // Apply object rotations (same order as in DrawGizmo)
+                float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
+                float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
+                float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
 
-                if(angle_diff < M_PI / 6.0f)
+                // Apply Z rotation
+                float temp_x = local_x * cos(rz) - local_y * sin(rz);
+                float temp_y = local_x * sin(rz) + local_y * cos(rz);
+                local_x = temp_x;
+                local_y = temp_y;
+
+                // Apply Y rotation
+                temp_x = local_x * cos(ry) + local_z * sin(ry);
+                float temp_z = -local_x * sin(ry) + local_z * cos(ry);
+                local_x = temp_x;
+                local_z = temp_z;
+
+                // Apply X rotation
+                temp_y = local_y * cos(rx) - local_z * sin(rx);
+                temp_z = local_y * sin(rx) + local_z * cos(rx);
+                local_y = temp_y;
+                local_z = temp_z;
+
+                // Transform to world position
+                float world_x = ctrl->transform.position.x + local_x;
+                float world_y = ctrl->transform.position.y + local_y;
+                float world_z = ctrl->transform.position.z + local_z;
+
+                GLdouble handleX, handleY, handleZ;
+                gluProject(world_x, world_y, world_z, mv, proj, vp, &handleX, &handleY, &handleZ);
+
+                float dx = winX - handleX;
+                float dy = winY - handleY;
+                float dist = sqrt(dx*dx + dy*dy);
+
+                if(dist < 35.0f && dist < closest_dist) // Slightly larger hit area for easier clicking
                 {
-                    closest_axis = i;
-                    break;
+                    closest_dist = dist;
+                    closest_axis = axis;
                 }
+            }
+        }
+
+        // Check center handle for free rotation (axis = 3)
+        GLdouble centerX_proj, centerY_proj, centerZ_proj;
+        gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
+                   mv, proj, vp, &centerX_proj, &centerY_proj, &centerZ_proj);
+
+        float center_dx = winX - centerX_proj;
+        float center_dy = winY - centerY_proj;
+        float center_dist = sqrt(center_dx*center_dx + center_dy*center_dy);
+
+        if(center_dist < 25.0f && center_dist < closest_dist)
+        {
+            closest_dist = center_dist;
+            closest_axis = 3; // Special value for free rotation
+        }
+    }
+    else if(gizmo_mode == GIZMO_MODE_SCALE)
+    {
+        for(int i = 0; i < 3; i++)
+        {
+            // Apply the same transformations as in DrawGizmo for scale handles
+            float local_x = axes[i].x;
+            float local_y = axes[i].y;
+            float local_z = axes[i].z;
+
+            // Apply object rotations (same order as in DrawGizmo)
+            float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
+            float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
+            float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
+
+            // Apply Z rotation
+            float temp_x = local_x * cos(rz) - local_y * sin(rz);
+            float temp_y = local_x * sin(rz) + local_y * cos(rz);
+            local_x = temp_x;
+            local_y = temp_y;
+
+            // Apply Y rotation
+            temp_x = local_x * cos(ry) + local_z * sin(ry);
+            float temp_z = -local_x * sin(ry) + local_z * cos(ry);
+            local_x = temp_x;
+            local_z = temp_z;
+
+            // Apply X rotation
+            temp_y = local_y * cos(rx) - local_z * sin(rx);
+            temp_z = local_y * sin(rx) + local_z * cos(rx);
+            local_y = temp_y;
+            local_z = temp_z;
+
+            // Transform to world position
+            float world_x = ctrl->transform.position.x + local_x;
+            float world_y = ctrl->transform.position.y + local_y;
+            float world_z = ctrl->transform.position.z + local_z;
+
+            GLdouble cubeX, cubeY, cubeZ;
+            gluProject(world_x, world_y, world_z, mv, proj, vp, &cubeX, &cubeY, &cubeZ);
+
+            float dx = winX - cubeX;
+            float dy = winY - cubeY;
+            float dist = sqrt(dx*dx + dy*dy);
+
+            // Hit detection for scale cube handles
+            if(dist < 40.0f && dist < closest_dist) // Adjusted for smaller handles
+            {
+                closest_dist = dist;
+                closest_axis = i;
             }
         }
     }
@@ -818,46 +1300,98 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
 
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
 
-    if(gizmo_rotate_mode)
+    if(gizmo_mode == GIZMO_MODE_ROTATE)
     {
-        float rot_scale = 0.5f;
+        // Get current OpenGL matrices to convert screen delta to world space
+        makeCurrent();
+        GLdouble modelview[16];
+        GLdouble projection[16];
+        GLint viewport[4];
+        glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+        glGetDoublev(GL_PROJECTION_MATRIX, projection);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+
+        float rot_scale = 1.0f;
+
+        if(dragging_axis == 0) // X-axis rotation (red handles) - always rotate around world X
+        {
+            // For X-axis rotation, use vertical mouse movement (dy)
+            ctrl->transform.rotation.x += dy * rot_scale;
+        }
+        else if(dragging_axis == 1) // Y-axis rotation (green handles) - always rotate around world Y
+        {
+            // For Y-axis rotation, use horizontal mouse movement (dx)
+            ctrl->transform.rotation.y += dx * rot_scale;
+        }
+        else if(dragging_axis == 2) // Z-axis rotation (blue handles) - always rotate around world Z
+        {
+            // For Z-axis rotation, use combined movement for intuitive feel
+            float combined_delta = (dx - dy) * 0.7f;
+            ctrl->transform.rotation.z += combined_delta * rot_scale;
+        }
+        else if(dragging_axis == 3) // Free rotation (center yellow handle)
+        {
+            // Free rotation combines X and Y rotations based on mouse movement
+            ctrl->transform.rotation.y += dx * rot_scale;
+            ctrl->transform.rotation.x += dy * rot_scale;
+        }
+
+        // Keep rotations within reasonable bounds
+        if(ctrl->transform.rotation.x > 360.0f) ctrl->transform.rotation.x -= 360.0f;
+        if(ctrl->transform.rotation.x < -360.0f) ctrl->transform.rotation.x += 360.0f;
+        if(ctrl->transform.rotation.y > 360.0f) ctrl->transform.rotation.y -= 360.0f;
+        if(ctrl->transform.rotation.y < -360.0f) ctrl->transform.rotation.y += 360.0f;
+        if(ctrl->transform.rotation.z > 360.0f) ctrl->transform.rotation.z -= 360.0f;
+        if(ctrl->transform.rotation.z < -360.0f) ctrl->transform.rotation.z += 360.0f;
+    }
+    else if(gizmo_mode == GIZMO_MODE_SCALE)
+    {
+        float scale_speed = 0.01f;
+        float delta_scale = (dx - dy) * scale_speed;
 
         if(dragging_axis == 0)
         {
-            ctrl->transform.rotation.x -= dy * rot_scale;
+            ctrl->transform.scale.x += delta_scale;
+            if(ctrl->transform.scale.x < 0.1f) ctrl->transform.scale.x = 0.1f;
+            if(ctrl->transform.scale.x > 10.0f) ctrl->transform.scale.x = 10.0f;
         }
         else if(dragging_axis == 1)
         {
-            ctrl->transform.rotation.y += dx * rot_scale;
+            ctrl->transform.scale.y += delta_scale;
+            if(ctrl->transform.scale.y < 0.1f) ctrl->transform.scale.y = 0.1f;
+            if(ctrl->transform.scale.y > 10.0f) ctrl->transform.scale.y = 10.0f;
         }
         else if(dragging_axis == 2)
         {
-            ctrl->transform.rotation.z += dx * rot_scale;
+            ctrl->transform.scale.z += delta_scale;
+            if(ctrl->transform.scale.z < 0.1f) ctrl->transform.scale.z = 0.1f;
+            if(ctrl->transform.scale.z > 10.0f) ctrl->transform.scale.z = 10.0f;
         }
-        else
-        {
-            ctrl->transform.rotation.y += dx * rot_scale;
-            ctrl->transform.rotation.x -= dy * rot_scale;
-        }
+
+        emit ControllerScaleChanged(selected_controller_idx,
+                                    ctrl->transform.scale.x,
+                                    ctrl->transform.scale.y,
+                                    ctrl->transform.scale.z);
     }
-    else
+    else // GIZMO_MODE_MOVE
     {
         float move_scale = 0.1f;
 
-        if(dragging_axis == 0)
+        if(dragging_axis == 0) // X-axis (blue) - always move along world X axis
         {
             ctrl->transform.position.x += dx * move_scale;
         }
-        else if(dragging_axis == 1)
+        else if(dragging_axis == 1) // Y-axis (green) - always move along world Y axis
         {
             ctrl->transform.position.y -= dy * move_scale;
         }
-        else if(dragging_axis == 2)
+        else if(dragging_axis == 2) // Z-axis (red) - always move along world Z axis
         {
-            ctrl->transform.position.z += dy * move_scale;
+            ctrl->transform.position.z -= dy * move_scale;
         }
-        else
+        else // Free movement in camera plane
         {
+            // Calculate camera-relative movement vectors for free movement only
             float yaw_rad = camera_yaw * M_PI / 180.0f;
             float pitch_rad = camera_pitch * M_PI / 180.0f;
 

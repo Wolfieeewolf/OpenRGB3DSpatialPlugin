@@ -60,6 +60,7 @@ private slots:
 
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
+    void on_controller_scale_changed(int index, float x, float y, float z);
 
     void on_add_clicked();
     void on_granularity_changed(int index);
@@ -109,9 +110,21 @@ private:
     QDoubleSpinBox*             pos_x_spin;
     QDoubleSpinBox*             pos_y_spin;
     QDoubleSpinBox*             pos_z_spin;
+    QSlider*                    pos_x_slider;
+    QSlider*                    pos_y_slider;
+    QSlider*                    pos_z_slider;
     QDoubleSpinBox*             rot_x_spin;
     QDoubleSpinBox*             rot_y_spin;
     QDoubleSpinBox*             rot_z_spin;
+    QSlider*                    rot_x_slider;
+    QSlider*                    rot_y_slider;
+    QSlider*                    rot_z_slider;
+    QDoubleSpinBox*             scale_x_spin;
+    QDoubleSpinBox*             scale_y_spin;
+    QDoubleSpinBox*             scale_z_spin;
+    QSlider*                    scale_x_slider;
+    QSlider*                    scale_y_slider;
+    QSlider*                    scale_z_slider;
 
     QComboBox*                  effect_type_combo;
     QSlider*                    effect_speed_slider;

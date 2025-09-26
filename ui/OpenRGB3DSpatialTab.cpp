@@ -184,6 +184,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
             this, SLOT(on_controller_position_changed(int,float,float,float)));
+    connect(viewport, SIGNAL(ControllerScaleChanged(int,float,float,float)),
+            this, SLOT(on_controller_scale_changed(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
@@ -271,14 +273,32 @@ void OpenRGB3DSpatialTab::SetupUI()
     main_layout->addLayout(middle_panel, 2);
 
     QVBoxLayout* right_panel = new QVBoxLayout();
-    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
+    QGroupBox* transform_group = new QGroupBox("Position, Rotation & Scale");
     QGridLayout* position_layout = new QGridLayout();
 
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
+
+    pos_x_slider = new QSlider(Qt::Horizontal);
+    pos_x_slider->setRange(-1000, 1000);
+    pos_x_slider->setValue(0);
+    connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        pos_x_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.x = pos_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(pos_x_slider, 0, 1);
+
     pos_x_spin = new QDoubleSpinBox();
     pos_x_spin->setRange(-100, 100);
     pos_x_spin->setDecimals(1);
+    pos_x_spin->setMaximumWidth(80);
     connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        pos_x_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -286,13 +306,31 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(pos_x_spin, 0, 1);
+    position_layout->addWidget(pos_x_spin, 0, 2);
 
     position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
+
+    pos_y_slider = new QSlider(Qt::Horizontal);
+    pos_y_slider->setRange(-1000, 1000);
+    pos_y_slider->setValue(0);
+    connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        pos_y_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.y = pos_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(pos_y_slider, 1, 1);
+
     pos_y_spin = new QDoubleSpinBox();
     pos_y_spin->setRange(-100, 100);
     pos_y_spin->setDecimals(1);
+    pos_y_spin->setMaximumWidth(80);
     connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        pos_y_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -300,13 +338,31 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(pos_y_spin, 1, 1);
+    position_layout->addWidget(pos_y_spin, 1, 2);
 
     position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
+
+    pos_z_slider = new QSlider(Qt::Horizontal);
+    pos_z_slider->setRange(-1000, 1000);
+    pos_z_slider->setValue(0);
+    connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        pos_z_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.z = pos_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(pos_z_slider, 2, 1);
+
     pos_z_spin = new QDoubleSpinBox();
     pos_z_spin->setRange(-100, 100);
     pos_z_spin->setDecimals(1);
+    pos_z_spin->setMaximumWidth(80);
     connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        pos_z_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -314,13 +370,31 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(pos_z_spin, 2, 1);
+    position_layout->addWidget(pos_z_spin, 2, 2);
 
     position_layout->addWidget(new QLabel("Rotation X:"), 3, 0);
+
+    rot_x_slider = new QSlider(Qt::Horizontal);
+    rot_x_slider->setRange(-1800, 1800);
+    rot_x_slider->setValue(0);
+    connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value / 10.0;
+        rot_x_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.x = rot_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_x_slider, 3, 1);
+
     rot_x_spin = new QDoubleSpinBox();
     rot_x_spin->setRange(-180, 180);
     rot_x_spin->setDecimals(1);
+    rot_x_spin->setMaximumWidth(80);
     connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_x_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -328,13 +402,31 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(rot_x_spin, 3, 1);
+    position_layout->addWidget(rot_x_spin, 3, 2);
 
     position_layout->addWidget(new QLabel("Rotation Y:"), 4, 0);
+
+    rot_y_slider = new QSlider(Qt::Horizontal);
+    rot_y_slider->setRange(-1800, 1800);
+    rot_y_slider->setValue(0);
+    connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value / 10.0;
+        rot_y_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.y = rot_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_y_slider, 4, 1);
+
     rot_y_spin = new QDoubleSpinBox();
     rot_y_spin->setRange(-180, 180);
     rot_y_spin->setDecimals(1);
+    rot_y_spin->setMaximumWidth(80);
     connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_y_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -342,13 +434,31 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(rot_y_spin, 4, 1);
+    position_layout->addWidget(rot_y_spin, 4, 2);
 
     position_layout->addWidget(new QLabel("Rotation Z:"), 5, 0);
+
+    rot_z_slider = new QSlider(Qt::Horizontal);
+    rot_z_slider->setRange(-1800, 1800);
+    rot_z_slider->setValue(0);
+    connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value / 10.0;
+        rot_z_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.z = rot_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(rot_z_slider, 5, 1);
+
     rot_z_spin = new QDoubleSpinBox();
     rot_z_spin->setRange(-180, 180);
     rot_z_spin->setDecimals(1);
+    rot_z_spin->setMaximumWidth(80);
     connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_z_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -356,7 +466,106 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->update();
         }
     });
-    position_layout->addWidget(rot_z_spin, 5, 1);
+    position_layout->addWidget(rot_z_spin, 5, 2);
+
+    position_layout->addWidget(new QLabel("Scale X:"), 6, 0);
+
+    scale_x_slider = new QSlider(Qt::Horizontal);
+    scale_x_slider->setRange(10, 1000);
+    scale_x_slider->setValue(100);
+    connect(scale_x_slider, &QSlider::valueChanged, [this](int value) {
+        double scale_value = value / 100.0;
+        scale_x_spin->setValue(scale_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.x = scale_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_x_slider, 6, 1);
+
+    scale_x_spin = new QDoubleSpinBox();
+    scale_x_spin->setRange(0.1, 10.0);
+    scale_x_spin->setDecimals(2);
+    scale_x_spin->setValue(1.0);
+    scale_x_spin->setMaximumWidth(80);
+    connect(scale_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        scale_x_slider->setValue((int)(value * 100));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.x = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_x_spin, 6, 2);
+
+    position_layout->addWidget(new QLabel("Scale Y:"), 7, 0);
+
+    scale_y_slider = new QSlider(Qt::Horizontal);
+    scale_y_slider->setRange(10, 1000);
+    scale_y_slider->setValue(100);
+    connect(scale_y_slider, &QSlider::valueChanged, [this](int value) {
+        double scale_value = value / 100.0;
+        scale_y_spin->setValue(scale_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.y = scale_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_y_slider, 7, 1);
+
+    scale_y_spin = new QDoubleSpinBox();
+    scale_y_spin->setRange(0.1, 10.0);
+    scale_y_spin->setDecimals(2);
+    scale_y_spin->setValue(1.0);
+    scale_y_spin->setMaximumWidth(80);
+    connect(scale_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        scale_y_slider->setValue((int)(value * 100));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.y = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_y_spin, 7, 2);
+
+    position_layout->addWidget(new QLabel("Scale Z:"), 8, 0);
+
+    scale_z_slider = new QSlider(Qt::Horizontal);
+    scale_z_slider->setRange(10, 1000);
+    scale_z_slider->setValue(100);
+    connect(scale_z_slider, &QSlider::valueChanged, [this](int value) {
+        double scale_value = value / 100.0;
+        scale_z_spin->setValue(scale_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.z = scale_value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_z_slider, 8, 1);
+
+    scale_z_spin = new QDoubleSpinBox();
+    scale_z_spin->setRange(0.1, 10.0);
+    scale_z_spin->setDecimals(2);
+    scale_z_spin->setValue(1.0);
+    scale_z_spin->setMaximumWidth(80);
+    connect(scale_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        scale_z_slider->setValue((int)(value * 100));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.scale.z = value;
+            viewport->update();
+        }
+    });
+    position_layout->addWidget(scale_z_spin, 8, 2);
 
     transform_group->setLayout(position_layout);
     right_panel->addWidget(transform_group);
@@ -469,6 +678,19 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_x_spin->setValue(ctrl->transform.rotation.x);
         rot_y_spin->setValue(ctrl->transform.rotation.y);
         rot_z_spin->setValue(ctrl->transform.rotation.z);
+        scale_x_spin->setValue(ctrl->transform.scale.x);
+        scale_y_spin->setValue(ctrl->transform.scale.y);
+        scale_z_spin->setValue(ctrl->transform.scale.z);
+
+        pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
+        pos_y_slider->setValue((int)(ctrl->transform.position.y * 10));
+        pos_z_slider->setValue((int)(ctrl->transform.position.z * 10));
+        rot_x_slider->setValue((int)(ctrl->transform.rotation.x * 10));
+        rot_y_slider->setValue((int)(ctrl->transform.rotation.y * 10));
+        rot_z_slider->setValue((int)(ctrl->transform.rotation.z * 10));
+        scale_x_slider->setValue((int)(ctrl->transform.scale.x * 100));
+        scale_y_slider->setValue((int)(ctrl->transform.scale.y * 100));
+        scale_z_slider->setValue((int)(ctrl->transform.scale.z * 100));
     }
     else if(index == -1)
     {
@@ -488,6 +710,21 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         pos_x_spin->setValue(x);
         pos_y_spin->setValue(y);
         pos_z_spin->setValue(z);
+    }
+}
+
+void OpenRGB3DSpatialTab::on_controller_scale_changed(int index, float x, float y, float z)
+{
+    if(index >= 0 && index < (int)controller_transforms.size())
+    {
+        ControllerTransform* ctrl = controller_transforms[index];
+        ctrl->transform.scale.x = x;
+        ctrl->transform.scale.y = y;
+        ctrl->transform.scale.z = z;
+
+        scale_x_spin->setValue(x);
+        scale_y_spin->setValue(y);
+        scale_z_spin->setValue(z);
     }
 }
 

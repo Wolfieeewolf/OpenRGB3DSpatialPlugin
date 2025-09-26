@@ -34,6 +34,7 @@ public:
 signals:
     void ControllerSelected(int index);
     void ControllerPositionChanged(int index, float x, float y, float z);
+    void ControllerScaleChanged(int index, float x, float y, float z);
 
 protected:
     void initializeGL() override;
@@ -71,7 +72,7 @@ private:
     bool    dragging_pan;
     bool    dragging_gizmo;
     int     dragging_axis;
-    bool    gizmo_rotate_mode;
+    int     gizmo_mode;
     QPoint  last_mouse_pos;
 };
 
