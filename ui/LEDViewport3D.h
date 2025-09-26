@@ -54,9 +54,22 @@ private:
     void DrawGizmo();
 
     int PickController(int mouse_x, int mouse_y);
-    int PickGizmoAxis(int mouse_x, int mouse_y);
     bool PickGizmoCenter(int mouse_x, int mouse_y);
     void UpdateGizmo(int dx, int dy);
+
+    struct Ray3D {
+        float origin[3];
+        float direction[3];
+    };
+
+    struct Box3D {
+        float min[3];
+        float max[3];
+    };
+
+    Ray3D GenerateRay(int mouse_x, int mouse_y);
+    bool RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance);
+    int PickGizmoAxis3D(int mouse_x, int mouse_y);
 
     std::vector<ControllerTransform*>*  controller_transforms;
     int                                 selected_controller_idx;

@@ -19,6 +19,7 @@
 #endif
 #include <windows.h>
 #include <GL/gl.h>
+#include <GL/glu.h>
 #else
 #include <GL/gl.h>
 #include <GL/glu.h>
@@ -50,7 +51,6 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
     forward[1] = centerY - eyeY;
     forward[2] = centerZ - eyeZ;
 
-    // Normalize forward
     double len = sqrt(forward[0]*forward[0] + forward[1]*forward[1] + forward[2]*forward[2]);
     if (len != 0.0) {
         forward[0] /= len;
@@ -58,12 +58,10 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
         forward[2] /= len;
     }
 
-    // Calculate side = forward x up
     side[0] = forward[1] * upZ - forward[2] * upY;
     side[1] = forward[2] * upX - forward[0] * upZ;
     side[2] = forward[0] * upY - forward[1] * upX;
 
-    // Normalize side
     len = sqrt(side[0]*side[0] + side[1]*side[1] + side[2]*side[2]);
     if (len != 0.0) {
         side[0] /= len;
@@ -71,12 +69,10 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
         side[2] /= len;
     }
 
-    // Calculate up = side x forward
     up[0] = side[1] * forward[2] - side[2] * forward[1];
     up[1] = side[2] * forward[0] - side[0] * forward[2];
     up[2] = side[0] * forward[1] - side[1] * forward[0];
 
-    // Build matrix
     m[0][0] = side[0];
     m[1][0] = side[1];
     m[2][0] = side[2];
@@ -103,7 +99,7 @@ void gluLookAt(double eyeX, double eyeY, double eyeZ,
 
 int gluProject(double objX, double objY, double objZ,
                const double* model, const double* proj, const int* view,
-               double* winX, double* winY, double* winZ) {
+               double* win_x, double* win_y, double* winZ) {
     double in[4];
     double out[4];
 
@@ -112,13 +108,11 @@ int gluProject(double objX, double objY, double objZ,
     in[2] = objZ;
     in[3] = 1.0;
 
-    // Transform by modelview matrix
     out[0] = model[0]*in[0] + model[4]*in[1] + model[8]*in[2] + model[12]*in[3];
     out[1] = model[1]*in[0] + model[5]*in[1] + model[9]*in[2] + model[13]*in[3];
     out[2] = model[2]*in[0] + model[6]*in[1] + model[10]*in[2] + model[14]*in[3];
     out[3] = model[3]*in[0] + model[7]*in[1] + model[11]*in[2] + model[15]*in[3];
 
-    // Transform by projection matrix
     in[0] = proj[0]*out[0] + proj[4]*out[1] + proj[8]*out[2] + proj[12]*out[3];
     in[1] = proj[1]*out[0] + proj[5]*out[1] + proj[9]*out[2] + proj[13]*out[3];
     in[2] = proj[2]*out[0] + proj[6]*out[1] + proj[10]*out[2] + proj[14]*out[3];
@@ -130,14 +124,12 @@ int gluProject(double objX, double objY, double objZ,
     in[1] /= in[3];
     in[2] /= in[3];
 
-    // Map to range 0-1
     in[0] = in[0] * 0.5 + 0.5;
     in[1] = in[1] * 0.5 + 0.5;
     in[2] = in[2] * 0.5 + 0.5;
 
-    // Map to viewport
-    *winX = in[0] * view[2] + view[0];
-    *winY = in[1] * view[3] + view[1];
+    *win_x = in[0] * view[2] + view[0];
+    *win_y = in[1] * view[3] + view[1];
     *winZ = in[2];
 
     return 1;
@@ -408,10 +400,8 @@ void LEDViewport3D::DrawGizmo()
     {
         float radius = 5.0f;
 
-        // Draw thin rings as visual guides
         glLineWidth(2.0f);
 
-        // X-axis rotation ring (red) - YZ plane
         glColor3f(1.0f, 0.0f, 0.0f);
         glBegin(GL_LINE_LOOP);
         for(int i = 0; i <= 32; i++)
@@ -421,7 +411,6 @@ void LEDViewport3D::DrawGizmo()
         }
         glEnd();
 
-        // Y-axis rotation ring (green) - XZ plane
         glColor3f(0.0f, 1.0f, 0.0f);
         glBegin(GL_LINE_LOOP);
         for(int i = 0; i <= 32; i++)
@@ -431,7 +420,6 @@ void LEDViewport3D::DrawGizmo()
         }
         glEnd();
 
-        // Z-axis rotation ring (blue) - XY plane
         glColor3f(0.0f, 0.0f, 1.0f);
         glBegin(GL_LINE_LOOP);
         for(int i = 0; i <= 32; i++)
@@ -441,43 +429,33 @@ void LEDViewport3D::DrawGizmo()
         }
         glEnd();
 
-        // Draw cube-shaped grab handles away from ring intersections
-        float cube_size = 0.39f; // 20% smaller than previous (0.49 * 0.8 = 0.39)
+        float cube_size = 0.39f;
 
-        // X-axis handles (red) - positioned away from Y/Z ring intersections
         glColor3f(1.0f, 0.0f, 0.0f);
 
-        // Handle 1: at (0, radius*0.7, radius*0.7)
         glPushMatrix();
         glTranslatef(0, radius*0.7f, radius*0.7f);
-        // Draw cube
         glBegin(GL_QUADS);
-        // Front face
         glVertex3f(-cube_size, -cube_size, cube_size);
         glVertex3f(cube_size, -cube_size, cube_size);
         glVertex3f(cube_size, cube_size, cube_size);
         glVertex3f(-cube_size, cube_size, cube_size);
-        // Back face
         glVertex3f(-cube_size, -cube_size, -cube_size);
         glVertex3f(-cube_size, cube_size, -cube_size);
         glVertex3f(cube_size, cube_size, -cube_size);
         glVertex3f(cube_size, -cube_size, -cube_size);
-        // Left face
         glVertex3f(-cube_size, -cube_size, -cube_size);
         glVertex3f(-cube_size, -cube_size, cube_size);
         glVertex3f(-cube_size, cube_size, cube_size);
         glVertex3f(-cube_size, cube_size, -cube_size);
-        // Right face
         glVertex3f(cube_size, -cube_size, -cube_size);
         glVertex3f(cube_size, cube_size, -cube_size);
         glVertex3f(cube_size, cube_size, cube_size);
         glVertex3f(cube_size, -cube_size, cube_size);
-        // Top face
         glVertex3f(-cube_size, cube_size, -cube_size);
         glVertex3f(-cube_size, cube_size, cube_size);
         glVertex3f(cube_size, cube_size, cube_size);
         glVertex3f(cube_size, cube_size, -cube_size);
-        // Bottom face
         glVertex3f(-cube_size, -cube_size, -cube_size);
         glVertex3f(cube_size, -cube_size, -cube_size);
         glVertex3f(cube_size, -cube_size, cube_size);
@@ -485,7 +463,6 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Handle 2: at (0, -radius*0.7, -radius*0.7)
         glPushMatrix();
         glTranslatef(0, -radius*0.7f, -radius*0.7f);
         glBegin(GL_QUADS);
@@ -516,10 +493,8 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Y-axis handles (green) - positioned away from X/Z ring intersections
         glColor3f(0.0f, 1.0f, 0.0f);
 
-        // Handle 1: at (radius*0.7, 0, radius*0.7)
         glPushMatrix();
         glTranslatef(radius*0.7f, 0, radius*0.7f);
         glBegin(GL_QUADS);
@@ -550,7 +525,6 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Handle 2: at (-radius*0.7, 0, -radius*0.7)
         glPushMatrix();
         glTranslatef(-radius*0.7f, 0, -radius*0.7f);
         glBegin(GL_QUADS);
@@ -581,10 +555,8 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Z-axis handles (blue) - positioned away from X/Y ring intersections
         glColor3f(0.0f, 0.0f, 1.0f);
 
-        // Handle 1: at (radius*0.7, radius*0.7, 0)
         glPushMatrix();
         glTranslatef(radius*0.7f, radius*0.7f, 0);
         glBegin(GL_QUADS);
@@ -615,7 +587,6 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Handle 2: at (-radius*0.7, -radius*0.7, 0)
         glPushMatrix();
         glTranslatef(-radius*0.7f, -radius*0.7f, 0);
         glBegin(GL_QUADS);
@@ -646,12 +617,10 @@ void LEDViewport3D::DrawGizmo()
         glEnd();
         glPopMatrix();
 
-        // Center sphere for free rotation in all directions
         glColor3f(1.0f, 1.0f, 0.0f);
         float center_size = 0.6f;
         glBegin(GL_QUADS);
 
-        // Draw a simple cube as center handle
         glVertex3f(-center_size, -center_size, -center_size);
         glVertex3f(center_size, -center_size, -center_size);
         glVertex3f(center_size, center_size, -center_size);
@@ -689,25 +658,21 @@ void LEDViewport3D::DrawGizmo()
         glLineWidth(5.0f);
         glBegin(GL_LINES);
 
-        // X-axis line (blue)
         glColor3f(0.0f, 0.0f, 1.0f);
         glVertex3f(0, 0, 0);
         glVertex3f(5, 0, 0);
 
-        // Y-axis line (green)
         glColor3f(0.0f, 1.0f, 0.0f);
         glVertex3f(0, 0, 0);
         glVertex3f(0, 5, 0);
 
-        // Z-axis line (red)
         glColor3f(1.0f, 0.0f, 0.0f);
         glVertex3f(0, 0, 0);
         glVertex3f(0, 0, 5);
 
         glEnd();
 
-        // Reasonably sized cube handles for grabbing
-        float cube_size = 0.45f; // 10% smaller (0.5 * 0.9 = 0.45)
+        float cube_size = 0.45f;
         glBegin(GL_QUADS);
 
         glColor3f(0.0f, 0.0f, 1.0f);
@@ -911,7 +876,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                 return;
             }
 
-            int axis = PickGizmoAxis(MOUSE_X(event), MOUSE_Y(event));
+            int axis = PickGizmoAxis3D(MOUSE_X(event), MOUSE_Y(event));
             if(axis >= 0)
             {
                 dragging_gizmo = true;
@@ -1031,8 +996,8 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
     glGetDoublev(GL_PROJECTION_MATRIX, projection);
 
-    GLfloat winX = (float)mouse_x;
-    GLfloat winY = (float)(viewport[3] - mouse_y);
+    GLfloat win_x = (float)mouse_x;
+    GLfloat win_y = (float)(viewport[3] - mouse_y);
 
     int closest_idx = -1;
     float closest_dist = 1000000.0f;
@@ -1041,12 +1006,12 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     {
         ControllerTransform* ctrl = (*controller_transforms)[i];
 
-        GLdouble objX, objY, objZ;
+        GLdouble obj_x, obj_y, obj_z;
         gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
-                   modelview, projection, viewport, &objX, &objY, &objZ);
+                   modelview, projection, viewport, &obj_x, &obj_y, &obj_z);
 
-        float dx = winX - objX;
-        float dy = winY - objY;
+        float dx = win_x - obj_x;
+        float dy = win_y - obj_y;
         float dist = sqrt(dx*dx + dy*dy);
 
         if(dist < 50.0f && dist < closest_dist)
@@ -1075,216 +1040,317 @@ bool LEDViewport3D::PickGizmoCenter(int mouse_x, int mouse_y)
     glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
     glGetDoublev(GL_PROJECTION_MATRIX, projection);
 
-    GLfloat winX = (float)mouse_x;
-    GLfloat winY = (float)(viewport[3] - mouse_y);
+    GLfloat win_x = (float)mouse_x;
+    GLfloat win_y = (float)(viewport[3] - mouse_y);
 
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
 
-    GLdouble objX, objY, objZ;
+    GLdouble obj_x, obj_y, obj_z;
     gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
-               modelview, projection, viewport, &objX, &objY, &objZ);
+               modelview, projection, viewport, &obj_x, &obj_y, &obj_z);
 
-    float dx = winX - objX;
-    float dy = winY - objY;
+    float dx = win_x - obj_x;
+    float dy = win_y - obj_y;
     float dist = sqrt(dx*dx + dy*dy);
 
     return dist < 20.0f;
 }
 
-int LEDViewport3D::PickGizmoAxis(int mouse_x, int mouse_y)
+LEDViewport3D::Ray3D LEDViewport3D::GenerateRay(int mouse_x, int mouse_y)
 {
-    if(selected_controller_idx < 0 || !controller_transforms)
-    {
+    makeCurrent();
+
+    GLint viewport[4];
+    GLdouble modelview[16];
+    GLdouble projection[16];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+    glGetDoublev(GL_PROJECTION_MATRIX, projection);
+
+    float win_x = (float)mouse_x;
+    float win_y = (float)(viewport[3] - mouse_y);
+
+    GLdouble near_x, near_y, near_z;
+    GLdouble far_x, far_y, far_z;
+
+    gluUnProject(win_x, win_y, 0.0, modelview, projection, viewport, &near_x, &near_y, &near_z);
+    gluUnProject(win_x, win_y, 1.0, modelview, projection, viewport, &far_x, &far_y, &far_z);
+
+    Ray3D ray;
+    ray.origin[0] = (float)near_x;
+    ray.origin[1] = (float)near_y;
+    ray.origin[2] = (float)near_z;
+
+    float dx = (float)(far_x - near_x);
+    float dy = (float)(far_y - near_y);
+    float dz = (float)(far_z - near_z);
+    float length = sqrt(dx*dx + dy*dy + dz*dz);
+
+    ray.direction[0] = dx / length;
+    ray.direction[1] = dy / length;
+    ray.direction[2] = dz / length;
+
+    return ray;
+}
+
+bool LEDViewport3D::RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance)
+{
+    float tmin = 0.0f;
+    float tmax = 10000.0f; // Large number for "infinity"
+
+    for (int i = 0; i < 3; i++) {
+        if (fabs(ray.direction[i]) < 0.0001f) {
+            if (ray.origin[i] < box.min[i] || ray.origin[i] > box.max[i]) {
+                return false;
+            }
+        } else {
+            float t1 = (box.min[i] - ray.origin[i]) / ray.direction[i];
+            float t2 = (box.max[i] - ray.origin[i]) / ray.direction[i];
+
+            if (t1 > t2) {
+                float temp = t1;
+                t1 = t2;
+                t2 = temp;
+            }
+
+            tmin = fmax(tmin, t1);
+            tmax = fmin(tmax, t2);
+
+            if (tmin > tmax) {
+                return false;
+            }
+        }
+    }
+
+    distance = tmin > 0.0f ? tmin : tmax;
+    return distance > 0.0f;
+}
+
+int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
+{
+    if(selected_controller_idx < 0 || !controller_transforms) {
         return -1;
     }
 
-    makeCurrent();
-
-    GLint vp[4];
-    GLdouble mv[16];
-    GLdouble proj[16];
-    glGetIntegerv(GL_VIEWPORT, vp);
-    glGetDoublev(GL_MODELVIEW_MATRIX, mv);
-    glGetDoublev(GL_PROJECTION_MATRIX, proj);
-
-    GLfloat winX = (float)mouse_x;
-    GLfloat winY = (float)(vp[3] - mouse_y);
-
     ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+    Ray3D ray = GenerateRay(mouse_x, mouse_y);
 
-    GLdouble centerX, centerY, centerZ;
-    gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
-               mv, proj, vp, &centerX, &centerY, &centerZ);
-
-    float axis_length = 7.0f;
-    Vector3D axes[3] = {{axis_length, 0, 0}, {0, axis_length, 0}, {0, 0, axis_length}};
-
-    float closest_dist = 1000000.0f;
+    float closest_distance = 10000.0f;
     int closest_axis = -1;
 
     if(gizmo_mode == GIZMO_MODE_ROTATE)
     {
         float ring_radius = 5.0f;
+        float cube_size = 0.39f;
 
-        // Define handle positions for each axis (2 handles per axis) - away from intersections
         float handle_positions[3][2][3] = {
-            // X-axis handles (red) - positioned away from Y/Z ring intersections
             {{0, ring_radius*0.7f, ring_radius*0.7f}, {0, -ring_radius*0.7f, -ring_radius*0.7f}},
-            // Y-axis handles (green) - positioned away from X/Z ring intersections
+            // Y-axis handles (green)
             {{ring_radius*0.7f, 0, ring_radius*0.7f}, {-ring_radius*0.7f, 0, -ring_radius*0.7f}},
-            // Z-axis handles (blue) - positioned away from X/Y ring intersections
+            // Z-axis handles (blue)
             {{ring_radius*0.7f, ring_radius*0.7f, 0}, {-ring_radius*0.7f, -ring_radius*0.7f, 0}}
         };
 
-        // Check each handle - need to transform through object's rotation matrix
         for(int axis = 0; axis < 3; axis++)
         {
             for(int handle = 0; handle < 2; handle++)
             {
-                // Apply the same transformations as in DrawGizmo
+                // Transform handle position through object rotation
                 float local_x = handle_positions[axis][handle][0];
                 float local_y = handle_positions[axis][handle][1];
                 float local_z = handle_positions[axis][handle][2];
 
-                // Apply object rotations (same order as in DrawGizmo)
+                // Apply rotations (same as in drawing code)
                 float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
                 float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
                 float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
 
-                // Apply Z rotation
+                // Z rotation
                 float temp_x = local_x * cos(rz) - local_y * sin(rz);
                 float temp_y = local_x * sin(rz) + local_y * cos(rz);
                 local_x = temp_x;
                 local_y = temp_y;
 
-                // Apply Y rotation
+                // Y rotation
                 temp_x = local_x * cos(ry) + local_z * sin(ry);
                 float temp_z = -local_x * sin(ry) + local_z * cos(ry);
                 local_x = temp_x;
                 local_z = temp_z;
 
-                // Apply X rotation
+                // X rotation
                 temp_y = local_y * cos(rx) - local_z * sin(rx);
                 temp_z = local_y * sin(rx) + local_z * cos(rx);
                 local_y = temp_y;
                 local_z = temp_z;
 
-                // Transform to world position
+                // Create bounding box for this cube handle
+                Box3D box;
                 float world_x = ctrl->transform.position.x + local_x;
                 float world_y = ctrl->transform.position.y + local_y;
                 float world_z = ctrl->transform.position.z + local_z;
 
-                GLdouble handleX, handleY, handleZ;
-                gluProject(world_x, world_y, world_z, mv, proj, vp, &handleX, &handleY, &handleZ);
+                box.min[0] = world_x - cube_size;
+                box.min[1] = world_y - cube_size;
+                box.min[2] = world_z - cube_size;
+                box.max[0] = world_x + cube_size;
+                box.max[1] = world_y + cube_size;
+                box.max[2] = world_z + cube_size;
 
-                float dx = winX - handleX;
-                float dy = winY - handleY;
-                float dist = sqrt(dx*dx + dy*dy);
-
-                if(dist < 35.0f && dist < closest_dist) // Slightly larger hit area for easier clicking
+                float distance;
+                if(RayBoxIntersect(ray, box, distance) && distance < closest_distance)
                 {
-                    closest_dist = dist;
+                    closest_distance = distance;
                     closest_axis = axis;
                 }
             }
         }
 
-        // Check center handle for free rotation (axis = 3)
-        GLdouble centerX_proj, centerY_proj, centerZ_proj;
-        gluProject(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z,
-                   mv, proj, vp, &centerX_proj, &centerY_proj, &centerZ_proj);
+        // Test center cube for free rotation (axis = 3)
+        Box3D center_box;
+        float center_size = 0.6f;
+        center_box.min[0] = ctrl->transform.position.x - center_size;
+        center_box.min[1] = ctrl->transform.position.y - center_size;
+        center_box.min[2] = ctrl->transform.position.z - center_size;
+        center_box.max[0] = ctrl->transform.position.x + center_size;
+        center_box.max[1] = ctrl->transform.position.y + center_size;
+        center_box.max[2] = ctrl->transform.position.z + center_size;
 
-        float center_dx = winX - centerX_proj;
-        float center_dy = winY - centerY_proj;
-        float center_dist = sqrt(center_dx*center_dx + center_dy*center_dy);
-
-        if(center_dist < 25.0f && center_dist < closest_dist)
+        float distance;
+        if(RayBoxIntersect(ray, center_box, distance) && distance < closest_distance)
         {
-            closest_dist = center_dist;
-            closest_axis = 3; // Special value for free rotation
+            closest_distance = distance;
+            closest_axis = 3; // Free rotation
         }
     }
     else if(gizmo_mode == GIZMO_MODE_SCALE)
     {
+        // Test scale cube handles - match drawing positions
+        Vector3D axes[3] = {{5, 0, 0}, {0, 5, 0}, {0, 0, 5}};
+        float cube_size = 0.45f;
+
         for(int i = 0; i < 3; i++)
         {
-            // Apply the same transformations as in DrawGizmo for scale handles
+            // Transform scale handle position
             float local_x = axes[i].x;
             float local_y = axes[i].y;
             float local_z = axes[i].z;
 
-            // Apply object rotations (same order as in DrawGizmo)
+            // Apply rotations
             float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
             float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
             float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
 
-            // Apply Z rotation
+            // Z rotation
             float temp_x = local_x * cos(rz) - local_y * sin(rz);
             float temp_y = local_x * sin(rz) + local_y * cos(rz);
             local_x = temp_x;
             local_y = temp_y;
 
-            // Apply Y rotation
+            // Y rotation
             temp_x = local_x * cos(ry) + local_z * sin(ry);
             float temp_z = -local_x * sin(ry) + local_z * cos(ry);
             local_x = temp_x;
             local_z = temp_z;
 
-            // Apply X rotation
+            // X rotation
             temp_y = local_y * cos(rx) - local_z * sin(rx);
             temp_z = local_y * sin(rx) + local_z * cos(rx);
             local_y = temp_y;
             local_z = temp_z;
 
-            // Transform to world position
+            // Create bounding box
+            Box3D box;
             float world_x = ctrl->transform.position.x + local_x;
             float world_y = ctrl->transform.position.y + local_y;
             float world_z = ctrl->transform.position.z + local_z;
 
-            GLdouble cubeX, cubeY, cubeZ;
-            gluProject(world_x, world_y, world_z, mv, proj, vp, &cubeX, &cubeY, &cubeZ);
+            box.min[0] = world_x - cube_size;
+            box.min[1] = world_y - cube_size;
+            box.min[2] = world_z - cube_size;
+            box.max[0] = world_x + cube_size;
+            box.max[1] = world_y + cube_size;
+            box.max[2] = world_z + cube_size;
 
-            float dx = winX - cubeX;
-            float dy = winY - cubeY;
-            float dist = sqrt(dx*dx + dy*dy);
-
-            // Hit detection for scale cube handles
-            if(dist < 40.0f && dist < closest_dist) // Adjusted for smaller handles
+            float distance;
+            if(RayBoxIntersect(ray, box, distance) && distance < closest_distance)
             {
-                closest_dist = dist;
+                closest_distance = distance;
                 closest_axis = i;
             }
         }
     }
-    else
+    else // GIZMO_MODE_MOVE
     {
+        // Test move arrow handles with simplified box intersection for now
+        Vector3D axes[3] = {{7, 0, 0}, {0, 7, 0}, {0, 0, 7}};
+        float handle_size = 1.0f; // Generous hit area for arrows
+
         for(int i = 0; i < 3; i++)
         {
-            GLdouble axisX, axisY, axisZ;
-            gluProject(ctrl->transform.position.x + axes[i].x,
-                       ctrl->transform.position.y + axes[i].y,
-                       ctrl->transform.position.z + axes[i].z,
-                       mv, proj, vp, &axisX, &axisY, &axisZ);
+            // Transform move handle position
+            float local_x = axes[i].x;
+            float local_y = axes[i].y;
+            float local_z = axes[i].z;
 
-            float line_dx = axisX - centerX;
-            float line_dy = axisY - centerY;
-            float line_len = sqrt(line_dx*line_dx + line_dy*line_dy);
+            // Apply rotations (same as other gizmos)
+            float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
+            float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
+            float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
 
-            if(line_len < 0.1f) continue;
+            // Z rotation
+            float temp_x = local_x * cos(rz) - local_y * sin(rz);
+            float temp_y = local_x * sin(rz) + local_y * cos(rz);
+            local_x = temp_x;
+            local_y = temp_y;
 
-            float u = ((winX - centerX) * line_dx + (winY - centerY) * line_dy) / (line_len * line_len);
-            u = fmax(0.0f, fmin(1.0f, u));
+            // Y rotation
+            temp_x = local_x * cos(ry) + local_z * sin(ry);
+            float temp_z = -local_x * sin(ry) + local_z * cos(ry);
+            local_x = temp_x;
+            local_z = temp_z;
 
-            float proj_x = centerX + u * line_dx;
-            float proj_y = centerY + u * line_dy;
+            // X rotation
+            temp_y = local_y * cos(rx) - local_z * sin(rx);
+            temp_z = local_y * sin(rx) + local_z * cos(rx);
+            local_y = temp_y;
+            local_z = temp_z;
 
-            float dist = sqrt((winX - proj_x) * (winX - proj_x) + (winY - proj_y) * (winY - proj_y));
+            // Create bounding box for arrow handle
+            Box3D box;
+            float world_x = ctrl->transform.position.x + local_x;
+            float world_y = ctrl->transform.position.y + local_y;
+            float world_z = ctrl->transform.position.z + local_z;
 
-            if(dist < 15.0f && dist < closest_dist)
+            box.min[0] = world_x - handle_size;
+            box.min[1] = world_y - handle_size;
+            box.min[2] = world_z - handle_size;
+            box.max[0] = world_x + handle_size;
+            box.max[1] = world_y + handle_size;
+            box.max[2] = world_z + handle_size;
+
+            float distance;
+            if(RayBoxIntersect(ray, box, distance) && distance < closest_distance)
             {
-                closest_dist = dist;
+                closest_distance = distance;
                 closest_axis = i;
             }
+        }
+
+        // Test orange center cube for free movement
+        Box3D center_box;
+        float center_size = 0.4f;
+        center_box.min[0] = ctrl->transform.position.x - center_size;
+        center_box.min[1] = ctrl->transform.position.y - center_size;
+        center_box.min[2] = ctrl->transform.position.z - center_size;
+        center_box.max[0] = ctrl->transform.position.x + center_size;
+        center_box.max[1] = ctrl->transform.position.y + center_size;
+        center_box.max[2] = ctrl->transform.position.z + center_size;
+
+        float distance;
+        if(RayBoxIntersect(ray, center_box, distance) && distance < closest_distance)
+        {
+            closest_distance = distance;
+            closest_axis = -1; // Free movement (no specific axis)
         }
     }
 
