@@ -76,8 +76,12 @@ void CustomControllerDialog::SetupUI()
     connect(assign_button, &QPushButton::clicked, this, &CustomControllerDialog::on_assign_clicked);
     left_layout->addWidget(assign_button);
 
-    remove_from_grid_button = new QPushButton("Remove from Grid");
-    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_from_grid_clicked);
+    clear_button = new QPushButton("Clear Selected Cell");
+    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
+    left_layout->addWidget(clear_button);
+
+    remove_from_grid_button = new QPushButton("Remove All LEDs from Grid");
+    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
     left_layout->addWidget(remove_from_grid_button);
 
     left_group->setLayout(left_layout);
@@ -118,16 +122,18 @@ void CustomControllerDialog::SetupUI()
     grid_table->setSelectionMode(QAbstractItemView::SingleSelection);
     grid_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connect(grid_table, &QTableWidget::cellClicked, this, &CustomControllerDialog::on_grid_cell_clicked);
+
+    grid_table->horizontalHeader()->setDefaultSectionSize(30);
+    grid_table->verticalHeader()->setDefaultSectionSize(30);
+    grid_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    grid_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    grid_table->setShowGrid(true);
     first_tab_layout->addWidget(grid_table);
     layer_tabs->addTab(first_tab, "Layer 0");
     right_layout->addWidget(layer_tabs);
 
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
-
-    clear_button = new QPushButton("Clear Selected Cell");
-    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
-    right_layout->addWidget(clear_button);
 
     content_layout->addLayout(right_layout, 2);
 
@@ -151,7 +157,7 @@ void CustomControllerDialog::SetupUI()
 
     color_refresh_timer = new QTimer(this);
     connect(color_refresh_timer, &QTimer::timeout, this, &CustomControllerDialog::refresh_colors);
-    color_refresh_timer->start(500);
+    color_refresh_timer->start(750);
 
     UpdateGridDisplay();
 }
@@ -225,6 +231,7 @@ void CustomControllerDialog::on_grid_cell_clicked(int row, int column)
     selected_row = row;
     selected_col = column;
     UpdateCellInfo();
+    UpdateGridColors();
 }
 
 void CustomControllerDialog::on_layer_tab_changed(int index)
@@ -316,20 +323,130 @@ void CustomControllerDialog::UpdateGridDisplay()
         {
             QTableWidgetItem* item = new QTableWidgetItem();
 
-            bool found = false;
-            for(const auto& mapping : led_mappings)
+            std::vector<GridLEDMapping> cell_mappings;
+            for(const GridLEDMapping& mapping : led_mappings)
             {
                 if(mapping.x == j && mapping.y == i && mapping.z == current_layer)
                 {
-                    item->setBackground(QBrush(QColor(100, 200, 100)));
-                    found = true;
-                    break;
+                    cell_mappings.push_back(mapping);
                 }
             }
 
-            if(!found)
+            QColor cell_color(50, 50, 50);
+
+            if(!cell_mappings.empty())
             {
-                item->setBackground(QBrush(QColor(50, 50, 50)));
+                if(cell_mappings.size() == 1)
+                {
+                    cell_color = GetMappingColor(cell_mappings[0]);
+                }
+                else
+                {
+                    unsigned int total_r = 0, total_g = 0, total_b = 0;
+                    unsigned int valid_count = 0;
+
+                    for(const GridLEDMapping& mapping : cell_mappings)
+                    {
+                        QColor ledColor = GetMappingColor(mapping);
+                        total_r += ledColor.red();
+                        total_g += ledColor.green();
+                        total_b += ledColor.blue();
+                        valid_count++;
+                    }
+
+                    if(valid_count > 0)
+                    {
+                        cell_color = QColor(total_r / valid_count, total_g / valid_count, total_b / valid_count);
+                    }
+                }
+
+                // Create tooltip with all mapped LEDs
+                QString tooltip_text;
+                if(cell_mappings.size() == 1)
+                {
+                    const GridLEDMapping& mapping = cell_mappings[0];
+                    tooltip_text = QString("Assigned: %1\nZone: %2\nLED: %3")
+                                   .arg(QString::fromStdString(mapping.controller->name))
+                                   .arg(mapping.zone_idx)
+                                   .arg(mapping.led_idx);
+                }
+                else
+                {
+                    tooltip_text = QString("Multiple LEDs (%1):\n").arg(cell_mappings.size());
+                    for(size_t i = 0; i < cell_mappings.size() && i < 5; i++) // Limit to 5 for readability
+                    {
+                        const GridLEDMapping& mapping = cell_mappings[i];
+                        tooltip_text += QString("• %1 [Z%2:L%3]\n")
+                                       .arg(QString::fromStdString(mapping.controller->name))
+                                       .arg(mapping.zone_idx)
+                                       .arg(mapping.led_idx);
+                    }
+                    if(cell_mappings.size() > 5)
+                    {
+                        tooltip_text += QString("... and %1 more").arg(cell_mappings.size() - 5);
+                    }
+                }
+                item->setToolTip(tooltip_text);
+
+                // Add indicator based on number of LEDs
+                if(cell_mappings.size() == 1)
+                {
+                    item->setText("●");
+                }
+                else
+                {
+                    item->setText(QString::number(cell_mappings.size()));
+                }
+                item->setTextAlignment(Qt::AlignCenter);
+
+            }
+
+            else
+            {
+                item->setText("");
+                item->setToolTip("Empty - click to assign");
+            }
+
+            // Check if this cell is currently selected
+            bool isSelected = (i == selected_row && j == selected_col);
+
+            if(isSelected)
+            {
+                // Mix the LED color with selection blue for visual feedback
+                QColor selection_color = QColor(100, 150, 255); // Light blue selection
+                QColor blended_color;
+                if(cell_mappings.empty())
+                {
+                    // For empty cells, use pure selection color
+                    blended_color = selection_color;
+                }
+                else
+                {
+                    // Blend LED color with selection color (70% selection, 30% LED color)
+                    blended_color = QColor(
+                        static_cast<int>(selection_color.red() * 0.7 + cell_color.red() * 0.3),
+                        static_cast<int>(selection_color.green() * 0.7 + cell_color.green() * 0.3),
+                        static_cast<int>(selection_color.blue() * 0.7 + cell_color.blue() * 0.3)
+                    );
+                }
+                item->setBackground(QBrush(blended_color));
+
+                // Update text color for selected cell
+                QColor text_color = (blended_color.red() + blended_color.green() + blended_color.blue() > 382) ?
+                                   Qt::black : Qt::white;
+                item->setForeground(QBrush(text_color));
+            }
+            else
+            {
+                item->setBackground(QBrush(cell_color));
+
+                // Set text color for non-selected cells
+                if(!cell_mappings.empty())
+                {
+                    QColor text_color = (cell_color.red() + cell_color.green() + cell_color.blue() > 382) ?
+                                       Qt::black : Qt::white;
+                    item->setForeground(QBrush(text_color));
+                }
             }
 
             grid_table->setItem(i, j, item);
@@ -338,6 +455,8 @@ void CustomControllerDialog::UpdateGridDisplay()
 
     grid_table->horizontalHeader()->setDefaultSectionSize(30);
     grid_table->verticalHeader()->setDefaultSectionSize(30);
+    grid_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    grid_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
 }
 
 void CustomControllerDialog::UpdateCellInfo()
@@ -353,7 +472,7 @@ void CustomControllerDialog::UpdateCellInfo()
                     .arg(selected_row)
                     .arg(current_layer);
 
-    for(const auto& mapping : led_mappings)
+    for(const GridLEDMapping& mapping : led_mappings)
     {
         if(mapping.x == selected_col && mapping.y == selected_row && mapping.z == current_layer)
         {
@@ -394,7 +513,7 @@ void CustomControllerDialog::on_assign_clicked()
 
     int item_idx = item_combo->currentData().toInt();
 
-    for(auto it = led_mappings.begin(); it != led_mappings.end();)
+    for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
     {
         if(it->x == selected_col && it->y == selected_row && it->z == current_layer)
         {
@@ -410,7 +529,7 @@ void CustomControllerDialog::on_assign_clicked()
 
     if(granularity == 0)
     {
-        for(const auto& pos : positions)
+        for(const LEDPosition3D& pos : positions)
         {
             GridLEDMapping mapping;
             mapping.x = selected_col;
@@ -424,7 +543,7 @@ void CustomControllerDialog::on_assign_clicked()
     }
     else if(granularity == 1)
     {
-        for(const auto& pos : positions)
+        for(const LEDPosition3D& pos : positions)
         {
             if(pos.zone_idx == (unsigned int)item_idx)
             {
@@ -441,7 +560,7 @@ void CustomControllerDialog::on_assign_clicked()
     }
     else if(granularity == 2)
     {
-        for(const auto& pos : positions)
+        for(const LEDPosition3D& pos : positions)
         {
             unsigned int global_led_idx = controller->zones[pos.zone_idx].start_idx + pos.led_idx;
             if(global_led_idx == (unsigned int)item_idx)
@@ -458,7 +577,7 @@ void CustomControllerDialog::on_assign_clicked()
         }
     }
 
-    UpdateGridDisplay();
+    UpdateGridColors();
     UpdateCellInfo();
     UpdateItemCombo();
 }
@@ -471,7 +590,7 @@ void CustomControllerDialog::on_clear_cell_clicked()
         return;
     }
 
-    for(auto it = led_mappings.begin(); it != led_mappings.end();)
+    for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
     {
         if(it->x == selected_col && it->y == selected_row && it->z == current_layer)
         {
@@ -483,91 +602,34 @@ void CustomControllerDialog::on_clear_cell_clicked()
         }
     }
 
-    UpdateGridDisplay();
+    UpdateGridColors();
     UpdateCellInfo();
     UpdateItemCombo();
 }
 
-void CustomControllerDialog::on_remove_from_grid_clicked()
+void CustomControllerDialog::on_remove_all_leds_clicked()
 {
-    int ctrl_idx = available_controllers->currentRow();
-    int granularity = granularity_combo->currentIndex();
-    int item_row = item_combo->currentIndex();
-
-    if(ctrl_idx < 0 || item_row < 0)
+    if(led_mappings.empty())
     {
-        QMessageBox::warning(this, "No Selection", "Please select a controller/zone/LED first");
+        QMessageBox::information(this, "Grid Empty", "The grid is already empty - no LEDs to remove");
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    if(ctrl_idx >= (int)controllers.size()) return;
+    int reply = QMessageBox::question(this, "Remove All LEDs",
+                                      QString("Are you sure you want to remove all %1 LED(s) from the grid?").arg(led_mappings.size()),
+                                      QMessageBox::Yes | QMessageBox::No);
 
-    RGBController* controller = controllers[ctrl_idx];
-
-    std::vector<LEDPosition3D> positions = ControllerLayout3D::GenerateLEDPositions(controller);
-
-    int removed_count = 0;
-
-    if(granularity == 0)
+    if(reply == QMessageBox::Yes)
     {
-        for(auto it = led_mappings.begin(); it != led_mappings.end();)
-        {
-            if(it->controller == controller)
-            {
-                it = led_mappings.erase(it);
-                removed_count++;
-            }
-            else
-            {
-                ++it;
-            }
-        }
-    }
-    else if(granularity == 1)
-    {
-        for(auto it = led_mappings.begin(); it != led_mappings.end();)
-        {
-            if(it->controller == controller && it->zone_idx == (unsigned int)item_row)
-            {
-                it = led_mappings.erase(it);
-                removed_count++;
-            }
-            else
-            {
-                ++it;
-            }
-        }
-    }
-    else if(granularity == 2)
-    {
-        for(auto it = led_mappings.begin(); it != led_mappings.end();)
-        {
-            unsigned int global_led_idx = controller->zones[it->zone_idx].start_idx + it->led_idx;
-            if(it->controller == controller && global_led_idx == (unsigned int)item_row)
-            {
-                it = led_mappings.erase(it);
-                removed_count++;
-            }
-            else
-            {
-                ++it;
-            }
-        }
-    }
+        size_t removed_count = led_mappings.size();
+        led_mappings.clear();
 
-    if(removed_count > 0)
-    {
-        QMessageBox::information(this, "Removed", QString("Removed %1 LED(s) from grid").arg(removed_count));
-    }
-    else
-    {
-        QMessageBox::information(this, "Not Found", "The selected item was not found in the grid");
-    }
+        QMessageBox::information(this, "Removed", QString("Removed all %1 LED(s) from grid").arg(static_cast<int>(removed_count)));
 
-    UpdateGridDisplay();
-    UpdateCellInfo();
-    UpdateItemCombo();
+        UpdateGridColors();
+        UpdateCellInfo();
+        UpdateItemCombo();
+    }
 }
 
 void CustomControllerDialog::on_save_clicked()
@@ -611,7 +673,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
 {
     if(granularity == 0)
     {
-        for(const auto& mapping : led_mappings)
+        for(const GridLEDMapping& mapping : led_mappings)
         {
             if(mapping.controller == controller)
             {
@@ -621,7 +683,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
     else if(granularity == 1)
     {
-        for(const auto& mapping : led_mappings)
+        for(const GridLEDMapping& mapping : led_mappings)
         {
             if(mapping.controller == controller && mapping.zone_idx == (unsigned int)item_idx)
             {
@@ -631,7 +693,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
     else if(granularity == 2)
     {
-        for(const auto& mapping : led_mappings)
+        for(const GridLEDMapping& mapping : led_mappings)
         {
             unsigned int global_led_idx = controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
             if(mapping.controller == controller && global_led_idx == (unsigned int)item_idx)
@@ -716,6 +778,23 @@ QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
     return QColor(static_cast<int>(total_r / count), static_cast<int>(total_g / count), static_cast<int>(total_b / count));
 }
 
+QColor CustomControllerDialog::GetMappingColor(const GridLEDMapping& mapping)
+{
+    if(!mapping.controller)
+        return QColor(128, 128, 128);
+
+    if(mapping.zone_idx >= mapping.controller->zones.size())
+        return QColor(128, 128, 128);
+
+    const zone& z = mapping.controller->zones[mapping.zone_idx];
+    unsigned int global_led_idx = z.start_idx + mapping.led_idx;
+
+    if(global_led_idx >= mapping.controller->colors.size())
+        return QColor(128, 128, 128);
+
+    return RGBToQColor(mapping.controller->colors[global_led_idx]);
+}
+
 QColor CustomControllerDialog::RGBToQColor(unsigned int rgb_value)
 {
     unsigned int r = (rgb_value >> 0) & 0xFF;
@@ -737,15 +816,15 @@ void ColorComboDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
     if(index.data(Qt::DecorationRole).canConvert<QIcon>())
     {
         QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
-        QRect iconRect = option.rect;
-        iconRect.setWidth(20);
-        iconRect.adjust(4, 2, 0, -2);
+        QRect icon_rect = option.rect;
+        icon_rect.setWidth(20);
+        icon_rect.adjust(4, 2, 0, -2);
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing);
 
-        QPixmap pixmap = icon.pixmap(iconRect.size());
-        painter->drawPixmap(iconRect, pixmap);
+        QPixmap pixmap = icon.pixmap(icon_rect.size());
+        painter->drawPixmap(icon_rect, pixmap);
 
         painter->restore();
     }
@@ -759,7 +838,99 @@ QSize ColorComboDelegate::sizeHint(const QStyleOptionViewItem &option,
     return size;
 }
 
+void CustomControllerDialog::UpdateGridColors()
+{
+    if(!grid_table) return;
+
+    for(int i = 0; i < grid_table->rowCount(); i++)
+    {
+        for(int j = 0; j < grid_table->columnCount(); j++)
+        {
+            QTableWidgetItem* item = grid_table->item(i, j);
+            if(!item) continue;
+
+            std::vector<GridLEDMapping> cell_mappings;
+            for(const GridLEDMapping& mapping : led_mappings)
+            {
+                if(mapping.x == j && mapping.y == i && mapping.z == current_layer)
+                {
+                    cell_mappings.push_back(mapping);
+                }
+            }
+
+            QColor cell_color(50, 50, 50);
+
+            if(!cell_mappings.empty())
+            {
+                // Calculate color (same logic as UpdateGridDisplay)
+                if(cell_mappings.size() == 1)
+                {
+                    cell_color = GetMappingColor(cell_mappings[0]);
+                }
+                else
+                {
+                    unsigned int total_r = 0, total_g = 0, total_b = 0;
+                    unsigned int valid_count = 0;
+
+                    for(const GridLEDMapping& mapping : cell_mappings)
+                    {
+                        QColor ledColor = GetMappingColor(mapping);
+                        total_r += ledColor.red();
+                        total_g += ledColor.green();
+                        total_b += ledColor.blue();
+                        valid_count++;
+                    }
+
+                    if(valid_count > 0)
+                    {
+                        cell_color = QColor(total_r / valid_count, total_g / valid_count, total_b / valid_count);
+                    }
+                }
+            }
+
+            // Check if this cell is currently selected
+            bool isSelected = (i == selected_row && j == selected_col);
+
+            if(isSelected)
+            {
+                // Mix the LED color with selection blue for visual feedback
+                QColor selection_color = QColor(100, 150, 255);
+                QColor blended_color;
+                if(cell_mappings.empty())
+                {
+                    blended_color = selection_color;
+                }
+                else
+                {
+                    blended_color = QColor(
+                        static_cast<int>(selection_color.red() * 0.7 + cell_color.red() * 0.3),
+                        static_cast<int>(selection_color.green() * 0.7 + cell_color.green() * 0.3),
+                        static_cast<int>(selection_color.blue() * 0.7 + cell_color.blue() * 0.3)
+                    );
+                }
+                item->setBackground(QBrush(blended_color));
+
+                QColor text_color = (blended_color.red() + blended_color.green() + blended_color.blue() > 382) ?
+                                   Qt::black : Qt::white;
+                item->setForeground(QBrush(text_color));
+            }
+            else
+            {
+                item->setBackground(QBrush(cell_color));
+
+                if(!cell_mappings.empty())
+                {
+                    QColor text_color = (cell_color.red() + cell_color.green() + cell_color.blue() > 382) ?
+                                       Qt::black : Qt::white;
+                    item->setForeground(QBrush(text_color));
+                }
+            }
+        }
+    }
+}
+
 void CustomControllerDialog::refresh_colors()
 {
     UpdateItemCombo();
+    UpdateGridColors();
 }

@@ -76,7 +76,7 @@ private slots:
     void on_dimension_changed();
     void on_assign_clicked();
     void on_clear_cell_clicked();
-    void on_remove_from_grid_clicked();
+    void on_remove_all_leds_clicked();
     void on_save_clicked();
     void refresh_colors();
 
@@ -84,12 +84,14 @@ private:
     void SetupUI();
     void UpdateItemCombo();
     void UpdateGridDisplay();
+    void UpdateGridColors();
     void UpdateCellInfo();
     void RebuildLayerTabs();
     bool IsItemAssigned(RGBController* controller, int granularity, int item_idx);
     QColor GetItemColor(RGBController* controller, int granularity, int item_idx);
     QColor GetAverageZoneColor(RGBController* controller, unsigned int zone_idx);
     QColor GetAverageDeviceColor(RGBController* controller);
+    QColor GetMappingColor(const GridLEDMapping& mapping);
     static QColor RGBToQColor(unsigned int rgb_value);
 
     ResourceManagerInterface* resource_manager;

@@ -953,7 +953,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
     }
 
     QStringList controller_names;
-    for(const auto& ctrl : virtual_controllers)
+    for(const VirtualController3D* ctrl : virtual_controllers)
     {
         controller_names.append(QString::fromStdString(ctrl->GetName()));
     }
@@ -1027,7 +1027,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
         if(virtual_ctrl)
         {
-            for(const auto& existing : virtual_controllers)
+            for(const VirtualController3D* existing : virtual_controllers)
             {
                 if(existing->GetName() == virtual_ctrl->GetName())
                 {
@@ -1043,7 +1043,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                     }
                     else
                     {
-                        auto it = std::find(virtual_controllers.begin(), virtual_controllers.end(), existing);
+                        std::vector<VirtualController3D*>::iterator it = std::find(virtual_controllers.begin(), virtual_controllers.end(), existing);
                         if(it != virtual_controllers.end())
                         {
                             delete *it;
@@ -1481,7 +1481,7 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
     mkdir(custom_dir.c_str(), 0755);
 #endif
 
-    for(const auto& ctrl : virtual_controllers)
+    for(const VirtualController3D* ctrl : virtual_controllers)
     {
         std::string safe_name = ctrl->GetName();
         for(char& c : safe_name)
@@ -1525,7 +1525,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
     try
     {
-        for(const auto& entry : filesystem::directory_iterator(dir_path))
+        for(const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(dir_path))
         {
             if(entry.path().extension() == ".json")
             {
@@ -1571,7 +1571,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
 bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granularity, int item_idx)
 {
-    for(const auto& ct : controller_transforms)
+    for(ControllerTransform* ct : controller_transforms)
     {
         if(ct->controller == nullptr) continue;
 
@@ -1595,7 +1595,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             if(ct->controller == controller)
             {
-                for(const auto& pos : ct->led_positions)
+                for(const LEDPosition3D& pos : ct->led_positions)
                 {
                     if(pos.zone_idx == (unsigned int)item_idx)
                     {
@@ -1608,7 +1608,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             if(ct->controller == controller)
             {
-                for(const auto& pos : ct->led_positions)
+                for(const LEDPosition3D& pos : ct->led_positions)
                 {
                     unsigned int global_led_idx = controller->zones[pos.zone_idx].start_idx + pos.led_idx;
                     if(global_led_idx == (unsigned int)item_idx)
@@ -1640,7 +1640,7 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
     int total_leds = (int)controller->leds.size();
     int assigned_leds = 0;
 
-    for(const auto& ct : controller_transforms)
+    for(ControllerTransform* ct : controller_transforms)
     {
         if(ct->controller == controller)
         {
