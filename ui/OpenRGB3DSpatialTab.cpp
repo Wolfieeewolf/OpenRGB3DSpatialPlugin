@@ -87,51 +87,18 @@ void OpenRGB3DSpatialTab::SetupUI()
     QHBoxLayout* main_layout = new QHBoxLayout(this);
 
     QVBoxLayout* left_panel = new QVBoxLayout();
+    left_panel->setSpacing(8);
 
-    viewport = new LEDViewport3D();
-    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
-    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
-            this, SLOT(on_controller_position_changed(int,float,float,float)));
-    left_panel->addWidget(viewport, 1);
-
-    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
-    left_panel->addWidget(controls_label);
-
-    main_layout->addLayout(left_panel, 3);
-
-    QVBoxLayout* right_panel = new QVBoxLayout();
-
-    QGroupBox* controller_group = new QGroupBox("Controllers");
-    QVBoxLayout* controller_layout = new QVBoxLayout();
-
-    QLabel* available_label = new QLabel("Available Controllers:");
-    controller_layout->addWidget(available_label);
+    QGroupBox* available_group = new QGroupBox("Available Controllers");
+    QVBoxLayout* available_layout = new QVBoxLayout();
+    available_layout->setSpacing(5);
 
     available_controllers_list = new QListWidget();
-    available_controllers_list->setMaximumHeight(100);
+    available_controllers_list->setMinimumHeight(200);
     connect(available_controllers_list, &QListWidget::currentRowChanged, [this](int) {
         on_granularity_changed(granularity_combo->currentIndex());
     });
-    controller_layout->addWidget(available_controllers_list);
-
-    QPushButton* custom_controller_button = new QPushButton("Create Custom 3D Controller");
-    connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
-    controller_layout->addWidget(custom_controller_button);
-
-    QHBoxLayout* custom_io_layout = new QHBoxLayout();
-    QPushButton* import_button = new QPushButton("Import Custom Controller");
-    connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
-    custom_io_layout->addWidget(import_button);
-
-    QPushButton* export_button = new QPushButton("Export Custom Controller");
-    connect(export_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
-    custom_io_layout->addWidget(export_button);
-
-    QPushButton* edit_button = new QPushButton("Edit Custom Controller");
-    connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
-    custom_io_layout->addWidget(edit_button);
-
-    controller_layout->addLayout(custom_io_layout);
+    available_layout->addWidget(available_controllers_list);
 
     QHBoxLayout* granularity_layout = new QHBoxLayout();
     granularity_layout->addWidget(new QLabel("Add:"));
@@ -141,10 +108,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     granularity_combo->addItem("LED");
     connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
     granularity_layout->addWidget(granularity_combo);
-    controller_layout->addLayout(granularity_layout);
+    available_layout->addLayout(granularity_layout);
 
     item_combo = new QComboBox();
-    controller_layout->addWidget(item_combo);
+    available_layout->addWidget(item_combo);
 
     QHBoxLayout* add_remove_layout = new QHBoxLayout();
     QPushButton* add_button = new QPushButton("Add to 3D View");
@@ -158,55 +125,39 @@ void OpenRGB3DSpatialTab::SetupUI()
     QPushButton* clear_button = new QPushButton("Clear All");
     connect(clear_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_clear_all_clicked);
     add_remove_layout->addWidget(clear_button);
-    controller_layout->addLayout(add_remove_layout);
+    available_layout->addLayout(add_remove_layout);
 
-    QHBoxLayout* save_load_layout = new QHBoxLayout();
-    QPushButton* save_button = new QPushButton("Save Layout");
-    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
-    save_load_layout->addWidget(save_button);
+    available_group->setLayout(available_layout);
+    left_panel->addWidget(available_group);
 
-    QPushButton* load_button = new QPushButton("Load Layout");
-    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
-    save_load_layout->addWidget(load_button);
-    controller_layout->addLayout(save_load_layout);
+    QGroupBox* custom_group = new QGroupBox("Custom 3D Controllers");
+    QVBoxLayout* custom_layout = new QVBoxLayout();
+    custom_layout->setSpacing(5);
 
-    QLabel* profile_label = new QLabel("Layout Profiles:");
-    controller_layout->addWidget(profile_label);
+    QPushButton* custom_controller_button = new QPushButton("Create Custom 3D Controller");
+    connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
+    custom_layout->addWidget(custom_controller_button);
 
-    layout_profiles_combo = new QComboBox();
-    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
-    controller_layout->addWidget(layout_profiles_combo);
+    QHBoxLayout* custom_io_layout = new QHBoxLayout();
+    QPushButton* import_button = new QPushButton("Import");
+    connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
+    custom_io_layout->addWidget(import_button);
 
-    QHBoxLayout* profile_actions_layout = new QHBoxLayout();
-    QPushButton* delete_button = new QPushButton("Delete Profile");
-    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
-    profile_actions_layout->addWidget(delete_button);
-    controller_layout->addLayout(profile_actions_layout);
+    QPushButton* export_button = new QPushButton("Export");
+    connect(export_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
+    custom_io_layout->addWidget(export_button);
 
-    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
+    QPushButton* edit_button = new QPushButton("Edit");
+    connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
+    custom_io_layout->addWidget(edit_button);
 
-    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-    bool auto_load_enabled = false;
-    if(settings.contains("AutoLoad"))
-    {
-        auto_load_enabled = settings["AutoLoad"];
-    }
-    auto_load_checkbox->setChecked(auto_load_enabled);
-    LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting loaded: %s", auto_load_enabled ? "enabled" : "disabled");
+    custom_layout->addLayout(custom_io_layout);
+    custom_group->setLayout(custom_layout);
+    left_panel->addWidget(custom_group);
 
-    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-        settings["AutoLoad"] = checked;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-        resource_manager->GetSettingsManager()->SaveSettings();
-        LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting changed to: %s", checked ? "enabled" : "disabled");
-    });
-    controller_layout->addWidget(auto_load_checkbox);
-
-    PopulateLayoutDropdown();
-
-    QLabel* active_label = new QLabel("Active in 3D View:");
-    controller_layout->addWidget(active_label);
+    QGroupBox* controller_group = new QGroupBox("Controllers in 3D Scene");
+    QVBoxLayout* controller_layout = new QVBoxLayout();
+    controller_layout->setSpacing(5);
 
     controller_list = new QListWidget();
     controller_list->setMaximumHeight(80);
@@ -219,7 +170,110 @@ void OpenRGB3DSpatialTab::SetupUI()
     });
     controller_layout->addWidget(controller_list);
 
+    controller_group->setLayout(controller_layout);
+    left_panel->addWidget(controller_group);
+
+    main_layout->addLayout(left_panel, 1);
+
+    QVBoxLayout* middle_panel = new QVBoxLayout();
+
+    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
+    middle_panel->addWidget(controls_label);
+
+    viewport = new LEDViewport3D();
+    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
+    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
+            this, SLOT(on_controller_position_changed(int,float,float,float)));
+    middle_panel->addWidget(viewport, 1);
+
+    QGroupBox* effect_group = new QGroupBox("Spatial Effects");
+    QVBoxLayout* effect_layout = new QVBoxLayout();
+
+    QHBoxLayout* effect_type_layout = new QHBoxLayout();
+    effect_type_layout->addWidget(new QLabel("Effect:"));
+    effect_type_combo = new QComboBox();
+    effect_type_combo->addItem("Wave X");
+    effect_type_combo->addItem("Wave Y");
+    effect_type_combo->addItem("Wave Z");
+    effect_type_combo->addItem("Radial Wave");
+    effect_type_combo->addItem("Rain");
+    effect_type_combo->addItem("Fire");
+    effect_type_combo->addItem("Plasma");
+    effect_type_combo->addItem("Ripple");
+    effect_type_combo->addItem("Spiral");
+    effect_type_combo->addItem("Orbit");
+    effect_type_combo->addItem("Sphere Pulse");
+    effect_type_combo->addItem("Cube Rotate");
+    effect_type_combo->addItem("Meteor");
+    effect_type_combo->addItem("DNA Helix");
+    effect_type_combo->addItem("Room Sweep");
+    effect_type_combo->addItem("Corners");
+    effect_type_combo->addItem("Vertical Bars");
+    effect_type_combo->addItem("Breathing Sphere");
+    effect_type_combo->addItem("Explosion");
+    effect_type_combo->addItem("Wipe Top to Bottom");
+    effect_type_combo->addItem("Wipe Left to Right");
+    effect_type_combo->addItem("Wipe Front to Back");
+    effect_type_combo->addItem("LED Sparkle");
+    effect_type_combo->addItem("LED Chase");
+    effect_type_combo->addItem("LED Twinkle");
+    effect_type_layout->addWidget(effect_type_combo);
+    effect_layout->addLayout(effect_type_layout);
+
+    QHBoxLayout* speed_layout = new QHBoxLayout();
+    speed_layout->addWidget(new QLabel("Speed:"));
+    effect_speed_slider = new QSlider(Qt::Horizontal);
+    effect_speed_slider->setMinimum(1);
+    effect_speed_slider->setMaximum(100);
+    effect_speed_slider->setValue(50);
+    connect(effect_speed_slider, SIGNAL(valueChanged(int)), this, SLOT(on_effect_speed_changed(int)));
+    speed_layout->addWidget(effect_speed_slider);
+    speed_label = new QLabel("50");
+    speed_layout->addWidget(speed_label);
+    effect_layout->addLayout(speed_layout);
+
+    QHBoxLayout* brightness_layout = new QHBoxLayout();
+    brightness_layout->addWidget(new QLabel("Brightness:"));
+    effect_brightness_slider = new QSlider(Qt::Horizontal);
+    effect_brightness_slider->setMinimum(0);
+    effect_brightness_slider->setMaximum(100);
+    effect_brightness_slider->setValue(100);
+    connect(effect_brightness_slider, SIGNAL(valueChanged(int)), this, SLOT(on_effect_brightness_changed(int)));
+    brightness_layout->addWidget(effect_brightness_slider);
+    brightness_label = new QLabel("100");
+    brightness_layout->addWidget(brightness_label);
+    effect_layout->addLayout(brightness_layout);
+
+    QHBoxLayout* color_layout = new QHBoxLayout();
+    color_layout->addWidget(new QLabel("Colors:"));
+    color_start_button = new QPushButton("Start Color");
+    connect(color_start_button, SIGNAL(clicked()), this, SLOT(on_color_start_clicked()));
+    color_layout->addWidget(color_start_button);
+
+    color_end_button = new QPushButton("End Color");
+    connect(color_end_button, SIGNAL(clicked()), this, SLOT(on_color_end_clicked()));
+    color_layout->addWidget(color_end_button);
+    effect_layout->addLayout(color_layout);
+
+    QHBoxLayout* button_layout = new QHBoxLayout();
+    start_effect_button = new QPushButton("Start Effect");
+    connect(start_effect_button, SIGNAL(clicked()), this, SLOT(on_start_effect_clicked()));
+    button_layout->addWidget(start_effect_button);
+
+    stop_effect_button = new QPushButton("Stop Effect");
+    stop_effect_button->setEnabled(false);
+    connect(stop_effect_button, SIGNAL(clicked()), this, SLOT(on_stop_effect_clicked()));
+    button_layout->addWidget(stop_effect_button);
+
+    effect_layout->addLayout(button_layout);
+    effect_group->setLayout(effect_layout);
+    middle_panel->addWidget(effect_group);
+    main_layout->addLayout(middle_panel, 2);
+
+    QVBoxLayout* right_panel = new QVBoxLayout();
+    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
     QGridLayout* position_layout = new QGridLayout();
+
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
     pos_x_spin = new QDoubleSpinBox();
     pos_x_spin->setRange(-100, 100);
@@ -304,94 +358,56 @@ void OpenRGB3DSpatialTab::SetupUI()
     });
     position_layout->addWidget(rot_z_spin, 5, 1);
 
-    controller_layout->addLayout(position_layout);
-    controller_group->setLayout(controller_layout);
-    right_panel->addWidget(controller_group);
-
-    QGroupBox* effect_group = new QGroupBox("Spatial Effects");
-    QVBoxLayout* effect_layout = new QVBoxLayout();
-
-    QHBoxLayout* effect_type_layout = new QHBoxLayout();
-    effect_type_layout->addWidget(new QLabel("Effect:"));
-    effect_type_combo = new QComboBox();
-    effect_type_combo->addItem("Wave X");
-    effect_type_combo->addItem("Wave Y");
-    effect_type_combo->addItem("Wave Z");
-    effect_type_combo->addItem("Radial Wave");
-    effect_type_combo->addItem("Rain");
-    effect_type_combo->addItem("Fire");
-    effect_type_combo->addItem("Plasma");
-    effect_type_combo->addItem("Ripple");
-    effect_type_combo->addItem("Spiral");
-    effect_type_combo->addItem("Orbit");
-    effect_type_combo->addItem("Sphere Pulse");
-    effect_type_combo->addItem("Cube Rotate");
-    effect_type_combo->addItem("Meteor");
-    effect_type_combo->addItem("DNA Helix");
-    effect_type_combo->addItem("Room Sweep");
-    effect_type_combo->addItem("Corners");
-    effect_type_combo->addItem("Vertical Bars");
-    effect_type_combo->addItem("Breathing Sphere");
-    effect_type_combo->addItem("Explosion");
-    effect_type_combo->addItem("Wipe Top to Bottom");
-    effect_type_combo->addItem("Wipe Left to Right");
-    effect_type_combo->addItem("Wipe Front to Back");
-    effect_type_combo->addItem("LED Sparkle");
-    effect_type_combo->addItem("LED Chase");
-    effect_type_combo->addItem("LED Twinkle");
-    effect_type_layout->addWidget(effect_type_combo);
-    effect_layout->addLayout(effect_type_layout);
-
-    QHBoxLayout* speed_layout = new QHBoxLayout();
-    speed_layout->addWidget(new QLabel("Speed:"));
-    effect_speed_slider = new QSlider(Qt::Horizontal);
-    effect_speed_slider->setMinimum(1);
-    effect_speed_slider->setMaximum(100);
-    effect_speed_slider->setValue(50);
-    connect(effect_speed_slider, SIGNAL(valueChanged(int)), this, SLOT(on_effect_speed_changed(int)));
-    speed_layout->addWidget(effect_speed_slider);
-    speed_label = new QLabel("50");
-    speed_layout->addWidget(speed_label);
-    effect_layout->addLayout(speed_layout);
-
-    QHBoxLayout* brightness_layout = new QHBoxLayout();
-    brightness_layout->addWidget(new QLabel("Brightness:"));
-    effect_brightness_slider = new QSlider(Qt::Horizontal);
-    effect_brightness_slider->setMinimum(0);
-    effect_brightness_slider->setMaximum(100);
-    effect_brightness_slider->setValue(100);
-    connect(effect_brightness_slider, SIGNAL(valueChanged(int)), this, SLOT(on_effect_brightness_changed(int)));
-    brightness_layout->addWidget(effect_brightness_slider);
-    brightness_label = new QLabel("100");
-    brightness_layout->addWidget(brightness_label);
-    effect_layout->addLayout(brightness_layout);
-
-    QHBoxLayout* color_layout = new QHBoxLayout();
-    color_layout->addWidget(new QLabel("Colors:"));
-    color_start_button = new QPushButton("Start Color");
-    connect(color_start_button, SIGNAL(clicked()), this, SLOT(on_color_start_clicked()));
-    color_layout->addWidget(color_start_button);
-
-    color_end_button = new QPushButton("End Color");
-    connect(color_end_button, SIGNAL(clicked()), this, SLOT(on_color_end_clicked()));
-    color_layout->addWidget(color_end_button);
-    effect_layout->addLayout(color_layout);
-
-    QHBoxLayout* button_layout = new QHBoxLayout();
-    start_effect_button = new QPushButton("Start Effect");
-    connect(start_effect_button, SIGNAL(clicked()), this, SLOT(on_start_effect_clicked()));
-    button_layout->addWidget(start_effect_button);
-
-    stop_effect_button = new QPushButton("Stop Effect");
-    stop_effect_button->setEnabled(false);
-    connect(stop_effect_button, SIGNAL(clicked()), this, SLOT(on_stop_effect_clicked()));
-    button_layout->addWidget(stop_effect_button);
-
-    effect_layout->addLayout(button_layout);
-    effect_group->setLayout(effect_layout);
-    right_panel->addWidget(effect_group);
+    transform_group->setLayout(position_layout);
+    right_panel->addWidget(transform_group);
 
     right_panel->addStretch();
+
+    QGroupBox* layout_group = new QGroupBox("Layout Profiles");
+    QVBoxLayout* layout_layout = new QVBoxLayout();
+
+    layout_profiles_combo = new QComboBox();
+    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
+    layout_layout->addWidget(layout_profiles_combo);
+
+    QHBoxLayout* save_load_layout = new QHBoxLayout();
+    QPushButton* save_button = new QPushButton("Save Layout");
+    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+    save_load_layout->addWidget(save_button);
+
+    QPushButton* load_button = new QPushButton("Load Layout");
+    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
+    save_load_layout->addWidget(load_button);
+    layout_layout->addLayout(save_load_layout);
+
+    QPushButton* delete_button = new QPushButton("Delete Profile");
+    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
+    layout_layout->addWidget(delete_button);
+
+    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
+
+    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    bool auto_load_enabled = false;
+    if(settings.contains("AutoLoad"))
+    {
+        auto_load_enabled = settings["AutoLoad"];
+    }
+    auto_load_checkbox->setChecked(auto_load_enabled);
+    LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting loaded: %s", auto_load_enabled ? "enabled" : "disabled");
+
+    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        settings["AutoLoad"] = checked;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        resource_manager->GetSettingsManager()->SaveSettings();
+        LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting changed to: %s", checked ? "enabled" : "disabled");
+    });
+    layout_layout->addWidget(auto_load_checkbox);
+
+    PopulateLayoutDropdown();
+
+    layout_group->setLayout(layout_layout);
+    right_panel->addWidget(layout_group);
     main_layout->addLayout(right_panel, 1);
 
     setLayout(main_layout);
