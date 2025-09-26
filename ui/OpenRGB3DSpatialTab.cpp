@@ -21,6 +21,9 @@
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 #include <QFileInfo>
 #include <QInputDialog>

@@ -188,6 +188,8 @@ unix:!macx {
     QMAKE_CXXFLAGS += -std=c++17 -Wno-psabi
     target.path=$$PREFIX/lib/openrgb/plugins/
     INSTALLS += target
+
+    LIBS += -lGL -lGLU
 }
 
 #-----------------------------------------------------------------------------------------------#
@@ -197,4 +199,6 @@ QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 
 macx: {
     CONFIG += c++17
+
+    LIBS += -framework OpenGL
 }
