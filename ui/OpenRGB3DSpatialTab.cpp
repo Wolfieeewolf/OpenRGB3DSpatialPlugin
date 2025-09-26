@@ -928,7 +928,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = nullptr;
-        ctrl_transform->transform.position = {(float)(controller_transforms.size() * 15), 0.0f, 0.0f};
+        ctrl_transform->transform.position = {-40.0f, 0.0f, -50.0f};
         ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
@@ -965,7 +965,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     ControllerTransform* ctrl_transform = new ControllerTransform();
     ctrl_transform->controller = controller;
-    ctrl_transform->transform.position = {(float)(controller_transforms.size() * 15), 0.0f, 0.0f};
+    ctrl_transform->transform.position = {-40.0f, 0.0f, -50.0f};
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
