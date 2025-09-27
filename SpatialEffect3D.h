@@ -24,6 +24,8 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
+#include <QPushButton>
+#include <QColorDialog>
 #include "LEDPosition3D.h"
 #include "RGBController.h"
 #include "SpatialEffectCalculator.h"
@@ -63,6 +65,12 @@ public:
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
 
     /*---------------------------------------------------------*\
+    | Common effect controls (all effects need these)        |
+    \*---------------------------------------------------------*/
+    virtual void CreateCommonEffectControls(QWidget* parent);
+    virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
+
+    /*---------------------------------------------------------*\
     | Common 3D spatial controls                               |
     \*---------------------------------------------------------*/
     virtual void CreateCommon3DControls(QWidget* parent);
@@ -87,6 +95,18 @@ signals:
     void ParametersChanged();
 
 protected:
+    /*---------------------------------------------------------*\
+    | Common effect controls                                   |
+    \*---------------------------------------------------------*/
+    QGroupBox*          effect_controls_group;
+    QSlider*            speed_slider;
+    QSlider*            brightness_slider;
+    QPushButton*        color_start_button;
+    QPushButton*        color_end_button;
+    QCheckBox*          gradient_check;
+    QLabel*             speed_label;
+    QLabel*             brightness_label;
+
     /*---------------------------------------------------------*\
     | Common 3D spatial controls                               |
     \*---------------------------------------------------------*/
@@ -139,6 +159,8 @@ protected:
 
 private slots:
     void OnParameterChanged();
+    void OnColorStartClicked();
+    void OnColorEndClicked();
 
 private:
     void CreateOriginControls(QWidget* parent);

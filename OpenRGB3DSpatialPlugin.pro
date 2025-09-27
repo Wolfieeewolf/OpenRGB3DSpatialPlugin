@@ -134,6 +134,7 @@ HEADERS +=                                                                      
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
     Effects3D/Wave3D.h                                                                          \
+    Effects3D/Plasma3D.h                                                                        \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -146,6 +147,7 @@ SOURCES +=                                                                      
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     Effects3D/Wave3D.cpp                                                                        \
+    Effects3D/Plasma3D.cpp                                                                      \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

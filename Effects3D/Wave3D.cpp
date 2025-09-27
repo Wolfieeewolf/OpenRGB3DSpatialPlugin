@@ -61,6 +61,11 @@ EffectInfo3D Wave3D::GetEffectInfo()
 void Wave3D::SetupCustomUI(QWidget* parent)
 {
     /*---------------------------------------------------------*\
+    | Create common effect controls first                      |
+    \*---------------------------------------------------------*/
+    CreateCommonEffectControls(parent);
+
+    /*---------------------------------------------------------*\
     | Create wave-specific controls group                      |
     \*---------------------------------------------------------*/
     QGroupBox* wave_controls_group = new QGroupBox("Wave Settings");
@@ -196,6 +201,11 @@ void Wave3D::SetupCustomUI(QWidget* parent)
 
 void Wave3D::UpdateParams(SpatialEffectParams& params)
 {
+    /*---------------------------------------------------------*\
+    | Update common effect parameters first                    |
+    \*---------------------------------------------------------*/
+    UpdateCommonEffectParams(params);
+
     /*---------------------------------------------------------*\
     | Update wave-specific parameters                          |
     \*---------------------------------------------------------*/

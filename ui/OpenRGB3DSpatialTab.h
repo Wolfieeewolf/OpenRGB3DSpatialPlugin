@@ -34,6 +34,7 @@
 #include "VirtualController3D.h"
 #include "SpatialEffect3D.h"
 #include "Wave3D.h"
+#include "Plasma3D.h"
 
 namespace Ui
 {
@@ -52,14 +53,9 @@ public slots:
     void UpdateDeviceList();
 
 private slots:
-    void on_effect_speed_changed(int value);
-    void on_effect_brightness_changed(int value);
     void on_effect_type_changed(int index);
     void on_start_effect_clicked();
     void on_stop_effect_clicked();
-
-    void on_color_start_clicked();
-    void on_color_end_clicked();
 
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
@@ -132,19 +128,13 @@ private:
     QSlider*                    scale_z_slider;
 
     QComboBox*                  effect_type_combo;
-    QSlider*                    effect_speed_slider;
-    QSlider*                    effect_brightness_slider;
-    QLabel*                     speed_label;
-    QLabel*                     brightness_label;
-
     QPushButton*                start_effect_button;
     QPushButton*                stop_effect_button;
-    QPushButton*                color_start_button;
-    QPushButton*                color_end_button;
 
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;
     Wave3D*                     wave3d_effect;
+    Plasma3D*                   plasma3d_effect;
 
     QComboBox*                  layout_profiles_combo;
     QCheckBox*                  auto_load_checkbox;
@@ -152,9 +142,6 @@ private:
     bool                        first_load;
 
     std::vector<VirtualController3D*> virtual_controllers;
-
-    RGBColor                    current_color_start;
-    RGBColor                    current_color_end;
 };
 
 #endif

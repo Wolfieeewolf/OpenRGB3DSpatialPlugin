@@ -20,6 +20,15 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     color_end = 0x0000FF;
     use_gradient = true;
 
+    effect_controls_group = nullptr;
+    speed_slider = nullptr;
+    brightness_slider = nullptr;
+    color_start_button = nullptr;
+    color_end_button = nullptr;
+    gradient_check = nullptr;
+    speed_label = nullptr;
+    brightness_label = nullptr;
+
     spatial_controls_group = nullptr;
     origin_x_spin = nullptr;
     origin_y_spin = nullptr;
@@ -40,6 +49,102 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 
 SpatialEffect3D::~SpatialEffect3D()
 {
+}
+
+void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
+{
+    effect_controls_group = new QGroupBox("Effect Controls");
+    QVBoxLayout* main_layout = new QVBoxLayout();
+
+    /*---------------------------------------------------------*\
+    | Speed control                                            |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* speed_layout = new QHBoxLayout();
+    speed_layout->addWidget(new QLabel("Speed:"));
+    speed_slider = new QSlider(Qt::Horizontal);
+    speed_slider->setRange(1, 100);
+    speed_slider->setValue(effect_speed);
+    speed_layout->addWidget(speed_slider);
+    speed_label = new QLabel(QString::number(effect_speed));
+    speed_label->setMinimumWidth(30);
+    speed_layout->addWidget(speed_label);
+    main_layout->addLayout(speed_layout);
+
+    /*---------------------------------------------------------*\
+    | Brightness control                                       |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* brightness_layout = new QHBoxLayout();
+    brightness_layout->addWidget(new QLabel("Brightness:"));
+    brightness_slider = new QSlider(Qt::Horizontal);
+    brightness_slider->setRange(1, 100);
+    brightness_slider->setValue(effect_brightness);
+    brightness_layout->addWidget(brightness_slider);
+    brightness_label = new QLabel(QString::number(effect_brightness));
+    brightness_label->setMinimumWidth(30);
+    brightness_layout->addWidget(brightness_label);
+    main_layout->addLayout(brightness_layout);
+
+    /*---------------------------------------------------------*\
+    | Color controls                                           |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* color_layout = new QHBoxLayout();
+    color_layout->addWidget(new QLabel("Colors:"));
+
+    color_start_button = new QPushButton();
+    color_start_button->setMinimumSize(40, 30);
+    color_start_button->setMaximumSize(40, 30);
+    color_start_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3);")
+                                      .arg((color_start >> 16) & 0xFF)
+                                      .arg((color_start >> 8) & 0xFF)
+                                      .arg(color_start & 0xFF));
+    color_layout->addWidget(color_start_button);
+
+    color_end_button = new QPushButton();
+    color_end_button->setMinimumSize(40, 30);
+    color_end_button->setMaximumSize(40, 30);
+    color_end_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3);")
+                                    .arg((color_end >> 16) & 0xFF)
+                                    .arg((color_end >> 8) & 0xFF)
+                                    .arg(color_end & 0xFF));
+    color_layout->addWidget(color_end_button);
+
+    gradient_check = new QCheckBox("Gradient");
+    gradient_check->setChecked(use_gradient);
+    color_layout->addWidget(gradient_check);
+
+    color_layout->addStretch();
+    main_layout->addLayout(color_layout);
+
+    effect_controls_group->setLayout(main_layout);
+
+    /*---------------------------------------------------------*\
+    | Connect signals                                          |
+    \*---------------------------------------------------------*/
+    connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(color_start_button, &QPushButton::clicked, this, &SpatialEffect3D::OnColorStartClicked);
+    connect(color_end_button, &QPushButton::clicked, this, &SpatialEffect3D::OnColorEndClicked);
+    connect(gradient_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
+
+    /*---------------------------------------------------------*\
+    | Update labels when sliders change                        |
+    \*---------------------------------------------------------*/
+    connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
+        speed_label->setText(QString::number(value));
+        effect_speed = value;
+    });
+    connect(brightness_slider, &QSlider::valueChanged, brightness_label, [this](int value) {
+        brightness_label->setText(QString::number(value));
+        effect_brightness = value;
+    });
+
+    /*---------------------------------------------------------*\
+    | Add to parent layout                                     |
+    \*---------------------------------------------------------*/
+    if(parent && parent->layout())
+    {
+        parent->layout()->addWidget(effect_controls_group);
+    }
 }
 
 void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
@@ -335,7 +440,76 @@ void SpatialEffect3D::GetColors(RGBColor& start, RGBColor& end, bool& gradient)
     gradient = use_gradient;
 }
 
+void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& params)
+{
+    /*---------------------------------------------------------*\
+    | Update common effect parameters                          |
+    \*---------------------------------------------------------*/
+    if(speed_slider)
+    {
+        params.speed = speed_slider->value();
+        effect_speed = params.speed;
+    }
+
+    if(brightness_slider)
+    {
+        params.brightness = brightness_slider->value();
+        effect_brightness = params.brightness;
+    }
+
+    if(gradient_check)
+    {
+        params.use_gradient = gradient_check->isChecked();
+        use_gradient = params.use_gradient;
+    }
+
+    params.color_start = color_start;
+    params.color_end = color_end;
+}
+
 void SpatialEffect3D::OnParameterChanged()
 {
     emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnColorStartClicked()
+{
+    QColor initial_color = QColor((color_start >> 16) & 0xFF,
+                                  (color_start >> 8) & 0xFF,
+                                  color_start & 0xFF);
+
+    QColor new_color = QColorDialog::getColor(initial_color, this, "Select Start Color");
+
+    if(new_color.isValid())
+    {
+        color_start = (new_color.red() << 16) | (new_color.green() << 8) | new_color.blue();
+
+        color_start_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3);")
+                                          .arg(new_color.red())
+                                          .arg(new_color.green())
+                                          .arg(new_color.blue()));
+
+        emit ParametersChanged();
+    }
+}
+
+void SpatialEffect3D::OnColorEndClicked()
+{
+    QColor initial_color = QColor((color_end >> 16) & 0xFF,
+                                  (color_end >> 8) & 0xFF,
+                                  color_end & 0xFF);
+
+    QColor new_color = QColorDialog::getColor(initial_color, this, "Select End Color");
+
+    if(new_color.isValid())
+    {
+        color_end = (new_color.red() << 16) | (new_color.green() << 8) | new_color.blue();
+
+        color_end_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3);")
+                                        .arg(new_color.red())
+                                        .arg(new_color.green())
+                                        .arg(new_color.blue()));
+
+        emit ParametersChanged();
+    }
 }
