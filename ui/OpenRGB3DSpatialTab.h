@@ -26,6 +26,7 @@
 #include <QListWidget>
 #include <QCheckBox>
 #include <QTimer>
+#include <QScrollArea>
 
 #include "ResourceManagerInterface.h"
 #include "SpatialEffects.h"

@@ -89,8 +89,21 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 void OpenRGB3DSpatialTab::SetupUI()
 {
     QHBoxLayout* main_layout = new QHBoxLayout(this);
+    main_layout->setSpacing(8);
+    main_layout->setContentsMargins(8, 8, 8, 8);
 
-    QVBoxLayout* left_panel = new QVBoxLayout();
+    /*---------------------------------------------------------*\
+    | Left panel with scroll area                              |
+    \*---------------------------------------------------------*/
+    QScrollArea* left_scroll = new QScrollArea();
+    left_scroll->setWidgetResizable(true);
+    left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    left_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    left_scroll->setMinimumWidth(300);
+    left_scroll->setMaximumWidth(400);
+
+    QWidget* left_content = new QWidget();
+    QVBoxLayout* left_panel = new QVBoxLayout(left_content);
     left_panel->setSpacing(8);
 
     QGroupBox* available_group = new QGroupBox("Available Controllers");
@@ -177,7 +190,16 @@ void OpenRGB3DSpatialTab::SetupUI()
     controller_group->setLayout(controller_layout);
     left_panel->addWidget(controller_group);
 
-    main_layout->addLayout(left_panel, 1);
+    /*---------------------------------------------------------*\
+    | Add stretch to push content to top of scroll area       |
+    \*---------------------------------------------------------*/
+    left_panel->addStretch();
+
+    /*---------------------------------------------------------*\
+    | Set up left scroll area and add to main layout          |
+    \*---------------------------------------------------------*/
+    left_scroll->setWidget(left_content);
+    main_layout->addWidget(left_scroll, 1);
 
     QVBoxLayout* middle_panel = new QVBoxLayout();
 
@@ -243,15 +265,22 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_layout->addLayout(button_layout);
 
     /*---------------------------------------------------------*\
-    | Create custom effect UI container                        |
+    | Create custom effect UI container with scroll area      |
     \*---------------------------------------------------------*/
     custom_effect_container = new QWidget();
     custom_effect_container->setLayout(new QVBoxLayout());
-    effect_layout->addWidget(custom_effect_container);
+
+    QScrollArea* effect_scroll = new QScrollArea();
+    effect_scroll->setWidgetResizable(true);
+    effect_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    effect_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    effect_scroll->setWidget(custom_effect_container);
+    effect_scroll->setMaximumHeight(300);  // Limit height to prevent overlap
+    effect_layout->addWidget(effect_scroll);
 
     effect_group->setLayout(effect_layout);
     middle_panel->addWidget(effect_group);
-    main_layout->addLayout(middle_panel, 2);
+    main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
     QVBoxLayout* right_panel = new QVBoxLayout();
     QGroupBox* transform_group = new QGroupBox("Position, Rotation & Scale");
@@ -598,7 +627,27 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     layout_group->setLayout(layout_layout);
     right_panel->addWidget(layout_group);
-    main_layout->addLayout(right_panel, 1);
+
+    /*---------------------------------------------------------*\
+    | Add stretch to push content to top of right panel       |
+    \*---------------------------------------------------------*/
+    right_panel->addStretch();
+
+    /*---------------------------------------------------------*\
+    | Create right scroll area and add to main layout         |
+    \*---------------------------------------------------------*/
+    QScrollArea* right_scroll = new QScrollArea();
+    right_scroll->setWidgetResizable(true);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    right_scroll->setMinimumWidth(300);
+    right_scroll->setMaximumWidth(400);
+
+    QWidget* right_content = new QWidget();
+    right_content->setLayout(right_panel);
+    right_scroll->setWidget(right_content);
+
+    main_layout->addWidget(right_scroll, 1);
 
     setLayout(main_layout);
 

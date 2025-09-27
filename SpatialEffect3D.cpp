@@ -149,10 +149,21 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
 
 void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
 {
+    EffectInfo3D info = GetEffectInfo();
+
+    /*---------------------------------------------------------*\
+    | Only create 3D controls if the effect actually needs them|
+    \*---------------------------------------------------------*/
+    bool needs_any_3d_controls = info.needs_3d_origin || info.needs_direction;
+
+    if(!needs_any_3d_controls)
+    {
+        return; // Don't create empty 3D controls box
+    }
+
     spatial_controls_group = new QGroupBox("3D Spatial Controls");
     QVBoxLayout* main_layout = new QVBoxLayout();
-
-    EffectInfo3D info = GetEffectInfo();
+    spatial_controls_group->setLayout(main_layout);  // Set layout first
 
     /*---------------------------------------------------------*\
     | Create controls based on effect requirements            |
@@ -171,8 +182,6 @@ void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
     }
 
     CreateMirrorControls(spatial_controls_group);
-
-    spatial_controls_group->setLayout(main_layout);
 
     /*---------------------------------------------------------*\
     | Add to parent layout if it exists                       |
