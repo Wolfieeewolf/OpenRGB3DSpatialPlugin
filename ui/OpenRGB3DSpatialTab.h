@@ -32,6 +32,8 @@
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
 #include "VirtualController3D.h"
+#include "SpatialEffect3D.h"
+#include "Wave3D.h"
 
 namespace Ui
 {
@@ -52,6 +54,7 @@ public slots:
 private slots:
     void on_effect_speed_changed(int value);
     void on_effect_brightness_changed(int value);
+    void on_effect_type_changed(int index);
     void on_start_effect_clicked();
     void on_stop_effect_clicked();
 
@@ -94,6 +97,8 @@ private:
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
+    void SetupCustomEffectUI(int effect_type);
+    void ClearCustomEffectUI();
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -136,6 +141,10 @@ private:
     QPushButton*                stop_effect_button;
     QPushButton*                color_start_button;
     QPushButton*                color_end_button;
+
+    QWidget*                    custom_effect_container;
+    SpatialEffect3D*            current_effect_ui;
+    Wave3D*                     wave3d_effect;
 
     QComboBox*                  layout_profiles_combo;
     QCheckBox*                  auto_load_checkbox;

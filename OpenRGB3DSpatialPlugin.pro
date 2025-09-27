@@ -120,25 +120,32 @@ SOURCES +=                                                                      
 #-------------------------------------------------------------------#
 INCLUDEPATH +=                                                                                  \
     ui                                                                                          \
+    Effects3D                                                                                   \
 
 HEADERS +=                                                                                      \
     OpenRGB3DSpatialPlugin.h                                                                    \
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
     SpatialEffects.h                                                                            \
+    SpatialEffectCalculator.h                                                                   \
+    SpatialEffect3D.h                                                                           \
     VirtualController3D.h                                                                       \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
+    Effects3D/Wave3D.h                                                                          \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
     SpatialEffects.cpp                                                                          \
+    SpatialEffectCalculator.cpp                                                                 \
+    SpatialEffect3D.cpp                                                                         \
     VirtualController3D.cpp                                                                     \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
+    Effects3D/Wave3D.cpp                                                                        \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

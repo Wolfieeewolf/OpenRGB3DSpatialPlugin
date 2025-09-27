@@ -46,6 +46,10 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     current_color_start = 0x0000FF;
     current_color_end = 0xFF0000;
 
+    custom_effect_container = nullptr;
+    current_effect_ui = nullptr;
+    wave3d_effect = nullptr;
+
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
@@ -225,6 +229,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_type_combo->addItem("LED Chase");
     effect_type_combo->addItem("LED Twinkle");
     effect_type_layout->addWidget(effect_type_combo);
+    connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_layout->addLayout(effect_type_layout);
 
     QHBoxLayout* speed_layout = new QHBoxLayout();
@@ -273,6 +278,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     button_layout->addWidget(stop_effect_button);
 
     effect_layout->addLayout(button_layout);
+
+    /*---------------------------------------------------------*\
+    | Create custom effect UI container                        |
+    \*---------------------------------------------------------*/
+    custom_effect_container = new QWidget();
+    custom_effect_container->setLayout(new QVBoxLayout());
+    effect_layout->addWidget(custom_effect_container);
+
     effect_group->setLayout(effect_layout);
     middle_panel->addWidget(effect_group);
     main_layout->addLayout(middle_panel, 2);
@@ -625,6 +638,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     main_layout->addLayout(right_panel, 1);
 
     setLayout(main_layout);
+
+    /*---------------------------------------------------------*\
+    | Initialize with default effect UI (Wave X)              |
+    \*---------------------------------------------------------*/
+    SetupCustomEffectUI(0);
 }
 
 void OpenRGB3DSpatialTab::LoadDevices()
@@ -762,8 +780,31 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     params.color_start = current_color_start;
     params.color_end = current_color_end;
     params.use_gradient = true;
-    params.scale = 1.0f;
+
+    /*---------------------------------------------------------*\
+    | Set default 3D spatial parameters                       |
+    \*---------------------------------------------------------*/
+    params.scale_3d = {1.0f, 1.0f, 1.0f};
     params.origin = {0.0f, 0.0f, 0.0f};
+    params.rotation = {0.0f, 0.0f, 0.0f};
+    params.direction = {1.0f, 0.0f, 0.0f};
+    params.thickness = 1.0f;
+    params.intensity = 1.0f;
+    params.falloff = 1.0f;
+    params.num_arms = 4;
+    params.frequency = 10;
+    params.reverse = false;
+    params.mirror_x = false;
+    params.mirror_y = false;
+    params.mirror_z = false;
+
+    /*---------------------------------------------------------*\
+    | Update with custom effect parameters if available       |
+    \*---------------------------------------------------------*/
+    if(current_effect_ui)
+    {
+        current_effect_ui->UpdateParams(params);
+    }
 
     effects->StartEffect(params);
 
@@ -1972,3 +2013,103 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
 
     return total_leds - assigned_leds;
 }
+
+void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
+{
+    /*---------------------------------------------------------*\
+    | Clear current custom UI                                  |
+    \*---------------------------------------------------------*/
+    ClearCustomEffectUI();
+
+    /*---------------------------------------------------------*\
+    | Set up new custom UI based on effect type               |
+    \*---------------------------------------------------------*/
+    SetupCustomEffectUI(index);
+}
+
+void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
+{
+    if(!custom_effect_container)
+    {
+        return;
+    }
+
+    /*---------------------------------------------------------*\
+    | Currently only Wave effects (0-3) have custom UI        |
+    \*---------------------------------------------------------*/
+    if(effect_type >= 0 && effect_type <= 3)
+    {
+        /*---------------------------------------------------------*\
+        | Create Wave3D effect UI                                  |
+        \*---------------------------------------------------------*/
+        wave3d_effect = new Wave3D(custom_effect_container);
+        wave3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = wave3d_effect;
+
+        /*---------------------------------------------------------*\
+        | Connect parameter change signals                         |
+        \*---------------------------------------------------------*/
+        connect(wave3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
+            if(effects->IsEffectRunning())
+            {
+                /*---------------------------------------------------------*\
+                | Update effect parameters in real-time                   |
+                \*---------------------------------------------------------*/
+                SpatialEffectParams params;
+                wave3d_effect->UpdateParams(params);
+                params.type = (SpatialEffectType)effect_type_combo->currentIndex();
+                params.speed = effect_speed_slider->value();
+                params.brightness = effect_brightness_slider->value();
+                params.color_start = current_color_start;
+                params.color_end = current_color_end;
+                params.use_gradient = true;
+
+                effects->UpdateEffectParams(params);
+            }
+        });
+
+        LOG_VERBOSE("[OpenRGB 3D Spatial] Set up Wave3D custom UI for effect type %d", effect_type);
+    }
+    else
+    {
+        /*---------------------------------------------------------*\
+        | For other effects, show a placeholder or default UI     |
+        \*---------------------------------------------------------*/
+        QLabel* placeholder = new QLabel("Custom controls for this effect will be available in future updates.");
+        placeholder->setAlignment(Qt::AlignCenter);
+        placeholder->setStyleSheet("color: #666; font-style: italic; padding: 20px;");
+        custom_effect_container->layout()->addWidget(placeholder);
+
+        LOG_VERBOSE("[OpenRGB 3D Spatial] No custom UI available for effect type %d", effect_type);
+    }
+}
+
+void OpenRGB3DSpatialTab::ClearCustomEffectUI()
+{
+    if(!custom_effect_container || !custom_effect_container->layout())
+    {
+        return;
+    }
+
+    /*---------------------------------------------------------*\
+    | Remove all widgets from the container                    |
+    \*---------------------------------------------------------*/
+    QLayoutItem* item;
+    while((item = custom_effect_container->layout()->takeAt(0)) != nullptr)
+    {
+        if(item->widget())
+        {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+
+    /*---------------------------------------------------------*\
+    | Reset effect UI pointers                                 |
+    \*---------------------------------------------------------*/
+    current_effect_ui = nullptr;
+    wave3d_effect = nullptr;
+
+    LOG_VERBOSE("[OpenRGB 3D Spatial] Cleared custom effect UI");
+}
+

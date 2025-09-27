@@ -29,8 +29,23 @@ SpatialEffects::SpatialEffects()
     params.color_start = 0xFF0000;
     params.color_end = 0x0000FF;
     params.use_gradient = true;
-    params.scale = 1.0f;
+
+    /*---------------------------------------------------------*\
+    | Initialize 3D spatial parameters                         |
+    \*---------------------------------------------------------*/
+    params.scale_3d = {1.0f, 1.0f, 1.0f};
     params.origin = {0.0f, 0.0f, 0.0f};
+    params.rotation = {0.0f, 0.0f, 0.0f};
+    params.direction = {1.0f, 0.0f, 0.0f};
+    params.thickness = 1.0f;
+    params.intensity = 1.0f;
+    params.falloff = 1.0f;
+    params.num_arms = 4;
+    params.frequency = 10;
+    params.reverse = false;
+    params.mirror_x = false;
+    params.mirror_y = false;
+    params.mirror_z = false;
 }
 
 void SpatialEffects::SetControllerTransforms(std::vector<ControllerTransform*>* transforms)
@@ -66,6 +81,33 @@ bool SpatialEffects::IsRunning()
     return running;
 }
 
+bool SpatialEffects::IsEffectRunning()
+{
+    return running;
+}
+
+void SpatialEffects::UpdateEffectParams(SpatialEffectParams new_params)
+{
+    QMutexLocker lock(&mutex);
+
+    /*---------------------------------------------------------*\
+    | Preserve timing information and running state            |
+    \*---------------------------------------------------------*/
+    bool was_running = running;
+    unsigned int current_time = time_counter;
+
+    /*---------------------------------------------------------*\
+    | Update parameters                                        |
+    \*---------------------------------------------------------*/
+    params = new_params;
+
+    /*---------------------------------------------------------*\
+    | Restore timing state                                     |
+    \*---------------------------------------------------------*/
+    running = was_running;
+    time_counter = current_time;
+}
+
 void SpatialEffects::SetSpeed(unsigned int speed)
 {
     QMutexLocker lock(&mutex);
@@ -85,6 +127,7 @@ void SpatialEffects::SetColors(RGBColor start, RGBColor end, bool gradient)
     params.color_end = end;
     params.use_gradient = gradient;
 }
+
 
 void SpatialEffects::run()
 {
@@ -122,102 +165,7 @@ void SpatialEffects::UpdateLEDColors()
 
             RGBColor color = 0;
 
-            switch(params.type)
-            {
-                case SPATIAL_EFFECT_WAVE_X:
-                case SPATIAL_EFFECT_WAVE_Y:
-                case SPATIAL_EFFECT_WAVE_Z:
-                    color = CalculateWaveColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_WAVE_RADIAL:
-                    color = CalculateRadialWaveColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_RAIN:
-                    color = CalculateRainColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_FIRE:
-                    color = CalculateFireColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_PLASMA:
-                    color = CalculatePlasmaColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_RIPPLE:
-                    color = CalculateRippleColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_SPIRAL:
-                    color = CalculateSpiralColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_ORBIT:
-                    color = CalculateOrbitColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_SPHERE_PULSE:
-                    color = CalculateSpherePulseColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_CUBE_ROTATE:
-                    color = CalculateCubeRotateColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_METEOR:
-                    color = CalculateMeteorColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_DNA_HELIX:
-                    color = CalculateDNAHelixColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_ROOM_SWEEP:
-                    color = CalculateRoomSweepColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_CORNERS:
-                    color = CalculateCornersColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_VERTICAL_BARS:
-                    color = CalculateVerticalBarsColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_BREATHING_SPHERE:
-                    color = CalculateBreathingSphereColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_EXPLOSION:
-                    color = CalculateExplosionColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_WIPE_TOP_BOTTOM:
-                    color = CalculateWipeTopBottomColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_WIPE_LEFT_RIGHT:
-                    color = CalculateWipeLeftRightColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_WIPE_FRONT_BACK:
-                    color = CalculateWipeFrontBackColor(led_pos.world_position, time_offset);
-                    break;
-
-                case SPATIAL_EFFECT_LED_SPARKLE:
-                    color = CalculateLEDSparkleColor(led_pos.world_position, time_offset, j);
-                    break;
-
-                case SPATIAL_EFFECT_LED_CHASE:
-                    color = CalculateLEDChaseColor(led_pos.world_position, time_offset, j);
-                    break;
-
-                case SPATIAL_EFFECT_LED_TWINKLE:
-                    color = CalculateLEDTwinkleColor(led_pos.world_position, time_offset, j);
-                    break;
-            }
+            color = SpatialEffectCalculator::CalculateColor(led_pos.world_position, time_offset, params, j);
 
             if(controller != nullptr)
             {
@@ -257,143 +205,6 @@ void SpatialEffects::UpdateLEDColors()
     emit EffectUpdated();
 }
 
-RGBColor SpatialEffects::CalculateWaveColor(Vector3D pos, float time_offset)
-{
-    float position_val = 0;
-
-    if(params.type == SPATIAL_EFFECT_WAVE_X)
-    {
-        position_val = pos.x * params.scale;
-    }
-    else if(params.type == SPATIAL_EFFECT_WAVE_Y)
-    {
-        position_val = pos.y * params.scale;
-    }
-    else if(params.type == SPATIAL_EFFECT_WAVE_Z)
-    {
-        position_val = pos.z * params.scale;
-    }
-
-    float wave = (sin((position_val + time_offset) / 10.0f) + 1.0f) / 2.0f;
-
-    if(params.use_gradient)
-    {
-        return LerpColor(params.color_start, params.color_end, wave);
-    }
-    else
-    {
-        return params.color_start;
-    }
-}
-
-RGBColor SpatialEffects::CalculateRadialWaveColor(Vector3D pos, float time_offset)
-{
-    float dist = Distance3D(pos, params.origin);
-
-    float wave = (sin((dist * params.scale + time_offset) / 10.0f) + 1.0f) / 2.0f;
-
-    if(params.use_gradient)
-    {
-        return LerpColor(params.color_start, params.color_end, wave);
-    }
-    else
-    {
-        return params.color_start;
-    }
-}
-
-RGBColor SpatialEffects::CalculateRainColor(Vector3D pos, float time_offset)
-{
-    float y_pos = pos.y + time_offset;
-    float intensity = fmod(y_pos * params.scale, 10.0f) / 10.0f;
-
-    return LerpColor(0x000000, params.color_start, intensity);
-}
-
-RGBColor SpatialEffects::CalculateFireColor(Vector3D pos, float time_offset)
-{
-    float base = sin(pos.x * 0.5f + time_offset * 0.1f) * 0.3f;
-    float flicker = sin(time_offset * 0.8f + pos.x) * 0.2f;
-    float height_factor = 1.0f - (pos.y / 10.0f);
-
-    float intensity = (base + flicker + height_factor) / 2.0f;
-    intensity = fmax(0.0f, fmin(1.0f, intensity));
-
-    // Using BGR format: 0x00BBGGRR (Orange = RGB(255,69,0) -> BGR(0,69,255))
-    RGBColor orange = 0x0045FF;  // Orange: R=255, G=69, B=0 -> 0x00|00|45|FF
-    RGBColor yellow = 0x00FFFF;  // Yellow: R=255, G=255, B=0 -> 0x00|00|FF|FF
-
-    return LerpColor(orange, yellow, intensity);
-}
-
-RGBColor SpatialEffects::CalculatePlasmaColor(Vector3D pos, float time_offset)
-{
-    float v1 = sin((pos.x + time_offset) * 0.1f);
-    float v2 = sin((pos.y + time_offset) * 0.1f);
-    float v3 = sin((pos.z + time_offset) * 0.1f);
-
-    float value = (v1 + v2 + v3 + 3.0f) / 6.0f;
-
-    return LerpColor(params.color_start, params.color_end, value);
-}
-
-RGBColor SpatialEffects::CalculateRippleColor(Vector3D pos, float time_offset)
-{
-    float dist = Distance3D(pos, params.origin);
-
-    float ripple1 = sin((dist * params.scale - time_offset) / 5.0f);
-    float ripple2 = sin((dist * params.scale - time_offset * 1.5f) / 7.0f);
-
-    float intensity = (ripple1 + ripple2 + 2.0f) / 4.0f;
-
-    return LerpColor(params.color_start, params.color_end, intensity);
-}
-
-RGBColor SpatialEffects::CalculateSpiralColor(Vector3D pos, float time_offset)
-{
-    float angle = atan2(pos.y - params.origin.y, pos.x - params.origin.x);
-    float dist = Distance3D(pos, params.origin);
-
-    float spiral = angle + (dist * params.scale / 5.0f) - (time_offset / 10.0f);
-    float value = (sin(spiral * 2.0f * M_PI) + 1.0f) / 2.0f;
-
-    return LerpColor(params.color_start, params.color_end, value);
-}
-
-RGBColor SpatialEffects::LerpColor(RGBColor a, RGBColor b, float t)
-{
-    t = fmax(0.0f, fmin(1.0f, t));
-
-    // OpenRGB uses BGR format: 0x00BBGGRR
-    unsigned char r_a = a & 0xFF;          // Red is in bits 0-7
-    unsigned char g_a = (a >> 8) & 0xFF;   // Green is in bits 8-15
-    unsigned char b_a = (a >> 16) & 0xFF;  // Blue is in bits 16-23
-
-    unsigned char r_b = b & 0xFF;          // Red is in bits 0-7
-    unsigned char g_b = (b >> 8) & 0xFF;   // Green is in bits 8-15
-    unsigned char b_b = (b >> 16) & 0xFF;  // Blue is in bits 16-23
-
-    unsigned char r = (unsigned char)(r_a + (r_b - r_a) * t);
-    unsigned char g = (unsigned char)(g_a + (g_b - g_a) * t);
-    unsigned char b_out = (unsigned char)(b_a + (b_b - b_a) * t);
-
-    float brightness_scale = params.brightness / 100.0f;
-    r = (unsigned char)(r * brightness_scale);
-    g = (unsigned char)(g * brightness_scale);
-    b_out = (unsigned char)(b_out * brightness_scale);
-
-    // Return in BGR format: 0x00BBGGRR
-    return (b_out << 16) | (g << 8) | r;
-}
-
-float SpatialEffects::Distance3D(Vector3D a, Vector3D b)
-{
-    float dx = a.x - b.x;
-    float dy = a.y - b.y;
-    float dz = a.z - b.z;
-
-    return sqrt(dx * dx + dy * dy + dz * dz);
-}
 
 Vector3D SpatialEffects::RotateVector(Vector3D vec, Rotation3D rot)
 {
@@ -403,6 +214,7 @@ Vector3D SpatialEffects::RotateVector(Vector3D vec, Rotation3D rot)
 
     Vector3D result = vec;
 
+    // Rotate around X axis
     float cos_x = cos(rad_x);
     float sin_x = sin(rad_x);
     float y = result.y * cos_x - result.z * sin_x;
@@ -410,6 +222,7 @@ Vector3D SpatialEffects::RotateVector(Vector3D vec, Rotation3D rot)
     result.y = y;
     result.z = z;
 
+    // Rotate around Y axis
     float cos_y = cos(rad_y);
     float sin_y = sin(rad_y);
     float x = result.x * cos_y + result.z * sin_y;
@@ -417,6 +230,7 @@ Vector3D SpatialEffects::RotateVector(Vector3D vec, Rotation3D rot)
     result.x = x;
     result.z = z;
 
+    // Rotate around Z axis
     float cos_z = cos(rad_z);
     float sin_z = sin(rad_z);
     x = result.x * cos_z - result.y * sin_z;
@@ -437,293 +251,4 @@ Vector3D SpatialEffects::TransformToWorld(Vector3D local_pos, Transform3D transf
     world.z = rotated.z * transform.scale.z + transform.position.z;
 
     return world;
-}
-
-RGBColor SpatialEffects::CalculateOrbitColor(Vector3D pos, float time_offset)
-{
-    float angle = atan2(pos.z, pos.x) + time_offset / 20.0f;
-    float radius = sqrt(pos.x * pos.x + pos.z * pos.z);
-
-    float orbit_x = cos(angle) * radius;
-    float orbit_z = sin(angle) * radius;
-
-    float dist = sqrt((pos.x - orbit_x) * (pos.x - orbit_x) + (pos.z - orbit_z) * (pos.z - orbit_z));
-    float brightness = fmax(0.0f, 1.0f - dist / 5.0f);
-
-    return LerpColor(0x000000, params.color_start, brightness);
-}
-
-RGBColor SpatialEffects::CalculateSpherePulseColor(Vector3D pos, float time_offset)
-{
-    float dist = Distance3D(pos, params.origin);
-    float pulse_radius = fmod(time_offset / 5.0f, 50.0f);
-
-    float diff = fabs(dist - pulse_radius);
-    float brightness = fmax(0.0f, 1.0f - diff / 3.0f);
-
-    if(params.use_gradient)
-    {
-        float grad = (sin(time_offset / 20.0f) + 1.0f) / 2.0f;
-        return LerpColor(params.color_start, params.color_end, grad * brightness);
-    }
-
-    return LerpColor(0x000000, params.color_start, brightness);
-}
-
-RGBColor SpatialEffects::CalculateCubeRotateColor(Vector3D pos, float time_offset)
-{
-    float angle = time_offset / 30.0f;
-
-    float rotated_x = pos.x * cos(angle) - pos.z * sin(angle);
-    float rotated_z = pos.x * sin(angle) + pos.z * cos(angle);
-
-    float max_abs = fmax(fmax(fabs(rotated_x), fabs(pos.y)), fabs(rotated_z));
-
-    if(max_abs > 20.0f && max_abs < 25.0f)
-    {
-        return params.color_start;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateMeteorColor(Vector3D pos, float time_offset)
-{
-    float meteor_y = 50.0f - fmod(time_offset / 3.0f, 100.0f);
-    float meteor_x = time_offset / 5.0f;
-
-    float dist_x = pos.x - meteor_x;
-    float dist_y = pos.y - meteor_y;
-    float dist_z = pos.z;
-
-    float trail_length = 15.0f;
-    float dist = sqrt(dist_x * dist_x + dist_z * dist_z);
-
-    if(dist_y > 0 && dist_y < trail_length && dist < 3.0f)
-    {
-        float brightness = 1.0f - (dist_y / trail_length);
-        return LerpColor(params.color_end, params.color_start, brightness);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateDNAHelixColor(Vector3D pos, float time_offset)
-{
-    float y_offset = time_offset / 10.0f;
-
-    float angle1 = (pos.y + y_offset) / 5.0f;
-    float helix1_x = cos(angle1) * 10.0f;
-    float helix1_z = sin(angle1) * 10.0f;
-
-    float angle2 = angle1 + M_PI;
-    float helix2_x = cos(angle2) * 10.0f;
-    float helix2_z = sin(angle2) * 10.0f;
-
-    float dist1 = sqrt((pos.x - helix1_x) * (pos.x - helix1_x) + (pos.z - helix1_z) * (pos.z - helix1_z));
-    float dist2 = sqrt((pos.x - helix2_x) * (pos.x - helix2_x) + (pos.z - helix2_z) * (pos.z - helix2_z));
-
-    if(dist1 < 3.0f)
-    {
-        return params.color_start;
-    }
-    else if(dist2 < 3.0f)
-    {
-        return params.color_end;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateRoomSweepColor(Vector3D pos, float time_offset)
-{
-    float sweep_pos = fmod(time_offset / 5.0f, 100.0f) - 50.0f;
-
-    float dist = fabs(pos.x - sweep_pos);
-
-    if(dist < 5.0f)
-    {
-        float brightness = 1.0f - (dist / 5.0f);
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateCornersColor(Vector3D pos, float time_offset)
-{
-    int corner = (int)(time_offset / 30.0f) % 8;
-
-    float target_x = (corner & 1) ? 25.0f : -25.0f;
-    float target_y = (corner & 2) ? 25.0f : -25.0f;
-    float target_z = (corner & 4) ? 25.0f : -25.0f;
-
-    float dist = sqrt(
-        (pos.x - target_x) * (pos.x - target_x) +
-        (pos.y - target_y) * (pos.y - target_y) +
-        (pos.z - target_z) * (pos.z - target_z)
-    );
-
-    if(dist < 10.0f)
-    {
-        float brightness = 1.0f - (dist / 10.0f);
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateVerticalBarsColor(Vector3D pos, float time_offset)
-{
-    float offset = time_offset / 10.0f;
-    float bar_width = 5.0f;
-    float spacing = 15.0f;
-
-    float x_mod = fmod(pos.x + offset, spacing);
-
-    if(x_mod < bar_width)
-    {
-        float t = x_mod / bar_width;
-        return LerpColor(params.color_start, params.color_end, t);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateBreathingSphereColor(Vector3D pos, float time_offset)
-{
-    float breath = (sin(time_offset / 30.0f) + 1.0f) / 2.0f;
-    float radius = 15.0f + breath * 15.0f;
-
-    float dist = Distance3D(pos, params.origin);
-
-    if(fabs(dist - radius) < 3.0f)
-    {
-        float brightness = 1.0f - fabs(dist - radius) / 3.0f;
-        return LerpColor(params.color_start, params.color_end, breath * brightness);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateExplosionColor(Vector3D pos, float time_offset)
-{
-    float dist = Distance3D(pos, params.origin);
-    float explosion_radius = time_offset / 3.0f;
-
-    float diff = fabs(dist - explosion_radius);
-
-    if(diff < 5.0f)
-    {
-        float brightness = 1.0f - (diff / 5.0f);
-        float fade = fmax(0.0f, 1.0f - (explosion_radius / 50.0f));
-        brightness *= fade;
-
-        return LerpColor(params.color_end, params.color_start, brightness);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateWipeTopBottomColor(Vector3D pos, float time_offset)
-{
-    float wipe_pos = 50.0f - (time_offset / 3.0f);
-
-    float diff = pos.y - wipe_pos;
-
-    if(diff > 0 && diff < 8.0f)
-    {
-        float brightness = 1.0f - (diff / 8.0f);
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    if(diff >= 8.0f)
-    {
-        return params.color_end;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateWipeLeftRightColor(Vector3D pos, float time_offset)
-{
-    float wipe_pos = -50.0f + (time_offset / 3.0f);
-
-    float diff = wipe_pos - pos.x;
-
-    if(diff > 0 && diff < 8.0f)
-    {
-        float brightness = 1.0f - (diff / 8.0f);
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    if(diff >= 8.0f)
-    {
-        return params.color_end;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateWipeFrontBackColor(Vector3D pos, float time_offset)
-{
-    float wipe_pos = -50.0f + (time_offset / 3.0f);
-
-    float diff = wipe_pos - pos.z;
-
-    if(diff > 0 && diff < 8.0f)
-    {
-        float brightness = 1.0f - (diff / 8.0f);
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    if(diff >= 8.0f)
-    {
-        return params.color_end;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateLEDSparkleColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
-{
-    unsigned int seed = led_idx + (unsigned int)(time_offset / 10.0f);
-    srand(seed);
-
-    if((rand() % 100) < 5)
-    {
-        return params.color_start;
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateLEDChaseColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
-{
-    unsigned int chase_pos = (unsigned int)(time_offset / 2.0f) % 10;
-
-    if(led_idx % 10 == chase_pos)
-    {
-        return params.color_start;
-    }
-    else if(led_idx % 10 == (chase_pos + 9) % 10)
-    {
-        return LerpColor(0x000000, params.color_start, 0.3f);
-    }
-
-    return 0x000000;
-}
-
-RGBColor SpatialEffects::CalculateLEDTwinkleColor(Vector3D /*pos*/, float time_offset, unsigned int led_idx)
-{
-    float led_phase = (led_idx * 0.37f);
-    float twinkle = (sin((time_offset / 20.0f) + led_phase) + 1.0f) / 2.0f;
-
-    if(twinkle > 0.7f)
-    {
-        float brightness = (twinkle - 0.7f) / 0.3f;
-        return LerpColor(0x000000, params.color_start, brightness);
-    }
-
-    return 0x000000;
 }
