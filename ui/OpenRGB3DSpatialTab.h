@@ -29,13 +29,18 @@
 #include <QScrollArea>
 
 #include "ResourceManagerInterface.h"
-#include "SpatialEffects.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
 #include "VirtualController3D.h"
+#include "SpatialEffectTypes.h"
 #include "SpatialEffect3D.h"
-#include "Wave3D.h"
-#include "Plasma3D.h"
+#include "Effects3D/Wave3D/Wave3D.h"
+#include "Effects3D/Wipe3D/Wipe3D.h"
+#include "Effects3D/Plasma3D/Plasma3D.h"
+#include "Effects3D/Spiral3D/Spiral3D.h"
+#include "Effects3D/DNAHelix3D/DNAHelix3D.h"
+#include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
+#include "Effects3D/Explosion3D/Explosion3D.h"
 
 namespace Ui
 {
@@ -77,6 +82,7 @@ private slots:
     void on_edit_custom_controller_clicked();
 
     void on_effect_updated();
+    void on_effect_timer_timeout();
 
 private:
     void SetupUI();
@@ -95,12 +101,12 @@ private:
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
     void SetupCustomEffectUI(int effect_type);
+    void SetupEffectSignals(SpatialEffect3D* effect, int effect_type);
     void ClearCustomEffectUI();
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
 
-    SpatialEffects*             effects;
     LEDViewport3D*              viewport;
 
     std::vector<ControllerTransform*> controller_transforms;
@@ -135,12 +141,20 @@ private:
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;
     Wave3D*                     wave3d_effect;
+    Wipe3D*                     wipe3d_effect;
     Plasma3D*                   plasma3d_effect;
+    Spiral3D*                   spiral3d_effect;
+    Explosion3D*                explosion3d_effect;
+    BreathingSphere3D*          breathingsphere3d_effect;
+    DNAHelix3D*                 dnahelix3d_effect;
 
     QComboBox*                  layout_profiles_combo;
     QCheckBox*                  auto_load_checkbox;
     QTimer*                     auto_load_timer;
+    QTimer*                     effect_timer;
     bool                        first_load;
+    bool                        effect_running;
+    float                       effect_time;
 
     std::vector<VirtualController3D*> virtual_controllers;
 };

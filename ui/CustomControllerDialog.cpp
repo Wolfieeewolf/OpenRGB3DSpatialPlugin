@@ -162,12 +162,12 @@ void CustomControllerDialog::SetupUI()
     UpdateGridDisplay();
 }
 
-void CustomControllerDialog::on_controller_selected(int /*index*/)
+void CustomControllerDialog::on_controller_selected(int)
 {
     UpdateItemCombo();
 }
 
-void CustomControllerDialog::on_granularity_changed(int /*index*/)
+void CustomControllerDialog::on_granularity_changed(int)
 {
     UpdateItemCombo();
 }

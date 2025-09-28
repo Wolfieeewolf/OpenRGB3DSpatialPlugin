@@ -18,6 +18,11 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QScrollArea>
+#include <QColorDialog>
 #include "../SpatialEffect3D.h"
 
 class Plasma3D : public SpatialEffect3D
@@ -34,30 +39,51 @@ public:
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
+    RGBColor CalculateColor(float x, float y, float z, float time) override;
 
 private slots:
     void OnPlasmaParameterChanged();
+    void OnAddColorClicked();
+    void OnRemoveColorClicked();
+    void OnColorButtonClicked();
+    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
     | Plasma-specific controls                                 |
     \*---------------------------------------------------------*/
-    QSlider*        complexity_slider;      // Plasma complexity/detail
-    QSlider*        time_scale_slider;      // Time scaling factor
-    QSlider*        noise_scale_slider;     // Noise scale
     QComboBox*      pattern_combo;          // Pattern type
-    QCheckBox*      smooth_check;           // Smooth interpolation
-    QSlider*        color_shift_slider;     // Color shifting
+    QSlider*        speed_slider;           // Effect speed
+    QSlider*        brightness_slider;      // Effect brightness
+    QSlider*        frequency_slider;       // Plasma frequency
+    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
+
+    /*---------------------------------------------------------*\
+    | Color controls                                           |
+    \*---------------------------------------------------------*/
+    QWidget*        color_controls_widget;
+    QHBoxLayout*    color_controls_layout;
+    QPushButton*    add_color_button;
+    QPushButton*    remove_color_button;
+    std::vector<QPushButton*> color_buttons;
+    std::vector<RGBColor> colors;
 
     /*---------------------------------------------------------*\
     | Current plasma parameters                                |
     \*---------------------------------------------------------*/
-    float           complexity;
-    float           time_scale;
-    float           noise_scale;
     int             pattern_type;           // 0=Classic, 1=Swirl, 2=Ripple, 3=Organic
-    bool            smooth_interpolation;
-    float           color_shift;
+    unsigned int    frequency;              // Plasma frequency
+    bool            rainbow_mode;           // Rainbow mode enabled
+    float           progress;               // Animation progress
+
+    /*---------------------------------------------------------*\
+    | Helper methods                                           |
+    \*---------------------------------------------------------*/
+    void SetupColorControls(QWidget* parent);
+    void CreateColorButton(RGBColor color);
+    void RemoveLastColorButton();
+    RGBColor GetRainbowColor(float hue);
+    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

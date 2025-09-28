@@ -126,28 +126,35 @@ HEADERS +=                                                                      
     OpenRGB3DSpatialPlugin.h                                                                    \
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
-    SpatialEffects.h                                                                            \
-    SpatialEffectCalculator.h                                                                   \
+    SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
     VirtualController3D.h                                                                       \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
-    Effects3D/Wave3D.h                                                                          \
-    Effects3D/Plasma3D.h                                                                        \
+    Effects3D/Wave3D/Wave3D.h                                                                   \
+    Effects3D/Wipe3D/Wipe3D.h                                                                   \
+    Effects3D/Plasma3D/Plasma3D.h                                                               \
+    Effects3D/Spiral3D/Spiral3D.h                                                               \
+    Effects3D/Explosion3D/Explosion3D.h                                                         \
+    Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
+    Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
-    SpatialEffects.cpp                                                                          \
-    SpatialEffectCalculator.cpp                                                                 \
     SpatialEffect3D.cpp                                                                         \
     VirtualController3D.cpp                                                                     \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
-    Effects3D/Wave3D.cpp                                                                        \
-    Effects3D/Plasma3D.cpp                                                                      \
+    Effects3D/Wave3D/Wave3D.cpp                                                                 \
+    Effects3D/Wipe3D/Wipe3D.cpp                                                                 \
+    Effects3D/Plasma3D/Plasma3D.cpp                                                             \
+    Effects3D/Spiral3D/Spiral3D.cpp                                                             \
+    Effects3D/Explosion3D/Explosion3D.cpp                                                       \
+    Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
+    Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

@@ -1110,7 +1110,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     last_mouse_pos = event->pos();
 }
 
-void LEDViewport3D::mouseReleaseEvent(QMouseEvent* /*event*/)
+void LEDViewport3D::mouseReleaseEvent(QMouseEvent*)
 {
     dragging_rotate = false;
     dragging_pan = false;

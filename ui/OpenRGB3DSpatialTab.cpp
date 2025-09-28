@@ -29,24 +29,25 @@
 #include <QInputDialog>
 #include <QFileDialog>
 #include <filesystem>
+#include <cmath>
 #include "SettingsManager.h"
 #include <nlohmann/json.hpp>
-
-using namespace std;
-using json = nlohmann::json;
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
     resource_manager(rm),
     first_load(true)
 {
-    effects = new SpatialEffects();
-    connect(effects, SIGNAL(EffectUpdated()), this, SLOT(on_effect_updated()));
 
     custom_effect_container = nullptr;
     current_effect_ui = nullptr;
     wave3d_effect = nullptr;
+    wipe3d_effect = nullptr;
     plasma3d_effect = nullptr;
+    spiral3d_effect = nullptr;
+    explosion3d_effect = nullptr;
+    breathingsphere3d_effect = nullptr;
+    dnahelix3d_effect = nullptr;
 
     SetupUI();
     LoadDevices();
@@ -56,6 +57,11 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     auto_load_timer->setSingleShot(true);
     connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
     auto_load_timer->start(500);
+
+    effect_timer = new QTimer(this);
+    connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
+    effect_running = false;
+    effect_time = 0.0f;
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
@@ -66,12 +72,12 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         delete auto_load_timer;
     }
 
-    if(effects->IsRunning())
+    if(effect_timer)
     {
-        effects->StopEffect();
+        effect_timer->stop();
+        delete effect_timer;
     }
 
-    delete effects;
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
@@ -215,7 +221,6 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_controller_scale_changed(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
 
-    effects->SetControllerTransforms(&controller_transforms);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -223,31 +228,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     QHBoxLayout* effect_type_layout = new QHBoxLayout();
     effect_type_layout->addWidget(new QLabel("Effect:"));
     effect_type_combo = new QComboBox();
-    effect_type_combo->addItem("Wave X");
-    effect_type_combo->addItem("Wave Y");
-    effect_type_combo->addItem("Wave Z");
-    effect_type_combo->addItem("Radial Wave");
-    effect_type_combo->addItem("Rain");
-    effect_type_combo->addItem("Fire");
+    effect_type_combo->addItem("Wave");
+    effect_type_combo->addItem("Wipe");
     effect_type_combo->addItem("Plasma");
-    effect_type_combo->addItem("Ripple");
     effect_type_combo->addItem("Spiral");
-    effect_type_combo->addItem("Orbit");
-    effect_type_combo->addItem("Sphere Pulse");
-    effect_type_combo->addItem("Cube Rotate");
-    effect_type_combo->addItem("Meteor");
     effect_type_combo->addItem("DNA Helix");
-    effect_type_combo->addItem("Room Sweep");
-    effect_type_combo->addItem("Corners");
-    effect_type_combo->addItem("Vertical Bars");
     effect_type_combo->addItem("Breathing Sphere");
     effect_type_combo->addItem("Explosion");
-    effect_type_combo->addItem("Wipe Top to Bottom");
-    effect_type_combo->addItem("Wipe Left to Right");
-    effect_type_combo->addItem("Wipe Front to Back");
-    effect_type_combo->addItem("LED Sparkle");
-    effect_type_combo->addItem("LED Chase");
-    effect_type_combo->addItem("LED Twinkle");
     effect_type_layout->addWidget(effect_type_combo);
     connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
     effect_layout->addLayout(effect_type_layout);
@@ -605,21 +592,19 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
 
-    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
     bool auto_load_enabled = false;
     if(settings.contains("AutoLoad"))
     {
         auto_load_enabled = settings["AutoLoad"];
     }
     auto_load_checkbox->setChecked(auto_load_enabled);
-    LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting loaded: %s", auto_load_enabled ? "enabled" : "disabled");
 
     connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
         settings["AutoLoad"] = checked;
         resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
         resource_manager->GetSettingsManager()->SaveSettings();
-        LOG_INFO("[OpenRGB 3D Spatial] Auto-load setting changed to: %s", checked ? "enabled" : "disabled");
     });
     layout_layout->addWidget(auto_load_checkbox);
 
@@ -666,7 +651,6 @@ void OpenRGB3DSpatialTab::LoadDevices()
 
     UpdateAvailableControllersList();
 
-    effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
 }
 
@@ -697,6 +681,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Device list updated");
     LoadDevices();
 }
 
@@ -765,53 +750,67 @@ void OpenRGB3DSpatialTab::on_controller_scale_changed(int index, float x, float 
 
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Starting spatial effect");
+
     if(!current_effect_ui)
     {
-        LOG_ERROR("[OpenRGB 3D Spatial] No effect UI available");
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] No effect selected");
         return;
     }
 
-    SpatialEffectParams params;
-    params.type = (SpatialEffectType)effect_type_combo->currentIndex();
+    /*---------------------------------------------------------*\
+    | Put all controllers in direct control mode               |
+    \*---------------------------------------------------------*/
+    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+    {
+        ControllerTransform* transform = controller_transforms[ctrl_idx];
+        if(!transform || !transform->controller)
+        {
+            continue;
+        }
+
+        RGBController* controller = transform->controller;
+        if(!controller)
+        {
+            continue;
+        }
+
+        controller->SetCustomMode();
+    }
 
     /*---------------------------------------------------------*\
-    | Set default 3D spatial parameters                       |
+    | Start the effect                                         |
     \*---------------------------------------------------------*/
-    params.scale_3d = {1.0f, 1.0f, 1.0f};
-    params.origin = {0.0f, 0.0f, 0.0f};
-    params.rotation = {0.0f, 0.0f, 0.0f};
-    params.direction = {1.0f, 0.0f, 0.0f};
-    params.thickness = 1.0f;
-    params.intensity = 1.0f;
-    params.falloff = 1.0f;
-    params.num_arms = 4;
-    params.frequency = 10;
-    params.reverse = false;
-    params.mirror_x = false;
-    params.mirror_y = false;
-    params.mirror_z = false;
+    effect_running = true;
+    effect_time = 0.0f;
 
     /*---------------------------------------------------------*\
-    | Get all parameters from the effect's custom UI          |
+    | Set timer interval based on FPS (default 30 FPS = 33ms) |
     \*---------------------------------------------------------*/
-    current_effect_ui->UpdateParams(params);
+    effect_timer->start(33);
 
-    effects->StartEffect(params);
-
+    /*---------------------------------------------------------*\
+    | Update UI                                                |
+    \*---------------------------------------------------------*/
     start_effect_button->setEnabled(false);
     stop_effect_button->setEnabled(true);
-
-    LOG_VERBOSE("[OpenRGB 3D Spatial] Started effect: %s (Speed: %u, Brightness: %u)", effect_type_combo->currentText().toStdString().c_str(), params.speed, params.brightness);
 }
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 {
-    effects->StopEffect();
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Stopping spatial effect");
 
+    /*---------------------------------------------------------*\
+    | Stop the effect                                          |
+    \*---------------------------------------------------------*/
+    effect_running = false;
+    effect_timer->stop();
+
+    /*---------------------------------------------------------*\
+    | Update UI                                                |
+    \*---------------------------------------------------------*/
     start_effect_button->setEnabled(true);
     stop_effect_button->setEnabled(false);
-
-    LOG_VERBOSE("[OpenRGB 3D Spatial] Stopped effect");
 }
 
 void OpenRGB3DSpatialTab::on_effect_updated()
@@ -819,7 +818,77 @@ void OpenRGB3DSpatialTab::on_effect_updated()
     viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::on_granularity_changed(int /*index*/)
+void OpenRGB3DSpatialTab::on_effect_timer_timeout()
+{
+    if(!effect_running || !current_effect_ui)
+    {
+        return;
+    }
+
+    /*---------------------------------------------------------*\
+    | Update effect time                                       |
+    \*---------------------------------------------------------*/
+    effect_time += 0.033f; // ~30 FPS
+
+    /*---------------------------------------------------------*\
+    | Apply effect to all controller LEDs                     |
+    \*---------------------------------------------------------*/
+    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+    {
+        ControllerTransform* transform = controller_transforms[ctrl_idx];
+        if(!transform || !transform->controller)
+        {
+            continue;
+        }
+
+        RGBController* controller = transform->controller;
+        if(!controller)
+        {
+            continue;
+        }
+
+        /*---------------------------------------------------------*\
+        | Calculate colors for each LED                            |
+        \*---------------------------------------------------------*/
+        for(unsigned int led_idx = 0; led_idx < controller->leds.size(); led_idx++)
+        {
+            /*---------------------------------------------------------*\
+            | Get LED 3D position relative to controller              |
+            \*---------------------------------------------------------*/
+            // Create a more logical 3D grid for effects
+            // This spreads LEDs evenly in 3D space for proper axis effects
+            int grid_size = (int)ceil(cbrt(controller->leds.size())); // Cube root for 3D grid
+            float x = (led_idx % grid_size) - (grid_size / 2.0f);
+            float y = ((led_idx / grid_size) % grid_size) - (grid_size / 2.0f);
+            float z = (led_idx / (grid_size * grid_size)) - (grid_size / 2.0f);
+
+            /*---------------------------------------------------------*\
+            | Apply controller transform                               |
+            \*---------------------------------------------------------*/
+            x += transform->transform.position.x;
+            y += transform->transform.position.y;
+            z += transform->transform.position.z;
+
+            /*---------------------------------------------------------*\
+            | Calculate effect color                                   |
+            \*---------------------------------------------------------*/
+            RGBColor color = current_effect_ui->CalculateColor(x, y, z, effect_time);
+            controller->colors[led_idx] = color;
+        }
+
+        /*---------------------------------------------------------*\
+        | Update the controller                                    |
+        \*---------------------------------------------------------*/
+        controller->UpdateLEDs();
+    }
+
+    /*---------------------------------------------------------*\
+    | Update the 3D viewport                                   |
+    \*---------------------------------------------------------*/
+    viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::on_granularity_changed(int)
 {
     UpdateAvailableItemCombo();
 }
@@ -914,13 +983,11 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     {
         if(item_row >= (int)virtual_controllers.size())
         {
-            LOG_ERROR("[OpenRGB 3D Spatial] Invalid virtual controller index: %d (max: %d)", item_row, (int)virtual_controllers.size());
             return;
         }
 
         VirtualController3D* virtual_ctrl = virtual_controllers[item_row];
 
-        LOG_INFO("[OpenRGB 3D Spatial] Adding virtual controller '%s' to scene", virtual_ctrl->GetName().c_str());
 
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = nullptr;
@@ -928,9 +995,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
-        LOG_INFO("[OpenRGB 3D Spatial] Generating LED positions for virtual controller");
         ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
-        LOG_INFO("[OpenRGB 3D Spatial] Generated %d LED positions", (int)ctrl_transform->led_positions.size());
 
         int hue = (controller_transforms.size() * 137) % 360;
         QColor color = QColor::fromHsv(hue, 200, 255);
@@ -944,8 +1009,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         list_item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
         controller_list->addItem(list_item);
 
-        effects->SetControllerTransforms(&controller_transforms);
-        viewport->SetControllerTransforms(&controller_transforms);
+            viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
@@ -1027,13 +1091,11 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
     controller_list->addItem(item);
 
-    effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
 
-    LOG_VERBOSE("[OpenRGB 3D Spatial] Added %s (%u LEDs) to 3D view", name.toStdString().c_str(), ctrl_transform->led_positions.size());
 }
 
 void OpenRGB3DSpatialTab::on_remove_controller_clicked()
@@ -1049,7 +1111,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
 
     controller_list->takeItem(selected_row);
 
-    effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
@@ -1066,7 +1127,6 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
 
     controller_list->clear();
 
-    effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
@@ -1156,7 +1216,7 @@ void OpenRGB3DSpatialTab::on_delete_layout_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_layout_profile_changed(int /*index*/)
+void OpenRGB3DSpatialTab::on_layout_profile_changed(int)
 {
     SaveCurrentLayoutName();
 }
@@ -1177,11 +1237,6 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 
         virtual_controllers.push_back(virtual_ctrl);
 
-        LOG_INFO("[OpenRGB 3D Spatial] Created custom controller: %s (%dx%dx%d)",
-                 virtual_ctrl->GetName().c_str(),
-                 virtual_ctrl->GetWidth(),
-                 virtual_ctrl->GetHeight(),
-                 virtual_ctrl->GetDepth());
 
         available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
 
@@ -1227,7 +1282,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         return;
     }
 
-    json export_data = ctrl->ToJson();
+    nlohmann::json export_data = ctrl->ToJson();
 
     std::ofstream file(filename.toStdString());
     if(file.is_open())
@@ -1237,8 +1292,6 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         QMessageBox::information(this, "Export Successful",
                                 QString("Custom controller '%1' exported successfully to:\n%2")
                                 .arg(selected).arg(filename));
-        LOG_INFO("[OpenRGB 3D Spatial] Exported custom controller '%s' to %s",
-                 ctrl->GetName().c_str(), filename.toStdString().c_str());
     }
     else
     {
@@ -1267,7 +1320,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
     try
     {
-        json import_data;
+        nlohmann::json import_data;
         file >> import_data;
         file.close();
 
@@ -1292,11 +1345,14 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                     }
                     else
                     {
-                        std::vector<VirtualController3D*>::iterator it = std::find(virtual_controllers.begin(), virtual_controllers.end(), existing);
-                        if(it != virtual_controllers.end())
+                        for(unsigned int i = 0; i < virtual_controllers.size(); i++)
                         {
-                            delete *it;
-                            virtual_controllers.erase(it);
+                            if(virtual_controllers[i] == existing)
+                            {
+                                delete virtual_controllers[i];
+                                virtual_controllers.erase(virtual_controllers.begin() + i);
+                                break;
+                            }
                         }
                         break;
                     }
@@ -1307,11 +1363,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
             SaveCustomControllers();
             UpdateAvailableControllersList();
 
-            LOG_INFO("[OpenRGB 3D Spatial] Imported custom controller: %s (%dx%dx%d)",
-                     virtual_ctrl->GetName().c_str(),
-                     virtual_ctrl->GetWidth(),
-                     virtual_ctrl->GetHeight(),
-                     virtual_ctrl->GetDepth());
 
             QMessageBox::information(this, "Import Successful",
                                     QString("Custom controller '%1' imported successfully!\n\n"
@@ -1335,7 +1386,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
     {
         QMessageBox::critical(this, "Import Failed",
                             QString("Failed to parse custom controller file:\n\n%1").arg(e.what()));
-        LOG_ERROR("[OpenRGB 3D Spatial] Failed to import custom controller: %s", e.what());
     }
 }
 
@@ -1400,7 +1450,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             if(filesystem::exists(old_filepath))
             {
                 filesystem::remove(old_filepath);
-                LOG_INFO("[OpenRGB 3D Spatial] Removed old custom controller file: %s", old_filepath.c_str());
             }
         }
 
@@ -1416,11 +1465,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         SaveCustomControllers();
         UpdateAvailableControllersList();
 
-        LOG_INFO("[OpenRGB 3D Spatial] Edited custom controller: %s (%dx%dx%d)",
-                 virtual_controllers[virtual_idx]->GetName().c_str(),
-                 virtual_controllers[virtual_idx]->GetWidth(),
-                 virtual_controllers[virtual_idx]->GetHeight(),
-                 virtual_controllers[virtual_idx]->GetDepth());
 
         QMessageBox::information(this, "Custom Controller Updated",
                                 QString("Custom controller '%1' updated successfully!")
@@ -1430,11 +1474,13 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
 
 void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Saving layout: %s", filename.c_str());
+
     QFile file(QString::fromStdString(filename));
 
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        LOG_ERROR("[OpenRGB 3D Spatial] Failed to save layout to %s", filename.c_str());
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to save layout file: %s", filename.c_str());
         return;
     }
 
@@ -1476,16 +1522,17 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 
     file.close();
 
-    LOG_INFO("[OpenRGB 3D Spatial] Saved layout to %s", filename.c_str());
 }
 
 void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Loading layout: %s", filename.c_str());
+
     QFile file(QString::fromStdString(filename));
 
     if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        LOG_ERROR("[OpenRGB 3D Spatial] Failed to load layout from %s", filename.c_str());
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to open layout file: %s", filename.c_str());
         return;
     }
 
@@ -1494,7 +1541,6 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     QString header = in.readLine();
     if(header != "OpenRGB3DSpatialLayout")
     {
-        LOG_ERROR("[OpenRGB 3D Spatial] Invalid layout file format");
         file.close();
         return;
     }
@@ -1529,8 +1575,6 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
             if(!controller)
             {
-                LOG_WARNING("[OpenRGB 3D Spatial] Controller '%s' at '%s' not found, skipping",
-                           ctrl_name.toStdString().c_str(), ctrl_location.toStdString().c_str());
                 for(int j = 0; j < led_count; j++)
                 {
                     in.readLine();
@@ -1567,13 +1611,9 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
             if(virtual_ctrl)
             {
                 ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
-                LOG_INFO("[OpenRGB 3D Spatial] Restored virtual controller '%s' with %d LEDs",
-                         virtual_name.toStdString().c_str(), (int)ctrl_transform->led_positions.size());
             }
             else
             {
-                LOG_WARNING("[OpenRGB 3D Spatial] Virtual controller '%s' not found, creating placeholder",
-                           virtual_name.toStdString().c_str());
             }
 
             for(int j = 0; j < led_count; j++)
@@ -1657,13 +1697,11 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
     file.close();
 
-    effects->SetControllerTransforms(&controller_transforms);
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
 
-    LOG_INFO("[OpenRGB 3D Spatial] Loaded layout from %s (%d items)", filename.c_str(), (int)controller_transforms.size());
 }
 
 std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
@@ -1701,7 +1739,7 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
         layout_profiles_combo->addItem(base_name);
     }
 
-    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
     QString saved_profile = "";
     if(settings.contains("SelectedProfile"))
     {
@@ -1730,7 +1768,7 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
 
 void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
 {
-    json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
     settings["SelectedProfile"] = layout_profiles_combo->currentText().toStdString();
     resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
     resource_manager->GetSettingsManager()->SaveSettings();
@@ -1738,7 +1776,6 @@ void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
 
 void OpenRGB3DSpatialTab::TryAutoLoadLayout()
 {
-    LOG_INFO("[OpenRGB 3D Spatial] TryAutoLoadLayout called, first_load=%s", first_load ? "true" : "false");
 
     if(!first_load)
     {
@@ -1748,38 +1785,30 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     first_load = false;
 
     bool is_checked = auto_load_checkbox->isChecked();
-    LOG_INFO("[OpenRGB 3D Spatial] Auto-load checkbox is: %s", is_checked ? "checked" : "unchecked");
 
     if(is_checked)
     {
         QString profile_name = layout_profiles_combo->currentText();
-        LOG_INFO("[OpenRGB 3D Spatial] Selected profile name: '%s'", profile_name.toStdString().c_str());
 
         if(!profile_name.isEmpty())
         {
             std::string layout_path = GetLayoutPath(profile_name.toStdString());
             QFileInfo check_file(QString::fromStdString(layout_path));
-            LOG_INFO("[OpenRGB 3D Spatial] Checking for layout file: %s", layout_path.c_str());
 
             if(check_file.exists())
             {
                 LoadLayout(layout_path);
-                LOG_INFO("[OpenRGB 3D Spatial] Auto-loaded profile '%s' on startup", profile_name.toStdString().c_str());
             }
             else
             {
-                LOG_WARNING("[OpenRGB 3D Spatial] Auto-load profile '%s' not found at: %s",
-                           profile_name.toStdString().c_str(), layout_path.c_str());
             }
         }
         else
         {
-            LOG_WARNING("[OpenRGB 3D Spatial] Auto-load enabled but no profile selected");
         }
     }
     else
     {
-        LOG_INFO("[OpenRGB 3D Spatial] Auto-load is disabled, skipping");
     }
 }
 
@@ -1809,14 +1838,12 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
         std::ofstream file(filepath);
         if(file.is_open())
         {
-            json ctrl_json = ctrl->ToJson();
+            nlohmann::json ctrl_json = ctrl->ToJson();
             file << ctrl_json.dump(4);
             file.close();
-            LOG_INFO("[OpenRGB 3D Spatial] Saved custom controller '%s' to %s", ctrl->GetName().c_str(), filepath.c_str());
         }
         else
         {
-            LOG_ERROR("[OpenRGB 3D Spatial] Failed to save custom controller '%s' to %s", ctrl->GetName().c_str(), filepath.c_str());
         }
     }
 }
@@ -1829,7 +1856,6 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
     filesystem::path dir_path(custom_dir);
     if(!filesystem::exists(dir_path))
     {
-        LOG_INFO("[OpenRGB 3D Spatial] Custom controllers directory does not exist: %s", custom_dir.c_str());
         return;
     }
 
@@ -1847,7 +1873,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                 {
                     try
                     {
-                        json ctrl_json;
+                        nlohmann::json ctrl_json;
                         file >> ctrl_json;
                         file.close();
 
@@ -1856,29 +1882,19 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                         {
                             virtual_controllers.push_back(virtual_ctrl);
                             available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
-                            LOG_INFO("[OpenRGB 3D Spatial] Loaded custom controller: %s (%dx%dx%d) from %s",
-                                     virtual_ctrl->GetName().c_str(),
-                                     virtual_ctrl->GetWidth(),
-                                     virtual_ctrl->GetHeight(),
-                                     virtual_ctrl->GetDepth(),
-                                     entry.path().filename().string().c_str());
                             loaded_count++;
                         }
                     }
-                    catch(const std::exception& e)
+                    catch(const std::exception&)
                     {
-                        LOG_ERROR("[OpenRGB 3D Spatial] Failed to parse custom controller file %s: %s",
-                                 entry.path().filename().string().c_str(), e.what());
                     }
                 }
             }
         }
 
-        LOG_INFO("[OpenRGB 3D Spatial] Loaded %d custom controllers from %s", loaded_count, custom_dir.c_str());
     }
-    catch(const std::exception& e)
+    catch(const std::exception&)
     {
-        LOG_ERROR("[OpenRGB 3D Spatial] Failed to load custom controllers directory: %s", e.what());
     }
 }
 
@@ -1987,7 +2003,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     /*---------------------------------------------------------*\
     | Create appropriate effect UI based on type              |
     \*---------------------------------------------------------*/
-    if(effect_type >= 0 && effect_type <= 3)  // Wave effects (X, Y, Z, Radial)
+    if(effect_type == 0)  // Wave effect
     {
         /*---------------------------------------------------------*\
         | Create Wave3D effect UI                                  |
@@ -2000,43 +2016,26 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         | Connect parameter change signals                         |
         \*---------------------------------------------------------*/
         connect(wave3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
-            if(effects->IsEffectRunning())
-            {
-                /*---------------------------------------------------------*\
-                | Update effect parameters in real-time                   |
-                \*---------------------------------------------------------*/
-                SpatialEffectParams params;
-                params.type = (SpatialEffectType)effect_type_combo->currentIndex();
-
-                /*---------------------------------------------------------*\
-                | Set default parameters                                   |
-                \*---------------------------------------------------------*/
-                params.scale_3d = {1.0f, 1.0f, 1.0f};
-                params.origin = {0.0f, 0.0f, 0.0f};
-                params.rotation = {0.0f, 0.0f, 0.0f};
-                params.direction = {1.0f, 0.0f, 0.0f};
-                params.thickness = 1.0f;
-                params.intensity = 1.0f;
-                params.falloff = 1.0f;
-                params.num_arms = 4;
-                params.frequency = 10;
-                params.reverse = false;
-                params.mirror_x = false;
-                params.mirror_y = false;
-                params.mirror_z = false;
-
-                /*---------------------------------------------------------*\
-                | Get all parameters from effect UI                       |
-                \*---------------------------------------------------------*/
-                wave3d_effect->UpdateParams(params);
-
-                effects->UpdateEffectParams(params);
-            }
         });
 
-        LOG_VERBOSE("[OpenRGB 3D Spatial] Set up Wave3D custom UI for effect type %d", effect_type);
     }
-    else if(effect_type == 6)  // Plasma effect
+    else if(effect_type == 1)  // Wipe effect
+    {
+        /*---------------------------------------------------------*\
+        | Create Wipe3D effect UI                                  |
+        \*---------------------------------------------------------*/
+        wipe3d_effect = new Wipe3D(custom_effect_container);
+        wipe3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = wipe3d_effect;
+
+        /*---------------------------------------------------------*\
+        | Connect parameter change signals                         |
+        \*---------------------------------------------------------*/
+        connect(wipe3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
+        });
+
+    }
+    else if(effect_type == 2)  // Plasma effect
     {
         /*---------------------------------------------------------*\
         | Create Plasma3D effect UI                               |
@@ -2049,54 +2048,55 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         | Connect parameter change signals                         |
         \*---------------------------------------------------------*/
         connect(plasma3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
-            if(effects->IsEffectRunning())
-            {
-                /*---------------------------------------------------------*\
-                | Update effect parameters in real-time                   |
-                \*---------------------------------------------------------*/
-                SpatialEffectParams params;
-                params.type = (SpatialEffectType)effect_type_combo->currentIndex();
-
-                /*---------------------------------------------------------*\
-                | Set default parameters                                   |
-                \*---------------------------------------------------------*/
-                params.scale_3d = {1.0f, 1.0f, 1.0f};
-                params.origin = {0.0f, 0.0f, 0.0f};
-                params.rotation = {0.0f, 0.0f, 0.0f};
-                params.direction = {1.0f, 0.0f, 0.0f};
-                params.thickness = 1.0f;
-                params.intensity = 1.0f;
-                params.falloff = 1.0f;
-                params.num_arms = 4;
-                params.frequency = 10;
-                params.reverse = false;
-                params.mirror_x = false;
-                params.mirror_y = false;
-                params.mirror_z = false;
-
-                /*---------------------------------------------------------*\
-                | Get all parameters from effect UI                       |
-                \*---------------------------------------------------------*/
-                plasma3d_effect->UpdateParams(params);
-
-                effects->UpdateEffectParams(params);
-            }
         });
 
-        LOG_VERBOSE("[OpenRGB 3D Spatial] Set up Plasma3D custom UI for effect type %d", effect_type);
+    }
+    else if(effect_type == 3)  // Spiral
+    {
+        spiral3d_effect = new Spiral3D(custom_effect_container);
+        spiral3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = spiral3d_effect;
+        SetupEffectSignals(spiral3d_effect, effect_type);
+    }
+    else if(effect_type == 4)  // DNA Helix
+    {
+        dnahelix3d_effect = new DNAHelix3D(custom_effect_container);
+        dnahelix3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = dnahelix3d_effect;
+        SetupEffectSignals(dnahelix3d_effect, effect_type);
+    }
+    else if(effect_type == 5)  // Breathing Sphere
+    {
+        breathingsphere3d_effect = new BreathingSphere3D(custom_effect_container);
+        breathingsphere3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = breathingsphere3d_effect;
+        SetupEffectSignals(breathingsphere3d_effect, effect_type);
+    }
+    else if(effect_type == 6)  // Explosion
+    {
+        explosion3d_effect = new Explosion3D(custom_effect_container);
+        explosion3d_effect->SetupCustomUI(custom_effect_container);
+        current_effect_ui = explosion3d_effect;
+        SetupEffectSignals(explosion3d_effect, effect_type);
     }
     else
     {
-        /*---------------------------------------------------------*\
-        | For other effects, show a placeholder or default UI     |
-        \*---------------------------------------------------------*/
-        QLabel* placeholder = new QLabel("Custom controls for this effect will be available in future updates.");
-        placeholder->setAlignment(Qt::AlignCenter);
-        placeholder->setStyleSheet("color: #666; font-style: italic; padding: 20px;");
-        custom_effect_container->layout()->addWidget(placeholder);
+        QLabel* unknown_label = new QLabel("Unknown effect type.");
+        unknown_label->setAlignment(Qt::AlignCenter);
+        unknown_label->setStyleSheet("color: #666; font-style: italic; padding: 20px;");
+        custom_effect_container->layout()->addWidget(unknown_label);
 
-        LOG_VERBOSE("[OpenRGB 3D Spatial] No custom UI available for effect type %d", effect_type);
     }
+}
+
+void OpenRGB3DSpatialTab::SetupEffectSignals(SpatialEffect3D* effect, int effect_type)
+{
+    /*---------------------------------------------------------*\
+    | Connect parameter change signals                         |
+    \*---------------------------------------------------------*/
+    connect(effect, &SpatialEffect3D::ParametersChanged, [this, effect_type]() {
+    });
+
 }
 
 void OpenRGB3DSpatialTab::ClearCustomEffectUI()
@@ -2125,7 +2125,10 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     current_effect_ui = nullptr;
     wave3d_effect = nullptr;
     plasma3d_effect = nullptr;
+    spiral3d_effect = nullptr;
+    explosion3d_effect = nullptr;
+    breathingsphere3d_effect = nullptr;
+    dnahelix3d_effect = nullptr;
 
-    LOG_VERBOSE("[OpenRGB 3D Spatial] Cleared custom effect UI");
 }
 

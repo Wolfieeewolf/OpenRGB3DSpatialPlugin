@@ -28,7 +28,7 @@
 #include <QColorDialog>
 #include "LEDPosition3D.h"
 #include "RGBController.h"
-#include "SpatialEffectCalculator.h"
+#include "SpatialEffectTypes.h"
 
 struct EffectInfo3D
 {
@@ -63,6 +63,7 @@ public:
     virtual EffectInfo3D GetEffectInfo() = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
+    virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
 
     /*---------------------------------------------------------*\
     | Common effect controls (all effects need these)        |
