@@ -199,9 +199,18 @@ void Explosion3D::OnColorButtonClicked()
 
 RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
 {
+    // Create smooth curves for speed and frequency
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+
     // Update progress for animation
-    progress = time * (effect_speed * 0.1f);
-    float freq_scale = frequency * 0.01f;
+    progress = time * (actual_speed * 0.1f);
+    float freq_scale = actual_frequency * 0.01f;
 
     // Calculate distance from center (3D sphere)
     float distance = sqrt(x*x + y*y + z*z);

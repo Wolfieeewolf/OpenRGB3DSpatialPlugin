@@ -383,9 +383,16 @@ float Wipe3D::ApplyEdgeShape(float /*distance*/, float edge_distance)
 RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
 {
     /*---------------------------------------------------------*\
+    | Create smooth curves for speed                           |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    /*---------------------------------------------------------*\
     | Update progress for animation                            |
     \*---------------------------------------------------------*/
-    progress = time * (effect_speed * 0.5f);
+    progress = time * (actual_speed * 0.5f);
 
     /*---------------------------------------------------------*\
     | Calculate distance along wipe direction                  |

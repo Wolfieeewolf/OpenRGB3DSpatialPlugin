@@ -412,15 +412,26 @@ RGBColor Wave3D::GetColorAtPosition(float position)
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 {
     /*---------------------------------------------------------*\
+    | Create smooth curves for speed and frequency            |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 10.0f; // Map to 0-10 range
+
+    /*---------------------------------------------------------*\
     | Update progress for animation (like RadialRainbow)      |
     \*---------------------------------------------------------*/
-    progress = time * (effect_speed * 2.0f);
+    progress = time * (actual_speed * 2.0f);
 
     /*---------------------------------------------------------*\
     | Calculate wave based on direction type (like LED cube) |
     \*---------------------------------------------------------*/
     float wave_value = 0.0f;
-    float freq_scale = frequency * 0.1f;
+    float freq_scale = actual_frequency * 0.1f;
 
     switch(direction_type)
     {
