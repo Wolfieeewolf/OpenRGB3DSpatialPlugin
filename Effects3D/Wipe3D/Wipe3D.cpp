@@ -163,29 +163,11 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
     connect(thickness_slider, &QSlider::valueChanged, this, &Wipe3D::OnWipeParameterChanged);
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wipe3D::OnWipeParameterChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &Wipe3D::OnWipeParameterChanged);
-
-    /*---------------------------------------------------------*\
-    | Create enhanced 3D spatial controls with sliders        |
-    \*---------------------------------------------------------*/
-    CreateCommon3DControls(parent);
 }
 
 void Wipe3D::UpdateParams(SpatialEffectParams& params)
 {
-    /*---------------------------------------------------------*\
-    | Update common effect parameters                          |
-    \*---------------------------------------------------------*/
-    UpdateCommonEffectParams(params);
-
-    /*---------------------------------------------------------*\
-    | Set effect type                                          |
-    \*---------------------------------------------------------*/
     params.type = SPATIAL_EFFECT_WIPE;
-
-    /*---------------------------------------------------------*\
-    | Update 3D spatial parameters                            |
-    \*---------------------------------------------------------*/
-    UpdateCommon3DParams(params);
 }
 
 void Wipe3D::OnWipeParameterChanged()

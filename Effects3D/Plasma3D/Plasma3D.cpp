@@ -68,14 +68,6 @@ EffectInfo3D Plasma3D::GetEffectInfo()
 
 void Plasma3D::SetupCustomUI(QWidget* parent)
 {
-    /*---------------------------------------------------------*\
-    | Create common effect controls first                      |
-    \*---------------------------------------------------------*/
-    CreateCommonEffectControls(parent);
-
-    /*---------------------------------------------------------*\
-    | Simple plasma controls - OpenRGB style grid layout      |
-    \*---------------------------------------------------------*/
     QWidget* plasma_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(plasma_widget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -144,33 +136,11 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &Plasma3D::OnPlasmaParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &Plasma3D::OnPlasmaParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &Plasma3D::OnRainbowModeChanged);
-
-    /*---------------------------------------------------------*\
-    | Create enhanced 3D spatial controls with sliders        |
-    \*---------------------------------------------------------*/
-    CreateCommon3DControls(parent);
 }
 
 void Plasma3D::UpdateParams(SpatialEffectParams& params)
 {
-    /*---------------------------------------------------------*\
-    | Update common effect parameters first                    |
-    \*---------------------------------------------------------*/
-    UpdateCommonEffectParams(params);
-
-    /*---------------------------------------------------------*\
-    | Update plasma-specific parameters                       |
-    \*---------------------------------------------------------*/
-    if(pattern_combo)
-    {
-        pattern_type = pattern_combo->currentIndex();
-        // Pattern type affects the base plasma effect calculation
-    }
-
-    /*---------------------------------------------------------*\
-    | Update common 3D parameters                              |
-    \*---------------------------------------------------------*/
-    UpdateCommon3DParams(params);
+    params.type = SPATIAL_EFFECT_PLASMA;
 }
 
 void Plasma3D::OnPlasmaParameterChanged()

@@ -76,8 +76,6 @@ EffectInfo3D DNAHelix3D::GetEffectInfo()
 
 void DNAHelix3D::SetupCustomUI(QWidget* parent)
 {
-    CreateCommonEffectControls(parent);
-
     QWidget* dna_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(dna_widget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -128,15 +126,11 @@ void DNAHelix3D::SetupCustomUI(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &DNAHelix3D::OnDNAParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &DNAHelix3D::OnDNAParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &DNAHelix3D::OnRainbowModeChanged);
-
-    CreateCommon3DControls(parent);
 }
 
 void DNAHelix3D::UpdateParams(SpatialEffectParams& params)
 {
-    UpdateCommonEffectParams(params);
     params.type = SPATIAL_EFFECT_DNA_HELIX;
-    UpdateCommon3DParams(params);
 }
 
 void DNAHelix3D::OnDNAParameterChanged()

@@ -163,29 +163,11 @@ void Wave3D::SetupCustomUI(QWidget* parent)
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wave3D::OnWaveParameterChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &Wave3D::OnWaveParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &Wave3D::OnRainbowModeChanged);
-
-    /*---------------------------------------------------------*\
-    | Create enhanced 3D spatial controls with sliders        |
-    \*---------------------------------------------------------*/
-    CreateCommon3DControls(parent);
 }
 
 void Wave3D::UpdateParams(SpatialEffectParams& params)
 {
-    /*---------------------------------------------------------*\
-    | Update common effect parameters                          |
-    \*---------------------------------------------------------*/
-    UpdateCommonEffectParams(params);
-
-    /*---------------------------------------------------------*\
-    | Set effect type                                          |
-    \*---------------------------------------------------------*/
     params.type = SPATIAL_EFFECT_WAVE;
-
-    /*---------------------------------------------------------*\
-    | Update 3D spatial parameters                            |
-    \*---------------------------------------------------------*/
-    UpdateCommon3DParams(params);
 }
 
 void Wave3D::OnWaveParameterChanged()

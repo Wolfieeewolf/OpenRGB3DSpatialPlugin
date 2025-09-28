@@ -75,8 +75,6 @@ EffectInfo3D Explosion3D::GetEffectInfo()
 
 void Explosion3D::SetupCustomUI(QWidget* parent)
 {
-    CreateCommonEffectControls(parent);
-
     QWidget* explosion_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(explosion_widget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -127,15 +125,11 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &Explosion3D::OnRainbowModeChanged);
-
-    CreateCommon3DControls(parent);
 }
 
 void Explosion3D::UpdateParams(SpatialEffectParams& params)
 {
-    UpdateCommonEffectParams(params);
     params.type = SPATIAL_EFFECT_EXPLOSION;
-    UpdateCommon3DParams(params);
 }
 
 void Explosion3D::OnExplosionParameterChanged()

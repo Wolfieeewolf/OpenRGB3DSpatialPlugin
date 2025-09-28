@@ -68,14 +68,6 @@ EffectInfo3D Spiral3D::GetEffectInfo()
 
 void Spiral3D::SetupCustomUI(QWidget* parent)
 {
-    /*---------------------------------------------------------*\
-    | Create common effect controls first                      |
-    \*---------------------------------------------------------*/
-    CreateCommonEffectControls(parent);
-
-    /*---------------------------------------------------------*\
-    | Simple spiral controls - OpenRGB style grid layout      |
-    \*---------------------------------------------------------*/
     QWidget* spiral_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(spiral_widget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -141,35 +133,11 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &Spiral3D::OnRainbowModeChanged);
-
-    /*---------------------------------------------------------*\
-    | Create 3D spatial controls for origin                   |
-    \*---------------------------------------------------------*/
-    CreateCommon3DControls(parent);
 }
 
 void Spiral3D::UpdateParams(SpatialEffectParams& params)
 {
-    /*---------------------------------------------------------*\
-    | Update common effect parameters first                    |
-    \*---------------------------------------------------------*/
-    UpdateCommonEffectParams(params);
-
-    /*---------------------------------------------------------*\
-    | Update spiral-specific parameters                       |
-    \*---------------------------------------------------------*/
     params.type = SPATIAL_EFFECT_SPIRAL;
-
-    if(arms_slider)
-    {
-        num_arms = arms_slider->value();
-        params.num_arms = num_arms;
-    }
-
-    /*---------------------------------------------------------*\
-    | Update common 3D parameters                              |
-    \*---------------------------------------------------------*/
-    UpdateCommon3DParams(params);
 }
 
 void Spiral3D::OnSpiralParameterChanged()

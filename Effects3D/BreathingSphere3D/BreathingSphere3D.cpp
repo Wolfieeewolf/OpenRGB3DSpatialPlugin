@@ -75,8 +75,6 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
 
 void BreathingSphere3D::SetupCustomUI(QWidget* parent)
 {
-    CreateCommonEffectControls(parent);
-
     QWidget* sphere_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(sphere_widget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -127,15 +125,11 @@ void BreathingSphere3D::SetupCustomUI(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &BreathingSphere3D::OnRainbowModeChanged);
-
-    CreateCommon3DControls(parent);
 }
 
 void BreathingSphere3D::UpdateParams(SpatialEffectParams& params)
 {
-    UpdateCommonEffectParams(params);
     params.type = SPATIAL_EFFECT_BREATHING_SPHERE;
-    UpdateCommon3DParams(params);
 }
 
 void BreathingSphere3D::OnBreathingParameterChanged()
