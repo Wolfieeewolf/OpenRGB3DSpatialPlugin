@@ -31,8 +31,9 @@
 
 #define GIZMO_MODE_MOVE     0
 #define GIZMO_MODE_ROTATE   1
-#define GIZMO_MODE_SCALE    2
-#define GIZMO_MODE_FREEROAM 3
+#define GIZMO_MODE_FREEROAM 2
+
+#define RAY_INTERSECTION_MAX_DISTANCE 10000.0f
 
 #ifdef _WIN32
 // Manual GLU implementations for Windows to avoid header conflicts
@@ -157,6 +158,11 @@ LEDViewport3D::LEDViewport3D(QWidget *parent) : QOpenGLWidget(parent)
     controller_transforms = nullptr;
     selected_controller_idx = -1;
 
+    // Default grid dimensions
+    grid_x = 10;
+    grid_y = 10;
+    grid_z = 10;
+
     camera_distance = 50.0f;
     camera_yaw = 45.0f;
     camera_pitch = 30.0f;
@@ -192,6 +198,14 @@ void LEDViewport3D::SelectController(int index)
 
 void LEDViewport3D::UpdateColors()
 {
+    update();
+}
+
+void LEDViewport3D::SetGridDimensions(int x, int y, int z)
+{
+    grid_x = x;
+    grid_y = y;
+    grid_z = z;
     update();
 }
 
@@ -251,17 +265,72 @@ void LEDViewport3D::paintGL()
 
 void LEDViewport3D::DrawGrid()
 {
+    // Calculate grid bounds based on LED coordinate system
+    int half_x = grid_x / 2;
+    int half_y = grid_y / 2;
+    int half_z = grid_z / 2;
+
+    // LED coordinates range from -half to (size - half - 1)
+    int min_x = -half_x;
+    int max_x = grid_x - half_x - 1;
+    int min_z = -half_z;
+    int max_z = grid_z - half_z - 1;
+    int max_y = grid_y - half_y - 1; // Top of grid
+
+    // Ground grid (Y=0)
     glColor3f(0.2f, 0.2f, 0.25f);
     glBegin(GL_LINES);
 
-    for(int i = -50; i <= 50; i += 5)
+    // Draw X lines (parallel to X axis) - every 0.5 units for smaller grid
+    for(float z = min_z - 0.5f; z <= max_z + 0.5f; z += 0.5f)
     {
-        glVertex3f(i, 0, -50);
-        glVertex3f(i, 0, 50);
-
-        glVertex3f(-50, 0, i);
-        glVertex3f(50, 0, i);
+        glVertex3f(min_x - 0.5f, 0, z);
+        glVertex3f(max_x + 0.5f, 0, z);
     }
+
+    // Draw Z lines (parallel to Z axis) - every 0.5 units for smaller grid
+    for(float x = min_x - 0.5f; x <= max_x + 0.5f; x += 0.5f)
+    {
+        glVertex3f(x, 0, min_z - 0.5f);
+        glVertex3f(x, 0, max_z + 0.5f);
+    }
+
+    glEnd();
+
+    // Ceiling grid (at top of Y range)
+    glColor3f(0.15f, 0.15f, 0.2f);
+    glBegin(GL_LINES);
+
+    // Draw X lines (parallel to X axis) - every 0.5 units for smaller grid
+    for(float z = min_z - 0.5f; z <= max_z + 0.5f; z += 0.5f)
+    {
+        glVertex3f(min_x - 0.5f, max_y + 1, z);
+        glVertex3f(max_x + 0.5f, max_y + 1, z);
+    }
+
+    // Draw Z lines (parallel to Z axis) - every 0.5 units for smaller grid
+    for(float x = min_x - 0.5f; x <= max_x + 0.5f; x += 0.5f)
+    {
+        glVertex3f(x, max_y + 1, min_z - 0.5f);
+        glVertex3f(x, max_y + 1, max_z + 0.5f);
+    }
+
+    glEnd();
+
+    // Vertical boundary lines connecting floor to ceiling
+    glColor3f(0.1f, 0.1f, 0.15f);
+    glBegin(GL_LINES);
+
+    // Corner pillars
+    glVertex3f(min_x - 0.5f, 0, min_z - 0.5f); glVertex3f(min_x - 0.5f, max_y + 1, min_z - 0.5f);
+    glVertex3f(max_x + 0.5f, 0, min_z - 0.5f); glVertex3f(max_x + 0.5f, max_y + 1, min_z - 0.5f);
+    glVertex3f(min_x - 0.5f, 0, max_z + 0.5f); glVertex3f(min_x - 0.5f, max_y + 1, max_z + 0.5f);
+    glVertex3f(max_x + 0.5f, 0, max_z + 0.5f); glVertex3f(max_x + 0.5f, max_y + 1, max_z + 0.5f);
+
+    // Some intermediate vertical lines
+    int mid_x = (min_x + max_x) / 2;
+    int mid_z = (min_z + max_z) / 2;
+    glVertex3f(mid_x, 0, mid_z); glVertex3f(mid_x, max_y + 1, mid_z);
 
     glEnd();
 }
@@ -303,7 +372,7 @@ void LEDViewport3D::DrawControllers()
         glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
         glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
         glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
-        glScalef(ctrl->transform.scale.x, ctrl->transform.scale.y, ctrl->transform.scale.z);
+        // Scale removed - LEDs now positioned at discrete 1x1x1 grid positions
 
         DrawLEDs(ctrl);
 
@@ -368,9 +437,6 @@ void LEDViewport3D::DrawControllers()
 
 void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 {
-    glPointSize(8.0f);
-    glBegin(GL_POINTS);
-
     for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
     {
         LEDPosition3D& led = ctrl->led_positions[i];
@@ -404,10 +470,54 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
         }
 
         glColor3f(r, g, b);
-        glVertex3f(led.local_position.x, led.local_position.y, led.local_position.z);
-    }
 
-    glEnd();
+        // Draw LED as 1x1x1 cube at exact grid position
+        float x = led.local_position.x;
+        float y = led.local_position.y;
+        float z = led.local_position.z;
+
+        float size = 0.25f; // Cube size matches 0.5 grid spacing (0.5f total cube size)
+
+        glBegin(GL_QUADS);
+
+        // Front face
+        glVertex3f(x - size, y - size, z + size);
+        glVertex3f(x + size, y - size, z + size);
+        glVertex3f(x + size, y + size, z + size);
+        glVertex3f(x - size, y + size, z + size);
+
+        // Back face
+        glVertex3f(x - size, y - size, z - size);
+        glVertex3f(x - size, y + size, z - size);
+        glVertex3f(x + size, y + size, z - size);
+        glVertex3f(x + size, y - size, z - size);
+
+        // Top face
+        glVertex3f(x - size, y + size, z - size);
+        glVertex3f(x - size, y + size, z + size);
+        glVertex3f(x + size, y + size, z + size);
+        glVertex3f(x + size, y + size, z - size);
+
+        // Bottom face
+        glVertex3f(x - size, y - size, z - size);
+        glVertex3f(x + size, y - size, z - size);
+        glVertex3f(x + size, y - size, z + size);
+        glVertex3f(x - size, y - size, z + size);
+
+        // Right face
+        glVertex3f(x + size, y - size, z - size);
+        glVertex3f(x + size, y + size, z - size);
+        glVertex3f(x + size, y + size, z + size);
+        glVertex3f(x + size, y - size, z + size);
+
+        // Left face
+        glVertex3f(x - size, y - size, z - size);
+        glVertex3f(x - size, y - size, z + size);
+        glVertex3f(x - size, y + size, z + size);
+        glVertex3f(x - size, y + size, z - size);
+
+        glEnd();
+    }
 }
 
 void LEDViewport3D::DrawGizmo()
@@ -645,282 +755,6 @@ void LEDViewport3D::DrawGizmo()
         glVertex3f(-cube_size, -cube_size, cube_size);
         glEnd();
         glPopMatrix();
-
-        glColor3f(1.0f, 0.5f, 0.0f);
-        float center_size = 0.48f;
-        glBegin(GL_QUADS);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, center_size, -center_size);
-        glVertex3f(-center_size, center_size, -center_size);
-
-        glVertex3f(-center_size, -center_size, center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(-center_size, -center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, -center_size);
-
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(center_size, center_size, -center_size);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(-center_size, -center_size, center_size);
-
-        glVertex3f(-center_size, center_size, -center_size);
-        glVertex3f(center_size, center_size, -center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-
-        glEnd();
-    }
-    else if(gizmo_mode == GIZMO_MODE_SCALE)
-    {
-        glLineWidth(5.0f);
-        glBegin(GL_LINES);
-
-        glColor3f(0.0f, 0.0f, 1.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(5, 0, 0);
-
-        glColor3f(0.0f, 1.0f, 0.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 5, 0);
-
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 0, 5);
-
-        glEnd();
-
-        float cube_size = 0.56f;
-        glBegin(GL_QUADS);
-
-        glColor3f(0.0f, 0.0f, 1.0f);
-        glVertex3f(5-cube_size, -cube_size, -cube_size);
-        glVertex3f(5+cube_size, -cube_size, -cube_size);
-        glVertex3f(5+cube_size, +cube_size, -cube_size);
-        glVertex3f(5-cube_size, +cube_size, -cube_size);
-
-        glVertex3f(5-cube_size, -cube_size, +cube_size);
-        glVertex3f(5+cube_size, -cube_size, +cube_size);
-        glVertex3f(5+cube_size, +cube_size, +cube_size);
-        glVertex3f(5-cube_size, +cube_size, +cube_size);
-
-        glVertex3f(5-cube_size, -cube_size, -cube_size);
-        glVertex3f(5-cube_size, +cube_size, -cube_size);
-        glVertex3f(5-cube_size, +cube_size, +cube_size);
-        glVertex3f(5-cube_size, -cube_size, +cube_size);
-
-        glVertex3f(5+cube_size, -cube_size, -cube_size);
-        glVertex3f(5+cube_size, +cube_size, -cube_size);
-        glVertex3f(5+cube_size, +cube_size, +cube_size);
-        glVertex3f(5+cube_size, -cube_size, +cube_size);
-
-        glVertex3f(5-cube_size, -cube_size, -cube_size);
-        glVertex3f(5+cube_size, -cube_size, -cube_size);
-        glVertex3f(5+cube_size, -cube_size, +cube_size);
-        glVertex3f(5-cube_size, -cube_size, +cube_size);
-
-        glVertex3f(5-cube_size, +cube_size, -cube_size);
-        glVertex3f(5+cube_size, +cube_size, -cube_size);
-        glVertex3f(5+cube_size, +cube_size, +cube_size);
-        glVertex3f(5-cube_size, +cube_size, +cube_size);
-
-        glColor3f(0.0f, 1.0f, 0.0f);
-        glVertex3f(-cube_size, 5-cube_size, -cube_size);
-        glVertex3f(+cube_size, 5-cube_size, -cube_size);
-        glVertex3f(+cube_size, 5+cube_size, -cube_size);
-        glVertex3f(-cube_size, 5+cube_size, -cube_size);
-
-        glVertex3f(-cube_size, 5-cube_size, +cube_size);
-        glVertex3f(+cube_size, 5-cube_size, +cube_size);
-        glVertex3f(+cube_size, 5+cube_size, +cube_size);
-        glVertex3f(-cube_size, 5+cube_size, +cube_size);
-
-        glVertex3f(-cube_size, 5-cube_size, -cube_size);
-        glVertex3f(-cube_size, 5+cube_size, -cube_size);
-        glVertex3f(-cube_size, 5+cube_size, +cube_size);
-        glVertex3f(-cube_size, 5-cube_size, +cube_size);
-
-        glVertex3f(+cube_size, 5-cube_size, -cube_size);
-        glVertex3f(+cube_size, 5+cube_size, -cube_size);
-        glVertex3f(+cube_size, 5+cube_size, +cube_size);
-        glVertex3f(+cube_size, 5-cube_size, +cube_size);
-
-        glVertex3f(-cube_size, 5-cube_size, -cube_size);
-        glVertex3f(+cube_size, 5-cube_size, -cube_size);
-        glVertex3f(+cube_size, 5-cube_size, +cube_size);
-        glVertex3f(-cube_size, 5-cube_size, +cube_size);
-
-        glVertex3f(-cube_size, 5+cube_size, -cube_size);
-        glVertex3f(+cube_size, 5+cube_size, -cube_size);
-        glVertex3f(+cube_size, 5+cube_size, +cube_size);
-        glVertex3f(-cube_size, 5+cube_size, +cube_size);
-
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glVertex3f(-cube_size, -cube_size, 5-cube_size);
-        glVertex3f(+cube_size, -cube_size, 5-cube_size);
-        glVertex3f(+cube_size, +cube_size, 5-cube_size);
-        glVertex3f(-cube_size, +cube_size, 5-cube_size);
-
-        glVertex3f(-cube_size, -cube_size, 5+cube_size);
-        glVertex3f(+cube_size, -cube_size, 5+cube_size);
-        glVertex3f(+cube_size, +cube_size, 5+cube_size);
-        glVertex3f(-cube_size, +cube_size, 5+cube_size);
-
-        glVertex3f(-cube_size, -cube_size, 5-cube_size);
-        glVertex3f(-cube_size, +cube_size, 5-cube_size);
-        glVertex3f(-cube_size, +cube_size, 5+cube_size);
-        glVertex3f(-cube_size, -cube_size, 5+cube_size);
-
-        glVertex3f(+cube_size, -cube_size, 5-cube_size);
-        glVertex3f(+cube_size, +cube_size, 5-cube_size);
-        glVertex3f(+cube_size, +cube_size, 5+cube_size);
-        glVertex3f(+cube_size, -cube_size, 5+cube_size);
-
-        glVertex3f(-cube_size, -cube_size, 5-cube_size);
-        glVertex3f(+cube_size, -cube_size, 5-cube_size);
-        glVertex3f(+cube_size, -cube_size, 5+cube_size);
-        glVertex3f(-cube_size, -cube_size, 5+cube_size);
-
-        glVertex3f(-cube_size, +cube_size, 5-cube_size);
-        glVertex3f(+cube_size, +cube_size, 5-cube_size);
-        glVertex3f(+cube_size, +cube_size, 5+cube_size);
-        glVertex3f(-cube_size, +cube_size, 5+cube_size);
-
-        glEnd();
-    }
-    else if(gizmo_mode == GIZMO_MODE_MOVE)
-    {
-        glLineWidth(4.0f);
-        glBegin(GL_LINES);
-
-        glColor3f(0.0f, 0.0f, 1.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(7, 0, 0);
-
-        glColor3f(0.0f, 1.0f, 0.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 7, 0);
-
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, 0, 7);
-
-        glEnd();
-
-        glBegin(GL_TRIANGLES);
-
-        glColor3f(0.0f, 0.0f, 1.0f);
-        glVertex3f(7, 0, 0);
-        glVertex3f(6, 0.48f, 0);
-        glVertex3f(6, -0.48f, 0);
-
-        glVertex3f(7, 0, 0);
-        glVertex3f(6, 0, 0.48f);
-        glVertex3f(6, 0, -0.48f);
-
-        glColor3f(0.0f, 1.0f, 0.0f);
-        glVertex3f(0, 7, 0);
-        glVertex3f(0.48f, 6, 0);
-        glVertex3f(-0.48f, 6, 0);
-
-        glVertex3f(0, 7, 0);
-        glVertex3f(0, 6, 0.48f);
-        glVertex3f(0, 6, -0.48f);
-
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glVertex3f(0, 0, 7);
-        glVertex3f(0.48f, 0, 6);
-        glVertex3f(-0.48f, 0, 6);
-
-        glVertex3f(0, 0, 7);
-        glVertex3f(0, 0.48f, 6);
-        glVertex3f(0, -0.48f, 6);
-
-        glEnd();
-
-        float cube_size = 0.48f;
-        glBegin(GL_QUADS);
-        glColor3f(1.0f, 0.5f, 0.0f);
-
-        glVertex3f(-cube_size, -cube_size, -cube_size);
-        glVertex3f(cube_size, -cube_size, -cube_size);
-        glVertex3f(cube_size, cube_size, -cube_size);
-        glVertex3f(-cube_size, cube_size, -cube_size);
-
-        glVertex3f(-cube_size, -cube_size, cube_size);
-        glVertex3f(cube_size, -cube_size, cube_size);
-        glVertex3f(cube_size, cube_size, cube_size);
-        glVertex3f(-cube_size, cube_size, cube_size);
-
-        glVertex3f(-cube_size, -cube_size, -cube_size);
-        glVertex3f(-cube_size, -cube_size, cube_size);
-        glVertex3f(-cube_size, cube_size, cube_size);
-        glVertex3f(-cube_size, cube_size, -cube_size);
-
-        glVertex3f(cube_size, -cube_size, -cube_size);
-        glVertex3f(cube_size, -cube_size, cube_size);
-        glVertex3f(cube_size, cube_size, cube_size);
-        glVertex3f(cube_size, cube_size, -cube_size);
-
-        glVertex3f(-cube_size, -cube_size, -cube_size);
-        glVertex3f(cube_size, -cube_size, -cube_size);
-        glVertex3f(cube_size, -cube_size, cube_size);
-        glVertex3f(-cube_size, -cube_size, cube_size);
-
-        glVertex3f(-cube_size, cube_size, -cube_size);
-        glVertex3f(cube_size, cube_size, -cube_size);
-        glVertex3f(cube_size, cube_size, cube_size);
-        glVertex3f(-cube_size, cube_size, cube_size);
-
-        glEnd();
-
-        // Orange center cube for mode switching
-        glColor3f(1.0f, 0.5f, 0.0f);
-        float center_size = 0.48f;
-        glBegin(GL_QUADS);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, center_size, -center_size);
-        glVertex3f(-center_size, center_size, -center_size);
-
-        glVertex3f(-center_size, -center_size, center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(-center_size, -center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, -center_size);
-
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(center_size, center_size, -center_size);
-
-        glVertex3f(-center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, -center_size);
-        glVertex3f(center_size, -center_size, center_size);
-        glVertex3f(-center_size, -center_size, center_size);
-
-        glVertex3f(-center_size, center_size, -center_size);
-        glVertex3f(center_size, center_size, -center_size);
-        glVertex3f(center_size, center_size, center_size);
-        glVertex3f(-center_size, center_size, center_size);
-
-        glEnd();
     }
     else if(gizmo_mode == GIZMO_MODE_FREEROAM)
     {
@@ -1021,7 +855,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             if(PickGizmoCenter(MOUSE_X(event), MOUSE_Y(event)))
             {
-                gizmo_mode = (gizmo_mode + 1) % 4;
+                gizmo_mode = (gizmo_mode + 1) % 3;
                 update();
                 return;
             }
@@ -1244,7 +1078,7 @@ LEDViewport3D::Ray3D LEDViewport3D::GenerateRay(int mouse_x, int mouse_y)
 bool LEDViewport3D::RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance)
 {
     float tmin = 0.0f;
-    float tmax = 10000.0f; // Large number for "infinity"
+    float tmax = RAY_INTERSECTION_MAX_DISTANCE;
 
     for(int i = 0; i < 3; i++)
     {
@@ -1316,27 +1150,11 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
                 float local_z = handle_positions[axis][handle][2];
 
                 // Apply rotations (same as in drawing code)
-                float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
-                float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
-                float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
-
-                // Z rotation
-                float temp_x = local_x * cos(rz) - local_y * sin(rz);
-                float temp_y = local_x * sin(rz) + local_y * cos(rz);
-                local_x = temp_x;
-                local_y = temp_y;
-
-                // Y rotation
-                temp_x = local_x * cos(ry) + local_z * sin(ry);
-                float temp_z = -local_x * sin(ry) + local_z * cos(ry);
-                local_x = temp_x;
-                local_z = temp_z;
-
-                // X rotation
-                temp_y = local_y * cos(rx) - local_z * sin(rx);
-                temp_z = local_y * sin(rx) + local_z * cos(rx);
-                local_y = temp_y;
-                local_z = temp_z;
+                // Apply rotation transform
+                ApplyRotationToPoint(local_x, local_y, local_z,
+                                   ctrl->transform.rotation.x,
+                                   ctrl->transform.rotation.y,
+                                   ctrl->transform.rotation.z);
 
                 // Create bounding box for this cube handle
                 Box3D box;
@@ -1377,80 +1195,6 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
             closest_axis = 3; // Free rotation
         }
     }
-    else if(gizmo_mode == GIZMO_MODE_SCALE)
-    {
-        // Test scale cube handles - match drawing positions
-        Vector3D axes[3] = {{5, 0, 0}, {0, 5, 0}, {0, 0, 5}};
-        float cube_size = 0.56f;
-
-        for(int i = 0; i < 3; i++)
-        {
-            // Transform scale handle position
-            float local_x = axes[i].x;
-            float local_y = axes[i].y;
-            float local_z = axes[i].z;
-
-            // Apply rotations
-            float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
-            float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
-            float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
-
-            // Z rotation
-            float temp_x = local_x * cos(rz) - local_y * sin(rz);
-            float temp_y = local_x * sin(rz) + local_y * cos(rz);
-            local_x = temp_x;
-            local_y = temp_y;
-
-            // Y rotation
-            temp_x = local_x * cos(ry) + local_z * sin(ry);
-            float temp_z = -local_x * sin(ry) + local_z * cos(ry);
-            local_x = temp_x;
-            local_z = temp_z;
-
-            // X rotation
-            temp_y = local_y * cos(rx) - local_z * sin(rx);
-            temp_z = local_y * sin(rx) + local_z * cos(rx);
-            local_y = temp_y;
-            local_z = temp_z;
-
-            // Create bounding box
-            Box3D box;
-            float world_x = ctrl->transform.position.x + local_x;
-            float world_y = ctrl->transform.position.y + local_y;
-            float world_z = ctrl->transform.position.z + local_z;
-
-            box.min[0] = world_x - cube_size;
-            box.min[1] = world_y - cube_size;
-            box.min[2] = world_z - cube_size;
-            box.max[0] = world_x + cube_size;
-            box.max[1] = world_y + cube_size;
-            box.max[2] = world_z + cube_size;
-
-            float distance;
-            if(RayBoxIntersect(ray, box, distance) && distance < closest_distance)
-            {
-                closest_distance = distance;
-                closest_axis = i;
-            }
-        }
-
-        // Test orange center cube for mode switching
-        Box3D center_box;
-        float center_size = 0.48f;
-        center_box.min[0] = ctrl->transform.position.x - center_size;
-        center_box.min[1] = ctrl->transform.position.y - center_size;
-        center_box.min[2] = ctrl->transform.position.z - center_size;
-        center_box.max[0] = ctrl->transform.position.x + center_size;
-        center_box.max[1] = ctrl->transform.position.y + center_size;
-        center_box.max[2] = ctrl->transform.position.z + center_size;
-
-        float distance;
-        if(RayBoxIntersect(ray, center_box, distance) && distance < closest_distance)
-        {
-            closest_distance = distance;
-            closest_axis = -1; // Mode switching
-        }
-    }
     else if(gizmo_mode == GIZMO_MODE_MOVE)
     {
         // Test move arrow handles with simplified box intersection for now
@@ -1464,28 +1208,11 @@ int LEDViewport3D::PickGizmoAxis3D(int mouse_x, int mouse_y)
             float local_y = axes[i].y;
             float local_z = axes[i].z;
 
-            // Apply rotations (same as other gizmos)
-            float rx = ctrl->transform.rotation.x * M_PI / 180.0f;
-            float ry = ctrl->transform.rotation.y * M_PI / 180.0f;
-            float rz = ctrl->transform.rotation.z * M_PI / 180.0f;
-
-            // Z rotation
-            float temp_x = local_x * cos(rz) - local_y * sin(rz);
-            float temp_y = local_x * sin(rz) + local_y * cos(rz);
-            local_x = temp_x;
-            local_y = temp_y;
-
-            // Y rotation
-            temp_x = local_x * cos(ry) + local_z * sin(ry);
-            float temp_z = -local_x * sin(ry) + local_z * cos(ry);
-            local_x = temp_x;
-            local_z = temp_z;
-
-            // X rotation
-            temp_y = local_y * cos(rx) - local_z * sin(rx);
-            temp_z = local_y * sin(rx) + local_z * cos(rx);
-            local_y = temp_y;
-            local_z = temp_z;
+            // Apply rotation transform
+            ApplyRotationToPoint(local_x, local_y, local_z,
+                               ctrl->transform.rotation.x,
+                               ctrl->transform.rotation.y,
+                               ctrl->transform.rotation.z);
 
             // Create bounding box for arrow handle
             Box3D box;
@@ -1621,40 +1348,6 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
         if(ctrl->transform.rotation.z > 360.0f) ctrl->transform.rotation.z -= 360.0f;
         if(ctrl->transform.rotation.z < -360.0f) ctrl->transform.rotation.z += 360.0f;
     }
-    else if(gizmo_mode == GIZMO_MODE_SCALE)
-    {
-        float scale_speed = 0.01f;
-
-        if(dragging_axis == 0)
-        {
-            // X axis (blue) - use dx only
-            float delta_scale = dx * scale_speed;
-            ctrl->transform.scale.x += delta_scale;
-            if(ctrl->transform.scale.x < 0.1f) ctrl->transform.scale.x = 0.1f;
-            if(ctrl->transform.scale.x > 10.0f) ctrl->transform.scale.x = 10.0f;
-        }
-        else if(dragging_axis == 1)
-        {
-            // Y axis - keep original direction
-            float delta_scale = (dx - dy) * scale_speed;
-            ctrl->transform.scale.y += delta_scale;
-            if(ctrl->transform.scale.y < 0.1f) ctrl->transform.scale.y = 0.1f;
-            if(ctrl->transform.scale.y > 10.0f) ctrl->transform.scale.y = 10.0f;
-        }
-        else if(dragging_axis == 2)
-        {
-            // Z axis - reverse direction to fix backward movement
-            float delta_scale = -(dx - dy) * scale_speed;
-            ctrl->transform.scale.z += delta_scale;
-            if(ctrl->transform.scale.z < 0.1f) ctrl->transform.scale.z = 0.1f;
-            if(ctrl->transform.scale.z > 10.0f) ctrl->transform.scale.z = 10.0f;
-        }
-
-        emit ControllerScaleChanged(selected_controller_idx,
-                                    ctrl->transform.scale.x,
-                                    ctrl->transform.scale.y,
-                                    ctrl->transform.scale.z);
-    }
     else if(gizmo_mode == GIZMO_MODE_MOVE)
     {
         float move_scale = 0.1f;
@@ -1709,14 +1402,60 @@ void LEDViewport3D::UpdateGizmo(int dx, int dy)
         ctrl->transform.position.z += (right_z * dx + up_z * -dy) * move_scale;
     }
 
-    // Ground collision - prevent controllers from going below Y=0
-    if(ctrl->transform.position.y < 0.0f)
-    {
-        ctrl->transform.position.y = 0.0f;
-    }
+    // Snap to grid (0.5 unit increments)
+    ctrl->transform.position.x = round(ctrl->transform.position.x / 0.5f) * 0.5f;
+    ctrl->transform.position.y = round(ctrl->transform.position.y / 0.5f) * 0.5f;
+    ctrl->transform.position.z = round(ctrl->transform.position.z / 0.5f) * 0.5f;
+
+    // Grid bounds collision
+    int half_x = grid_x / 2;
+    int half_y = grid_y / 2;
+    int half_z = grid_z / 2;
+
+    // Calculate grid bounds
+    float min_x = -half_x - 0.5f;
+    float max_x = grid_x - half_x - 1 + 0.5f;
+    float min_y = 0.0f; // Floor
+    float max_y = grid_y - half_y; // Ceiling (LEDs can go up to max_y - 1)
+    float min_z = -half_z - 0.5f;
+    float max_z = grid_z - half_z - 1 + 0.5f;
+
+    // Apply collision bounds
+    if(ctrl->transform.position.x < min_x) ctrl->transform.position.x = min_x;
+    if(ctrl->transform.position.x > max_x) ctrl->transform.position.x = max_x;
+    if(ctrl->transform.position.y < min_y) ctrl->transform.position.y = min_y;
+    if(ctrl->transform.position.y > max_y) ctrl->transform.position.y = max_y;
+    if(ctrl->transform.position.z < min_z) ctrl->transform.position.z = min_z;
+    if(ctrl->transform.position.z > max_z) ctrl->transform.position.z = max_z;
 
     emit ControllerPositionChanged(selected_controller_idx,
                                    ctrl->transform.position.x,
                                    ctrl->transform.position.y,
                                    ctrl->transform.position.z);
+}
+
+void LEDViewport3D::ApplyRotationToPoint(float& x, float& y, float& z, float rx, float ry, float rz)
+{
+    // Convert angles to radians
+    rx = rx * M_PI / 180.0f;
+    ry = ry * M_PI / 180.0f;
+    rz = rz * M_PI / 180.0f;
+
+    // Z rotation
+    float new_x = x * cos(rz) - y * sin(rz);
+    float new_y = x * sin(rz) + y * cos(rz);
+    x = new_x;
+    y = new_y;
+
+    // Y rotation
+    new_x = x * cos(ry) + z * sin(ry);
+    float new_z = -x * sin(ry) + z * cos(ry);
+    x = new_x;
+    z = new_z;
+
+    // X rotation
+    new_y = y * cos(rx) - z * sin(rx);
+    new_z = y * sin(rx) + z * cos(rx);
+    y = new_y;
+    z = new_z;
 }

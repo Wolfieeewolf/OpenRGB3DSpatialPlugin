@@ -65,7 +65,6 @@ private slots:
 
     void on_controller_selected(int index);
     void on_controller_position_changed(int index, float x, float y, float z);
-    void on_controller_scale_changed(int index, float x, float y, float z);
 
     void on_add_clicked();
     void on_granularity_changed(int index);
@@ -83,6 +82,7 @@ private slots:
 
     void on_effect_updated();
     void on_effect_timer_timeout();
+    void on_grid_dimensions_changed();
 
 private:
     void SetupUI();
@@ -127,12 +127,6 @@ private:
     QSlider*                    rot_x_slider;
     QSlider*                    rot_y_slider;
     QSlider*                    rot_z_slider;
-    QDoubleSpinBox*             scale_x_spin;
-    QDoubleSpinBox*             scale_y_spin;
-    QDoubleSpinBox*             scale_z_spin;
-    QSlider*                    scale_x_slider;
-    QSlider*                    scale_y_slider;
-    QSlider*                    scale_z_slider;
 
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
@@ -155,6 +149,16 @@ private:
     bool                        first_load;
     bool                        effect_running;
     float                       effect_time;
+
+    /*---------------------------------------------------------*\
+    | Custom grid dimensions (always 1:1 LED mapping)         |
+    \*---------------------------------------------------------*/
+    QSpinBox*                   grid_x_spin;
+    QSpinBox*                   grid_y_spin;
+    QSpinBox*                   grid_z_spin;
+    int                         custom_grid_x;
+    int                         custom_grid_y;
+    int                         custom_grid_z;
 
     std::vector<VirtualController3D*> virtual_controllers;
 };

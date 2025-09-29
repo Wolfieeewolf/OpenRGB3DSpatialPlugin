@@ -12,6 +12,9 @@
 #ifndef SPATIALEFFECT3D_H
 #define SPATIALEFFECT3D_H
 
+/*---------------------------------------------------------*\
+| Qt Includes                                              |
+\*---------------------------------------------------------*/
 #include <QWidget>
 #include <QLayout>
 #include <QLabel>
@@ -26,9 +29,36 @@
 #include <QGridLayout>
 #include <QPushButton>
 #include <QColorDialog>
-#include "LEDPosition3D.h"
+
+/*---------------------------------------------------------*\
+| OpenRGB Includes                                         |
+\*---------------------------------------------------------*/
 #include "RGBController.h"
+
+/*---------------------------------------------------------*\
+| Local Includes                                           |
+\*---------------------------------------------------------*/
+#include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
+
+/*---------------------------------------------------------*\
+| Grid context for dynamic effect scaling                 |
+\*---------------------------------------------------------*/
+struct GridContext3D
+{
+    float min_x, max_x;
+    float min_y, max_y;
+    float min_z, max_z;
+    float width, height, depth;
+
+    GridContext3D(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
+        : min_x(minX), max_x(maxX), min_y(minY), max_y(maxY), min_z(minZ), max_z(maxZ)
+    {
+        width = max_x - min_x + 1.0f;
+        height = max_y - min_y + 1.0f;
+        depth = max_z - min_z + 1.0f;
+    }
+};
 
 struct EffectInfo3D
 {
@@ -64,6 +94,7 @@ public:
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
+    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
 
     /*---------------------------------------------------------*\
     | Common effect controls (all effects need these)        |
@@ -116,6 +147,7 @@ protected:
     /*---------------------------------------------------------*\
     | Origin controls                                          |
     \*---------------------------------------------------------*/
+    QComboBox*          origin_preset_combo;
     QDoubleSpinBox*     origin_x_spin;
     QDoubleSpinBox*     origin_y_spin;
     QDoubleSpinBox*     origin_z_spin;

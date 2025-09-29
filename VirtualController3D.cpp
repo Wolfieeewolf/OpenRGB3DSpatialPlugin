@@ -56,23 +56,6 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions()
     return positions;
 }
 
-void VirtualController3D::UpdateColors(std::vector<RGBController*>& controllers)
-{
-    for(unsigned int m = 0; m < led_mappings.size(); m++)
-    {
-        for(unsigned int i = 0; i < controllers.size(); i++)
-        {
-            if(controllers[i] == led_mappings[m].controller)
-            {
-                unsigned int led_global_idx = controllers[i]->zones[led_mappings[m].zone_idx].start_idx + led_mappings[m].led_idx;
-                if(led_global_idx < controllers[i]->colors.size())
-                {
-                }
-                break;
-            }
-        }
-    }
-}
 
 json VirtualController3D::ToJson() const
 {

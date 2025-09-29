@@ -36,9 +36,9 @@ Spiral3D::Spiral3D(QWidget* parent) : SpatialEffect3D(parent)
     progress = 0.0f;
 
     // Initialize with default colors
-    colors.push_back(0x000000FF);  // Red
+    colors.push_back(0x000000FF);  // Blue
     colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Blue
+    colors.push_back(0x00FF0000);  // Red
 }
 
 Spiral3D::~Spiral3D()
@@ -255,6 +255,103 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
 
     // Add secondary spiral for complexity
     float secondary_spiral = cos(spiral_angle * 0.5f + z * freq_scale * 1.5f + progress * 1.2f) * 0.3f;
+    spiral_value += secondary_spiral;
+
+    /*---------------------------------------------------------*\
+    | Normalize to 0.0 - 1.0                                  |
+    \*---------------------------------------------------------*/
+    spiral_value = (spiral_value + 1.5f) / 3.0f;
+    spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+
+    /*---------------------------------------------------------*\
+    | Get color based on mode                                  |
+    \*---------------------------------------------------------*/
+    RGBColor final_color;
+
+    if(rainbow_mode)
+    {
+        float hue = spiral_value * 360.0f + progress * 20.0f;
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        final_color = GetColorAtPosition(spiral_value);
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply brightness                                         |
+    \*---------------------------------------------------------*/
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = effect_brightness / 100.0f;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Calculate normalized coordinates (0 to 1)               |
+    \*---------------------------------------------------------*/
+    float norm_x = (x - grid.min_x) / grid.width;
+    float norm_y = (y - grid.min_y) / grid.height;
+    float norm_z = (z - grid.min_z) / grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Create smooth curves for speed and frequency            |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = time * (actual_speed * 0.1f);
+
+    /*---------------------------------------------------------*\
+    | Scale frequency based on grid dimensions                 |
+    \*---------------------------------------------------------*/
+    float freq_scale = actual_frequency * 0.01f;
+    float grid_scale = sqrt(grid.width * grid.height) / 10.0f; // Use XY plane area for spiral scaling
+    freq_scale *= grid_scale;
+
+    /*---------------------------------------------------------*\
+    | Convert to centered coordinates for spiral calculation  |
+    \*---------------------------------------------------------*/
+    float center_x = (norm_x - 0.5f) * grid.width;
+    float center_y = (norm_y - 0.5f) * grid.height;
+    float center_z = (norm_z - 0.5f) * grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Calculate enhanced 3D spiral pattern (grid-aware)       |
+    \*---------------------------------------------------------*/
+    // Primary spiral in XY plane
+    float radius = sqrt(center_x*center_x + center_y*center_y);
+    float angle = atan2(center_y, center_x);
+
+    // Scale radius to grid dimensions
+    float max_radius = sqrt(grid.width*grid.width + grid.height*grid.height) * 0.5f;
+    float normalized_radius = radius / max_radius;
+
+    // Add Z-axis twist for true 3D spiral
+    float z_twist = center_z * 0.3f;
+    float spiral_angle = angle * num_arms + normalized_radius * freq_scale + z_twist - progress;
+
+    // Create multiple spiral layers for depth
+    float spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(center_z * freq_scale + progress * 0.7f));
+
+    // Add secondary spiral for complexity
+    float secondary_spiral = cos(spiral_angle * 0.5f + center_z * freq_scale * 1.5f + progress * 1.2f) * 0.3f;
     spiral_value += secondary_spiral;
 
     /*---------------------------------------------------------*\

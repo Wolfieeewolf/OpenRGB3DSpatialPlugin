@@ -36,9 +36,9 @@ Plasma3D::Plasma3D(QWidget* parent) : SpatialEffect3D(parent)
     progress = 0.0f;
 
     // Initialize with default colors
-    colors.push_back(0x000000FF);  // Red
+    colors.push_back(0x000000FF);  // Blue
     colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Blue
+    colors.push_back(0x00FF0000);  // Red
 }
 
 Plasma3D::~Plasma3D()
@@ -283,6 +283,124 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
         case 3: // Organic
             plasma_value = sin(x * freq_scale * 0.7f + sin(y * freq_scale * 1.3f + progress) + progress * 0.7f) +
                           cos(y * freq_scale * 0.9f + cos(z * freq_scale * 1.1f + progress * 1.2f) + progress * 0.8f);
+            break;
+    }
+
+    /*---------------------------------------------------------*\
+    | Normalize to 0.0 - 1.0                                  |
+    \*---------------------------------------------------------*/
+    plasma_value = (plasma_value + 2.0f) * 0.25f;
+    plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
+
+    /*---------------------------------------------------------*\
+    | Get color based on mode                                  |
+    \*---------------------------------------------------------*/
+    RGBColor final_color;
+
+    if(rainbow_mode)
+    {
+        float hue = plasma_value * 360.0f;
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        final_color = GetColorAtPosition(plasma_value);
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply brightness                                         |
+    \*---------------------------------------------------------*/
+    unsigned char r = (final_color >> 16) & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = final_color & 0xFF;
+
+    float brightness_factor = effect_brightness / 100.0f;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Calculate normalized coordinates (0 to 1)               |
+    \*---------------------------------------------------------*/
+    float norm_x = (x - grid.min_x) / grid.width;
+    float norm_y = (y - grid.min_y) / grid.height;
+    float norm_z = (z - grid.min_z) / grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Create smooth curves for speed and frequency            |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = time * (actual_speed * 0.1f);
+
+    /*---------------------------------------------------------*\
+    | Scale frequency based on grid dimensions                 |
+    \*---------------------------------------------------------*/
+    float freq_scale = actual_frequency * 0.01f;
+    float grid_scale = sqrt(grid.width * grid.height * grid.depth) / 10.0f; // Normalize based on grid volume
+    freq_scale *= grid_scale;
+
+    /*---------------------------------------------------------*\
+    | Convert normalized coordinates to scaled space          |
+    \*---------------------------------------------------------*/
+    float scaled_x = norm_x * grid.width;
+    float scaled_y = norm_y * grid.height;
+    float scaled_z = norm_z * grid.depth;
+
+    float plasma_value = 0.0f;
+
+    /*---------------------------------------------------------*\
+    | Calculate plasma pattern based on type (grid-aware)     |
+    \*---------------------------------------------------------*/
+    switch(pattern_type)
+    {
+        case 0: // Classic plasma
+            plasma_value = sin(scaled_x * freq_scale + progress) +
+                          sin(scaled_y * freq_scale + progress * 1.1f) +
+                          sin(scaled_z * freq_scale + progress * 0.9f);
+            break;
+        case 1: // Swirl
+            {
+                // Center coordinates around grid center
+                float center_x = scaled_x - grid.width * 0.5f;
+                float center_y = scaled_y - grid.height * 0.5f;
+                float center_z = scaled_z - grid.depth * 0.5f;
+
+                float angle = atan2(center_y, center_x) + progress * 0.5f;
+                float radius = sqrt(center_x*center_x + center_y*center_y + center_z*center_z);
+                plasma_value = sin(angle * 3.0f + radius * freq_scale + progress) +
+                              cos(center_z * freq_scale * 0.5f + progress * 0.8f);
+            }
+            break;
+        case 2: // Ripple
+            {
+                // Center coordinates around grid center
+                float center_x = scaled_x - grid.width * 0.5f;
+                float center_y = scaled_y - grid.height * 0.5f;
+                float center_z = scaled_z - grid.depth * 0.5f;
+
+                float distance = sqrt(center_x*center_x + center_y*center_y + center_z*center_z);
+                plasma_value = sin(distance * freq_scale - progress * 2.0f) +
+                              cos(scaled_x * freq_scale + scaled_y * freq_scale + progress);
+            }
+            break;
+        case 3: // Organic
+            plasma_value = sin(scaled_x * freq_scale * 0.7f + sin(scaled_y * freq_scale * 1.3f + progress) + progress * 0.7f) +
+                          cos(scaled_y * freq_scale * 0.9f + cos(scaled_z * freq_scale * 1.1f + progress * 1.2f) + progress * 0.8f);
             break;
     }
 

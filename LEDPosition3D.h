@@ -44,9 +44,13 @@ struct LEDPosition3D
     Vector3D        world_position;
 };
 
+// Forward declaration
+class VirtualController3D;
+
 struct ControllerTransform
 {
     RGBController*      controller;
+    VirtualController3D* virtual_controller;
     Transform3D         transform;
     std::vector<LEDPosition3D> led_positions;
     RGBColor            display_color;

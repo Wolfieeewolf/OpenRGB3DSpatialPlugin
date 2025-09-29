@@ -47,9 +47,9 @@ Wipe3D::Wipe3D(QWidget* parent) : SpatialEffect3D(parent)
     progress = 0.0f;
 
     // Initialize with default colors
-    colors.push_back(0x000000FF);  // Red
+    colors.push_back(0x000000FF);  // Blue
     colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Blue
+    colors.push_back(0x00FF0000);  // Red
 }
 
 Wipe3D::~Wipe3D()
@@ -364,6 +364,47 @@ float Wipe3D::CalculateWipeDistance(float x, float y, float z)
     }
 }
 
+float Wipe3D::CalculateWipeDistanceGrid(float x, float y, float z, const GridContext3D& grid)
+{
+    switch(direction_type)
+    {
+        case 0: // X Axis - scale to grid width
+        {
+            float normalized_x = (x - grid.min_x) / grid.width; // 0 to 1
+            float scaled_x = normalized_x * grid.width; // Scale to grid dimensions
+            return reverse_mode ? grid.width - scaled_x : scaled_x;
+        }
+        case 1: // Y Axis - scale to grid height
+        {
+            float normalized_y = (y - grid.min_y) / grid.height; // 0 to 1
+            float scaled_y = normalized_y * grid.height; // Scale to grid dimensions
+            return reverse_mode ? grid.height - scaled_y : scaled_y;
+        }
+        case 2: // Z Axis - scale to grid depth
+        {
+            float normalized_z = (z - grid.min_z) / grid.depth; // 0 to 1
+            float scaled_z = normalized_z * grid.depth; // Scale to grid dimensions
+            return reverse_mode ? grid.depth - scaled_z : scaled_z;
+        }
+        case 3: // Radial - distance from center
+        default:
+        {
+            float center_x = (grid.min_x + grid.max_x) / 2.0f;
+            float center_y = (grid.min_y + grid.max_y) / 2.0f;
+            float center_z = (grid.min_z + grid.max_z) / 2.0f;
+
+            float dx = x - center_x;
+            float dy = y - center_y;
+            float dz = z - center_z;
+
+            float distance = sqrt(dx*dx + dy*dy + dz*dz);
+            float max_radius = std::max({grid.width, grid.height, grid.depth}) / 2.0f;
+
+            return reverse_mode ? max_radius - distance : distance;
+        }
+    }
+}
+
 float Wipe3D::ApplyEdgeShape(float /*distance*/, float edge_distance)
 {
     float thickness_factor = thickness * 0.1f;
@@ -403,6 +444,63 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     | Calculate wipe position (-20 to +20 range)              |
     \*---------------------------------------------------------*/
     float wipe_position = progress - 20.0f;
+    float edge_distance = fabs(distance - wipe_position);
+
+    /*---------------------------------------------------------*\
+    | Apply edge shape and get intensity                       |
+    \*---------------------------------------------------------*/
+    float intensity = ApplyEdgeShape(distance, edge_distance);
+
+    if(intensity <= 0.0f)
+    {
+        return 0x000000; // Black (no color)
+    }
+
+    /*---------------------------------------------------------*\
+    | Get color based on position in wipe                     |
+    \*---------------------------------------------------------*/
+    float color_position = fmod(distance * 0.1f + progress * 0.05f, 1.0f);
+    RGBColor base_color = GetColorAtPosition(color_position);
+
+    /*---------------------------------------------------------*\
+    | Apply intensity and brightness                           |
+    \*---------------------------------------------------------*/
+    unsigned char r = (base_color >> 16) & 0xFF;
+    unsigned char g = (base_color >> 8) & 0xFF;
+    unsigned char b = base_color & 0xFF;
+
+    float brightness_factor = (effect_brightness / 100.0f) * intensity;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Create smooth curves for speed                           |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = time * (actual_speed * 0.5f);
+
+    /*---------------------------------------------------------*\
+    | Calculate distance along wipe direction using grid      |
+    \*---------------------------------------------------------*/
+    float distance = CalculateWipeDistanceGrid(x, y, z, grid);
+
+    /*---------------------------------------------------------*\
+    | Calculate wipe position scaled to grid dimensions       |
+    \*---------------------------------------------------------*/
+    float max_grid_dimension = std::max({grid.width, grid.height, grid.depth});
+    float wipe_position = progress - max_grid_dimension;
     float edge_distance = fabs(distance - wipe_position);
 
     /*---------------------------------------------------------*\

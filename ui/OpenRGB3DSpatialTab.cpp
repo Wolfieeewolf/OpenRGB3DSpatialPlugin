@@ -13,6 +13,8 @@
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
+#include "VirtualController3D.h"
+#include "Effects3D/Explosion3D/Explosion3D.h"
 #include <QColorDialog>
 #include <QFile>
 #include <QTextStream>
@@ -27,11 +29,76 @@
 #endif
 #include <QFileInfo>
 #include <QInputDialog>
+#include <set>
 #include <QFileDialog>
 #include <filesystem>
 #include <cmath>
 #include "SettingsManager.h"
 #include <nlohmann/json.hpp>
+
+/*---------------------------------------------------------*\
+| Helper function to calculate origin offset based on     |
+| room preset and grid size                                |
+\*---------------------------------------------------------*/
+static void CalculateOriginOffset(OriginPreset preset, int grid_size, float& offset_x, float& offset_y, float& offset_z)
+{
+    float half_grid = grid_size / 2.0f;
+
+    switch(preset)
+    {
+        case ORIGIN_ROOM_CENTER:
+            offset_x = 0.0f;
+            offset_y = 0.0f;
+            offset_z = 0.0f;
+            break;
+        case ORIGIN_FLOOR_CENTER:
+            offset_x = 0.0f;
+            offset_y = 0.0f;
+            offset_z = -half_grid;  // Bottom of room
+            break;
+        case ORIGIN_CEILING_CENTER:
+            offset_x = 0.0f;
+            offset_y = 0.0f;
+            offset_z = half_grid;   // Top of room
+            break;
+        case ORIGIN_FRONT_WALL:
+            offset_x = 0.0f;
+            offset_y = -half_grid;  // Front wall (user facing)
+            offset_z = 0.0f;
+            break;
+        case ORIGIN_BACK_WALL:
+            offset_x = 0.0f;
+            offset_y = half_grid;   // Back wall
+            offset_z = 0.0f;
+            break;
+        case ORIGIN_LEFT_WALL:
+            offset_x = -half_grid;  // Left wall
+            offset_y = 0.0f;
+            offset_z = 0.0f;
+            break;
+        case ORIGIN_RIGHT_WALL:
+            offset_x = half_grid;   // Right wall
+            offset_y = 0.0f;
+            offset_z = 0.0f;
+            break;
+        case ORIGIN_FLOOR_FRONT:
+            offset_x = 0.0f;
+            offset_y = -half_grid;  // Front edge
+            offset_z = -half_grid;  // Floor level
+            break;
+        case ORIGIN_FLOOR_BACK:
+            offset_x = 0.0f;
+            offset_y = half_grid;   // Back edge
+            offset_z = -half_grid;  // Floor level
+            break;
+        case ORIGIN_CUSTOM:
+        default:
+            offset_x = 0.0f;
+            offset_y = 0.0f;
+            offset_z = 0.0f;
+            break;
+    }
+}
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -48,6 +115,14 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     explosion3d_effect = nullptr;
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
+
+    // Initialize layout mode and grid dimensions
+    grid_x_spin = nullptr;
+    grid_y_spin = nullptr;
+    grid_z_spin = nullptr;
+    custom_grid_x = 10;  // Default values
+    custom_grid_y = 10;
+    custom_grid_z = 10;
 
     SetupUI();
     LoadDevices();
@@ -214,13 +289,49 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     viewport = new LEDViewport3D();
     viewport->SetControllerTransforms(&controller_transforms);
+    viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
             this, SLOT(on_controller_position_changed(int,float,float,float)));
-    connect(viewport, SIGNAL(ControllerScaleChanged(int,float,float,float)),
-            this, SLOT(on_controller_scale_changed(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
 
+    /*---------------------------------------------------------*\
+    | Grid Settings Group (Custom Grid Only)                  |
+    \*---------------------------------------------------------*/
+    QGroupBox* layout_group = new QGroupBox("Grid Settings (1:1 LED Mapping)");
+    QGridLayout* layout_layout = new QGridLayout();
+
+    // Grid Dimensions
+    layout_layout->addWidget(new QLabel("Grid X:"), 0, 0);
+    grid_x_spin = new QSpinBox();
+    grid_x_spin->setRange(1, 100);
+    grid_x_spin->setValue(custom_grid_x);
+    layout_layout->addWidget(grid_x_spin, 0, 1);
+
+    layout_layout->addWidget(new QLabel("Grid Y:"), 0, 2);
+    grid_y_spin = new QSpinBox();
+    grid_y_spin->setRange(1, 100);
+    grid_y_spin->setValue(custom_grid_y);
+    layout_layout->addWidget(grid_y_spin, 0, 3);
+
+    layout_layout->addWidget(new QLabel("Grid Z:"), 0, 4);
+    grid_z_spin = new QSpinBox();
+    grid_z_spin->setRange(1, 100);
+    grid_z_spin->setValue(custom_grid_z);
+    layout_layout->addWidget(grid_z_spin, 0, 5);
+
+    // Add helpful label
+    QLabel* grid_help = new QLabel("LEDs are mapped sequentially to grid positions (X, Y, Z)");
+    grid_help->setStyleSheet("color: gray; font-size: 10px;");
+    layout_layout->addWidget(grid_help, 1, 0, 1, 6);
+
+    layout_group->setLayout(layout_layout);
+    left_panel->addWidget(layout_group);
+
+    // Connect signals
+    connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+    connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+    connect(grid_z_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
 
     QGroupBox* effect_group = new QGroupBox("Spatial Effects");
     QVBoxLayout* effect_layout = new QVBoxLayout();
@@ -270,7 +381,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
     QVBoxLayout* right_panel = new QVBoxLayout();
-    QGroupBox* transform_group = new QGroupBox("Position, Rotation & Scale");
+    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
     QGridLayout* position_layout = new QGridLayout();
 
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
@@ -465,116 +576,18 @@ void OpenRGB3DSpatialTab::SetupUI()
     });
     position_layout->addWidget(rot_z_spin, 5, 2);
 
-    position_layout->addWidget(new QLabel("Scale X:"), 6, 0);
-
-    scale_x_slider = new QSlider(Qt::Horizontal);
-    scale_x_slider->setRange(10, 1000);
-    scale_x_slider->setValue(100);
-    connect(scale_x_slider, &QSlider::valueChanged, [this](int value) {
-        double scale_value = value / 100.0;
-        scale_x_spin->setValue(scale_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.x = scale_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_x_slider, 6, 1);
-
-    scale_x_spin = new QDoubleSpinBox();
-    scale_x_spin->setRange(0.1, 10.0);
-    scale_x_spin->setDecimals(2);
-    scale_x_spin->setValue(1.0);
-    scale_x_spin->setMaximumWidth(80);
-    connect(scale_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        scale_x_slider->setValue((int)(value * 100));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.x = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_x_spin, 6, 2);
-
-    position_layout->addWidget(new QLabel("Scale Y:"), 7, 0);
-
-    scale_y_slider = new QSlider(Qt::Horizontal);
-    scale_y_slider->setRange(10, 1000);
-    scale_y_slider->setValue(100);
-    connect(scale_y_slider, &QSlider::valueChanged, [this](int value) {
-        double scale_value = value / 100.0;
-        scale_y_spin->setValue(scale_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.y = scale_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_y_slider, 7, 1);
-
-    scale_y_spin = new QDoubleSpinBox();
-    scale_y_spin->setRange(0.1, 10.0);
-    scale_y_spin->setDecimals(2);
-    scale_y_spin->setValue(1.0);
-    scale_y_spin->setMaximumWidth(80);
-    connect(scale_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        scale_y_slider->setValue((int)(value * 100));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.y = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_y_spin, 7, 2);
-
-    position_layout->addWidget(new QLabel("Scale Z:"), 8, 0);
-
-    scale_z_slider = new QSlider(Qt::Horizontal);
-    scale_z_slider->setRange(10, 1000);
-    scale_z_slider->setValue(100);
-    connect(scale_z_slider, &QSlider::valueChanged, [this](int value) {
-        double scale_value = value / 100.0;
-        scale_z_spin->setValue(scale_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.z = scale_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_z_slider, 8, 1);
-
-    scale_z_spin = new QDoubleSpinBox();
-    scale_z_spin->setRange(0.1, 10.0);
-    scale_z_spin->setDecimals(2);
-    scale_z_spin->setValue(1.0);
-    scale_z_spin->setMaximumWidth(80);
-    connect(scale_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        scale_z_slider->setValue((int)(value * 100));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.scale.z = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(scale_z_spin, 8, 2);
 
     transform_group->setLayout(position_layout);
     right_panel->addWidget(transform_group);
 
     right_panel->addStretch();
 
-    QGroupBox* layout_group = new QGroupBox("Layout Profiles");
-    QVBoxLayout* layout_layout = new QVBoxLayout();
+    QGroupBox* profile_group = new QGroupBox("Layout Profiles");
+    QVBoxLayout* profile_layout = new QVBoxLayout();
 
     layout_profiles_combo = new QComboBox();
     connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
-    layout_layout->addWidget(layout_profiles_combo);
+    profile_layout->addWidget(layout_profiles_combo);
 
     QHBoxLayout* save_load_layout = new QHBoxLayout();
     QPushButton* save_button = new QPushButton("Save Layout");
@@ -584,11 +597,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     QPushButton* load_button = new QPushButton("Load Layout");
     connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
     save_load_layout->addWidget(load_button);
-    layout_layout->addLayout(save_load_layout);
+    profile_layout->addLayout(save_load_layout);
 
     QPushButton* delete_button = new QPushButton("Delete Profile");
     connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
-    layout_layout->addWidget(delete_button);
+    profile_layout->addWidget(delete_button);
 
     auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
 
@@ -606,12 +619,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
         resource_manager->GetSettingsManager()->SaveSettings();
     });
-    layout_layout->addWidget(auto_load_checkbox);
+    profile_layout->addWidget(auto_load_checkbox);
 
     PopulateLayoutDropdown();
 
-    layout_group->setLayout(layout_layout);
-    right_panel->addWidget(layout_group);
+    profile_group->setLayout(profile_layout);
+    right_panel->addWidget(profile_group);
 
     /*---------------------------------------------------------*\
     | Add stretch to push content to top of right panel       |
@@ -698,9 +711,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_x_spin->setValue(ctrl->transform.rotation.x);
         rot_y_spin->setValue(ctrl->transform.rotation.y);
         rot_z_spin->setValue(ctrl->transform.rotation.z);
-        scale_x_spin->setValue(ctrl->transform.scale.x);
-        scale_y_spin->setValue(ctrl->transform.scale.y);
-        scale_z_spin->setValue(ctrl->transform.scale.z);
 
         pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
         pos_y_slider->setValue((int)(ctrl->transform.position.y * 10));
@@ -708,9 +718,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_x_slider->setValue((int)(ctrl->transform.rotation.x * 10));
         rot_y_slider->setValue((int)(ctrl->transform.rotation.y * 10));
         rot_z_slider->setValue((int)(ctrl->transform.rotation.z * 10));
-        scale_x_slider->setValue((int)(ctrl->transform.scale.x * 100));
-        scale_y_slider->setValue((int)(ctrl->transform.scale.y * 100));
-        scale_z_slider->setValue((int)(ctrl->transform.scale.z * 100));
     }
     else if(index == -1)
     {
@@ -727,26 +734,17 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
 
+        // Update both spin boxes and sliders
         pos_x_spin->setValue(x);
         pos_y_spin->setValue(y);
         pos_z_spin->setValue(z);
+
+        pos_x_slider->setValue((int)(x * 10));
+        pos_y_slider->setValue((int)(y * 10));
+        pos_z_slider->setValue((int)(z * 10));
     }
 }
 
-void OpenRGB3DSpatialTab::on_controller_scale_changed(int index, float x, float y, float z)
-{
-    if(index >= 0 && index < (int)controller_transforms.size())
-    {
-        ControllerTransform* ctrl = controller_transforms[index];
-        ctrl->transform.scale.x = x;
-        ctrl->transform.scale.y = y;
-        ctrl->transform.scale.z = z;
-
-        scale_x_spin->setValue(x);
-        scale_y_spin->setValue(y);
-        scale_z_spin->setValue(z);
-    }
-}
 
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
@@ -831,16 +829,103 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     effect_time += 0.033f; // ~30 FPS
 
     /*---------------------------------------------------------*\
-    | Apply effect to all controller LEDs                     |
+    | Apply effect over the entire grid space                 |
     \*---------------------------------------------------------*/
+    // Calculate grid bounds
+    int half_x = custom_grid_x / 2;
+    int half_y = custom_grid_y / 2;
+    int half_z = custom_grid_z / 2;
+
+    float grid_min_x = -half_x;
+    float grid_max_x = custom_grid_x - half_x - 1;
+    float grid_min_y = -half_y;
+    float grid_max_y = custom_grid_y - half_y - 1;
+    float grid_min_z = -half_z;
+    float grid_max_z = custom_grid_z - half_z - 1;
+
+    // Create grid context for effects
+    GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
+
+    // Get origin offset for the effect
+    OriginPreset origin_preset = ORIGIN_ROOM_CENTER; // Default fallback
+    Explosion3D* explosion_effect = dynamic_cast<Explosion3D*>(current_effect_ui);
+    if(explosion_effect)
+    {
+        origin_preset = explosion_effect->GetOriginPreset();
+    }
+
+    float origin_offset_x, origin_offset_y, origin_offset_z;
+    int max_grid_size = std::max({custom_grid_x, custom_grid_y, custom_grid_z});
+    CalculateOriginOffset(origin_preset, max_grid_size, origin_offset_x, origin_offset_y, origin_offset_z);
+
+    // Now map each controller's LEDs to the unified grid and apply effects
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx];
-        if(!transform || !transform->controller)
+        if(!transform)
         {
             continue;
         }
 
+        // Handle virtual controllers
+        if(transform->virtual_controller && !transform->controller)
+        {
+            VirtualController3D* virtual_ctrl = transform->virtual_controller;
+            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+
+            // Apply effects to each virtual LED
+            for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
+            {
+                const GridLEDMapping& mapping = mappings[mapping_idx];
+                if(!mapping.controller) continue;
+
+                // Calculate virtual LED world position in unified grid space using proper transformation
+                Vector3D local_pos;
+                local_pos.x = (float)mapping.x;
+                local_pos.y = (float)mapping.y;
+                local_pos.z = (float)mapping.z;
+                Vector3D world_pos = ControllerLayout3D::CalculateWorldPosition(local_pos, transform->transform);
+                float x = world_pos.x;
+                float y = world_pos.y;
+                float z = world_pos.z;
+
+                // Adjust coordinates relative to the unified origin point (calculated once above)
+                float relative_x = x - origin_offset_x;
+                float relative_y = y - origin_offset_y;
+                float relative_z = z - origin_offset_z;
+
+                // Only apply effects to virtual LEDs within the unified grid bounds
+                if(x >= grid_min_x && x <= grid_max_x &&
+                   y >= grid_min_y && y <= grid_max_y &&
+                   z >= grid_min_z && z <= grid_max_z)
+                {
+                    // Calculate effect color using grid-aware method
+                    RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+
+                    // Apply color to the mapped physical LED
+                    unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                    if(led_global_idx < mapping.controller->colors.size())
+                    {
+                        mapping.controller->colors[led_global_idx] = color;
+                    }
+                }
+            }
+
+            // Update the physical controllers that this virtual controller maps to
+            std::set<RGBController*> updated_controllers;
+            for(const GridLEDMapping& mapping : mappings)
+            {
+                if(mapping.controller && updated_controllers.find(mapping.controller) == updated_controllers.end())
+                {
+                    mapping.controller->UpdateLEDs();
+                    updated_controllers.insert(mapping.controller);
+                }
+            }
+
+            continue;
+        }
+
+        // Handle regular controllers
         RGBController* controller = transform->controller;
         if(!controller)
         {
@@ -848,32 +933,46 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
 
         /*---------------------------------------------------------*\
-        | Calculate colors for each LED                            |
+        | Calculate colors for each LED using actual positions    |
         \*---------------------------------------------------------*/
-        for(unsigned int led_idx = 0; led_idx < controller->leds.size(); led_idx++)
+        for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
         {
-            /*---------------------------------------------------------*\
-            | Get LED 3D position relative to controller              |
-            \*---------------------------------------------------------*/
-            // Create a more logical 3D grid for effects
-            // This spreads LEDs evenly in 3D space for proper axis effects
-            int grid_size = (int)ceil(cbrt(controller->leds.size())); // Cube root for 3D grid
-            float x = (led_idx % grid_size) - (grid_size / 2.0f);
-            float y = ((led_idx / grid_size) % grid_size) - (grid_size / 2.0f);
-            float z = (led_idx / (grid_size * grid_size)) - (grid_size / 2.0f);
+            LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
 
             /*---------------------------------------------------------*\
-            | Apply controller transform                               |
+            | Get LED 3D position from the actual layout              |
             \*---------------------------------------------------------*/
-            x += transform->transform.position.x;
-            y += transform->transform.position.y;
-            z += transform->transform.position.z;
+            // Calculate LED world position in unified grid space using proper transformation
+            Vector3D world_pos = ControllerLayout3D::CalculateWorldPosition(led_position.local_position, transform->transform);
+            float x = world_pos.x;
+            float y = world_pos.y;
+            float z = world_pos.z;
 
-            /*---------------------------------------------------------*\
-            | Calculate effect color                                   |
-            \*---------------------------------------------------------*/
-            RGBColor color = current_effect_ui->CalculateColor(x, y, z, effect_time);
-            controller->colors[led_idx] = color;
+            // Get the actual LED index for color updates
+            unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
+
+            // Adjust coordinates relative to the unified origin point (calculated once above)
+            float relative_x = x - origin_offset_x;
+            float relative_y = y - origin_offset_y;
+            float relative_z = z - origin_offset_z;
+
+            // Only apply effects to LEDs within the unified grid bounds
+            if(x >= grid_min_x && x <= grid_max_x &&
+               y >= grid_min_y && y <= grid_max_y &&
+               z >= grid_min_z && z <= grid_max_z)
+            {
+                /*---------------------------------------------------------*\
+                | Calculate effect color using grid-aware method          |
+                \*---------------------------------------------------------*/
+                RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+
+                // Apply color to the correct LED using the global LED index
+                if(led_global_idx < controller->colors.size())
+                {
+                    controller->colors[led_global_idx] = color;
+                }
+            }
+            // LEDs outside the grid remain unlit (keep their current color)
         }
 
         /*---------------------------------------------------------*\
@@ -991,7 +1090,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = nullptr;
-        ctrl_transform->transform.position = {-40.0f, 0.0f, -50.0f};
+        ctrl_transform->virtual_controller = virtual_ctrl;
+        ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
         ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
@@ -1025,7 +1125,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     ControllerTransform* ctrl_transform = new ControllerTransform();
     ctrl_transform->controller = controller;
-    ctrl_transform->transform.position = {-40.0f, 0.0f, -50.0f};
+    ctrl_transform->virtual_controller = nullptr;
+    ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
@@ -1033,7 +1134,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     if(granularity == 0)
     {
-        ctrl_transform->led_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+        ctrl_transform->led_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
         name = QString::fromStdString(controller->name);
     }
     else if(granularity == 1)
@@ -1044,7 +1145,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             return;
         }
 
-        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
         zone* z = &controller->zones[item_row];
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
@@ -1065,7 +1166,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             return;
         }
 
-        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
@@ -1487,7 +1588,8 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     QTextStream out(&file);
 
     out << "OpenRGB3DSpatialLayout\n";
-    out << "Version 1\n";
+    out << "Version 2\n";  // Increment version for grid dimensions
+    out << custom_grid_x << " " << custom_grid_y << " " << custom_grid_z << "\n";  // Save grid dimensions
     out << controller_transforms.size() << "\n";
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
@@ -1546,6 +1648,26 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     }
 
     QString version_line = in.readLine();
+    bool is_version_2 = (version_line == "Version 2");
+
+    // Load grid dimensions if version 2
+    if(is_version_2)
+    {
+        QString grid_line = in.readLine();
+        QStringList grid_parts = grid_line.split(" ");
+        if(grid_parts.size() >= 3)
+        {
+            custom_grid_x = grid_parts[0].toInt();
+            custom_grid_y = grid_parts[1].toInt();
+            custom_grid_z = grid_parts[2].toInt();
+
+            // Update UI
+            if(grid_x_spin) grid_x_spin->setValue(custom_grid_x);
+            if(grid_y_spin) grid_y_spin->setValue(custom_grid_y);
+            if(grid_z_spin) grid_z_spin->setValue(custom_grid_z);
+        }
+    }
+
     int count = in.readLine().toInt();
 
     on_clear_all_clicked();
@@ -1589,6 +1711,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
         ControllerTransform* ctrl_transform = new ControllerTransform();
         ctrl_transform->controller = controller;
+        ctrl_transform->virtual_controller = nullptr;
 
         if(is_virtual)
         {
@@ -1610,10 +1733,23 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
             if(virtual_ctrl)
             {
+                ctrl_transform->controller = nullptr;
+                ctrl_transform->virtual_controller = virtual_ctrl;
                 ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
             }
             else
             {
+                // Virtual controller not found, skip this entry
+                for(int j = 0; j < led_count; j++)
+                {
+                    in.readLine();
+                }
+                in.readLine(); // x position
+                in.readLine(); // y position
+                in.readLine(); // z position
+                in.readLine(); // display color
+                delete ctrl_transform;
+                continue;
             }
 
             for(int j = 0; j < led_count; j++)
@@ -1629,7 +1765,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
                 unsigned int zone_idx = parts[0].toUInt();
                 unsigned int led_idx = parts[1].toUInt();
 
-                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
 
                 for(unsigned int k = 0; k < all_positions.size(); k++)
                 {
@@ -1909,7 +2045,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
             if(ct->controller == controller)
             {
                 bool is_whole_device = true;
-                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateLEDPositions(controller);
+                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
                 if(ct->led_positions.size() != all_positions.size())
                 {
                     is_whole_device = false;
@@ -2131,4 +2267,37 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     dnahelix3d_effect = nullptr;
 
 }
+
+void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
+{
+    /*---------------------------------------------------------*\
+    | Update grid dimensions from UI                           |
+    \*---------------------------------------------------------*/
+    if(grid_x_spin) custom_grid_x = grid_x_spin->value();
+    if(grid_y_spin) custom_grid_y = grid_y_spin->value();
+    if(grid_z_spin) custom_grid_z = grid_z_spin->value();
+
+    /*---------------------------------------------------------*\
+    | Regenerate LED positions for all controllers            |
+    \*---------------------------------------------------------*/
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* transform = controller_transforms[i];
+        if(transform->controller)
+        {
+            transform->led_positions = ControllerLayout3D::GenerateCustomGridLayout(
+                transform->controller, custom_grid_x, custom_grid_y, custom_grid_z);
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Update viewport                                          |
+    \*---------------------------------------------------------*/
+    if(viewport)
+    {
+        viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
+        viewport->update();
+    }
+}
+
 

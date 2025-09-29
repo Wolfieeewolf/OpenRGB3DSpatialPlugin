@@ -129,6 +129,7 @@ HEADERS +=                                                                      
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
     VirtualController3D.h                                                                       \
+    Constants3D.h                                                                               \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \

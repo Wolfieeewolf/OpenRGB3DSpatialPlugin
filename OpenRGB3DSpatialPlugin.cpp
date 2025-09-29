@@ -28,12 +28,12 @@ OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
     info.Location       = OPENRGB_PLUGIN_LOCATION_TOP;
 
 
-    return(info);
+    return info;
 }
 
 unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
 {
-    return(OPENRGB_PLUGIN_API_VERSION);
+    return OPENRGB_PLUGIN_API_VERSION;
 }
 
 void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
@@ -58,7 +58,7 @@ QWidget* OpenRGB3DSpatialPlugin::GetWidget()
 
 QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 {
-    return(nullptr);
+    return nullptr;
 }
 
 void OpenRGB3DSpatialPlugin::Unload()

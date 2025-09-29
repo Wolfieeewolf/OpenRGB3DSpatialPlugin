@@ -12,13 +12,23 @@
 #ifndef OPENRGB3DSPATIALPLUGIN_H
 #define OPENRGB3DSPATIALPLUGIN_H
 
+/*---------------------------------------------------------*\
+| Qt Includes                                              |
+\*---------------------------------------------------------*/
 #include <QObject>
 #include <QWidget>
 #include <QMenu>
 
+/*---------------------------------------------------------*\
+| OpenRGB Includes                                         |
+\*---------------------------------------------------------*/
 #include "OpenRGBPluginInterface.h"
-#include "OpenRGB3DSpatialTab.h"
 #include "ResourceManagerInterface.h"
+
+/*---------------------------------------------------------*\
+| Local Includes                                           |
+\*---------------------------------------------------------*/
+#include "OpenRGB3DSpatialTab.h"
 
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
 {

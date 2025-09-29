@@ -26,6 +26,20 @@ enum SpatialEffectType
     SPATIAL_EFFECT_EXPLOSION        = 6,
 };
 
+enum OriginPreset
+{
+    ORIGIN_ROOM_CENTER      = 0,    // Center of entire room (current default)
+    ORIGIN_FLOOR_CENTER     = 1,    // Center of floor
+    ORIGIN_CEILING_CENTER   = 2,    // Center of ceiling
+    ORIGIN_FRONT_WALL       = 3,    // Center of front wall (user facing)
+    ORIGIN_BACK_WALL        = 4,    // Center of back wall
+    ORIGIN_LEFT_WALL        = 5,    // Center of left wall
+    ORIGIN_RIGHT_WALL       = 6,    // Center of right wall
+    ORIGIN_FLOOR_FRONT      = 7,    // Front edge of floor
+    ORIGIN_FLOOR_BACK       = 8,    // Back edge of floor
+    ORIGIN_CUSTOM           = 9,    // Custom X,Y,Z coordinates
+};
+
 struct SpatialEffectParams
 {
     SpatialEffectType   type;
@@ -39,7 +53,8 @@ struct SpatialEffectParams
     | 3D Spatial Controls                                      |
     \*---------------------------------------------------------*/
     Vector3D            scale_3d;           // Scale per axis (X, Y, Z)
-    Vector3D            origin;             // Center point for effect
+    Vector3D            origin;             // Center point for effect (custom coordinates)
+    OriginPreset        origin_preset;      // Room-based origin preset
     Rotation3D          rotation;           // Rotation around each axis
     Vector3D            direction;          // Direction vector for directional effects
 

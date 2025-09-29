@@ -21,7 +21,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QColorDialog>
-#include "../SpatialEffect3D.h"
+#include "SpatialEffect3D.h"
 
 class Explosion3D : public SpatialEffect3D
 {
@@ -38,6 +38,8 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    OriginPreset GetOriginPreset() const { return origin_preset; }
 
 private slots:
     void OnExplosionParameterChanged();
@@ -50,6 +52,7 @@ private:
     /*---------------------------------------------------------*\
     | Explosion-specific controls                              |
     \*---------------------------------------------------------*/
+    QComboBox*      origin_combo;           // Origin preset selection
     QSlider*        intensity_slider;       // Explosion intensity
     QSlider*        speed_slider;           // Effect speed
     QSlider*        brightness_slider;      // Effect brightness
@@ -69,6 +72,7 @@ private:
     /*---------------------------------------------------------*\
     | Current explosion parameters                             |
     \*---------------------------------------------------------*/
+    OriginPreset    origin_preset;
     unsigned int    explosion_intensity;
     unsigned int    frequency;
     bool            rainbow_mode;

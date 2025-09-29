@@ -17,6 +17,10 @@
 #include <algorithm>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     direction_combo = nullptr;
@@ -40,9 +44,9 @@ Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
     progress = 0.0f;
 
     // Initialize with default colors (will use rainbow mode by default)
-    colors.push_back(0x000000FF);  // Red
+    colors.push_back(0x000000FF);  // Blue
     colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Blue
+    colors.push_back(0x00FF0000);  // Red
 }
 
 Wave3D::~Wave3D()
@@ -146,7 +150,7 @@ void Wave3D::SetupCustomUI(QWidget* parent)
     /*---------------------------------------------------------*\
     | Add to parent layout                                     |
     \*---------------------------------------------------------*/
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(wave_widget);
     }
@@ -175,12 +179,12 @@ void Wave3D::OnWaveParameterChanged()
     /*---------------------------------------------------------*\
     | Update internal parameters                               |
     \*---------------------------------------------------------*/
-    if(direction_combo)  direction_type = direction_combo->currentIndex();
-    if(speed_slider)     effect_speed = speed_slider->value();
-    if(brightness_slider) effect_brightness = brightness_slider->value();
-    if(frequency_slider) frequency = frequency_slider->value();
-    if(shape_combo)      shape_type = shape_combo->currentIndex();
-    if(reverse_check)    reverse_mode = reverse_check->isChecked();
+    if (direction_combo)  direction_type = direction_combo->currentIndex();
+    if (speed_slider)     effect_speed = speed_slider->value();
+    if (brightness_slider) effect_brightness = brightness_slider->value();
+    if (frequency_slider) frequency = frequency_slider->value();
+    if (shape_combo)      shape_type = shape_combo->currentIndex();
+    if (reverse_check)    reverse_mode = reverse_check->isChecked();
 
     /*---------------------------------------------------------*\
     | Emit parameter change signal                             |
@@ -190,7 +194,7 @@ void Wave3D::OnWaveParameterChanged()
 
 void Wave3D::OnRainbowModeChanged()
 {
-    if(rainbow_mode_check)
+    if (rainbow_mode_check)
     {
         rainbow_mode = rainbow_mode_check->isChecked();
     }
@@ -198,7 +202,7 @@ void Wave3D::OnRainbowModeChanged()
     /*---------------------------------------------------------*\
     | Show/hide color controls based on rainbow mode          |
     \*---------------------------------------------------------*/
-    if(color_controls_widget)
+    if (color_controls_widget)
     {
         color_controls_widget->setVisible(!rainbow_mode);
     }
@@ -219,7 +223,7 @@ void Wave3D::OnAddColorClicked()
 
 void Wave3D::OnRemoveColorClicked()
 {
-    if(colors.size() > 1)
+    if (colors.size() > 1)
     {
         colors.pop_back();
         RemoveLastColorButton();
@@ -230,27 +234,27 @@ void Wave3D::OnRemoveColorClicked()
 void Wave3D::OnColorButtonClicked()
 {
     QPushButton* button = qobject_cast<QPushButton*>(sender());
-    if(!button) return;
+    if (!button) return;
 
     // Find which color button was clicked
     int index = -1;
-    for(unsigned int i = 0; i < color_buttons.size(); i++)
+    for (unsigned int i = 0; i < color_buttons.size(); i++)
     {
-        if(color_buttons[i] == button)
+        if (color_buttons[i] == button)
         {
             index = i;
             break;
         }
     }
 
-    if(index >= 0 && index < (int)colors.size())
+    if (index >= 0 && index < (int)colors.size())
     {
         // Open color dialog
         QColor initial_color;
         initial_color.setRgb(colors[index] & 0xFF, (colors[index] >> 8) & 0xFF, (colors[index] >> 16) & 0xFF);
 
         QColor new_color = QColorDialog::getColor(initial_color, this);
-        if(new_color.isValid())
+        if (new_color.isValid())
         {
             colors[index] = (new_color.blue() << 16) | (new_color.green() << 8) | new_color.red();
 
@@ -265,7 +269,7 @@ void Wave3D::OnColorButtonClicked()
 
 void Wave3D::SetupColorControls(QWidget* parent)
 {
-    if(!parent || !parent->layout()) return;
+    if (!parent || !parent->layout()) return;
 
     color_controls_widget = new QWidget();
     color_controls_layout = new QHBoxLayout(color_controls_widget);
@@ -286,7 +290,7 @@ void Wave3D::SetupColorControls(QWidget* parent)
     /*---------------------------------------------------------*\
     | Create initial color buttons                             |
     \*---------------------------------------------------------*/
-    for(unsigned int i = 0; i < colors.size(); i++)
+    for (unsigned int i = 0; i < colors.size(); i++)
     {
         CreateColorButton(colors[i]);
     }
@@ -325,7 +329,7 @@ void Wave3D::CreateColorButton(RGBColor color)
 
 void Wave3D::RemoveLastColorButton()
 {
-    if(!color_buttons.empty())
+    if (!color_buttons.empty())
     {
         QPushButton* button = color_buttons.back();
         color_buttons.pop_back();
@@ -340,7 +344,7 @@ RGBColor Wave3D::GetRainbowColor(float hue)
     | Convert HSV to RGB (like RadialRainbow)                 |
     \*---------------------------------------------------------*/
     float h = fmod(hue, 360.0f);
-    if(h < 0.0f) h += 360.0f;
+    if (h < 0.0f) h += 360.0f;
 
     float saturation = 1.0f;
     float value = 1.0f;
@@ -350,17 +354,28 @@ RGBColor Wave3D::GetRainbowColor(float hue)
     float m = value - c;
 
     float r, g, b;
-    if(h >= 0 && h < 60) {
+    if (h >= 0 && h < 60)
+    {
         r = c; g = x; b = 0;
-    } else if(h >= 60 && h < 120) {
+    }
+    else if (h >= 60 && h < 120)
+    {
         r = x; g = c; b = 0;
-    } else if(h >= 120 && h < 180) {
+    }
+    else if (h >= 120 && h < 180)
+    {
         r = 0; g = c; b = x;
-    } else if(h >= 180 && h < 240) {
+    }
+    else if (h >= 180 && h < 240)
+    {
         r = 0; g = x; b = c;
-    } else if(h >= 240 && h < 300) {
+    }
+    else if (h >= 240 && h < 300)
+    {
         r = x; g = 0; b = c;
-    } else {
+    }
+    else
+    {
         r = c; g = 0; b = x;
     }
 
@@ -373,20 +388,20 @@ RGBColor Wave3D::GetRainbowColor(float hue)
 
 RGBColor Wave3D::GetColorAtPosition(float position)
 {
-    if(colors.empty()) return 0x000000;
-    if(colors.size() == 1) return colors[0];
+    if (colors.empty()) return 0x000000;
+    if (colors.size() == 1) return colors[0];
 
     /*---------------------------------------------------------*\
     | Interpolate between colors                               |
     \*---------------------------------------------------------*/
     position = fmod(position, 1.0f);
-    if(position < 0.0f) position += 1.0f;
+    if (position < 0.0f) position += 1.0f;
 
     float color_pos = position * (colors.size() - 1);
     int color_idx = (int)color_pos;
     float blend = color_pos - color_idx;
 
-    if(color_idx >= (int)colors.size() - 1)
+    if (color_idx >= (int)colors.size() - 1)
     {
         return colors[colors.size() - 1];
     }
@@ -449,7 +464,7 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
             break;
         case 3: // Radial (3D Sphere)
         default:
-            if(shape_type == 0) // Circles
+            if (shape_type == 0) // Circles
             {
                 float distance = sqrt(x*x + y*y + z*z);
                 wave_value = sin(distance * freq_scale + (reverse_mode ? progress : -progress));
@@ -467,14 +482,124 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     \*---------------------------------------------------------*/
     float hue = (wave_value + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
-    if(hue < 0.0f) hue += 360.0f;
+    if (hue < 0.0f) hue += 360.0f;
 
     /*---------------------------------------------------------*\
     | Get color based on mode                                  |
     \*---------------------------------------------------------*/
     RGBColor final_color;
 
-    if(rainbow_mode)
+    if (rainbow_mode)
+    {
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        // Use custom colors with position-based selection
+        float position = hue / 360.0f;
+        final_color = GetColorAtPosition(position);
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply brightness                                         |
+    \*---------------------------------------------------------*/
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = effect_brightness / 100.0f;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Create smooth curves for speed and frequency            |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 10.0f; // Map to 0-10 range
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = time * (actual_speed * 2.0f);
+
+    /*---------------------------------------------------------*\
+    | Calculate normalized coordinates (0 to 1)               |
+    \*---------------------------------------------------------*/
+    float norm_x = (x - grid.min_x) / grid.width;
+    float norm_y = (y - grid.min_y) / grid.height;
+    float norm_z = (z - grid.min_z) / grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Calculate wave based on direction type                  |
+    \*---------------------------------------------------------*/
+    float wave_value = 0.0f;
+    float freq_scale = actual_frequency * 2.0f * M_PI; // Scale for proper wave frequency
+
+    switch(direction_type)
+    {
+        case 0: // X Axis Wave (left-to-right across grid)
+            wave_value = sin(norm_x * grid.width * freq_scale / grid.width + (reverse_mode ? -progress : progress)) *
+                        (1.0f + 0.3f * sin(norm_y * grid.height * 0.5f) + 0.2f * sin(norm_z * grid.depth * 0.3f));
+            break;
+        case 1: // Y Axis Wave (up-down across grid)
+            wave_value = sin(norm_y * grid.height * freq_scale / grid.height + (reverse_mode ? -progress : progress)) *
+                        (1.0f + 0.3f * sin(norm_x * grid.width * 0.5f) + 0.2f * sin(norm_z * grid.depth * 0.3f));
+            break;
+        case 2: // Z Axis Wave (front-back across grid)
+            wave_value = sin(norm_z * grid.depth * freq_scale / grid.depth + (reverse_mode ? -progress : progress)) *
+                        (1.0f + 0.3f * sin(norm_x * grid.width * 0.5f) + 0.2f * sin(norm_y * grid.height * 0.3f));
+            break;
+        case 3: // Radial (3D Sphere scaled to grid)
+        default:
+        {
+            // Calculate distance from center in normalized space
+            float center_x = 0.5f;
+            float center_y = 0.5f;
+            float center_z = 0.5f;
+
+            float dx = norm_x - center_x;
+            float dy = norm_y - center_y;
+            float dz = norm_z - center_z;
+
+            if (shape_type == 0) // Circles
+            {
+                float distance = sqrt(dx*dx + dy*dy + dz*dz);
+                float max_radius = 0.5f * sqrt(3.0f); // Max distance in normalized cube
+                wave_value = sin(distance * freq_scale / max_radius + (reverse_mode ? progress : -progress));
+            }
+            else // Squares (cube distance)
+            {
+                float distance = std::max({fabs(dx), fabs(dy), fabs(dz)});
+                wave_value = sin(distance * freq_scale / 0.5f + (reverse_mode ? progress : -progress));
+            }
+            break;
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Convert wave to hue (0-360 degrees)                     |
+    \*---------------------------------------------------------*/
+    float hue = (wave_value + 1.0f) * 180.0f;
+    hue = fmod(hue, 360.0f);
+    if (hue < 0.0f) hue += 360.0f;
+
+    /*---------------------------------------------------------*\
+    | Get color based on mode                                  |
+    \*---------------------------------------------------------*/
+    RGBColor final_color;
+
+    if (rainbow_mode)
     {
         final_color = GetRainbowColor(hue);
     }

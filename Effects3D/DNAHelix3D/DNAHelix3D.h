@@ -21,7 +21,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QColorDialog>
-#include "../SpatialEffect3D.h"
+#include "SpatialEffect3D.h"
 
 class DNAHelix3D : public SpatialEffect3D
 {
@@ -38,6 +38,7 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private slots:
     void OnDNAParameterChanged();

@@ -43,9 +43,9 @@ BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
     progress = 0.0f;
 
     // Initialize with default colors
-    colors.push_back(0x000000FF);  // Red
+    colors.push_back(0x000000FF);  // Blue
     colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Blue
+    colors.push_back(0x00FF0000);  // Red
 }
 
 BreathingSphere3D::~BreathingSphere3D()
@@ -245,6 +245,110 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
     }
 
     // Apply intensity and brightness
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = (effect_brightness / 100.0f) * sphere_intensity;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Calculate normalized coordinates (0 to 1)               |
+    \*---------------------------------------------------------*/
+    float norm_x = (x - grid.min_x) / grid.width;
+    float norm_y = (y - grid.min_y) / grid.height;
+    float norm_z = (z - grid.min_z) / grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Create smooth curves for speed and frequency            |
+    \*---------------------------------------------------------*/
+    float speed_curve = (effect_speed / 100.0f);
+    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
+    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+
+    float freq_curve = (frequency / 100.0f);
+    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
+    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = time * (actual_speed * 0.1f);
+
+    /*---------------------------------------------------------*\
+    | Scale frequency based on grid dimensions                 |
+    \*---------------------------------------------------------*/
+    float freq_scale = actual_frequency * 0.01f;
+    float grid_scale = sqrt(grid.width * grid.height * grid.depth) / 15.0f; // 3D scaling for sphere
+    freq_scale *= grid_scale;
+
+    /*---------------------------------------------------------*\
+    | Convert to centered coordinates for sphere calculation   |
+    \*---------------------------------------------------------*/
+    float center_x = (norm_x - 0.5f) * grid.width;
+    float center_y = (norm_y - 0.5f) * grid.height;
+    float center_z = (norm_z - 0.5f) * grid.depth;
+
+    /*---------------------------------------------------------*\
+    | Calculate distance from center (3D sphere)              |
+    \*---------------------------------------------------------*/
+    float distance = sqrt(center_x*center_x + center_y*center_y + center_z*center_z);
+
+    /*---------------------------------------------------------*\
+    | Scale sphere size relative to grid dimensions           |
+    \*---------------------------------------------------------*/
+    float max_grid_dimension = fmax(grid.width, fmax(grid.height, grid.depth));
+    float grid_sphere_size = (sphere_size / 100.0f) * max_grid_dimension * 0.4f;
+
+    /*---------------------------------------------------------*\
+    | Create breathing effect - pulsing sphere                |
+    \*---------------------------------------------------------*/
+    float sphere_radius = grid_sphere_size * (1.0f + 0.5f * sin(progress * freq_scale));
+
+    /*---------------------------------------------------------*\
+    | Create smooth falloff from center with breathing        |
+    \*---------------------------------------------------------*/
+    float sphere_intensity = 1.0f - smoothstep(0.0f, sphere_radius, distance);
+
+    /*---------------------------------------------------------*\
+    | Add secondary pulse waves for complexity                |
+    \*---------------------------------------------------------*/
+    float pulse_wave = 0.3f * sin(distance * freq_scale * 2.0f - progress * 2.0f);
+    sphere_intensity += pulse_wave;
+
+    /*---------------------------------------------------------*\
+    | Normalize intensity                                      |
+    \*---------------------------------------------------------*/
+    sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
+
+    /*---------------------------------------------------------*\
+    | Get color based on mode                                  |
+    \*---------------------------------------------------------*/
+    RGBColor final_color;
+
+    if(rainbow_mode)
+    {
+        // Rainbow colors based on distance and time
+        float hue = distance * 50.0f + progress * 30.0f;
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        // Use position for color selection in custom mode
+        float color_position = (distance / max_grid_dimension + progress * 0.05f);
+        final_color = GetColorAtPosition(color_position);
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply intensity and brightness                           |
+    \*---------------------------------------------------------*/
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;

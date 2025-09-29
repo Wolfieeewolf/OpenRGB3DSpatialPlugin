@@ -10,14 +10,15 @@
 \*---------------------------------------------------------*/
 
 #include "SpatialEffect3D.h"
+#include "Constants3D.h"
 
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
     effect_enabled = false;
-    effect_speed = 50;
-    effect_brightness = 100;
-    color_start = 0xFF0000;
-    color_end = 0x0000FF;
+    effect_speed = DEFAULT_EFFECT_SPEED;
+    effect_brightness = DEFAULT_EFFECT_BRIGHTNESS;
+    color_start = DEFAULT_COLOR_START;
+    color_end = DEFAULT_COLOR_END;
     use_gradient = true;
 
     effect_controls_group = nullptr;
@@ -141,7 +142,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     /*---------------------------------------------------------*\
     | Add to parent layout                                     |
     \*---------------------------------------------------------*/
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(effect_controls_group);
     }
@@ -156,7 +157,7 @@ void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
     \*---------------------------------------------------------*/
     bool needs_any_3d_controls = info.needs_3d_origin || info.needs_direction;
 
-    if(!needs_any_3d_controls)
+    if (!needs_any_3d_controls)
     {
         return; // Don't create empty 3D controls box
     }
@@ -168,7 +169,7 @@ void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
     /*---------------------------------------------------------*\
     | Create controls based on effect requirements            |
     \*---------------------------------------------------------*/
-    if(info.needs_3d_origin)
+    if (info.needs_3d_origin)
     {
         CreateOriginControls(spatial_controls_group);
     }
@@ -176,7 +177,7 @@ void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
     CreateScaleControls(spatial_controls_group);
     CreateRotationControls(spatial_controls_group);
 
-    if(info.needs_direction)
+    if (info.needs_direction)
     {
         CreateDirectionControls(spatial_controls_group);
     }
@@ -186,7 +187,7 @@ void SpatialEffect3D::CreateCommon3DControls(QWidget* parent)
     /*---------------------------------------------------------*\
     | Add to parent layout if it exists                       |
     \*---------------------------------------------------------*/
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(spatial_controls_group);
     }
@@ -227,7 +228,7 @@ void SpatialEffect3D::CreateOriginControls(QWidget* parent)
     connect(origin_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
     connect(origin_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
 
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(origin_group);
     }
@@ -268,7 +269,7 @@ void SpatialEffect3D::CreateScaleControls(QWidget* parent)
     connect(scale_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
 
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(scale_group);
     }
@@ -306,7 +307,7 @@ void SpatialEffect3D::CreateRotationControls(QWidget* parent)
     connect(rotation_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(rotation_z_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
 
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(rotation_group);
     }
@@ -347,7 +348,7 @@ void SpatialEffect3D::CreateDirectionControls(QWidget* parent)
     connect(direction_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
     connect(direction_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SpatialEffect3D::OnParameterChanged);
 
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(direction_group);
     }
@@ -375,7 +376,7 @@ void SpatialEffect3D::CreateMirrorControls(QWidget* parent)
     connect(mirror_y_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
     connect(mirror_z_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
 
-    if(parent && parent->layout())
+    if (parent && parent->layout())
     {
         parent->layout()->addWidget(mirror_group);
     }
@@ -386,7 +387,7 @@ void SpatialEffect3D::UpdateCommon3DParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update origin                                            |
     \*---------------------------------------------------------*/
-    if(origin_x_spin && origin_y_spin && origin_z_spin)
+    if (origin_x_spin && origin_y_spin && origin_z_spin)
     {
         params.origin.x = (float)origin_x_spin->value();
         params.origin.y = (float)origin_y_spin->value();
@@ -396,7 +397,7 @@ void SpatialEffect3D::UpdateCommon3DParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update scale                                             |
     \*---------------------------------------------------------*/
-    if(scale_x_spin && scale_y_spin && scale_z_spin)
+    if (scale_x_spin && scale_y_spin && scale_z_spin)
     {
         params.scale_3d.x = (float)scale_x_spin->value();
         params.scale_3d.y = (float)scale_y_spin->value();
@@ -406,7 +407,7 @@ void SpatialEffect3D::UpdateCommon3DParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update rotation                                          |
     \*---------------------------------------------------------*/
-    if(rotation_x_slider && rotation_y_slider && rotation_z_slider)
+    if (rotation_x_slider && rotation_y_slider && rotation_z_slider)
     {
         params.rotation.x = (float)rotation_x_slider->value();
         params.rotation.y = (float)rotation_y_slider->value();
@@ -416,7 +417,7 @@ void SpatialEffect3D::UpdateCommon3DParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update direction                                         |
     \*---------------------------------------------------------*/
-    if(direction_x_spin && direction_y_spin && direction_z_spin)
+    if (direction_x_spin && direction_y_spin && direction_z_spin)
     {
         params.direction.x = (float)direction_x_spin->value();
         params.direction.y = (float)direction_y_spin->value();
@@ -426,7 +427,7 @@ void SpatialEffect3D::UpdateCommon3DParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update mirror settings                                   |
     \*---------------------------------------------------------*/
-    if(mirror_x_check && mirror_y_check && mirror_z_check)
+    if (mirror_x_check && mirror_y_check && mirror_z_check)
     {
         params.mirror_x = mirror_x_check->isChecked();
         params.mirror_y = mirror_y_check->isChecked();
@@ -454,19 +455,19 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& params)
     /*---------------------------------------------------------*\
     | Update common effect parameters                          |
     \*---------------------------------------------------------*/
-    if(speed_slider)
+    if (speed_slider)
     {
         params.speed = speed_slider->value();
         effect_speed = params.speed;
     }
 
-    if(brightness_slider)
+    if (brightness_slider)
     {
         params.brightness = brightness_slider->value();
         effect_brightness = params.brightness;
     }
 
-    if(gradient_check)
+    if (gradient_check)
     {
         params.use_gradient = gradient_check->isChecked();
         use_gradient = params.use_gradient;
@@ -489,7 +490,7 @@ void SpatialEffect3D::OnColorStartClicked()
 
     QColor new_color = QColorDialog::getColor(initial_color, this, "Select Start Color");
 
-    if(new_color.isValid())
+    if (new_color.isValid())
     {
         color_start = (new_color.red() << 16) | (new_color.green() << 8) | new_color.blue();
 
@@ -510,7 +511,7 @@ void SpatialEffect3D::OnColorEndClicked()
 
     QColor new_color = QColorDialog::getColor(initial_color, this, "Select End Color");
 
-    if(new_color.isValid())
+    if (new_color.isValid())
     {
         color_end = (new_color.red() << 16) | (new_color.green() << 8) | new_color.blue();
 

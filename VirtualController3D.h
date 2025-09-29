@@ -37,8 +37,6 @@ public:
 
     std::vector<LEDPosition3D> GenerateLEDPositions();
 
-    void UpdateColors(std::vector<RGBController*>& controllers);
-
     json ToJson() const;
     static VirtualController3D* FromJson(const json& j, std::vector<RGBController*>& controllers);
 

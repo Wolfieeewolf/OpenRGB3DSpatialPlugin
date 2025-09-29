@@ -19,14 +19,10 @@
 class ControllerLayout3D
 {
 public:
-    static std::vector<LEDPosition3D> GenerateLEDPositions(RGBController* controller);
+    static std::vector<LEDPosition3D> GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y, int grid_z);
+    static Vector3D CalculateWorldPosition(Vector3D local_pos, Transform3D transform);
 
 private:
-    static std::vector<LEDPosition3D> GenerateMatrixLayout(RGBController* controller, unsigned int zone_idx);
-    static std::vector<LEDPosition3D> GenerateLinearLayout(RGBController* controller, unsigned int zone_idx);
-    static std::vector<LEDPosition3D> GenerateSingleLayout(RGBController* controller, unsigned int zone_idx);
-
-    static Vector3D CalculateWorldPosition(Vector3D local_pos, Transform3D transform);
 };
 
 #endif

@@ -654,7 +654,8 @@ void CustomControllerDialog::on_assign_clicked()
         }
     }
 
-    std::vector<LEDPosition3D> positions = ControllerLayout3D::GenerateLEDPositions(controller);
+    // Use default grid size - TODO: make this configurable
+    std::vector<LEDPosition3D> positions = ControllerLayout3D::GenerateCustomGridLayout(controller, 10, 10, 1);
 
     if(granularity == 0)
     {

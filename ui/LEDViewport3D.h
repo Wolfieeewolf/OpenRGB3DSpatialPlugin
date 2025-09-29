@@ -30,6 +30,7 @@ public:
     void SetControllerTransforms(std::vector<ControllerTransform*>* transforms);
     void SelectController(int index);
     void UpdateColors();
+    void SetGridDimensions(int x, int y, int z);
 
 signals:
     void ControllerSelected(int index);
@@ -70,9 +71,15 @@ private:
     Ray3D GenerateRay(int mouse_x, int mouse_y);
     bool RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance);
     int PickGizmoAxis3D(int mouse_x, int mouse_y);
+    void ApplyRotationToPoint(float& x, float& y, float& z, float rx, float ry, float rz);
 
     std::vector<ControllerTransform*>*  controller_transforms;
     int                                 selected_controller_idx;
+
+    // Grid dimensions for proper bounds and visualization
+    int     grid_x;
+    int     grid_y;
+    int     grid_z;
 
     float   camera_distance;
     float   camera_yaw;
