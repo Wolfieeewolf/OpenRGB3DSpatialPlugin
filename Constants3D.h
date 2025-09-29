@@ -19,8 +19,8 @@
 \*---------------------------------------------------------*/
 #define DEFAULT_EFFECT_SPEED                50
 #define DEFAULT_EFFECT_BRIGHTNESS          100
-#define DEFAULT_COLOR_START                0xFF0000    // Red
-#define DEFAULT_COLOR_END                  0x0000FF    // Blue
+#define DEFAULT_COLOR_START                COLOR_RED
+#define DEFAULT_COLOR_END                  COLOR_BLUE
 
 /*---------------------------------------------------------*\
 | Speed Ranges                                             |
@@ -55,16 +55,9 @@
 #define MAX_SPIRAL_ARMS                    12
 
 /*---------------------------------------------------------*\
-| Common Colors                                            |
+| Note: Basic colors are defined in OpenRGB/Colors.h      |
+| COLOR_RED, COLOR_GREEN, COLOR_BLUE, etc. are available  |
 \*---------------------------------------------------------*/
-#define COLOR_RED                          0xFF0000
-#define COLOR_GREEN                        0x00FF00
-#define COLOR_BLUE                         0x0000FF
-#define COLOR_WHITE                        0xFFFFFF
-#define COLOR_BLACK                        0x000000
-#define COLOR_YELLOW                       0xFFFF00
-#define COLOR_CYAN                         0x00FFFF
-#define COLOR_MAGENTA                      0xFF00FF
 
 /*---------------------------------------------------------*\
 | UI Constants                                             |
