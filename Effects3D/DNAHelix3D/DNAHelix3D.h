@@ -42,47 +42,18 @@ public:
 
 private slots:
     void OnDNAParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
-    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | DNA-specific controls                                    |
+    | DNA-specific controls only                               |
     \*---------------------------------------------------------*/
     QSlider*        radius_slider;          // Helix radius
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
-    QSlider*        frequency_slider;       // DNA pitch frequency
-    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
-
-    /*---------------------------------------------------------*\
-    | Color controls                                           |
-    \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
 
     /*---------------------------------------------------------*\
     | Current DNA parameters                                   |
     \*---------------------------------------------------------*/
     unsigned int    helix_radius;
-    unsigned int    frequency;
-    bool            rainbow_mode;
     float           progress;
-
-    /*---------------------------------------------------------*\
-    | Helper methods                                           |
-    \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
-    RGBColor GetRainbowColor(float hue);
-    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

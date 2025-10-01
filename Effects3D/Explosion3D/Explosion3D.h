@@ -50,12 +50,10 @@ private slots:
 
 private:
     /*---------------------------------------------------------*\
-    | Explosion-specific controls                              |
+    | Explosion-specific controls (speed/brightness now in base class) |
     \*---------------------------------------------------------*/
     QComboBox*      origin_combo;           // Origin preset selection
     QSlider*        intensity_slider;       // Explosion intensity
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
     QSlider*        frequency_slider;       // Shockwave frequency
     QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
 
@@ -84,8 +82,6 @@ private:
     void SetupColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    RGBColor GetRainbowColor(float hue);
-    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

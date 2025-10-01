@@ -129,10 +129,11 @@ HEADERS +=                                                                      
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
     VirtualController3D.h                                                                       \
-    Constants3D.h                                                                               \
+    VirtualReferencePoint3D.h                                                                   \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
+    ui/Gizmo3D.h                                                                                \
     Effects3D/Wave3D/Wave3D.h                                                                   \
     Effects3D/Wipe3D/Wipe3D.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
@@ -146,9 +147,11 @@ SOURCES +=                                                                      
     ControllerLayout3D.cpp                                                                      \
     SpatialEffect3D.cpp                                                                         \
     VirtualController3D.cpp                                                                     \
+    VirtualReferencePoint3D.cpp                                                                 \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
+    ui/Gizmo3D.cpp                                                                              \
     Effects3D/Wave3D/Wave3D.cpp                                                                 \
     Effects3D/Wipe3D/Wipe3D.cpp                                                                 \
     Effects3D/Plasma3D/Plasma3D.cpp                                                             \

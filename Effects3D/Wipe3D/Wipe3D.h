@@ -44,50 +44,25 @@ public:
 
 private slots:
     void OnWipeParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
 
 private:
     /*---------------------------------------------------------*\
-    | Wipe-specific controls                                   |
+    | Wipe-specific controls only                              |
     \*---------------------------------------------------------*/
-    QComboBox*      direction_combo;        // Direction presets (X/Y/Z/Radial)
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
     QSlider*        thickness_slider;       // Wipe thickness
     QComboBox*      shape_combo;            // Edge shapes (Round/Point/Square)
-    QCheckBox*      reverse_check;          // Reverse direction
 
     /*---------------------------------------------------------*\
-    | Color controls                                           |
+    | Wipe-specific parameters                                 |
     \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
-
-    /*---------------------------------------------------------*\
-    | Current wipe parameters                                  |
-    \*---------------------------------------------------------*/
-    int             direction_type;         // 0=X, 1=Y, 2=Z, 3=Radial
-    unsigned int    thickness;              // Wipe thickness
-    int             shape_type;             // 0=Round, 1=Point, 2=Square
-    bool            reverse_mode;           // Reverse direction
+    int             wipe_thickness;         // Wipe thickness
+    int             edge_shape;             // 0=Round, 1=Point, 2=Square
     float           progress;               // Animation progress
 
     /*---------------------------------------------------------*\
     | Helper methods                                           |
     \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
-    RGBColor GetColorAtPosition(float position);
-    float CalculateWipeDistance(float x, float y, float z);
-    float CalculateWipeDistanceGrid(float x, float y, float z, const GridContext3D& grid);
-    float ApplyEdgeShape(float distance, float edge_distance);
+    float smoothstep(float edge0, float edge1, float x);
 };
 
 #endif

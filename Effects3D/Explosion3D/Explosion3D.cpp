@@ -28,8 +28,6 @@ Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     origin_combo = nullptr;
     intensity_slider = nullptr;
-    speed_slider = nullptr;
-    brightness_slider = nullptr;
     frequency_slider = nullptr;
     rainbow_mode_check = nullptr;
 
@@ -103,31 +101,17 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     intensity_slider->setValue(explosion_intensity);
     layout->addWidget(intensity_slider, 1, 1);
 
-    // Row 2: Speed
-    layout->addWidget(new QLabel("Speed:"), 2, 0);
-    speed_slider = new QSlider(Qt::Horizontal);
-    speed_slider->setRange(1, 200);
-    speed_slider->setValue(effect_speed);
-    layout->addWidget(speed_slider, 2, 1);
-
-    // Row 3: Brightness
-    layout->addWidget(new QLabel("Brightness:"), 3, 0);
-    brightness_slider = new QSlider(Qt::Horizontal);
-    brightness_slider->setRange(1, 100);
-    brightness_slider->setValue(effect_brightness);
-    layout->addWidget(brightness_slider, 3, 1);
-
-    // Row 4: Frequency
-    layout->addWidget(new QLabel("Frequency:"), 4, 0);
+    // Row 2: Frequency
+    layout->addWidget(new QLabel("Frequency:"), 2, 0);
     frequency_slider = new QSlider(Qt::Horizontal);
     frequency_slider->setRange(1, 100);
     frequency_slider->setValue(frequency);
-    layout->addWidget(frequency_slider, 4, 1);
+    layout->addWidget(frequency_slider, 2, 1);
 
-    // Row 5: Rainbow Mode
+    // Row 3: Rainbow Mode
     rainbow_mode_check = new QCheckBox("Rainbow Mode");
     rainbow_mode_check->setChecked(rainbow_mode);
-    layout->addWidget(rainbow_mode_check, 5, 0, 1, 2);
+    layout->addWidget(rainbow_mode_check, 3, 0, 1, 2);
 
     if(parent && parent->layout())
     {
@@ -139,8 +123,6 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     // Connect signals
     connect(origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Explosion3D::OnExplosionParameterChanged);
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
-    connect(speed_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
-    connect(brightness_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &Explosion3D::OnRainbowModeChanged);
 }
@@ -154,8 +136,6 @@ void Explosion3D::OnExplosionParameterChanged()
 {
     if(origin_combo) origin_preset = (OriginPreset)origin_combo->currentIndex();
     if(intensity_slider) explosion_intensity = intensity_slider->value();
-    if(speed_slider) effect_speed = speed_slider->value();
-    if(brightness_slider) effect_brightness = brightness_slider->value();
     if(frequency_slider) frequency = frequency_slider->value();
     emit ParametersChanged();
 }
@@ -293,183 +273,8 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
 
 RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    /*---------------------------------------------------------*\
-    | Calculate normalized coordinates (0 to 1)               |
-    \*---------------------------------------------------------*/
-    float norm_x = (x - grid.min_x) / grid.width;
-    float norm_y = (y - grid.min_y) / grid.height;
-    float norm_z = (z - grid.min_z) / grid.depth;
-
-    /*---------------------------------------------------------*\
-    | Create smooth curves for speed and frequency            |
-    \*---------------------------------------------------------*/
-    float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
-    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
-
-    float freq_curve = (frequency / 100.0f);
-    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
-    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
-
-    /*---------------------------------------------------------*\
-    | Update progress for animation                            |
-    \*---------------------------------------------------------*/
-    progress = time * (actual_speed * 0.1f);
-
-    /*---------------------------------------------------------*\
-    | Scale frequency based on grid dimensions                 |
-    \*---------------------------------------------------------*/
-    float freq_scale = actual_frequency * 0.01f;
-    float grid_scale = sqrt(grid.width * grid.height * grid.depth) / 15.0f; // 3D scaling for explosion
-    freq_scale *= grid_scale;
-
-    /*---------------------------------------------------------*\
-    | Calculate explosion origin based on origin preset       |
-    \*---------------------------------------------------------*/
-    float origin_x, origin_y, origin_z;
-    switch(origin_preset)
-    {
-        case ORIGIN_ROOM_CENTER:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.5f * grid.height;
-            origin_z = 0.5f * grid.depth;
-            break;
-        case ORIGIN_FLOOR_CENTER:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.0f;
-            origin_z = 0.5f * grid.depth;
-            break;
-        case ORIGIN_CEILING_CENTER:
-            origin_x = 0.5f * grid.width;
-            origin_y = grid.height;
-            origin_z = 0.5f * grid.depth;
-            break;
-        case ORIGIN_FRONT_WALL:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.5f * grid.height;
-            origin_z = 0.0f;
-            break;
-        case ORIGIN_BACK_WALL:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.5f * grid.height;
-            origin_z = grid.depth;
-            break;
-        case ORIGIN_LEFT_WALL:
-            origin_x = 0.0f;
-            origin_y = 0.5f * grid.height;
-            origin_z = 0.5f * grid.depth;
-            break;
-        case ORIGIN_RIGHT_WALL:
-            origin_x = grid.width;
-            origin_y = 0.5f * grid.height;
-            origin_z = 0.5f * grid.depth;
-            break;
-        case ORIGIN_FLOOR_FRONT:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.0f;
-            origin_z = 0.0f;
-            break;
-        case ORIGIN_FLOOR_BACK:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.0f;
-            origin_z = grid.depth;
-            break;
-        default:
-            origin_x = 0.5f * grid.width;
-            origin_y = 0.0f;
-            origin_z = 0.5f * grid.depth;
-            break;
-    }
-
-    /*---------------------------------------------------------*\
-    | Convert to centered coordinates for explosion calc      |
-    \*---------------------------------------------------------*/
-    float center_x = (norm_x * grid.width) - origin_x;
-    float center_y = (norm_y * grid.height) - origin_y;
-    float center_z = (norm_z * grid.depth) - origin_z;
-
-    /*---------------------------------------------------------*\
-    | Calculate distance from explosion origin                |
-    \*---------------------------------------------------------*/
-    float distance = sqrt(center_x*center_x + center_y*center_y + center_z*center_z);
-
-    /*---------------------------------------------------------*\
-    | Scale explosion parameters based on grid size           |
-    \*---------------------------------------------------------*/
-    float max_grid_dimension = fmax(grid.width, fmax(grid.height, grid.depth));
-    float grid_explosion_intensity = (explosion_intensity / 100.0f) * max_grid_dimension * 0.5f;
-
-    /*---------------------------------------------------------*\
-    | Create expanding shockwave - main explosion wave        |
-    \*---------------------------------------------------------*/
-    float explosion_radius = progress * (grid_explosion_intensity * 0.1f);
-    float wave_thickness = max_grid_dimension * 0.1f + grid_explosion_intensity * 0.05f;
-
-    /*---------------------------------------------------------*\
-    | Primary shockwave                                        |
-    \*---------------------------------------------------------*/
-    float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
-    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f); // Exponential falloff
-
-    /*---------------------------------------------------------*\
-    | Secondary shockwave (following behind)                  |
-    \*---------------------------------------------------------*/
-    float secondary_radius = explosion_radius * 0.7f;
-    float secondary_wave = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
-    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.15f) * 0.6f;
-
-    /*---------------------------------------------------------*\
-    | Add high-frequency shock details                        |
-    \*---------------------------------------------------------*/
-    float shock_detail = 0.2f * sin(distance * freq_scale * 8.0f - progress * 4.0f);
-    shock_detail *= exp(-distance * 0.1f); // Fade with distance
-
-    /*---------------------------------------------------------*\
-    | Combine all explosion layers                            |
-    \*---------------------------------------------------------*/
-    float explosion_intensity_final = primary_wave + secondary_wave + shock_detail;
-    explosion_intensity_final = fmax(0.0f, fmin(1.0f, explosion_intensity_final));
-
-    /*---------------------------------------------------------*\
-    | Add inner core explosion (bright center)                |
-    \*---------------------------------------------------------*/
-    if(distance < explosion_radius * 0.3f)
-    {
-        float core_intensity = 1.0f - (distance / (explosion_radius * 0.3f));
-        explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.8f);
-    }
-
-    /*---------------------------------------------------------*\
-    | Get color based on mode                                  |
-    \*---------------------------------------------------------*/
-    RGBColor final_color;
-
-    if(rainbow_mode)
-    {
-        // Rainbow colors - hot to cool based on explosion distance and intensity
-        float hue = 60.0f - (explosion_intensity_final * 60.0f) + progress * 10.0f; // Red-hot to blue-cool
-        hue = fmax(0.0f, hue);
-        final_color = GetRainbowColor(hue);
-    }
-    else
-    {
-        // Use custom colors based on explosion intensity
-        final_color = GetColorAtPosition(explosion_intensity_final);
-    }
-
-    /*---------------------------------------------------------*\
-    | Apply intensity and brightness                           |
-    \*---------------------------------------------------------*/
-    unsigned char r = final_color & 0xFF;
-    unsigned char g = (final_color >> 8) & 0xFF;
-    unsigned char b = (final_color >> 16) & 0xFF;
-
-    float brightness_factor = (effect_brightness / 100.0f) * explosion_intensity_final;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
-
-    return (b << 16) | (g << 8) | r;
+    (void)grid;
+    return CalculateColor(x, y, z, time);
 }
 
 void Explosion3D::SetupColorControls(QWidget* parent)
@@ -528,73 +333,4 @@ void Explosion3D::RemoveLastColorButton()
         color_controls_layout->removeWidget(button);
         delete button;
     }
-}
-
-RGBColor Explosion3D::GetRainbowColor(float hue)
-{
-    float h = fmod(hue, 360.0f);
-    if(h < 0.0f) h += 360.0f;
-
-    float saturation = 1.0f;
-    float value = 1.0f;
-
-    float c = value * saturation;
-    float x = c * (1.0f - fabs(fmod(h / 60.0f, 2.0f) - 1.0f));
-    float m = value - c;
-
-    float r, g, b;
-    if(h >= 0 && h < 60) {
-        r = c; g = x; b = 0;
-    } else if(h >= 60 && h < 120) {
-        r = x; g = c; b = 0;
-    } else if(h >= 120 && h < 180) {
-        r = 0; g = c; b = x;
-    } else if(h >= 180 && h < 240) {
-        r = 0; g = x; b = c;
-    } else if(h >= 240 && h < 300) {
-        r = x; g = 0; b = c;
-    } else {
-        r = c; g = 0; b = x;
-    }
-
-    unsigned char red = (unsigned char)((r + m) * 255);
-    unsigned char green = (unsigned char)((g + m) * 255);
-    unsigned char blue = (unsigned char)((b + m) * 255);
-
-    return (blue << 16) | (green << 8) | red;
-}
-
-RGBColor Explosion3D::GetColorAtPosition(float position)
-{
-    if(colors.empty()) return 0x000000;
-    if(colors.size() == 1) return colors[0];
-
-    position = fmod(position, 1.0f);
-    if(position < 0.0f) position += 1.0f;
-
-    float color_pos = position * (colors.size() - 1);
-    int color_idx = (int)color_pos;
-    float blend = color_pos - color_idx;
-
-    if(color_idx >= (int)colors.size() - 1)
-    {
-        return colors[colors.size() - 1];
-    }
-
-    RGBColor color1 = colors[color_idx];
-    RGBColor color2 = colors[color_idx + 1];
-
-    unsigned char r1 = color1 & 0xFF;
-    unsigned char g1 = (color1 >> 8) & 0xFF;
-    unsigned char b1 = (color1 >> 16) & 0xFF;
-
-    unsigned char r2 = color2 & 0xFF;
-    unsigned char g2 = (color2 >> 8) & 0xFF;
-    unsigned char b2 = (color2 >> 16) & 0xFF;
-
-    unsigned char r = (unsigned char)(r1 + (r2 - r1) * blend);
-    unsigned char g = (unsigned char)(g1 + (g2 - g1) * blend);
-    unsigned char b = (unsigned char)(b1 + (b2 - b1) * blend);
-
-    return (b << 16) | (g << 8) | r;
 }

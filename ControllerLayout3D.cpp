@@ -18,25 +18,20 @@
 
 std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y, int grid_z)
 {
-    (void)grid_z; // Parameter reserved for future 3D grid functionality
+    (void)grid_z;
 
     std::vector<LEDPosition3D> positions;
 
-    // Calculate total LEDs across all zones
     unsigned int total_leds = 0;
     for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
     {
         total_leds += controller->zones[zone_idx].leds_count;
     }
 
-    // Map LEDs zone by zone to handle different zone types appropriately
     unsigned int global_led_idx = 0;
     for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
     {
         zone* current_zone = &controller->zones[zone_idx];
-
-        // Always use user-specified grid dimensions for 1:1 mapping
-        // This ensures LEDs fit within the specified grid bounds
 
         for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
         {
@@ -45,21 +40,16 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
             led_pos.zone_idx = zone_idx;
             led_pos.led_idx = led_idx;
 
-            // For matrix zones, use LED position within the zone
-            // For other zones, use global LED index
             unsigned int mapping_idx = led_idx;
             if(current_zone->type != ZONE_TYPE_MATRIX)
             {
                 mapping_idx = global_led_idx;
             }
 
-            // Calculate position using a reasonable automatic layout
-            // For LED strips, use linear layout; for others, use grid layout
             int x_pos, y_pos, z_pos;
 
             if(controller->type == DEVICE_TYPE_LEDSTRIP)
             {
-                // LED strips: linear layout
                 x_pos = mapping_idx;
                 y_pos = 0;
                 z_pos = 0;
@@ -68,30 +58,59 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
                     current_zone->type == ZONE_TYPE_MATRIX &&
                     current_zone->matrix_map != nullptr)
             {
-                // Keyboards: use actual matrix dimensions
                 int matrix_width = current_zone->matrix_map->width;
-                // matrix_height available but not needed for current mapping
                 x_pos = led_idx % matrix_width;
                 y_pos = led_idx / matrix_width;
-                z_pos = 0; // Keyboards are flat
+                z_pos = 0;
             }
             else
             {
-                // Other devices: use grid layout
                 x_pos = mapping_idx % grid_x;
                 y_pos = (mapping_idx / grid_x) % grid_y;
                 z_pos = mapping_idx / (grid_x * grid_y);
             }
 
-            // Convert to centered INTEGER coordinates for 1x1x1 cube alignment
-            led_pos.local_position.x = (float)(x_pos - (x_pos / 2)); // Center around 0
-            led_pos.local_position.y = (float)y_pos; // Start from 0
-            led_pos.local_position.z = (float)(z_pos - (z_pos / 2)); // Center around 0
+            led_pos.local_position.x = (float)x_pos;
+            led_pos.local_position.y = (float)y_pos;
+            led_pos.local_position.z = (float)z_pos;
 
             led_pos.world_position = led_pos.local_position;
 
             positions.push_back(led_pos);
             global_led_idx++;
+        }
+    }
+
+    // Center all positions at 0,0,0
+    if(!positions.empty())
+    {
+        float min_x = positions[0].local_position.x;
+        float max_x = positions[0].local_position.x;
+        float min_y = positions[0].local_position.y;
+        float max_y = positions[0].local_position.y;
+        float min_z = positions[0].local_position.z;
+        float max_z = positions[0].local_position.z;
+
+        for(unsigned int i = 1; i < positions.size(); i++)
+        {
+            if(positions[i].local_position.x < min_x) min_x = positions[i].local_position.x;
+            if(positions[i].local_position.x > max_x) max_x = positions[i].local_position.x;
+            if(positions[i].local_position.y < min_y) min_y = positions[i].local_position.y;
+            if(positions[i].local_position.y > max_y) max_y = positions[i].local_position.y;
+            if(positions[i].local_position.z < min_z) min_z = positions[i].local_position.z;
+            if(positions[i].local_position.z > max_z) max_z = positions[i].local_position.z;
+        }
+
+        float center_x = (min_x + max_x) / 2.0f;
+        float center_y = (min_y + max_y) / 2.0f;
+        float center_z = (min_z + max_z) / 2.0f;
+
+        for(unsigned int i = 0; i < positions.size(); i++)
+        {
+            positions[i].local_position.x -= center_x;
+            positions[i].local_position.y -= center_y;
+            positions[i].local_position.z -= center_z;
+            positions[i].world_position = positions[i].local_position;
         }
     }
 

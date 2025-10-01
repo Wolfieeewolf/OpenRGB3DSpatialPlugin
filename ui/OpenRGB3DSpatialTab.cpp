@@ -21,6 +21,7 @@
 #include <QDir>
 #include <QMessageBox>
 #include <fstream>
+#include <algorithm>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -40,12 +41,17 @@
 | Helper function to calculate origin offset based on     |
 | room preset and grid size                                |
 \*---------------------------------------------------------*/
-static void CalculateOriginOffset(OriginPreset preset, int grid_size, float& offset_x, float& offset_y, float& offset_z)
+static void CalculateOriginOffset(OriginPreset preset, const UserPosition3D& user_pos, int grid_size, float& offset_x, float& offset_y, float& offset_z)
 {
     float half_grid = grid_size / 2.0f;
 
     switch(preset)
     {
+        case ORIGIN_USER_POSITION:
+            offset_x = user_pos.x;
+            offset_y = user_pos.y;
+            offset_z = user_pos.z;
+            break;
         case ORIGIN_ROOM_CENTER:
             offset_x = 0.0f;
             offset_y = 0.0f;
@@ -54,42 +60,42 @@ static void CalculateOriginOffset(OriginPreset preset, int grid_size, float& off
         case ORIGIN_FLOOR_CENTER:
             offset_x = 0.0f;
             offset_y = 0.0f;
-            offset_z = -half_grid;  // Bottom of room
+            offset_z = -half_grid;
             break;
         case ORIGIN_CEILING_CENTER:
             offset_x = 0.0f;
             offset_y = 0.0f;
-            offset_z = half_grid;   // Top of room
+            offset_z = half_grid;
             break;
         case ORIGIN_FRONT_WALL:
             offset_x = 0.0f;
-            offset_y = -half_grid;  // Front wall (user facing)
+            offset_y = half_grid;
             offset_z = 0.0f;
             break;
         case ORIGIN_BACK_WALL:
             offset_x = 0.0f;
-            offset_y = half_grid;   // Back wall
+            offset_y = -half_grid;
             offset_z = 0.0f;
             break;
         case ORIGIN_LEFT_WALL:
-            offset_x = -half_grid;  // Left wall
+            offset_x = -half_grid;
             offset_y = 0.0f;
             offset_z = 0.0f;
             break;
         case ORIGIN_RIGHT_WALL:
-            offset_x = half_grid;   // Right wall
+            offset_x = half_grid;
             offset_y = 0.0f;
             offset_z = 0.0f;
             break;
         case ORIGIN_FLOOR_FRONT:
             offset_x = 0.0f;
-            offset_y = -half_grid;  // Front edge
-            offset_z = -half_grid;  // Floor level
+            offset_y = -half_grid;
+            offset_z = -half_grid;
             break;
         case ORIGIN_FLOOR_BACK:
             offset_x = 0.0f;
-            offset_y = half_grid;   // Back edge
-            offset_z = -half_grid;  // Floor level
+            offset_y = half_grid;
+            offset_z = -half_grid;
             break;
         case ORIGIN_CUSTOM:
         default:
@@ -106,7 +112,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     first_load(true)
 {
 
-    custom_effect_container = nullptr;
+    effect_controls_widget = nullptr;
     current_effect_ui = nullptr;
     wave3d_effect = nullptr;
     wipe3d_effect = nullptr;
@@ -116,11 +122,13 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
 
-    // Initialize layout mode and grid dimensions
+
     grid_x_spin = nullptr;
     grid_y_spin = nullptr;
     grid_z_spin = nullptr;
-    custom_grid_x = 10;  // Default values
+    grid_snap_checkbox = nullptr;
+    selection_info_label = nullptr;
+    custom_grid_x = 10;
     custom_grid_y = 10;
     custom_grid_z = 10;
 
@@ -131,7 +139,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
     connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
-    auto_load_timer->start(500);
+    auto_load_timer->start(2000);
+
 
     effect_timer = new QTimer(this);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
@@ -272,316 +281,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_panel->addWidget(controller_group);
 
     /*---------------------------------------------------------*\
-    | Add stretch to push content to top of scroll area       |
+    | Layout Profiles (moved from right panel)                |
     \*---------------------------------------------------------*/
-    left_panel->addStretch();
-
-    /*---------------------------------------------------------*\
-    | Set up left scroll area and add to main layout          |
-    \*---------------------------------------------------------*/
-    left_scroll->setWidget(left_content);
-    main_layout->addWidget(left_scroll, 1);
-
-    QVBoxLayout* middle_panel = new QVBoxLayout();
-
-    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
-    middle_panel->addWidget(controls_label);
-
-    viewport = new LEDViewport3D();
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
-    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
-    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
-            this, SLOT(on_controller_position_changed(int,float,float,float)));
-    middle_panel->addWidget(viewport, 1);
-
-    /*---------------------------------------------------------*\
-    | Grid Settings Group (Custom Grid Only)                  |
-    \*---------------------------------------------------------*/
-    QGroupBox* layout_group = new QGroupBox("Grid Settings (1:1 LED Mapping)");
-    QGridLayout* layout_layout = new QGridLayout();
-
-    // Grid Dimensions
-    layout_layout->addWidget(new QLabel("Grid X:"), 0, 0);
-    grid_x_spin = new QSpinBox();
-    grid_x_spin->setRange(1, 100);
-    grid_x_spin->setValue(custom_grid_x);
-    layout_layout->addWidget(grid_x_spin, 0, 1);
-
-    layout_layout->addWidget(new QLabel("Grid Y:"), 0, 2);
-    grid_y_spin = new QSpinBox();
-    grid_y_spin->setRange(1, 100);
-    grid_y_spin->setValue(custom_grid_y);
-    layout_layout->addWidget(grid_y_spin, 0, 3);
-
-    layout_layout->addWidget(new QLabel("Grid Z:"), 0, 4);
-    grid_z_spin = new QSpinBox();
-    grid_z_spin->setRange(1, 100);
-    grid_z_spin->setValue(custom_grid_z);
-    layout_layout->addWidget(grid_z_spin, 0, 5);
-
-    // Add helpful label
-    QLabel* grid_help = new QLabel("LEDs are mapped sequentially to grid positions (X, Y, Z)");
-    grid_help->setStyleSheet("color: gray; font-size: 10px;");
-    layout_layout->addWidget(grid_help, 1, 0, 1, 6);
-
-    layout_group->setLayout(layout_layout);
-    left_panel->addWidget(layout_group);
-
-    // Connect signals
-    connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
-    connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
-    connect(grid_z_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
-
-    QGroupBox* effect_group = new QGroupBox("Spatial Effects");
-    QVBoxLayout* effect_layout = new QVBoxLayout();
-
-    QHBoxLayout* effect_type_layout = new QHBoxLayout();
-    effect_type_layout->addWidget(new QLabel("Effect:"));
-    effect_type_combo = new QComboBox();
-    effect_type_combo->addItem("Wave");
-    effect_type_combo->addItem("Wipe");
-    effect_type_combo->addItem("Plasma");
-    effect_type_combo->addItem("Spiral");
-    effect_type_combo->addItem("DNA Helix");
-    effect_type_combo->addItem("Breathing Sphere");
-    effect_type_combo->addItem("Explosion");
-    effect_type_layout->addWidget(effect_type_combo);
-    connect(effect_type_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_effect_type_changed(int)));
-    effect_layout->addLayout(effect_type_layout);
-
-    QHBoxLayout* button_layout = new QHBoxLayout();
-    start_effect_button = new QPushButton("Start Effect");
-    connect(start_effect_button, SIGNAL(clicked()), this, SLOT(on_start_effect_clicked()));
-    button_layout->addWidget(start_effect_button);
-
-    stop_effect_button = new QPushButton("Stop Effect");
-    stop_effect_button->setEnabled(false);
-    connect(stop_effect_button, SIGNAL(clicked()), this, SLOT(on_stop_effect_clicked()));
-    button_layout->addWidget(stop_effect_button);
-
-    effect_layout->addLayout(button_layout);
-
-    /*---------------------------------------------------------*\
-    | Create custom effect UI container with scroll area      |
-    \*---------------------------------------------------------*/
-    custom_effect_container = new QWidget();
-    custom_effect_container->setLayout(new QVBoxLayout());
-
-    QScrollArea* effect_scroll = new QScrollArea();
-    effect_scroll->setWidgetResizable(true);
-    effect_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    effect_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    effect_scroll->setWidget(custom_effect_container);
-    effect_scroll->setMaximumHeight(300);  // Limit height to prevent overlap
-    effect_layout->addWidget(effect_scroll);
-
-    effect_group->setLayout(effect_layout);
-    middle_panel->addWidget(effect_group);
-    main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
-
-    QVBoxLayout* right_panel = new QVBoxLayout();
-    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
-    QGridLayout* position_layout = new QGridLayout();
-
-    position_layout->addWidget(new QLabel("Position X:"), 0, 0);
-
-    pos_x_slider = new QSlider(Qt::Horizontal);
-    pos_x_slider->setRange(-1000, 1000);
-    pos_x_slider->setValue(0);
-    connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        pos_x_spin->setValue(pos_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.x = pos_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_x_slider, 0, 1);
-
-    pos_x_spin = new QDoubleSpinBox();
-    pos_x_spin->setRange(-100, 100);
-    pos_x_spin->setDecimals(1);
-    pos_x_spin->setMaximumWidth(80);
-    connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_x_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.x = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_x_spin, 0, 2);
-
-    position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
-
-    pos_y_slider = new QSlider(Qt::Horizontal);
-    pos_y_slider->setRange(-1000, 1000);
-    pos_y_slider->setValue(0);
-    connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        pos_y_spin->setValue(pos_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.y = pos_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_y_slider, 1, 1);
-
-    pos_y_spin = new QDoubleSpinBox();
-    pos_y_spin->setRange(-100, 100);
-    pos_y_spin->setDecimals(1);
-    pos_y_spin->setMaximumWidth(80);
-    connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_y_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.y = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_y_spin, 1, 2);
-
-    position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
-
-    pos_z_slider = new QSlider(Qt::Horizontal);
-    pos_z_slider->setRange(-1000, 1000);
-    pos_z_slider->setValue(0);
-    connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        pos_z_spin->setValue(pos_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.z = pos_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_z_slider, 2, 1);
-
-    pos_z_spin = new QDoubleSpinBox();
-    pos_z_spin->setRange(-100, 100);
-    pos_z_spin->setDecimals(1);
-    pos_z_spin->setMaximumWidth(80);
-    connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_z_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.z = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(pos_z_spin, 2, 2);
-
-    position_layout->addWidget(new QLabel("Rotation X:"), 3, 0);
-
-    rot_x_slider = new QSlider(Qt::Horizontal);
-    rot_x_slider->setRange(-1800, 1800);
-    rot_x_slider->setValue(0);
-    connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = value / 10.0;
-        rot_x_spin->setValue(rot_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.x = rot_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_x_slider, 3, 1);
-
-    rot_x_spin = new QDoubleSpinBox();
-    rot_x_spin->setRange(-180, 180);
-    rot_x_spin->setDecimals(1);
-    rot_x_spin->setMaximumWidth(80);
-    connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_x_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.x = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_x_spin, 3, 2);
-
-    position_layout->addWidget(new QLabel("Rotation Y:"), 4, 0);
-
-    rot_y_slider = new QSlider(Qt::Horizontal);
-    rot_y_slider->setRange(-1800, 1800);
-    rot_y_slider->setValue(0);
-    connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = value / 10.0;
-        rot_y_spin->setValue(rot_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.y = rot_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_y_slider, 4, 1);
-
-    rot_y_spin = new QDoubleSpinBox();
-    rot_y_spin->setRange(-180, 180);
-    rot_y_spin->setDecimals(1);
-    rot_y_spin->setMaximumWidth(80);
-    connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_y_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.y = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_y_spin, 4, 2);
-
-    position_layout->addWidget(new QLabel("Rotation Z:"), 5, 0);
-
-    rot_z_slider = new QSlider(Qt::Horizontal);
-    rot_z_slider->setRange(-1800, 1800);
-    rot_z_slider->setValue(0);
-    connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = value / 10.0;
-        rot_z_spin->setValue(rot_value);
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.z = rot_value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_z_slider, 5, 1);
-
-    rot_z_spin = new QDoubleSpinBox();
-    rot_z_spin->setRange(-180, 180);
-    rot_z_spin->setDecimals(1);
-    rot_z_spin->setMaximumWidth(80);
-    connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_z_slider->setValue((int)(value * 10));
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.z = value;
-            viewport->update();
-        }
-    });
-    position_layout->addWidget(rot_z_spin, 5, 2);
-
-
-    transform_group->setLayout(position_layout);
-    right_panel->addWidget(transform_group);
-
-    right_panel->addStretch();
-
     QGroupBox* profile_group = new QGroupBox("Layout Profiles");
     QVBoxLayout* profile_layout = new QVBoxLayout();
 
@@ -624,7 +325,384 @@ void OpenRGB3DSpatialTab::SetupUI()
     PopulateLayoutDropdown();
 
     profile_group->setLayout(profile_layout);
-    right_panel->addWidget(profile_group);
+    left_panel->addWidget(profile_group);
+
+    /*---------------------------------------------------------*\
+    | Add stretch to push content to top of scroll area       |
+    \*---------------------------------------------------------*/
+    left_panel->addStretch();
+
+    /*---------------------------------------------------------*\
+    | Set up left scroll area and add to main layout          |
+    \*---------------------------------------------------------*/
+    left_scroll->setWidget(left_content);
+    main_layout->addWidget(left_scroll, 1);
+
+    QVBoxLayout* middle_panel = new QVBoxLayout();
+
+    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
+    middle_panel->addWidget(controls_label);
+
+    viewport = new LEDViewport3D();
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
+    viewport->SetGridSnapEnabled(false); // Initialize with snapping disabled
+    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
+    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
+            this, SLOT(on_controller_position_changed(int,float,float,float)));
+    connect(viewport, SIGNAL(ControllerRotationChanged(int,float,float,float)),
+            this, SLOT(on_controller_rotation_changed(int,float,float,float)));
+    middle_panel->addWidget(viewport, 1);
+
+    /*---------------------------------------------------------*\
+    | Grid Settings Group (Custom Grid Only)                  |
+    \*---------------------------------------------------------*/
+    QGroupBox* layout_group = new QGroupBox("Grid Settings (1:1 LED Mapping)");
+    QGridLayout* layout_layout = new QGridLayout();
+
+    // Grid Dimensions
+    layout_layout->addWidget(new QLabel("Grid X:"), 0, 0);
+    grid_x_spin = new QSpinBox();
+    grid_x_spin->setRange(1, 100);
+    grid_x_spin->setValue(custom_grid_x);
+    layout_layout->addWidget(grid_x_spin, 0, 1);
+
+    layout_layout->addWidget(new QLabel("Grid Y:"), 0, 2);
+    grid_y_spin = new QSpinBox();
+    grid_y_spin->setRange(1, 100);
+    grid_y_spin->setValue(custom_grid_y);
+    layout_layout->addWidget(grid_y_spin, 0, 3);
+
+    layout_layout->addWidget(new QLabel("Grid Z:"), 0, 4);
+    grid_z_spin = new QSpinBox();
+    grid_z_spin->setRange(1, 100);
+    grid_z_spin->setValue(custom_grid_z);
+    layout_layout->addWidget(grid_z_spin, 0, 5);
+
+    // Grid Snap Checkbox
+    grid_snap_checkbox = new QCheckBox("Grid Snapping");
+    grid_snap_checkbox->setToolTip("Snap controller positions to grid intersections");
+    layout_layout->addWidget(grid_snap_checkbox, 1, 0, 1, 3);
+
+    // Selection Info Label
+    selection_info_label = new QLabel("No selection");
+    selection_info_label->setStyleSheet("color: gray; font-size: 10px; font-weight: bold;");
+    selection_info_label->setAlignment(Qt::AlignRight);
+    layout_layout->addWidget(selection_info_label, 1, 3, 1, 3);
+
+    // User Position Controls (Row 2)
+    layout_layout->addWidget(new QLabel("User X:"), 2, 0);
+    user_pos_x_spin = new QDoubleSpinBox();
+    user_pos_x_spin->setRange(-50.0, 50.0);
+    user_pos_x_spin->setSingleStep(0.5);
+    user_pos_x_spin->setValue(user_position.x);
+    user_pos_x_spin->setToolTip("User X position in room grid");
+    layout_layout->addWidget(user_pos_x_spin, 2, 1);
+
+    layout_layout->addWidget(new QLabel("User Y:"), 2, 2);
+    user_pos_y_spin = new QDoubleSpinBox();
+    user_pos_y_spin->setRange(-50.0, 50.0);
+    user_pos_y_spin->setSingleStep(0.5);
+    user_pos_y_spin->setValue(user_position.y);
+    user_pos_y_spin->setToolTip("User Y position in room grid");
+    layout_layout->addWidget(user_pos_y_spin, 2, 3);
+
+    layout_layout->addWidget(new QLabel("User Z:"), 2, 4);
+    user_pos_z_spin = new QDoubleSpinBox();
+    user_pos_z_spin->setRange(-50.0, 50.0);
+    user_pos_z_spin->setSingleStep(0.5);
+    user_pos_z_spin->setValue(user_position.z);
+    user_pos_z_spin->setToolTip("User Z position in room grid");
+    layout_layout->addWidget(user_pos_z_spin, 2, 5);
+
+    // User controls row (Row 3)
+    user_visible_checkbox = new QCheckBox("Show User");
+    user_visible_checkbox->setChecked(user_position.visible);
+    user_visible_checkbox->setToolTip("Show/hide green stick figure");
+    layout_layout->addWidget(user_visible_checkbox, 3, 0, 1, 2);
+
+    user_center_button = new QPushButton("Center User");
+    user_center_button->setToolTip("Move user to room center (0,0,0)");
+    layout_layout->addWidget(user_center_button, 3, 2, 1, 2);
+
+    // Add helpful labels with text wrapping
+    QLabel* grid_help1 = new QLabel("LEDs mapped sequentially to grid positions (X, Y, Z)");
+    grid_help1->setStyleSheet("color: gray; font-size: 10px;");
+    grid_help1->setWordWrap(true);
+    layout_layout->addWidget(grid_help1, 4, 0, 1, 6);
+
+    QLabel* grid_help2 = new QLabel("Effects originate from user position • Use Ctrl+Click for multi-select");
+    grid_help2->setStyleSheet("color: gray; font-size: 10px;");
+    grid_help2->setWordWrap(true);
+    layout_layout->addWidget(grid_help2, 5, 0, 1, 6);
+
+    layout_group->setLayout(layout_layout);
+    left_panel->addWidget(layout_group);
+
+    // Connect signals
+    connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+    connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+    connect(grid_z_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+    connect(grid_snap_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_grid_snap_toggled);
+
+    // User position signals
+    connect(user_pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
+    connect(user_pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
+    connect(user_pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
+    connect(user_visible_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_user_visibility_toggled);
+    connect(user_center_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_user_center_clicked);
+
+    /*---------------------------------------------------------*\
+    | Position & Rotation Controls (moved from right panel)   |
+    \*---------------------------------------------------------*/
+    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
+    QGridLayout* position_layout = new QGridLayout();
+
+    position_layout->addWidget(new QLabel("Position X:"), 0, 0);
+
+    pos_x_slider = new QSlider(Qt::Horizontal);
+    pos_x_slider->setRange(-1000, 1000);
+    pos_x_slider->setValue(0);
+    connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        pos_x_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.x = pos_value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_x_slider, 0, 1);
+
+    pos_x_spin = new QDoubleSpinBox();
+    pos_x_spin->setRange(-100, 100);
+    pos_x_spin->setDecimals(1);
+    pos_x_spin->setMaximumWidth(80);
+    connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        pos_x_slider->setValue((int)(value * 10));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.x = value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_x_spin, 0, 2);
+
+    position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
+
+    pos_y_slider = new QSlider(Qt::Horizontal);
+    pos_y_slider->setRange(0, 1000);  // Start from 0 (floor level)
+    pos_y_slider->setValue(0);
+    connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        // Ensure Y position never goes below floor level
+        if(pos_value < 0.0f) {
+            pos_value = 0.0f;
+            pos_y_slider->setValue((int)(pos_value * 10));
+        }
+        pos_y_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.y = pos_value;
+            // Enforce floor constraint after position change
+            viewport->EnforceFloorConstraint(controller_transforms[row]);
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_y_slider, 1, 1);
+
+    pos_y_spin = new QDoubleSpinBox();
+    pos_y_spin->setRange(0, 100);  // Floor constraint
+    pos_y_spin->setDecimals(1);
+    pos_y_spin->setMaximumWidth(80);
+    connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        // Ensure Y position never goes below floor level
+        if(value < 0.0) {
+            value = 0.0;
+            pos_y_spin->setValue(value);
+        }
+        pos_y_slider->setValue((int)(value * 10));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.y = value;
+            // Enforce floor constraint after position change
+            viewport->EnforceFloorConstraint(controller_transforms[row]);
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_y_spin, 1, 2);
+
+    position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
+
+    pos_z_slider = new QSlider(Qt::Horizontal);
+    pos_z_slider->setRange(-1000, 1000);
+    pos_z_slider->setValue(0);
+    connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
+        double pos_value = value / 10.0;
+        pos_z_spin->setValue(pos_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.z = pos_value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_z_slider, 2, 1);
+
+    pos_z_spin = new QDoubleSpinBox();
+    pos_z_spin->setRange(-100, 100);
+    pos_z_spin->setDecimals(1);
+    pos_z_spin->setMaximumWidth(80);
+    connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        pos_z_slider->setValue((int)(value * 10));
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.position.z = value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(pos_z_spin, 2, 2);
+
+    position_layout->addWidget(new QLabel("Rotation X:"), 3, 0);
+
+    rot_x_slider = new QSlider(Qt::Horizontal);
+    rot_x_slider->setRange(-180, 180);
+    rot_x_slider->setValue(0);
+    connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value;
+        rot_x_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.x = rot_value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_x_slider, 3, 1);
+
+    rot_x_spin = new QDoubleSpinBox();
+    rot_x_spin->setRange(-180, 180);
+    rot_x_spin->setDecimals(1);
+    rot_x_spin->setMaximumWidth(80);
+    connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_x_slider->setValue((int)value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.x = value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_x_spin, 3, 2);
+
+    position_layout->addWidget(new QLabel("Rotation Y:"), 4, 0);
+
+    rot_y_slider = new QSlider(Qt::Horizontal);
+    rot_y_slider->setRange(-180, 180);
+    rot_y_slider->setValue(0);
+    connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value;
+        rot_y_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.y = rot_value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_y_slider, 4, 1);
+
+    rot_y_spin = new QDoubleSpinBox();
+    rot_y_spin->setRange(-180, 180);
+    rot_y_spin->setDecimals(1);
+    rot_y_spin->setMaximumWidth(80);
+    connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_y_slider->setValue((int)value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.y = value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_y_spin, 4, 2);
+
+    position_layout->addWidget(new QLabel("Rotation Z:"), 5, 0);
+
+    rot_z_slider = new QSlider(Qt::Horizontal);
+    rot_z_slider->setRange(-180, 180);
+    rot_z_slider->setValue(0);
+    connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
+        double rot_value = value;
+        rot_z_spin->setValue(rot_value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.z = rot_value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_z_slider, 5, 1);
+
+    rot_z_spin = new QDoubleSpinBox();
+    rot_z_spin->setRange(-180, 180);
+    rot_z_spin->setDecimals(1);
+    rot_z_spin->setMaximumWidth(80);
+    connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        rot_z_slider->setValue((int)value);
+        int row = controller_list->currentRow();
+        if(row >= 0 && row < (int)controller_transforms.size())
+        {
+            controller_transforms[row]->transform.rotation.z = value;
+            viewport->NotifyControllerTransformChanged();
+        }
+    });
+    position_layout->addWidget(rot_z_spin, 5, 2);
+
+    transform_group->setLayout(position_layout);
+    middle_panel->addWidget(transform_group);
+
+    main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
+
+    QVBoxLayout* right_panel = new QVBoxLayout();
+
+    /*---------------------------------------------------------*\
+    | Effects Section                                          |
+    \*---------------------------------------------------------*/
+    QGroupBox* effects_group = new QGroupBox("Effects");
+    QVBoxLayout* effects_layout = new QVBoxLayout();
+
+    // Effect selection
+    effect_combo = new QComboBox();
+    effect_combo->addItem("None");
+    effect_combo->addItem("Wave 3D");         // effect_type 0
+    effect_combo->addItem("Wipe 3D");         // effect_type 1
+    effect_combo->addItem("Plasma 3D");       // effect_type 2
+    effect_combo->addItem("Spiral 3D");       // effect_type 3
+    effect_combo->addItem("DNA Helix 3D");    // effect_type 4
+    effect_combo->addItem("Breathing Sphere 3D"); // effect_type 5
+    effect_combo->addItem("Explosion 3D");    // effect_type 6
+
+    connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_effect_changed);
+
+    effects_layout->addWidget(new QLabel("Effect:"));
+    effects_layout->addWidget(effect_combo);
+
+    // Effect-specific controls container
+    effect_controls_widget = new QWidget();
+    effect_controls_layout = new QVBoxLayout();
+    effect_controls_widget->setLayout(effect_controls_layout);
+    effects_layout->addWidget(effect_controls_widget);
+
+    effects_group->setLayout(effects_layout);
+    right_panel->addWidget(effects_group);
+
 
     /*---------------------------------------------------------*\
     | Add stretch to push content to top of right panel       |
@@ -648,11 +726,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     main_layout->addWidget(right_scroll, 1);
 
     setLayout(main_layout);
-
-    /*---------------------------------------------------------*\
-    | Initialize with default effect UI (Wave X)              |
-    \*---------------------------------------------------------*/
-    SetupCustomEffectUI(0);
 }
 
 void OpenRGB3DSpatialTab::LoadDevices()
@@ -694,7 +767,6 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Device list updated");
     LoadDevices();
 }
 
@@ -705,6 +777,21 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         controller_list->setCurrentRow(index);
 
         ControllerTransform* ctrl = controller_transforms[index];
+
+        // Block signals to prevent feedback loops
+        pos_x_spin->blockSignals(true);
+        pos_y_spin->blockSignals(true);
+        pos_z_spin->blockSignals(true);
+        rot_x_spin->blockSignals(true);
+        rot_y_spin->blockSignals(true);
+        rot_z_spin->blockSignals(true);
+        pos_x_slider->blockSignals(true);
+        pos_y_slider->blockSignals(true);
+        pos_z_slider->blockSignals(true);
+        rot_x_slider->blockSignals(true);
+        rot_y_slider->blockSignals(true);
+        rot_z_slider->blockSignals(true);
+
         pos_x_spin->setValue(ctrl->transform.position.x);
         pos_y_spin->setValue(ctrl->transform.position.y);
         pos_z_spin->setValue(ctrl->transform.position.z);
@@ -713,16 +800,33 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_z_spin->setValue(ctrl->transform.rotation.z);
 
         pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
-        pos_y_slider->setValue((int)(ctrl->transform.position.y * 10));
+        float constrained_y = std::max(ctrl->transform.position.y, (float)0.0f);
+        pos_y_slider->setValue((int)(constrained_y * 10));
         pos_z_slider->setValue((int)(ctrl->transform.position.z * 10));
-        rot_x_slider->setValue((int)(ctrl->transform.rotation.x * 10));
-        rot_y_slider->setValue((int)(ctrl->transform.rotation.y * 10));
-        rot_z_slider->setValue((int)(ctrl->transform.rotation.z * 10));
+        rot_x_slider->setValue((int)(ctrl->transform.rotation.x));
+        rot_y_slider->setValue((int)(ctrl->transform.rotation.y));
+        rot_z_slider->setValue((int)(ctrl->transform.rotation.z));
+
+        // Unblock signals
+        pos_x_spin->blockSignals(false);
+        pos_y_spin->blockSignals(false);
+        pos_z_spin->blockSignals(false);
+        rot_x_spin->blockSignals(false);
+        rot_y_spin->blockSignals(false);
+        rot_z_spin->blockSignals(false);
+        pos_x_slider->blockSignals(false);
+        pos_y_slider->blockSignals(false);
+        pos_z_slider->blockSignals(false);
+        rot_x_slider->blockSignals(false);
+        rot_y_slider->blockSignals(false);
+        rot_z_slider->blockSignals(false);
     }
     else if(index == -1)
     {
         controller_list->setCurrentRow(-1);
     }
+
+    UpdateSelectionInfo();
 }
 
 void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, float y, float z)
@@ -734,39 +838,121 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
 
-        // Update both spin boxes and sliders
+        // Block signals to prevent feedback loops
+        pos_x_spin->blockSignals(true);
+        pos_y_spin->blockSignals(true);
+        pos_z_spin->blockSignals(true);
+        pos_x_slider->blockSignals(true);
+        pos_y_slider->blockSignals(true);
+        pos_z_slider->blockSignals(true);
+
         pos_x_spin->setValue(x);
         pos_y_spin->setValue(y);
         pos_z_spin->setValue(z);
 
         pos_x_slider->setValue((int)(x * 10));
-        pos_y_slider->setValue((int)(y * 10));
+        float constrained_y = std::max(y, (float)0.0f);
+        pos_y_slider->setValue((int)(constrained_y * 10));
         pos_z_slider->setValue((int)(z * 10));
+
+        // Unblock signals
+        pos_x_spin->blockSignals(false);
+        pos_y_spin->blockSignals(false);
+        pos_z_spin->blockSignals(false);
+        pos_x_slider->blockSignals(false);
+        pos_y_slider->blockSignals(false);
+        pos_z_slider->blockSignals(false);
+    }
+}
+
+void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, float y, float z)
+{
+    if(index >= 0 && index < (int)controller_transforms.size())
+    {
+        ControllerTransform* ctrl = controller_transforms[index];
+        ctrl->transform.rotation.x = x;
+        ctrl->transform.rotation.y = y;
+        ctrl->transform.rotation.z = z;
+
+        // Block signals to prevent feedback loops
+        rot_x_spin->blockSignals(true);
+        rot_y_spin->blockSignals(true);
+        rot_z_spin->blockSignals(true);
+        rot_x_slider->blockSignals(true);
+        rot_y_slider->blockSignals(true);
+        rot_z_slider->blockSignals(true);
+
+        rot_x_spin->setValue(x);
+        rot_y_spin->setValue(y);
+        rot_z_spin->setValue(z);
+
+        rot_x_slider->setValue((int)x);
+        rot_y_slider->setValue((int)y);
+        rot_z_slider->setValue((int)z);
+
+        // Unblock signals
+        rot_x_spin->blockSignals(false);
+        rot_y_spin->blockSignals(false);
+        rot_z_spin->blockSignals(false);
+        rot_x_slider->blockSignals(false);
+        rot_y_slider->blockSignals(false);
+        rot_z_slider->blockSignals(false);
     }
 }
 
 
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Starting spatial effect");
 
     if(!current_effect_ui)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] No effect selected");
+        QMessageBox::warning(this, "No Effect Selected", "Please select an effect before starting.");
+        return;
+    }
+
+    if(controller_transforms.empty())
+    {
+        QMessageBox::warning(this, "No Controllers", "Please add controllers to the 3D scene before starting effects.");
         return;
     }
 
     /*---------------------------------------------------------*\
     | Put all controllers in direct control mode               |
     \*---------------------------------------------------------*/
+    bool has_valid_controller = false;
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx];
-        if(!transform || !transform->controller)
+        if(!transform)
         {
             continue;
         }
 
+        // Handle virtual controllers - they map to physical controllers
+        if(transform->virtual_controller)
+        {
+            VirtualController3D* virtual_ctrl = transform->virtual_controller;
+            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+
+            // Set all physical controllers mapped to this virtual controller to direct mode
+            std::set<RGBController*> controllers_to_set;
+            for(unsigned int i = 0; i < mappings.size(); i++)
+            {
+                if(mappings[i].controller)
+                {
+                    controllers_to_set.insert(mappings[i].controller);
+                }
+            }
+
+            for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
+            {
+                (*it)->SetCustomMode();
+                has_valid_controller = true;
+            }
+            continue;
+        }
+
+        // Handle regular controllers
         RGBController* controller = transform->controller;
         if(!controller)
         {
@@ -774,6 +960,13 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
         }
 
         controller->SetCustomMode();
+        has_valid_controller = true;
+    }
+
+    if(!has_valid_controller)
+    {
+        QMessageBox::warning(this, "No Valid Controllers", "No controllers are available for effects.");
+        return;
     }
 
     /*---------------------------------------------------------*\
@@ -792,11 +985,11 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     \*---------------------------------------------------------*/
     start_effect_button->setEnabled(false);
     stop_effect_button->setEnabled(true);
+
 }
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Stopping spatial effect");
 
     /*---------------------------------------------------------*\
     | Stop the effect                                          |
@@ -824,6 +1017,24 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     }
 
     /*---------------------------------------------------------*\
+    | Safety: Check if we have any controllers                |
+    \*---------------------------------------------------------*/
+    if(controller_transforms.empty())
+    {
+        return; // No controllers to update
+    }
+
+    /*---------------------------------------------------------*\
+    | Safety: Verify effect timer and viewport are valid      |
+    \*---------------------------------------------------------*/
+    if(!effect_timer || !viewport)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect timer or viewport is null, stopping effect");
+        on_stop_effect_clicked();
+        return;
+    }
+
+    /*---------------------------------------------------------*\
     | Update effect time                                       |
     \*---------------------------------------------------------*/
     effect_time += 0.033f; // ~30 FPS
@@ -831,7 +1042,12 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     /*---------------------------------------------------------*\
     | Apply effect over the entire grid space                 |
     \*---------------------------------------------------------*/
-    // Calculate grid bounds
+    // Safety check: ensure grid dimensions are valid
+    if(custom_grid_x < 1) custom_grid_x = 10;
+    if(custom_grid_y < 1) custom_grid_y = 10;
+    if(custom_grid_z < 1) custom_grid_z = 10;
+
+    // Calculate room-centered grid bounds (user at center)
     int half_x = custom_grid_x / 2;
     int half_y = custom_grid_y / 2;
     int half_z = custom_grid_z / 2;
@@ -846,8 +1062,8 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     // Create grid context for effects
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
 
-    // Get origin offset for the effect
-    OriginPreset origin_preset = ORIGIN_ROOM_CENTER; // Default fallback
+    // Get origin offset for room-based effects (default: user position)
+    OriginPreset origin_preset = ORIGIN_USER_POSITION; // Default: user position
     Explosion3D* explosion_effect = dynamic_cast<Explosion3D*>(current_effect_ui);
     if(explosion_effect)
     {
@@ -856,7 +1072,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 
     float origin_offset_x, origin_offset_y, origin_offset_z;
     int max_grid_size = std::max({custom_grid_x, custom_grid_y, custom_grid_z});
-    CalculateOriginOffset(origin_preset, max_grid_size, origin_offset_x, origin_offset_y, origin_offset_z);
+    CalculateOriginOffset(origin_preset, user_position, max_grid_size, origin_offset_x, origin_offset_y, origin_offset_z);
 
     // Now map each controller's LEDs to the unified grid and apply effects
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
@@ -889,36 +1105,51 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                 float y = world_pos.y;
                 float z = world_pos.z;
 
-                // Adjust coordinates relative to the unified origin point (calculated once above)
+                // Adjust coordinates relative to the effect origin (user position)
                 float relative_x = x - origin_offset_x;
                 float relative_y = y - origin_offset_y;
                 float relative_z = z - origin_offset_z;
 
-                // Only apply effects to virtual LEDs within the unified grid bounds
+                // Only apply effects to LEDs within the room-centered grid bounds
                 if(x >= grid_min_x && x <= grid_max_x &&
                    y >= grid_min_y && y <= grid_max_y &&
                    z >= grid_min_z && z <= grid_max_z)
                 {
+                    // Safety: Ensure controller is still valid
+                    if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
+                    {
+                        continue;
+                    }
+
                     // Calculate effect color using grid-aware method
                     RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
 
-                    // Apply color to the mapped physical LED
-                    unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                    if(led_global_idx < mapping.controller->colors.size())
+                    // Apply color to the mapped physical LED (with bounds checking)
+                    if(mapping.zone_idx < mapping.controller->zones.size())
                     {
-                        mapping.controller->colors[led_global_idx] = color;
+                        unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                        if(led_global_idx < mapping.controller->colors.size())
+                        {
+                            mapping.controller->colors[led_global_idx] = color;
+                        }
+                        else
+                        {
+                        }
+                    }
+                    else
+                    {
                     }
                 }
             }
 
             // Update the physical controllers that this virtual controller maps to
             std::set<RGBController*> updated_controllers;
-            for(const GridLEDMapping& mapping : mappings)
+            for(unsigned int i = 0; i < mappings.size(); i++)
             {
-                if(mapping.controller && updated_controllers.find(mapping.controller) == updated_controllers.end())
+                if(mappings[i].controller && updated_controllers.find(mappings[i].controller) == updated_controllers.end())
                 {
-                    mapping.controller->UpdateLEDs();
-                    updated_controllers.insert(mapping.controller);
+                    mappings[i].controller->UpdateLEDs();
+                    updated_controllers.insert(mappings[i].controller);
                 }
             }
 
@@ -927,7 +1158,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 
         // Handle regular controllers
         RGBController* controller = transform->controller;
-        if(!controller)
+        if(!controller || controller->zones.empty() || controller->colors.empty())
         {
             continue;
         }
@@ -948,15 +1179,21 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             float y = world_pos.y;
             float z = world_pos.z;
 
+            // Validate zone index before accessing
+            if(led_position.zone_idx >= controller->zones.size())
+            {
+                continue; // Skip invalid zone
+            }
+
             // Get the actual LED index for color updates
             unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
 
-            // Adjust coordinates relative to the unified origin point (calculated once above)
+            // Adjust coordinates relative to the effect origin (user position)
             float relative_x = x - origin_offset_x;
             float relative_y = y - origin_offset_y;
             float relative_z = z - origin_offset_z;
 
-            // Only apply effects to LEDs within the unified grid bounds
+            // Only apply effects to LEDs within the room-centered grid bounds
             if(x >= grid_min_x && x <= grid_max_x &&
                y >= grid_min_y && y <= grid_max_y &&
                z >= grid_min_z && z <= grid_max_z)
@@ -1236,6 +1473,16 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
 {
+    // Update all settings from UI before saving
+    if(grid_x_spin) custom_grid_x = grid_x_spin->value();
+    if(grid_y_spin) custom_grid_y = grid_y_spin->value();
+    if(grid_z_spin) custom_grid_z = grid_z_spin->value();
+
+    if(user_pos_x_spin) user_position.x = (float)user_pos_x_spin->value();
+    if(user_pos_y_spin) user_position.y = (float)user_pos_y_spin->value();
+    if(user_pos_z_spin) user_position.z = (float)user_pos_z_spin->value();
+    if(user_visible_checkbox) user_position.visible = user_visible_checkbox->isChecked();
+
     bool ok;
     QString profile_name = QInputDialog::getText(this, "Save Layout Profile",
                                                  "Profile name:", QLineEdit::Normal,
@@ -1256,6 +1503,9 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     {
         layout_profiles_combo->setCurrentIndex(index);
     }
+
+    // Save the selected profile name to settings
+    SaveCurrentLayoutName();
 
     QMessageBox::information(this, "Layout Saved",
                             QString("Profile '%1' saved to plugins directory").arg(profile_name));
@@ -1358,9 +1608,9 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
     }
 
     QStringList controller_names;
-    for(const VirtualController3D* ctrl : virtual_controllers)
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
     {
-        controller_names.append(QString::fromStdString(ctrl->GetName()));
+        controller_names.append(QString::fromStdString(virtual_controllers[i]->GetName()));
     }
 
     bool ok;
@@ -1430,9 +1680,9 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
         if(virtual_ctrl)
         {
-            for(const VirtualController3D* existing : virtual_controllers)
+            for(unsigned int i = 0; i < virtual_controllers.size(); i++)
             {
-                if(existing->GetName() == virtual_ctrl->GetName())
+                if(virtual_controllers[i]->GetName() == virtual_ctrl->GetName())
                 {
                     QMessageBox::StandardButton reply = QMessageBox::question(this, "Duplicate Name",
                         QString("A custom controller named '%1' already exists.\n\nDo you want to replace it?")
@@ -1446,12 +1696,12 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                     }
                     else
                     {
-                        for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+                        for(unsigned int j = 0; j < virtual_controllers.size(); j++)
                         {
-                            if(virtual_controllers[i] == existing)
+                            if(virtual_controllers[j]->GetName() == virtual_ctrl->GetName())
                             {
-                                delete virtual_controllers[i];
-                                virtual_controllers.erase(virtual_controllers.begin() + i);
+                                delete virtual_controllers[j];
+                                virtual_controllers.erase(virtual_controllers.begin() + j);
                                 break;
                             }
                         }
@@ -1539,11 +1789,11 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
 
             std::string safe_old_name = old_name;
-            for(char& c : safe_old_name)
+            for(unsigned int i = 0; i < safe_old_name.length(); i++)
             {
-                if(c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+                if(safe_old_name[i] == '/' || safe_old_name[i] == '\\' || safe_old_name[i] == ':' || safe_old_name[i] == '*' || safe_old_name[i] == '?' || safe_old_name[i] == '"' || safe_old_name[i] == '<' || safe_old_name[i] == '>' || safe_old_name[i] == '|')
                 {
-                    c = '_';
+                    safe_old_name[i] = '_';
                 }
             }
 
@@ -1575,269 +1825,362 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
 
 void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Saving layout: %s", filename.c_str());
 
-    QFile file(QString::fromStdString(filename));
+    nlohmann::json layout_json;
 
-    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to save layout file: %s", filename.c_str());
-        return;
-    }
+    /*---------------------------------------------------------*\
+    | Header Information                                       |
+    \*---------------------------------------------------------*/
+    layout_json["format"] = "OpenRGB3DSpatialLayout";
+    layout_json["version"] = 5;
 
-    QTextStream out(&file);
+    /*---------------------------------------------------------*\
+    | Grid Settings                                            |
+    \*---------------------------------------------------------*/
+    layout_json["grid"]["dimensions"]["x"] = custom_grid_x;
+    layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
+    layout_json["grid"]["dimensions"]["z"] = custom_grid_z;
+    layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
 
-    out << "OpenRGB3DSpatialLayout\n";
-    out << "Version 2\n";  // Increment version for grid dimensions
-    out << custom_grid_x << " " << custom_grid_y << " " << custom_grid_z << "\n";  // Save grid dimensions
-    out << controller_transforms.size() << "\n";
+    /*---------------------------------------------------------*\
+    | User Position                                            |
+    \*---------------------------------------------------------*/
+    layout_json["user_position"]["x"] = user_position.x;
+    layout_json["user_position"]["y"] = user_position.y;
+    layout_json["user_position"]["z"] = user_position.z;
+    layout_json["user_position"]["visible"] = user_position.visible;
+
+    /*---------------------------------------------------------*\
+    | Controllers                                              |
+    \*---------------------------------------------------------*/
+    layout_json["controllers"] = nlohmann::json::array();
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* ct = controller_transforms[i];
+        nlohmann::json controller_json;
 
         if(ct->controller == nullptr)
         {
             QListWidgetItem* item = controller_list->item(i);
             QString display_name = item ? item->text() : "Unknown Custom Controller";
 
-            out << display_name.toStdString().c_str() << "\n";
-            out << "VIRTUAL_CONTROLLER\n";
+            controller_json["name"] = display_name.toStdString();
+            controller_json["type"] = "virtual";
+            controller_json["location"] = "VIRTUAL_CONTROLLER";
         }
         else
         {
-            out << ct->controller->name.c_str() << "\n";
-            out << ct->controller->location.c_str() << "\n";
+            controller_json["name"] = ct->controller->name;
+            controller_json["type"] = "physical";
+            controller_json["location"] = ct->controller->location;
         }
-        out << ct->led_positions.size() << "\n";
 
+        /*---------------------------------------------------------*\
+        | LED Mappings                                             |
+        \*---------------------------------------------------------*/
+        controller_json["led_mappings"] = nlohmann::json::array();
         for(unsigned int j = 0; j < ct->led_positions.size(); j++)
         {
-            out << ct->led_positions[j].zone_idx << " " << ct->led_positions[j].led_idx << "\n";
+            nlohmann::json led_mapping;
+            led_mapping["zone_index"] = ct->led_positions[j].zone_idx;
+            led_mapping["led_index"] = ct->led_positions[j].led_idx;
+            controller_json["led_mappings"].push_back(led_mapping);
         }
 
-        out << ct->transform.position.x << " " << ct->transform.position.y << " " << ct->transform.position.z << "\n";
-        out << ct->transform.rotation.x << " " << ct->transform.rotation.y << " " << ct->transform.rotation.z << "\n";
-        out << ct->transform.scale.x << " " << ct->transform.scale.y << " " << ct->transform.scale.z << "\n";
-        out << ct->display_color << "\n";
+        /*---------------------------------------------------------*\
+        | Transform                                                |
+        \*---------------------------------------------------------*/
+        controller_json["transform"]["position"]["x"] = ct->transform.position.x;
+        controller_json["transform"]["position"]["y"] = ct->transform.position.y;
+        controller_json["transform"]["position"]["z"] = ct->transform.position.z;
+
+        controller_json["transform"]["rotation"]["x"] = ct->transform.rotation.x;
+        controller_json["transform"]["rotation"]["y"] = ct->transform.rotation.y;
+        controller_json["transform"]["rotation"]["z"] = ct->transform.rotation.z;
+
+        controller_json["transform"]["scale"]["x"] = ct->transform.scale.x;
+        controller_json["transform"]["scale"]["y"] = ct->transform.scale.y;
+        controller_json["transform"]["scale"]["z"] = ct->transform.scale.z;
+
+        controller_json["display_color"] = ct->display_color;
+
+        layout_json["controllers"].push_back(controller_json);
     }
 
+    /*---------------------------------------------------------*\
+    | Write JSON to file                                       |
+    \*---------------------------------------------------------*/
+    QFile file(QString::fromStdString(filename));
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        return;
+    }
+
+    QTextStream out(&file);
+    out << QString::fromStdString(layout_json.dump(4));
     file.close();
 
 }
 
-void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
+void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Loading layout: %s", filename.c_str());
 
-    QFile file(QString::fromStdString(filename));
-
-    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    /*---------------------------------------------------------*\
+    | Load Grid Settings                                       |
+    \*---------------------------------------------------------*/
+    if(layout_json.contains("grid"))
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to open layout file: %s", filename.c_str());
-        return;
-    }
+        custom_grid_x = layout_json["grid"]["dimensions"]["x"].get<int>();
+        custom_grid_y = layout_json["grid"]["dimensions"]["y"].get<int>();
+        custom_grid_z = layout_json["grid"]["dimensions"]["z"].get<int>();
 
-    QTextStream in(&file);
-
-    QString header = in.readLine();
-    if(header != "OpenRGB3DSpatialLayout")
-    {
-        file.close();
-        return;
-    }
-
-    QString version_line = in.readLine();
-    bool is_version_2 = (version_line == "Version 2");
-
-    // Load grid dimensions if version 2
-    if(is_version_2)
-    {
-        QString grid_line = in.readLine();
-        QStringList grid_parts = grid_line.split(" ");
-        if(grid_parts.size() >= 3)
+        if(grid_x_spin)
         {
-            custom_grid_x = grid_parts[0].toInt();
-            custom_grid_y = grid_parts[1].toInt();
-            custom_grid_z = grid_parts[2].toInt();
-
-            // Update UI
-            if(grid_x_spin) grid_x_spin->setValue(custom_grid_x);
-            if(grid_y_spin) grid_y_spin->setValue(custom_grid_y);
-            if(grid_z_spin) grid_z_spin->setValue(custom_grid_z);
+            grid_x_spin->blockSignals(true);
+            grid_x_spin->setValue(custom_grid_x);
+            grid_x_spin->blockSignals(false);
         }
+        if(grid_y_spin)
+        {
+            grid_y_spin->blockSignals(true);
+            grid_y_spin->setValue(custom_grid_y);
+            grid_y_spin->blockSignals(false);
+        }
+        if(grid_z_spin)
+        {
+            grid_z_spin->blockSignals(true);
+            grid_z_spin->setValue(custom_grid_z);
+            grid_z_spin->blockSignals(false);
+        }
+
+        if(viewport)
+        {
+            viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
+        }
+
+        bool grid_snap_enabled = layout_json["grid"]["snap_enabled"].get<bool>();
+        if(grid_snap_checkbox) grid_snap_checkbox->setChecked(grid_snap_enabled);
+        if(viewport) viewport->SetGridSnapEnabled(grid_snap_enabled);
     }
 
-    int count = in.readLine().toInt();
+    /*---------------------------------------------------------*\
+    | Load User Position                                       |
+    \*---------------------------------------------------------*/
+    if(layout_json.contains("user_position"))
+    {
+        user_position.x = layout_json["user_position"]["x"].get<float>();
+        user_position.y = layout_json["user_position"]["y"].get<float>();
+        user_position.z = layout_json["user_position"]["z"].get<float>();
+        user_position.visible = layout_json["user_position"]["visible"].get<bool>();
 
+        if(user_pos_x_spin)
+        {
+            user_pos_x_spin->blockSignals(true);
+            user_pos_x_spin->setValue(user_position.x);
+            user_pos_x_spin->blockSignals(false);
+        }
+        if(user_pos_y_spin)
+        {
+            user_pos_y_spin->blockSignals(true);
+            user_pos_y_spin->setValue(user_position.y);
+            user_pos_y_spin->blockSignals(false);
+        }
+        if(user_pos_z_spin)
+        {
+            user_pos_z_spin->blockSignals(true);
+            user_pos_z_spin->setValue(user_position.z);
+            user_pos_z_spin->blockSignals(false);
+        }
+        if(user_visible_checkbox)
+        {
+            user_visible_checkbox->blockSignals(true);
+            user_visible_checkbox->setChecked(user_position.visible);
+            user_visible_checkbox->blockSignals(false);
+        }
+
+        if(viewport) viewport->SetUserPosition(user_position);
+    }
+
+    /*---------------------------------------------------------*\
+    | Clear existing controllers                               |
+    \*---------------------------------------------------------*/
     on_clear_all_clicked();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
-    for(int i = 0; i < count; i++)
+    /*---------------------------------------------------------*\
+    | Load Controllers                                         |
+    \*---------------------------------------------------------*/
+    if(layout_json.contains("controllers"))
     {
-        QString ctrl_name = in.readLine();
-        QString ctrl_location = in.readLine();
-        int led_count = in.readLine().toInt();
-
-        RGBController* controller = nullptr;
-        bool is_virtual = (ctrl_location == "VIRTUAL_CONTROLLER");
-
-        if(!is_virtual)
+        for(const auto& controller_json : layout_json["controllers"])
         {
-            for(unsigned int j = 0; j < controllers.size(); j++)
+            std::string ctrl_name = controller_json["name"].get<std::string>();
+            std::string ctrl_location = controller_json["location"].get<std::string>();
+            std::string ctrl_type = controller_json["type"].get<std::string>();
+
+            RGBController* controller = nullptr;
+            bool is_virtual = (ctrl_type == "virtual");
+
+            if(!is_virtual)
             {
-                if(controllers[j]->name == ctrl_name.toStdString() &&
-                   controllers[j]->location == ctrl_location.toStdString())
+                for(unsigned int j = 0; j < controllers.size(); j++)
                 {
-                    controller = controllers[j];
-                    break;
-                }
-            }
-
-            if(!controller)
-            {
-                for(int j = 0; j < led_count; j++)
-                {
-                    in.readLine();
-                }
-                in.readLine();
-                in.readLine();
-                in.readLine();
-                in.readLine();
-                continue;
-            }
-        }
-
-        ControllerTransform* ctrl_transform = new ControllerTransform();
-        ctrl_transform->controller = controller;
-        ctrl_transform->virtual_controller = nullptr;
-
-        if(is_virtual)
-        {
-            QString virtual_name = ctrl_name;
-            if(virtual_name.startsWith("[Custom] "))
-            {
-                virtual_name = virtual_name.mid(9);
-            }
-
-            VirtualController3D* virtual_ctrl = nullptr;
-            for(VirtualController3D* vc : virtual_controllers)
-            {
-                if(QString::fromStdString(vc->GetName()) == virtual_name)
-                {
-                    virtual_ctrl = vc;
-                    break;
-                }
-            }
-
-            if(virtual_ctrl)
-            {
-                ctrl_transform->controller = nullptr;
-                ctrl_transform->virtual_controller = virtual_ctrl;
-                ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
-            }
-            else
-            {
-                // Virtual controller not found, skip this entry
-                for(int j = 0; j < led_count; j++)
-                {
-                    in.readLine();
-                }
-                in.readLine(); // x position
-                in.readLine(); // y position
-                in.readLine(); // z position
-                in.readLine(); // display color
-                delete ctrl_transform;
-                continue;
-            }
-
-            for(int j = 0; j < led_count; j++)
-            {
-                in.readLine();
-            }
-        }
-        else
-        {
-            for(int j = 0; j < led_count; j++)
-            {
-                QStringList parts = in.readLine().split(" ");
-                unsigned int zone_idx = parts[0].toUInt();
-                unsigned int led_idx = parts[1].toUInt();
-
-                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
-
-                for(unsigned int k = 0; k < all_positions.size(); k++)
-                {
-                    if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
+                    if(controllers[j]->name == ctrl_name && controllers[j]->location == ctrl_location)
                     {
-                        ctrl_transform->led_positions.push_back(all_positions[k]);
+                        controller = controllers[j];
                         break;
                     }
                 }
-            }
-        }
 
-        QStringList pos_parts = in.readLine().split(" ");
-        ctrl_transform->transform.position.x = pos_parts[0].toFloat();
-        ctrl_transform->transform.position.y = pos_parts[1].toFloat();
-        ctrl_transform->transform.position.z = pos_parts[2].toFloat();
-
-        QStringList rot_parts = in.readLine().split(" ");
-        ctrl_transform->transform.rotation.x = rot_parts[0].toFloat();
-        ctrl_transform->transform.rotation.y = rot_parts[1].toFloat();
-        ctrl_transform->transform.rotation.z = rot_parts[2].toFloat();
-
-        QStringList scale_parts = in.readLine().split(" ");
-        ctrl_transform->transform.scale.x = scale_parts[0].toFloat();
-        ctrl_transform->transform.scale.y = scale_parts[1].toFloat();
-        ctrl_transform->transform.scale.z = scale_parts[2].toFloat();
-
-        ctrl_transform->display_color = in.readLine().toUInt();
-
-        controller_transforms.push_back(ctrl_transform);
-
-        QColor color;
-        color.setRgb(ctrl_transform->display_color & 0xFF,
-                     (ctrl_transform->display_color >> 8) & 0xFF,
-                     (ctrl_transform->display_color >> 16) & 0xFF);
-
-        QString name;
-        if(is_virtual)
-        {
-            name = ctrl_name;
-        }
-        else
-        {
-            name = QString::fromStdString(controller->name);
-            if(ctrl_transform->led_positions.size() < controller->leds.size())
-            {
-                if(ctrl_transform->led_positions.size() == 1)
+                if(!controller)
                 {
-                    unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
-                                                  ctrl_transform->led_positions[0].led_idx;
-                    name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                    continue;
+                }
+            }
+
+            ControllerTransform* ctrl_transform = new ControllerTransform();
+            ctrl_transform->controller = controller;
+            ctrl_transform->virtual_controller = nullptr;
+
+            if(is_virtual)
+            {
+                QString virtual_name = QString::fromStdString(ctrl_name);
+                if(virtual_name.startsWith("[Custom] "))
+                {
+                    virtual_name = virtual_name.mid(9);
+                }
+
+                VirtualController3D* virtual_ctrl = nullptr;
+                for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+                {
+                    if(QString::fromStdString(virtual_controllers[i]->GetName()) == virtual_name)
+                    {
+                        virtual_ctrl = virtual_controllers[i];
+                        break;
+                    }
+                }
+
+                if(virtual_ctrl)
+                {
+                    ctrl_transform->controller = nullptr;
+                    ctrl_transform->virtual_controller = virtual_ctrl;
+                    ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
                 }
                 else
                 {
-                    name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                    delete ctrl_transform;
+                    continue;
                 }
             }
+            else
+            {
+                // Load LED mappings for physical controllers
+                for(const auto& led_mapping : controller_json["led_mappings"])
+                {
+                    unsigned int zone_idx = led_mapping["zone_index"].get<unsigned int>();
+                    unsigned int led_idx = led_mapping["led_index"].get<unsigned int>();
+
+                    std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
+
+                    for(unsigned int k = 0; k < all_positions.size(); k++)
+                    {
+                        if(all_positions[k].zone_idx == zone_idx && all_positions[k].led_idx == led_idx)
+                        {
+                            ctrl_transform->led_positions.push_back(all_positions[k]);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Load transform
+            ctrl_transform->transform.position.x = controller_json["transform"]["position"]["x"].get<float>();
+            ctrl_transform->transform.position.y = controller_json["transform"]["position"]["y"].get<float>();
+            ctrl_transform->transform.position.z = controller_json["transform"]["position"]["z"].get<float>();
+
+            ctrl_transform->transform.rotation.x = controller_json["transform"]["rotation"]["x"].get<float>();
+            ctrl_transform->transform.rotation.y = controller_json["transform"]["rotation"]["y"].get<float>();
+            ctrl_transform->transform.rotation.z = controller_json["transform"]["rotation"]["z"].get<float>();
+
+            ctrl_transform->transform.scale.x = controller_json["transform"]["scale"]["x"].get<float>();
+            ctrl_transform->transform.scale.y = controller_json["transform"]["scale"]["y"].get<float>();
+            ctrl_transform->transform.scale.z = controller_json["transform"]["scale"]["z"].get<float>();
+
+            ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
+
+            controller_transforms.push_back(ctrl_transform);
+
+            QColor color;
+            color.setRgb(ctrl_transform->display_color & 0xFF,
+                         (ctrl_transform->display_color >> 8) & 0xFF,
+                         (ctrl_transform->display_color >> 16) & 0xFF);
+
+            QString name;
+            if(is_virtual)
+            {
+                name = QString::fromStdString(ctrl_name);
+            }
+            else
+            {
+                name = QString::fromStdString(controller->name);
+                if(ctrl_transform->led_positions.size() < controller->leds.size())
+                {
+                    if(ctrl_transform->led_positions.size() == 1)
+                    {
+                        unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
+                                                      ctrl_transform->led_positions[0].led_idx;
+                        name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                    }
+                    else
+                    {
+                        name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                    }
+                }
+            }
+
+            QListWidgetItem* item = new QListWidgetItem(name);
+            item->setBackground(QBrush(color));
+            item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
+            controller_list->addItem(item);
         }
-
-        QListWidgetItem* item = new QListWidgetItem(name);
-        item->setBackground(QBrush(color));
-        item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
-        controller_list->addItem(item);
     }
-
-    file.close();
 
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+}
 
+void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
+{
+
+    QFile file(QString::fromStdString(filename));
+
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return;
+    }
+
+    QString content = QString::fromUtf8(file.readAll());
+    file.close();
+
+    try
+    {
+        nlohmann::json layout_json = nlohmann::json::parse(content.toStdString());
+        LoadLayoutFromJSON(layout_json);
+        return;
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to parse JSON: %s", e.what());
+        QMessageBox::critical(nullptr, "Invalid Layout File",
+                            QString("Failed to load layout file:\n%1\n\nError: %2")
+                            .arg(QString::fromStdString(filename))
+                            .arg(e.what()));
+        return;
+    }
 }
 
 std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
@@ -1848,7 +2191,7 @@ std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
     QDir dir;
     dir.mkpath(QString::fromStdString(plugins_dir.string()));
 
-    std::string filename = layout_name + ".3dlayout";
+    std::string filename = layout_name + ".json";
     filesystem::path layout_file = plugins_dir / filename;
 
     return layout_file.string();
@@ -1864,14 +2207,16 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path layouts_dir = config_dir / "plugins" / "3d_spatial_layouts";
 
+
     QDir dir(QString::fromStdString(layouts_dir.string()));
     QStringList filters;
-    filters << "*.3dlayout";
+    filters << "*.json";
     QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
 
-    for(const QFileInfo& file_info : files)
+
+    for(int i = 0; i < files.size(); i++)
     {
-        QString base_name = file_info.baseName();
+        QString base_name = files[i].baseName();
         layout_profiles_combo->addItem(base_name);
     }
 
@@ -1881,6 +2226,9 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
     {
         saved_profile = QString::fromStdString(settings["SelectedProfile"].get<std::string>());
     }
+    else
+    {
+    }
 
     if(!saved_profile.isEmpty())
     {
@@ -1888,6 +2236,9 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
         if(index >= 0)
         {
             layout_profiles_combo->setCurrentIndex(index);
+        }
+        else
+        {
         }
     }
     else if(!current_text.isEmpty())
@@ -1904,15 +2255,17 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
 
 void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
 {
+    std::string profile_name = layout_profiles_combo->currentText().toStdString();
+
     nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-    settings["SelectedProfile"] = layout_profiles_combo->currentText().toStdString();
+    settings["SelectedProfile"] = profile_name;
     resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
     resource_manager->GetSettingsManager()->SaveSettings();
+
 }
 
 void OpenRGB3DSpatialTab::TryAutoLoadLayout()
 {
-
     if(!first_load)
     {
         return;
@@ -1920,9 +2273,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
 
     first_load = false;
 
-    bool is_checked = auto_load_checkbox->isChecked();
-
-    if(is_checked)
+    if(auto_load_checkbox->isChecked())
     {
         QString profile_name = layout_profiles_combo->currentText();
 
@@ -1935,16 +2286,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
             {
                 LoadLayout(layout_path);
             }
-            else
-            {
-            }
         }
-        else
-        {
-        }
-    }
-    else
-    {
     }
 }
 
@@ -1959,14 +2301,14 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
     mkdir(custom_dir.c_str(), 0755);
 #endif
 
-    for(const VirtualController3D* ctrl : virtual_controllers)
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
     {
-        std::string safe_name = ctrl->GetName();
-        for(char& c : safe_name)
+        std::string safe_name = virtual_controllers[i]->GetName();
+        for(unsigned int j = 0; j < safe_name.length(); j++)
         {
-            if(c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+            if(safe_name[j] == '/' || safe_name[j] == '\\' || safe_name[j] == ':' || safe_name[j] == '*' || safe_name[j] == '?' || safe_name[j] == '"' || safe_name[j] == '<' || safe_name[j] == '>' || safe_name[j] == '|')
             {
-                c = '_';
+                safe_name[j] = '_';
             }
         }
 
@@ -1974,7 +2316,7 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
         std::ofstream file(filepath);
         if(file.is_open())
         {
-            nlohmann::json ctrl_json = ctrl->ToJson();
+            nlohmann::json ctrl_json = virtual_controllers[i]->ToJson();
             file << ctrl_json.dump(4);
             file.close();
         }
@@ -2000,11 +2342,14 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
     try
     {
-        for(const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(dir_path))
+        std::filesystem::directory_iterator dir_iter(dir_path);
+        std::filesystem::directory_iterator end_iter;
+
+        for(std::filesystem::directory_iterator entry = dir_iter; entry != end_iter; ++entry)
         {
-            if(entry.path().extension() == ".json")
+            if(entry->path().extension() == ".json")
             {
-                std::ifstream file(entry.path().string());
+                std::ifstream file(entry->path().string());
                 if(file.is_open())
                 {
                     try
@@ -2036,8 +2381,9 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
 bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granularity, int item_idx)
 {
-    for(ControllerTransform* ct : controller_transforms)
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
+        ControllerTransform* ct = controller_transforms[i];
         if(ct->controller == nullptr) continue;
 
         if(granularity == 0)
@@ -2060,9 +2406,9 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             if(ct->controller == controller)
             {
-                for(const LEDPosition3D& pos : ct->led_positions)
+                for(unsigned int j = 0; j < ct->led_positions.size(); j++)
                 {
-                    if(pos.zone_idx == (unsigned int)item_idx)
+                    if(ct->led_positions[j].zone_idx == (unsigned int)item_idx)
                     {
                         return true;
                     }
@@ -2073,9 +2419,9 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             if(ct->controller == controller)
             {
-                for(const LEDPosition3D& pos : ct->led_positions)
+                for(unsigned int j = 0; j < ct->led_positions.size(); j++)
                 {
-                    unsigned int global_led_idx = controller->zones[pos.zone_idx].start_idx + pos.led_idx;
+                    unsigned int global_led_idx = controller->zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
                     if(global_led_idx == (unsigned int)item_idx)
                     {
                         return true;
@@ -2105,11 +2451,11 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
     int total_leds = (int)controller->leds.size();
     int assigned_leds = 0;
 
-    for(ControllerTransform* ct : controller_transforms)
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        if(ct->controller == controller)
+        if(controller_transforms[i]->controller == controller)
         {
-            assigned_leds += (int)ct->led_positions.size();
+            assigned_leds += (int)controller_transforms[i]->led_positions.size();
         }
     }
 
@@ -2131,7 +2477,7 @@ void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 
 void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
 {
-    if(!custom_effect_container)
+    if(!effect_controls_widget)
     {
         return;
     }
@@ -2144,9 +2490,23 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         /*---------------------------------------------------------*\
         | Create Wave3D effect UI                                  |
         \*---------------------------------------------------------*/
-        wave3d_effect = new Wave3D(custom_effect_container);
-        wave3d_effect->SetupCustomUI(custom_effect_container);
+        wave3d_effect = new Wave3D(effect_controls_widget);
+        wave3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        wave3d_effect->CreateCommon3DControls(effect_controls_widget);
+        wave3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = wave3d_effect;
+
+        /*---------------------------------------------------------*\
+        | Get buttons from effect and store references            |
+        \*---------------------------------------------------------*/
+        start_effect_button = wave3d_effect->GetStartButton();
+        stop_effect_button = wave3d_effect->GetStopButton();
+
+        /*---------------------------------------------------------*\
+        | Connect start/stop buttons to tab handlers              |
+        \*---------------------------------------------------------*/
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
 
         /*---------------------------------------------------------*\
         | Connect parameter change signals                         |
@@ -2160,13 +2520,17 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         /*---------------------------------------------------------*\
         | Create Wipe3D effect UI                                  |
         \*---------------------------------------------------------*/
-        wipe3d_effect = new Wipe3D(custom_effect_container);
-        wipe3d_effect->SetupCustomUI(custom_effect_container);
+        wipe3d_effect = new Wipe3D(effect_controls_widget);
+        wipe3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        wipe3d_effect->CreateCommon3DControls(effect_controls_widget);
+        wipe3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = wipe3d_effect;
 
-        /*---------------------------------------------------------*\
-        | Connect parameter change signals                         |
-        \*---------------------------------------------------------*/
+        start_effect_button = wipe3d_effect->GetStartButton();
+        stop_effect_button = wipe3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         connect(wipe3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
         });
 
@@ -2176,43 +2540,79 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         /*---------------------------------------------------------*\
         | Create Plasma3D effect UI                               |
         \*---------------------------------------------------------*/
-        plasma3d_effect = new Plasma3D(custom_effect_container);
-        plasma3d_effect->SetupCustomUI(custom_effect_container);
+        plasma3d_effect = new Plasma3D(effect_controls_widget);
+        plasma3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        plasma3d_effect->CreateCommon3DControls(effect_controls_widget);
+        plasma3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = plasma3d_effect;
 
-        /*---------------------------------------------------------*\
-        | Connect parameter change signals                         |
-        \*---------------------------------------------------------*/
+        start_effect_button = plasma3d_effect->GetStartButton();
+        stop_effect_button = plasma3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         connect(plasma3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
         });
 
     }
     else if(effect_type == 3)  // Spiral
     {
-        spiral3d_effect = new Spiral3D(custom_effect_container);
-        spiral3d_effect->SetupCustomUI(custom_effect_container);
+        spiral3d_effect = new Spiral3D(effect_controls_widget);
+        spiral3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        spiral3d_effect->CreateCommon3DControls(effect_controls_widget);
+        spiral3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = spiral3d_effect;
+
+        start_effect_button = spiral3d_effect->GetStartButton();
+        stop_effect_button = spiral3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(spiral3d_effect, effect_type);
     }
     else if(effect_type == 4)  // DNA Helix
     {
-        dnahelix3d_effect = new DNAHelix3D(custom_effect_container);
-        dnahelix3d_effect->SetupCustomUI(custom_effect_container);
+        dnahelix3d_effect = new DNAHelix3D(effect_controls_widget);
+        dnahelix3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        dnahelix3d_effect->CreateCommon3DControls(effect_controls_widget);
+        dnahelix3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = dnahelix3d_effect;
+
+        start_effect_button = dnahelix3d_effect->GetStartButton();
+        stop_effect_button = dnahelix3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(dnahelix3d_effect, effect_type);
     }
     else if(effect_type == 5)  // Breathing Sphere
     {
-        breathingsphere3d_effect = new BreathingSphere3D(custom_effect_container);
-        breathingsphere3d_effect->SetupCustomUI(custom_effect_container);
+        breathingsphere3d_effect = new BreathingSphere3D(effect_controls_widget);
+        breathingsphere3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        breathingsphere3d_effect->CreateCommon3DControls(effect_controls_widget);
+        breathingsphere3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = breathingsphere3d_effect;
+
+        start_effect_button = breathingsphere3d_effect->GetStartButton();
+        stop_effect_button = breathingsphere3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(breathingsphere3d_effect, effect_type);
     }
     else if(effect_type == 6)  // Explosion
     {
-        explosion3d_effect = new Explosion3D(custom_effect_container);
-        explosion3d_effect->SetupCustomUI(custom_effect_container);
+        explosion3d_effect = new Explosion3D(effect_controls_widget);
+        explosion3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        explosion3d_effect->CreateCommon3DControls(effect_controls_widget);
+        explosion3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = explosion3d_effect;
+
+        start_effect_button = explosion3d_effect->GetStartButton();
+        stop_effect_button = explosion3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(explosion3d_effect, effect_type);
     }
     else
@@ -2220,8 +2620,58 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         QLabel* unknown_label = new QLabel("Unknown effect type.");
         unknown_label->setAlignment(Qt::AlignCenter);
         unknown_label->setStyleSheet("color: #666; font-style: italic; padding: 20px;");
-        custom_effect_container->layout()->addWidget(unknown_label);
+        effect_controls_layout->addWidget(unknown_label);
+    }
 
+    // Update the layout to show the new controls
+    if(effect_controls_widget && effect_controls_layout)
+    {
+        effect_controls_widget->updateGeometry();
+        effect_controls_widget->update();
+    }
+}
+
+/*---------------------------------------------------------*\
+| NEW: Simplified effect creation using auto-registration |
+| This replaces the 100+ lines of if/else above          |
+\*---------------------------------------------------------*/
+void OpenRGB3DSpatialTab::SetupCustomEffectUI_NEW(const std::string& effect_class_name)
+{
+    if(!effect_controls_widget)
+    {
+        return;
+    }
+
+    // Create effect using the manager
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_class_name);
+    if(!effect)
+    {
+        QLabel* error_label = new QLabel(QString("Failed to create effect: %1").arg(QString::fromStdString(effect_class_name)));
+        error_label->setAlignment(Qt::AlignCenter);
+        error_label->setStyleSheet("color: red; font-style: italic; padding: 20px;");
+        effect_controls_layout->addWidget(error_label);
+        return;
+    }
+
+    // Setup effect UI (same 4 lines for ALL effects!)
+    effect->setParent(effect_controls_widget);
+    effect->CreateCommonEffectControls(effect_controls_widget);
+    effect->CreateCommon3DControls(effect_controls_widget);
+    effect->SetupCustomUI(effect_controls_widget);
+    current_effect_ui = effect;
+
+    // Get and connect buttons
+    start_effect_button = effect->GetStartButton();
+    stop_effect_button = effect->GetStopButton();
+    connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+    connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+    connect(effect, &SpatialEffect3D::ParametersChanged, [this]() {});
+
+    // Update layout
+    if(effect_controls_widget && effect_controls_layout)
+    {
+        effect_controls_widget->updateGeometry();
+        effect_controls_widget->update();
     }
 }
 
@@ -2237,7 +2687,7 @@ void OpenRGB3DSpatialTab::SetupEffectSignals(SpatialEffect3D* effect, int effect
 
 void OpenRGB3DSpatialTab::ClearCustomEffectUI()
 {
-    if(!custom_effect_container || !custom_effect_container->layout())
+    if(!effect_controls_layout)
     {
         return;
     }
@@ -2246,7 +2696,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     | Remove all widgets from the container                    |
     \*---------------------------------------------------------*/
     QLayoutItem* item;
-    while((item = custom_effect_container->layout()->takeAt(0)) != nullptr)
+    while((item = effect_controls_layout->takeAt(0)) != nullptr)
     {
         if(item->widget())
         {
@@ -2265,6 +2715,8 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     explosion3d_effect = nullptr;
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
+    start_effect_button = nullptr;
+    stop_effect_button = nullptr;
 
 }
 
@@ -2297,6 +2749,105 @@ void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
     {
         viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
         viewport->update();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_grid_snap_toggled(bool enabled)
+{
+    if(viewport)
+    {
+        viewport->SetGridSnapEnabled(enabled);
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateSelectionInfo()
+{
+    if(!viewport || !selection_info_label) return;
+
+    const std::vector<int>& selected = viewport->GetSelectedControllers();
+
+    if(selected.empty())
+    {
+        selection_info_label->setText("No selection");
+        selection_info_label->setStyleSheet("color: gray; font-size: 10px; font-weight: bold;");
+    }
+    else if(selected.size() == 1)
+    {
+        selection_info_label->setText(QString("Selected: 1 controller"));
+        selection_info_label->setStyleSheet("color: #ffaa00; font-size: 10px; font-weight: bold;");
+    }
+    else
+    {
+        selection_info_label->setText(QString("Selected: %1 controllers").arg(selected.size()));
+        selection_info_label->setStyleSheet("color: #ffaa00; font-size: 10px; font-weight: bold;");
+    }
+}
+
+/*---------------------------------------------------------*\
+| User Position Control Functions                          |
+\*---------------------------------------------------------*/
+void OpenRGB3DSpatialTab::on_user_position_changed()
+{
+    // Update user position from spin boxes
+    user_position.x = (float)user_pos_x_spin->value();
+    user_position.y = (float)user_pos_y_spin->value();
+    user_position.z = (float)user_pos_z_spin->value();
+
+    // Update viewport display
+    if(viewport)
+    {
+        viewport->SetUserPosition(user_position);
+        viewport->update();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_user_visibility_toggled(bool visible)
+{
+    user_position.visible = visible;
+
+    // Update viewport display
+    if(viewport)
+    {
+        viewport->SetUserPosition(user_position);
+        viewport->update();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_user_center_clicked()
+{
+    // Reset user to room center (0,0,0)
+    user_position.x = 0.0f;
+    user_position.y = 0.0f;
+    user_position.z = 0.0f;
+
+    // Update spin boxes
+    user_pos_x_spin->setValue(0.0);
+    user_pos_y_spin->setValue(0.0);
+    user_pos_z_spin->setValue(0.0);
+
+    // Update viewport display
+    if(viewport)
+    {
+        viewport->SetUserPosition(user_position);
+        viewport->update();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_effect_changed(int index)
+{
+    // Clear current effect UI
+    ClearCustomEffectUI();
+
+    // Stop current effect
+    if(effect_running)
+    {
+        on_stop_effect_clicked();
+    }
+
+    // Set up new effect UI based on selection
+    if(index > 0)  // Skip "None" option
+    {
+        SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
     }
 }
 

@@ -49,11 +49,9 @@ private slots:
 
 private:
     /*---------------------------------------------------------*\
-    | Breathing-specific controls                              |
+    | Breathing-specific controls (speed/brightness now in base class) |
     \*---------------------------------------------------------*/
     QSlider*        size_slider;            // Sphere size
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
     QSlider*        frequency_slider;       // Breathing frequency
     QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
 
@@ -81,8 +79,6 @@ private:
     void SetupColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    RGBColor GetRainbowColor(float hue);
-    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

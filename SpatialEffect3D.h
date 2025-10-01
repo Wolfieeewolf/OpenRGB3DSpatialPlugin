@@ -94,7 +94,16 @@ public:
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
-    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
+
+    /*---------------------------------------------------------*\
+    | Optional grid calculation (for backward compatibility)   |
+    | Default implementation just calls CalculateColor()       |
+    \*---------------------------------------------------------*/
+    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+    {
+        (void)grid;
+        return CalculateColor(x, y, z, time);
+    }
 
     /*---------------------------------------------------------*\
     | Common effect controls (all effects need these)        |
@@ -120,8 +129,18 @@ public:
     virtual void SetBrightness(unsigned int brightness) { effect_brightness = brightness; }
     virtual unsigned int GetBrightness() { return effect_brightness; }
 
-    virtual void SetColors(RGBColor start, RGBColor end, bool gradient);
-    virtual void GetColors(RGBColor& start, RGBColor& end, bool& gradient);
+    virtual void SetColors(const std::vector<RGBColor>& colors);
+    virtual std::vector<RGBColor> GetColors() const;
+    virtual void SetRainbowMode(bool enabled);
+    virtual bool GetRainbowMode() const;
+    virtual void SetFrequency(unsigned int frequency);
+    virtual unsigned int GetFrequency() const;
+
+    /*---------------------------------------------------------*\
+    | Button accessors for parent tab to connect              |
+    \*---------------------------------------------------------*/
+    QPushButton* GetStartButton() { return start_effect_button; }
+    QPushButton* GetStopButton() { return stop_effect_button; }
 
 signals:
     void ParametersChanged();
@@ -133,11 +152,31 @@ protected:
     QGroupBox*          effect_controls_group;
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
-    QPushButton*        color_start_button;
-    QPushButton*        color_end_button;
-    QCheckBox*          gradient_check;
+    QSlider*            frequency_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
+    QLabel*             frequency_label;
+
+    /*---------------------------------------------------------*\
+    | Color management controls                                |
+    \*---------------------------------------------------------*/
+    QGroupBox*          color_controls_group;
+    QCheckBox*          rainbow_mode_check;
+    QWidget*            color_buttons_widget;
+    QHBoxLayout*        color_buttons_layout;
+    QPushButton*        add_color_button;
+    QPushButton*        remove_color_button;
+    std::vector<QPushButton*> color_buttons;
+    std::vector<RGBColor> colors;
+
+    /*---------------------------------------------------------*\
+    | Universal Axis & Direction Controls                      |
+    \*---------------------------------------------------------*/
+    QComboBox*          axis_combo;             // X/Y/Z/Radial/Custom
+    QCheckBox*          reverse_check;          // Reverse direction
+    QDoubleSpinBox*     custom_direction_x;     // Custom direction X
+    QDoubleSpinBox*     custom_direction_y;     // Custom direction Y
+    QDoubleSpinBox*     custom_direction_z;     // Custom direction Z
 
     /*---------------------------------------------------------*\
     | Common 3D spatial controls                               |
@@ -181,23 +220,53 @@ protected:
     QCheckBox*          mirror_z_check;
 
     /*---------------------------------------------------------*\
+    | Effect control buttons                                   |
+    \*---------------------------------------------------------*/
+    QPushButton*        start_effect_button;
+    QPushButton*        stop_effect_button;
+
+    /*---------------------------------------------------------*\
     | Effect parameters                                        |
     \*---------------------------------------------------------*/
     bool                effect_enabled;
+    bool                effect_running;
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
-    RGBColor            color_start;
-    RGBColor            color_end;
-    bool                use_gradient;
+    unsigned int        effect_frequency;
+    bool                rainbow_mode;
+    float               rainbow_progress;
+
+    /*---------------------------------------------------------*\
+    | Universal Axis & Direction Parameters                    |
+    \*---------------------------------------------------------*/
+    EffectAxis          effect_axis;            // X/Y/Z/Radial/Custom
+    bool                effect_reverse;         // Reverse direction
+    Vector3D            custom_direction;       // Custom direction vector
+
+    /*---------------------------------------------------------*\
+    | Helper methods for derived classes                       |
+    \*---------------------------------------------------------*/
+    RGBColor GetRainbowColor(float hue);
+    RGBColor GetColorAtPosition(float position);
 
 private slots:
     void OnParameterChanged();
-    void OnColorStartClicked();
-    void OnColorEndClicked();
+    void OnAxisChanged();
+    void OnReverseChanged();
+    void OnCustomDirectionChanged();
+    void OnRainbowModeChanged();
+    void OnAddColorClicked();
+    void OnRemoveColorClicked();
+    void OnColorButtonClicked();
+    void OnStartEffectClicked();
+    void OnStopEffectClicked();
 
 private:
     void CreateOriginControls(QWidget* parent);
     void CreateScaleControls(QWidget* parent);
+    void CreateColorControls(QWidget* parent);
+    void CreateColorButton(RGBColor color);
+    void RemoveLastColorButton();
     void CreateRotationControls(QWidget* parent);
     void CreateDirectionControls(QWidget* parent);
     void CreateMirrorControls(QWidget* parent);

@@ -12,12 +12,27 @@
 #ifndef LEDVIEWPORT3D_H
 #define LEDVIEWPORT3D_H
 
+/*---------------------------------------------------------*\
+| Qt Includes                                              |
+\*---------------------------------------------------------*/
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
 #include <QMouseEvent>
 #include <QWheelEvent>
+
+/*---------------------------------------------------------*\
+| System Includes                                          |
+\*---------------------------------------------------------*/
 #include <vector>
+
+/*---------------------------------------------------------*\
+| Local Includes                                           |
+\*---------------------------------------------------------*/
 #include "LEDPosition3D.h"
+#include "ControllerLayout3D.h"
+#include "Gizmo3D.h"
+#include "SpatialEffectTypes.h"
+#include "VirtualController3D.h"
 
 class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -31,11 +46,24 @@ public:
     void SelectController(int index);
     void UpdateColors();
     void SetGridDimensions(int x, int y, int z);
+    void SetGridSnapEnabled(bool enabled);
+    bool IsGridSnapEnabled() const { return grid_snap_enabled; }
+    void SetUserPosition(const UserPosition3D& position);
+
+    void EnforceFloorConstraint(ControllerTransform* ctrl);
+    void UpdateGizmoPosition();
+    void NotifyControllerTransformChanged();
+
+    void AddControllerToSelection(int index);
+    void RemoveControllerFromSelection(int index);
+    void ClearSelection();
+    bool IsControllerSelected(int index) const;
+    const std::vector<int>& GetSelectedControllers() const { return selected_controller_indices; }
 
 signals:
     void ControllerSelected(int index);
     void ControllerPositionChanged(int index, float x, float y, float z);
-    void ControllerScaleChanged(int index, float x, float y, float z);
+    void ControllerRotationChanged(int index, float x, float y, float z);
 
 protected:
     void initializeGL() override;
@@ -50,37 +78,42 @@ protected:
 private:
     void DrawGrid();
     void DrawAxes();
+    void DrawAxisLabels();
     void DrawControllers();
     void DrawLEDs(ControllerTransform* ctrl);
-    void DrawGizmo();
+    void DrawUserFigure();
 
     int PickController(int mouse_x, int mouse_y);
-    bool PickGizmoCenter(int mouse_x, int mouse_y);
-    void UpdateGizmo(int dx, int dy);
+    bool RayBoxIntersect(float ray_origin[3], float ray_direction[3],
+                        const Vector3D& box_min, const Vector3D& box_max, float& distance);
 
-    struct Ray3D {
-        float origin[3];
-        float direction[3];
-    };
+    void CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds);
+    Vector3D GetControllerCenter(ControllerTransform* ctrl);
+    Vector3D GetControllerSize(ControllerTransform* ctrl);
 
-    struct Box3D {
-        float min[3];
-        float max[3];
-    };
+    bool IsControllerAboveFloor(ControllerTransform* ctrl);
+    float GetControllerMinY(ControllerTransform* ctrl);
 
-    Ray3D GenerateRay(int mouse_x, int mouse_y);
-    bool RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance);
-    int PickGizmoAxis3D(int mouse_x, int mouse_y);
-    void ApplyRotationToPoint(float& x, float& y, float& z, float rx, float ry, float rz);
+    Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform);
 
     std::vector<ControllerTransform*>*  controller_transforms;
     int                                 selected_controller_idx;
+    std::vector<int>                    selected_controller_indices;
 
     // Grid dimensions for proper bounds and visualization
     int     grid_x;
     int     grid_y;
     int     grid_z;
+    bool    grid_snap_enabled;
 
+    /*---------------------------------------------------------*\
+    | User Position Reference Point                            |
+    \*---------------------------------------------------------*/
+    UserPosition3D  user_position;
+
+    /*---------------------------------------------------------*\
+    | Camera Controls                                          |
+    \*---------------------------------------------------------*/
     float   camera_distance;
     float   camera_yaw;
     float   camera_pitch;
@@ -88,12 +121,17 @@ private:
     float   camera_target_y;
     float   camera_target_z;
 
+    /*---------------------------------------------------------*\
+    | Mouse Interaction                                        |
+    \*---------------------------------------------------------*/
     bool    dragging_rotate;
     bool    dragging_pan;
-    bool    dragging_gizmo;
-    int     dragging_axis;
-    int     gizmo_mode;
     QPoint  last_mouse_pos;
+
+    /*---------------------------------------------------------*\
+    | 3D Manipulation Gizmo                                   |
+    \*---------------------------------------------------------*/
+    Gizmo3D gizmo;
 };
 
 #endif

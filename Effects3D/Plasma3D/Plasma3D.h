@@ -44,37 +44,17 @@ public:
 
 private slots:
     void OnPlasmaParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
-    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | Plasma-specific controls                                 |
+    | Plasma-specific controls only                            |
     \*---------------------------------------------------------*/
     QComboBox*      pattern_combo;          // Pattern type
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
-    QSlider*        frequency_slider;       // Plasma frequency
-    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
-
-    /*---------------------------------------------------------*\
-    | Color controls                                           |
-    \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
 
     /*---------------------------------------------------------*\
     | Current plasma parameters                                |
     \*---------------------------------------------------------*/
     int             pattern_type;           // 0=Classic, 1=Swirl, 2=Ripple, 3=Organic
-    unsigned int    frequency;              // Plasma frequency
-    bool            rainbow_mode;           // Rainbow mode enabled
     float           progress;               // Animation progress
 
     /*---------------------------------------------------------*\
@@ -83,8 +63,6 @@ private:
     void SetupColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    RGBColor GetRainbowColor(float hue);
-    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

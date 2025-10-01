@@ -50,11 +50,9 @@ private slots:
 
 private:
     /*---------------------------------------------------------*\
-    | Spiral-specific controls                                 |
+    | Spiral-specific controls (speed/brightness now in base class) |
     \*---------------------------------------------------------*/
     QSlider*        arms_slider;            // Number of spiral arms
-    QSlider*        speed_slider;           // Effect speed
-    QSlider*        brightness_slider;      // Effect brightness
     QSlider*        frequency_slider;       // Spiral frequency
     QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
 
@@ -82,8 +80,6 @@ private:
     void SetupColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    RGBColor GetRainbowColor(float hue);
-    RGBColor GetColorAtPosition(float position);
 };
 
 #endif

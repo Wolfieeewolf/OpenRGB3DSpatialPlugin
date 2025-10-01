@@ -12,6 +12,8 @@
 #ifndef SPATIALEFFECTTYPES_H
 #define SPATIALEFFECTTYPES_H
 
+#include <string>
+#include <vector>
 #include "LEDPosition3D.h"
 #include "RGBController.h"
 
@@ -28,16 +30,78 @@ enum SpatialEffectType
 
 enum OriginPreset
 {
-    ORIGIN_ROOM_CENTER      = 0,    // Center of entire room (current default)
-    ORIGIN_FLOOR_CENTER     = 1,    // Center of floor
-    ORIGIN_CEILING_CENTER   = 2,    // Center of ceiling
-    ORIGIN_FRONT_WALL       = 3,    // Center of front wall (user facing)
-    ORIGIN_BACK_WALL        = 4,    // Center of back wall
-    ORIGIN_LEFT_WALL        = 5,    // Center of left wall
-    ORIGIN_RIGHT_WALL       = 6,    // Center of right wall
-    ORIGIN_FLOOR_FRONT      = 7,    // Front edge of floor
-    ORIGIN_FLOOR_BACK       = 8,    // Back edge of floor
-    ORIGIN_CUSTOM           = 9,    // Custom X,Y,Z coordinates
+    ORIGIN_USER_POSITION    = 0,    // User position (default - adjustable)
+    ORIGIN_ROOM_CENTER      = 1,    // Center of entire room grid
+    ORIGIN_FLOOR_CENTER     = 2,    // Center of floor
+    ORIGIN_CEILING_CENTER   = 3,    // Center of ceiling
+    ORIGIN_FRONT_WALL       = 4,    // Center of front wall (user facing)
+    ORIGIN_BACK_WALL        = 5,    // Center of back wall
+    ORIGIN_LEFT_WALL        = 6,    // Center of left wall
+    ORIGIN_RIGHT_WALL       = 7,    // Center of right wall
+    ORIGIN_FLOOR_FRONT      = 8,    // Front edge of floor
+    ORIGIN_FLOOR_BACK       = 9,    // Back edge of floor
+    ORIGIN_CUSTOM           = 10,   // Custom X,Y,Z coordinates
+};
+
+/*---------------------------------------------------------*\
+| Reference Point System                                   |
+\*---------------------------------------------------------*/
+enum ReferencePointType
+{
+    REF_POINT_USER          = 0,    // User position (green stick figure)
+    REF_POINT_MONITOR       = 1,    // Monitor/screen
+    REF_POINT_CHAIR         = 2,    // Chair
+    REF_POINT_DESK          = 3,    // Desk
+    REF_POINT_SPEAKER_LEFT  = 4,    // Left speaker
+    REF_POINT_SPEAKER_RIGHT = 5,    // Right speaker
+    REF_POINT_DOOR          = 6,    // Room door
+    REF_POINT_WINDOW        = 7,    // Window
+    REF_POINT_BED           = 8,    // Bed
+    REF_POINT_TV            = 9,    // TV
+    REF_POINT_CUSTOM        = 10    // Custom user-defined
+};
+
+/*---------------------------------------------------------*\
+| Forward declaration for VirtualReferencePoint3D         |
+| Full definition is in VirtualReferencePoint3D.h         |
+\*---------------------------------------------------------*/
+class VirtualReferencePoint3D;
+
+struct UserPosition3D
+{
+    float x;                        // User X position in grid
+    float y;                        // User Y position in grid
+    float z;                        // User Z position in grid
+    bool visible;                   // Show/hide stick figure
+
+    UserPosition3D() : x(0.0f), y(0.0f), z(0.0f), visible(true) {}
+    UserPosition3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_), visible(true) {}
+};
+
+/*---------------------------------------------------------*\
+| Common Effect Axis Types                                 |
+\*---------------------------------------------------------*/
+enum EffectAxis
+{
+    AXIS_X              = 0,    // Left to Right
+    AXIS_Y              = 1,    // Front to Back
+    AXIS_Z              = 2,    // Bottom to Top
+    AXIS_RADIAL         = 3,    // Outward from center
+    AXIS_CUSTOM         = 4     // Custom direction vector
+};
+
+/*---------------------------------------------------------*\
+| Multi-Reference Point Effects                            |
+\*---------------------------------------------------------*/
+struct MultiPointConfig
+{
+    std::vector<int>    reference_point_ids;    // IDs of reference points to use
+    int                 primary_point_id;       // Main reference point
+    int                 secondary_point_id;     // Secondary reference point (for dual-point effects)
+    bool                use_all_points;         // Use all selected points simultaneously
+    float               point_influence;        // How much each point affects the effect (0.0-1.0)
+
+    MultiPointConfig() : primary_point_id(-1), secondary_point_id(-1), use_all_points(false), point_influence(1.0f) {}
 };
 
 struct SpatialEffectParams
@@ -50,13 +114,24 @@ struct SpatialEffectParams
     bool                use_gradient;
 
     /*---------------------------------------------------------*\
+    | Common Effect Controls (all effects have these)         |
+    \*---------------------------------------------------------*/
+    EffectAxis          axis;               // Primary axis for effect
+    bool                reverse;            // Reverse direction
+    Vector3D            direction;          // Custom direction vector (for AXIS_CUSTOM)
+
+    /*---------------------------------------------------------*\
+    | Multi-Reference Point System                             |
+    \*---------------------------------------------------------*/
+    MultiPointConfig    multi_points;       // Multiple reference points configuration
+
+    /*---------------------------------------------------------*\
     | 3D Spatial Controls                                      |
     \*---------------------------------------------------------*/
     Vector3D            scale_3d;           // Scale per axis (X, Y, Z)
     Vector3D            origin;             // Center point for effect (custom coordinates)
     OriginPreset        origin_preset;      // Room-based origin preset
     Rotation3D          rotation;           // Rotation around each axis
-    Vector3D            direction;          // Direction vector for directional effects
 
     /*---------------------------------------------------------*\
     | Effect-specific controls                                 |
@@ -66,7 +141,6 @@ struct SpatialEffectParams
     float               falloff;            // Distance falloff factor
     unsigned int        num_arms;           // For spiral, star effects
     unsigned int        frequency;          // For wave frequency
-    bool                reverse;            // Reverse direction
     bool                mirror_x;           // Mirror across X axis
     bool                mirror_y;           // Mirror across Y axis
     bool                mirror_z;           // Mirror across Z axis

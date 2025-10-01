@@ -543,11 +543,11 @@ void CustomControllerDialog::UpdateCellInfo()
 
     // Count all mappings for this cell
     std::vector<GridLEDMapping> cell_mappings;
-    for(const GridLEDMapping& mapping : led_mappings)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
-        if(mapping.x == selected_col && mapping.y == selected_row && mapping.z == current_layer)
+        if(led_mappings[i].x == selected_col && led_mappings[i].y == selected_row && led_mappings[i].z == current_layer)
         {
-            cell_mappings.push_back(mapping);
+            cell_mappings.push_back(led_mappings[i]);
         }
     }
 
@@ -915,11 +915,11 @@ QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
 
     unsigned long long total_r = 0, total_g = 0, total_b = 0;  // Use larger type to prevent overflow
 
-    for(unsigned int color : controller->colors)
+    for(unsigned int i = 0; i < controller->colors.size(); i++)
     {
-        total_r += (color >> 0) & 0xFF;
-        total_g += (color >> 8) & 0xFF;
-        total_b += (color >> 16) & 0xFF;
+        total_r += (controller->colors[i] >> 0) & 0xFF;
+        total_g += (controller->colors[i] >> 8) & 0xFF;
+        total_b += (controller->colors[i] >> 16) & 0xFF;
     }
 
     size_t count = controller->colors.size();
