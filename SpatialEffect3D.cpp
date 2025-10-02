@@ -203,6 +203,11 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     // to actually start the effect timer
 
     /*---------------------------------------------------------*\
+    | Apply control visibility based on effect info            |
+    \*---------------------------------------------------------*/
+    ApplyControlVisibility();
+
+    /*---------------------------------------------------------*\
     | Update labels when sliders change                        |
     \*---------------------------------------------------------*/
     connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
@@ -634,6 +639,136 @@ float SpatialEffect3D::CalculateProgress(float time) const
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
 {
     // Empty implementation - old 3D controls removed
+}
+
+/*---------------------------------------------------------*\
+| Apply Control Visibility                                 |
+| Hides base controls if effect provides custom versions   |
+\*---------------------------------------------------------*/
+void SpatialEffect3D::ApplyControlVisibility()
+{
+    EffectInfo3D info = GetEffectInfo();
+
+    // Hide/show controls based on effect's declarations
+    if(speed_slider && speed_label)
+    {
+        speed_slider->setVisible(info.show_speed_control);
+        speed_label->setVisible(info.show_speed_control);
+        // Find and hide the label too
+        QWidget* parent = speed_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Speed:")
+                {
+                    label->setVisible(info.show_speed_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(brightness_slider && brightness_label)
+    {
+        brightness_slider->setVisible(info.show_brightness_control);
+        brightness_label->setVisible(info.show_brightness_control);
+        QWidget* parent = brightness_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Brightness:")
+                {
+                    label->setVisible(info.show_brightness_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(frequency_slider && frequency_label)
+    {
+        frequency_slider->setVisible(info.show_frequency_control);
+        frequency_label->setVisible(info.show_frequency_control);
+        QWidget* parent = frequency_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Frequency:")
+                {
+                    label->setVisible(info.show_frequency_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(size_slider && size_label)
+    {
+        size_slider->setVisible(info.show_size_control);
+        size_label->setVisible(info.show_size_control);
+        QWidget* parent = size_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Size:")
+                {
+                    label->setVisible(info.show_size_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(fps_slider && fps_label)
+    {
+        fps_slider->setVisible(info.show_fps_control);
+        fps_label->setVisible(info.show_fps_control);
+        QWidget* parent = fps_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "FPS:")
+                {
+                    label->setVisible(info.show_fps_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(axis_combo && reverse_check)
+    {
+        axis_combo->setVisible(info.show_axis_control);
+        reverse_check->setVisible(info.show_axis_control);
+        QWidget* parent = axis_combo->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Axis:")
+                {
+                    label->setVisible(info.show_axis_control);
+                    break;
+                }
+            }
+        }
+    }
+
+    if(color_controls_group)
+    {
+        color_controls_group->setVisible(info.show_color_controls);
+    }
 }
 
 void SpatialEffect3D::OnParameterChanged()

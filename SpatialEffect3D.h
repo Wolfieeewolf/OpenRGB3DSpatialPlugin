@@ -82,6 +82,15 @@ struct EffectInfo3D
     float               default_speed_scale;      // Default: 10.0 (multiplier after normalization)
     float               default_frequency_scale;  // Default: 10.0 (multiplier after normalization)
     bool                use_size_parameter;       // Default: true (effect supports size scaling)
+
+    // Control visibility flags - set to false if effect provides its own custom version
+    bool                show_speed_control;       // Default: true (show base speed slider)
+    bool                show_brightness_control;  // Default: true (show base brightness slider)
+    bool                show_frequency_control;   // Default: true (show base frequency slider)
+    bool                show_size_control;        // Default: true (show base size slider)
+    bool                show_fps_control;         // Default: true (show base FPS slider)
+    bool                show_axis_control;        // Default: true (show axis selection)
+    bool                show_color_controls;      // Default: true (show color/rainbow controls)
 };
 
 class SpatialEffect3D : public QWidget
@@ -115,6 +124,7 @@ public:
     \*---------------------------------------------------------*/
     virtual void CreateCommonEffectControls(QWidget* parent);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
+    virtual void ApplyControlVisibility();      // Apply visibility flags from EffectInfo
 
 
     /*---------------------------------------------------------*\
