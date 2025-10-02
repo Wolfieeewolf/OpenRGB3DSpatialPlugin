@@ -71,6 +71,7 @@ private slots:
 
     void on_add_clicked();
     void on_granularity_changed(int index);
+    void on_led_spacing_preset_changed(int index);
     void on_remove_controller_clicked();
     void on_remove_controller_from_viewport(int index);
     void on_clear_all_clicked();
@@ -94,6 +95,7 @@ private slots:
     void on_use_user_reference_toggled(bool enabled);
     void on_effect_changed(int index);
     void UpdateSelectionInfo();
+    void on_apply_spacing_clicked();
 
 private:
     void SetupUI();
@@ -116,6 +118,7 @@ private:
     void SetupCustomEffectUI_NEW(const std::string& effect_class_name);  // NEW: Simplified version
     void SetupEffectSignals(SpatialEffect3D* effect, int effect_type);
     void ClearCustomEffectUI();
+    void RegenerateLEDPositions(ControllerTransform* transform);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -171,10 +174,28 @@ private:
     QSpinBox*                   grid_y_spin;
     QSpinBox*                   grid_z_spin;
     QCheckBox*                  grid_snap_checkbox;
+    QDoubleSpinBox*             grid_scale_spin;
     QLabel*                     selection_info_label;
     int                         custom_grid_x;
     int                         custom_grid_y;
     int                         custom_grid_z;
+    float                       grid_scale_mm;
+
+    /*---------------------------------------------------------*\
+    | LED Spacing Controls (for adding controllers)           |
+    \*---------------------------------------------------------*/
+    QDoubleSpinBox*             led_spacing_x_spin;
+    QDoubleSpinBox*             led_spacing_y_spin;
+    QDoubleSpinBox*             led_spacing_z_spin;
+    QComboBox*                  led_spacing_preset_combo;
+
+    /*---------------------------------------------------------*\
+    | LED Spacing Edit Controls (for selected controller)     |
+    \*---------------------------------------------------------*/
+    QDoubleSpinBox*             edit_led_spacing_x_spin;
+    QDoubleSpinBox*             edit_led_spacing_y_spin;
+    QDoubleSpinBox*             edit_led_spacing_z_spin;
+    QPushButton*                apply_spacing_button;
 
     /*---------------------------------------------------------*\
     | User Position Reference Point                            |

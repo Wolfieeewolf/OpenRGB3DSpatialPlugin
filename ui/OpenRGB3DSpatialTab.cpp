@@ -135,10 +135,17 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     grid_y_spin = nullptr;
     grid_z_spin = nullptr;
     grid_snap_checkbox = nullptr;
+    grid_scale_spin = nullptr;
     selection_info_label = nullptr;
     custom_grid_x = 10;
     custom_grid_y = 10;
     custom_grid_z = 10;
+    grid_scale_mm = 10.0f;  // Default: 10mm = 1 grid unit
+
+    led_spacing_x_spin = nullptr;
+    led_spacing_y_spin = nullptr;
+    led_spacing_z_spin = nullptr;
+    led_spacing_preset_combo = nullptr;
 
     SetupUI();
     LoadDevices();
@@ -228,6 +235,55 @@ void OpenRGB3DSpatialTab::SetupUI()
     item_combo = new QComboBox();
     available_layout->addWidget(item_combo);
 
+    // LED Spacing Controls
+    QLabel* spacing_label = new QLabel("LED Spacing (mm):");
+    spacing_label->setStyleSheet("font-weight: bold; margin-top: 5px;");
+    available_layout->addWidget(spacing_label);
+
+    QGridLayout* spacing_grid = new QGridLayout();
+    spacing_grid->setSpacing(3);
+
+    spacing_grid->addWidget(new QLabel("X:"), 0, 0);
+    led_spacing_x_spin = new QDoubleSpinBox();
+    led_spacing_x_spin->setRange(0.0, 1000.0);
+    led_spacing_x_spin->setSingleStep(1.0);
+    led_spacing_x_spin->setValue(10.0);
+    led_spacing_x_spin->setSuffix(" mm");
+    led_spacing_x_spin->setToolTip("Horizontal spacing between LEDs (left/right)");
+    spacing_grid->addWidget(led_spacing_x_spin, 0, 1);
+
+    spacing_grid->addWidget(new QLabel("Y:"), 0, 2);
+    led_spacing_y_spin = new QDoubleSpinBox();
+    led_spacing_y_spin->setRange(0.0, 1000.0);
+    led_spacing_y_spin->setSingleStep(1.0);
+    led_spacing_y_spin->setValue(0.0);
+    led_spacing_y_spin->setSuffix(" mm");
+    led_spacing_y_spin->setToolTip("Vertical spacing between LEDs (floor/ceiling)");
+    spacing_grid->addWidget(led_spacing_y_spin, 0, 3);
+
+    spacing_grid->addWidget(new QLabel("Z:"), 1, 0);
+    led_spacing_z_spin = new QDoubleSpinBox();
+    led_spacing_z_spin->setRange(0.0, 1000.0);
+    led_spacing_z_spin->setSingleStep(1.0);
+    led_spacing_z_spin->setValue(0.0);
+    led_spacing_z_spin->setSuffix(" mm");
+    led_spacing_z_spin->setToolTip("Depth spacing between LEDs (front/back)");
+    spacing_grid->addWidget(led_spacing_z_spin, 1, 1);
+
+    led_spacing_preset_combo = new QComboBox();
+    led_spacing_preset_combo->addItem("Custom");
+    led_spacing_preset_combo->addItem("Dense Strip (10mm)");
+    led_spacing_preset_combo->addItem("Keyboard (19mm)");
+    led_spacing_preset_combo->addItem("Sparse Strip (33mm)");
+    led_spacing_preset_combo->addItem("LED Cube (50mm)");
+    led_spacing_preset_combo->setToolTip("Quick presets for common LED configurations");
+    spacing_grid->addWidget(led_spacing_preset_combo, 1, 2, 1, 2);
+
+    available_layout->addLayout(spacing_grid);
+
+    // Connect LED spacing preset combo
+    connect(led_spacing_preset_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_led_spacing_preset_changed(int)));
+
     QHBoxLayout* add_remove_layout = new QHBoxLayout();
     QPushButton* add_button = new QPushButton("Add to 3D View");
     connect(add_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_clicked);
@@ -284,6 +340,45 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
     });
     controller_layout->addWidget(controller_list);
+
+    // LED Spacing edit for selected controller
+    QLabel* edit_spacing_label = new QLabel("Edit Selected LED Spacing:");
+    edit_spacing_label->setStyleSheet("font-weight: bold; margin-top: 5px;");
+    controller_layout->addWidget(edit_spacing_label);
+
+    QGridLayout* edit_spacing_grid = new QGridLayout();
+    edit_spacing_grid->setSpacing(3);
+
+    edit_spacing_grid->addWidget(new QLabel("X:"), 0, 0);
+    edit_led_spacing_x_spin = new QDoubleSpinBox();
+    edit_led_spacing_x_spin->setRange(0.0, 1000.0);
+    edit_led_spacing_x_spin->setValue(10.0);
+    edit_led_spacing_x_spin->setSuffix(" mm");
+    edit_led_spacing_x_spin->setEnabled(false);
+    edit_spacing_grid->addWidget(edit_led_spacing_x_spin, 0, 1);
+
+    edit_spacing_grid->addWidget(new QLabel("Y:"), 0, 2);
+    edit_led_spacing_y_spin = new QDoubleSpinBox();
+    edit_led_spacing_y_spin->setRange(0.0, 1000.0);
+    edit_led_spacing_y_spin->setValue(0.0);
+    edit_led_spacing_y_spin->setSuffix(" mm");
+    edit_led_spacing_y_spin->setEnabled(false);
+    edit_spacing_grid->addWidget(edit_led_spacing_y_spin, 0, 3);
+
+    edit_spacing_grid->addWidget(new QLabel("Z:"), 1, 0);
+    edit_led_spacing_z_spin = new QDoubleSpinBox();
+    edit_led_spacing_z_spin->setRange(0.0, 1000.0);
+    edit_led_spacing_z_spin->setValue(0.0);
+    edit_led_spacing_z_spin->setSuffix(" mm");
+    edit_led_spacing_z_spin->setEnabled(false);
+    edit_spacing_grid->addWidget(edit_led_spacing_z_spin, 1, 1);
+
+    apply_spacing_button = new QPushButton("Apply Spacing");
+    apply_spacing_button->setEnabled(false);
+    connect(apply_spacing_button, SIGNAL(clicked()), this, SLOT(on_apply_spacing_clicked()));
+    edit_spacing_grid->addWidget(apply_spacing_button, 1, 2, 1, 2);
+
+    controller_layout->addLayout(edit_spacing_grid);
 
     controller_group->setLayout(controller_layout);
     left_panel->addWidget(controller_group);
@@ -388,10 +483,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_z_spin->setValue(custom_grid_z);
     layout_layout->addWidget(grid_z_spin, 0, 5);
 
+    // Grid Scale (mm per grid unit)
+    layout_layout->addWidget(new QLabel("Grid Scale:"), 1, 0);
+    grid_scale_spin = new QDoubleSpinBox();
+    grid_scale_spin->setRange(0.1, 1000.0);
+    grid_scale_spin->setSingleStep(1.0);
+    grid_scale_spin->setValue(grid_scale_mm);
+    grid_scale_spin->setSuffix(" mm/unit");
+    grid_scale_spin->setToolTip("Physical size of one grid unit in millimeters (default: 10mm = 1cm)");
+    layout_layout->addWidget(grid_scale_spin, 1, 1, 1, 2);
+
     // Grid Snap Checkbox
     grid_snap_checkbox = new QCheckBox("Grid Snapping");
     grid_snap_checkbox->setToolTip("Snap controller positions to grid intersections");
-    layout_layout->addWidget(grid_snap_checkbox, 1, 0, 1, 3);
+    layout_layout->addWidget(grid_snap_checkbox, 1, 3, 1, 3);
 
     // Selection Info Label
     selection_info_label = new QLabel("No selection");
@@ -839,10 +944,43 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_x_slider->blockSignals(false);
         rot_y_slider->blockSignals(false);
         rot_z_slider->blockSignals(false);
+
+        // Update LED spacing controls
+        if(edit_led_spacing_x_spin)
+        {
+            edit_led_spacing_x_spin->setEnabled(true);
+            edit_led_spacing_x_spin->blockSignals(true);
+            edit_led_spacing_x_spin->setValue(ctrl->led_spacing_mm_x);
+            edit_led_spacing_x_spin->blockSignals(false);
+        }
+        if(edit_led_spacing_y_spin)
+        {
+            edit_led_spacing_y_spin->setEnabled(true);
+            edit_led_spacing_y_spin->blockSignals(true);
+            edit_led_spacing_y_spin->setValue(ctrl->led_spacing_mm_y);
+            edit_led_spacing_y_spin->blockSignals(false);
+        }
+        if(edit_led_spacing_z_spin)
+        {
+            edit_led_spacing_z_spin->setEnabled(true);
+            edit_led_spacing_z_spin->blockSignals(true);
+            edit_led_spacing_z_spin->setValue(ctrl->led_spacing_mm_z);
+            edit_led_spacing_z_spin->blockSignals(false);
+        }
+        if(apply_spacing_button)
+        {
+            apply_spacing_button->setEnabled(true);
+        }
     }
     else if(index == -1)
     {
         controller_list->setCurrentRow(-1);
+
+        // Disable LED spacing controls
+        if(edit_led_spacing_x_spin) edit_led_spacing_x_spin->setEnabled(false);
+        if(edit_led_spacing_y_spin) edit_led_spacing_y_spin->setEnabled(false);
+        if(edit_led_spacing_z_spin) edit_led_spacing_z_spin->setEnabled(false);
+        if(apply_spacing_button) apply_spacing_button->setEnabled(false);
     }
 
     UpdateSelectionInfo();
@@ -1248,6 +1386,51 @@ void OpenRGB3DSpatialTab::on_granularity_changed(int)
     UpdateAvailableItemCombo();
 }
 
+void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
+{
+    if(!led_spacing_x_spin || !led_spacing_y_spin || !led_spacing_z_spin)
+    {
+        return;
+    }
+
+    // Block signals to prevent triggering changes while updating
+    led_spacing_x_spin->blockSignals(true);
+    led_spacing_y_spin->blockSignals(true);
+    led_spacing_z_spin->blockSignals(true);
+
+    switch(index)
+    {
+        case 1: // Dense Strip (10mm)
+            led_spacing_x_spin->setValue(10.0);
+            led_spacing_y_spin->setValue(0.0);
+            led_spacing_z_spin->setValue(0.0);
+            break;
+        case 2: // Keyboard (19mm)
+            led_spacing_x_spin->setValue(19.0);
+            led_spacing_y_spin->setValue(0.0);
+            led_spacing_z_spin->setValue(19.0);
+            break;
+        case 3: // Sparse Strip (33mm)
+            led_spacing_x_spin->setValue(33.0);
+            led_spacing_y_spin->setValue(0.0);
+            led_spacing_z_spin->setValue(0.0);
+            break;
+        case 4: // LED Cube (50mm)
+            led_spacing_x_spin->setValue(50.0);
+            led_spacing_y_spin->setValue(50.0);
+            led_spacing_z_spin->setValue(50.0);
+            break;
+        case 0: // Custom
+        default:
+            // Do nothing - user controls manually
+            break;
+    }
+
+    led_spacing_x_spin->blockSignals(false);
+    led_spacing_y_spin->blockSignals(false);
+    led_spacing_z_spin->blockSignals(false);
+}
+
 void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
 {
     item_combo->clear();
@@ -1351,7 +1534,16 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
-        ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
+        // Set LED spacing from UI
+        ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
+        ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
+        ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+
+        // Virtual controllers always use whole device granularity
+        ctrl_transform->granularity = -1;  // -1 = virtual controller
+        ctrl_transform->item_idx = -1;
+
+        ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
 
         int hue = (controller_transforms.size() * 137) % 360;
         QColor color = QColor::fromHsv(hue, 200, 255);
@@ -1384,12 +1576,24 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
 
+    // Set LED spacing from UI
+    ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
+    ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
+    ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+
+    // Set granularity
+    ctrl_transform->granularity = granularity;
+    ctrl_transform->item_idx = item_row;
+
     QString name;
 
     if(granularity == 0)
     {
-        ctrl_transform->led_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
-        name = QString::fromStdString(controller->name);
+        ctrl_transform->led_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+            grid_scale_mm);
+        name = QString("[Device] ") + QString::fromStdString(controller->name);
     }
     else if(granularity == 1)
     {
@@ -1399,7 +1603,10 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             return;
         }
 
-        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+            grid_scale_mm);
         zone* z = &controller->zones[item_row];
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
@@ -1410,7 +1617,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             }
         }
 
-        name = QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
+        name = QString("[Zone] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
     }
     else if(granularity == 2)
     {
@@ -1420,7 +1627,10 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             return;
         }
 
-        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+            grid_scale_mm);
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
@@ -1432,7 +1642,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             }
         }
 
-        name = QString::fromStdString(controller->name) + " - " + QString::fromStdString(controller->leds[item_row].name);
+        name = QString("[LED] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(controller->leds[item_row].name);
     }
 
     int hue = (controller_transforms.size() * 137) % 360;
@@ -1502,6 +1712,29 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+}
+
+void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
+{
+    int selected_row = controller_list->currentRow();
+    if(selected_row < 0 || selected_row >= (int)controller_transforms.size())
+    {
+        return;
+    }
+
+    ControllerTransform* ctrl = controller_transforms[selected_row];
+
+    // Update LED spacing values
+    ctrl->led_spacing_mm_x = edit_led_spacing_x_spin ? (float)edit_led_spacing_x_spin->value() : 10.0f;
+    ctrl->led_spacing_mm_y = edit_led_spacing_y_spin ? (float)edit_led_spacing_y_spin->value() : 0.0f;
+    ctrl->led_spacing_mm_z = edit_led_spacing_z_spin ? (float)edit_led_spacing_z_spin->value() : 0.0f;
+
+    // Regenerate LED positions with new spacing
+    RegenerateLEDPositions(ctrl);
+
+    // Update viewport
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
 }
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
@@ -1616,7 +1849,10 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
             dialog.GetGridDepth(),
-            dialog.GetLEDMappings()
+            dialog.GetLEDMappings(),
+            dialog.GetSpacingX(),
+            dialog.GetSpacingY(),
+            dialog.GetSpacingZ()
         );
 
         virtual_controllers.push_back(virtual_ctrl);
@@ -1843,7 +2079,10 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
             dialog.GetGridDepth(),
-            dialog.GetLEDMappings()
+            dialog.GetLEDMappings(),
+            dialog.GetSpacingX(),
+            dialog.GetSpacingY(),
+            dialog.GetSpacingZ()
         );
 
         SaveCustomControllers();
@@ -1874,6 +2113,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
     layout_json["grid"]["dimensions"]["z"] = custom_grid_z;
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
+    layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
     /*---------------------------------------------------------*\
     | User Position                                            |
@@ -1936,6 +2176,19 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["transform"]["scale"]["y"] = ct->transform.scale.y;
         controller_json["transform"]["scale"]["z"] = ct->transform.scale.z;
 
+        /*---------------------------------------------------------*\
+        | LED Spacing                                              |
+        \*---------------------------------------------------------*/
+        controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
+        controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
+        controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
+
+        /*---------------------------------------------------------*\
+        | Granularity (-1=virtual, 0=device, 1=zone, 2=LED)       |
+        \*---------------------------------------------------------*/
+        controller_json["granularity"] = ct->granularity;
+        controller_json["item_idx"] = ct->item_idx;
+
         controller_json["display_color"] = ct->display_color;
 
         layout_json["controllers"].push_back(controller_json);
@@ -1995,6 +2248,18 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         bool grid_snap_enabled = layout_json["grid"]["snap_enabled"].get<bool>();
         if(grid_snap_checkbox) grid_snap_checkbox->setChecked(grid_snap_enabled);
         if(viewport) viewport->SetGridSnapEnabled(grid_snap_enabled);
+
+        // Load grid scale if available (default to 10mm for older layouts)
+        if(layout_json["grid"].contains("scale_mm"))
+        {
+            grid_scale_mm = layout_json["grid"]["scale_mm"].get<float>();
+            if(grid_scale_spin)
+            {
+                grid_scale_spin->blockSignals(true);
+                grid_scale_spin->setValue(grid_scale_mm);
+                grid_scale_spin->blockSignals(false);
+            }
+        }
     }
 
     /*---------------------------------------------------------*\
@@ -2077,6 +2342,33 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             ctrl_transform->controller = controller;
             ctrl_transform->virtual_controller = nullptr;
 
+            // Load LED spacing first (needed for position generation)
+            if(controller_json.contains("led_spacing_mm"))
+            {
+                ctrl_transform->led_spacing_mm_x = controller_json["led_spacing_mm"]["x"].get<float>();
+                ctrl_transform->led_spacing_mm_y = controller_json["led_spacing_mm"]["y"].get<float>();
+                ctrl_transform->led_spacing_mm_z = controller_json["led_spacing_mm"]["z"].get<float>();
+            }
+            else
+            {
+                ctrl_transform->led_spacing_mm_x = 10.0f;
+                ctrl_transform->led_spacing_mm_y = 0.0f;
+                ctrl_transform->led_spacing_mm_z = 0.0f;
+            }
+
+            // Load granularity
+            if(controller_json.contains("granularity"))
+            {
+                ctrl_transform->granularity = controller_json["granularity"].get<int>();
+                ctrl_transform->item_idx = controller_json["item_idx"].get<int>();
+            }
+            else
+            {
+                // Default for older files: -1 for virtual, 0 for physical
+                ctrl_transform->granularity = is_virtual ? -1 : 0;
+                ctrl_transform->item_idx = 0;
+            }
+
             if(is_virtual)
             {
                 QString virtual_name = QString::fromStdString(ctrl_name);
@@ -2099,7 +2391,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 {
                     ctrl_transform->controller = nullptr;
                     ctrl_transform->virtual_controller = virtual_ctrl;
-                    ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions();
+                    ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
                 }
                 else
                 {
@@ -2115,7 +2407,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     unsigned int zone_idx = led_mapping["zone_index"].get<unsigned int>();
                     unsigned int led_idx = led_mapping["led_index"].get<unsigned int>();
 
-                    std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
+                    std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+                        controller, custom_grid_x, custom_grid_y, custom_grid_z,
+                        ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+                        grid_scale_mm);
 
                     for(unsigned int k = 0; k < all_positions.size(); k++)
                     {
@@ -2124,6 +2419,102 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             ctrl_transform->led_positions.push_back(all_positions[k]);
                             break;
                         }
+                    }
+                }
+
+                // Validate/infer granularity from loaded LED positions (FAILSAFE)
+                // This corrects any corrupted or mismatched granularity data
+                if(ctrl_transform->led_positions.size() > 0)
+                {
+                    int original_granularity = ctrl_transform->granularity;
+                    int original_item_idx = ctrl_transform->item_idx;
+
+                    // Count total LEDs in controller
+                    std::vector<LEDPosition3D> all_leds = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+                        controller, custom_grid_x, custom_grid_y, custom_grid_z,
+                        ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
+                        grid_scale_mm);
+
+                    if(ctrl_transform->led_positions.size() == all_leds.size())
+                    {
+                        // All LEDs loaded - this is whole device
+                        if(ctrl_transform->granularity != 0)
+                        {
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has all %d LEDs (changing to Whole Device)",
+                                        controller->name.c_str(),
+                                        (original_granularity == 1 ? "Zone" : (original_granularity == 2 ? "LED" : "Unknown")),
+                                        (int)ctrl_transform->led_positions.size());
+                            ctrl_transform->granularity = 0;
+                            ctrl_transform->item_idx = 0;
+                        }
+                    }
+                    else if(ctrl_transform->led_positions.size() == 1)
+                    {
+                        // Single LED - granularity should be 2
+                        if(ctrl_transform->granularity != 2)
+                        {
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has only 1 LED (changing to LED level)",
+                                        controller->name.c_str(),
+                                        (original_granularity == 0 ? "Whole Device" : (original_granularity == 1 ? "Zone" : "Unknown")));
+                            ctrl_transform->granularity = 2;
+                            // Calculate global LED index from zone/led indices
+                            unsigned int zone_idx = ctrl_transform->led_positions[0].zone_idx;
+                            unsigned int led_idx = ctrl_transform->led_positions[0].led_idx;
+                            if(zone_idx < controller->zones.size())
+                            {
+                                ctrl_transform->item_idx = controller->zones[zone_idx].start_idx + led_idx;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Multiple LEDs but not all - check if they're all from same zone
+                        unsigned int first_zone = ctrl_transform->led_positions[0].zone_idx;
+                        bool same_zone = true;
+                        for(unsigned int i = 1; i < ctrl_transform->led_positions.size(); i++)
+                        {
+                            if(ctrl_transform->led_positions[i].zone_idx != first_zone)
+                            {
+                                same_zone = false;
+                                break;
+                            }
+                        }
+
+                        if(same_zone)
+                        {
+                            // All from same zone
+                            if(ctrl_transform->granularity != 1)
+                            {
+                                LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has %d LEDs from zone %d (changing to Zone level)",
+                                            controller->name.c_str(),
+                                            (original_granularity == 0 ? "Whole Device" : (original_granularity == 2 ? "LED" : "Unknown")),
+                                            (int)ctrl_transform->led_positions.size(),
+                                            first_zone);
+                                ctrl_transform->granularity = 1;
+                                ctrl_transform->item_idx = first_zone;
+                            }
+                        }
+                        else
+                        {
+                            // LEDs from multiple zones - this is corrupted data!
+                            // Best we can do is treat as whole device and regenerate
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] CORRUPTED DATA for '%s': has %d LEDs from multiple zones with granularity=%d. Treating as Whole Device and will regenerate on next change.",
+                                        controller->name.c_str(),
+                                        (int)ctrl_transform->led_positions.size(),
+                                        original_granularity);
+                            ctrl_transform->granularity = 0;
+                            ctrl_transform->item_idx = 0;
+                            // Keep the loaded LED positions for now, but they'll be regenerated on next change
+                        }
+                    }
+
+                    // Log successful validation
+                    if(ctrl_transform->granularity == original_granularity && ctrl_transform->item_idx == original_item_idx)
+                    {
+                        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Granularity validated OK for '%s': %s with %d LEDs",
+                                    controller->name.c_str(),
+                                    (ctrl_transform->granularity == 0 ? "Whole Device" : (ctrl_transform->granularity == 1 ? "Zone" : "LED")),
+                                    (int)ctrl_transform->led_positions.size());
                     }
                 }
             }
@@ -2157,18 +2548,47 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
             else
             {
-                name = QString::fromStdString(controller->name);
-                if(ctrl_transform->led_positions.size() < controller->leds.size())
+                // Use granularity info to create proper name with prefix
+                if(ctrl_transform->granularity == 0)
                 {
-                    if(ctrl_transform->led_positions.size() == 1)
+                    name = QString("[Device] ") + QString::fromStdString(controller->name);
+                }
+                else if(ctrl_transform->granularity == 1)
+                {
+                    name = QString("[Zone] ") + QString::fromStdString(controller->name);
+                    if(ctrl_transform->item_idx >= 0 && ctrl_transform->item_idx < (int)controller->zones.size())
                     {
-                        unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
-                                                      ctrl_transform->led_positions[0].led_idx;
-                        name += " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                        name += " - " + QString::fromStdString(controller->zones[ctrl_transform->item_idx].name);
+                    }
+                }
+                else if(ctrl_transform->granularity == 2)
+                {
+                    name = QString("[LED] ") + QString::fromStdString(controller->name);
+                    if(ctrl_transform->item_idx >= 0 && ctrl_transform->item_idx < (int)controller->leds.size())
+                    {
+                        name += " - " + QString::fromStdString(controller->leds[ctrl_transform->item_idx].name);
+                    }
+                }
+                else
+                {
+                    // Fallback for old files without granularity
+                    name = QString::fromStdString(controller->name);
+                    if(ctrl_transform->led_positions.size() < controller->leds.size())
+                    {
+                        if(ctrl_transform->led_positions.size() == 1)
+                        {
+                            unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
+                                                          ctrl_transform->led_positions[0].led_idx;
+                            name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                        }
+                        else
+                        {
+                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                        }
                     }
                     else
                     {
-                        name += " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                        name = QString("[Device] ") + name;
                     }
                 }
             }
@@ -2416,18 +2836,27 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
     {
         ControllerTransform* ct = controller_transforms[i];
         if(ct->controller == nullptr) continue;
+        if(ct->controller != controller) continue;
 
+        // Use granularity field if available
+        if(ct->granularity == granularity && ct->item_idx == item_idx)
+        {
+            return true;
+        }
+
+        // Fallback: check by LED positions (for older data or edge cases)
         if(granularity == 0)
         {
-            if(ct->controller == controller)
+            // Check if this is whole device by comparing LED count
+            if(ct->granularity == 0)
             {
-                bool is_whole_device = true;
+                return true;
+            }
+            // Legacy check for controllers without granularity field
+            if(ct->granularity < 0 || ct->granularity > 2)
+            {
                 std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
-                if(ct->led_positions.size() != all_positions.size())
-                {
-                    is_whole_device = false;
-                }
-                if(is_whole_device)
+                if(ct->led_positions.size() == all_positions.size())
                 {
                     return true;
                 }
@@ -2435,28 +2864,24 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         }
         else if(granularity == 1)
         {
-            if(ct->controller == controller)
+            // Check if any LED from this zone is in the controller
+            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+                if(ct->led_positions[j].zone_idx == (unsigned int)item_idx)
                 {
-                    if(ct->led_positions[j].zone_idx == (unsigned int)item_idx)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
         else if(granularity == 2)
         {
-            if(ct->controller == controller)
+            // Check if this specific LED is in the controller
+            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+                unsigned int global_led_idx = controller->zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
+                if(global_led_idx == (unsigned int)item_idx)
                 {
-                    unsigned int global_led_idx = controller->zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
-                    if(global_led_idx == (unsigned int)item_idx)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -2491,6 +2916,58 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
     }
 
     return total_leds - assigned_leds;
+}
+
+void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
+{
+    if(!transform) return;
+
+    if(transform->virtual_controller)
+    {
+        // Virtual controller
+        transform->led_positions = transform->virtual_controller->GenerateLEDPositions(grid_scale_mm);
+    }
+    else if(transform->controller)
+    {
+        // Physical controller - regenerate with spacing and respect granularity
+        std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
+            transform->controller,
+            custom_grid_x, custom_grid_y, custom_grid_z,
+            transform->led_spacing_mm_x, transform->led_spacing_mm_y, transform->led_spacing_mm_z,
+            grid_scale_mm);
+
+        transform->led_positions.clear();
+
+        if(transform->granularity == 0)
+        {
+            // Whole device - use all positions
+            transform->led_positions = all_positions;
+        }
+        else if(transform->granularity == 1)
+        {
+            // Zone - filter to specific zone
+            for(unsigned int i = 0; i < all_positions.size(); i++)
+            {
+                if(all_positions[i].zone_idx == (unsigned int)transform->item_idx)
+                {
+                    transform->led_positions.push_back(all_positions[i]);
+                }
+            }
+        }
+        else if(transform->granularity == 2)
+        {
+            // LED - filter to specific LED
+            for(unsigned int i = 0; i < all_positions.size(); i++)
+            {
+                unsigned int global_led_idx = transform->controller->zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+                if(global_led_idx == (unsigned int)transform->item_idx)
+                {
+                    transform->led_positions.push_back(all_positions[i]);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
@@ -2798,15 +3275,11 @@ void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
 
     /*---------------------------------------------------------*\
     | Regenerate LED positions for all controllers            |
+    | Must respect granularity and LED spacing!               |
     \*---------------------------------------------------------*/
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        ControllerTransform* transform = controller_transforms[i];
-        if(transform->controller)
-        {
-            transform->led_positions = ControllerLayout3D::GenerateCustomGridLayout(
-                transform->controller, custom_grid_x, custom_grid_y, custom_grid_z);
-        }
+        RegenerateLEDPositions(controller_transforms[i]);
     }
 
     /*---------------------------------------------------------*\

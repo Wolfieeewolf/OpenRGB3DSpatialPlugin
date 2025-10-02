@@ -25,7 +25,8 @@ class VirtualController3D
 public:
     VirtualController3D(const std::string& name,
                         int width, int height, int depth,
-                        const std::vector<GridLEDMapping>& mappings);
+                        const std::vector<GridLEDMapping>& mappings,
+                        float spacing_x = 10.0f, float spacing_y = 10.0f, float spacing_z = 10.0f);
     ~VirtualController3D();
 
     std::string GetName() const { return name; }
@@ -33,9 +34,13 @@ public:
     int GetHeight() const { return height; }
     int GetDepth() const { return depth; }
 
+    float GetSpacingX() const { return spacing_mm_x; }
+    float GetSpacingY() const { return spacing_mm_y; }
+    float GetSpacingZ() const { return spacing_mm_z; }
+
     const std::vector<GridLEDMapping>& GetMappings() const { return led_mappings; }
 
-    std::vector<LEDPosition3D> GenerateLEDPositions();
+    std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f);
 
     json ToJson() const;
     static VirtualController3D* FromJson(const json& j, std::vector<RGBController*>& controllers);
@@ -45,6 +50,9 @@ private:
     int width;
     int height;
     int depth;
+    float spacing_mm_x;
+    float spacing_mm_y;
+    float spacing_mm_z;
     std::vector<GridLEDMapping> led_mappings;
 };
 

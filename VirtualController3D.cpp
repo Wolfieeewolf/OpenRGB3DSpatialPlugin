@@ -13,11 +13,15 @@
 
 VirtualController3D::VirtualController3D(const std::string& name,
                                          int width, int height, int depth,
-                                         const std::vector<GridLEDMapping>& mappings)
+                                         const std::vector<GridLEDMapping>& mappings,
+                                         float spacing_x, float spacing_y, float spacing_z)
     : name(name),
       width(width),
       height(height),
       depth(depth),
+      spacing_mm_x(spacing_x),
+      spacing_mm_y(spacing_y),
+      spacing_mm_z(spacing_z),
       led_mappings(mappings)
 {
 }
@@ -26,9 +30,14 @@ VirtualController3D::~VirtualController3D()
 {
 }
 
-std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions()
+std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_scale_mm)
 {
     std::vector<LEDPosition3D> positions;
+
+    // Calculate scale factors based on LED spacing and grid scale
+    float scale_x = (spacing_mm_x > 0.001f) ? (spacing_mm_x / grid_scale_mm) : 1.0f;
+    float scale_y = (spacing_mm_y > 0.001f) ? (spacing_mm_y / grid_scale_mm) : 1.0f;
+    float scale_z = (spacing_mm_z > 0.001f) ? (spacing_mm_z / grid_scale_mm) : 1.0f;
 
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
@@ -46,9 +55,11 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions()
         pos.controller = led_mappings[i].controller;
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
-        pos.local_position.x = (float)led_mappings[i].x;
-        pos.local_position.y = (float)led_mappings[i].y;
-        pos.local_position.z = (float)led_mappings[i].z;
+
+        // Apply spacing scaling to grid coordinates
+        pos.local_position.x = (float)led_mappings[i].x * scale_x;
+        pos.local_position.y = (float)led_mappings[i].y * scale_y;
+        pos.local_position.z = (float)led_mappings[i].z * scale_z;
         pos.world_position = pos.local_position;
         positions.push_back(pos);
     }
@@ -64,6 +75,9 @@ json VirtualController3D::ToJson() const
     j["width"] = width;
     j["height"] = height;
     j["depth"] = depth;
+    j["spacing_mm_x"] = spacing_mm_x;
+    j["spacing_mm_y"] = spacing_mm_y;
+    j["spacing_mm_z"] = spacing_mm_z;
 
     json mappings_array = json::array();
     for(unsigned int i = 0; i < led_mappings.size(); i++)
@@ -76,6 +90,7 @@ json VirtualController3D::ToJson() const
         m["controller_location"] = led_mappings[i].controller->location;
         m["zone_idx"] = led_mappings[i].zone_idx;
         m["led_idx"] = led_mappings[i].led_idx;
+        m["granularity"] = led_mappings[i].granularity;
         mappings_array.push_back(m);
     }
     j["mappings"] = mappings_array;
@@ -89,6 +104,11 @@ VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RG
     int width = j["width"];
     int height = j["height"];
     int depth = j["depth"];
+
+    // Load spacing (with defaults for older files)
+    float spacing_x = j.contains("spacing_mm_x") ? j["spacing_mm_x"].get<float>() : 10.0f;
+    float spacing_y = j.contains("spacing_mm_y") ? j["spacing_mm_y"].get<float>() : 10.0f;
+    float spacing_z = j.contains("spacing_mm_z") ? j["spacing_mm_z"].get<float>() : 10.0f;
 
     std::vector<GridLEDMapping> mappings;
 
@@ -117,13 +137,15 @@ VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RG
             mapping.controller = found_controller;
             mapping.zone_idx = mappings_json[i]["zone_idx"];
             mapping.led_idx = mappings_json[i]["led_idx"];
+            // Load granularity (with default for older files)
+            mapping.granularity = mappings_json[i].contains("granularity") ? mappings_json[i]["granularity"].get<int>() : 2;
             mappings.push_back(mapping);
         }
     }
 
     if(!mappings.empty())
     {
-        return new VirtualController3D(name, width, height, depth, mappings);
+        return new VirtualController3D(name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
     }
 
     return nullptr;

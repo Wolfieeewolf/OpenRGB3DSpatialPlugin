@@ -90,25 +90,50 @@ void CustomControllerDialog::SetupUI()
     QVBoxLayout* right_layout = new QVBoxLayout();
 
     QGroupBox* dim_group = new QGroupBox("Grid Dimensions");
-    QHBoxLayout* dim_layout = new QHBoxLayout();
-    dim_layout->addWidget(new QLabel("Width:"));
+    QGridLayout* dim_layout = new QGridLayout();
+    dim_layout->addWidget(new QLabel("Width:"), 0, 0);
     width_spin = new QSpinBox();
     width_spin->setRange(1, 50);
     width_spin->setValue(10);
     connect(width_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
-    dim_layout->addWidget(width_spin);
-    dim_layout->addWidget(new QLabel("Height:"));
+    dim_layout->addWidget(width_spin, 0, 1);
+
+    dim_layout->addWidget(new QLabel("Height:"), 0, 2);
     height_spin = new QSpinBox();
     height_spin->setRange(1, 50);
     height_spin->setValue(10);
     connect(height_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
-    dim_layout->addWidget(height_spin);
-    dim_layout->addWidget(new QLabel("Depth (layers):"));
+    dim_layout->addWidget(height_spin, 0, 3);
+
+    dim_layout->addWidget(new QLabel("Depth:"), 0, 4);
     depth_spin = new QSpinBox();
     depth_spin->setRange(1, 20);
     depth_spin->setValue(1);
     connect(depth_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
-    dim_layout->addWidget(depth_spin);
+    dim_layout->addWidget(depth_spin, 0, 5);
+
+    // LED Spacing Row
+    dim_layout->addWidget(new QLabel("Spacing X:"), 1, 0);
+    spacing_x_spin = new QDoubleSpinBox();
+    spacing_x_spin->setRange(0.1, 1000.0);
+    spacing_x_spin->setValue(10.0);
+    spacing_x_spin->setSuffix(" mm");
+    dim_layout->addWidget(spacing_x_spin, 1, 1);
+
+    dim_layout->addWidget(new QLabel("Spacing Y:"), 1, 2);
+    spacing_y_spin = new QDoubleSpinBox();
+    spacing_y_spin->setRange(0.1, 1000.0);
+    spacing_y_spin->setValue(10.0);
+    spacing_y_spin->setSuffix(" mm");
+    dim_layout->addWidget(spacing_y_spin, 1, 3);
+
+    dim_layout->addWidget(new QLabel("Spacing Z:"), 1, 4);
+    spacing_z_spin = new QDoubleSpinBox();
+    spacing_z_spin->setRange(0.1, 1000.0);
+    spacing_z_spin->setValue(10.0);
+    spacing_z_spin->setSuffix(" mm");
+    dim_layout->addWidget(spacing_z_spin, 1, 5);
+
     dim_group->setLayout(dim_layout);
     right_layout->addWidget(dim_group);
 
@@ -804,6 +829,21 @@ int CustomControllerDialog::GetGridHeight() const
 int CustomControllerDialog::GetGridDepth() const
 {
     return depth_spin->value();
+}
+
+float CustomControllerDialog::GetSpacingX() const
+{
+    return (float)spacing_x_spin->value();
+}
+
+float CustomControllerDialog::GetSpacingY() const
+{
+    return (float)spacing_y_spin->value();
+}
+
+float CustomControllerDialog::GetSpacingZ() const
+{
+    return (float)spacing_z_spin->value();
 }
 
 bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granularity, int item_idx)

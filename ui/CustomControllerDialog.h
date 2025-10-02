@@ -16,6 +16,7 @@
 #include <QListWidget>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QLabel>
@@ -68,6 +69,9 @@ public:
     int GetGridWidth() const;
     int GetGridHeight() const;
     int GetGridDepth() const;
+    float GetSpacingX() const;
+    float GetSpacingY() const;
+    float GetSpacingZ() const;
 
 private slots:
     void on_controller_selected(int index);
@@ -106,6 +110,11 @@ private:
     QSpinBox*       width_spin;
     QSpinBox*       height_spin;
     QSpinBox*       depth_spin;
+
+    QDoubleSpinBox* spacing_x_spin;
+    QDoubleSpinBox* spacing_y_spin;
+    QDoubleSpinBox* spacing_z_spin;
+
     QTabWidget*     layer_tabs;
 
     QTableWidget*   grid_table;

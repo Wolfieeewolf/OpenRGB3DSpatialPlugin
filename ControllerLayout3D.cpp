@@ -117,6 +117,28 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     return positions;
 }
 
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBController* controller, int grid_x, int grid_y, int grid_z, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm)
+{
+    // First generate the layout with integer grid positions
+    std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y, grid_z);
+
+    // Now scale positions based on LED spacing and grid scale
+    // Formula: grid_position = led_spacing_mm / grid_scale_mm
+    float scale_x = (spacing_mm_x > 0.001f) ? (spacing_mm_x / grid_scale_mm) : 1.0f;
+    float scale_y = (spacing_mm_y > 0.001f) ? (spacing_mm_y / grid_scale_mm) : 1.0f;
+    float scale_z = (spacing_mm_z > 0.001f) ? (spacing_mm_z / grid_scale_mm) : 1.0f;
+
+    for(unsigned int i = 0; i < positions.size(); i++)
+    {
+        positions[i].local_position.x *= scale_x;
+        positions[i].local_position.y *= scale_y;
+        positions[i].local_position.z *= scale_z;
+        positions[i].world_position = positions[i].local_position;
+    }
+
+    return positions;
+}
+
 Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transform3D transform)
 {
     float rad_x = transform.rotation.x * (float)M_PI / 180.0f;

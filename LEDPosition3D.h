@@ -54,6 +54,21 @@ struct ControllerTransform
     Transform3D         transform;
     std::vector<LEDPosition3D> led_positions;
     RGBColor            display_color;
+
+    /*---------------------------------------------------------*\
+    | LED Physical Spacing (in millimeters)                    |
+    | Used to calculate real-world grid positions              |
+    \*---------------------------------------------------------*/
+    float               led_spacing_mm_x;
+    float               led_spacing_mm_y;
+    float               led_spacing_mm_z;
+
+    /*---------------------------------------------------------*\
+    | Granularity (0=whole device, 1=zone, 2=LED)             |
+    | Only relevant for physical controllers, not virtual      |
+    \*---------------------------------------------------------*/
+    int                 granularity;
+    int                 item_idx;  // Zone or LED index based on granularity
 };
 
 #endif
