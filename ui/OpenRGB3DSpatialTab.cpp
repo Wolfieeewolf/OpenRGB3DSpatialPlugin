@@ -1968,7 +1968,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         file.close();
         QMessageBox::information(this, "Export Successful",
                                 QString("Custom controller '%1' exported successfully to:\n%2")
-                                .arg(selected).arg(filename));
+                                .arg(QString::fromStdString(ctrl->GetName())).arg(filename));
     }
     else
     {
@@ -2118,7 +2118,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         }
 
         delete virtual_ctrl;
-        virtual_controllers[virtual_idx] = new VirtualController3D(
+        virtual_controllers[list_row] = new VirtualController3D(
             new_name,
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
@@ -2132,10 +2132,9 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         SaveCustomControllers();
         UpdateAvailableControllersList();
 
-
         QMessageBox::information(this, "Custom Controller Updated",
                                 QString("Custom controller '%1' updated successfully!")
-                                .arg(QString::fromStdString(virtual_controllers[virtual_idx]->GetName())));
+                                .arg(QString::fromStdString(virtual_controllers[list_row]->GetName())));
     }
 }
 
