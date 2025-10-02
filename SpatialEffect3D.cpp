@@ -567,10 +567,15 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 | Standardized Parameter Calculation Helpers               |
 | These provide consistent behavior across all effects     |
 \*---------------------------------------------------------*/
+/*---------------------------------------------------------*\
+| Base normalized parameter getters                        |
+| These return 0.0-1.0 or similar ranges, no effect bias   |
+\*---------------------------------------------------------*/
 float SpatialEffect3D::GetNormalizedSpeed() const
 {
     // Apply quadratic curve for smooth acceleration
     // Range: 0.0 (stopped) to 1.0 (max speed)
+    // This curve works well for ANY effect type
     float normalized = effect_speed / 100.0f;
     return normalized * normalized;
 }
@@ -586,14 +591,41 @@ float SpatialEffect3D::GetNormalizedFrequency() const
 float SpatialEffect3D::GetNormalizedSize() const
 {
     // Linear scaling for size
-    // Range: 0.0 (tiny) to 1.0 (normal size) to 2.0 (double size)
-    // Maps slider 1-100 to 0.1-2.0
+    // Range: 0.1 (tiny) to 1.0 (normal) to 2.0 (double size)
+    // Works for spatial effects, particle effects, wave effects, etc.
     return 0.1f + (effect_size / 100.0f) * 1.9f;
 }
 
 unsigned int SpatialEffect3D::GetTargetFPS() const
 {
     return effect_fps;
+}
+
+/*---------------------------------------------------------*\
+| Scaled parameter getters - use effect-specific info      |
+\*---------------------------------------------------------*/
+float SpatialEffect3D::GetScaledSpeed() const
+{
+    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    float speed_scale = (info.default_speed_scale > 0.0f) ? info.default_speed_scale : 10.0f;
+    return GetNormalizedSpeed() * speed_scale;
+}
+
+float SpatialEffect3D::GetScaledFrequency() const
+{
+    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
+    return GetNormalizedFrequency() * freq_scale;
+}
+
+/*---------------------------------------------------------*\
+| Universal progress calculator                            |
+| Use this in CalculateColor() for time-based animation    |
+\*---------------------------------------------------------*/
+float SpatialEffect3D::CalculateProgress(float time) const
+{
+    float progress = time * GetScaledSpeed();
+    return effect_reverse ? -progress : progress;
 }
 
 /*---------------------------------------------------------*\

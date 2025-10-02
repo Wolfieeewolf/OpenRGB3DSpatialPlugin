@@ -77,6 +77,11 @@ struct EffectInfo3D
     bool                needs_thickness;
     bool                needs_arms;
     bool                needs_frequency;
+
+    // Standardized parameter scaling (defaults suitable for most effects)
+    float               default_speed_scale;      // Default: 10.0 (multiplier after normalization)
+    float               default_frequency_scale;  // Default: 10.0 (multiplier after normalization)
+    bool                use_size_parameter;       // Default: true (effect supports size scaling)
 };
 
 class SpatialEffect3D : public QWidget
@@ -227,11 +232,19 @@ protected:
 
     /*---------------------------------------------------------*\
     | Standardized parameter calculation helpers               |
+    | These work for ANY effect - past, present, or future!    |
     \*---------------------------------------------------------*/
     float GetNormalizedSpeed() const;           // Returns 0.0-1.0 speed with consistent curve
     float GetNormalizedFrequency() const;       // Returns 0.0-1.0 frequency with consistent curve
-    float GetNormalizedSize() const;            // Returns 0.0-1.0 size multiplier
-    unsigned int GetTargetFPS() const;          // Returns FPS setting
+    float GetNormalizedSize() const;            // Returns 0.1-2.0 size multiplier (linear)
+    unsigned int GetTargetFPS() const;          // Returns FPS setting (1-60)
+
+    // Advanced: Scaled versions that apply effect-specific multipliers
+    float GetScaledSpeed() const;               // Returns speed * effect's speed_scale
+    float GetScaledFrequency() const;           // Returns frequency * effect's frequency_scale
+
+    // Universal progress calculator - use this for ANY effect animation
+    float CalculateProgress(float time) const;  // Returns time * scaled_speed (handles reverse too)
 
 private slots:
     void OnParameterChanged();
