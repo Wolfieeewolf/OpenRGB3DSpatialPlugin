@@ -225,6 +225,14 @@ protected:
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
 
+    /*---------------------------------------------------------*\
+    | Standardized parameter calculation helpers               |
+    \*---------------------------------------------------------*/
+    float GetNormalizedSpeed() const;           // Returns 0.0-1.0 speed with consistent curve
+    float GetNormalizedFrequency() const;       // Returns 0.0-1.0 frequency with consistent curve
+    float GetNormalizedSize() const;            // Returns 0.0-1.0 size multiplier
+    unsigned int GetTargetFPS() const;          // Returns FPS setting
+
 private slots:
     void OnParameterChanged();
     void OnRainbowModeChanged();

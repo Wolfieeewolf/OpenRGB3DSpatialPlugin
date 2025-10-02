@@ -564,6 +564,39 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 }
 
 /*---------------------------------------------------------*\
+| Standardized Parameter Calculation Helpers               |
+| These provide consistent behavior across all effects     |
+\*---------------------------------------------------------*/
+float SpatialEffect3D::GetNormalizedSpeed() const
+{
+    // Apply quadratic curve for smooth acceleration
+    // Range: 0.0 (stopped) to 1.0 (max speed)
+    float normalized = effect_speed / 100.0f;
+    return normalized * normalized;
+}
+
+float SpatialEffect3D::GetNormalizedFrequency() const
+{
+    // Apply quadratic curve for smooth frequency scaling
+    // Range: 0.0 (low frequency) to 1.0 (high frequency)
+    float normalized = effect_frequency / 100.0f;
+    return normalized * normalized;
+}
+
+float SpatialEffect3D::GetNormalizedSize() const
+{
+    // Linear scaling for size
+    // Range: 0.0 (tiny) to 1.0 (normal size) to 2.0 (double size)
+    // Maps slider 1-100 to 0.1-2.0
+    return 0.1f + (effect_size / 100.0f) * 1.9f;
+}
+
+unsigned int SpatialEffect3D::GetTargetFPS() const
+{
+    return effect_fps;
+}
+
+/*---------------------------------------------------------*\
 | Parameter Update Methods                                 |
 \*---------------------------------------------------------*/
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
@@ -573,17 +606,10 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */
 
 void SpatialEffect3D::OnParameterChanged()
 {
-    // Update speed with gentle logarithmic curve
-    // Map slider 1-100 to the range that was previously slider 1-30
-    // Old formula at 30: pow(10, (30-1)/33) ≈ 17.3
-    // New: spread that range across 1-100
+    // Use linear speed mapping - effects handle their own speed curves
     if(speed_slider)
     {
-        int slider_value = speed_slider->value();
-        // Map 1-100 to 1-30 range: scaled_value = 1 + (slider_value - 1) * 29/99
-        double scaled_value = 1.0 + (slider_value - 1.0) * 29.0 / 99.0;
-        // Apply same exponential curve but with scaled input
-        effect_speed = static_cast<unsigned int>(std::pow(10.0, (scaled_value - 1.0) / 33.0));
+        effect_speed = speed_slider->value();
         if(speed_label)
         {
             speed_label->setText(QString::number(effect_speed));
