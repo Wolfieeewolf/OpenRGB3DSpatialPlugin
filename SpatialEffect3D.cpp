@@ -20,6 +20,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_speed = 50;
     effect_brightness = 100;
     effect_frequency = 50;
+    effect_size = 50;
+    effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
 
@@ -35,9 +37,13 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     speed_slider = nullptr;
     brightness_slider = nullptr;
     frequency_slider = nullptr;
+    size_slider = nullptr;
+    fps_slider = nullptr;
     speed_label = nullptr;
     brightness_label = nullptr;
     frequency_label = nullptr;
+    size_label = nullptr;
+    fps_label = nullptr;
 
     // Axis controls
     axis_combo = nullptr;
@@ -81,13 +87,14 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     main_layout->addLayout(button_layout);
 
     /*---------------------------------------------------------*\
-    | Speed control                                            |
+    | Speed control (with logarithmic curve)                   |
     \*---------------------------------------------------------*/
     QHBoxLayout* speed_layout = new QHBoxLayout();
     speed_layout->addWidget(new QLabel("Speed:"));
     speed_slider = new QSlider(Qt::Horizontal);
     speed_slider->setRange(1, 100);
     speed_slider->setValue(effect_speed);
+    speed_slider->setToolTip("Effect animation speed (uses logarithmic curve for smooth control)");
     speed_layout->addWidget(speed_slider);
     speed_label = new QLabel(QString::number(effect_speed));
     speed_label->setMinimumWidth(30);
@@ -116,11 +123,42 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     frequency_slider = new QSlider(Qt::Horizontal);
     frequency_slider->setRange(1, 100);
     frequency_slider->setValue(effect_frequency);
+    frequency_slider->setToolTip("Pattern frequency - controls color wave/pattern density");
     frequency_layout->addWidget(frequency_slider);
     frequency_label = new QLabel(QString::number(effect_frequency));
     frequency_label->setMinimumWidth(30);
     frequency_layout->addWidget(frequency_label);
     main_layout->addLayout(frequency_layout);
+
+    /*---------------------------------------------------------*\
+    | Size control                                             |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* size_layout = new QHBoxLayout();
+    size_layout->addWidget(new QLabel("Size:"));
+    size_slider = new QSlider(Qt::Horizontal);
+    size_slider->setRange(1, 100);
+    size_slider->setValue(effect_size);
+    size_slider->setToolTip("Effect size/scale - larger values create bigger patterns");
+    size_layout->addWidget(size_slider);
+    size_label = new QLabel(QString::number(effect_size));
+    size_label->setMinimumWidth(30);
+    size_layout->addWidget(size_label);
+    main_layout->addLayout(size_layout);
+
+    /*---------------------------------------------------------*\
+    | FPS Limiter control                                      |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* fps_layout = new QHBoxLayout();
+    fps_layout->addWidget(new QLabel("FPS:"));
+    fps_slider = new QSlider(Qt::Horizontal);
+    fps_slider->setRange(1, 60);
+    fps_slider->setValue(effect_fps);
+    fps_slider->setToolTip("Frames per second (1-60) - lower values reduce CPU usage");
+    fps_layout->addWidget(fps_slider);
+    fps_label = new QLabel(QString::number(effect_fps));
+    fps_label->setMinimumWidth(30);
+    fps_layout->addWidget(fps_label);
+    main_layout->addLayout(fps_layout);
 
     /*---------------------------------------------------------*\
     | Axis control                                             |
@@ -155,6 +193,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(fps_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnAxisChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnReverseChanged);
 
@@ -533,6 +573,44 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */
 
 void SpatialEffect3D::OnParameterChanged()
 {
+    // Update speed with logarithmic curve for smoother control
+    // At value 1: speed = 1, at value 50: speed ≈ 50, at value 100: speed = 1000
+    if(speed_slider)
+    {
+        int slider_value = speed_slider->value();
+        // Exponential curve: speed = pow(10, (slider_value - 1) / 33.0)
+        // This gives: 1 -> 1, 50 -> ~46, 100 -> 1000
+        effect_speed = static_cast<unsigned int>(std::pow(10.0, (slider_value - 1.0) / 33.0));
+        if(speed_label)
+        {
+            speed_label->setText(QString::number(effect_speed));
+        }
+    }
+
+    if(brightness_slider && brightness_label)
+    {
+        effect_brightness = brightness_slider->value();
+        brightness_label->setText(QString::number(effect_brightness));
+    }
+
+    if(frequency_slider && frequency_label)
+    {
+        effect_frequency = frequency_slider->value();
+        frequency_label->setText(QString::number(effect_frequency));
+    }
+
+    if(size_slider && size_label)
+    {
+        effect_size = size_slider->value();
+        size_label->setText(QString::number(effect_size));
+    }
+
+    if(fps_slider && fps_label)
+    {
+        effect_fps = fps_slider->value();
+        fps_label->setText(QString::number(effect_fps));
+    }
+
     emit ParametersChanged();
 }
 

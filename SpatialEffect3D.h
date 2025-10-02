@@ -158,9 +158,13 @@ protected:
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
+    QSlider*            size_slider;
+    QSlider*            fps_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
     QLabel*             frequency_label;
+    QLabel*             size_label;
+    QLabel*             fps_label;
 
     /*---------------------------------------------------------*\
     | Axis selection controls                                  |
@@ -195,6 +199,8 @@ protected:
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
+    unsigned int        effect_size;
+    unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
 
