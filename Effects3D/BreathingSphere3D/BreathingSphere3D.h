@@ -1,7 +1,7 @@
 /*---------------------------------------------------------*\
-| BreathingSphere3D.h                                             |
+| BreathingSphere3D.h                                       |
 |                                                           |
-|   3D BreathingSphere3D effect - simple color-only effect      |
+|   3D Breathing Sphere effect - pulsing sphere from origin |
 |                                                           |
 |   Date: 2025-09-27                                        |
 |                                                           |
@@ -9,19 +9,14 @@
 |   SPDX-License-Identifier: GPL-2.0-only                   |
 \*---------------------------------------------------------*/
 
-#ifndef BreathingSphere3D_H
-#define BreathingSphere3D_H
+#ifndef BREATHINGSPHERE3D_H
+#define BREATHINGSPHERE3D_H
 
 #include <QWidget>
 #include <QSlider>
 #include <QLabel>
-#include <QComboBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QColorDialog>
 #include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
 
 class BreathingSphere3D : public SpatialEffect3D
 {
@@ -32,53 +27,36 @@ public:
     ~BreathingSphere3D();
 
     /*---------------------------------------------------------*\
+    | Auto-registration system                                 |
+    \*---------------------------------------------------------*/
+    EFFECT_REGISTERER_3D("BreathingSphere3D", "3D Breathing Sphere", "3D Spatial", [](){return new BreathingSphere3D;});
+
+    static std::string const ClassName() { return "BreathingSphere3D"; }
+    static std::string const UIName() { return "3D Breathing Sphere"; }
+
+    /*---------------------------------------------------------*\
     | Pure virtual implementations                             |
     \*---------------------------------------------------------*/
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
-    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private slots:
     void OnBreathingParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
-    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | Breathing-specific controls (speed/brightness now in base class) |
+    | Breathing-specific controls                              |
     \*---------------------------------------------------------*/
-    QSlider*        size_slider;            // Sphere size
-    QSlider*        frequency_slider;       // Breathing frequency
-    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
+    QSlider*        size_slider;
 
     /*---------------------------------------------------------*\
-    | Color controls                                           |
-    \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
-
-    /*---------------------------------------------------------*\
-    | Current breathing parameters                             |
+    | Breathing-specific parameters                            |
+    | (frequency, rainbow_mode, colors are in base class)     |
     \*---------------------------------------------------------*/
     unsigned int    sphere_size;
-    unsigned int    frequency;
-    bool            rainbow_mode;
     float           progress;
-
-    /*---------------------------------------------------------*\
-    | Helper methods                                           |
-    \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
 };
 
 #endif

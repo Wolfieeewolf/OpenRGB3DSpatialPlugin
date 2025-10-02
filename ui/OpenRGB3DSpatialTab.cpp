@@ -14,6 +14,13 @@
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "VirtualController3D.h"
+#include "Effects3D/Wave3D/Wave3D.h"
+#include "Effects3D/Wipe3D/Wipe3D.h"
+#include "Effects3D/Plasma3D/Plasma3D.h"
+#include "Effects3D/Spiral3D/Spiral3D.h"
+#include "Effects3D/Spin3D/Spin3D.h"
+#include "Effects3D/DNAHelix3D/DNAHelix3D.h"
+#include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
 #include "Effects3D/Explosion3D/Explosion3D.h"
 #include <QColorDialog>
 #include <QFile>
@@ -118,6 +125,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     wipe3d_effect = nullptr;
     plasma3d_effect = nullptr;
     spiral3d_effect = nullptr;
+    spin3d_effect = nullptr;
     explosion3d_effect = nullptr;
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
@@ -396,7 +404,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     user_pos_x_spin->setRange(-50.0, 50.0);
     user_pos_x_spin->setSingleStep(0.5);
     user_pos_x_spin->setValue(user_position.x);
-    user_pos_x_spin->setToolTip("User X position in room grid");
+    user_pos_x_spin->setToolTip("User head X position (left/right) - perception origin for effects");
     layout_layout->addWidget(user_pos_x_spin, 2, 1);
 
     layout_layout->addWidget(new QLabel("User Y:"), 2, 2);
@@ -404,7 +412,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     user_pos_y_spin->setRange(-50.0, 50.0);
     user_pos_y_spin->setSingleStep(0.5);
     user_pos_y_spin->setValue(user_position.y);
-    user_pos_y_spin->setToolTip("User Y position in room grid");
+    user_pos_y_spin->setToolTip("User head Y position (floor/ceiling) - perception origin for effects");
     layout_layout->addWidget(user_pos_y_spin, 2, 3);
 
     layout_layout->addWidget(new QLabel("User Z:"), 2, 4);
@@ -412,18 +420,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     user_pos_z_spin->setRange(-50.0, 50.0);
     user_pos_z_spin->setSingleStep(0.5);
     user_pos_z_spin->setValue(user_position.z);
-    user_pos_z_spin->setToolTip("User Z position in room grid");
+    user_pos_z_spin->setToolTip("User head Z position (front/back) - perception origin for effects");
     layout_layout->addWidget(user_pos_z_spin, 2, 5);
 
     // User controls row (Row 3)
-    user_visible_checkbox = new QCheckBox("Show User");
+    user_visible_checkbox = new QCheckBox("Show User Head");
     user_visible_checkbox->setChecked(user_position.visible);
-    user_visible_checkbox->setToolTip("Show/hide green stick figure");
+    user_visible_checkbox->setToolTip("Show/hide user head (green smiley face) in viewport");
     layout_layout->addWidget(user_visible_checkbox, 3, 0, 1, 2);
 
     user_center_button = new QPushButton("Center User");
-    user_center_button->setToolTip("Move user to room center (0,0,0)");
+    user_center_button->setToolTip("Move user head to room center (0,0,0)");
     layout_layout->addWidget(user_center_button, 3, 2, 1, 2);
+
+    // User reference point row (Row 4)
+    use_user_reference_checkbox = new QCheckBox("Use User Head as Effect Origin");
+    use_user_reference_checkbox->setChecked(false);
+    use_user_reference_checkbox->setToolTip("When enabled, effects originate from user head position instead of room center (0,0,0)");
+    layout_layout->addWidget(use_user_reference_checkbox, 4, 0, 1, 6);
 
     // Add helpful labels with text wrapping
     QLabel* grid_help1 = new QLabel("LEDs mapped sequentially to grid positions (X, Y, Z)");
@@ -451,6 +465,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(user_pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
     connect(user_visible_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_user_visibility_toggled);
     connect(user_center_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_user_center_clicked);
+    connect(use_user_reference_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_use_user_reference_toggled);
 
     /*---------------------------------------------------------*\
     | Position & Rotation Controls (moved from right panel)   |
@@ -679,14 +694,17 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     // Effect selection
     effect_combo = new QComboBox();
+    effect_combo->blockSignals(true);  // Block signals during initialization
     effect_combo->addItem("None");
     effect_combo->addItem("Wave 3D");         // effect_type 0
     effect_combo->addItem("Wipe 3D");         // effect_type 1
     effect_combo->addItem("Plasma 3D");       // effect_type 2
     effect_combo->addItem("Spiral 3D");       // effect_type 3
-    effect_combo->addItem("DNA Helix 3D");    // effect_type 4
-    effect_combo->addItem("Breathing Sphere 3D"); // effect_type 5
-    effect_combo->addItem("Explosion 3D");    // effect_type 6
+    effect_combo->addItem("Spin 3D");         // effect_type 4
+    effect_combo->addItem("DNA Helix 3D");    // effect_type 5
+    effect_combo->addItem("Breathing Sphere 3D"); // effect_type 6
+    effect_combo->addItem("Explosion 3D");    // effect_type 7
+    effect_combo->blockSignals(false); // Re-enable signals after initialization
 
     connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_changed);
@@ -2492,7 +2510,6 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         \*---------------------------------------------------------*/
         wave3d_effect = new Wave3D(effect_controls_widget);
         wave3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        wave3d_effect->CreateCommon3DControls(effect_controls_widget);
         wave3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = wave3d_effect;
 
@@ -2522,7 +2539,6 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         \*---------------------------------------------------------*/
         wipe3d_effect = new Wipe3D(effect_controls_widget);
         wipe3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        wipe3d_effect->CreateCommon3DControls(effect_controls_widget);
         wipe3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = wipe3d_effect;
 
@@ -2542,7 +2558,6 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         \*---------------------------------------------------------*/
         plasma3d_effect = new Plasma3D(effect_controls_widget);
         plasma3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        plasma3d_effect->CreateCommon3DControls(effect_controls_widget);
         plasma3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = plasma3d_effect;
 
@@ -2559,7 +2574,6 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     {
         spiral3d_effect = new Spiral3D(effect_controls_widget);
         spiral3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        spiral3d_effect->CreateCommon3DControls(effect_controls_widget);
         spiral3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = spiral3d_effect;
 
@@ -2570,11 +2584,24 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(spiral3d_effect, effect_type);
     }
-    else if(effect_type == 4)  // DNA Helix
+    else if(effect_type == 4)  // Spin
+    {
+        spin3d_effect = new Spin3D(effect_controls_widget);
+        spin3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        spin3d_effect->SetupCustomUI(effect_controls_widget);
+        current_effect_ui = spin3d_effect;
+
+        start_effect_button = spin3d_effect->GetStartButton();
+        stop_effect_button = spin3d_effect->GetStopButton();
+
+        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+        SetupEffectSignals(spin3d_effect, effect_type);
+    }
+    else if(effect_type == 5)  // DNA Helix
     {
         dnahelix3d_effect = new DNAHelix3D(effect_controls_widget);
         dnahelix3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        dnahelix3d_effect->CreateCommon3DControls(effect_controls_widget);
         dnahelix3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = dnahelix3d_effect;
 
@@ -2585,11 +2612,10 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(dnahelix3d_effect, effect_type);
     }
-    else if(effect_type == 5)  // Breathing Sphere
+    else if(effect_type == 6)  // Breathing Sphere
     {
         breathingsphere3d_effect = new BreathingSphere3D(effect_controls_widget);
         breathingsphere3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        breathingsphere3d_effect->CreateCommon3DControls(effect_controls_widget);
         breathingsphere3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = breathingsphere3d_effect;
 
@@ -2600,11 +2626,10 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(breathingsphere3d_effect, effect_type);
     }
-    else if(effect_type == 6)  // Explosion
+    else if(effect_type == 7)  // Explosion
     {
         explosion3d_effect = new Explosion3D(effect_controls_widget);
         explosion3d_effect->CreateCommonEffectControls(effect_controls_widget);
-        explosion3d_effect->CreateCommon3DControls(effect_controls_widget);
         explosion3d_effect->SetupCustomUI(effect_controls_widget);
         current_effect_ui = explosion3d_effect;
 
@@ -2653,10 +2678,9 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI_NEW(const std::string& effect_clas
         return;
     }
 
-    // Setup effect UI (same 4 lines for ALL effects!)
+    // Setup effect UI (same 3 lines for ALL effects!)
     effect->setParent(effect_controls_widget);
     effect->CreateCommonEffectControls(effect_controls_widget);
-    effect->CreateCommon3DControls(effect_controls_widget);
     effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = effect;
 
@@ -2693,6 +2717,50 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     }
 
     /*---------------------------------------------------------*\
+    | Stop timer to prevent callbacks during cleanup           |
+    \*---------------------------------------------------------*/
+    if(effect_timer && effect_timer->isActive())
+    {
+        effect_timer->stop();
+    }
+    effect_running = false;
+
+    /*---------------------------------------------------------*\
+    | Disconnect current effect to prevent crashes             |
+    \*---------------------------------------------------------*/
+    if(current_effect_ui)
+    {
+        disconnect(current_effect_ui, nullptr, this, nullptr);
+    }
+
+    /*---------------------------------------------------------*\
+    | Disconnect buttons before deletion                       |
+    \*---------------------------------------------------------*/
+    if(start_effect_button)
+    {
+        disconnect(start_effect_button, nullptr, this, nullptr);
+    }
+    if(stop_effect_button)
+    {
+        disconnect(stop_effect_button, nullptr, this, nullptr);
+    }
+
+    /*---------------------------------------------------------*\
+    | Reset effect UI pointers BEFORE deletion                 |
+    \*---------------------------------------------------------*/
+    current_effect_ui = nullptr;
+    wave3d_effect = nullptr;
+    plasma3d_effect = nullptr;
+    spiral3d_effect = nullptr;
+    spin3d_effect = nullptr;
+    explosion3d_effect = nullptr;
+    breathingsphere3d_effect = nullptr;
+    dnahelix3d_effect = nullptr;
+    wipe3d_effect = nullptr;
+    start_effect_button = nullptr;
+    stop_effect_button = nullptr;
+
+    /*---------------------------------------------------------*\
     | Remove all widgets from the container                    |
     \*---------------------------------------------------------*/
     QLayoutItem* item;
@@ -2704,20 +2772,6 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         }
         delete item;
     }
-
-    /*---------------------------------------------------------*\
-    | Reset effect UI pointers                                 |
-    \*---------------------------------------------------------*/
-    current_effect_ui = nullptr;
-    wave3d_effect = nullptr;
-    plasma3d_effect = nullptr;
-    spiral3d_effect = nullptr;
-    explosion3d_effect = nullptr;
-    breathingsphere3d_effect = nullptr;
-    dnahelix3d_effect = nullptr;
-    start_effect_button = nullptr;
-    stop_effect_button = nullptr;
-
 }
 
 void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
@@ -2799,6 +2853,13 @@ void OpenRGB3DSpatialTab::on_user_position_changed()
         viewport->SetUserPosition(user_position);
         viewport->update();
     }
+
+    // Update effect reference point if using user position
+    if(current_effect_ui && use_user_reference_checkbox && use_user_reference_checkbox->isChecked())
+    {
+        Vector3D user_pos = {user_position.x, user_position.y, user_position.z};
+        current_effect_ui->SetGlobalReferencePoint(user_pos);
+    }
 }
 
 void OpenRGB3DSpatialTab::on_user_visibility_toggled(bool visible)
@@ -2833,18 +2894,55 @@ void OpenRGB3DSpatialTab::on_user_center_clicked()
     }
 }
 
+void OpenRGB3DSpatialTab::on_use_user_reference_toggled(bool enabled)
+{
+    if(current_effect_ui)
+    {
+        if(enabled)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_USER_POSITION);
+            Vector3D user_pos = {user_position.x, user_position.y, user_position.z};
+            current_effect_ui->SetGlobalReferencePoint(user_pos);
+        }
+        else
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
+            current_effect_ui->SetGlobalReferencePoint({0.0f, 0.0f, 0.0f});
+        }
+    }
+}
+
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
-    // Clear current effect UI
-    ClearCustomEffectUI();
-
-    // Stop current effect
-    if(effect_running)
+    /*---------------------------------------------------------*\
+    | Stop effect timer and set flag BEFORE clearing UI        |
+    \*---------------------------------------------------------*/
+    if(effect_running && effect_timer)
     {
-        on_stop_effect_clicked();
+        effect_running = false;
+        effect_timer->stop();
     }
 
-    // Set up new effect UI based on selection
+    /*---------------------------------------------------------*\
+    | Update button states if they exist                       |
+    \*---------------------------------------------------------*/
+    if(start_effect_button)
+    {
+        start_effect_button->setEnabled(true);
+    }
+    if(stop_effect_button)
+    {
+        stop_effect_button->setEnabled(false);
+    }
+
+    /*---------------------------------------------------------*\
+    | Clear current effect UI (disconnects and deletes)        |
+    \*---------------------------------------------------------*/
+    ClearCustomEffectUI();
+
+    /*---------------------------------------------------------*\
+    | Set up new effect UI based on selection                  |
+    \*---------------------------------------------------------*/
     if(index > 0)  // Skip "None" option
     {
         SetupCustomEffectUI(index - 1);  // Adjust for "None" offset

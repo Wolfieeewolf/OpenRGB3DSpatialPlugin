@@ -122,72 +122,77 @@ void Wave3D::OnWaveParameterChanged()
 
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Debug: Log that we're being called
-    static int call_count = 0;
-    if(call_count < 5)
-    {
-        call_count++;
-        // Will log to OpenRGB console
-    }
+    /*---------------------------------------------------------*\
+    | Get effect origin (room center or user head position)   |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOrigin();
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
 
     /*---------------------------------------------------------*\
     | Create smooth curves for speed and frequency            |
     \*---------------------------------------------------------*/
     float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
-    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+    speed_curve = speed_curve * speed_curve;
+    float actual_speed = speed_curve * 200.0f;
 
     float freq_curve = (effect_frequency / 100.0f);
-    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
-    float actual_frequency = freq_curve * 10.0f; // Map to 0-10 range
+    freq_curve = freq_curve * freq_curve;
+    float actual_frequency = freq_curve * 10.0f;
 
     /*---------------------------------------------------------*\
-    | Update progress for animation (like RadialRainbow)      |
+    | Update progress for animation                            |
     \*---------------------------------------------------------*/
     progress = time * (actual_speed * 2.0f);
 
     /*---------------------------------------------------------*\
-    | Calculate wave based on direction type (like LED cube) |
+    | Calculate wave based on axis and shape type             |
     \*---------------------------------------------------------*/
     float wave_value = 0.0f;
     float freq_scale = actual_frequency * 0.1f;
+    float position = 0.0f;
 
+    /*---------------------------------------------------------*\
+    | Calculate position based on selected axis               |
+    \*---------------------------------------------------------*/
     switch(effect_axis)
     {
-        case AXIS_X: // X Axis Wave (left-to-right with Y/Z amplitude)
-            wave_value = sin(x * freq_scale + (effect_reverse ? -progress : progress)) *
-                        (1.0f + 0.3f * sin(y * 0.5f) + 0.2f * sin(z * 0.3f));
+        case AXIS_X:  // Left to Right
+            position = rel_x;
             break;
-        case AXIS_Y: // Y Axis Wave (up-down with X/Z amplitude)
-            wave_value = sin(y * freq_scale + (effect_reverse ? -progress : progress)) *
-                        (1.0f + 0.3f * sin(x * 0.5f) + 0.2f * sin(z * 0.3f));
+        case AXIS_Y:  // Front to Back
+            position = rel_y;
             break;
-        case AXIS_Z: // Z Axis Wave (front-back with X/Y amplitude)
-            wave_value = sin(z * freq_scale + (effect_reverse ? -progress : progress)) *
-                        (1.0f + 0.3f * sin(x * 0.5f) + 0.2f * sin(y * 0.3f));
+        case AXIS_Z:  // Floor to Ceiling
+            position = rel_z;
             break;
-        case AXIS_RADIAL: // Radial (3D Sphere)
+        case AXIS_RADIAL:  // Radial from center
         default:
-            if(shape_type == 0) // Circles
+            if(shape_type == 0)  // Sphere
             {
-                float distance = sqrt(x*x + y*y + z*z);
-                wave_value = sin(distance * freq_scale + (effect_reverse ? progress : -progress));
+                position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             }
-            else // Squares (cube distance)
+            else  // Cube
             {
-                float distance = std::max({fabs(x), fabs(y), fabs(z)});
-                wave_value = sin(distance * freq_scale + (effect_reverse ? progress : -progress));
+                position = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
             }
             break;
-        case AXIS_CUSTOM: // Custom direction vector
-        {
-            // Project position onto custom direction vector
-            float dot_product = x * custom_direction.x + y * custom_direction.y + z * custom_direction.z;
-            wave_value = sin(dot_product * freq_scale + (effect_reverse ? -progress : progress)) *
-                        (1.0f + 0.3f * sin((x + y + z) * 0.3f)); // Add some 3D complexity
-            break;
-        }
     }
+
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        position = -position;
+    }
+
+    wave_value = sin(position * freq_scale - progress);
 
     /*---------------------------------------------------------*\
     | Convert wave to hue (0-360 degrees)                     |

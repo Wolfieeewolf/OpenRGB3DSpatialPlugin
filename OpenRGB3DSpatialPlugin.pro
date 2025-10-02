@@ -138,6 +138,7 @@ HEADERS +=                                                                      
     Effects3D/Wipe3D/Wipe3D.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
     Effects3D/Spiral3D/Spiral3D.h                                                               \
+    Effects3D/Spin3D/Spin3D.h                                                                   \
     Effects3D/Explosion3D/Explosion3D.h                                                         \
     Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
     Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
@@ -156,6 +157,7 @@ SOURCES +=                                                                      
     Effects3D/Wipe3D/Wipe3D.cpp                                                                 \
     Effects3D/Plasma3D/Plasma3D.cpp                                                             \
     Effects3D/Spiral3D/Spiral3D.cpp                                                             \
+    Effects3D/Spin3D/Spin3D.cpp                                                                 \
     Effects3D/Explosion3D/Explosion3D.cpp                                                       \
     Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
     Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \

@@ -16,13 +16,8 @@
 #include <QSlider>
 #include <QLabel>
 #include <QComboBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QScrollArea>
-#include <QColorDialog>
 #include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
 
 class Spiral3D : public SpatialEffect3D
 {
@@ -33,53 +28,40 @@ public:
     ~Spiral3D();
 
     /*---------------------------------------------------------*\
+    | Auto-registration system                                 |
+    \*---------------------------------------------------------*/
+    EFFECT_REGISTERER_3D("Spiral3D", "3D Spiral", "3D Spatial", [](){return new Spiral3D;});
+
+    static std::string const ClassName() { return "Spiral3D"; }
+    static std::string const UIName() { return "3D Spiral"; }
+
+    /*---------------------------------------------------------*\
     | Pure virtual implementations                             |
     \*---------------------------------------------------------*/
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
-    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private slots:
     void OnSpiralParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
-    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | Spiral-specific controls (speed/brightness now in base class) |
+    | Spiral-specific controls                                 |
     \*---------------------------------------------------------*/
-    QSlider*        arms_slider;            // Number of spiral arms
-    QSlider*        frequency_slider;       // Spiral frequency
-    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
+    QSlider*        arms_slider;
+    QComboBox*      pattern_combo;
+    QSlider*        gap_slider;
 
     /*---------------------------------------------------------*\
-    | Color controls                                           |
-    \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
-
-    /*---------------------------------------------------------*\
-    | Current spiral parameters                                |
+    | Spiral-specific parameters                               |
+    | (frequency, rainbow_mode, colors are in base class)     |
     \*---------------------------------------------------------*/
     unsigned int    num_arms;
-    unsigned int    frequency;              // Spiral frequency
-    bool            rainbow_mode;           // Rainbow mode enabled
-    float           progress;               // Animation progress
-
-    /*---------------------------------------------------------*\
-    | Helper methods                                           |
-    \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
+    int             pattern_type;      // 0=Smooth, 1=Pinwheel, 2=Sharp
+    unsigned int    gap_size;          // Size of dark gaps
+    float           progress;
 };
 
 #endif

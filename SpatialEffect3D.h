@@ -111,11 +111,6 @@ public:
     virtual void CreateCommonEffectControls(QWidget* parent);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
 
-    /*---------------------------------------------------------*\
-    | Common 3D spatial controls                               |
-    \*---------------------------------------------------------*/
-    virtual void CreateCommon3DControls(QWidget* parent);
-    virtual void UpdateCommon3DParams(SpatialEffectParams& params);
 
     /*---------------------------------------------------------*\
     | Effect state management                                  |
@@ -135,6 +130,16 @@ public:
     virtual bool GetRainbowMode() const;
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
+
+    /*---------------------------------------------------------*\
+    | Reference point system                                   |
+    \*---------------------------------------------------------*/
+    virtual void SetReferenceMode(ReferenceMode mode);
+    virtual ReferenceMode GetReferenceMode() const;
+    virtual void SetGlobalReferencePoint(const Vector3D& point);
+    virtual Vector3D GetGlobalReferencePoint() const;
+    virtual void SetCustomReferencePoint(const Vector3D& point);
+    virtual void SetUseCustomReference(bool use_custom);
 
     /*---------------------------------------------------------*\
     | Button accessors for parent tab to connect              |
@@ -158,6 +163,12 @@ protected:
     QLabel*             frequency_label;
 
     /*---------------------------------------------------------*\
+    | Axis selection controls                                  |
+    \*---------------------------------------------------------*/
+    QComboBox*          axis_combo;
+    QCheckBox*          reverse_check;
+
+    /*---------------------------------------------------------*\
     | Color management controls                                |
     \*---------------------------------------------------------*/
     QGroupBox*          color_controls_group;
@@ -169,55 +180,6 @@ protected:
     std::vector<QPushButton*> color_buttons;
     std::vector<RGBColor> colors;
 
-    /*---------------------------------------------------------*\
-    | Universal Axis & Direction Controls                      |
-    \*---------------------------------------------------------*/
-    QComboBox*          axis_combo;             // X/Y/Z/Radial/Custom
-    QCheckBox*          reverse_check;          // Reverse direction
-    QDoubleSpinBox*     custom_direction_x;     // Custom direction X
-    QDoubleSpinBox*     custom_direction_y;     // Custom direction Y
-    QDoubleSpinBox*     custom_direction_z;     // Custom direction Z
-
-    /*---------------------------------------------------------*\
-    | Common 3D spatial controls                               |
-    \*---------------------------------------------------------*/
-    QGroupBox*          spatial_controls_group;
-
-    /*---------------------------------------------------------*\
-    | Origin controls                                          |
-    \*---------------------------------------------------------*/
-    QComboBox*          origin_preset_combo;
-    QDoubleSpinBox*     origin_x_spin;
-    QDoubleSpinBox*     origin_y_spin;
-    QDoubleSpinBox*     origin_z_spin;
-
-    /*---------------------------------------------------------*\
-    | Scale controls                                           |
-    \*---------------------------------------------------------*/
-    QDoubleSpinBox*     scale_x_spin;
-    QDoubleSpinBox*     scale_y_spin;
-    QDoubleSpinBox*     scale_z_spin;
-
-    /*---------------------------------------------------------*\
-    | Rotation controls                                        |
-    \*---------------------------------------------------------*/
-    QSlider*            rotation_x_slider;
-    QSlider*            rotation_y_slider;
-    QSlider*            rotation_z_slider;
-
-    /*---------------------------------------------------------*\
-    | Direction controls (for directional effects)            |
-    \*---------------------------------------------------------*/
-    QDoubleSpinBox*     direction_x_spin;
-    QDoubleSpinBox*     direction_y_spin;
-    QDoubleSpinBox*     direction_z_spin;
-
-    /*---------------------------------------------------------*\
-    | Mirror controls                                          |
-    \*---------------------------------------------------------*/
-    QCheckBox*          mirror_x_check;
-    QCheckBox*          mirror_y_check;
-    QCheckBox*          mirror_z_check;
 
     /*---------------------------------------------------------*\
     | Effect control buttons                                   |
@@ -237,39 +199,41 @@ protected:
     float               rainbow_progress;
 
     /*---------------------------------------------------------*\
-    | Universal Axis & Direction Parameters                    |
+    | Axis parameters                                          |
     \*---------------------------------------------------------*/
-    EffectAxis          effect_axis;            // X/Y/Z/Radial/Custom
-    bool                effect_reverse;         // Reverse direction
-    Vector3D            custom_direction;       // Custom direction vector
+    EffectAxis          effect_axis;
+    bool                effect_reverse;
+
+    /*---------------------------------------------------------*\
+    | Reference Point System (for effect origin)              |
+    \*---------------------------------------------------------*/
+    ReferenceMode       reference_mode;         // Room center / User position / Custom
+    Vector3D            global_reference_point; // Set by parent tab (user position or 0,0,0)
+    Vector3D            custom_reference_point; // Effect-specific override (future)
+    bool                use_custom_reference;   // Override global setting
 
     /*---------------------------------------------------------*\
     | Helper methods for derived classes                       |
     \*---------------------------------------------------------*/
+    Vector3D GetEffectOrigin() const;           // Returns correct origin based on reference mode
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
 
 private slots:
     void OnParameterChanged();
-    void OnAxisChanged();
-    void OnReverseChanged();
-    void OnCustomDirectionChanged();
     void OnRainbowModeChanged();
     void OnAddColorClicked();
     void OnRemoveColorClicked();
     void OnColorButtonClicked();
     void OnStartEffectClicked();
     void OnStopEffectClicked();
+    void OnAxisChanged();
+    void OnReverseChanged();
 
 private:
-    void CreateOriginControls(QWidget* parent);
-    void CreateScaleControls(QWidget* parent);
     void CreateColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    void CreateRotationControls(QWidget* parent);
-    void CreateDirectionControls(QWidget* parent);
-    void CreateMirrorControls(QWidget* parent);
 };
 
 #endif

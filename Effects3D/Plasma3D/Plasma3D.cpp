@@ -10,6 +10,11 @@
 \*---------------------------------------------------------*/
 
 #include "Plasma3D.h"
+
+/*---------------------------------------------------------*\
+| Register this effect with the effect manager             |
+\*---------------------------------------------------------*/
+REGISTER_EFFECT_3D(Plasma3D);
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -100,7 +105,18 @@ void Plasma3D::OnPlasmaParameterChanged()
 
 RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Use universal base class values
+    /*---------------------------------------------------------*\
+    | Get effect origin (room center or user head position)   |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOrigin();
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
     float speed_curve = (effect_speed / 100.0f);
     speed_curve = speed_curve * speed_curve;
     float actual_speed = speed_curve * 4.0f;
@@ -109,53 +125,116 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     freq_curve = freq_curve * freq_curve;
     float actual_frequency = freq_curve * 20.0f;
 
-    // Update progress for animation
     progress = time * actual_speed;
 
-    // Base plasma calculation with different patterns
-    float plasma_value;
-
-    switch(pattern_type)
+    /*---------------------------------------------------------*\
+    | Calculate primary and secondary coordinates based on axis|
+    \*---------------------------------------------------------*/
+    float coord1, coord2, coord3;
+    switch(effect_axis)
     {
-        case 0: // Classic
-            plasma_value = sin(x * 0.1f + progress) +
-                          sin(y * 0.1f + progress * 1.3f) +
-                          sin(z * 0.1f + progress * 0.7f) +
-                          sin(sqrt(x*x + y*y + z*z) * 0.05f + progress * 2.0f);
+        case AXIS_X:  // Pattern primarily on YZ plane (perpendicular to X)
+            coord1 = rel_y;
+            coord2 = rel_z;
+            coord3 = rel_x;
             break;
-
-        case 1: // Swirl
-            {
-                float angle = atan2(y, x);
-                float radius = sqrt(x*x + y*y);
-                plasma_value = sin(angle * 3.0f + radius * 0.1f + progress) +
-                              sin(z * 0.1f + progress * 1.5f) +
-                              sin((radius + z) * 0.08f + progress * 0.8f);
-            }
+        case AXIS_Y:  // Pattern primarily on XZ plane (perpendicular to Y)
+            coord1 = rel_x;
+            coord2 = rel_z;
+            coord3 = rel_y;
             break;
-
-        case 2: // Ripple
-            {
-                float dist_from_center = sqrt(x*x + y*y + z*z);
-                plasma_value = sin(dist_from_center * 0.2f - progress * 3.0f) +
-                              sin(x * 0.15f + y * 0.1f + progress) +
-                              sin(z * 0.12f + progress * 1.2f);
-            }
+        case AXIS_Z:  // Pattern primarily on XY plane (perpendicular to Z)
+            coord1 = rel_x;
+            coord2 = rel_y;
+            coord3 = rel_z;
             break;
-
-        case 3: // Organic
+        case AXIS_RADIAL:  // Full 3D pattern
         default:
-            plasma_value = sin(x * 0.08f + sin(y * 0.12f + progress) + progress * 0.5f) +
-                          cos(y * 0.09f + cos(z * 0.11f + progress * 1.3f)) +
-                          sin(z * 0.07f + sin(x * 0.13f + progress * 0.7f));
+            coord1 = rel_x;
+            coord2 = rel_y;
+            coord3 = rel_z;
             break;
     }
 
-    // Apply frequency scaling
-    plasma_value *= actual_frequency * 0.1f;
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        coord3 = -coord3;
+    }
+
+    float plasma_value;
+    float scale = actual_frequency * 0.015f;
+
+    switch(pattern_type)
+    {
+        case 0: // Classic Plasma - Multiple overlapping sine waves
+            {
+                // Create classic plasma with 4-6 overlapping waves
+                plasma_value =
+                    sin((coord1 + progress * 2.0f) * scale) +
+                    sin((coord2 + progress * 1.7f) * scale * 0.8f) +
+                    sin((coord1 + coord2 + progress * 1.3f) * scale * 0.6f) +
+                    cos((coord1 - coord2 + progress * 2.2f) * scale * 0.7f) +
+                    sin(sqrt(coord1*coord1 + coord2*coord2) * scale * 0.5f + progress * 1.5f) +
+                    cos(coord3 * scale * 0.4f + progress * 0.9f);
+            }
+            break;
+
+        case 1: // Swirl Plasma - Rotating spiral patterns
+            {
+                float angle = atan2(coord2, coord1);
+                float radius = sqrt(coord1*coord1 + coord2*coord2);
+
+                plasma_value =
+                    sin(angle * 4.0f + radius * scale * 0.8f + progress * 2.0f) +
+                    sin(angle * 3.0f - radius * scale * 0.6f + progress * 1.5f) +
+                    cos(angle * 5.0f + radius * scale * 0.4f - progress * 1.8f) +
+                    sin(coord3 * scale * 0.5f + progress) +
+                    cos((angle * 2.0f + coord3 * scale * 0.3f) + progress * 1.2f);
+            }
+            break;
+
+        case 2: // Ripple Plasma - Concentric waves
+            {
+                float dist_from_center;
+                if(effect_axis == AXIS_RADIAL)
+                {
+                    dist_from_center = sqrt(coord1*coord1 + coord2*coord2 + coord3*coord3);
+                }
+                else
+                {
+                    dist_from_center = sqrt(coord1*coord1 + coord2*coord2);
+                }
+
+                plasma_value =
+                    sin(dist_from_center * scale - progress * 3.0f) +
+                    sin(dist_from_center * scale * 1.5f - progress * 2.3f) +
+                    cos(dist_from_center * scale * 0.8f + progress * 1.8f) +
+                    sin((coord1 + coord2) * scale * 0.6f + progress * 1.2f) +
+                    cos(coord3 * scale * 0.5f - progress * 0.7f);
+            }
+            break;
+
+        case 3: // Organic Plasma - Flowing liquid-like patterns
+        default:
+            {
+                // Nested sine waves for organic flowing effect
+                float flow1 = sin(coord1 * scale * 0.8f + sin(coord2 * scale * 1.2f + progress) + progress * 0.5f);
+                float flow2 = cos(coord2 * scale * 0.9f + cos(coord3 * scale * 1.1f + progress * 1.3f));
+                float flow3 = sin(coord3 * scale * 0.7f + sin(coord1 * scale * 1.3f + progress * 0.7f));
+                float flow4 = cos((coord1 + coord2) * scale * 0.6f + sin(progress * 1.5f));
+                float flow5 = sin((coord2 + coord3) * scale * 0.5f + cos(progress * 1.8f));
+
+                plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
+            }
+            break;
+    }
 
     // Normalize to 0-1 range
-    plasma_value = (plasma_value + 4.0f) / 8.0f;
+    // With 5-6 overlapping waves, range is approximately -6 to +6
+    plasma_value = (plasma_value + 6.0f) / 12.0f;
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
     // Get color using universal base class methods
@@ -185,8 +264,3 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
-RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-{
-    (void)grid;
-    return CalculateColor(x, y, z, time);
-}

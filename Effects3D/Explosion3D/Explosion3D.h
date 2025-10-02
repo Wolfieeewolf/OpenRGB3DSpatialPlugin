@@ -16,12 +16,8 @@
 #include <QSlider>
 #include <QLabel>
 #include <QComboBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QColorDialog>
 #include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
 
 class Explosion3D : public SpatialEffect3D
 {
@@ -32,56 +28,39 @@ public:
     ~Explosion3D();
 
     /*---------------------------------------------------------*\
+    | Auto-registration system                                 |
+    \*---------------------------------------------------------*/
+    EFFECT_REGISTERER_3D("Explosion3D", "3D Explosion", "3D Spatial", [](){return new Explosion3D;});
+
+    static std::string const ClassName() { return "Explosion3D"; }
+    static std::string const UIName() { return "3D Explosion"; }
+
+    /*---------------------------------------------------------*\
     | Pure virtual implementations                             |
     \*---------------------------------------------------------*/
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
-    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     OriginPreset GetOriginPreset() const { return origin_preset; }
 
 private slots:
     void OnExplosionParameterChanged();
-    void OnAddColorClicked();
-    void OnRemoveColorClicked();
-    void OnColorButtonClicked();
-    void OnRainbowModeChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | Explosion-specific controls (speed/brightness now in base class) |
+    | Explosion-specific controls                              |
     \*---------------------------------------------------------*/
-    QComboBox*      origin_combo;           // Origin preset selection
-    QSlider*        intensity_slider;       // Explosion intensity
-    QSlider*        frequency_slider;       // Shockwave frequency
-    QCheckBox*      rainbow_mode_check;     // Rainbow mode toggle
+    QComboBox*      origin_combo;
+    QSlider*        intensity_slider;
 
     /*---------------------------------------------------------*\
-    | Color controls                                           |
-    \*---------------------------------------------------------*/
-    QWidget*        color_controls_widget;
-    QHBoxLayout*    color_controls_layout;
-    QPushButton*    add_color_button;
-    QPushButton*    remove_color_button;
-    std::vector<QPushButton*> color_buttons;
-    std::vector<RGBColor> colors;
-
-    /*---------------------------------------------------------*\
-    | Current explosion parameters                             |
+    | Explosion-specific parameters                            |
+    | (frequency, rainbow_mode, colors are in base class)     |
     \*---------------------------------------------------------*/
     OriginPreset    origin_preset;
     unsigned int    explosion_intensity;
-    unsigned int    frequency;
-    bool            rainbow_mode;
     float           progress;
-
-    /*---------------------------------------------------------*\
-    | Helper methods                                           |
-    \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
 };
 
 #endif

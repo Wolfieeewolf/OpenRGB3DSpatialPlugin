@@ -10,6 +10,11 @@
 \*---------------------------------------------------------*/
 
 #include "Wipe3D.h"
+
+/*---------------------------------------------------------*\
+| Register this effect with the effect manager             |
+\*---------------------------------------------------------*/
+REGISTER_EFFECT_3D(Wipe3D);
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -52,9 +57,9 @@ EffectInfo3D Wipe3D::GetEffectInfo()
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
-    info.needs_3d_origin = true;
-    info.needs_direction = true;
-    info.needs_thickness = true;
+    info.needs_3d_origin = false;
+    info.needs_direction = false;
+    info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = false;
     return info;
@@ -106,31 +111,56 @@ void Wipe3D::OnWipeParameterChanged()
 
 RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Use universal base class values
+    /*---------------------------------------------------------*\
+    | Get effect origin (room center or user head position)   |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOrigin();
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
     float speed_curve = (effect_speed / 100.0f);
     float actual_speed = speed_curve * 2.0f;
 
-    // Update progress for animation
     progress = fmod(time * actual_speed, 2.0f);
-    if(progress > 1.0f) progress = 2.0f - progress; // Reverse direction
+    if(progress > 1.0f) progress = 2.0f - progress;
 
-    // Calculate wipe progress based on universal axis
+    /*---------------------------------------------------------*\
+    | Calculate position based on selected axis               |
+    \*---------------------------------------------------------*/
     float position;
     switch(effect_axis)
     {
-        case AXIS_X: position = x; break;
-        case AXIS_Y: position = y; break;
-        case AXIS_Z: position = z; break;
-        case AXIS_RADIAL: position = sqrt(x*x + y*y + z*z); break;
-        case AXIS_CUSTOM:
+        case AXIS_X:  // Left to Right wipe
+            position = rel_x;
+            break;
+        case AXIS_Y:  // Front to Back wipe
+            position = rel_y;
+            break;
+        case AXIS_Z:  // Floor to Ceiling wipe
         default:
-            position = x * custom_direction.x + y * custom_direction.y + z * custom_direction.z;
+            position = rel_z;
+            break;
+        case AXIS_RADIAL:  // Radial wipe from center
+            position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             break;
     }
 
-    if(effect_reverse) position = -position;
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        position = -position;
+    }
 
-    // Normalize position to 0-1 range
+    /*---------------------------------------------------------*\
+    | Normalize position to 0-1 range                          |
+    \*---------------------------------------------------------*/
     position = (position + 100.0f) / 200.0f;
     position = fmax(0.0f, fmin(1.0f, position));
 
@@ -176,12 +206,6 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     b = (unsigned char)(b * brightness_factor);
 
     return (b << 16) | (g << 8) | r;
-}
-
-RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-{
-    (void)grid;
-    return CalculateColor(x, y, z, time);
 }
 
 // Helper function for smooth interpolation

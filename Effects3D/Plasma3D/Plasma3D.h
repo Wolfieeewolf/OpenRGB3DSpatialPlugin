@@ -14,16 +14,9 @@
 
 #include <QWidget>
 #include <QComboBox>
-#include <QSlider>
 #include <QLabel>
-#include <QSpinBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QScrollArea>
-#include <QColorDialog>
 #include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
 
 class Plasma3D : public SpatialEffect3D
 {
@@ -34,35 +27,36 @@ public:
     ~Plasma3D();
 
     /*---------------------------------------------------------*\
+    | Auto-registration system                                 |
+    \*---------------------------------------------------------*/
+    EFFECT_REGISTERER_3D("Plasma3D", "3D Plasma", "3D Spatial", [](){return new Plasma3D;});
+
+    static std::string const ClassName() { return "Plasma3D"; }
+    static std::string const UIName() { return "3D Plasma"; }
+
+    /*---------------------------------------------------------*\
     | Pure virtual implementations                             |
     \*---------------------------------------------------------*/
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
-    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private slots:
     void OnPlasmaParameterChanged();
 
 private:
     /*---------------------------------------------------------*\
-    | Plasma-specific controls only                            |
+    | Plasma-specific controls                                 |
     \*---------------------------------------------------------*/
-    QComboBox*      pattern_combo;          // Pattern type
+    QComboBox*      pattern_combo;
 
     /*---------------------------------------------------------*\
-    | Current plasma parameters                                |
+    | Plasma-specific parameters                               |
+    | (frequency, rainbow_mode, colors are in base class)     |
     \*---------------------------------------------------------*/
-    int             pattern_type;           // 0=Classic, 1=Swirl, 2=Ripple, 3=Organic
-    float           progress;               // Animation progress
-
-    /*---------------------------------------------------------*\
-    | Helper methods                                           |
-    \*---------------------------------------------------------*/
-    void SetupColorControls(QWidget* parent);
-    void CreateColorButton(RGBColor color);
-    void RemoveLastColorButton();
+    int             pattern_type;
+    float           progress;
 };
 
 #endif

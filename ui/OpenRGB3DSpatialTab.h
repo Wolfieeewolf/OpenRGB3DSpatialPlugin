@@ -39,6 +39,7 @@
 #include "Effects3D/Wipe3D/Wipe3D.h"
 #include "Effects3D/Plasma3D/Plasma3D.h"
 #include "Effects3D/Spiral3D/Spiral3D.h"
+#include "Effects3D/Spin3D/Spin3D.h"
 #include "Effects3D/DNAHelix3D/DNAHelix3D.h"
 #include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
 #include "Effects3D/Explosion3D/Explosion3D.h"
@@ -89,6 +90,7 @@ private slots:
     void on_user_position_changed();
     void on_user_visibility_toggled(bool visible);
     void on_user_center_clicked();
+    void on_use_user_reference_toggled(bool enabled);
     void on_effect_changed(int index);
     void UpdateSelectionInfo();
 
@@ -148,6 +150,7 @@ private:
     Wipe3D*                     wipe3d_effect;
     Plasma3D*                   plasma3d_effect;
     Spiral3D*                   spiral3d_effect;
+    Spin3D*                     spin3d_effect;
     Explosion3D*                explosion3d_effect;
     BreathingSphere3D*          breathingsphere3d_effect;
     DNAHelix3D*                 dnahelix3d_effect;
@@ -180,6 +183,7 @@ private:
     QDoubleSpinBox*             user_pos_z_spin;
     QCheckBox*                  user_visible_checkbox;
     QPushButton*                user_center_button;
+    QCheckBox*                  use_user_reference_checkbox;
     UserPosition3D              user_position;
 
     /*---------------------------------------------------------*\

@@ -10,33 +10,38 @@
 \*---------------------------------------------------------*/
 
 #include "Spiral3D.h"
+
+/*---------------------------------------------------------*\
+| Register this effect with the effect manager             |
+\*---------------------------------------------------------*/
+REGISTER_EFFECT_3D(Spiral3D);
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
-#include <QColorDialog>
-#include <algorithm>
 #include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 Spiral3D::Spiral3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     arms_slider = nullptr;
-    frequency_slider = nullptr;
-    rainbow_mode_check = nullptr;
-
-    color_controls_widget = nullptr;
-    color_controls_layout = nullptr;
-    add_color_button = nullptr;
-    remove_color_button = nullptr;
-
-    num_arms = 3;            // Default arms
-    frequency = 50;          // Default frequency
-    rainbow_mode = true;     // Default to rainbow mode
+    pattern_combo = nullptr;
+    gap_slider = nullptr;
+    num_arms = 3;
+    pattern_type = 0;   // Default to Smooth
+    gap_size = 30;      // Default gap size
     progress = 0.0f;
 
-    // Initialize with default colors
-    colors.push_back(0x000000FF);  // Blue
-    colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Red
+    SetFrequency(50);
+    SetRainbowMode(true);
+
+    std::vector<RGBColor> default_colors;
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
+    SetColors(default_colors);
 }
 
 Spiral3D::~Spiral3D()
@@ -56,7 +61,7 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     info.min_speed = 1;
     info.user_colors = 2;
     info.has_custom_settings = true;
-    info.needs_3d_origin = true;
+    info.needs_3d_origin = false;
     info.needs_direction = false;
     info.needs_thickness = false;
     info.needs_arms = true;
@@ -70,47 +75,34 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(spiral_widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    /*---------------------------------------------------------*\
-    | Row 0: Arms                                              |
-    \*---------------------------------------------------------*/
-    layout->addWidget(new QLabel("Arms:"), 0, 0);
+    layout->addWidget(new QLabel("Pattern:"), 0, 0);
+    pattern_combo = new QComboBox();
+    pattern_combo->addItem("Smooth Spiral");
+    pattern_combo->addItem("Pinwheel");
+    pattern_combo->addItem("Sharp Blades");
+    pattern_combo->setCurrentIndex(pattern_type);
+    layout->addWidget(pattern_combo, 0, 1);
+
+    layout->addWidget(new QLabel("Arms:"), 1, 0);
     arms_slider = new QSlider(Qt::Horizontal);
     arms_slider->setRange(2, 8);
     arms_slider->setValue(num_arms);
-    layout->addWidget(arms_slider, 0, 1);
+    layout->addWidget(arms_slider, 1, 1);
 
-    /*---------------------------------------------------------*\
-    | Row 1: Frequency                                         |
-    \*---------------------------------------------------------*/
-    layout->addWidget(new QLabel("Frequency:"), 1, 0);
-    frequency_slider = new QSlider(Qt::Horizontal);
-    frequency_slider->setRange(1, 100);
-    frequency_slider->setValue(frequency);
-    layout->addWidget(frequency_slider, 1, 1);
+    layout->addWidget(new QLabel("Gap Size:"), 2, 0);
+    gap_slider = new QSlider(Qt::Horizontal);
+    gap_slider->setRange(10, 80);
+    gap_slider->setValue(gap_size);
+    layout->addWidget(gap_slider, 2, 1);
 
-    /*---------------------------------------------------------*\
-    | Row 2: Rainbow Mode                                      |
-    \*---------------------------------------------------------*/
-    rainbow_mode_check = new QCheckBox("Rainbow Mode");
-    rainbow_mode_check->setChecked(rainbow_mode);
-    layout->addWidget(rainbow_mode_check, 2, 0, 1, 2);
-
-    /*---------------------------------------------------------*\
-    | Add to parent layout                                     |
-    \*---------------------------------------------------------*/
     if(parent && parent->layout())
     {
         parent->layout()->addWidget(spiral_widget);
     }
 
-    SetupColorControls(parent);
-
-    /*---------------------------------------------------------*\
-    | Connect signals                                          |
-    \*---------------------------------------------------------*/
+    connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral3D::OnSpiralParameterChanged);
     connect(arms_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
-    connect(frequency_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
-    connect(rainbow_mode_check, &QCheckBox::toggled, this, &Spiral3D::OnRainbowModeChanged);
+    connect(gap_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
 }
 
 void Spiral3D::UpdateParams(SpatialEffectParams& params)
@@ -120,143 +112,180 @@ void Spiral3D::UpdateParams(SpatialEffectParams& params)
 
 void Spiral3D::OnSpiralParameterChanged()
 {
-    /*---------------------------------------------------------*\
-    | Update internal parameters                               |
-    \*---------------------------------------------------------*/
+    if(pattern_combo) pattern_type = pattern_combo->currentIndex();
     if(arms_slider) num_arms = arms_slider->value();
-    if(frequency_slider) frequency = frequency_slider->value();
-
-    /*---------------------------------------------------------*\
-    | Emit parameter change signal                             |
-    \*---------------------------------------------------------*/
+    if(gap_slider) gap_size = gap_slider->value();
     emit ParametersChanged();
-}
-
-void Spiral3D::OnRainbowModeChanged()
-{
-    if(rainbow_mode_check)
-    {
-        rainbow_mode = rainbow_mode_check->isChecked();
-    }
-
-    if(color_controls_widget)
-    {
-        color_controls_widget->setVisible(!rainbow_mode);
-    }
-
-    emit ParametersChanged();
-}
-
-void Spiral3D::OnAddColorClicked()
-{
-    RGBColor new_color = 0xFFFFFFFF; // White
-    colors.push_back(new_color);
-    CreateColorButton(new_color);
-    emit ParametersChanged();
-}
-
-void Spiral3D::OnRemoveColorClicked()
-{
-    if(colors.size() > 1)
-    {
-        colors.pop_back();
-        RemoveLastColorButton();
-        emit ParametersChanged();
-    }
-}
-
-void Spiral3D::OnColorButtonClicked()
-{
-    QPushButton* button = qobject_cast<QPushButton*>(sender());
-    if(!button) return;
-
-    int index = -1;
-    for(unsigned int i = 0; i < color_buttons.size(); i++)
-    {
-        if(color_buttons[i] == button)
-        {
-            index = i;
-            break;
-        }
-    }
-
-    if(index >= 0 && index < (int)colors.size())
-    {
-        QColor initial_color;
-        initial_color.setRgb(colors[index] & 0xFF, (colors[index] >> 8) & 0xFF, (colors[index] >> 16) & 0xFF);
-
-        QColor new_color = QColorDialog::getColor(initial_color, this);
-        if(new_color.isValid())
-        {
-            colors[index] = (new_color.blue() << 16) | (new_color.green() << 8) | new_color.red();
-            QString style = QString("background-color: rgb(%1, %2, %3);").arg(new_color.red()).arg(new_color.green()).arg(new_color.blue());
-            button->setStyleSheet(style);
-            emit ParametersChanged();
-        }
-    }
 }
 
 RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
 {
     /*---------------------------------------------------------*\
+    | Get effect origin (room center or user head position)   |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOrigin();
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    /*---------------------------------------------------------*\
     | Create smooth curves for speed and frequency            |
     \*---------------------------------------------------------*/
     float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
-    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+    speed_curve = speed_curve * speed_curve;
+    float actual_speed = speed_curve * 200.0f;
 
-    float freq_curve = (frequency / 100.0f);
-    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
-    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+    float freq_curve = (GetFrequency() / 100.0f);
+    freq_curve = freq_curve * freq_curve;
+    float actual_frequency = freq_curve * 100.0f;
 
-    /*---------------------------------------------------------*\
-    | Update progress for animation                            |
-    \*---------------------------------------------------------*/
     progress = time * (actual_speed * 0.1f);
     float freq_scale = actual_frequency * 0.01f;
 
     /*---------------------------------------------------------*\
-    | Calculate enhanced 3D spiral pattern                    |
+    | Calculate spiral based on selected axis                 |
     \*---------------------------------------------------------*/
-    // Primary spiral in XY plane
-    float radius = sqrt(x*x + y*y);
-    float angle = atan2(y, x);
+    float radius, angle, twist_coord;
 
-    // Add Z-axis twist for true 3D spiral
-    float z_twist = z * 0.3f;
+    switch(effect_axis)
+    {
+        case AXIS_X:  // Spiral along X-axis
+            radius = sqrt(rel_y*rel_y + rel_z*rel_z);
+            angle = atan2(rel_z, rel_y);
+            twist_coord = rel_x;
+            break;
+        case AXIS_Y:  // Spiral along Y-axis
+            radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+            angle = atan2(rel_z, rel_x);
+            twist_coord = rel_y;
+            break;
+        case AXIS_Z:  // Spiral along Z-axis (vertical)
+        default:
+            radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+            angle = atan2(rel_y, rel_x);
+            twist_coord = rel_z;
+            break;
+        case AXIS_RADIAL:  // Radial spiral from center
+            radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y));
+            twist_coord = radius;
+            break;
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        angle = -angle;
+    }
+
+    float z_twist = twist_coord * 0.3f;
     float spiral_angle = angle * num_arms + radius * freq_scale + z_twist - progress;
 
-    // Create multiple spiral layers for depth
-    float spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(z * freq_scale + progress * 0.7f));
-
-    // Add secondary spiral for complexity
-    float secondary_spiral = cos(spiral_angle * 0.5f + z * freq_scale * 1.5f + progress * 1.2f) * 0.3f;
-    spiral_value += secondary_spiral;
-
     /*---------------------------------------------------------*\
-    | Normalize to 0.0 - 1.0                                  |
+    | Calculate intensity based on pattern type               |
     \*---------------------------------------------------------*/
-    spiral_value = (spiral_value + 1.5f) / 3.0f;
-    spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+    float spiral_value;
+    float gap_factor = gap_size / 100.0f;
+
+    switch(pattern_type)
+    {
+        case 0: // Smooth Spiral - Original smooth flowing spiral
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(twist_coord * freq_scale + progress * 0.7f));
+            {
+                float secondary_spiral = cos(spiral_angle * 0.5f + twist_coord * freq_scale * 1.5f + progress * 1.2f) * 0.3f;
+                spiral_value += secondary_spiral;
+            }
+            spiral_value = (spiral_value + 1.5f) / 3.0f;
+            spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            break;
+
+        case 1: // Pinwheel - Distinct blades with dark gaps
+            {
+                // Normalize angle to 0-2π range per arm
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+
+                // Calculate blade width (inverse of gap)
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+
+                // Sharp edges for distinct blades
+                if(arm_angle < blade_width)
+                {
+                    // Inside blade - smooth gradient
+                    float blade_position = arm_angle / blade_width;
+                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);  // Peak in middle
+                }
+                else
+                {
+                    // In gap - completely dark
+                    spiral_value = 0.0f;
+                }
+
+                // Add radial gradient for depth
+                float radial_fade = 1.0f - exp(-radius * freq_scale * 0.5f);
+                spiral_value *= radial_fade;
+            }
+            break;
+
+        case 2: // Sharp Blades - Very defined, laser-like arms
+        default:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+
+                if(arm_angle < blade_width)
+                {
+                    // Sharp peak in center with quick falloff
+                    float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    spiral_value = 1.0f - blade_position * blade_position;  // Sharp peak
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+
+                // Add pulsing energy along blades
+                float energy_pulse = 0.2f * sin(radius * freq_scale * 2.0f - progress * 2.0f);
+                spiral_value = fmax(0.0f, spiral_value + energy_pulse);
+            }
+            break;
+    }
 
     /*---------------------------------------------------------*\
-    | Get color based on mode                                  |
+    | Get color based on spiral value and position            |
     \*---------------------------------------------------------*/
     RGBColor final_color;
 
-    if(rainbow_mode)
+    // For pinwheel modes, color each arm differently
+    if((pattern_type == 1 || pattern_type == 2) && !GetRainbowMode())
     {
-        float hue = spiral_value * 360.0f + progress * 20.0f;
+        // Determine which arm we're on
+        float arm_index = fmod(spiral_angle / (6.28318f / num_arms), num_arms);
+        if(arm_index < 0) arm_index += num_arms;
+        float color_position = arm_index / num_arms;
+
+        final_color = GetColorAtPosition(color_position);
+    }
+    else if(GetRainbowMode())
+    {
+        // Rainbow mode - smooth color transition
+        float hue = spiral_angle * 57.2958f + progress * 20.0f;  // Convert radians to degrees
         final_color = GetRainbowColor(hue);
     }
     else
     {
+        // Smooth gradient based on spiral value
         final_color = GetColorAtPosition(spiral_value);
     }
 
-    /*---------------------------------------------------------*\
-    | Apply brightness                                         |
-    \*---------------------------------------------------------*/
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
@@ -269,66 +298,3 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
-RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-{
-    (void)grid;
-    return CalculateColor(x, y, z, time);
-}
-
-void Spiral3D::SetupColorControls(QWidget* parent)
-{
-    if(!parent || !parent->layout()) return;
-
-    color_controls_widget = new QWidget();
-    color_controls_layout = new QHBoxLayout(color_controls_widget);
-    color_controls_layout->setContentsMargins(0, 0, 0, 0);
-
-    add_color_button = new QPushButton("+");
-    add_color_button->setMaximumWidth(30);
-    remove_color_button = new QPushButton("-");
-    remove_color_button->setMaximumWidth(30);
-
-    color_controls_layout->addWidget(new QLabel("Colors:"));
-    color_controls_layout->addWidget(add_color_button);
-    color_controls_layout->addWidget(remove_color_button);
-
-    for(unsigned int i = 0; i < colors.size(); i++)
-    {
-        CreateColorButton(colors[i]);
-    }
-
-    color_controls_layout->addStretch();
-    parent->layout()->addWidget(color_controls_widget);
-    color_controls_widget->setVisible(!rainbow_mode);
-
-    connect(add_color_button, &QPushButton::clicked, this, &Spiral3D::OnAddColorClicked);
-    connect(remove_color_button, &QPushButton::clicked, this, &Spiral3D::OnRemoveColorClicked);
-}
-
-void Spiral3D::CreateColorButton(RGBColor color)
-{
-    QPushButton* button = new QPushButton();
-    button->setMaximumWidth(30);
-    button->setMaximumHeight(30);
-
-    unsigned char r = color & 0xFF;
-    unsigned char g = (color >> 8) & 0xFF;
-    unsigned char b = (color >> 16) & 0xFF;
-    QString style = QString("background-color: rgb(%1, %2, %3);").arg(r).arg(g).arg(b);
-    button->setStyleSheet(style);
-
-    color_buttons.push_back(button);
-    color_controls_layout->insertWidget(color_controls_layout->count() - 1, button);
-    connect(button, &QPushButton::clicked, this, &Spiral3D::OnColorButtonClicked);
-}
-
-void Spiral3D::RemoveLastColorButton()
-{
-    if(!color_buttons.empty())
-    {
-        QPushButton* button = color_buttons.back();
-        color_buttons.pop_back();
-        color_controls_layout->removeWidget(button);
-        delete button;
-    }
-}

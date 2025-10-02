@@ -1140,35 +1140,40 @@ void LEDViewport3D::DrawUserFigure()
     glPushMatrix();
     glTranslatef(user_position.x, user_position.y, user_position.z);
 
-    glColor3f(0.0f, 1.0f, 0.0f); 
-    glLineWidth(3.0f);
+    const float head_radius = 0.4f;
+    const int segments = 20;
 
-    glBegin(GL_LINES);
-
-    glVertex3f(0.0f, -0.8f, 0.0f);  // Feet
-    glVertex3f(0.0f, 0.8f, 0.0f);   // Head
-
-    glVertex3f(-0.6f, 0.2f, 0.0f);  // Left arm
-    glVertex3f(0.6f, 0.2f, 0.0f);   // Right arm
-
-    glVertex3f(0.0f, -0.2f, 0.0f);  // Pelvis center
-    glVertex3f(-0.4f, -0.8f, 0.0f); // Left foot
-
-    glVertex3f(0.0f, -0.2f, 0.0f);  // Pelvis center
-    glVertex3f(0.4f, -0.8f, 0.0f);  // Right foot
-
-    glEnd();
+    glColor3f(0.0f, 1.0f, 0.0f);
+    glLineWidth(2.0f);
 
     glBegin(GL_LINE_LOOP);
-    for(int i = 0; i < 12; i++)
+    for(int i = 0; i < segments; i++)
     {
-        float angle = 2.0f * M_PI * i / 12.0f;
-        float x = 0.15f * cosf(angle);
-        float y = 0.9f + 0.15f * sinf(angle);  // Above body
+        float angle = 2.0f * M_PI * i / segments;
+        float x = head_radius * cosf(angle);
+        float y = head_radius * sinf(angle);
         glVertex3f(x, y, 0.0f);
     }
     glEnd();
 
-    glLineWidth(1.0f);  // Reset line width
+    glPointSize(6.0f);
+    glBegin(GL_POINTS);
+    glVertex3f(-0.15f, 0.1f, 0.0f);
+    glVertex3f(0.15f, 0.1f, 0.0f);
+    glEnd();
+
+    glBegin(GL_LINE_STRIP);
+    for(int i = 0; i <= 10; i++)
+    {
+        float t = (float)i / 10.0f;
+        float angle = M_PI + t * M_PI;
+        float x = 0.25f * cosf(angle);
+        float y = -0.05f + 0.25f * sinf(angle);
+        glVertex3f(x, y, 0.0f);
+    }
+    glEnd();
+
+    glLineWidth(1.0f);
+    glPointSize(1.0f);
     glPopMatrix();
 }

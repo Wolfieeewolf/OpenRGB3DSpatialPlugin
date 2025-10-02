@@ -79,6 +79,17 @@ struct UserPosition3D
 };
 
 /*---------------------------------------------------------*\
+| Reference Mode for Effect Origin                         |
+| Determines where effects originate from in 3D space      |
+\*---------------------------------------------------------*/
+enum ReferenceMode
+{
+    REF_MODE_ROOM_CENTER    = 0,    // Default: Effects use room center (0,0,0)
+    REF_MODE_USER_POSITION  = 1,    // Effects use user head position as origin
+    REF_MODE_CUSTOM_POINT   = 2     // Effect-specific custom reference point (future)
+};
+
+/*---------------------------------------------------------*\
 | Common Effect Axis Types                                 |
 \*---------------------------------------------------------*/
 enum EffectAxis

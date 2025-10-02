@@ -1,7 +1,7 @@
 /*---------------------------------------------------------*\
 | BreathingSphere3D.cpp                                     |
 |                                                           |
-|   3D Breathing Sphere effect with enhanced controls      |
+|   3D Breathing Sphere effect - pulsing sphere from origin |
 |                                                           |
 |   Date: 2025-09-28                                        |
 |                                                           |
@@ -10,14 +10,20 @@
 \*---------------------------------------------------------*/
 
 #include "BreathingSphere3D.h"
+
+/*---------------------------------------------------------*\
+| Register this effect with the effect manager             |
+\*---------------------------------------------------------*/
+REGISTER_EFFECT_3D(BreathingSphere3D);
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
-#include <QColorDialog>
-#include <algorithm>
 #include <cmath>
 
-// Helper function for smooth interpolation
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 static float smoothstep(float edge0, float edge1, float x)
 {
     float t = fmax(0.0f, fmin(1.0f, (x - edge0) / (edge1 - edge0)));
@@ -27,23 +33,17 @@ static float smoothstep(float edge0, float edge1, float x)
 BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
-    frequency_slider = nullptr;
-    rainbow_mode_check = nullptr;
-
-    color_controls_widget = nullptr;
-    color_controls_layout = nullptr;
-    add_color_button = nullptr;
-    remove_color_button = nullptr;
-
-    sphere_size = 50;        // Default sphere size
-    frequency = 50;          // Default breathing frequency
-    rainbow_mode = true;     // Default to rainbow mode
+    sphere_size = 50;
     progress = 0.0f;
 
-    // Initialize with default colors
-    colors.push_back(0x000000FF);  // Blue
-    colors.push_back(0x0000FF00);  // Green
-    colors.push_back(0x00FF0000);  // Red
+    SetFrequency(50);
+    SetRainbowMode(true);
+
+    std::vector<RGBColor> default_colors;
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
+    SetColors(default_colors);
 }
 
 BreathingSphere3D::~BreathingSphere3D()
@@ -63,7 +63,7 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     info.min_speed = 1;
     info.user_colors = 0;
     info.has_custom_settings = true;
-    info.needs_3d_origin = true;
+    info.needs_3d_origin = false;
     info.needs_direction = false;
     info.needs_thickness = false;
     info.needs_arms = false;
@@ -73,40 +73,22 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
 
 void BreathingSphere3D::SetupCustomUI(QWidget* parent)
 {
-    QWidget* sphere_widget = new QWidget();
-    QGridLayout* layout = new QGridLayout(sphere_widget);
+    QWidget* breathing_widget = new QWidget();
+    QGridLayout* layout = new QGridLayout(breathing_widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    // Row 0: Sphere Size
     layout->addWidget(new QLabel("Size:"), 0, 0);
     size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(10, 200);
     size_slider->setValue(sphere_size);
     layout->addWidget(size_slider, 0, 1);
 
-    // Row 1: Frequency
-    layout->addWidget(new QLabel("Frequency:"), 1, 0);
-    frequency_slider = new QSlider(Qt::Horizontal);
-    frequency_slider->setRange(1, 100);
-    frequency_slider->setValue(frequency);
-    layout->addWidget(frequency_slider, 1, 1);
-
-    // Row 2: Rainbow Mode
-    rainbow_mode_check = new QCheckBox("Rainbow Mode");
-    rainbow_mode_check->setChecked(rainbow_mode);
-    layout->addWidget(rainbow_mode_check, 2, 0, 1, 2);
-
     if(parent && parent->layout())
     {
-        parent->layout()->addWidget(sphere_widget);
+        parent->layout()->addWidget(breathing_widget);
     }
 
-    SetupColorControls(parent);
-
-    // Connect signals
     connect(size_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);
-    connect(frequency_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);
-    connect(rainbow_mode_check, &QCheckBox::toggled, this, &BreathingSphere3D::OnRainbowModeChanged);
 }
 
 void BreathingSphere3D::UpdateParams(SpatialEffectParams& params)
@@ -117,109 +99,74 @@ void BreathingSphere3D::UpdateParams(SpatialEffectParams& params)
 void BreathingSphere3D::OnBreathingParameterChanged()
 {
     if(size_slider) sphere_size = size_slider->value();
-    if(frequency_slider) frequency = frequency_slider->value();
     emit ParametersChanged();
-}
-
-void BreathingSphere3D::OnRainbowModeChanged()
-{
-    if(rainbow_mode_check) rainbow_mode = rainbow_mode_check->isChecked();
-    if(color_controls_widget) color_controls_widget->setVisible(!rainbow_mode);
-    emit ParametersChanged();
-}
-
-void BreathingSphere3D::OnAddColorClicked()
-{
-    RGBColor new_color = 0x00FFFFFF; // White
-    colors.push_back(new_color);
-    CreateColorButton(new_color);
-    emit ParametersChanged();
-}
-
-void BreathingSphere3D::OnRemoveColorClicked()
-{
-    if(colors.size() > 1)
-    {
-        colors.pop_back();
-        RemoveLastColorButton();
-        emit ParametersChanged();
-    }
-}
-
-void BreathingSphere3D::OnColorButtonClicked()
-{
-    QPushButton* button = qobject_cast<QPushButton*>(sender());
-    if(!button) return;
-
-    int index = -1;
-    for(unsigned int i = 0; i < color_buttons.size(); i++)
-    {
-        if(color_buttons[i] == button)
-        {
-            index = i;
-            break;
-        }
-    }
-
-    if(index >= 0 && index < (int)colors.size())
-    {
-        QColor initial_color;
-        initial_color.setRgb(colors[index] & 0xFF, (colors[index] >> 8) & 0xFF, (colors[index] >> 16) & 0xFF);
-
-        QColor new_color = QColorDialog::getColor(initial_color, this);
-        if(new_color.isValid())
-        {
-            colors[index] = (new_color.blue() << 16) | (new_color.green() << 8) | new_color.red();
-            QString style = QString("background-color: rgb(%1, %2, %3);").arg(new_color.red()).arg(new_color.green()).arg(new_color.blue());
-            button->setStyleSheet(style);
-            emit ParametersChanged();
-        }
-    }
 }
 
 RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Create smooth curves for speed and frequency
+    /*---------------------------------------------------------*\
+    | Get effect origin (room center or user head position)   |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOrigin();
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
     float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve; // Quadratic curve for smoother control
-    float actual_speed = speed_curve * 200.0f; // Map back to 0-200 range
+    speed_curve = speed_curve * speed_curve;
+    float actual_speed = speed_curve * 200.0f;
 
-    float freq_curve = (frequency / 100.0f);
-    freq_curve = freq_curve * freq_curve; // Quadratic curve for smoother control
-    float actual_frequency = freq_curve * 100.0f; // Map to 0-100 range
+    float freq_curve = (GetFrequency() / 100.0f);
+    freq_curve = freq_curve * freq_curve;
+    float actual_frequency = freq_curve * 100.0f;
 
-    // Update progress for animation
     progress = time * (actual_speed * 0.1f);
+    if(effect_reverse) progress = -progress;
+
     float freq_scale = actual_frequency * 0.01f;
 
-    // Calculate distance from center (3D sphere)
-    float distance = sqrt(x*x + y*y + z*z);
+    /*---------------------------------------------------------*\
+    | Calculate distance based on axis (sphere vs ellipsoid)  |
+    \*---------------------------------------------------------*/
+    float distance;
+    switch(effect_axis)
+    {
+        case AXIS_X:  // Ellipsoid stretched along X-axis
+            distance = sqrt((rel_x * 0.5f)*(rel_x * 0.5f) + rel_y*rel_y + rel_z*rel_z);
+            break;
+        case AXIS_Y:  // Ellipsoid stretched along Y-axis
+            distance = sqrt(rel_x*rel_x + (rel_y * 0.5f)*(rel_y * 0.5f) + rel_z*rel_z);
+            break;
+        case AXIS_Z:  // Ellipsoid stretched along Z-axis
+            distance = sqrt(rel_x*rel_x + rel_y*rel_y + (rel_z * 0.5f)*(rel_z * 0.5f));
+            break;
+        case AXIS_RADIAL:  // Perfect sphere
+        default:
+            distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            break;
+    }
 
-    // Create breathing effect - pulsing sphere
     float sphere_radius = (sphere_size * 0.1f) * (1.0f + 0.5f * sin(progress * freq_scale));
 
-    // Create smooth falloff from center with breathing
     float sphere_intensity = 1.0f - smoothstep(0.0f, sphere_radius, distance);
 
-    // Add secondary pulse waves for complexity
     float pulse_wave = 0.3f * sin(distance * freq_scale * 2.0f - progress * 2.0f);
     sphere_intensity += pulse_wave;
 
-    // Normalize intensity
     sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
 
-    // Get color based on mode
     RGBColor final_color;
-
-    if(rainbow_mode)
+    if(GetRainbowMode())
     {
-        // Rainbow colors based on distance and time
         float hue = distance * 50.0f + progress * 30.0f;
         final_color = GetRainbowColor(hue);
     }
     else
     {
-        // Use position for color selection in custom mode
         float color_position = (distance * 0.1f + progress * 0.05f);
         final_color = GetColorAtPosition(color_position);
     }
@@ -235,68 +182,4 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
     b = (unsigned char)(b * brightness_factor);
 
     return (b << 16) | (g << 8) | r;
-}
-
-RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-{
-    (void)grid;
-    return CalculateColor(x, y, z, time);
-}
-
-void BreathingSphere3D::SetupColorControls(QWidget* parent)
-{
-    if(!parent || !parent->layout()) return;
-
-    color_controls_widget = new QWidget();
-    color_controls_layout = new QHBoxLayout(color_controls_widget);
-    color_controls_layout->setContentsMargins(0, 0, 0, 0);
-
-    add_color_button = new QPushButton("+");
-    add_color_button->setMaximumWidth(30);
-    remove_color_button = new QPushButton("-");
-    remove_color_button->setMaximumWidth(30);
-
-    color_controls_layout->addWidget(new QLabel("Colors:"));
-    color_controls_layout->addWidget(add_color_button);
-    color_controls_layout->addWidget(remove_color_button);
-
-    for(unsigned int i = 0; i < colors.size(); i++)
-    {
-        CreateColorButton(colors[i]);
-    }
-
-    color_controls_layout->addStretch();
-    parent->layout()->addWidget(color_controls_widget);
-    color_controls_widget->setVisible(!rainbow_mode);
-
-    connect(add_color_button, &QPushButton::clicked, this, &BreathingSphere3D::OnAddColorClicked);
-    connect(remove_color_button, &QPushButton::clicked, this, &BreathingSphere3D::OnRemoveColorClicked);
-}
-
-void BreathingSphere3D::CreateColorButton(RGBColor color)
-{
-    QPushButton* button = new QPushButton();
-    button->setMaximumWidth(30);
-    button->setMaximumHeight(30);
-
-    unsigned char r = color & 0xFF;
-    unsigned char g = (color >> 8) & 0xFF;
-    unsigned char b = (color >> 16) & 0xFF;
-    QString style = QString("background-color: rgb(%1, %2, %3);").arg(r).arg(g).arg(b);
-    button->setStyleSheet(style);
-
-    color_buttons.push_back(button);
-    color_controls_layout->insertWidget(color_controls_layout->count() - 1, button);
-    connect(button, &QPushButton::clicked, this, &BreathingSphere3D::OnColorButtonClicked);
-}
-
-void BreathingSphere3D::RemoveLastColorButton()
-{
-    if(!color_buttons.empty())
-    {
-        QPushButton* button = color_buttons.back();
-        color_buttons.pop_back();
-        color_controls_layout->removeWidget(button);
-        delete button;
-    }
 }
