@@ -52,6 +52,7 @@ Explosion3D::~Explosion3D()
 EffectInfo3D Explosion3D::GetEffectInfo()
 {
     EffectInfo3D info;
+    info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Explosion";
     info.effect_description = "Expanding shockwave explosion with multiple wave layers";
     info.category = "3D Spatial";
@@ -67,6 +68,22 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
+
+    // Standardized parameter scaling
+    info.default_speed_scale = 20.0f;       // (speed/100)² * 200 * 0.1
+    info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
+    info.use_size_parameter = true;
+
+    // Control visibility (show all controls)
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = true;
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_fps_control = true;
+    info.show_axis_control = true;
+    info.show_color_controls = true;
+
     return info;
 }
 
@@ -125,11 +142,12 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
     Vector3D origin = GetEffectOrigin();
 
     /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
+    | Calculate position relative to origin and apply scale   |
     \*---------------------------------------------------------*/
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
+    float scale_factor = GetNormalizedScale();
+    float rel_x = (x - origin.x) / scale_factor;
+    float rel_y = (y - origin.y) / scale_factor;
+    float rel_z = (z - origin.z) / scale_factor;
 
     float speed_curve = (effect_speed / 100.0f);
     speed_curve = speed_curve * speed_curve;
@@ -142,7 +160,8 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
     progress = time * (actual_speed * 0.1f);
     if(effect_reverse) progress = -progress;
 
-    float freq_scale = actual_frequency * 0.01f;
+    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
+    float freq_scale = actual_frequency * 0.01f / size_multiplier;
 
     /*---------------------------------------------------------*\
     | Calculate distance based on axis (spherical vs directional)|
@@ -165,8 +184,8 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
             break;
     }
 
-    float explosion_radius = progress * (explosion_intensity * 0.1f);
-    float wave_thickness = 3.0f + explosion_intensity * 0.05f;
+    float explosion_radius = progress * (explosion_intensity * 0.1f) * size_multiplier;
+    float wave_thickness = (3.0f + explosion_intensity * 0.05f) * size_multiplier;
 
     float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
     primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f);

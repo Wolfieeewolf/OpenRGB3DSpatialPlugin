@@ -62,6 +62,10 @@ struct GridContext3D
 
 struct EffectInfo3D
 {
+    // Version field - set to 2 for effects using the new standardized system
+    // Old effects won't set this (will be 0), new effects set it to 2
+    int                 info_version;             // Set to 2 for new effects
+
     const char*         effect_name;
     const char*         effect_description;
     const char*         category;
@@ -88,6 +92,7 @@ struct EffectInfo3D
     bool                show_brightness_control;  // Default: true (show base brightness slider)
     bool                show_frequency_control;   // Default: true (show base frequency slider)
     bool                show_size_control;        // Default: true (show base size slider)
+    bool                show_scale_control;       // Default: true (show base scale slider)
     bool                show_fps_control;         // Default: true (show base FPS slider)
     bool                show_axis_control;        // Default: true (show axis selection)
     bool                show_color_controls;      // Default: true (show color/rainbow controls)
@@ -174,11 +179,13 @@ protected:
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
     QSlider*            size_slider;
+    QSlider*            scale_slider;
     QSlider*            fps_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
     QLabel*             frequency_label;
     QLabel*             size_label;
+    QLabel*             scale_label;
     QLabel*             fps_label;
 
     /*---------------------------------------------------------*\
@@ -215,6 +222,7 @@ protected:
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
     unsigned int        effect_size;
+    unsigned int        effect_scale;
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
@@ -247,6 +255,7 @@ protected:
     float GetNormalizedSpeed() const;           // Returns 0.0-1.0 speed with consistent curve
     float GetNormalizedFrequency() const;       // Returns 0.0-1.0 frequency with consistent curve
     float GetNormalizedSize() const;            // Returns 0.1-2.0 size multiplier (linear)
+    float GetNormalizedScale() const;           // Returns 0.1-2.0 scale multiplier (affects area coverage)
     unsigned int GetTargetFPS() const;          // Returns FPS setting (1-60)
 
     // Advanced: Scaled versions that apply effect-specific multipliers

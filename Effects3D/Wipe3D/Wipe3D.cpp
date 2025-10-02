@@ -47,6 +47,7 @@ Wipe3D::~Wipe3D()
 EffectInfo3D Wipe3D::GetEffectInfo()
 {
     EffectInfo3D info;
+    info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Wipe";
     info.effect_description = "Progressive sweep effect with configurable thickness and edge shapes";
     info.category = "3D Spatial";
@@ -62,6 +63,22 @@ EffectInfo3D Wipe3D::GetEffectInfo()
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = false;
+
+    // Standardized parameter scaling
+    info.default_speed_scale = 2.0f;        // speed/100 * 2.0
+    info.default_frequency_scale = 10.0f;
+    info.use_size_parameter = true;
+
+    // Control visibility (show all controls except frequency)
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = false;    // Wipe doesn't use frequency
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_fps_control = true;
+    info.show_axis_control = true;
+    info.show_color_controls = true;
+
     return info;
 }
 
@@ -117,11 +134,12 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     Vector3D origin = GetEffectOrigin();
 
     /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
+    | Calculate position relative to origin and apply scale   |
     \*---------------------------------------------------------*/
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
+    float scale_factor = GetNormalizedScale();
+    float rel_x = (x - origin.x) / scale_factor;
+    float rel_y = (y - origin.y) / scale_factor;
+    float rel_z = (z - origin.z) / scale_factor;
 
     float speed_curve = (effect_speed / 100.0f);
     float actual_speed = speed_curve * 2.0f;

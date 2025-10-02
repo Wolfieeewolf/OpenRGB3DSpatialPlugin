@@ -51,6 +51,7 @@ Spiral3D::~Spiral3D()
 EffectInfo3D Spiral3D::GetEffectInfo()
 {
     EffectInfo3D info;
+    info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Spiral";
     info.effect_description = "Animated spiral pattern with configurable arm count";
     info.category = "3D Spatial";
@@ -66,6 +67,22 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     info.needs_thickness = false;
     info.needs_arms = true;
     info.needs_frequency = false;
+
+    // Standardized parameter scaling
+    info.default_speed_scale = 20.0f;       // (speed/100)² * 200 * 0.1
+    info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
+    info.use_size_parameter = true;
+
+    // Control visibility (show all controls except frequency - has custom)
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = false;    // Spiral has custom frequency in arms/gap
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_fps_control = true;
+    info.show_axis_control = true;
+    info.show_color_controls = true;
+
     return info;
 }
 
@@ -126,11 +143,12 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     Vector3D origin = GetEffectOrigin();
 
     /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
+    | Calculate position relative to origin and apply scale   |
     \*---------------------------------------------------------*/
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
+    float scale_factor = GetNormalizedScale();
+    float rel_x = (x - origin.x) / scale_factor;
+    float rel_y = (y - origin.y) / scale_factor;
+    float rel_z = (z - origin.z) / scale_factor;
 
     /*---------------------------------------------------------*\
     | Create smooth curves for speed and frequency            |
@@ -144,7 +162,8 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     float actual_frequency = freq_curve * 100.0f;
 
     progress = time * (actual_speed * 0.1f);
-    float freq_scale = actual_frequency * 0.01f;
+    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
+    float freq_scale = actual_frequency * 0.01f / size_multiplier;
 
     /*---------------------------------------------------------*\
     | Calculate spiral based on selected axis                 |

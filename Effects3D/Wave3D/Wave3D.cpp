@@ -50,6 +50,7 @@ Wave3D::~Wave3D()
 EffectInfo3D Wave3D::GetEffectInfo()
 {
     EffectInfo3D info;
+    info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Wave";
     info.effect_description = "3D wave effect with configurable direction and properties";
     info.category = "3D Spatial";
@@ -65,6 +66,21 @@ EffectInfo3D Wave3D::GetEffectInfo()
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
+
+    // Standardized parameter scaling
+    info.default_speed_scale = 400.0f;      // (speed/100)² * 200 * 2.0
+    info.default_frequency_scale = 10.0f;   // (freq/100)² * 10
+    info.use_size_parameter = true;
+
+    // Control visibility (show all controls)
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = true;
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_fps_control = true;
+    info.show_axis_control = true;
+    info.show_color_controls = true;
 
     return info;
 }
@@ -128,11 +144,13 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     Vector3D origin = GetEffectOrigin();
 
     /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
+    | Calculate position relative to origin and apply scale   |
+    | Scale affects coverage area - smaller = localized       |
     \*---------------------------------------------------------*/
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
+    float scale_factor = GetNormalizedScale();  // 0.1 to 2.0
+    float rel_x = (x - origin.x) / scale_factor;
+    float rel_y = (y - origin.y) / scale_factor;
+    float rel_z = (z - origin.z) / scale_factor;
 
     /*---------------------------------------------------------*\
     | Create smooth curves for speed and frequency            |
@@ -154,7 +172,8 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     | Calculate wave based on axis and shape type             |
     \*---------------------------------------------------------*/
     float wave_value = 0.0f;
-    float freq_scale = actual_frequency * 0.1f;
+    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0 (affects spatial frequency)
+    float freq_scale = actual_frequency * 0.1f / size_multiplier;  // Larger size = more spread out
     float position = 0.0f;
 
     /*---------------------------------------------------------*\

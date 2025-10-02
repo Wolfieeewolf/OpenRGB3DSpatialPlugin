@@ -17,10 +17,11 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
     effect_enabled = false;
     effect_running = false;
-    effect_speed = 50;
+    effect_speed = 1;
     effect_brightness = 100;
-    effect_frequency = 50;
+    effect_frequency = 1;
     effect_size = 50;
+    effect_scale = 100;
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
@@ -38,11 +39,13 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     brightness_slider = nullptr;
     frequency_slider = nullptr;
     size_slider = nullptr;
+    scale_slider = nullptr;
     fps_slider = nullptr;
     speed_label = nullptr;
     brightness_label = nullptr;
     frequency_label = nullptr;
     size_label = nullptr;
+    scale_label = nullptr;
     fps_label = nullptr;
 
     // Axis controls
@@ -131,19 +134,34 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     main_layout->addLayout(frequency_layout);
 
     /*---------------------------------------------------------*\
-    | Size control                                             |
+    | Size control (pattern density)                          |
     \*---------------------------------------------------------*/
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
     size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(1, 100);
     size_slider->setValue(effect_size);
-    size_slider->setToolTip("Effect size/scale - larger values create bigger patterns");
+    size_slider->setToolTip("Pattern size - controls how tight/spread out the pattern is");
     size_layout->addWidget(size_slider);
     size_label = new QLabel(QString::number(effect_size));
     size_label->setMinimumWidth(30);
     size_layout->addWidget(size_label);
     main_layout->addLayout(size_layout);
+
+    /*---------------------------------------------------------*\
+    | Scale control (area coverage)                            |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* scale_layout = new QHBoxLayout();
+    scale_layout->addWidget(new QLabel("Scale:"));
+    scale_slider = new QSlider(Qt::Horizontal);
+    scale_slider->setRange(10, 200);
+    scale_slider->setValue(effect_scale);
+    scale_slider->setToolTip("Effect coverage area - small localized effects to room-wide coverage");
+    scale_layout->addWidget(scale_slider);
+    scale_label = new QLabel(QString::number(effect_scale));
+    scale_label->setMinimumWidth(30);
+    scale_layout->addWidget(scale_label);
+    main_layout->addLayout(scale_layout);
 
     /*---------------------------------------------------------*\
     | FPS Limiter control                                      |
@@ -595,10 +613,18 @@ float SpatialEffect3D::GetNormalizedFrequency() const
 
 float SpatialEffect3D::GetNormalizedSize() const
 {
-    // Linear scaling for size
+    // Linear scaling for size (pattern density)
     // Range: 0.1 (tiny) to 1.0 (normal) to 2.0 (double size)
     // Works for spatial effects, particle effects, wave effects, etc.
     return 0.1f + (effect_size / 100.0f) * 1.9f;
+}
+
+float SpatialEffect3D::GetNormalizedScale() const
+{
+    // Linear scaling for coverage area
+    // Range: 0.1 (10% - small localized) to 1.0 (100% - normal) to 2.0 (200% - room-wide)
+    // This scales the spatial coordinates, affecting how far the effect reaches
+    return 0.1f + (effect_scale / 100.0f) * 1.9f;
 }
 
 unsigned int SpatialEffect3D::GetTargetFPS() const
@@ -649,24 +675,19 @@ void SpatialEffect3D::ApplyControlVisibility()
 {
     EffectInfo3D info = GetEffectInfo();
 
-    // Default to showing all controls (backward compatibility)
-    // Effects can explicitly set these to false to hide controls
-    // The issue is that old effects don't initialize these fields at all
-    // So we can't reliably detect if they're intentionally false or just uninitialized
-    // Solution: Always default to visible - effects must explicitly hide
+    // Check version to determine if effect uses new visibility system
+    // Version 2+ effects explicitly set visibility flags
+    // Version 0/1 (old) effects default to showing all controls
+    bool is_versioned_effect = (info.info_version >= 2);
 
-    // For safety, assume all controls should be visible unless we're certain they shouldn't be
-    // Since we can't tell uninitialized from intentionally-false, just show everything
-    bool show_speed = true;
-    bool show_brightness = true;
-    bool show_frequency = true;
-    bool show_size = true;
-    bool show_fps = true;
-    bool show_axis = true;
-    bool show_colors = true;
-
-    // TODO: Future enhancement - add a version field to EffectInfo3D so we can detect
-    // which effects are using the new system
+    bool show_speed = is_versioned_effect ? info.show_speed_control : true;
+    bool show_brightness = is_versioned_effect ? info.show_brightness_control : true;
+    bool show_frequency = is_versioned_effect ? info.show_frequency_control : true;
+    bool show_size = is_versioned_effect ? info.show_size_control : true;
+    bool show_scale = is_versioned_effect ? info.show_scale_control : true;
+    bool show_fps = is_versioned_effect ? info.show_fps_control : true;
+    bool show_axis = is_versioned_effect ? info.show_axis_control : true;
+    bool show_colors = is_versioned_effect ? info.show_color_controls : true;
 
     // Hide/show controls based on effect's declarations
     if(speed_slider && speed_label)
@@ -746,6 +767,25 @@ void SpatialEffect3D::ApplyControlVisibility()
         }
     }
 
+    if(scale_slider && scale_label)
+    {
+        scale_slider->setVisible(show_scale);
+        scale_label->setVisible(show_scale);
+        QWidget* parent = scale_slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == "Scale:")
+                {
+                    label->setVisible(show_scale);
+                    break;
+                }
+            }
+        }
+    }
+
     if(fps_slider && fps_label)
     {
         fps_slider->setVisible(show_fps);
@@ -818,6 +858,12 @@ void SpatialEffect3D::OnParameterChanged()
     {
         effect_size = size_slider->value();
         size_label->setText(QString::number(effect_size));
+    }
+
+    if(scale_slider && scale_label)
+    {
+        effect_scale = scale_slider->value();
+        scale_label->setText(QString::number(effect_scale));
     }
 
     if(fps_slider && fps_label)
