@@ -72,6 +72,7 @@ private slots:
     void on_add_clicked();
     void on_granularity_changed(int index);
     void on_remove_controller_clicked();
+    void on_remove_controller_from_viewport(int index);
     void on_clear_all_clicked();
 
     void on_save_layout_clicked();

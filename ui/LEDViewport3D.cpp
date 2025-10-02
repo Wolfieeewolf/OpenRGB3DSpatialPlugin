@@ -15,6 +15,8 @@
 #include <QOpenGLWidget>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QKeyEvent>
+#include <QMessageBox>
 
 /*---------------------------------------------------------*\
 | System Includes                                          |
@@ -68,6 +70,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , camera_target_z(0.0f)
     , dragging_rotate(false)
     , dragging_pan(false)
+    , dragging_grab(false)
 {
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -227,6 +230,7 @@ void LEDViewport3D::resizeGL(int w, int h)
 void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 {
     last_mouse_pos = event->pos();
+    click_start_pos = event->pos();
 
     float modelview[16];
     float projection[16];
@@ -239,6 +243,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
     if(event->button() == Qt::LeftButton)
     {
+        // Check gizmo first (if something is selected)
         if(selected_controller_idx >= 0 && controller_transforms &&
             selected_controller_idx < (int)controller_transforms->size())
         {
@@ -250,6 +255,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
+        // Check if clicking on a controller
         int picked_controller = PickController(event->x(), event->y());
         if(picked_controller >= 0)
         {
@@ -286,28 +292,19 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
-        if(!selected_controller_indices.empty())
-        {
-            ClearSelection();
-            emit ControllerSelected(-1);
-            update();
-            return;
-        }
+        // Start grab mode (will decide on release if it was a click or drag)
+        dragging_grab = true;
+        return;
     }
     else if(event->button() == Qt::MiddleButton)
     {
-        if(event->modifiers() & Qt::ShiftModifier)
-        {
-            dragging_pan = true;
-        }
-        else
-        {
-            dragging_rotate = true;
-        }
+        // Middle mouse = Select only
+        return;
     }
     else if(event->button() == Qt::RightButton)
     {
-        dragging_pan = true;
+        // Right mouse = Rotate
+        dragging_rotate = true;
     }
 }
 
@@ -350,12 +347,40 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if(dragging_rotate)
+    if(dragging_grab)
     {
-        float orbit_sensitivity = 0.5f;
-        camera_yaw += delta.x() * orbit_sensitivity;
-        camera_pitch -= delta.y() * orbit_sensitivity;
+        // Grab mode: slide the grid like grabbing and dragging the floor
+        float grab_sensitivity = 0.003f * camera_distance;
 
+        // Calculate camera right and forward vectors (in XZ plane only - parallel to ground)
+        float yaw_rad = camera_yaw * M_PI / 180.0f;
+
+        // Right vector (perpendicular to view, in XZ plane)
+        float right_x = -sinf(yaw_rad);
+        float right_z = cosf(yaw_rad);
+
+        // Forward vector (view direction projected onto XZ plane)
+        float forward_x = cosf(yaw_rad);
+        float forward_z = sinf(yaw_rad);
+
+        // Horizontal drag = slide left/right (swapped for natural feel)
+        camera_target_x += right_x * delta.x() * grab_sensitivity;
+        camera_target_z += right_z * delta.x() * grab_sensitivity;
+
+        // Vertical drag = slide forward/back on the ground plane (inverted)
+        camera_target_x -= forward_x * delta.y() * grab_sensitivity;
+        camera_target_z -= forward_z * delta.y() * grab_sensitivity;
+
+        update();
+    }
+    else if(dragging_rotate)
+    {
+        // Unity-style rotation: smooth and responsive
+        float orbit_sensitivity = 0.3f;
+        camera_yaw += delta.x() * orbit_sensitivity;  // Swapped back
+        camera_pitch += delta.y() * orbit_sensitivity;  // Inverted up/down
+
+        // Clamp pitch to avoid gimbal lock
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
 
@@ -363,19 +388,28 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     }
     else if(dragging_pan)
     {
-        float pan_sensitivity = 0.01f * camera_distance * 0.1f; // Scale with zoom level
+        // Blender-style panning: scales with distance for consistent feel
+        float pan_sensitivity = 0.002f * camera_distance;
 
-        float right_x = cosf(camera_yaw * M_PI / 180.0f);
-        float right_z = sinf(camera_yaw * M_PI / 180.0f);
-        float up_x = -sinf(camera_yaw * M_PI / 180.0f) * sinf(camera_pitch * M_PI / 180.0f);
-        float up_y = cosf(camera_pitch * M_PI / 180.0f);
-        float up_z = cosf(camera_yaw * M_PI / 180.0f) * sinf(camera_pitch * M_PI / 180.0f);
+        // Calculate camera right and up vectors
+        float yaw_rad = camera_yaw * M_PI / 180.0f;
+        float pitch_rad = camera_pitch * M_PI / 180.0f;
 
-        camera_target_x -= right_x * delta.x() * pan_sensitivity;
-        camera_target_z -= right_z * delta.x() * pan_sensitivity;
-        camera_target_x += up_x * delta.y() * pan_sensitivity;
-        camera_target_y += up_y * delta.y() * pan_sensitivity;
-        camera_target_z += up_z * delta.y() * pan_sensitivity;
+        // Right vector (perpendicular to view direction, in XZ plane)
+        float right_x = -sinf(yaw_rad);
+        float right_z = cosf(yaw_rad);
+
+        // Up vector (camera's up direction in world space)
+        float up_x = cosf(yaw_rad) * sinf(pitch_rad);
+        float up_y = cosf(pitch_rad);
+        float up_z = sinf(yaw_rad) * sinf(pitch_rad);
+
+        // Pan the camera target
+        camera_target_x += right_x * delta.x() * pan_sensitivity;
+        camera_target_z += right_z * delta.x() * pan_sensitivity;
+        camera_target_x -= up_x * delta.y() * pan_sensitivity;  // Swapped back
+        camera_target_y -= up_y * delta.y() * pan_sensitivity;  // Swapped back
+        camera_target_z -= up_z * delta.y() * pan_sensitivity;  // Swapped back
 
         update();
     }
@@ -385,38 +419,120 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 {
-    (void)event;
+    // Handle grab mode release - check if it was a click or drag
+    if(dragging_grab && event->button() == Qt::LeftButton)
+    {
+        // Calculate distance moved
+        QPoint delta = event->pos() - click_start_pos;
+        float distance = sqrtf(delta.x() * delta.x() + delta.y() * delta.y());
+
+        // If barely moved (< 3 pixels), treat as click for selection
+        if(distance < 3.0f)
+        {
+            int picked_controller = PickController(event->x(), event->y());
+            if(picked_controller >= 0)
+            {
+                // Select the controller
+                ClearSelection();
+                AddControllerToSelection(picked_controller);
+                SelectController(picked_controller);
+                emit ControllerSelected(picked_controller);
+            }
+            else
+            {
+                // Clicked empty space - deselect
+                if(!selected_controller_indices.empty())
+                {
+                    ClearSelection();
+                    emit ControllerSelected(-1);
+                }
+            }
+        }
+        // else: was a drag, camera already moved
+    }
+    // Handle middle-click selection
+    else if(event->button() == Qt::MiddleButton)
+    {
+        int picked_controller = PickController(event->x(), event->y());
+        if(picked_controller >= 0)
+        {
+            // Select the controller
+            ClearSelection();
+            AddControllerToSelection(picked_controller);
+            SelectController(picked_controller);
+            emit ControllerSelected(picked_controller);
+        }
+        else
+        {
+            // Clicked empty space - deselect
+            if(!selected_controller_indices.empty())
+            {
+                ClearSelection();
+                emit ControllerSelected(-1);
+            }
+        }
+    }
 
     gizmo.HandleMouseRelease(event);
     dragging_rotate = false;
     dragging_pan = false;
+    dragging_grab = false;
     update();
 }
 
 void LEDViewport3D::wheelEvent(QWheelEvent *event)
 {
-    float zoom_speed = 0.001f * camera_distance; // Zoom speed scales with distance
-    float min_zoom_speed = 0.1f;
-    float max_zoom_speed = 2.0f;
-
-    if(zoom_speed < min_zoom_speed) zoom_speed = min_zoom_speed;
-    if(zoom_speed > max_zoom_speed) zoom_speed = max_zoom_speed;
-
+    // Blender-style zoom: exponential scaling for smooth zoom at all distances
     float delta = event->angleDelta().y() / 120.0f;
 
-    if(delta > 0)
+    // Use percentage-based zoom for consistent feel
+    // Each scroll step zooms by 10% of current distance
+    float zoom_factor = 1.0f - (delta * 0.1f);
+
+    camera_distance *= zoom_factor;
+
+    // Clamp to reasonable bounds
+    if(camera_distance < 1.0f) camera_distance = 1.0f;
+    if(camera_distance > 500.0f) camera_distance = 500.0f;
+
+    update();
+}
+
+void LEDViewport3D::keyPressEvent(QKeyEvent *event)
+{
+    if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
-        camera_distance -= zoom_speed * delta;
+        // Delete the selected controller with confirmation
+        if(selected_controller_idx >= 0 && controller_transforms &&
+           selected_controller_idx < (int)controller_transforms->size())
+        {
+            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+            QString controller_name = "Unknown";
+
+            if(ctrl && ctrl->controller)
+            {
+                controller_name = QString::fromStdString(ctrl->controller->name);
+            }
+            else if(ctrl && ctrl->virtual_controller)
+            {
+                controller_name = QString::fromStdString(ctrl->virtual_controller->GetName());
+            }
+
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(this, "Delete Controller",
+                                         QString("Are you sure you want to remove '%1' from the 3D view?").arg(controller_name),
+                                         QMessageBox::Yes | QMessageBox::No);
+
+            if(reply == QMessageBox::Yes)
+            {
+                emit ControllerDeleteRequested(selected_controller_idx);
+            }
+        }
     }
     else
     {
-        camera_distance -= zoom_speed * delta;
+        QOpenGLWidget::keyPressEvent(event);
     }
-
-    if(camera_distance < 0.5f) camera_distance = 0.5f;
-    if(camera_distance > 200.0f) camera_distance = 200.0f;
-
-    update();
 }
 
 void LEDViewport3D::DrawGrid()
@@ -710,7 +826,7 @@ void LEDViewport3D::DrawControllers()
         }
         else
         {
-            glColor3f(0.7f, 0.7f, 0.7f); // Light gray for unselected
+            glColor3f(0.3f, 0.3f, 0.3f); // Gray for unselected controllers
             glLineWidth(1.0f);
         }
 
@@ -818,35 +934,46 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    float x = (2.0f * mouse_x) / viewport[2] - 1.0f;
-    float y = 1.0f - (2.0f * mouse_y) / viewport[3];
+    /*---------------------------------------------------------*\
+    | Use gluUnProject for proper ray generation             |
+    \*---------------------------------------------------------*/
+    GLdouble near_x, near_y, near_z;
+    GLdouble far_x, far_y, far_z;
 
-    float ray_clip[4] = { x, y, -1.0f, 1.0f };
+    // Convert mouse Y to OpenGL coordinates (flip Y axis)
+    int gl_mouse_y = viewport[3] - mouse_y;
 
-    float inv_projection[16];
-    for(int i = 0; i < 16; i++) inv_projection[i] = 0.0f;
-    inv_projection[0] = 1.0f / projection[0];
-    inv_projection[5] = 1.0f / projection[5];
-    inv_projection[10] = 0.0f;
-    inv_projection[11] = -1.0f;
-    inv_projection[14] = 1.0f / projection[14];
-    inv_projection[15] = 0.0f;
-
-    float ray_eye[4];
+    // Convert to GLdouble arrays
+    GLdouble mv[16], proj[16];
+    GLint vp[4];
+    for(int i = 0; i < 16; i++)
+    {
+        mv[i] = (GLdouble)modelview[i];
+        proj[i] = (GLdouble)projection[i];
+    }
     for(int i = 0; i < 4; i++)
     {
-        ray_eye[i] = 0.0f;
-        for(int j = 0; j < 4; j++)
-        {
-            ray_eye[i] += inv_projection[i * 4 + j] * ray_clip[j];
-        }
+        vp[i] = (GLint)viewport[i];
     }
-    ray_eye[2] = -1.0f;
-    ray_eye[3] = 0.0f;
 
-    float ray_origin[3] = { modelview[12], modelview[13], modelview[14] };
-    float ray_direction[3] = { ray_eye[0], ray_eye[1], ray_eye[2] };
+    // Unproject near and far plane
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 0.0,
+                 mv, proj, vp,
+                 &near_x, &near_y, &near_z);
 
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 1.0,
+                 mv, proj, vp,
+                 &far_x, &far_y, &far_z);
+
+    // Create ray
+    float ray_origin[3] = { (float)near_x, (float)near_y, (float)near_z };
+    float ray_direction[3] = {
+        (float)(far_x - near_x),
+        (float)(far_y - near_y),
+        (float)(far_z - near_z)
+    };
+
+    // Normalize direction
     float length = sqrtf(ray_direction[0] * ray_direction[0] +
                         ray_direction[1] * ray_direction[1] +
                         ray_direction[2] * ray_direction[2]);
@@ -868,12 +995,14 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
         Vector3D min_bounds, max_bounds;
         CalculateControllerBounds(ctrl, min_bounds, max_bounds);
 
+        // Calculate center offset to match DrawControllers rendering
         Vector3D center_offset = {
             -(min_bounds.x + max_bounds.x) * 0.5f,
             -(min_bounds.y + max_bounds.y) * 0.5f,
             -(min_bounds.z + max_bounds.z) * 0.5f
         };
 
+        // Transform local bounds to world space (matching draw transform order)
         Vector3D world_min = {
             ctrl->transform.position.x + center_offset.x + min_bounds.x,
             ctrl->transform.position.y + center_offset.y + min_bounds.y,
@@ -885,9 +1014,16 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
             ctrl->transform.position.z + center_offset.z + max_bounds.z
         };
 
+        // Ensure min < max (swap if needed)
+        if(world_min.x > world_max.x) { float temp = world_min.x; world_min.x = world_max.x; world_max.x = temp; }
+        if(world_min.y > world_max.y) { float temp = world_min.y; world_min.y = world_max.y; world_max.y = temp; }
+        if(world_min.z > world_max.z) { float temp = world_min.z; world_min.z = world_max.z; world_max.z = temp; }
+
         float distance;
         if(RayBoxIntersect(ray_origin, ray_direction, world_min, world_max, distance))
         {
+            // Prefer closer objects - distance-based priority
+            // This helps when multiple boxes overlap or are aligned
             if(distance < closest_distance)
             {
                 closest_distance = distance;
@@ -961,6 +1097,34 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
         if(pos.z > max_bounds.z) max_bounds.z = pos.z;
     }
 
+    // Check if this is a single point (1x1x1 or all LEDs at same position)
+    float size_x = max_bounds.x - min_bounds.x;
+    float size_y = max_bounds.y - min_bounds.y;
+    float size_z = max_bounds.z - min_bounds.z;
+
+    // For degenerate boxes (single point or very thin), create a minimum sized box
+    float min_dimension = 0.2f;  // Minimum box dimension
+
+    if(size_x < 0.001f)  // Essentially zero
+    {
+        float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
+        min_bounds.x = center_x - min_dimension;
+        max_bounds.x = center_x + min_dimension;
+    }
+    if(size_y < 0.001f)
+    {
+        float center_y = (min_bounds.y + max_bounds.y) * 0.5f;
+        min_bounds.y = center_y - min_dimension;
+        max_bounds.y = center_y + min_dimension;
+    }
+    if(size_z < 0.001f)
+    {
+        float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
+        min_bounds.z = center_z - min_dimension;
+        max_bounds.z = center_z + min_dimension;
+    }
+
+    // Small padding for visual clarity (tighter now)
     float padding = 0.1f;
     min_bounds.x -= padding;
     min_bounds.y -= padding;

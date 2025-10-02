@@ -360,6 +360,7 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_controller_position_changed(int,float,float,float)));
     connect(viewport, SIGNAL(ControllerRotationChanged(int,float,float,float)),
             this, SLOT(on_controller_rotation_changed(int,float,float,float)));
+    connect(viewport, SIGNAL(ControllerDeleteRequested(int)), this, SLOT(on_remove_controller_from_viewport(int)));
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
@@ -1360,8 +1361,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(name);
-        list_item->setBackground(QBrush(color));
-        list_item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
         controller_list->addItem(list_item);
 
             viewport->SetControllerTransforms(&controller_transforms);
@@ -1443,8 +1442,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     controller_transforms.push_back(ctrl_transform);
 
     QListWidgetItem* item = new QListWidgetItem(name);
-    item->setBackground(QBrush(color));
-    item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
     controller_list->addItem(item);
 
     viewport->SetControllerTransforms(&controller_transforms);
@@ -1466,6 +1463,24 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
     controller_transforms.erase(controller_transforms.begin() + selected_row);
 
     controller_list->takeItem(selected_row);
+
+    viewport->SetControllerTransforms(&controller_transforms);
+    viewport->update();
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
+}
+
+void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
+{
+    if(index < 0 || index >= (int)controller_transforms.size())
+    {
+        return;
+    }
+
+    delete controller_transforms[index];
+    controller_transforms.erase(controller_transforms.begin() + index);
+
+    controller_list->takeItem(index);
 
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
@@ -2159,8 +2174,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
 
             QListWidgetItem* item = new QListWidgetItem(name);
-            item->setBackground(QBrush(color));
-            item->setForeground(QBrush(color.value() > 128 ? Qt::black : Qt::white));
             controller_list->addItem(item);
         }
     }

@@ -64,6 +64,7 @@ signals:
     void ControllerSelected(int index);
     void ControllerPositionChanged(int index, float x, float y, float z);
     void ControllerRotationChanged(int index, float x, float y, float z);
+    void ControllerDeleteRequested(int index);
 
 protected:
     void initializeGL() override;
@@ -74,6 +75,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     void DrawGrid();
@@ -126,7 +128,9 @@ private:
     \*---------------------------------------------------------*/
     bool    dragging_rotate;
     bool    dragging_pan;
+    bool    dragging_grab;
     QPoint  last_mouse_pos;
+    QPoint  click_start_pos;
 
     /*---------------------------------------------------------*\
     | 3D Manipulation Gizmo                                   |

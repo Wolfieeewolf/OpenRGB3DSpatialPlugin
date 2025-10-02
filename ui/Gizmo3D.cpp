@@ -43,7 +43,9 @@
 \*---------------------------------------------------------*/
 #define GIZMO_SIZE                  1.5f
 #define AXIS_THICKNESS              0.1f
-#define CENTER_SPHERE_RADIUS        0.2f
+#define AXIS_HIT_THICKNESS          0.25f    // Larger hit box for easier clicking
+#define CENTER_SPHERE_RADIUS        0.15f    // Reduced visual size
+#define CENTER_SPHERE_HIT_RADIUS    0.20f    // Tighter hit radius to avoid overlap with small controllers
 #define RAY_INTERSECTION_TOLERANCE  0.15f
 
 Gizmo3D::Gizmo3D()
@@ -230,74 +232,55 @@ Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, con
     Ray3D ray;
 
     /*---------------------------------------------------------*\
-    | Convert mouse coordinates to normalized device coords   |
+    | Use gluUnProject to convert screen coords to world     |
     \*---------------------------------------------------------*/
-    float x = (2.0f * mouse_x) / viewport[2] - 1.0f;
-    float y = 1.0f - (2.0f * mouse_y) / viewport[3];
+    GLdouble near_x, near_y, near_z;
+    GLdouble far_x, far_y, far_z;
 
-    /*---------------------------------------------------------*\
-    | Create ray in clip space                                |
-    \*---------------------------------------------------------*/
-    float ray_clip[4] = { x, y, -1.0f, 1.0f };
+    // Convert mouse Y to OpenGL coordinates (flip Y axis)
+    int gl_mouse_y = viewport[3] - mouse_y;
 
-    /*---------------------------------------------------------*\
-    | Convert to eye coordinates                              |
-    \*---------------------------------------------------------*/
-    float inv_projection[16];
-    // Simple inverse for perspective projection
-    for(int i = 0; i < 16; i++) inv_projection[i] = 0.0f;
-    inv_projection[0] = 1.0f / projection[0];
-    inv_projection[5] = 1.0f / projection[5];
-    inv_projection[10] = 0.0f;
-    inv_projection[11] = -1.0f;
-    inv_projection[14] = 1.0f / projection[14];
-    inv_projection[15] = 0.0f;
-
-    float ray_eye[4];
+    // Unproject near plane (z=0.0) and far plane (z=1.0)
+    GLdouble mv[16], proj[16];
+    GLint vp[4];
+    for(int i = 0; i < 16; i++)
+    {
+        mv[i] = (GLdouble)modelview[i];
+        proj[i] = (GLdouble)projection[i];
+    }
     for(int i = 0; i < 4; i++)
     {
-        ray_eye[i] = 0.0f;
-        for(int j = 0; j < 4; j++)
-        {
-            ray_eye[i] += inv_projection[i * 4 + j] * ray_clip[j];
-        }
-    }
-    ray_eye[2] = -1.0f;
-    ray_eye[3] = 0.0f;
-
-    /*---------------------------------------------------------*\
-    | Convert to world coordinates                            |
-    \*---------------------------------------------------------*/
-    float inv_modelview[16];
-    // Simple inverse for basic transformations (this is simplified)
-    for(int i = 0; i < 16; i++) inv_modelview[i] = modelview[i];
-
-    float ray_world[4];
-    for(int i = 0; i < 4; i++)
-    {
-        ray_world[i] = 0.0f;
-        for(int j = 0; j < 4; j++)
-        {
-            ray_world[i] += inv_modelview[i * 4 + j] * ray_eye[j];
-        }
+        vp[i] = (GLint)viewport[i];
     }
 
-    /*---------------------------------------------------------*\
-    | Set ray origin (camera position)                       |
-    \*---------------------------------------------------------*/
-    ray.origin[0] = modelview[12];
-    ray.origin[1] = modelview[13];
-    ray.origin[2] = modelview[14];
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 0.0,
+                 mv, proj, vp,
+                 &near_x, &near_y, &near_z);
+
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 1.0,
+                 mv, proj, vp,
+                 &far_x, &far_y, &far_z);
 
     /*---------------------------------------------------------*\
-    | Set ray direction (normalized)                          |
+    | Set ray origin (near plane point)                       |
     \*---------------------------------------------------------*/
-    float length = sqrtf(ray_world[0] * ray_world[0] + ray_world[1] * ray_world[1] + ray_world[2] * ray_world[2]);
+    ray.origin[0] = (float)near_x;
+    ray.origin[1] = (float)near_y;
+    ray.origin[2] = (float)near_z;
+
+    /*---------------------------------------------------------*\
+    | Set ray direction (from near to far, normalized)        |
+    \*---------------------------------------------------------*/
+    float dx = (float)(far_x - near_x);
+    float dy = (float)(far_y - near_y);
+    float dz = (float)(far_z - near_z);
+    float length = sqrtf(dx * dx + dy * dy + dz * dz);
+
     if(length > 0.0f)
     {
-        ray.direction[0] = ray_world[0] / length;
-        ray.direction[1] = ray_world[1] / length;
-        ray.direction[2] = ray_world[2] / length;
+        ray.direction[0] = dx / length;
+        ray.direction[1] = dy / length;
+        ray.direction[2] = dz / length;
     }
     else
     {
@@ -376,25 +359,80 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     GizmoAxis closest_axis = GIZMO_AXIS_NONE;
 
     /*---------------------------------------------------------*\
-    | Check center sphere first                               |
+    | Check center sphere FIRST with priority                 |
+    | (larger hit radius for easier clicking)                 |
     \*---------------------------------------------------------*/
     float distance;
-    if(RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, center_sphere_radius, distance))
+    if(RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, CENTER_SPHERE_HIT_RADIUS, distance))
     {
-        if(distance < closest_distance)
-        {
-            closest_distance = distance;
-            closest_axis = GIZMO_AXIS_CENTER;
-        }
+        // Center sphere has priority - return immediately
+        return GIZMO_AXIS_CENTER;
     }
 
     /*---------------------------------------------------------*\
-    | Check X axis                                            |
+    | In ROTATE mode, check grab handles on rotation rings   |
+    \*---------------------------------------------------------*/
+    if(mode == GIZMO_MODE_ROTATE)
+    {
+        float handle_radius = 0.25f;  // Slightly larger for easier clicking
+
+        // Check X ring handles (4 points on YZ plane)
+        for(int i = 0; i < 4; i++)
+        {
+            float angle = (i / 4.0f) * 2.0f * M_PI;
+            float handle_x = gizmo_x;
+            float handle_y = gizmo_y + cosf(angle) * gizmo_size;
+            float handle_z = gizmo_z + sinf(angle) * gizmo_size;
+
+            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            {
+                closest_distance = distance;
+                closest_axis = GIZMO_AXIS_X;
+            }
+        }
+
+        // Check Y ring handles (4 points on XZ plane)
+        for(int i = 0; i < 4; i++)
+        {
+            float angle = (i / 4.0f) * 2.0f * M_PI;
+            float handle_x = gizmo_x + cosf(angle) * gizmo_size;
+            float handle_y = gizmo_y;
+            float handle_z = gizmo_z + sinf(angle) * gizmo_size;
+
+            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            {
+                closest_distance = distance;
+                closest_axis = GIZMO_AXIS_Y;
+            }
+        }
+
+        // Check Z ring handles (4 points on XY plane)
+        for(int i = 0; i < 4; i++)
+        {
+            float angle = (i / 4.0f) * 2.0f * M_PI;
+            float handle_x = gizmo_x + cosf(angle) * gizmo_size;
+            float handle_y = gizmo_y + sinf(angle) * gizmo_size;
+            float handle_z = gizmo_z;
+
+            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            {
+                closest_distance = distance;
+                closest_axis = GIZMO_AXIS_Z;
+            }
+        }
+
+        // If we found a handle, return it
+        if(closest_axis != GIZMO_AXIS_NONE)
+            return closest_axis;
+    }
+
+    /*---------------------------------------------------------*\
+    | Check X axis (with larger hit box)                     |
     \*---------------------------------------------------------*/
     Box3D x_box;
     x_box.min[0] = gizmo_x; x_box.max[0] = gizmo_x + gizmo_size;
-    x_box.min[1] = gizmo_y - axis_thickness; x_box.max[1] = gizmo_y + axis_thickness;
-    x_box.min[2] = gizmo_z - axis_thickness; x_box.max[2] = gizmo_z + axis_thickness;
+    x_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; x_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
+    x_box.min[2] = gizmo_z - AXIS_HIT_THICKNESS; x_box.max[2] = gizmo_z + AXIS_HIT_THICKNESS;
 
     if(RayBoxIntersect(ray, x_box, distance) && distance < closest_distance)
     {
@@ -403,12 +441,12 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     }
 
     /*---------------------------------------------------------*\
-    | Check Y axis                                            |
+    | Check Y axis (with larger hit box)                     |
     \*---------------------------------------------------------*/
     Box3D y_box;
-    y_box.min[0] = gizmo_x - axis_thickness; y_box.max[0] = gizmo_x + axis_thickness;
+    y_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; y_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
     y_box.min[1] = gizmo_y; y_box.max[1] = gizmo_y + gizmo_size;
-    y_box.min[2] = gizmo_z - axis_thickness; y_box.max[2] = gizmo_z + axis_thickness;
+    y_box.min[2] = gizmo_z - AXIS_HIT_THICKNESS; y_box.max[2] = gizmo_z + AXIS_HIT_THICKNESS;
 
     if(RayBoxIntersect(ray, y_box, distance) && distance < closest_distance)
     {
@@ -417,11 +455,11 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     }
 
     /*---------------------------------------------------------*\
-    | Check Z axis                                            |
+    | Check Z axis (with larger hit box)                     |
     \*---------------------------------------------------------*/
     Box3D z_box;
-    z_box.min[0] = gizmo_x - axis_thickness; z_box.max[0] = gizmo_x + axis_thickness;
-    z_box.min[1] = gizmo_y - axis_thickness; z_box.max[1] = gizmo_y + axis_thickness;
+    z_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; z_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
+    z_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; z_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
     z_box.min[2] = gizmo_z; z_box.max[2] = gizmo_z + gizmo_size;
 
     if(RayBoxIntersect(ray, z_box, distance) && distance < closest_distance)
@@ -438,7 +476,7 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
     Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
 
     float distance;
-    return RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, center_sphere_radius, distance);
+    return RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, CENTER_SPHERE_HIT_RADIUS, distance);
 }
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
@@ -453,7 +491,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
     float delta_x = mouse_x - last_mouse_pos.x();
     float delta_y = mouse_y - last_mouse_pos.y();
 
-    float sensitivity = 0.01f;
+    float sensitivity = 0.05f;  // Increased from 0.01 for better responsiveness
 
     switch(mode)
     {
@@ -470,7 +508,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         move_delta[1] = -delta_y * sensitivity;
                         break;
                     case GIZMO_AXIS_Z:
-                        move_delta[2] = delta_x * sensitivity;
+                        move_delta[2] = -delta_x * sensitivity;  // Inverted for correct direction
                         break;
                     case GIZMO_AXIS_CENTER:
                         move_delta[0] = delta_x * sensitivity;
@@ -538,9 +576,10 @@ void Gizmo3D::ApplyTranslation(float delta_x, float delta_y, float delta_z)
         target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
     }
 
-    // Update gizmo position to follow target
-    // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
-    // which calls GetControllerCenter() for proper bounds-based centering
+    // Update gizmo position to follow target immediately
+    gizmo_x = target_transform->transform.position.x;
+    gizmo_y = target_transform->transform.position.y;
+    gizmo_z = target_transform->transform.position.z;
 }
 
 void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
@@ -567,27 +606,43 @@ void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
 
 void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)
 {
-    (void)modelview;
     (void)projection;
     (void)viewport;
 
     if(!target_transform)
         return;
 
-    // Extract camera angles from modelview matrix - simplified approach
-    // In a full implementation, we'd properly extract camera yaw/pitch
-    // For now, use screen-space movement with reasonable sensitivity
-    float move_scale = 0.01f;
+    // Extract camera right and up vectors from modelview matrix
+    // Modelview matrix columns give us the camera axes
+    float right_x = modelview[0];
+    float right_y = modelview[4];
+    float right_z = modelview[8];
 
-    // Simple screen-space to world-space conversion
-    // This provides intuitive movement where dragging moves the object
-    // in the direction you drag on screen
-    target_transform->transform.position.x += delta_x * move_scale;
-    target_transform->transform.position.y -= delta_y * move_scale; // Invert Y for intuitive movement
+    float up_x = modelview[1];
+    float up_y = modelview[5];
+    float up_z = modelview[9];
+
+    // Scale for intuitive movement
+    float move_scale = 0.05f;
+
+    // Move in camera-relative directions (screen space to world space)
+    // Right for horizontal mouse movement, up for vertical
+    target_transform->transform.position.x += (right_x * delta_x - up_x * delta_y) * move_scale;
+    target_transform->transform.position.y += (right_y * delta_x - up_y * delta_y) * move_scale;
+    target_transform->transform.position.z += (right_z * delta_x - up_z * delta_y) * move_scale;
+
+    // Apply grid snapping if enabled
+    if(grid_snap_enabled)
+    {
+        target_transform->transform.position.x = SnapToGrid(target_transform->transform.position.x);
+        target_transform->transform.position.y = SnapToGrid(target_transform->transform.position.y);
+        target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
+    }
 
     // Update gizmo position to follow target
-    // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
-    // which calls GetControllerCenter() for proper bounds-based centering
+    gizmo_x = target_transform->transform.position.x;
+    gizmo_y = target_transform->transform.position.y;
+    gizmo_z = target_transform->transform.position.z;
 }
 
 
@@ -727,8 +782,10 @@ void Gizmo3D::DrawRotateGizmo()
     glDisable(GL_LIGHTING);
     glLineWidth(3.0f);
 
+    float handle_radius = 0.15f;  // Size of grab handles
+
     /*---------------------------------------------------------*\
-    | Draw rotation rings for each axis                       |
+    | Draw rotation rings for each axis with grab handles    |
     \*---------------------------------------------------------*/
 
     // X axis rotation ring (Red) - rotation around X axis (YZ plane)
@@ -741,6 +798,13 @@ void Gizmo3D::DrawRotateGizmo()
         glVertex3f(0.0f, cosf(angle) * gizmo_size, sinf(angle) * gizmo_size);
     }
     glEnd();
+    // Add 4 grab handles on X ring (at cardinal points)
+    for(int i = 0; i < 4; i++)
+    {
+        float angle = (i / 4.0f) * 2.0f * M_PI;
+        float handle_pos[3] = {0.0f, cosf(angle) * gizmo_size, sinf(angle) * gizmo_size};
+        DrawSphere(handle_pos, handle_radius, color);
+    }
 
     // Y axis rotation ring (Green) - rotation around Y axis (XZ plane)
     color = (selected_axis == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
@@ -752,6 +816,13 @@ void Gizmo3D::DrawRotateGizmo()
         glVertex3f(cosf(angle) * gizmo_size, 0.0f, sinf(angle) * gizmo_size);
     }
     glEnd();
+    // Add 4 grab handles on Y ring
+    for(int i = 0; i < 4; i++)
+    {
+        float angle = (i / 4.0f) * 2.0f * M_PI;
+        float handle_pos[3] = {cosf(angle) * gizmo_size, 0.0f, sinf(angle) * gizmo_size};
+        DrawSphere(handle_pos, handle_radius, color);
+    }
 
     // Z axis rotation ring (Blue) - rotation around Z axis (XY plane)
     color = (selected_axis == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
@@ -763,6 +834,13 @@ void Gizmo3D::DrawRotateGizmo()
         glVertex3f(cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, 0.0f);
     }
     glEnd();
+    // Add 4 grab handles on Z ring
+    for(int i = 0; i < 4; i++)
+    {
+        float angle = (i / 4.0f) * 2.0f * M_PI;
+        float handle_pos[3] = {cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, 0.0f};
+        DrawSphere(handle_pos, handle_radius, color);
+    }
 
     /*---------------------------------------------------------*\
     | Draw orange center cube for mode switching             |
