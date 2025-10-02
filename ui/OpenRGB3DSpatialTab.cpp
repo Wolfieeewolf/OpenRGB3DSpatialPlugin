@@ -354,6 +354,54 @@ void OpenRGB3DSpatialTab::SetupUI()
     custom_tab->setLayout(custom_layout);
     left_tabs->addTab(custom_tab, "Custom Controllers");
 
+    /*---------------------------------------------------------*\
+    | Layout Profiles Tab                                      |
+    \*---------------------------------------------------------*/
+    QWidget* profile_tab = new QWidget();
+    QVBoxLayout* profile_layout = new QVBoxLayout();
+    profile_layout->setSpacing(5);
+
+    layout_profiles_combo = new QComboBox();
+    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
+    profile_layout->addWidget(layout_profiles_combo);
+
+    QHBoxLayout* save_load_layout = new QHBoxLayout();
+    QPushButton* save_button = new QPushButton("Save Layout");
+    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+    save_load_layout->addWidget(save_button);
+
+    QPushButton* load_button = new QPushButton("Load Layout");
+    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
+    save_load_layout->addWidget(load_button);
+    profile_layout->addLayout(save_load_layout);
+
+    QPushButton* delete_button = new QPushButton("Delete Profile");
+    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
+    profile_layout->addWidget(delete_button);
+
+    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
+
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    bool auto_load_enabled = false;
+    if(settings.contains("AutoLoad"))
+    {
+        auto_load_enabled = settings["AutoLoad"];
+    }
+    auto_load_checkbox->setChecked(auto_load_enabled);
+
+    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        settings["AutoLoad"] = checked;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        resource_manager->GetSettingsManager()->SaveSettings();
+    });
+    profile_layout->addWidget(auto_load_checkbox);
+
+    PopulateLayoutDropdown();
+
+    profile_tab->setLayout(profile_layout);
+    left_tabs->addTab(profile_tab, "Layout Profiles");
+
     // Add tabs to left panel
     left_panel->addWidget(left_tabs);
 
@@ -418,53 +466,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_panel->addWidget(controller_group);
 
     /*---------------------------------------------------------*\
-    | Layout Profiles (moved from right panel)                |
-    \*---------------------------------------------------------*/
-    QGroupBox* profile_group = new QGroupBox("Layout Profiles");
-    QVBoxLayout* profile_layout = new QVBoxLayout();
-
-    layout_profiles_combo = new QComboBox();
-    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
-    profile_layout->addWidget(layout_profiles_combo);
-
-    QHBoxLayout* save_load_layout = new QHBoxLayout();
-    QPushButton* save_button = new QPushButton("Save Layout");
-    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
-    save_load_layout->addWidget(save_button);
-
-    QPushButton* load_button = new QPushButton("Load Layout");
-    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
-    save_load_layout->addWidget(load_button);
-    profile_layout->addLayout(save_load_layout);
-
-    QPushButton* delete_button = new QPushButton("Delete Profile");
-    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
-    profile_layout->addWidget(delete_button);
-
-    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
-
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-    bool auto_load_enabled = false;
-    if(settings.contains("AutoLoad"))
-    {
-        auto_load_enabled = settings["AutoLoad"];
-    }
-    auto_load_checkbox->setChecked(auto_load_enabled);
-
-    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-        settings["AutoLoad"] = checked;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-        resource_manager->GetSettingsManager()->SaveSettings();
-    });
-    profile_layout->addWidget(auto_load_checkbox);
-
-    PopulateLayoutDropdown();
-
-    profile_group->setLayout(profile_layout);
-    left_panel->addWidget(profile_group);
-
-    /*---------------------------------------------------------*\
     | Add stretch to push content to top of scroll area       |
     \*---------------------------------------------------------*/
     left_panel->addStretch();
@@ -493,7 +494,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
-    | Tab Widget for Grid Settings and Position/Rotation      |
+    | Tab Widget for Position/Rotation and Grid Settings      |
     \*---------------------------------------------------------*/
     QTabWidget* settings_tabs = new QTabWidget();
 
@@ -597,7 +598,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     layout_layout->addWidget(grid_help2, 5, 0, 1, 6);
 
     grid_settings_tab->setLayout(layout_layout);
-    settings_tabs->addTab(grid_settings_tab, "Grid Settings");
 
     // Connect signals
     connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
@@ -827,7 +827,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(rot_z_spin, 5, 2);
 
     transform_tab->setLayout(position_layout);
+
+    // Add tabs in correct order: Position/Rotation first, then Grid Settings
     settings_tabs->addTab(transform_tab, "Position & Rotation");
+    settings_tabs->addTab(grid_settings_tab, "Grid Settings");
 
     // Add the tab widget to middle panel
     middle_panel->addWidget(settings_tabs);
