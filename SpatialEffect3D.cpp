@@ -11,6 +11,7 @@
 
 #include "SpatialEffect3D.h"
 #include "Colors.h"
+#include <cmath>
 
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
@@ -278,11 +279,11 @@ void SpatialEffect3D::RemoveLastColorButton()
 RGBColor SpatialEffect3D::GetRainbowColor(float hue)
 {
     // Convert HSV to RGB (Hue: 0-360, Saturation: 1.0, Value: 1.0)
-    hue = fmod(hue, 360.0f);
+    hue = std::fmod(hue, 360.0f);
     if(hue < 0) hue += 360.0f;
 
     float c = 1.0f; // Chroma (since saturation = 1, value = 1)
-    float x = c * (1.0f - fabs(fmod(hue / 60.0f, 2.0f) - 1.0f));
+    float x = c * (1.0f - std::fabs(std::fmod(hue / 60.0f, 2.0f) - 1.0f));
 
     float r, g, b;
     if(hue < 60) { r = c; g = x; b = 0; }
