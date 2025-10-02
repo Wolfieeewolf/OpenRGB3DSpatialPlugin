@@ -573,14 +573,17 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */
 
 void SpatialEffect3D::OnParameterChanged()
 {
-    // Update speed with logarithmic curve for smoother control
-    // At value 1: speed = 1, at value 50: speed ≈ 50, at value 100: speed = 1000
+    // Update speed with gentle logarithmic curve
+    // Map slider 1-100 to the range that was previously slider 1-30
+    // Old formula at 30: pow(10, (30-1)/33) ≈ 17.3
+    // New: spread that range across 1-100
     if(speed_slider)
     {
         int slider_value = speed_slider->value();
-        // Exponential curve: speed = pow(10, (slider_value - 1) / 33.0)
-        // This gives: 1 -> 1, 50 -> ~46, 100 -> 1000
-        effect_speed = static_cast<unsigned int>(std::pow(10.0, (slider_value - 1.0) / 33.0));
+        // Map 1-100 to 1-30 range: scaled_value = 1 + (slider_value - 1) * 29/99
+        double scaled_value = 1.0 + (slider_value - 1.0) * 29.0 / 99.0;
+        // Apply same exponential curve but with scaled input
+        effect_speed = static_cast<unsigned int>(std::pow(10.0, (scaled_value - 1.0) / 33.0));
         if(speed_label)
         {
             speed_label->setText(QString::number(effect_speed));
