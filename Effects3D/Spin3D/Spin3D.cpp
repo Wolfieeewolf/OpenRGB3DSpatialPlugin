@@ -145,10 +145,10 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
     \*---------------------------------------------------------*/
     switch(surface_type)
     {
-        case 0: // Floor (XY plane, spins around Z axis)
+        case 0: // Floor (XZ plane, spins around Y axis)
             {
-                float angle = atan2(rel_y, rel_x);
-                float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+                float angle = atan2(rel_z, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
                 float spin_angle = angle * num_arms - progress;
                 float arm_position = fmod(spin_angle, 6.28318f / num_arms);
                 if(arm_position < 0) arm_position += 6.28318f / num_arms;
@@ -160,16 +160,16 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                     intensity = 1.0f - (arm_position / blade_width);
                     // Radial fade (strong everywhere, slight fade at far edges)
                     intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
-                    // Fade with height (stronger near floor)
-                    intensity *= fmax(0.0f, 1.0f - fabs(rel_z) * 0.15f);
+                    // Fade with height (stronger near floor, Y near 0)
+                    intensity *= fmax(0.0f, 1.0f - fabs(rel_y) * 0.15f);
                 }
             }
             break;
 
-        case 1: // Ceiling (XY plane, spins around Z axis)
+        case 1: // Ceiling (XZ plane, spins around Y axis)
             {
-                float angle = atan2(rel_y, rel_x);
-                float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+                float angle = atan2(rel_z, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
                 float spin_angle = angle * num_arms - progress;
                 float arm_position = fmod(spin_angle, 6.28318f / num_arms);
                 if(arm_position < 0) arm_position += 6.28318f / num_arms;
@@ -179,8 +179,8 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                 {
                     intensity = 1.0f - (arm_position / blade_width);
                     intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
-                    // Fade with height (stronger near ceiling, positive Z)
-                    intensity *= fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
+                    // Fade with height (stronger near ceiling, positive Y)
+                    intensity *= fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
                 }
             }
             break;
@@ -223,45 +223,7 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
             }
             break;
 
-        case 4: // Front Wall (XZ plane, spins around Y axis)
-            {
-                float angle = atan2(rel_z, rel_x);
-                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
-                float spin_angle = angle * num_arms - progress;
-                float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-                if(arm_position < 0) arm_position += 6.28318f / num_arms;
-
-                float blade_width = 0.4f * (6.28318f / num_arms);
-                if(arm_position < blade_width)
-                {
-                    intensity = 1.0f - (arm_position / blade_width);
-                    intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
-                    // Fade with Y distance (stronger near front wall, negative Y)
-                    intensity *= fmax(0.0f, (rel_y < 0) ? (1.0f - (5.0f + rel_y) * 0.15f) : 0.0f);
-                }
-            }
-            break;
-
-        case 5: // Back Wall (XZ plane, spins around Y axis)
-            {
-                float angle = atan2(rel_z, rel_x);
-                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
-                float spin_angle = angle * num_arms - progress;
-                float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-                if(arm_position < 0) arm_position += 6.28318f / num_arms;
-
-                float blade_width = 0.4f * (6.28318f / num_arms);
-                if(arm_position < blade_width)
-                {
-                    intensity = 1.0f - (arm_position / blade_width);
-                    intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
-                    // Fade with Y distance (stronger near back wall, positive Y)
-                    intensity *= fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
-                }
-            }
-            break;
-
-        case 6: // Floor & Ceiling
+        case 4: // Front Wall (XY plane, spins around Z axis)
             {
                 float angle = atan2(rel_y, rel_x);
                 float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
@@ -272,13 +234,51 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                 float blade_width = 0.4f * (6.28318f / num_arms);
                 if(arm_position < blade_width)
                 {
+                    intensity = 1.0f - (arm_position / blade_width);
+                    intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
+                    // Fade with Z distance (stronger near front wall, negative Z)
+                    intensity *= fmax(0.0f, (rel_z < 0) ? (1.0f - (5.0f + rel_z) * 0.15f) : 0.0f);
+                }
+            }
+            break;
+
+        case 5: // Back Wall (XY plane, spins around Z axis)
+            {
+                float angle = atan2(rel_y, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+                float spin_angle = angle * num_arms - progress;
+                float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+                if(arm_position < 0) arm_position += 6.28318f / num_arms;
+
+                float blade_width = 0.4f * (6.28318f / num_arms);
+                if(arm_position < blade_width)
+                {
+                    intensity = 1.0f - (arm_position / blade_width);
+                    intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
+                    // Fade with Z distance (stronger near back wall, positive Z)
+                    intensity *= fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
+                }
+            }
+            break;
+
+        case 6: // Floor & Ceiling
+            {
+                float angle = atan2(rel_z, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+                float spin_angle = angle * num_arms - progress;
+                float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+                if(arm_position < 0) arm_position += 6.28318f / num_arms;
+
+                float blade_width = 0.4f * (6.28318f / num_arms);
+                if(arm_position < blade_width)
+                {
                     float blade_intensity = 1.0f - (arm_position / blade_width);
                     blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
 
-                    // Floor component
-                    float floor_intensity = blade_intensity * fmax(0.0f, 1.0f - fabs(rel_z) * 0.15f);
-                    // Ceiling component
-                    float ceiling_intensity = blade_intensity * fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
+                    // Floor component (Y near 0)
+                    float floor_intensity = blade_intensity * fmax(0.0f, 1.0f - fabs(rel_y) * 0.15f);
+                    // Ceiling component (Y positive)
+                    float ceiling_intensity = blade_intensity * fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
 
                     intensity = fmax(floor_intensity, ceiling_intensity);
                 }
@@ -311,8 +311,8 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
 
         case 8: // Front & Back Walls
             {
-                float angle = atan2(rel_z, rel_x);
-                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+                float angle = atan2(rel_y, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
                 float spin_angle = angle * num_arms - progress;
                 float arm_position = fmod(spin_angle, 6.28318f / num_arms);
                 if(arm_position < 0) arm_position += 6.28318f / num_arms;
@@ -323,10 +323,10 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                     float blade_intensity = 1.0f - (arm_position / blade_width);
                     blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
 
-                    // Front wall
-                    float front_intensity = blade_intensity * fmax(0.0f, (rel_y < 0) ? (1.0f - (5.0f + rel_y) * 0.15f) : 0.0f);
-                    // Back wall
-                    float back_intensity = blade_intensity * fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
+                    // Front wall (negative Z)
+                    float front_intensity = blade_intensity * fmax(0.0f, (rel_z < 0) ? (1.0f - (5.0f + rel_z) * 0.15f) : 0.0f);
+                    // Back wall (positive Z)
+                    float back_intensity = blade_intensity * fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
 
                     intensity = fmax(front_intensity, back_intensity);
                 }
@@ -358,36 +358,7 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                     }
                 }
 
-                // Front/Back walls (XZ plane)
-                {
-                    float angle = atan2(rel_z, rel_x);
-                    float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
-                    float spin_angle = angle * num_arms - progress;
-                    float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-                    if(arm_position < 0) arm_position += 6.28318f / num_arms;
-
-                    float blade_width = 0.4f * (6.28318f / num_arms);
-                    if(arm_position < blade_width)
-                    {
-                        float blade_intensity = 1.0f - (arm_position / blade_width);
-                        blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
-
-                        float front = blade_intensity * fmax(0.0f, (rel_y < 0) ? (1.0f - (5.0f + rel_y) * 0.15f) : 0.0f);
-                        float back = blade_intensity * fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
-                        max_intensity = fmax(max_intensity, fmax(front, back));
-                    }
-                }
-
-                intensity = max_intensity;
-            }
-            break;
-
-        case 10: // Entire Room (all surfaces)
-        default:
-            {
-                float max_intensity = 0.0f;
-
-                // Floor/Ceiling (XY plane)
+                // Front/Back walls (XY plane)
                 {
                     float angle = atan2(rel_y, rel_x);
                     float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
@@ -401,8 +372,37 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                         float blade_intensity = 1.0f - (arm_position / blade_width);
                         blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
 
-                        float floor = blade_intensity * fmax(0.0f, 1.0f - fabs(rel_z) * 0.15f);
-                        float ceiling = blade_intensity * fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
+                        float front = blade_intensity * fmax(0.0f, (rel_z < 0) ? (1.0f - (5.0f + rel_z) * 0.15f) : 0.0f);
+                        float back = blade_intensity * fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
+                        max_intensity = fmax(max_intensity, fmax(front, back));
+                    }
+                }
+
+                intensity = max_intensity;
+            }
+            break;
+
+        case 10: // Entire Room (all surfaces)
+        default:
+            {
+                float max_intensity = 0.0f;
+
+                // Floor/Ceiling (XZ plane)
+                {
+                    float angle = atan2(rel_z, rel_x);
+                    float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+                    float spin_angle = angle * num_arms - progress;
+                    float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+                    if(arm_position < 0) arm_position += 6.28318f / num_arms;
+
+                    float blade_width = 0.4f * (6.28318f / num_arms);
+                    if(arm_position < blade_width)
+                    {
+                        float blade_intensity = 1.0f - (arm_position / blade_width);
+                        blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
+
+                        float floor = blade_intensity * fmax(0.0f, 1.0f - fabs(rel_y) * 0.15f);
+                        float ceiling = blade_intensity * fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
                         max_intensity = fmax(max_intensity, fmax(floor, ceiling));
                     }
                 }
@@ -428,8 +428,8 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                     }
 
                     // Front/Back walls
-                    angle = atan2(rel_z, rel_x);
-                    radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+                    angle = atan2(rel_y, rel_x);
+                    radius = sqrt(rel_x*rel_x + rel_y*rel_y);
                     spin_angle = angle * num_arms - progress;
                     arm_position = fmod(spin_angle, 6.28318f / num_arms);
                     if(arm_position < 0) arm_position += 6.28318f / num_arms;
@@ -439,8 +439,8 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                         float blade_intensity = 1.0f - (arm_position / blade_width);
                         blade_intensity *= fmax(0.3f, 1.0f - radius * 0.05f);
 
-                        float front = blade_intensity * fmax(0.0f, (rel_y < 0) ? (1.0f - (5.0f + rel_y) * 0.15f) : 0.0f);
-                        float back = blade_intensity * fmax(0.0f, (rel_y > 0) ? (1.0f - (5.0f - rel_y) * 0.15f) : 0.0f);
+                        float front = blade_intensity * fmax(0.0f, (rel_z < 0) ? (1.0f - (5.0f + rel_z) * 0.15f) : 0.0f);
+                        float back = blade_intensity * fmax(0.0f, (rel_z > 0) ? (1.0f - (5.0f - rel_z) * 0.15f) : 0.0f);
                         max_intensity = fmax(max_intensity, fmax(front, back));
                     }
                 }

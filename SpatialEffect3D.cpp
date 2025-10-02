@@ -129,8 +129,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     axis_combo = new QComboBox();
     axis_combo->addItem("Radial");
     axis_combo->addItem("X-Axis (Left to Right)");
-    axis_combo->addItem("Y-Axis (Front to Back)");
-    axis_combo->addItem("Z-Axis (Floor to Ceiling)");
+    axis_combo->addItem("Y-Axis (Floor to Ceiling)");
+    axis_combo->addItem("Z-Axis (Front to Back)");
     axis_combo->setCurrentIndex(effect_axis);
     axis_layout->addWidget(axis_combo);
 

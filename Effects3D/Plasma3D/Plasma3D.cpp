@@ -133,17 +133,17 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     float coord1, coord2, coord3;
     switch(effect_axis)
     {
-        case AXIS_X:  // Pattern primarily on YZ plane (perpendicular to X)
+        case AXIS_X:  // Pattern primarily on YZ plane (Left/Right walls - perpendicular to X)
             coord1 = rel_y;
             coord2 = rel_z;
             coord3 = rel_x;
             break;
-        case AXIS_Y:  // Pattern primarily on XZ plane (perpendicular to Y)
+        case AXIS_Y:  // Pattern primarily on XZ plane (Floor/Ceiling - perpendicular to Y)
             coord1 = rel_x;
             coord2 = rel_z;
             coord3 = rel_y;
             break;
-        case AXIS_Z:  // Pattern primarily on XY plane (perpendicular to Z)
+        case AXIS_Z:  // Pattern primarily on XY plane (Front/Back walls - perpendicular to Z)
             coord1 = rel_x;
             coord2 = rel_y;
             coord3 = rel_z;

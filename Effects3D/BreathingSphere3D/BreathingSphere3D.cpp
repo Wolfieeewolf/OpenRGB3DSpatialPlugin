@@ -135,13 +135,13 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
     float distance;
     switch(effect_axis)
     {
-        case AXIS_X:  // Ellipsoid stretched along X-axis
+        case AXIS_X:  // Ellipsoid stretched along X-axis (Left to Right)
             distance = sqrt((rel_x * 0.5f)*(rel_x * 0.5f) + rel_y*rel_y + rel_z*rel_z);
             break;
-        case AXIS_Y:  // Ellipsoid stretched along Y-axis
+        case AXIS_Y:  // Ellipsoid stretched along Y-axis (Floor to Ceiling)
             distance = sqrt(rel_x*rel_x + (rel_y * 0.5f)*(rel_y * 0.5f) + rel_z*rel_z);
             break;
-        case AXIS_Z:  // Ellipsoid stretched along Z-axis
+        case AXIS_Z:  // Ellipsoid stretched along Z-axis (Front to Back)
             distance = sqrt(rel_x*rel_x + rel_y*rel_y + (rel_z * 0.5f)*(rel_z * 0.5f));
             break;
         case AXIS_RADIAL:  // Perfect sphere

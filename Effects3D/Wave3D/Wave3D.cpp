@@ -165,10 +165,10 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right
             position = rel_x;
             break;
-        case AXIS_Y:  // Front to Back
+        case AXIS_Y:  // Floor to Ceiling
             position = rel_y;
             break;
-        case AXIS_Z:  // Floor to Ceiling
+        case AXIS_Z:  // Front to Back
             position = rel_z;
             break;
         case AXIS_RADIAL:  // Radial from center

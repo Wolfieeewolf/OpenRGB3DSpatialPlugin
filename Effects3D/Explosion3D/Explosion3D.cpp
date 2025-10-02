@@ -150,13 +150,13 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
     float distance;
     switch(effect_axis)
     {
-        case AXIS_X:  // Directional explosion along X-axis
+        case AXIS_X:  // Directional explosion along X-axis (Left to Right)
             distance = fabs(rel_x) + sqrt(rel_y*rel_y + rel_z*rel_z) * 0.3f;
             break;
-        case AXIS_Y:  // Directional explosion along Y-axis
+        case AXIS_Y:  // Directional explosion along Y-axis (Floor to Ceiling)
             distance = fabs(rel_y) + sqrt(rel_x*rel_x + rel_z*rel_z) * 0.3f;
             break;
-        case AXIS_Z:  // Directional explosion along Z-axis
+        case AXIS_Z:  // Directional explosion along Z-axis (Front to Back)
             distance = fabs(rel_z) + sqrt(rel_x*rel_x + rel_y*rel_y) * 0.3f;
             break;
         case AXIS_RADIAL:  // Spherical explosion

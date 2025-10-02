@@ -138,10 +138,10 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right wipe
             position = rel_x;
             break;
-        case AXIS_Y:  // Front to Back wipe
+        case AXIS_Y:  // Floor to Ceiling wipe
             position = rel_y;
             break;
-        case AXIS_Z:  // Floor to Ceiling wipe
+        case AXIS_Z:  // Front to Back wipe
         default:
             position = rel_z;
             break;
