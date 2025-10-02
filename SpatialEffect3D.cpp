@@ -212,6 +212,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(scale_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(fps_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnAxisChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnReverseChanged);
@@ -239,6 +240,18 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(frequency_slider, &QSlider::valueChanged, frequency_label, [this](int value) {
         frequency_label->setText(QString::number(value));
         effect_frequency = value;
+    });
+    connect(size_slider, &QSlider::valueChanged, size_label, [this](int value) {
+        size_label->setText(QString::number(value));
+        effect_size = value;
+    });
+    connect(scale_slider, &QSlider::valueChanged, scale_label, [this](int value) {
+        scale_label->setText(QString::number(value));
+        effect_scale = value;
+    });
+    connect(fps_slider, &QSlider::valueChanged, fps_label, [this](int value) {
+        fps_label->setText(QString::number(value));
+        effect_fps = value;
     });
 
     /*---------------------------------------------------------*\

@@ -144,13 +144,22 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     Vector3D origin = GetEffectOrigin();
 
     /*---------------------------------------------------------*\
-    | Calculate position relative to origin and apply scale   |
-    | Scale affects coverage area - smaller = localized       |
+    | Calculate position relative to origin                    |
     \*---------------------------------------------------------*/
-    float scale_factor = GetNormalizedScale();  // 0.1 to 2.0
-    float rel_x = (x - origin.x) / scale_factor;
-    float rel_y = (y - origin.y) / scale_factor;
-    float rel_z = (z - origin.z) / scale_factor;
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    /*---------------------------------------------------------*\
+    | Check if LED is within scaled effect radius             |
+    | Scale controls the boundary - outside = black            |
+    \*---------------------------------------------------------*/
+    float scale_radius = GetNormalizedScale() * 10.0f;  // 0.1 to 2.0 -> 1 to 20 units
+    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+    if(distance_from_origin > scale_radius)
+    {
+        return 0x00000000;  // Black - outside effect boundary
+    }
 
     /*---------------------------------------------------------*\
     | Create smooth curves for speed and frequency            |
