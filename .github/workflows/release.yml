@@ -52,8 +52,8 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          qmake OpenRGB3DSpatialPlugin.pro
-          nmake release
+          qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
+          nmake
 
       - name: Build (Linux)
         if: matrix.os == 'ubuntu-latest'
