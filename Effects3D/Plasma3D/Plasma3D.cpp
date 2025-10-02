@@ -26,11 +26,11 @@ Plasma3D::Plasma3D(QWidget* parent) : SpatialEffect3D(parent)
     pattern_type = 0;        // Default to Classic plasma
     progress = 0.0f;
 
-    // Set default plasma colors (electric blue to purple)
+    // Set default plasma colors
     std::vector<RGBColor> plasma_colors = {
-        0x0000FF00,  // Electric Blue
-        0x00FF00FF,  // Purple/Magenta
-        0x00FFFF00   // Cyan
+        0x0000FF00,  // Green (0x00BBGGRR format)
+        0x00FF00FF,  // Magenta/Purple
+        0x00FFFF00   // Yellow
     };
     // Only set default colors if none are set yet
     if(GetColors().empty())

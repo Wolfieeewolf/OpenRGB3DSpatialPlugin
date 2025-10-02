@@ -33,12 +33,12 @@ DNAHelix3D::DNAHelix3D(QWidget* parent) : SpatialEffect3D(parent)
     helix_radius = 75;       // Default helix radius
     progress = 0.0f;
 
-    // Set up default DNA base pair colors, but allow user override via universal controls
+    // Set up default DNA base pair colors (0x00BBGGRR format), allow user override via universal controls
     std::vector<RGBColor> dna_colors = {
-        0x000000FF,  // Blue (Adenine)
+        0x000000FF,  // Red (Adenine)
         0x0000FFFF,  // Yellow (Thymine)
         0x0000FF00,  // Green (Guanine)
-        0x00FF0000   // Red (Cytosine)
+        0x00FF0000   // Blue (Cytosine)
     };
     // Only set default colors if none are set yet
     if(GetColors().empty())

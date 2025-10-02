@@ -127,10 +127,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* axis_layout = new QHBoxLayout();
     axis_layout->addWidget(new QLabel("Axis:"));
     axis_combo = new QComboBox();
-    axis_combo->addItem("Radial");
-    axis_combo->addItem("X-Axis (Left to Right)");
-    axis_combo->addItem("Y-Axis (Floor to Ceiling)");
-    axis_combo->addItem("Z-Axis (Front to Back)");
+    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0
+    axis_combo->addItem("Y-Axis (Front to Back)");    // AXIS_Y = 1
+    axis_combo->addItem("Z-Axis (Bottom to Top)");    // AXIS_Z = 2
+    axis_combo->addItem("Radial (Outward from Center)"); // AXIS_RADIAL = 3
     axis_combo->setCurrentIndex(effect_axis);
     axis_layout->addWidget(axis_combo);
 

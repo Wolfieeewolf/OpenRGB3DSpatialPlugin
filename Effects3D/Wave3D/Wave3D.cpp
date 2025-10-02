@@ -37,9 +37,9 @@ Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true); // Default to rainbow like RadialRainbow
 
     std::vector<RGBColor> default_colors;
-    default_colors.push_back(0x000000FF);  // Blue
+    default_colors.push_back(0x000000FF);  // Red (0x00BBGGRR format)
     default_colors.push_back(0x0000FF00);  // Green
-    default_colors.push_back(0x00FF0000);  // Red
+    default_colors.push_back(0x00FF0000);  // Blue
     SetColors(default_colors);
 }
 
