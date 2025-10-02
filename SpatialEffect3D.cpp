@@ -649,11 +649,23 @@ void SpatialEffect3D::ApplyControlVisibility()
 {
     EffectInfo3D info = GetEffectInfo();
 
+    // For backward compatibility: if default_speed_scale is 0, assume old effect
+    // that doesn't set visibility flags, so default everything to visible
+    bool is_new_effect = (info.default_speed_scale != 0.0f);
+
+    bool show_speed = is_new_effect ? info.show_speed_control : true;
+    bool show_brightness = is_new_effect ? info.show_brightness_control : true;
+    bool show_frequency = is_new_effect ? info.show_frequency_control : true;
+    bool show_size = is_new_effect ? info.show_size_control : true;
+    bool show_fps = is_new_effect ? info.show_fps_control : true;
+    bool show_axis = is_new_effect ? info.show_axis_control : true;
+    bool show_colors = is_new_effect ? info.show_color_controls : true;
+
     // Hide/show controls based on effect's declarations
     if(speed_slider && speed_label)
     {
-        speed_slider->setVisible(info.show_speed_control);
-        speed_label->setVisible(info.show_speed_control);
+        speed_slider->setVisible(show_speed);
+        speed_label->setVisible(show_speed);
         // Find and hide the label too
         QWidget* parent = speed_slider->parentWidget();
         if(parent)
@@ -663,7 +675,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "Speed:")
                 {
-                    label->setVisible(info.show_speed_control);
+                    label->setVisible(show_speed);
                     break;
                 }
             }
@@ -672,8 +684,8 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(brightness_slider && brightness_label)
     {
-        brightness_slider->setVisible(info.show_brightness_control);
-        brightness_label->setVisible(info.show_brightness_control);
+        brightness_slider->setVisible(show_brightness);
+        brightness_label->setVisible(show_brightness);
         QWidget* parent = brightness_slider->parentWidget();
         if(parent)
         {
@@ -682,7 +694,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "Brightness:")
                 {
-                    label->setVisible(info.show_brightness_control);
+                    label->setVisible(show_brightness);
                     break;
                 }
             }
@@ -691,8 +703,8 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(frequency_slider && frequency_label)
     {
-        frequency_slider->setVisible(info.show_frequency_control);
-        frequency_label->setVisible(info.show_frequency_control);
+        frequency_slider->setVisible(show_frequency);
+        frequency_label->setVisible(show_frequency);
         QWidget* parent = frequency_slider->parentWidget();
         if(parent)
         {
@@ -701,7 +713,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "Frequency:")
                 {
-                    label->setVisible(info.show_frequency_control);
+                    label->setVisible(show_frequency);
                     break;
                 }
             }
@@ -710,8 +722,8 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(size_slider && size_label)
     {
-        size_slider->setVisible(info.show_size_control);
-        size_label->setVisible(info.show_size_control);
+        size_slider->setVisible(show_size);
+        size_label->setVisible(show_size);
         QWidget* parent = size_slider->parentWidget();
         if(parent)
         {
@@ -720,7 +732,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "Size:")
                 {
-                    label->setVisible(info.show_size_control);
+                    label->setVisible(show_size);
                     break;
                 }
             }
@@ -729,8 +741,8 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(fps_slider && fps_label)
     {
-        fps_slider->setVisible(info.show_fps_control);
-        fps_label->setVisible(info.show_fps_control);
+        fps_slider->setVisible(show_fps);
+        fps_label->setVisible(show_fps);
         QWidget* parent = fps_slider->parentWidget();
         if(parent)
         {
@@ -739,7 +751,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "FPS:")
                 {
-                    label->setVisible(info.show_fps_control);
+                    label->setVisible(show_fps);
                     break;
                 }
             }
@@ -748,8 +760,8 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(axis_combo && reverse_check)
     {
-        axis_combo->setVisible(info.show_axis_control);
-        reverse_check->setVisible(info.show_axis_control);
+        axis_combo->setVisible(show_axis);
+        reverse_check->setVisible(show_axis);
         QWidget* parent = axis_combo->parentWidget();
         if(parent)
         {
@@ -758,7 +770,7 @@ void SpatialEffect3D::ApplyControlVisibility()
             {
                 if(label->text() == "Axis:")
                 {
-                    label->setVisible(info.show_axis_control);
+                    label->setVisible(show_axis);
                     break;
                 }
             }
@@ -767,7 +779,7 @@ void SpatialEffect3D::ApplyControlVisibility()
 
     if(color_controls_group)
     {
-        color_controls_group->setVisible(info.show_color_controls);
+        color_controls_group->setVisible(show_colors);
     }
 }
 
