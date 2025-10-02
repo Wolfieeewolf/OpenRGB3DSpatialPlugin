@@ -211,7 +211,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* left_panel = new QVBoxLayout(left_content);
     left_panel->setSpacing(8);
 
-    QGroupBox* available_group = new QGroupBox("Available Controllers");
+    /*---------------------------------------------------------*\
+    | Tab Widget for left panel                                |
+    \*---------------------------------------------------------*/
+    QTabWidget* left_tabs = new QTabWidget();
+
+    /*---------------------------------------------------------*\
+    | Available Controllers Tab                                |
+    \*---------------------------------------------------------*/
+    QWidget* available_tab = new QWidget();
     QVBoxLayout* available_layout = new QVBoxLayout();
     available_layout->setSpacing(5);
 
@@ -298,34 +306,60 @@ void OpenRGB3DSpatialTab::SetupUI()
     add_remove_layout->addWidget(clear_button);
     available_layout->addLayout(add_remove_layout);
 
-    available_group->setLayout(available_layout);
-    left_panel->addWidget(available_group);
+    available_tab->setLayout(available_layout);
+    left_tabs->addTab(available_tab, "Available Controllers");
 
-    QGroupBox* custom_group = new QGroupBox("Custom 3D Controllers");
+    /*---------------------------------------------------------*\
+    | Custom 3D Controllers Tab                                |
+    \*---------------------------------------------------------*/
+    QWidget* custom_tab = new QWidget();
     QVBoxLayout* custom_layout = new QVBoxLayout();
     custom_layout->setSpacing(5);
 
-    QPushButton* custom_controller_button = new QPushButton("Create Custom 3D Controller");
+    // Custom controllers list
+    QLabel* custom_list_label = new QLabel("Available Custom Controllers:");
+    custom_list_label->setStyleSheet("font-weight: bold;");
+    custom_layout->addWidget(custom_list_label);
+
+    custom_controllers_list = new QListWidget();
+    custom_controllers_list->setMinimumHeight(150);
+    custom_controllers_list->setToolTip("Select a custom controller to edit or export");
+    custom_layout->addWidget(custom_controllers_list);
+
+    // Create button
+    QPushButton* custom_controller_button = new QPushButton("Create New Custom Controller");
     connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
     custom_layout->addWidget(custom_controller_button);
 
+    // Import/Export/Edit buttons
     QHBoxLayout* custom_io_layout = new QHBoxLayout();
+
     QPushButton* import_button = new QPushButton("Import");
+    import_button->setToolTip("Import a custom controller from file");
     connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
     custom_io_layout->addWidget(import_button);
 
     QPushButton* export_button = new QPushButton("Export");
+    export_button->setToolTip("Export selected custom controller to file");
     connect(export_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
     custom_io_layout->addWidget(export_button);
 
     QPushButton* edit_button = new QPushButton("Edit");
+    edit_button->setToolTip("Edit selected custom controller");
     connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
     custom_io_layout->addWidget(edit_button);
 
     custom_layout->addLayout(custom_io_layout);
-    custom_group->setLayout(custom_layout);
-    left_panel->addWidget(custom_group);
 
+    custom_tab->setLayout(custom_layout);
+    left_tabs->addTab(custom_tab, "Custom Controllers");
+
+    // Add tabs to left panel
+    left_panel->addWidget(left_tabs);
+
+    /*---------------------------------------------------------*\
+    | Controllers in 3D Scene (below tabs)                     |
+    \*---------------------------------------------------------*/
     QGroupBox* controller_group = new QGroupBox("Controllers in 3D Scene");
     QVBoxLayout* controller_layout = new QVBoxLayout();
     controller_layout->setSpacing(5);
@@ -896,6 +930,19 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
     for(unsigned int i = 0; i < virtual_controllers.size(); i++)
     {
         available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_controllers[i]->GetName()));
+    }
+
+    // Also update the custom controllers list
+    UpdateCustomControllersList();
+}
+
+void OpenRGB3DSpatialTab::UpdateCustomControllersList()
+{
+    custom_controllers_list->clear();
+
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+    {
+        custom_controllers_list->addItem(QString::fromStdString(virtual_controllers[i]->GetName()));
     }
 }
 
@@ -1886,23 +1933,20 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         return;
     }
 
-    QStringList controller_names;
-    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+    int list_row = custom_controllers_list->currentRow();
+    if(list_row < 0)
     {
-        controller_names.append(QString::fromStdString(virtual_controllers[i]->GetName()));
-    }
-
-    bool ok;
-    QString selected = QInputDialog::getItem(this, "Export Custom Controller",
-                                            "Select controller to export:",
-                                            controller_names, 0, false, &ok);
-    if(!ok || selected.isEmpty())
-    {
+        QMessageBox::warning(this, "No Selection", "Please select a custom controller from the list to export");
         return;
     }
 
-    int selected_idx = controller_names.indexOf(selected);
-    VirtualController3D* ctrl = virtual_controllers[selected_idx];
+    if(list_row >= (int)virtual_controllers.size())
+    {
+        QMessageBox::warning(this, "Invalid Selection", "Selected custom controller does not exist");
+        return;
+    }
+
+    VirtualController3D* ctrl = virtual_controllers[list_row];
 
     QString filename = QFileDialog::getSaveFileName(this, "Export Custom Controller",
                                                     QString::fromStdString(ctrl->GetName()) + ".3dctrl",
@@ -2021,33 +2065,20 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
 void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
 {
-    int list_row = available_controllers_list->currentRow();
+    int list_row = custom_controllers_list->currentRow();
     if(list_row < 0)
     {
-        QMessageBox::warning(this, "No Selection", "Please select a custom controller from the available controllers list");
+        QMessageBox::warning(this, "No Selection", "Please select a custom controller from the list to edit");
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-
-    int visible_physical_count = 0;
-    for(unsigned int i = 0; i < controllers.size(); i++)
+    if(list_row >= (int)virtual_controllers.size())
     {
-        if(GetUnassignedLEDCount(controllers[i]) > 0)
-        {
-            visible_physical_count++;
-        }
-    }
-
-    int virtual_idx = list_row - visible_physical_count;
-
-    if(virtual_idx < 0 || virtual_idx >= (int)virtual_controllers.size())
-    {
-        QMessageBox::warning(this, "Not a Custom Controller", "Selected item is not a custom controller.\n\nOnly custom controllers can be edited.");
+        QMessageBox::warning(this, "Invalid Selection", "Selected custom controller does not exist");
         return;
     }
 
-    VirtualController3D* virtual_ctrl = virtual_controllers[virtual_idx];
+    VirtualController3D* virtual_ctrl = virtual_controllers[list_row];
 
     CustomControllerDialog dialog(resource_manager, this);
     dialog.setWindowTitle("Edit Custom 3D Controller");

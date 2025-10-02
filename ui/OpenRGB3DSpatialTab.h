@@ -112,6 +112,7 @@ private:
     void LoadCustomControllers();
     void UpdateAvailableItemCombo();
     void UpdateAvailableControllersList();
+    void UpdateCustomControllersList();
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
@@ -129,6 +130,7 @@ private:
     std::vector<ControllerTransform*> controller_transforms;
 
     QListWidget*                available_controllers_list;
+    QListWidget*                custom_controllers_list;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;
     QListWidget*                controller_list;
