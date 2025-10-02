@@ -649,17 +649,24 @@ void SpatialEffect3D::ApplyControlVisibility()
 {
     EffectInfo3D info = GetEffectInfo();
 
-    // For backward compatibility: if default_speed_scale is 0, assume old effect
-    // that doesn't set visibility flags, so default everything to visible
-    bool is_new_effect = (info.default_speed_scale != 0.0f);
+    // Default to showing all controls (backward compatibility)
+    // Effects can explicitly set these to false to hide controls
+    // The issue is that old effects don't initialize these fields at all
+    // So we can't reliably detect if they're intentionally false or just uninitialized
+    // Solution: Always default to visible - effects must explicitly hide
 
-    bool show_speed = is_new_effect ? info.show_speed_control : true;
-    bool show_brightness = is_new_effect ? info.show_brightness_control : true;
-    bool show_frequency = is_new_effect ? info.show_frequency_control : true;
-    bool show_size = is_new_effect ? info.show_size_control : true;
-    bool show_fps = is_new_effect ? info.show_fps_control : true;
-    bool show_axis = is_new_effect ? info.show_axis_control : true;
-    bool show_colors = is_new_effect ? info.show_color_controls : true;
+    // For safety, assume all controls should be visible unless we're certain they shouldn't be
+    // Since we can't tell uninitialized from intentionally-false, just show everything
+    bool show_speed = true;
+    bool show_brightness = true;
+    bool show_frequency = true;
+    bool show_size = true;
+    bool show_fps = true;
+    bool show_axis = true;
+    bool show_colors = true;
+
+    // TODO: Future enhancement - add a version field to EffectInfo3D so we can detect
+    // which effects are using the new system
 
     // Hide/show controls based on effect's declarations
     if(speed_slider && speed_label)
