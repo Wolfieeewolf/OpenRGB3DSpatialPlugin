@@ -202,10 +202,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     \*---------------------------------------------------------*/
     QScrollArea* left_scroll = new QScrollArea();
     left_scroll->setWidgetResizable(true);
-    left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     left_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     left_scroll->setMinimumWidth(300);
-    left_scroll->setMaximumWidth(400);
+    left_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     QWidget* left_content = new QWidget();
     QVBoxLayout* left_panel = new QVBoxLayout(left_content);
@@ -459,10 +459,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
-    | Grid Settings Group (Custom Grid Only)                  |
+    | Grid Settings Group (Custom Grid Only) - moved to middle|
     \*---------------------------------------------------------*/
     QGroupBox* layout_group = new QGroupBox("Grid Settings (1:1 LED Mapping)");
     QGridLayout* layout_layout = new QGridLayout();
+    layout_layout->setSpacing(5);
 
     // Grid Dimensions
     layout_layout->addWidget(new QLabel("Grid X:"), 0, 0);
@@ -557,7 +558,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     layout_layout->addWidget(grid_help2, 5, 0, 1, 6);
 
     layout_group->setLayout(layout_layout);
-    left_panel->addWidget(layout_group);
+    middle_panel->addWidget(layout_group);
 
     // Connect signals
     connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
@@ -574,10 +575,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(use_user_reference_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_use_user_reference_toggled);
 
     /*---------------------------------------------------------*\
-    | Position & Rotation Controls (moved from right panel)   |
+    | Position & Rotation Controls - moved to right panel     |
     \*---------------------------------------------------------*/
     QGroupBox* transform_group = new QGroupBox("Position & Rotation");
     QGridLayout* position_layout = new QGridLayout();
+    position_layout->setSpacing(5);
 
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
 
@@ -786,11 +788,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(rot_z_spin, 5, 2);
 
     transform_group->setLayout(position_layout);
-    middle_panel->addWidget(transform_group);
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
     QVBoxLayout* right_panel = new QVBoxLayout();
+
+    /*---------------------------------------------------------*\
+    | Position & Rotation - now in right panel                 |
+    \*---------------------------------------------------------*/
+    right_panel->addWidget(transform_group);
 
     /*---------------------------------------------------------*\
     | Effects Section                                          |
@@ -838,10 +844,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     \*---------------------------------------------------------*/
     QScrollArea* right_scroll = new QScrollArea();
     right_scroll->setWidgetResizable(true);
-    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     right_scroll->setMinimumWidth(300);
-    right_scroll->setMaximumWidth(400);
+    right_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     QWidget* right_content = new QWidget();
     right_content->setLayout(right_panel);
