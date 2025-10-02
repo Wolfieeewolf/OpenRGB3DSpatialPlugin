@@ -3064,6 +3064,11 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(wave3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
         });
 
+        /*---------------------------------------------------------*\
+        | Add effect widget to layout                              |
+        \*---------------------------------------------------------*/
+        effect_controls_layout->addWidget(wave3d_effect);
+
     }
     else if(effect_type == 1)  // Wipe effect
     {
@@ -3082,6 +3087,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         connect(wipe3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
         });
+
+        effect_controls_layout->addWidget(wipe3d_effect);
 
     }
     else if(effect_type == 2)  // Plasma effect
@@ -3102,6 +3109,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(plasma3d_effect, &SpatialEffect3D::ParametersChanged, [this]() {
         });
 
+        effect_controls_layout->addWidget(plasma3d_effect);
+
     }
     else if(effect_type == 3)  // Spiral
     {
@@ -3116,6 +3125,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(spiral3d_effect, effect_type);
+
+        effect_controls_layout->addWidget(spiral3d_effect);
     }
     else if(effect_type == 4)  // Spin
     {
@@ -3130,6 +3141,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(spin3d_effect, effect_type);
+
+        effect_controls_layout->addWidget(spin3d_effect);
     }
     else if(effect_type == 5)  // DNA Helix
     {
@@ -3144,6 +3157,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(dnahelix3d_effect, effect_type);
+
+        effect_controls_layout->addWidget(dnahelix3d_effect);
     }
     else if(effect_type == 6)  // Breathing Sphere
     {
@@ -3158,6 +3173,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(breathingsphere3d_effect, effect_type);
+
+        effect_controls_layout->addWidget(breathingsphere3d_effect);
     }
     else if(effect_type == 7)  // Explosion
     {
@@ -3172,6 +3189,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
         connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
         SetupEffectSignals(explosion3d_effect, effect_type);
+
+        effect_controls_layout->addWidget(explosion3d_effect);
     }
     else
     {
