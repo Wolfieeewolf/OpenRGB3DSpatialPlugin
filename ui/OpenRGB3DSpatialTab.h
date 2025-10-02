@@ -27,6 +27,7 @@
 #include <QCheckBox>
 #include <QTimer>
 #include <QScrollArea>
+#include <QTabWidget>
 
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"

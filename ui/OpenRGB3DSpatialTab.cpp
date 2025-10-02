@@ -459,9 +459,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
-    | Grid Settings Group (Custom Grid Only) - moved to middle|
+    | Tab Widget for Grid Settings and Position/Rotation      |
     \*---------------------------------------------------------*/
-    QGroupBox* layout_group = new QGroupBox("Grid Settings (1:1 LED Mapping)");
+    QTabWidget* settings_tabs = new QTabWidget();
+
+    /*---------------------------------------------------------*\
+    | Grid Settings Tab                                        |
+    \*---------------------------------------------------------*/
+    QWidget* grid_settings_tab = new QWidget();
     QGridLayout* layout_layout = new QGridLayout();
     layout_layout->setSpacing(5);
 
@@ -557,8 +562,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_help2->setWordWrap(true);
     layout_layout->addWidget(grid_help2, 5, 0, 1, 6);
 
-    layout_group->setLayout(layout_layout);
-    middle_panel->addWidget(layout_group);
+    grid_settings_tab->setLayout(layout_layout);
+    settings_tabs->addTab(grid_settings_tab, "Grid Settings");
 
     // Connect signals
     connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
@@ -575,9 +580,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(use_user_reference_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_use_user_reference_toggled);
 
     /*---------------------------------------------------------*\
-    | Position & Rotation Controls - moved to right panel     |
+    | Position & Rotation Tab                                  |
     \*---------------------------------------------------------*/
-    QGroupBox* transform_group = new QGroupBox("Position & Rotation");
+    QWidget* transform_tab = new QWidget();
     QGridLayout* position_layout = new QGridLayout();
     position_layout->setSpacing(5);
 
@@ -787,16 +792,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     });
     position_layout->addWidget(rot_z_spin, 5, 2);
 
-    transform_group->setLayout(position_layout);
+    transform_tab->setLayout(position_layout);
+    settings_tabs->addTab(transform_tab, "Position & Rotation");
+
+    // Add the tab widget to middle panel
+    middle_panel->addWidget(settings_tabs);
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
     QVBoxLayout* right_panel = new QVBoxLayout();
-
-    /*---------------------------------------------------------*\
-    | Position & Rotation - now in right panel                 |
-    \*---------------------------------------------------------*/
-    right_panel->addWidget(transform_group);
 
     /*---------------------------------------------------------*\
     | Effects Section                                          |
