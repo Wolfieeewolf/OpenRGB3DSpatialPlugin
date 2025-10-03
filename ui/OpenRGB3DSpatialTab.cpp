@@ -275,7 +275,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     custom_controllers_list->setToolTip("Select a custom controller to edit or export");
     custom_layout->addWidget(custom_controllers_list);
 
-    // Create button
     QPushButton* custom_controller_button = new QPushButton("Create New Custom Controller");
     connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
     custom_layout->addWidget(custom_controller_button);
@@ -371,7 +370,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     ref_points_tab->setLayout(ref_points_layout);
     left_tabs->addTab(ref_points_tab, "Reference Points");
 
-    // Add tabs to left panel
     left_panel->addWidget(left_tabs);
 
     /*---------------------------------------------------------*\
@@ -965,12 +963,10 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     profile_tab->setLayout(profile_layout);
 
-    // Add tabs in correct order: Position/Rotation, Grid Settings, Layout Profiles
     settings_tabs->addTab(transform_tab, "Position & Rotation");
     settings_tabs->addTab(grid_settings_tab, "Grid Settings");
     settings_tabs->addTab(profile_tab, "Layout Profiles");
 
-    // Add the tab widget to middle panel
     middle_panel->addWidget(settings_tabs);
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space

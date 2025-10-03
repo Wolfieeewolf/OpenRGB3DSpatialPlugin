@@ -8,11 +8,13 @@ Position your RGB devices in 3D space and apply spatial effects that respond to 
 
 - **3D Viewport**: Position devices in 3D space with interactive OpenGL viewport
 - **Spatial Effects**: Physics-based effects that respond to LED position in 3D space
-- **Reference Point System**: User head position support for perception-based effects
+- **Reference Point System**: Multiple reference points for perception-based effects
+- **Zone Management**: Group controllers into zones for targeted effect control
 - **Custom Controllers**: Create virtual 3D grids from multiple devices
 - **Layout Profiles**: Save/load positions with auto-load support
 - **Universal Axis Controls**: X/Y/Z/Radial axes with forward/reverse for all effects
 - **Effect Registration System**: Modular effect architecture for easy expansion
+- **Unified Origin System**: All effects use configurable reference point origins
 
 ### Currently Working ✅
 
@@ -30,46 +32,48 @@ Position your RGB devices in 3D space and apply spatial effects that respond to 
 - 3D viewport with gizmo controls for device positioning
 - Custom controller creation and LED mapping
 - Layout save/load with JSON persistence
-- Reference point system (user head position support)
+- **Multi-reference point system** (10+ reference point types)
+- **Zone management** for grouping and targeting controllers
 - Universal effect base class with common controls
 - Rainbow mode and multi-color support
 - Frequency, speed, brightness controls
 - Effect auto-registration system
+- **Unified origin system** - all effects support reference point origins
 
 **UI Features:**
 - Interactive 3D viewport (rotate/pan/zoom)
 - Device selection and positioning
 - Color picker with add/remove color support
 - Axis selection (X/Y/Z/Radial)
-- Effect origin modes (Room Center / User Head)
+- **Reference points**: User, Monitor, Chair, Desk, Speakers, Door, Window, Bed, TV, Custom
+- **Zone management**: Create, edit, delete zones with controller selection
+- **Effect origin selection**: Room Center or any reference point
+- **Zone filtering**: Apply effects to specific zones only
 
 ### Currently Broken/Non-Functional 🔴
 
-**Known Broken Features:**
-- **Custom Controller Creation** - UI exists but functionality incomplete/buggy
-- **Layout Auto-load** - Checkbox present but auto-load on startup not working reliably
+**Known Issues:**
 - **Some device positioning** - Gizmo controls may not work correctly for all device types
-- **Effect persistence** - Effect settings not always saved/restored with layouts correctly
 - **Viewport rendering issues** - Occasional flickering or rendering artifacts on some systems
+- **Performance** - Not optimized for high LED counts (>500 LEDs may lag)
 
 ### Not Yet Implemented ❌
 
 **Planned Features:**
-- Multi-point reference system (monitor, desk, speakers, etc.)
 - Dual-point effects (Lightning Arc, Orbit Between)
 - Multi-point effects (Network Pulse, Zone Influence)
-- Per-effect origin override
-- Custom reference points
 - Effect chaining/sequencing
-- Reference point templates
+- Effect stacking (multiple simultaneous effects on different zones)
 - Game integration API
 - Motion tracking support
+- Custom gizmo for reference points
+- Reference point rotation controls
 
 **Known Limitations:**
-- Reference points limited to user head only (no monitor/desk/speakers yet)
-- No multi-point effect support
+- No multi-point effect support yet
+- No effect stacking/layering yet
 - No external trigger integration
-- Performance not optimized for high LED counts (>500 LEDs)
+- Reference point gizmos not yet implemented
 
 ### Controls
 
@@ -126,24 +130,56 @@ make -j8
 5. Adjust speed, brightness, colors, and axis
 6. Click **Start Effect**
 
-### Reference Point System (User Head)
+### Reference Point System
 
-1. Set your head position using X/Y/Z spin boxes in "Reference Point" section
-2. Check **"Use User Head as Effect Origin"** to enable perception-based effects
-3. Effects will now originate from your head position instead of room center
-4. Adjust position in real-time to see effects update
+The plugin supports multiple reference points for positioning effects in your room:
+
+**Available Reference Points:**
+- User (head position)
+- Monitor/Screen
+- Chair
+- Desk
+- Speakers (Left/Right)
+- Door
+- Window
+- Bed
+- TV
+- Custom points
+
+**Using Reference Points:**
+1. Go to **Reference Points** tab
+2. Click **Add Reference Point** and choose type
+3. Set position using X/Y/Z controls
+4. Optionally set color for visual identification
+5. In **Effects** tab, select reference point from **Origin** dropdown
+6. Effects will now originate from selected reference point
 
 **Coordinate System:**
 - X: Left (-) to Right (+)
-- Y: Floor (0) to Ceiling (+)
-- Z: Front (-) to Back (+)
+- Y: Front (-) to Back (+)
+- Z: Floor (-) to Ceiling (+)
+
+### Zone Management
+
+Group controllers into zones for targeted effect control:
+
+1. Go to **Zones** tab
+2. Click **Create Zone** and enter a name
+3. Select controllers to include in the zone
+4. In **Effects** tab, select zone from **Zone** dropdown
+5. Effects will only apply to controllers in the selected zone
+
+**Use Cases:**
+- "Desk" zone: Apply effects to keyboard, mouse, desk strip only
+- "Wall" zone: Target wall-mounted devices
+- "Ceiling" zone: Control overhead lighting separately
 
 ### Save/Load Layouts
 
-- **Save Layout**: Store device positions and reference points to JSON file
+- **Save Layout**: Store device positions, reference points, and zones to JSON file
 - **Load Layout**: Restore saved layout from file
 - **Auto-load**: Enable checkbox to automatically load layout on startup
-- Layouts include device positions, user head position, and effect settings
+- Layouts include device positions, reference points, zones, and effect settings
 
 ### Custom Controllers
 
@@ -158,9 +194,8 @@ make -j8
 - **Performance** - Not optimized for high LED counts (>500 LEDs may lag)
 - **Device compatibility** - Requires "Direct" mode, some devices may have limited support
 - **Platform** - Primarily tested on Windows, Linux/macOS may have viewport rendering issues
-- **Custom controllers** - Creation UI exists but functionality is buggy/incomplete
-- **Auto-load layouts** - Feature unreliable, may not load on startup
-- **Reference points** - Multi-point system designed but only user head currently functional
+- **Gizmo controls** - May not work correctly for all device types
+- **Viewport rendering** - Occasional flickering or artifacts on some systems
 
 ## Contributing
 
