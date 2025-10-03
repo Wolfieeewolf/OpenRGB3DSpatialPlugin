@@ -128,6 +128,8 @@ HEADERS +=                                                                      
     ControllerLayout3D.h                                                                        \
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
+    EffectListManager3D.h                                                                       \
+    EffectRegisterer3D.h                                                                        \
     VirtualController3D.h                                                                       \
     VirtualReferencePoint3D.h                                                                   \
     Zone3D.h                                                                                    \
