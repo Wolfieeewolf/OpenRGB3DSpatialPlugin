@@ -42,7 +42,6 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
-    OriginPreset GetOriginPreset() const { return origin_preset; }
 
 private slots:
     void OnExplosionParameterChanged();
@@ -51,14 +50,12 @@ private:
     /*---------------------------------------------------------*\
     | Explosion-specific controls                              |
     \*---------------------------------------------------------*/
-    QComboBox*      origin_combo;
     QSlider*        intensity_slider;
 
     /*---------------------------------------------------------*\
     | Explosion-specific parameters                            |
     | (frequency, rainbow_mode, colors are in base class)     |
     \*---------------------------------------------------------*/
-    OriginPreset    origin_preset;
     unsigned int    explosion_intensity;
     float           progress;
 };

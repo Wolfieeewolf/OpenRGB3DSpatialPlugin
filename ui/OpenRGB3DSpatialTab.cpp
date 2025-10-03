@@ -44,75 +44,6 @@
 #include "SettingsManager.h"
 #include <nlohmann/json.hpp>
 
-/*---------------------------------------------------------*\
-| Helper function to calculate origin offset based on     |
-| room preset and grid size                                |
-\*---------------------------------------------------------*/
-static void CalculateOriginOffset(OriginPreset preset, const UserPosition3D& user_pos, int grid_size, float& offset_x, float& offset_y, float& offset_z)
-{
-    float half_grid = grid_size / 2.0f;
-
-    switch(preset)
-    {
-        case ORIGIN_USER_POSITION:
-            offset_x = user_pos.x;
-            offset_y = user_pos.y;
-            offset_z = user_pos.z;
-            break;
-        case ORIGIN_ROOM_CENTER:
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-            offset_z = 0.0f;
-            break;
-        case ORIGIN_FLOOR_CENTER:
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-            offset_z = -half_grid;
-            break;
-        case ORIGIN_CEILING_CENTER:
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-            offset_z = half_grid;
-            break;
-        case ORIGIN_FRONT_WALL:
-            offset_x = 0.0f;
-            offset_y = half_grid;
-            offset_z = 0.0f;
-            break;
-        case ORIGIN_BACK_WALL:
-            offset_x = 0.0f;
-            offset_y = -half_grid;
-            offset_z = 0.0f;
-            break;
-        case ORIGIN_LEFT_WALL:
-            offset_x = -half_grid;
-            offset_y = 0.0f;
-            offset_z = 0.0f;
-            break;
-        case ORIGIN_RIGHT_WALL:
-            offset_x = half_grid;
-            offset_y = 0.0f;
-            offset_z = 0.0f;
-            break;
-        case ORIGIN_FLOOR_FRONT:
-            offset_x = 0.0f;
-            offset_y = -half_grid;
-            offset_z = -half_grid;
-            break;
-        case ORIGIN_FLOOR_BACK:
-            offset_x = 0.0f;
-            offset_y = half_grid;
-            offset_z = -half_grid;
-            break;
-        case ORIGIN_CUSTOM:
-        default:
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-            offset_z = 0.0f;
-            break;
-    }
-}
-
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
     resource_manager(rm),
@@ -1562,21 +1493,95 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     // Create grid context for effects
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
 
-    // Get origin offset for room-based effects (default: user position)
-    OriginPreset origin_preset = ORIGIN_USER_POSITION; // Default: user position
-    Explosion3D* explosion_effect = dynamic_cast<Explosion3D*>(current_effect_ui);
-    if(explosion_effect)
+    /*---------------------------------------------------------*\
+    | Get effect origin from the selected reference point     |
+    \*---------------------------------------------------------*/
+    float origin_offset_x = 0.0f;
+    float origin_offset_y = 0.0f;
+    float origin_offset_z = 0.0f;
+
+    if(effect_origin_combo)
     {
-        origin_preset = explosion_effect->GetOriginPreset();
+        // Get the selected reference point index (-1 means room center)
+        int index = effect_origin_combo->currentIndex();
+        int ref_point_idx = effect_origin_combo->itemData(index).toInt();
+
+        if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+        {
+            // Use selected reference point position
+            VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx];
+            Vector3D origin = ref_point->GetPosition();
+            origin_offset_x = origin.x;
+            origin_offset_y = origin.y;
+            origin_offset_z = origin.z;
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using reference point origin: %.1f, %.1f, %.1f", origin_offset_x, origin_offset_y, origin_offset_z);
+        }
+        else
+        {
+            // Room Center (0,0,0) selected
+            origin_offset_x = 0.0f;
+            origin_offset_y = 0.0f;
+            origin_offset_z = 0.0f;
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using room center origin: 0,0,0");
+        }
     }
 
-    float origin_offset_x, origin_offset_y, origin_offset_z;
-    int max_grid_size = std::max({custom_grid_x, custom_grid_y, custom_grid_z});
-    CalculateOriginOffset(origin_preset, user_position, max_grid_size, origin_offset_x, origin_offset_y, origin_offset_z);
+    /*---------------------------------------------------------*\
+    | Determine which controllers to apply effects to based   |
+    | on the selected zone                                     |
+    \*---------------------------------------------------------*/
+    std::vector<int> allowed_controllers;
+
+    if(!effect_zone_combo || !zone_manager)
+    {
+        // Safety: If UI not ready, allow all controllers
+        for(unsigned int i = 0; i < controller_transforms.size(); i++)
+        {
+            allowed_controllers.push_back(i);
+        }
+    }
+    else
+    {
+        int zone_idx = effect_zone_combo->currentIndex();
+
+        if(zone_idx == 0)
+        {
+            // "All Controllers" selected - allow all
+            for(unsigned int i = 0; i < controller_transforms.size(); i++)
+            {
+                allowed_controllers.push_back(i);
+            }
+        }
+        else
+        {
+            // Specific zone selected - get controllers from zone manager
+            // Zone index 0 is "All Controllers", so actual zones start at index 1
+            Zone3D* zone = zone_manager->GetZone(zone_idx - 1);
+            if(zone)
+            {
+                allowed_controllers = zone->GetControllers();
+            }
+            else
+            {
+                // Zone not found - allow all as fallback
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Selected zone not found, applying effect to all controllers");
+                for(unsigned int i = 0; i < controller_transforms.size(); i++)
+                {
+                    allowed_controllers.push_back(i);
+                }
+            }
+        }
+    }
 
     // Now map each controller's LEDs to the unified grid and apply effects
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
+        // Skip controllers not in the selected zone
+        if(std::find(allowed_controllers.begin(), allowed_controllers.end(), (int)ctrl_idx) == allowed_controllers.end())
+        {
+            continue; // Controller not in selected zone
+        }
+
         ControllerTransform* transform = controller_transforms[ctrl_idx];
         if(!transform)
         {

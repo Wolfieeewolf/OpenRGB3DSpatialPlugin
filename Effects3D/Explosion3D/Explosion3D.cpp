@@ -29,9 +29,7 @@ static float smoothstep(float edge0, float edge1, float x)
 
 Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
 {
-    origin_combo = nullptr;
     intensity_slider = nullptr;
-    origin_preset = ORIGIN_FLOOR_CENTER;
     explosion_intensity = 75;
     progress = 0.0f;
 
@@ -93,32 +91,17 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(explosion_widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    layout->addWidget(new QLabel("Origin:"), 0, 0);
-    origin_combo = new QComboBox();
-    origin_combo->addItem("Room Center");
-    origin_combo->addItem("Floor Center");
-    origin_combo->addItem("Ceiling Center");
-    origin_combo->addItem("Front Wall");
-    origin_combo->addItem("Back Wall");
-    origin_combo->addItem("Left Wall");
-    origin_combo->addItem("Right Wall");
-    origin_combo->addItem("Floor Front");
-    origin_combo->addItem("Floor Back");
-    origin_combo->setCurrentIndex(origin_preset);
-    layout->addWidget(origin_combo, 0, 1);
-
-    layout->addWidget(new QLabel("Intensity:"), 1, 0);
+    layout->addWidget(new QLabel("Intensity:"), 0, 0);
     intensity_slider = new QSlider(Qt::Horizontal);
     intensity_slider->setRange(10, 200);
     intensity_slider->setValue(explosion_intensity);
-    layout->addWidget(intensity_slider, 1, 1);
+    layout->addWidget(intensity_slider, 0, 1);
 
     if(parent && parent->layout())
     {
         parent->layout()->addWidget(explosion_widget);
     }
 
-    connect(origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Explosion3D::OnExplosionParameterChanged);
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
 }
 
@@ -129,7 +112,6 @@ void Explosion3D::UpdateParams(SpatialEffectParams& params)
 
 void Explosion3D::OnExplosionParameterChanged()
 {
-    if(origin_combo) origin_preset = (OriginPreset)origin_combo->currentIndex();
     if(intensity_slider) explosion_intensity = intensity_slider->value();
     emit ParametersChanged();
 }
