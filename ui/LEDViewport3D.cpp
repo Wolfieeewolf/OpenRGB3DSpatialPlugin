@@ -34,6 +34,7 @@
 | Local Includes                                           |
 \*---------------------------------------------------------*/
 #include "LEDViewport3D.h"
+#include "VirtualReferencePoint3D.h"
 
 /*---------------------------------------------------------*\
 | OpenGL Platform Includes                                 |
@@ -62,6 +63,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , grid_y(10)
     , grid_z(10)
     , grid_snap_enabled(false)
+    , reference_points(nullptr)
+    , selected_ref_point_idx(-1)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
     , camera_pitch(30.0f)
@@ -120,6 +123,23 @@ void LEDViewport3D::SelectController(int index)
     }
 }
 
+void LEDViewport3D::SelectReferencePoint(int index)
+{
+    if(reference_points && index >= 0 && index < (int)reference_points->size())
+    {
+        selected_ref_point_idx = index;
+        selected_controller_idx = -1;
+        ClearSelection();
+
+        VirtualReferencePoint3D* ref_point = (*reference_points)[index];
+        gizmo.SetTarget(ref_point);
+        gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+        UpdateGizmoPosition();
+
+        update();
+    }
+}
+
 void LEDViewport3D::UpdateColors()
 {
     update();
@@ -140,7 +160,17 @@ void LEDViewport3D::SetGridSnapEnabled(bool enabled)
 
 void LEDViewport3D::UpdateGizmoPosition()
 {
-    if(selected_controller_idx >= 0 && controller_transforms &&
+    if(selected_ref_point_idx >= 0 && reference_points &&
+        selected_ref_point_idx < (int)reference_points->size())
+    {
+        VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx];
+        if(ref_point)
+        {
+            Vector3D pos = ref_point->GetPosition();
+            gizmo.SetPosition(pos.x, pos.y, pos.z);
+        }
+    }
+    else if(selected_controller_idx >= 0 && controller_transforms &&
         selected_controller_idx < (int)controller_transforms->size())
     {
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
@@ -194,6 +224,7 @@ void LEDViewport3D::paintGL()
     DrawAxes();
     DrawControllers();
     DrawUserFigure();
+    DrawReferencePoints();
     DrawAxisLabels();
 
     UpdateGizmoPosition();
@@ -205,8 +236,12 @@ void LEDViewport3D::paintGL()
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    if(selected_controller_idx >= 0 && controller_transforms &&
-        selected_controller_idx < (int)controller_transforms->size())
+    bool has_controller_selected = (selected_controller_idx >= 0 && controller_transforms &&
+                                    selected_controller_idx < (int)controller_transforms->size());
+    bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&
+                                   selected_ref_point_idx < (int)reference_points->size());
+
+    if(has_controller_selected || has_ref_point_selected)
     {
         gizmo.Render(modelview, projection, viewport);
     }
@@ -244,8 +279,12 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     if(event->button() == Qt::LeftButton)
     {
         // Check gizmo first (if something is selected)
-        if(selected_controller_idx >= 0 && controller_transforms &&
-            selected_controller_idx < (int)controller_transforms->size())
+        bool has_controller_selected = (selected_controller_idx >= 0 && controller_transforms &&
+                                        selected_controller_idx < (int)controller_transforms->size());
+        bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&
+                                       selected_ref_point_idx < (int)reference_points->size());
+
+        if(has_controller_selected || has_ref_point_selected)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
             if(gizmo.HandleMousePress(event, modelview, projection, viewport))
@@ -255,10 +294,33 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
+        // Check if clicking on a reference point first (priority over controllers)
+        int picked_ref_point = PickReferencePoint(event->x(), event->y());
+        if(picked_ref_point >= 0)
+        {
+            selected_ref_point_idx = picked_ref_point;
+            selected_controller_idx = -1;
+            ClearSelection();
+
+            // Set gizmo to target the reference point
+            if(reference_points && picked_ref_point < (int)reference_points->size())
+            {
+                VirtualReferencePoint3D* ref_point = (*reference_points)[picked_ref_point];
+                gizmo.SetTarget(ref_point);
+                gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+                UpdateGizmoPosition();
+            }
+
+            emit ReferencePointSelected(picked_ref_point);
+            update();
+            return;
+        }
+
         // Check if clicking on a controller
         int picked_controller = PickController(event->x(), event->y());
         if(picked_controller >= 0)
         {
+            selected_ref_point_idx = -1; // Deselect reference point
             if(event->modifiers() & Qt::ControlModifier)
             {
                 if(IsControllerSelected(picked_controller))
@@ -340,6 +402,15 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
                                          ctrl->transform.rotation.x,
                                          ctrl->transform.rotation.y,
                                          ctrl->transform.rotation.z);
+        }
+        else if(selected_ref_point_idx >= 0 && reference_points &&
+                selected_ref_point_idx < (int)reference_points->size())
+        {
+            VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx];
+            Vector3D pos = ref_point->GetPosition();
+
+            emit ReferencePointPositionChanged(selected_ref_point_idx,
+                                              pos.x, pos.y, pos.z);
         }
 
         update();
@@ -1070,6 +1141,126 @@ bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
     return true;
 }
 
+bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[3],
+                                       const Vector3D& sphere_center, float sphere_radius, float& distance)
+{
+    // Calculate vector from ray origin to sphere center
+    float oc[3] = {
+        ray_origin[0] - sphere_center.x,
+        ray_origin[1] - sphere_center.y,
+        ray_origin[2] - sphere_center.z
+    };
+
+    // Quadratic equation coefficients: at^2 + bt + c = 0
+    float a = ray_direction[0] * ray_direction[0] +
+              ray_direction[1] * ray_direction[1] +
+              ray_direction[2] * ray_direction[2];
+
+    float b = 2.0f * (oc[0] * ray_direction[0] +
+                      oc[1] * ray_direction[1] +
+                      oc[2] * ray_direction[2]);
+
+    float c = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - sphere_radius * sphere_radius;
+
+    // Calculate discriminant
+    float discriminant = b * b - 4.0f * a * c;
+
+    if(discriminant < 0.0f)
+    {
+        return false; // No intersection
+    }
+
+    // Calculate the two possible intersection distances
+    float sqrt_discriminant = std::sqrt(discriminant);
+    float t1 = (-b - sqrt_discriminant) / (2.0f * a);
+    float t2 = (-b + sqrt_discriminant) / (2.0f * a);
+
+    // Use the closest positive intersection
+    if(t1 > 0.0f)
+    {
+        distance = t1;
+        return true;
+    }
+    else if(t2 > 0.0f)
+    {
+        distance = t2;
+        return true;
+    }
+
+    return false; // Both intersections behind the ray origin
+}
+
+int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
+{
+    if(!reference_points) return -1;
+
+    float modelview[16];
+    float projection[16];
+    int viewport[4];
+
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // Use gluUnProject for proper ray generation
+    GLdouble near_x, near_y, near_z;
+    GLdouble far_x, far_y, far_z;
+
+    int gl_mouse_y = viewport[3] - mouse_y;
+
+    GLdouble mv[16], proj[16];
+    GLint vp[4];
+    for(int i = 0; i < 16; i++)
+    {
+        mv[i] = (GLdouble)modelview[i];
+        proj[i] = (GLdouble)projection[i];
+    }
+    for(int i = 0; i < 4; i++)
+    {
+        vp[i] = (GLint)viewport[i];
+    }
+
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 0.0,
+                 mv, proj, vp,
+                 &near_x, &near_y, &near_z);
+
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 1.0,
+                 mv, proj, vp,
+                 &far_x, &far_y, &far_z);
+
+    // Create ray
+    float ray_origin[3] = { (float)near_x, (float)near_y, (float)near_z };
+    float ray_direction[3] = {
+        (float)(far_x - near_x),
+        (float)(far_y - near_y),
+        (float)(far_z - near_z)
+    };
+
+    // Find closest reference point
+    int closest_ref_point = -1;
+    float closest_distance = FLT_MAX;
+    const float sphere_radius = 0.3f; // Match the radius used in DrawReferencePoints
+
+    for(unsigned int i = 0; i < reference_points->size(); i++)
+    {
+        VirtualReferencePoint3D* ref_point = (*reference_points)[i];
+        if(!ref_point->IsVisible()) continue;
+
+        Vector3D pos = ref_point->GetPosition();
+        float distance;
+
+        if(RaySphereIntersect(ray_origin, ray_direction, pos, sphere_radius, distance))
+        {
+            if(distance < closest_distance)
+            {
+                closest_distance = distance;
+                closest_ref_point = (int)i;
+            }
+        }
+    }
+
+    return closest_ref_point;
+}
 
 void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds)
 {
@@ -1281,7 +1472,8 @@ void LEDViewport3D::ClearSelection()
 {
     selected_controller_indices.clear();
     selected_controller_idx = -1;
-    gizmo.SetTarget(nullptr);
+    selected_ref_point_idx = -1;
+    gizmo.SetTarget((ControllerTransform*)nullptr);
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const
@@ -1297,47 +1489,223 @@ void LEDViewport3D::SetUserPosition(const UserPosition3D& position)
     user_position = position;
 }
 
+void LEDViewport3D::SetReferencePoints(std::vector<VirtualReferencePoint3D*>* ref_points)
+{
+    reference_points = ref_points;
+}
+
 void LEDViewport3D::DrawUserFigure()
 {
-    if(!user_position.visible) return;
+    // Find and draw User type reference point with smiley face
+    if(!reference_points) return;
 
-    glPushMatrix();
-    glTranslatef(user_position.x, user_position.y, user_position.z);
-
-    const float head_radius = 0.4f;
-    const int segments = 20;
-
-    glColor3f(0.0f, 1.0f, 0.0f);
-    glLineWidth(2.0f);
-
-    glBegin(GL_LINE_LOOP);
-    for(int i = 0; i < segments; i++)
+    for(size_t idx = 0; idx < reference_points->size(); idx++)
     {
-        float angle = 2.0f * M_PI * i / segments;
-        float x = head_radius * cosf(angle);
-        float y = head_radius * sinf(angle);
-        glVertex3f(x, y, 0.0f);
+        VirtualReferencePoint3D* ref_point = (*reference_points)[idx];
+        if(ref_point->GetType() == REF_POINT_USER && ref_point->IsVisible())
+        {
+            bool is_selected = ((int)idx == selected_ref_point_idx);
+            Vector3D pos = ref_point->GetPosition();
+            Rotation3D rot = ref_point->GetRotation();
+            RGBColor color = ref_point->GetDisplayColor();
+
+            float r = (color & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = ((color >> 16) & 0xFF) / 255.0f;
+
+            glPushMatrix();
+            glTranslatef(pos.x, pos.y, pos.z);
+            glRotatef(rot.x, 1.0f, 0.0f, 0.0f);
+            glRotatef(rot.y, 0.0f, 1.0f, 0.0f);
+            glRotatef(rot.z, 0.0f, 0.0f, 1.0f);
+
+            const float head_radius = 0.4f;
+            const int segments = 20;
+
+            glColor3f(r, g, b);
+            glLineWidth(2.0f);
+
+            // Draw head circle
+            glBegin(GL_LINE_LOOP);
+            for(int i = 0; i < segments; i++)
+            {
+                float angle = 2.0f * M_PI * i / segments;
+                float x = head_radius * cosf(angle);
+                float y = head_radius * sinf(angle);
+                glVertex3f(x, y, 0.0f);
+            }
+            glEnd();
+
+            // Draw eyes
+            glPointSize(6.0f);
+            glBegin(GL_POINTS);
+            glVertex3f(-0.15f, 0.1f, 0.0f);
+            glVertex3f(0.15f, 0.1f, 0.0f);
+            glEnd();
+
+            // Draw smile
+            glBegin(GL_LINE_STRIP);
+            for(int i = 0; i <= 10; i++)
+            {
+                float t = (float)i / 10.0f;
+                float angle = M_PI + t * M_PI;
+                float x = 0.25f * cosf(angle);
+                float y = -0.05f + 0.25f * sinf(angle);
+                glVertex3f(x, y, 0.0f);
+            }
+            glEnd();
+
+            // Draw selection box when selected
+            if(is_selected)
+            {
+                glDisable(GL_DEPTH_TEST); // Make sure selection box is always visible
+                float box_size = head_radius * 1.5f;
+                glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow
+                glLineWidth(3.0f);
+
+                glBegin(GL_LINES);
+                // Bottom square
+                glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
+                glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
+                glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
+                glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
+
+                // Top square
+                glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
+                glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
+                glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
+                glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
+
+                // Vertical edges
+                glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
+                glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
+                glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
+                glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
+                glEnd();
+
+                glEnable(GL_DEPTH_TEST); // Re-enable depth test
+            }
+
+            glLineWidth(1.0f);
+            glPointSize(1.0f);
+            glPopMatrix();
+
+            // Only draw the first User type reference point
+            break;
+        }
     }
-    glEnd();
+}
 
-    glPointSize(6.0f);
-    glBegin(GL_POINTS);
-    glVertex3f(-0.15f, 0.1f, 0.0f);
-    glVertex3f(0.15f, 0.1f, 0.0f);
-    glEnd();
+void LEDViewport3D::DrawReferencePoints()
+{
+    if(!reference_points) return;
 
-    glBegin(GL_LINE_STRIP);
-    for(int i = 0; i <= 10; i++)
+    const float sphere_radius = 0.3f;
+    const int segments = 16;
+    const int rings = 12;
+
+    for(size_t idx = 0; idx < reference_points->size(); idx++)
     {
-        float t = (float)i / 10.0f;
-        float angle = M_PI + t * M_PI;
-        float x = 0.25f * cosf(angle);
-        float y = -0.05f + 0.25f * sinf(angle);
-        glVertex3f(x, y, 0.0f);
-    }
-    glEnd();
+        VirtualReferencePoint3D* ref_point = (*reference_points)[idx];
+        if(!ref_point->IsVisible()) continue;
 
-    glLineWidth(1.0f);
-    glPointSize(1.0f);
-    glPopMatrix();
+        // Skip User type - drawn as smiley face in DrawUserFigure()
+        if(ref_point->GetType() == REF_POINT_USER) continue;
+
+        bool is_selected = ((int)idx == selected_ref_point_idx);
+
+        Vector3D pos = ref_point->GetPosition();
+        Rotation3D rot = ref_point->GetRotation();
+        RGBColor color = ref_point->GetDisplayColor();
+
+        float r = (color & 0xFF) / 255.0f;
+        float g = ((color >> 8) & 0xFF) / 255.0f;
+        float b = ((color >> 16) & 0xFF) / 255.0f;
+
+        glPushMatrix();
+        glTranslatef(pos.x, pos.y, pos.z);
+        glRotatef(rot.x, 1.0f, 0.0f, 0.0f);
+        glRotatef(rot.y, 0.0f, 1.0f, 0.0f);
+        glRotatef(rot.z, 0.0f, 0.0f, 1.0f);
+
+        // Draw filled sphere
+        glColor3f(r, g, b);
+        for(int i = 0; i < rings; i++)
+        {
+            float lat0 = M_PI * (-0.5f + (float)i / rings);
+            float lat1 = M_PI * (-0.5f + (float)(i + 1) / rings);
+            float y0 = sphere_radius * sinf(lat0);
+            float y1 = sphere_radius * sinf(lat1);
+            float r0 = sphere_radius * cosf(lat0);
+            float r1 = sphere_radius * cosf(lat1);
+
+            glBegin(GL_QUAD_STRIP);
+            for(int j = 0; j <= segments; j++)
+            {
+                float lng = 2.0f * M_PI * (float)j / segments;
+                float x = cosf(lng);
+                float z = sinf(lng);
+
+                glVertex3f(x * r0, y0, z * r0);
+                glVertex3f(x * r1, y1, z * r1);
+            }
+            glEnd();
+        }
+
+        // Draw outline - brighter and thicker if selected
+        if(is_selected)
+        {
+            glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow for selection
+            glLineWidth(4.0f);
+        }
+        else
+        {
+            glColor3f(r * 0.5f, g * 0.5f, b * 0.5f);
+            glLineWidth(2.0f);
+        }
+
+        glBegin(GL_LINE_LOOP);
+        for(int i = 0; i < segments; i++)
+        {
+            float angle = 2.0f * M_PI * i / segments;
+            float x = sphere_radius * cosf(angle);
+            float z = sphere_radius * sinf(angle);
+            glVertex3f(x, 0.0f, z);
+        }
+        glEnd();
+
+        // Draw selection box when selected
+        if(is_selected)
+        {
+            glDisable(GL_DEPTH_TEST); // Make sure selection box is always visible
+            float box_size = sphere_radius * 1.5f;
+            glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow
+            glLineWidth(3.0f);
+
+            glBegin(GL_LINES);
+            // Bottom square
+            glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
+            glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
+            glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
+            glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
+
+            // Top square
+            glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
+            glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
+            glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
+            glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
+
+            // Vertical edges
+            glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
+            glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
+            glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
+            glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
+            glEnd();
+
+            glEnable(GL_DEPTH_TEST); // Re-enable depth test
+        }
+
+        glLineWidth(1.0f);
+        glPopMatrix();
+    }
 }

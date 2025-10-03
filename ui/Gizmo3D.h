@@ -23,6 +23,7 @@
 \*---------------------------------------------------------*/
 #include "LEDPosition3D.h"
 #include "ControllerLayout3D.h"
+#include "VirtualReferencePoint3D.h"
 
 /*---------------------------------------------------------*\
 | Gizmo Operation Modes                                    |
@@ -77,6 +78,7 @@ public:
     void CycleMode(); // Cycle through all modes when center is clicked
     void SetPosition(float x, float y, float z);
     void SetTarget(ControllerTransform* target);
+    void SetTarget(VirtualReferencePoint3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
 
@@ -157,7 +159,8 @@ private:
     /*---------------------------------------------------------*\
     | Target Transform                                         |
     \*---------------------------------------------------------*/
-    ControllerTransform*   target_transform;
+    ControllerTransform*        target_transform;
+    VirtualReferencePoint3D*    target_ref_point;
 
     /*---------------------------------------------------------*\
     | Gizmo Position                                           |

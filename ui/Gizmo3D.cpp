@@ -55,6 +55,7 @@ Gizmo3D::Gizmo3D()
     mode = GIZMO_MODE_MOVE;
     selected_axis = GIZMO_AXIS_NONE;
     target_transform = nullptr;
+    target_ref_point = nullptr;
 
     gizmo_x = 0.0f;
     gizmo_y = 0.0f;
@@ -123,11 +124,25 @@ void Gizmo3D::SetPosition(float x, float y, float z)
 void Gizmo3D::SetTarget(ControllerTransform* target)
 {
     target_transform = target;
+    target_ref_point = nullptr;
     active = (target != nullptr);
 
     if(target)
     {
         SetPosition(target->transform.position.x, target->transform.position.y, target->transform.position.z);
+    }
+}
+
+void Gizmo3D::SetTarget(VirtualReferencePoint3D* target)
+{
+    target_ref_point = target;
+    target_transform = nullptr;
+    active = (target != nullptr);
+
+    if(target)
+    {
+        Vector3D pos = target->GetPosition();
+        SetPosition(pos.x, pos.y, pos.z);
     }
 }
 
@@ -208,6 +223,9 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
     if(!active)
         return;
 
+    // Disable depth testing so gizmo always renders on top
+    glDisable(GL_DEPTH_TEST);
+
     glPushMatrix();
     glTranslatef(gizmo_x, gizmo_y, gizmo_z);
 
@@ -225,6 +243,9 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
     }
 
     glPopMatrix();
+
+    // Re-enable depth testing
+    glEnable(GL_DEPTH_TEST);
 }
 
 Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
@@ -560,57 +581,94 @@ float Gizmo3D::SnapToGrid(float value)
 
 void Gizmo3D::ApplyTranslation(float delta_x, float delta_y, float delta_z)
 {
-    if(!target_transform)
-        return;
-
-    // Apply the movement delta
-    target_transform->transform.position.x += delta_x;
-    target_transform->transform.position.y += delta_y;
-    target_transform->transform.position.z += delta_z;
-
-    // Apply grid snapping if enabled
-    if(grid_snap_enabled)
+    if(target_transform)
     {
-        target_transform->transform.position.x = SnapToGrid(target_transform->transform.position.x);
-        target_transform->transform.position.y = SnapToGrid(target_transform->transform.position.y);
-        target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
-    }
+        // Apply the movement delta to controller
+        target_transform->transform.position.x += delta_x;
+        target_transform->transform.position.y += delta_y;
+        target_transform->transform.position.z += delta_z;
 
-    // Update gizmo position to follow target immediately
-    gizmo_x = target_transform->transform.position.x;
-    gizmo_y = target_transform->transform.position.y;
-    gizmo_z = target_transform->transform.position.z;
+        // Apply grid snapping if enabled
+        if(grid_snap_enabled)
+        {
+            target_transform->transform.position.x = SnapToGrid(target_transform->transform.position.x);
+            target_transform->transform.position.y = SnapToGrid(target_transform->transform.position.y);
+            target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
+        }
+
+        // Update gizmo position to follow target immediately
+        gizmo_x = target_transform->transform.position.x;
+        gizmo_y = target_transform->transform.position.y;
+        gizmo_z = target_transform->transform.position.z;
+    }
+    else if(target_ref_point)
+    {
+        // Apply the movement delta to reference point
+        Vector3D pos = target_ref_point->GetPosition();
+        pos.x += delta_x;
+        pos.y += delta_y;
+        pos.z += delta_z;
+
+        // Apply grid snapping if enabled
+        if(grid_snap_enabled)
+        {
+            pos.x = SnapToGrid(pos.x);
+            pos.y = SnapToGrid(pos.y);
+            pos.z = SnapToGrid(pos.z);
+        }
+
+        target_ref_point->SetPosition(pos);
+
+        // Update gizmo position to follow target immediately
+        gizmo_x = pos.x;
+        gizmo_y = pos.y;
+        gizmo_z = pos.z;
+    }
 }
 
 void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
 {
-    if(!target_transform)
-        return;
+    if(target_ref_point)
+    {
+        Rotation3D rot = target_ref_point->GetRotation();
+        rot.x += delta_x;
+        rot.y += delta_y;
+        rot.z += delta_z;
 
-    target_transform->transform.rotation.x += delta_x;
-    target_transform->transform.rotation.y += delta_y;
-    target_transform->transform.rotation.z += delta_z;
+        // Clamp rotations to valid ranges
+        while(rot.x > 360.0f) rot.x -= 360.0f;
+        while(rot.x < 0.0f) rot.x += 360.0f;
+        while(rot.y > 360.0f) rot.y -= 360.0f;
+        while(rot.y < 0.0f) rot.y += 360.0f;
+        while(rot.z > 360.0f) rot.z -= 360.0f;
+        while(rot.z < 0.0f) rot.z += 360.0f;
 
-    // Clamp rotations to valid ranges
-    while(target_transform->transform.rotation.x > 360.0f) target_transform->transform.rotation.x -= 360.0f;
-    while(target_transform->transform.rotation.x < 0.0f) target_transform->transform.rotation.x += 360.0f;
-    while(target_transform->transform.rotation.y > 360.0f) target_transform->transform.rotation.y -= 360.0f;
-    while(target_transform->transform.rotation.y < 0.0f) target_transform->transform.rotation.y += 360.0f;
-    while(target_transform->transform.rotation.z > 360.0f) target_transform->transform.rotation.z -= 360.0f;
-    while(target_transform->transform.rotation.z < 0.0f) target_transform->transform.rotation.z += 360.0f;
+        target_ref_point->SetRotation(rot);
+    }
+    else if(target_transform)
+    {
+        target_transform->transform.rotation.x += delta_x;
+        target_transform->transform.rotation.y += delta_y;
+        target_transform->transform.rotation.z += delta_z;
 
-    // Keep gizmo centered on the controller - rotation doesn't change position
-    // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
-    // which calls GetControllerCenter() for proper bounds-based centering
+        // Clamp rotations to valid ranges
+        while(target_transform->transform.rotation.x > 360.0f) target_transform->transform.rotation.x -= 360.0f;
+        while(target_transform->transform.rotation.x < 0.0f) target_transform->transform.rotation.x += 360.0f;
+        while(target_transform->transform.rotation.y > 360.0f) target_transform->transform.rotation.y -= 360.0f;
+        while(target_transform->transform.rotation.y < 0.0f) target_transform->transform.rotation.y += 360.0f;
+        while(target_transform->transform.rotation.z > 360.0f) target_transform->transform.rotation.z -= 360.0f;
+        while(target_transform->transform.rotation.z < 0.0f) target_transform->transform.rotation.z += 360.0f;
+
+        // Keep gizmo centered on the controller - rotation doesn't change position
+        // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
+        // which calls GetControllerCenter() for proper bounds-based centering
+    }
 }
 
 void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport)
 {
     (void)projection;
     (void)viewport;
-
-    if(!target_transform)
-        return;
 
     // Extract camera right and up vectors from modelview matrix
     // Modelview matrix columns give us the camera axes
@@ -625,24 +683,51 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
     // Scale for intuitive movement
     float move_scale = 0.05f;
 
-    // Move in camera-relative directions (screen space to world space)
-    // Right for horizontal mouse movement, up for vertical
-    target_transform->transform.position.x += (right_x * delta_x - up_x * delta_y) * move_scale;
-    target_transform->transform.position.y += (right_y * delta_x - up_y * delta_y) * move_scale;
-    target_transform->transform.position.z += (right_z * delta_x - up_z * delta_y) * move_scale;
-
-    // Apply grid snapping if enabled
-    if(grid_snap_enabled)
+    if(target_ref_point)
     {
-        target_transform->transform.position.x = SnapToGrid(target_transform->transform.position.x);
-        target_transform->transform.position.y = SnapToGrid(target_transform->transform.position.y);
-        target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
-    }
+        Vector3D pos = target_ref_point->GetPosition();
 
-    // Update gizmo position to follow target
-    gizmo_x = target_transform->transform.position.x;
-    gizmo_y = target_transform->transform.position.y;
-    gizmo_z = target_transform->transform.position.z;
+        // Move in camera-relative directions (screen space to world space)
+        pos.x += (right_x * delta_x - up_x * delta_y) * move_scale;
+        pos.y += (right_y * delta_x - up_y * delta_y) * move_scale;
+        pos.z += (right_z * delta_x - up_z * delta_y) * move_scale;
+
+        // Apply grid snapping if enabled
+        if(grid_snap_enabled)
+        {
+            pos.x = SnapToGrid(pos.x);
+            pos.y = SnapToGrid(pos.y);
+            pos.z = SnapToGrid(pos.z);
+        }
+
+        target_ref_point->SetPosition(pos);
+
+        // Update gizmo position to follow target
+        gizmo_x = pos.x;
+        gizmo_y = pos.y;
+        gizmo_z = pos.z;
+    }
+    else if(target_transform)
+    {
+        // Move in camera-relative directions (screen space to world space)
+        // Right for horizontal mouse movement, up for vertical
+        target_transform->transform.position.x += (right_x * delta_x - up_x * delta_y) * move_scale;
+        target_transform->transform.position.y += (right_y * delta_x - up_y * delta_y) * move_scale;
+        target_transform->transform.position.z += (right_z * delta_x - up_z * delta_y) * move_scale;
+
+        // Apply grid snapping if enabled
+        if(grid_snap_enabled)
+        {
+            target_transform->transform.position.x = SnapToGrid(target_transform->transform.position.x);
+            target_transform->transform.position.y = SnapToGrid(target_transform->transform.position.y);
+            target_transform->transform.position.z = SnapToGrid(target_transform->transform.position.z);
+        }
+
+        // Update gizmo position to follow target
+        gizmo_x = target_transform->transform.position.x;
+        gizmo_y = target_transform->transform.position.y;
+        gizmo_z = target_transform->transform.position.z;
+    }
 }
 
 

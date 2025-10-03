@@ -130,6 +130,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
 
+    zone_manager = new ZoneManager3D();
 
     grid_x_spin = nullptr;
     grid_y_spin = nullptr;
@@ -150,6 +151,12 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
+
+    /*---------------------------------------------------------*\
+    | Initialize zone and effect combos                        |
+    \*---------------------------------------------------------*/
+    UpdateEffectZoneCombo();     // Initialize zone dropdown with "All Controllers"
+    UpdateEffectOriginCombo();   // Initialize reference point dropdown
 
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
@@ -189,6 +196,17 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         delete virtual_controllers[i];
     }
     virtual_controllers.clear();
+
+    for(unsigned int i = 0; i < reference_points.size(); i++)
+    {
+        delete reference_points[i];
+    }
+    reference_points.clear();
+
+    if(zone_manager)
+    {
+        delete zone_manager;
+    }
 }
 
 void OpenRGB3DSpatialTab::SetupUI()
@@ -355,52 +373,72 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_tabs->addTab(custom_tab, "Custom Controllers");
 
     /*---------------------------------------------------------*\
-    | Layout Profiles Tab                                      |
+    | Reference Points Tab                                     |
     \*---------------------------------------------------------*/
-    QWidget* profile_tab = new QWidget();
-    QVBoxLayout* profile_layout = new QVBoxLayout();
-    profile_layout->setSpacing(5);
+    QWidget* ref_points_tab = new QWidget();
+    QVBoxLayout* ref_points_layout = new QVBoxLayout();
+    ref_points_layout->setSpacing(5);
 
-    layout_profiles_combo = new QComboBox();
-    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
-    profile_layout->addWidget(layout_profiles_combo);
+    // List of reference points
+    reference_points_list = new QListWidget();
+    reference_points_list->setMinimumHeight(150);
+    connect(reference_points_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_ref_point_selected);
+    ref_points_layout->addWidget(reference_points_list);
 
-    QHBoxLayout* save_load_layout = new QHBoxLayout();
-    QPushButton* save_button = new QPushButton("Save Layout");
-    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
-    save_load_layout->addWidget(save_button);
+    // Name input
+    QHBoxLayout* name_layout = new QHBoxLayout();
+    name_layout->addWidget(new QLabel("Name:"));
+    ref_point_name_edit = new QLineEdit();
+    ref_point_name_edit->setPlaceholderText("e.g., My Monitor");
+    name_layout->addWidget(ref_point_name_edit);
+    ref_points_layout->addLayout(name_layout);
 
-    QPushButton* load_button = new QPushButton("Load Layout");
-    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
-    save_load_layout->addWidget(load_button);
-    profile_layout->addLayout(save_load_layout);
-
-    QPushButton* delete_button = new QPushButton("Delete Profile");
-    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
-    profile_layout->addWidget(delete_button);
-
-    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
-
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-    bool auto_load_enabled = false;
-    if(settings.contains("AutoLoad"))
+    // Type combo
+    QHBoxLayout* type_layout = new QHBoxLayout();
+    type_layout->addWidget(new QLabel("Type:"));
+    ref_point_type_combo = new QComboBox();
+    std::vector<std::string> type_names = VirtualReferencePoint3D::GetTypeNames();
+    for(const auto& name : type_names)
     {
-        auto_load_enabled = settings["AutoLoad"];
+        ref_point_type_combo->addItem(QString::fromStdString(name));
     }
-    auto_load_checkbox->setChecked(auto_load_enabled);
+    type_layout->addWidget(ref_point_type_combo);
+    ref_points_layout->addLayout(type_layout);
 
-    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-        settings["AutoLoad"] = checked;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-        resource_manager->GetSettingsManager()->SaveSettings();
-    });
-    profile_layout->addWidget(auto_load_checkbox);
+    // Color picker
+    QHBoxLayout* color_layout = new QHBoxLayout();
+    color_layout->addWidget(new QLabel("Color:"));
+    ref_point_color_button = new QPushButton();
+    ref_point_color_button->setFixedSize(30, 30);
+    selected_ref_point_color = 0x00808080; // Default gray
+    ref_point_color_button->setStyleSheet(QString("background-color: #%1").arg(selected_ref_point_color & 0xFFFFFF, 6, 16, QChar('0')));
+    connect(ref_point_color_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_ref_point_color_clicked);
+    color_layout->addWidget(ref_point_color_button);
+    color_layout->addStretch();
+    ref_points_layout->addLayout(color_layout);
 
-    PopulateLayoutDropdown();
+    // Help text
+    QLabel* help_label = new QLabel("Select a reference point to move it with the Position & Rotation controls and 3D gizmo.");
+    help_label->setStyleSheet("color: gray; font-size: 10px;");
+    help_label->setWordWrap(true);
+    ref_points_layout->addWidget(help_label);
 
-    profile_tab->setLayout(profile_layout);
-    left_tabs->addTab(profile_tab, "Layout Profiles");
+    // Add/Remove buttons
+    QHBoxLayout* ref_buttons_layout = new QHBoxLayout();
+    add_ref_point_button = new QPushButton("Add Reference Point");
+    connect(add_ref_point_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_ref_point_clicked);
+    ref_buttons_layout->addWidget(add_ref_point_button);
+
+    remove_ref_point_button = new QPushButton("Remove");
+    remove_ref_point_button->setEnabled(false);
+    connect(remove_ref_point_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_remove_ref_point_clicked);
+    ref_buttons_layout->addWidget(remove_ref_point_button);
+
+    ref_points_layout->addLayout(ref_buttons_layout);
+    ref_points_layout->addStretch();
+
+    ref_points_tab->setLayout(ref_points_layout);
+    left_tabs->addTab(ref_points_tab, "Reference Points");
 
     // Add tabs to left panel
     left_panel->addWidget(left_tabs);
@@ -478,19 +516,23 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     QVBoxLayout* middle_panel = new QVBoxLayout();
 
-    QLabel* controls_label = new QLabel("Camera: Middle mouse = Rotate | Right/Shift+Middle = Pan | Scroll = Zoom | Left click = Select/Move device");
+    QLabel* controls_label = new QLabel("Camera: Right mouse = Rotate | Left drag = Pan | Scroll = Zoom | Left click = Select/Move objects");
     middle_panel->addWidget(controls_label);
 
     viewport = new LEDViewport3D();
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false); // Initialize with snapping disabled
+    viewport->SetReferencePoints(&reference_points);
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
             this, SLOT(on_controller_position_changed(int,float,float,float)));
     connect(viewport, SIGNAL(ControllerRotationChanged(int,float,float,float)),
             this, SLOT(on_controller_rotation_changed(int,float,float,float)));
     connect(viewport, SIGNAL(ControllerDeleteRequested(int)), this, SLOT(on_remove_controller_from_viewport(int)));
+    connect(viewport, SIGNAL(ReferencePointSelected(int)), this, SLOT(on_ref_point_selected(int)));
+    connect(viewport, SIGNAL(ReferencePointPositionChanged(int,float,float,float)),
+            this, SLOT(on_ref_point_position_changed(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
@@ -545,57 +587,16 @@ void OpenRGB3DSpatialTab::SetupUI()
     selection_info_label->setAlignment(Qt::AlignRight);
     layout_layout->addWidget(selection_info_label, 1, 3, 1, 3);
 
-    // User Position Controls (Row 2)
-    layout_layout->addWidget(new QLabel("User X:"), 2, 0);
-    user_pos_x_spin = new QDoubleSpinBox();
-    user_pos_x_spin->setRange(-50.0, 50.0);
-    user_pos_x_spin->setSingleStep(0.5);
-    user_pos_x_spin->setValue(user_position.x);
-    user_pos_x_spin->setToolTip("User head X position (left/right) - perception origin for effects");
-    layout_layout->addWidget(user_pos_x_spin, 2, 1);
-
-    layout_layout->addWidget(new QLabel("User Y:"), 2, 2);
-    user_pos_y_spin = new QDoubleSpinBox();
-    user_pos_y_spin->setRange(-50.0, 50.0);
-    user_pos_y_spin->setSingleStep(0.5);
-    user_pos_y_spin->setValue(user_position.y);
-    user_pos_y_spin->setToolTip("User head Y position (floor/ceiling) - perception origin for effects");
-    layout_layout->addWidget(user_pos_y_spin, 2, 3);
-
-    layout_layout->addWidget(new QLabel("User Z:"), 2, 4);
-    user_pos_z_spin = new QDoubleSpinBox();
-    user_pos_z_spin->setRange(-50.0, 50.0);
-    user_pos_z_spin->setSingleStep(0.5);
-    user_pos_z_spin->setValue(user_position.z);
-    user_pos_z_spin->setToolTip("User head Z position (front/back) - perception origin for effects");
-    layout_layout->addWidget(user_pos_z_spin, 2, 5);
-
-    // User controls row (Row 3)
-    user_visible_checkbox = new QCheckBox("Show User Head");
-    user_visible_checkbox->setChecked(user_position.visible);
-    user_visible_checkbox->setToolTip("Show/hide user head (green smiley face) in viewport");
-    layout_layout->addWidget(user_visible_checkbox, 3, 0, 1, 2);
-
-    user_center_button = new QPushButton("Center User");
-    user_center_button->setToolTip("Move user head to room center (0,0,0)");
-    layout_layout->addWidget(user_center_button, 3, 2, 1, 2);
-
-    // User reference point row (Row 4)
-    use_user_reference_checkbox = new QCheckBox("Use User Head as Effect Origin");
-    use_user_reference_checkbox->setChecked(false);
-    use_user_reference_checkbox->setToolTip("When enabled, effects originate from user head position instead of room center (0,0,0)");
-    layout_layout->addWidget(use_user_reference_checkbox, 4, 0, 1, 6);
-
     // Add helpful labels with text wrapping
     QLabel* grid_help1 = new QLabel("LEDs mapped sequentially to grid positions (X, Y, Z)");
     grid_help1->setStyleSheet("color: gray; font-size: 10px;");
     grid_help1->setWordWrap(true);
-    layout_layout->addWidget(grid_help1, 4, 0, 1, 6);
+    layout_layout->addWidget(grid_help1, 2, 0, 1, 6);
 
-    QLabel* grid_help2 = new QLabel("Effects originate from user position • Use Ctrl+Click for multi-select");
+    QLabel* grid_help2 = new QLabel("Use Ctrl+Click for multi-select • Add User position in Reference Points tab");
     grid_help2->setStyleSheet("color: gray; font-size: 10px;");
     grid_help2->setWordWrap(true);
-    layout_layout->addWidget(grid_help2, 5, 0, 1, 6);
+    layout_layout->addWidget(grid_help2, 3, 0, 1, 6);
 
     grid_settings_tab->setLayout(layout_layout);
 
@@ -604,14 +605,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
     connect(grid_z_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
     connect(grid_snap_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_grid_snap_toggled);
-
-    // User position signals
-    connect(user_pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
-    connect(user_pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
-    connect(user_pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_user_position_changed);
-    connect(user_visible_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_user_visibility_toggled);
-    connect(user_center_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_user_center_clicked);
-    connect(use_user_reference_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_use_user_reference_toggled);
 
     /*---------------------------------------------------------*\
     | Position & Rotation Tab                                  |
@@ -628,6 +621,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
         pos_x_spin->setValue(pos_value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.x = pos_value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -643,6 +650,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     pos_x_spin->setMaximumWidth(80);
     connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_x_slider->setValue((int)(value * 10));
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.x = value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -659,12 +680,25 @@ void OpenRGB3DSpatialTab::SetupUI()
     pos_y_slider->setValue(0);
     connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
-        // Ensure Y position never goes below floor level
+        pos_y_spin->setValue(pos_value);
+
+        // Check if a reference point is selected (no floor constraint for ref points)
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.y = pos_value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected (with floor constraint)
         if(pos_value < 0.0f) {
             pos_value = 0.0f;
             pos_y_slider->setValue((int)(pos_value * 10));
         }
-        pos_y_spin->setValue(pos_value);
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -681,12 +715,25 @@ void OpenRGB3DSpatialTab::SetupUI()
     pos_y_spin->setDecimals(1);
     pos_y_spin->setMaximumWidth(80);
     connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        // Ensure Y position never goes below floor level
+        pos_y_slider->setValue((int)(value * 10));
+
+        // Check if a reference point is selected (no floor constraint for ref points)
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.y = value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected (with floor constraint)
         if(value < 0.0) {
             value = 0.0;
             pos_y_spin->setValue(value);
         }
-        pos_y_slider->setValue((int)(value * 10));
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -706,6 +753,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
         pos_z_spin->setValue(pos_value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.z = pos_value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -721,6 +782,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     pos_z_spin->setMaximumWidth(80);
     connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_z_slider->setValue((int)(value * 10));
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Vector3D pos = ref_point->GetPosition();
+            pos.z = value;
+            ref_point->SetPosition(pos);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -738,6 +813,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
         rot_x_spin->setValue(rot_value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.x = rot_value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -753,6 +842,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_x_spin->setMaximumWidth(80);
     connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_x_slider->setValue((int)value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.x = value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -770,6 +873,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
         rot_y_spin->setValue(rot_value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.y = rot_value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -785,6 +902,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_y_spin->setMaximumWidth(80);
     connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_y_slider->setValue((int)value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.y = value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -802,6 +933,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
         rot_z_spin->setValue(rot_value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.z = rot_value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -817,6 +962,20 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_z_spin->setMaximumWidth(80);
     connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_z_slider->setValue((int)value);
+
+        // Check if a reference point is selected
+        int ref_idx = reference_points_list->currentRow();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            Rotation3D rot = ref_point->GetRotation();
+            rot.z = value;
+            ref_point->SetRotation(rot);
+            viewport->update();
+            return;
+        }
+
+        // Otherwise check if a controller is selected
         int row = controller_list->currentRow();
         if(row >= 0 && row < (int)controller_transforms.size())
         {
@@ -828,9 +987,57 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     transform_tab->setLayout(position_layout);
 
-    // Add tabs in correct order: Position/Rotation first, then Grid Settings
+    /*---------------------------------------------------------*\
+    | Layout Profiles Tab                                      |
+    \*---------------------------------------------------------*/
+    QWidget* profile_tab = new QWidget();
+    QVBoxLayout* profile_layout = new QVBoxLayout();
+    profile_layout->setSpacing(5);
+
+    layout_profiles_combo = new QComboBox();
+    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
+    profile_layout->addWidget(layout_profiles_combo);
+
+    QHBoxLayout* save_load_layout = new QHBoxLayout();
+    QPushButton* save_button = new QPushButton("Save Layout");
+    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+    save_load_layout->addWidget(save_button);
+
+    QPushButton* load_button = new QPushButton("Load Layout");
+    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
+    save_load_layout->addWidget(load_button);
+    profile_layout->addLayout(save_load_layout);
+
+    QPushButton* delete_button = new QPushButton("Delete Profile");
+    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
+    profile_layout->addWidget(delete_button);
+
+    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
+
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    bool auto_load_enabled = false;
+    if(settings.contains("AutoLoad"))
+    {
+        auto_load_enabled = settings["AutoLoad"];
+    }
+    auto_load_checkbox->setChecked(auto_load_enabled);
+
+    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        settings["AutoLoad"] = checked;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        resource_manager->GetSettingsManager()->SaveSettings();
+    });
+    profile_layout->addWidget(auto_load_checkbox);
+
+    PopulateLayoutDropdown();
+
+    profile_tab->setLayout(profile_layout);
+
+    // Add tabs in correct order: Position/Rotation, Grid Settings, Layout Profiles
     settings_tabs->addTab(transform_tab, "Position & Rotation");
     settings_tabs->addTab(grid_settings_tab, "Grid Settings");
+    settings_tabs->addTab(profile_tab, "Layout Profiles");
 
     // Add the tab widget to middle panel
     middle_panel->addWidget(settings_tabs);
@@ -840,9 +1047,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* right_panel = new QVBoxLayout();
 
     /*---------------------------------------------------------*\
-    | Effects Section                                          |
+    | Right Tab Widget (Effects and Zones)                     |
     \*---------------------------------------------------------*/
-    QGroupBox* effects_group = new QGroupBox("Effects");
+    QTabWidget* right_tabs = new QTabWidget();
+
+    /*---------------------------------------------------------*\
+    | Effects Tab                                              |
+    \*---------------------------------------------------------*/
+    QWidget* effects_tab = new QWidget();
     QVBoxLayout* effects_layout = new QVBoxLayout();
 
     // Effect selection
@@ -865,15 +1077,73 @@ void OpenRGB3DSpatialTab::SetupUI()
     effects_layout->addWidget(new QLabel("Effect:"));
     effects_layout->addWidget(effect_combo);
 
+    // Zone selector
+    effects_layout->addWidget(new QLabel("Zone:"));
+    effect_zone_combo = new QComboBox();
+    effect_zone_combo->addItem("All Controllers");
+    effects_layout->addWidget(effect_zone_combo);
+
+    // Effect origin selector
+    effects_layout->addWidget(new QLabel("Origin:"));
+    effect_origin_combo = new QComboBox();
+    effect_origin_combo->addItem("Room Center (0,0,0)", QVariant(-1)); // -1 = no reference point
+    connect(effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
+    effects_layout->addWidget(effect_origin_combo);
+
     // Effect-specific controls container
     effect_controls_widget = new QWidget();
     effect_controls_layout = new QVBoxLayout();
     effect_controls_widget->setLayout(effect_controls_layout);
     effects_layout->addWidget(effect_controls_widget);
 
-    effects_group->setLayout(effects_layout);
-    right_panel->addWidget(effects_group);
+    effects_layout->addStretch();
+    effects_tab->setLayout(effects_layout);
+    right_tabs->addTab(effects_tab, "Effects");
 
+    /*---------------------------------------------------------*\
+    | Zones Tab                                                |
+    \*---------------------------------------------------------*/
+    QWidget* zones_tab = new QWidget();
+    QVBoxLayout* zones_layout = new QVBoxLayout();
+    zones_layout->setSpacing(5);
+
+    // List of zones
+    zones_list = new QListWidget();
+    zones_list->setMinimumHeight(200);
+    connect(zones_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_zone_selected);
+    zones_layout->addWidget(zones_list);
+
+    // Help text
+    QLabel* zones_help_label = new QLabel("Zones are groups of controllers for targeting effects.\n\nCreate zones like 'Desk', 'Front Wall', 'Ceiling', etc., then select them when configuring effects.");
+    zones_help_label->setStyleSheet("color: gray; font-size: 10px;");
+    zones_help_label->setWordWrap(true);
+    zones_layout->addWidget(zones_help_label);
+
+    // Create/Edit/Delete buttons
+    QHBoxLayout* zone_buttons_layout = new QHBoxLayout();
+    create_zone_button = new QPushButton("Create Zone");
+    connect(create_zone_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_zone_clicked);
+    zone_buttons_layout->addWidget(create_zone_button);
+
+    edit_zone_button = new QPushButton("Edit");
+    edit_zone_button->setEnabled(false);
+    connect(edit_zone_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_zone_clicked);
+    zone_buttons_layout->addWidget(edit_zone_button);
+
+    delete_zone_button = new QPushButton("Delete");
+    delete_zone_button->setEnabled(false);
+    connect(delete_zone_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_zone_clicked);
+    zone_buttons_layout->addWidget(delete_zone_button);
+
+    zones_layout->addLayout(zone_buttons_layout);
+    zones_layout->addStretch();
+
+    zones_tab->setLayout(zones_layout);
+    right_tabs->addTab(zones_tab, "Zones");
+
+    // Add tabs to right panel
+    right_panel->addWidget(right_tabs);
 
     /*---------------------------------------------------------*\
     | Add stretch to push content to top of right panel       |
@@ -1004,6 +1274,19 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         rot_x_slider->blockSignals(false);
         rot_y_slider->blockSignals(false);
         rot_z_slider->blockSignals(false);
+
+        // Clear reference point selection when controller is selected
+        reference_points_list->blockSignals(true);
+        reference_points_list->clearSelection();
+        reference_points_list->blockSignals(false);
+
+        // Enable rotation controls - controllers have rotation
+        rot_x_slider->setEnabled(true);
+        rot_y_slider->setEnabled(true);
+        rot_z_slider->setEnabled(true);
+        rot_x_spin->setEnabled(true);
+        rot_y_spin->setEnabled(true);
+        rot_z_spin->setEnabled(true);
 
         // Update LED spacing controls
         if(edit_led_spacing_x_spin)
@@ -1804,10 +2087,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     if(grid_y_spin) custom_grid_y = grid_y_spin->value();
     if(grid_z_spin) custom_grid_z = grid_z_spin->value();
 
-    if(user_pos_x_spin) user_position.x = (float)user_pos_x_spin->value();
-    if(user_pos_y_spin) user_position.y = (float)user_pos_y_spin->value();
-    if(user_pos_z_spin) user_position.z = (float)user_pos_z_spin->value();
-    if(user_visible_checkbox) user_position.visible = user_visible_checkbox->isChecked();
+    // User position is now handled through reference points system
 
     bool ok;
     QString profile_name = QInputDialog::getText(this, "Save Layout Profile",
@@ -2238,6 +2518,23 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     }
 
     /*---------------------------------------------------------*\
+    | Reference Points                                         |
+    \*---------------------------------------------------------*/
+    layout_json["reference_points"] = nlohmann::json::array();
+    for(const auto& ref_point : reference_points)
+    {
+        layout_json["reference_points"].push_back(ref_point->ToJson());
+    }
+
+    /*---------------------------------------------------------*\
+    | Zones                                                    |
+    \*---------------------------------------------------------*/
+    if(zone_manager)
+    {
+        layout_json["zones"] = zone_manager->ToJSON();
+    }
+
+    /*---------------------------------------------------------*\
     | Write JSON to file                                       |
     \*---------------------------------------------------------*/
     QFile file(QString::fromStdString(filename));
@@ -2315,31 +2612,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         user_position.z = layout_json["user_position"]["z"].get<float>();
         user_position.visible = layout_json["user_position"]["visible"].get<bool>();
 
-        if(user_pos_x_spin)
-        {
-            user_pos_x_spin->blockSignals(true);
-            user_pos_x_spin->setValue(user_position.x);
-            user_pos_x_spin->blockSignals(false);
-        }
-        if(user_pos_y_spin)
-        {
-            user_pos_y_spin->blockSignals(true);
-            user_pos_y_spin->setValue(user_position.y);
-            user_pos_y_spin->blockSignals(false);
-        }
-        if(user_pos_z_spin)
-        {
-            user_pos_z_spin->blockSignals(true);
-            user_pos_z_spin->setValue(user_position.z);
-            user_pos_z_spin->blockSignals(false);
-        }
-        if(user_visible_checkbox)
-        {
-            user_visible_checkbox->blockSignals(true);
-            user_visible_checkbox->setChecked(user_position.visible);
-            user_visible_checkbox->blockSignals(false);
-        }
-
+        // User position UI controls have been removed - values stored for legacy compatibility
         if(viewport) viewport->SetUserPosition(user_position);
     }
 
@@ -2641,7 +2914,61 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
+    /*---------------------------------------------------------*\
+    | Load Reference Points                                    |
+    \*---------------------------------------------------------*/
+    // Clear existing reference points
+    for(auto& ref_point : reference_points)
+    {
+        delete ref_point;
+    }
+    reference_points.clear();
+
+    if(layout_json.contains("reference_points"))
+    {
+        for(const auto& ref_point_json : layout_json["reference_points"])
+        {
+            VirtualReferencePoint3D* ref_point = VirtualReferencePoint3D::FromJson(ref_point_json);
+            if(ref_point)
+            {
+                reference_points.push_back(ref_point);
+            }
+        }
+    }
+
+    UpdateReferencePointsList();
+
+    /*---------------------------------------------------------*\
+    | Load Zones                                               |
+    \*---------------------------------------------------------*/
+    if(zone_manager)
+    {
+        if(layout_json.contains("zones"))
+        {
+            try
+            {
+                zone_manager->FromJSON(layout_json["zones"]);
+                UpdateZonesList();
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Loaded %d zones from layout", zone_manager->GetZoneCount());
+            }
+            catch(const std::exception& e)
+            {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to load zones from layout: %s", e.what());
+                zone_manager->ClearAllZones();
+                UpdateZonesList();
+            }
+        }
+        else
+        {
+            // Old layout file without zones - just initialize empty
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout has no zones (old format) - starting with empty zone list");
+            zone_manager->ClearAllZones();
+            UpdateZonesList();
+        }
+    }
+
     viewport->SetControllerTransforms(&controller_transforms);
+    viewport->SetReferencePoints(&reference_points);
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
@@ -3028,10 +3355,40 @@ void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 
 void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
 {
-    if(!effect_controls_widget)
+    /*---------------------------------------------------------*\
+    | Validate all required UI components                      |
+    \*---------------------------------------------------------*/
+    if(!effect_controls_widget || !effect_controls_layout)
     {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect controls widget or layout is null!");
         return;
     }
+
+    if(!effect_zone_combo)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect zone combo is null!");
+        return;
+    }
+
+    if(!effect_origin_combo)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect origin combo is null!");
+        return;
+    }
+
+    if(!zone_manager)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Zone manager is null!");
+        return;
+    }
+
+    if(!viewport)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Viewport is null!");
+        return;
+    }
+
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up effect UI for effect type %d", effect_type);
 
     /*---------------------------------------------------------*\
     | Create appropriate effect UI based on type              |
@@ -3388,77 +3745,10 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 /*---------------------------------------------------------*\
 | User Position Control Functions                          |
 \*---------------------------------------------------------*/
-void OpenRGB3DSpatialTab::on_user_position_changed()
-{
-    // Update user position from spin boxes
-    user_position.x = (float)user_pos_x_spin->value();
-    user_position.y = (float)user_pos_y_spin->value();
-    user_position.z = (float)user_pos_z_spin->value();
-
-    // Update viewport display
-    if(viewport)
-    {
-        viewport->SetUserPosition(user_position);
-        viewport->update();
-    }
-
-    // Update effect reference point if using user position
-    if(current_effect_ui && use_user_reference_checkbox && use_user_reference_checkbox->isChecked())
-    {
-        Vector3D user_pos = {user_position.x, user_position.y, user_position.z};
-        current_effect_ui->SetGlobalReferencePoint(user_pos);
-    }
-}
-
-void OpenRGB3DSpatialTab::on_user_visibility_toggled(bool visible)
-{
-    user_position.visible = visible;
-
-    // Update viewport display
-    if(viewport)
-    {
-        viewport->SetUserPosition(user_position);
-        viewport->update();
-    }
-}
-
-void OpenRGB3DSpatialTab::on_user_center_clicked()
-{
-    // Reset user to room center (0,0,0)
-    user_position.x = 0.0f;
-    user_position.y = 0.0f;
-    user_position.z = 0.0f;
-
-    // Update spin boxes
-    user_pos_x_spin->setValue(0.0);
-    user_pos_y_spin->setValue(0.0);
-    user_pos_z_spin->setValue(0.0);
-
-    // Update viewport display
-    if(viewport)
-    {
-        viewport->SetUserPosition(user_position);
-        viewport->update();
-    }
-}
-
-void OpenRGB3DSpatialTab::on_use_user_reference_toggled(bool enabled)
-{
-    if(current_effect_ui)
-    {
-        if(enabled)
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_USER_POSITION);
-            Vector3D user_pos = {user_position.x, user_position.y, user_position.z};
-            current_effect_ui->SetGlobalReferencePoint(user_pos);
-        }
-        else
-        {
-            current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
-            current_effect_ui->SetGlobalReferencePoint({0.0f, 0.0f, 0.0f});
-        }
-    }
-}
+/* Legacy user position control functions - REMOVED
+ * User position is now handled through the reference points system
+ * as a REF_POINT_USER type reference point.
+ */
 
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
@@ -3497,4 +3787,57 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     }
 }
 
+
+
+void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
+{
+    if(!effect_origin_combo) return;
+
+    effect_origin_combo->blockSignals(true);
+    effect_origin_combo->clear();
+
+    // Always add "Room Center" as first option
+    effect_origin_combo->addItem("Room Center (0,0,0)", QVariant(-1));
+
+    // Add all reference points
+    for(size_t i = 0; i < reference_points.size(); i++)
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[i];
+        QString name = QString::fromStdString(ref_point->GetName());
+        QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
+        QString display = QString("%1 (%2)").arg(name).arg(type);
+        effect_origin_combo->addItem(display, QVariant((int)i));
+    }
+
+    effect_origin_combo->blockSignals(false);
+}
+
+void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
+{
+    // Get the selected reference point index (-1 means room center)
+    int ref_point_idx = effect_origin_combo->itemData(index).toInt();
+
+    // Update the current effect with the new origin
+    // All effects will use this selected origin point
+    Vector3D origin = {0.0f, 0.0f, 0.0f};
+
+    if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx];
+        origin = ref_point->GetPosition();
+    }
+
+    // Update all effect instances
+    if(wave3d_effect) wave3d_effect->SetCustomReferencePoint(origin);
+    if(wipe3d_effect) wipe3d_effect->SetCustomReferencePoint(origin);
+    if(plasma3d_effect) plasma3d_effect->SetCustomReferencePoint(origin);
+    if(spiral3d_effect) spiral3d_effect->SetCustomReferencePoint(origin);
+    if(spin3d_effect) spin3d_effect->SetCustomReferencePoint(origin);
+    if(explosion3d_effect) explosion3d_effect->SetCustomReferencePoint(origin);
+    if(breathingsphere3d_effect) breathingsphere3d_effect->SetCustomReferencePoint(origin);
+    if(dnahelix3d_effect) dnahelix3d_effect->SetCustomReferencePoint(origin);
+
+    // Trigger viewport update
+    if(viewport) viewport->UpdateColors();
+}
 

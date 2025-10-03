@@ -130,6 +130,8 @@ HEADERS +=                                                                      
     SpatialEffect3D.h                                                                           \
     VirtualController3D.h                                                                       \
     VirtualReferencePoint3D.h                                                                   \
+    Zone3D.h                                                                                    \
+    ZoneManager3D.h                                                                             \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
@@ -149,7 +151,11 @@ SOURCES +=                                                                      
     SpatialEffect3D.cpp                                                                         \
     VirtualController3D.cpp                                                                     \
     VirtualReferencePoint3D.cpp                                                                 \
+    Zone3D.cpp                                                                                  \
+    ZoneManager3D.cpp                                                                           \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
+    ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
+    ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \

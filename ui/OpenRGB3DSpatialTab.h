@@ -28,11 +28,13 @@
 #include <QTimer>
 #include <QScrollArea>
 #include <QTabWidget>
+#include <QLineEdit>
 
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
 #include "VirtualController3D.h"
+#include "VirtualReferencePoint3D.h"
 #include "SpatialEffectTypes.h"
 #include "SpatialEffect3D.h"
 #include "EffectListManager3D.h"
@@ -44,6 +46,7 @@
 #include "Effects3D/DNAHelix3D/DNAHelix3D.h"
 #include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
 #include "Effects3D/Explosion3D/Explosion3D.h"
+#include "ZoneManager3D.h"
 
 namespace Ui
 {
@@ -85,18 +88,26 @@ private slots:
     void on_import_custom_controller_clicked();
     void on_export_custom_controller_clicked();
     void on_edit_custom_controller_clicked();
+    void on_add_ref_point_clicked();
+    void on_remove_ref_point_clicked();
+    void on_ref_point_selected(int index);
+    void on_ref_point_position_changed(int index, float x, float y, float z);
+    void on_ref_point_color_clicked();
+
+    void on_create_zone_clicked();
+    void on_edit_zone_clicked();
+    void on_delete_zone_clicked();
+    void on_zone_selected(int index);
 
     void on_effect_updated();
     void on_effect_timer_timeout();
     void on_grid_dimensions_changed();
     void on_grid_snap_toggled(bool enabled);
-    void on_user_position_changed();
-    void on_user_visibility_toggled(bool visible);
-    void on_user_center_clicked();
-    void on_use_user_reference_toggled(bool enabled);
     void on_effect_changed(int index);
+    void on_effect_origin_changed(int index);
     void UpdateSelectionInfo();
     void on_apply_spacing_clicked();
+    void UpdateEffectOriginCombo();
 
 private:
     void SetupUI();
@@ -113,6 +124,13 @@ private:
     void UpdateAvailableItemCombo();
     void UpdateAvailableControllersList();
     void UpdateCustomControllersList();
+    void UpdateReferencePointsList();
+    void SaveReferencePoints();
+    void LoadReferencePoints();
+    void UpdateZonesList();
+    void UpdateEffectZoneCombo();
+    void SaveZones();
+    void LoadZones();
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
@@ -201,24 +219,42 @@ private:
     QPushButton*                apply_spacing_button;
 
     /*---------------------------------------------------------*\
-    | User Position Reference Point                            |
+    | User Position Reference Point (legacy - now part of     |
+    | reference points system)                                 |
     \*---------------------------------------------------------*/
-    QDoubleSpinBox*             user_pos_x_spin;
-    QDoubleSpinBox*             user_pos_y_spin;
-    QDoubleSpinBox*             user_pos_z_spin;
-    QCheckBox*                  user_visible_checkbox;
-    QPushButton*                user_center_button;
-    QCheckBox*                  use_user_reference_checkbox;
     UserPosition3D              user_position;
 
     /*---------------------------------------------------------*\
     | Effects Section Controls                                 |
     \*---------------------------------------------------------*/
     QComboBox*                  effect_combo;
+    QComboBox*                  effect_origin_combo;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
 
+    /*---------------------------------------------------------*\
+    | Reference Points Section Controls                        |
+    \*---------------------------------------------------------*/
+    QListWidget*                reference_points_list;
+    QLineEdit*                  ref_point_name_edit;
+    QComboBox*                  ref_point_type_combo;
+    QPushButton*                ref_point_color_button;
+    QPushButton*                add_ref_point_button;
+    QPushButton*                remove_ref_point_button;
+    RGBColor                    selected_ref_point_color;
+
+    /*---------------------------------------------------------*\
+    | Zone Section Controls                                    |
+    \*---------------------------------------------------------*/
+    QListWidget*                zones_list;
+    QPushButton*                create_zone_button;
+    QPushButton*                edit_zone_button;
+    QPushButton*                delete_zone_button;
+    QComboBox*                  effect_zone_combo;
+
     std::vector<VirtualController3D*> virtual_controllers;
+    std::vector<VirtualReferencePoint3D*> reference_points;
+    ZoneManager3D*              zone_manager;
 };
 
 #endif

@@ -44,11 +44,13 @@ public:
 
     void SetControllerTransforms(std::vector<ControllerTransform*>* transforms);
     void SelectController(int index);
+    void SelectReferencePoint(int index);
     void UpdateColors();
     void SetGridDimensions(int x, int y, int z);
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
     void SetUserPosition(const UserPosition3D& position);
+    void SetReferencePoints(std::vector<VirtualReferencePoint3D*>* ref_points);
 
     void EnforceFloorConstraint(ControllerTransform* ctrl);
     void UpdateGizmoPosition();
@@ -65,6 +67,8 @@ signals:
     void ControllerPositionChanged(int index, float x, float y, float z);
     void ControllerRotationChanged(int index, float x, float y, float z);
     void ControllerDeleteRequested(int index);
+    void ReferencePointSelected(int index);
+    void ReferencePointPositionChanged(int index, float x, float y, float z);
 
 protected:
     void initializeGL() override;
@@ -79,6 +83,7 @@ protected:
 
 private:
     void DrawGrid();
+    void DrawReferencePoints();
     void DrawAxes();
     void DrawAxisLabels();
     void DrawControllers();
@@ -86,8 +91,11 @@ private:
     void DrawUserFigure();
 
     int PickController(int mouse_x, int mouse_y);
+    int PickReferencePoint(int mouse_x, int mouse_y);
     bool RayBoxIntersect(float ray_origin[3], float ray_direction[3],
                         const Vector3D& box_min, const Vector3D& box_max, float& distance);
+    bool RaySphereIntersect(float ray_origin[3], float ray_direction[3],
+                           const Vector3D& sphere_center, float sphere_radius, float& distance);
 
     void CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds);
     Vector3D GetControllerCenter(ControllerTransform* ctrl);
@@ -112,6 +120,12 @@ private:
     | User Position Reference Point                            |
     \*---------------------------------------------------------*/
     UserPosition3D  user_position;
+
+    /*---------------------------------------------------------*\
+    | Reference Points                                         |
+    \*---------------------------------------------------------*/
+    std::vector<VirtualReferencePoint3D*>* reference_points;
+    int                                     selected_ref_point_idx;
 
     /*---------------------------------------------------------*\
     | Camera Controls                                          |
