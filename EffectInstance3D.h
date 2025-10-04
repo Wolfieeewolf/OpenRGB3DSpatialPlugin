@@ -54,6 +54,7 @@ inline const char* BlendModeToString(BlendMode mode)
 struct EffectInstance3D
 {
     std::string name;                           // User-friendly name ("Wave on Desk")
+    std::string effect_class_name;              // Class name for serialization ("Wave3D")
     std::unique_ptr<SpatialEffect3D> effect;   // The actual effect object
     int zone_index;                             // -1 = All Controllers, >=0 = specific zone
     BlendMode blend_mode;                       // How to combine with other effects
@@ -62,6 +63,7 @@ struct EffectInstance3D
 
     EffectInstance3D()
         : name("New Effect")
+        , effect_class_name("")
         , effect(nullptr)
         , zone_index(-1)
         , blend_mode(BlendMode::ADD)
@@ -76,7 +78,7 @@ struct EffectInstance3D
     std::string GetDisplayName() const
     {
         std::string zone_name = (zone_index == -1) ? "All" : "Zone " + std::to_string(zone_index);
-        std::string effect_type = effect ? effect->GetEffectName() : "None";
+        std::string effect_type = effect ? effect->GetEffectInfo().effect_name : "None";
         return effect_type + " - " + zone_name + " - " + BlendModeToString(blend_mode);
     }
 

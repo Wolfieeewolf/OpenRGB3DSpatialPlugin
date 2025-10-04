@@ -22,10 +22,10 @@ nlohmann::json EffectInstance3D::ToJson() const
     j["enabled"] = enabled;
     j["id"] = id;
 
-    if(effect)
+    if(!effect_class_name.empty())
     {
-        j["effect_type"] = effect->GetEffectName();
-        j["effect_data"] = effect->SaveSettings();
+        j["effect_type"] = effect_class_name;
+        // TODO: Add effect parameter serialization when implemented
     }
 
     return j;
@@ -50,15 +50,16 @@ EffectInstance3D* EffectInstance3D::FromJson(const nlohmann::json& j)
     if(j.contains("id"))
         instance->id = j["id"].get<int>();
 
-    // Restore effect from type and data
-    if(j.contains("effect_type") && j.contains("effect_data"))
+    // Restore effect from type
+    if(j.contains("effect_type"))
     {
         std::string effect_type = j["effect_type"].get<std::string>();
-        SpatialEffect3D* effect = EffectListManager3D::CreateEffectByName(effect_type);
+        instance->effect_class_name = effect_type;
 
+        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_type);
         if(effect)
         {
-            effect->LoadSettings(j["effect_data"]);
+            // TODO: Load effect parameters when serialization is implemented
             instance->effect.reset(effect);
         }
     }

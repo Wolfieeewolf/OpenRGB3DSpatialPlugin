@@ -63,11 +63,12 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab()
     type_layout->addWidget(new QLabel("Effect Type:"));
     stack_effect_type_combo = new QComboBox();
 
-    // Populate with all available effects
-    std::vector<std::string> effect_names = EffectListManager3D::GetEffectNames();
-    for(const std::string& name : effect_names)
+    // Populate with all available effects (display UI name, store class name)
+    std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
+    for(const EffectRegistration3D& effect_reg : effects)
     {
-        stack_effect_type_combo->addItem(QString::fromStdString(name));
+        stack_effect_type_combo->addItem(QString::fromStdString(effect_reg.ui_name),
+                                         QString::fromStdString(effect_reg.class_name));
     }
 
     connect(stack_effect_type_combo, SIGNAL(currentIndexChanged(int)),
@@ -127,12 +128,15 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     // Create default effect (first in list)
     if(stack_effect_type_combo->count() > 0)
     {
-        std::string effect_name = stack_effect_type_combo->itemText(0).toStdString();
-        SpatialEffect3D* effect = EffectListManager3D::CreateEffectByName(effect_name);
+        QString class_name = stack_effect_type_combo->itemData(0).toString();
+        QString ui_name = stack_effect_type_combo->itemText(0);
+
+        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
         if(effect)
         {
             instance->effect.reset(effect);
-            instance->name = effect_name;
+            instance->effect_class_name = class_name.toStdString();
+            instance->name = ui_name.toStdString();
         }
     }
 
@@ -191,10 +195,10 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     EffectInstance3D* instance = effect_stack[index].get();
 
     // Set effect type
-    if(instance->effect)
+    if(!instance->effect_class_name.empty())
     {
-        QString effect_name = QString::fromStdString(instance->effect->GetEffectName());
-        int type_index = stack_effect_type_combo->findText(effect_name);
+        QString class_name = QString::fromStdString(instance->effect_class_name);
+        int type_index = stack_effect_type_combo->findData(class_name);
         if(type_index >= 0)
         {
             stack_effect_type_combo->setCurrentIndex(type_index);
@@ -229,13 +233,15 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
 
     // Create new effect of selected type
-    std::string effect_name = stack_effect_type_combo->currentText().toStdString();
-    SpatialEffect3D* new_effect = EffectListManager3D::CreateEffectByName(effect_name);
+    QString class_name = stack_effect_type_combo->currentData().toString();
+    QString ui_name = stack_effect_type_combo->currentText();
+    SpatialEffect3D* new_effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
 
     if(new_effect)
     {
         instance->effect.reset(new_effect);
-        instance->name = effect_name;
+        instance->effect_class_name = class_name.toStdString();
+        instance->name = ui_name.toStdString();
 
         // Update list display
         UpdateEffectStackList();
@@ -324,10 +330,10 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     if(!instance || !instance->effect)
         return;
 
-    // Get effect UI widget and add to container
-    QWidget* effect_widget = instance->effect->GetCustomSettingsWidget();
-    if(effect_widget)
-    {
-        stack_effect_controls_layout->addWidget(effect_widget);
-    }
+    // The effect itself is a QWidget - set it up and add to container
+    SpatialEffect3D* effect = instance->effect.get();
+    effect->setParent(stack_effect_controls_container);
+    effect->CreateCommonEffectControls(stack_effect_controls_container);
+    effect->SetupCustomUI(stack_effect_controls_container);
+    stack_effect_controls_layout->addWidget(effect);
 }
