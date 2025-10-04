@@ -681,6 +681,32 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */
 }
 
 /*---------------------------------------------------------*\
+| Helper function to set visibility of a control group     |
+\*---------------------------------------------------------*/
+void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
+{
+    if(slider && value_label)
+    {
+        slider->setVisible(visible);
+        value_label->setVisible(visible);
+
+        QWidget* parent = slider->parentWidget();
+        if(parent)
+        {
+            QList<QLabel*> labels = parent->findChildren<QLabel*>();
+            for(QLabel* label : labels)
+            {
+                if(label->text() == label_text)
+                {
+                    label->setVisible(visible);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/*---------------------------------------------------------*\
 | Apply Control Visibility                                 |
 | Hides base controls if effect provides custom versions   |
 \*---------------------------------------------------------*/
@@ -703,121 +729,14 @@ void SpatialEffect3D::ApplyControlVisibility()
     bool show_colors = is_versioned_effect ? info.show_color_controls : true;
 
     // Hide/show controls based on effect's declarations
-    if(speed_slider && speed_label)
-    {
-        speed_slider->setVisible(show_speed);
-        speed_label->setVisible(show_speed);
-        // Find and hide the label too
-        QWidget* parent = speed_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "Speed:")
-                {
-                    label->setVisible(show_speed);
-                    break;
-                }
-            }
-        }
-    }
+    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", show_speed);
+    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", show_brightness);
+    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", show_frequency);
+    SetControlGroupVisibility(size_slider, size_label, "Size:", show_size);
+    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", show_scale);
+    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", show_fps);
 
-    if(brightness_slider && brightness_label)
-    {
-        brightness_slider->setVisible(show_brightness);
-        brightness_label->setVisible(show_brightness);
-        QWidget* parent = brightness_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "Brightness:")
-                {
-                    label->setVisible(show_brightness);
-                    break;
-                }
-            }
-        }
-    }
-
-    if(frequency_slider && frequency_label)
-    {
-        frequency_slider->setVisible(show_frequency);
-        frequency_label->setVisible(show_frequency);
-        QWidget* parent = frequency_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "Frequency:")
-                {
-                    label->setVisible(show_frequency);
-                    break;
-                }
-            }
-        }
-    }
-
-    if(size_slider && size_label)
-    {
-        size_slider->setVisible(show_size);
-        size_label->setVisible(show_size);
-        QWidget* parent = size_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "Size:")
-                {
-                    label->setVisible(show_size);
-                    break;
-                }
-            }
-        }
-    }
-
-    if(scale_slider && scale_label)
-    {
-        scale_slider->setVisible(show_scale);
-        scale_label->setVisible(show_scale);
-        QWidget* parent = scale_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "Scale:")
-                {
-                    label->setVisible(show_scale);
-                    break;
-                }
-            }
-        }
-    }
-
-    if(fps_slider && fps_label)
-    {
-        fps_slider->setVisible(show_fps);
-        fps_label->setVisible(show_fps);
-        QWidget* parent = fps_slider->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
-            {
-                if(label->text() == "FPS:")
-                {
-                    label->setVisible(show_fps);
-                    break;
-                }
-            }
-        }
-    }
-
+    // Handle axis control separately as it uses combo box instead of slider
     if(axis_combo && reverse_check)
     {
         axis_combo->setVisible(show_axis);

@@ -280,6 +280,7 @@ private:
     void CreateColorControls(QWidget* parent);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
+    void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
 };
 
 #endif
