@@ -319,6 +319,11 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
 {
+    // Save current selection
+    int current_row = effect_stack_list->currentRow();
+
+    // Block signals to prevent selection change during clear/rebuild
+    effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
     for(size_t i = 0; i < effect_stack.size(); i++)
@@ -331,6 +336,14 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         QListWidgetItem* item = new QListWidgetItem(enabled_marker + display_name);
         effect_stack_list->addItem(item);
     }
+
+    // Restore selection
+    if(current_row >= 0 && current_row < (int)effect_stack.size())
+    {
+        effect_stack_list->setCurrentRow(current_row);
+    }
+
+    effect_stack_list->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
@@ -385,6 +398,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         instance->effect.reset(effect);
     }
 
+    // If no effect (None selected), just return - controls are already cleared
     if(!instance->effect)
         return;
 
