@@ -40,6 +40,7 @@
 \*---------------------------------------------------------*/
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
+#include <nlohmann/json.hpp>
 
 /*---------------------------------------------------------*\
 | Grid context for dynamic effect scaling                 |
@@ -166,6 +167,12 @@ public:
     \*---------------------------------------------------------*/
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
+
+    /*---------------------------------------------------------*\
+    | Serialization - save/load effect parameters             |
+    \*---------------------------------------------------------*/
+    virtual nlohmann::json SaveSettings() const;
+    virtual void LoadSettings(const nlohmann::json& settings);
 
 signals:
     void ParametersChanged();

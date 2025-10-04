@@ -827,3 +827,115 @@ void SpatialEffect3D::OnReverseChanged()
     }
     emit ParametersChanged();
 }
+
+/*---------------------------------------------------------*\
+| Serialization - save effect parameters to JSON           |
+\*---------------------------------------------------------*/
+nlohmann::json SpatialEffect3D::SaveSettings() const
+{
+    nlohmann::json j;
+
+    // Save common parameters
+    j["speed"] = effect_speed;
+    j["brightness"] = effect_brightness;
+    j["frequency"] = effect_frequency;
+    j["rainbow_mode"] = effect_rainbow;
+    j["reverse"] = effect_reverse;
+
+    // Save colors
+    nlohmann::json colors_array = nlohmann::json::array();
+    for(const RGBColor& color : effect_colors)
+    {
+        colors_array.push_back({
+            {"r", RGBGetRValue(color)},
+            {"g", RGBGetGValue(color)},
+            {"b", RGBGetBValue(color)}
+        });
+    }
+    j["colors"] = colors_array;
+
+    // Save reference point settings
+    j["reference_mode"] = (int)effect_reference_mode;
+    j["global_ref_x"] = global_reference_point.x;
+    j["global_ref_y"] = global_reference_point.y;
+    j["global_ref_z"] = global_reference_point.z;
+    j["custom_ref_x"] = custom_reference_point.x;
+    j["custom_ref_y"] = custom_reference_point.y;
+    j["custom_ref_z"] = custom_reference_point.z;
+    j["use_custom_ref"] = use_custom_reference;
+
+    return j;
+}
+
+/*---------------------------------------------------------*\
+| Serialization - load effect parameters from JSON         |
+\*---------------------------------------------------------*/
+void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
+{
+    // Load common parameters
+    if(settings.contains("speed"))
+        SetSpeed(settings["speed"].get<unsigned int>());
+
+    if(settings.contains("brightness"))
+        SetBrightness(settings["brightness"].get<unsigned int>());
+
+    if(settings.contains("frequency"))
+        SetFrequency(settings["frequency"].get<unsigned int>());
+
+    if(settings.contains("rainbow_mode"))
+        SetRainbowMode(settings["rainbow_mode"].get<bool>());
+
+    if(settings.contains("reverse"))
+        effect_reverse = settings["reverse"].get<bool>();
+
+    // Load colors
+    if(settings.contains("colors"))
+    {
+        std::vector<RGBColor> colors;
+        for(const auto& color_json : settings["colors"])
+        {
+            unsigned char r = color_json["r"].get<unsigned char>();
+            unsigned char g = color_json["g"].get<unsigned char>();
+            unsigned char b = color_json["b"].get<unsigned char>();
+            colors.push_back(ToRGBColor(r, g, b));
+        }
+        SetColors(colors);
+    }
+
+    // Load reference point settings
+    if(settings.contains("reference_mode"))
+        SetReferenceMode((ReferenceMode)settings["reference_mode"].get<int>());
+
+    if(settings.contains("global_ref_x") && settings.contains("global_ref_y") && settings.contains("global_ref_z"))
+    {
+        Vector3D ref_point;
+        ref_point.x = settings["global_ref_x"].get<float>();
+        ref_point.y = settings["global_ref_y"].get<float>();
+        ref_point.z = settings["global_ref_z"].get<float>();
+        SetGlobalReferencePoint(ref_point);
+    }
+
+    if(settings.contains("custom_ref_x") && settings.contains("custom_ref_y") && settings.contains("custom_ref_z"))
+    {
+        Vector3D ref_point;
+        ref_point.x = settings["custom_ref_x"].get<float>();
+        ref_point.y = settings["custom_ref_y"].get<float>();
+        ref_point.z = settings["custom_ref_z"].get<float>();
+        SetCustomReferencePoint(ref_point);
+    }
+
+    if(settings.contains("use_custom_ref"))
+        SetUseCustomReference(settings["use_custom_ref"].get<bool>());
+
+    // Update UI controls if they exist
+    if(speed_slider)
+        speed_slider->setValue(effect_speed);
+    if(brightness_slider)
+        brightness_slider->setValue(effect_brightness);
+    if(frequency_slider)
+        frequency_slider->setValue(effect_frequency);
+    if(rainbow_check)
+        rainbow_check->setChecked(effect_rainbow);
+    if(reverse_check)
+        reverse_check->setChecked(effect_reverse);
+}
