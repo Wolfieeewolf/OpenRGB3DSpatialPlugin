@@ -51,6 +51,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 {
 
     effect_controls_widget = nullptr;
+    effect_controls_layout = nullptr;
     current_effect_ui = nullptr;
     wave3d_effect = nullptr;
     wipe3d_effect = nullptr;
@@ -60,6 +61,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     explosion3d_effect = nullptr;
     breathingsphere3d_effect = nullptr;
     dnahelix3d_effect = nullptr;
+    start_effect_button = nullptr;
+    stop_effect_button = nullptr;
 
     zone_manager = new ZoneManager3D();
 
