@@ -15,17 +15,11 @@
 | Register this effect with the effect manager             |
 \*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(DNAHelix3D);
+
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
-#include <cmath>
-
-// Helper function for smooth interpolation
-static float smoothstep(float edge0, float edge1, float x)
-{
-    float t = fmax(0.0f, fmin(1.0f, (x - edge0) / (edge1 - edge0)));
-    return t * t * (3.0f - 2.0f * t);
-}
+#include "../EffectHelpers.h"
 
 DNAHelix3D::DNAHelix3D(QWidget* parent) : SpatialEffect3D(parent)
 {

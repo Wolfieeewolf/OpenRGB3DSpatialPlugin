@@ -135,8 +135,6 @@ private:
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
     void SetupCustomEffectUI(int effect_type);
-    void SetupCustomEffectUI_NEW(const std::string& effect_class_name);  // NEW: Simplified version
-    void SetupEffectSignals(SpatialEffect3D* effect, int effect_type);
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
 
