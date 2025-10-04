@@ -127,9 +127,9 @@ void LEDViewport3D::SelectReferencePoint(int index)
 {
     if(reference_points && index >= 0 && index < (int)reference_points->size())
     {
-        selected_ref_point_idx = index;
+        selected_controller_indices.clear();
         selected_controller_idx = -1;
-        ClearSelection();
+        selected_ref_point_idx = index;
 
         VirtualReferencePoint3D* ref_point = (*reference_points)[index];
         gizmo.SetTarget(ref_point);
