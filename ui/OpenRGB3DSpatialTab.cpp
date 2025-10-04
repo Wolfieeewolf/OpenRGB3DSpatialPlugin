@@ -1899,6 +1899,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     if(combo_idx < 0)
     {
+        QMessageBox::information(this, "No Item Selected",
+                                "Please select a controller, zone, or LED to add to the scene.");
         return;
     }
 
@@ -2587,6 +2589,12 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     QFile file(QString::fromStdString(filename));
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
+        QString error_msg = QString("Failed to save layout file:\n%1\n\nError: %2")
+            .arg(QString::fromStdString(filename))
+            .arg(file.errorString());
+        QMessageBox::critical(this, "Save Failed", error_msg);
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for writing: %s - %s",
+                  filename.c_str(), file.errorString().toStdString().c_str());
         return;
     }
 
@@ -2594,6 +2602,18 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     out << QString::fromStdString(layout_json.dump(4));
     file.close();
 
+    if(file.error() != QFile::NoError)
+    {
+        QString error_msg = QString("Failed to write layout file:\n%1\n\nError: %2")
+            .arg(QString::fromStdString(filename))
+            .arg(file.errorString());
+        QMessageBox::critical(this, "Write Failed", error_msg);
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write file: %s - %s",
+                  filename.c_str(), file.errorString().toStdString().c_str());
+        return;
+    }
+
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout saved successfully to: %s", filename.c_str());
 }
 
 void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
@@ -3034,23 +3054,41 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
     if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
+        QString error_msg = QString("Failed to open layout file:\n%1\n\nError: %2")
+            .arg(QString::fromStdString(filename))
+            .arg(file.errorString());
+        QMessageBox::critical(this, "Load Failed", error_msg);
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for reading: %s - %s",
+                  filename.c_str(), file.errorString().toStdString().c_str());
         return;
     }
 
     QString content = QString::fromUtf8(file.readAll());
     file.close();
 
+    if(file.error() != QFile::NoError)
+    {
+        QString error_msg = QString("Failed to read layout file:\n%1\n\nError: %2")
+            .arg(QString::fromStdString(filename))
+            .arg(file.errorString());
+        QMessageBox::critical(this, "Read Failed", error_msg);
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to read file: %s - %s",
+                  filename.c_str(), file.errorString().toStdString().c_str());
+        return;
+    }
+
     try
     {
         nlohmann::json layout_json = nlohmann::json::parse(content.toStdString());
         LoadLayoutFromJSON(layout_json);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout loaded successfully from: %s", filename.c_str());
         return;
     }
     catch(const std::exception& e)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to parse JSON: %s", e.what());
-        QMessageBox::critical(nullptr, "Invalid Layout File",
-                            QString("Failed to load layout file:\n%1\n\nError: %2")
+        QMessageBox::critical(this, "Invalid Layout File",
+                            QString("Failed to parse layout file:\n%1\n\nThe file may be corrupted or in an invalid format.\n\nError: %2")
                             .arg(QString::fromStdString(filename))
                             .arg(e.what()));
         return;
@@ -3198,9 +3236,21 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
             nlohmann::json ctrl_json = virtual_controllers[i]->ToJson();
             file << ctrl_json.dump(4);
             file.close();
+
+            if(file.fail())
+            {
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write custom controller: %s", filepath.c_str());
+                // Don't show error dialog here - too noisy during auto-save
+            }
+            else
+            {
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Saved custom controller: %s", safe_name.c_str());
+            }
         }
         else
         {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open custom controller file: %s", filepath.c_str());
+            // Don't show error dialog here - too noisy during auto-save
         }
     }
 }
@@ -3243,11 +3293,25 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                             available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
                             virtual_controllers.push_back(std::unique_ptr<VirtualController3D>(virtual_ctrl));
                             loaded_count++;
+                            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Loaded custom controller: %s",
+                                      virtual_ctrl->GetName().c_str());
+                        }
+                        else
+                        {
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create custom controller from: %s",
+                                      entry->path().filename().string().c_str());
                         }
                     }
-                    catch(const std::exception&)
+                    catch(const std::exception& e)
                     {
+                        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load custom controller %s: %s",
+                                entry->path().filename().string().c_str(), e.what());
                     }
+                }
+                else
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to open custom controller file: %s",
+                              entry->path().string().c_str());
                 }
             }
         }
