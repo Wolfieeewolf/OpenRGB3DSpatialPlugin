@@ -3399,9 +3399,13 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         /*---------------------------------------------------------*\
         | Create Wave3D effect UI                                  |
         \*---------------------------------------------------------*/
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Creating Wave3D effect");
         wave3d_effect = new Wave3D(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Wave3D constructor complete, calling CreateCommonEffectControls");
         wave3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] CreateCommonEffectControls complete, calling SetupCustomUI");
         wave3d_effect->SetupCustomUI(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] SetupCustomUI complete");
         current_effect_ui = wave3d_effect;
 
         /*---------------------------------------------------------*\
@@ -3433,9 +3437,13 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         /*---------------------------------------------------------*\
         | Create Wipe3D effect UI                                  |
         \*---------------------------------------------------------*/
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Creating Wipe3D effect");
         wipe3d_effect = new Wipe3D(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Wipe3D constructor complete, calling CreateCommonEffectControls");
         wipe3d_effect->CreateCommonEffectControls(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] CreateCommonEffectControls complete, calling SetupCustomUI");
         wipe3d_effect->SetupCustomUI(effect_controls_widget);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] SetupCustomUI complete");
         current_effect_ui = wipe3d_effect;
 
         start_effect_button = wipe3d_effect->GetStartButton();
