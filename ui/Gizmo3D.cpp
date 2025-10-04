@@ -160,7 +160,7 @@ void Gizmo3D::SetGridSnap(bool enabled, float size)
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || !target_transform)
+    if(!active || (!target_transform && !target_ref_point))
         return false;
 
     last_mouse_pos = event->pos();
@@ -189,7 +189,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
 
 bool Gizmo3D::HandleMouseMove(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || !dragging || !target_transform)
+    if(!active || !dragging || (!target_transform && !target_ref_point))
         return false;
 
     UpdateTransform(event->x(), event->y(), modelview, projection, viewport);
