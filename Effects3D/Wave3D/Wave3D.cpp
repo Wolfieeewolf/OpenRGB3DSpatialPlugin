@@ -28,19 +28,35 @@ REGISTER_EFFECT_3D(Wave3D);
 
 Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
 {
+    printf("[Wave3D] Constructor called\n");
+    fflush(stdout);
+
     shape_combo = nullptr;
     shape_type = 0;      // Circles
     progress = 0.0f;
 
+    printf("[Wave3D] About to call SetFrequency\n");
+    fflush(stdout);
+
     // Initialize with default colors using base class method
     SetFrequency(50);    // Default frequency like RadialRainbow slider2
+
+    printf("[Wave3D] About to call SetRainbowMode\n");
+    fflush(stdout);
+
     SetRainbowMode(true); // Default to rainbow like RadialRainbow
+
+    printf("[Wave3D] About to call SetColors\n");
+    fflush(stdout);
 
     std::vector<RGBColor> default_colors;
     default_colors.push_back(0x000000FF);  // Red (0x00BBGGRR format)
     default_colors.push_back(0x0000FF00);  // Green
     default_colors.push_back(0x00FF0000);  // Blue
     SetColors(default_colors);
+
+    printf("[Wave3D] Constructor complete\n");
+    fflush(stdout);
 }
 
 Wave3D::~Wave3D()

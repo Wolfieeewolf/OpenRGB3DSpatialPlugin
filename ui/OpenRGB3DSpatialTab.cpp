@@ -3356,6 +3356,8 @@ void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 
 void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
 {
+    LOG_ERROR("[OpenRGB3DSpatialPlugin] SetupCustomEffectUI called with effect_type=%d", effect_type);
+
     /*---------------------------------------------------------*\
     | Validate all required UI components                      |
     \*---------------------------------------------------------*/

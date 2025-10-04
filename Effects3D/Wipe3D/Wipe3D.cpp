@@ -22,11 +22,17 @@ REGISTER_EFFECT_3D(Wipe3D);
 
 Wipe3D::Wipe3D(QWidget* parent) : SpatialEffect3D(parent)
 {
+    printf("[Wipe3D] Constructor called\n");
+    fflush(stdout);
+
     thickness_slider = nullptr;
     shape_combo = nullptr;
     wipe_thickness = 20;     // Default thickness
     edge_shape = 0;          // Default to round edges
     progress = 0.0f;
+
+    printf("[Wipe3D] About to set colors\n");
+    fflush(stdout);
 
     // Set default wipe colors (red to white)
     std::vector<RGBColor> wipe_colors = {
@@ -37,7 +43,14 @@ Wipe3D::Wipe3D(QWidget* parent) : SpatialEffect3D(parent)
     {
         SetColors(wipe_colors);
     }
+
+    printf("[Wipe3D] About to call SetRainbowMode\n");
+    fflush(stdout);
+
     SetRainbowMode(false);   // Default to custom colors
+
+    printf("[Wipe3D] Constructor complete\n");
+    fflush(stdout);
 }
 
 Wipe3D::~Wipe3D()
