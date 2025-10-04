@@ -69,6 +69,12 @@ struct ControllerTransform
     \*---------------------------------------------------------*/
     int                 granularity;
     int                 item_idx;  // Zone or LED index based on granularity
+
+    /*---------------------------------------------------------*\
+    | World Position Cache                                      |
+    | Pre-computed world positions for performance             |
+    \*---------------------------------------------------------*/
+    bool                world_positions_dirty;  // True when transform changes
 };
 
 #endif

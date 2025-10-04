@@ -1618,55 +1618,53 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             VirtualController3D* virtual_ctrl = transform->virtual_controller;
             const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
 
+            // Update cached world positions if dirty
+            if(transform->world_positions_dirty)
+            {
+                ControllerLayout3D::UpdateWorldPositions(transform);
+            }
+
             // Apply effects to each virtual LED
             for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
             {
                 const GridLEDMapping& mapping = mappings[mapping_idx];
                 if(!mapping.controller) continue;
 
-                // Calculate virtual LED world position in unified grid space using proper transformation
-                Vector3D local_pos;
-                local_pos.x = (float)mapping.x;
-                local_pos.y = (float)mapping.y;
-                local_pos.z = (float)mapping.z;
-                Vector3D world_pos = ControllerLayout3D::CalculateWorldPosition(local_pos, transform->transform);
-                float x = world_pos.x;
-                float y = world_pos.y;
-                float z = world_pos.z;
-
-                // Adjust coordinates relative to the effect origin (user position)
-                float relative_x = x - origin_offset_x;
-                float relative_y = y - origin_offset_y;
-                float relative_z = z - origin_offset_z;
-
-                // Only apply effects to LEDs within the room-centered grid bounds
-                if(x >= grid_min_x && x <= grid_max_x &&
-                   y >= grid_min_y && y <= grid_max_y &&
-                   z >= grid_min_z && z <= grid_max_z)
+                // Use pre-computed world position from cached LED positions
+                if(mapping_idx < transform->led_positions.size())
                 {
-                    // Safety: Ensure controller is still valid
-                    if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
-                    {
-                        continue;
-                    }
+                    float x = transform->led_positions[mapping_idx].world_position.x;
+                    float y = transform->led_positions[mapping_idx].world_position.y;
+                    float z = transform->led_positions[mapping_idx].world_position.z;
 
-                    // Calculate effect color using grid-aware method
-                    RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+                    // Adjust coordinates relative to the effect origin (user position)
+                    float relative_x = x - origin_offset_x;
+                    float relative_y = y - origin_offset_y;
+                    float relative_z = z - origin_offset_z;
 
-                    // Apply color to the mapped physical LED (with bounds checking)
-                    if(mapping.zone_idx < mapping.controller->zones.size())
+                    // Only apply effects to LEDs within the room-centered grid bounds
+                    if(x >= grid_min_x && x <= grid_max_x &&
+                       y >= grid_min_y && y <= grid_max_y &&
+                       z >= grid_min_z && z <= grid_max_z)
                     {
-                        unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                        if(led_global_idx < mapping.controller->colors.size())
+                        // Safety: Ensure controller is still valid
+                        if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
                         {
-                            mapping.controller->colors[led_global_idx] = color;
+                            continue;
                         }
-                        else
+
+                        // Calculate effect color using grid-aware method
+                        RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+
+                        // Apply color to the mapped physical LED (with bounds checking)
+                        if(mapping.zone_idx < mapping.controller->zones.size())
                         {
+                            unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                            if(led_global_idx < mapping.controller->colors.size())
+                            {
+                                mapping.controller->colors[led_global_idx] = color;
+                            }
                         }
-                    }
-                    else
-                    {
                     }
                 }
             }
@@ -1693,20 +1691,26 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
 
         /*---------------------------------------------------------*\
-        | Calculate colors for each LED using actual positions    |
+        | Update cached world positions if dirty                  |
+        \*---------------------------------------------------------*/
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+
+        /*---------------------------------------------------------*\
+        | Calculate colors for each LED using cached positions    |
         \*---------------------------------------------------------*/
         for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
         {
             LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
 
             /*---------------------------------------------------------*\
-            | Get LED 3D position from the actual layout              |
+            | Use pre-computed world position (no calculation!)      |
             \*---------------------------------------------------------*/
-            // Calculate LED world position in unified grid space using proper transformation
-            Vector3D world_pos = ControllerLayout3D::CalculateWorldPosition(led_position.local_position, transform->transform);
-            float x = world_pos.x;
-            float y = world_pos.y;
-            float z = world_pos.z;
+            float x = led_position.world_position.x;
+            float y = led_position.world_position.y;
+            float z = led_position.world_position.z;
 
             // Validate zone index before accessing
             if(led_position.zone_idx >= controller->zones.size())
@@ -1915,10 +1919,14 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         ctrl_transform->item_idx = -1;
 
         ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
+        ctrl_transform->world_positions_dirty = true;
 
         int hue = (controller_transforms.size() * 137) % 360;
         QColor color = QColor::fromHsv(hue, 200, 255);
         ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+
+        // Pre-compute world positions before adding to vector
+        ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
         controller_transforms.push_back(std::move(ctrl_transform));
 
@@ -2017,6 +2025,9 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     int hue = (controller_transforms.size() * 137) % 360;
     QColor color = QColor::fromHsv(hue, 200, 255);
     ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+
+    ctrl_transform->world_positions_dirty = true;
+    ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
     controller_transforms.push_back(std::move(ctrl_transform));
 
@@ -2877,6 +2888,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             size_t led_positions_size = ctrl_transform->led_positions.size();
             unsigned int first_zone_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].zone_idx : 0;
             unsigned int first_led_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].led_idx : 0;
+
+            // Pre-compute world positions
+            ctrl_transform->world_positions_dirty = true;
+            ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
             controller_transforms.push_back(std::move(ctrl_transform));
 

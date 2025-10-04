@@ -180,3 +180,56 @@ Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transfor
 
     return world_pos;
 }
+
+void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transform)
+{
+    if(!ctrl_transform)
+    {
+        return;
+    }
+
+    // Pre-compute rotation matrices for efficiency
+    float rad_x = ctrl_transform->transform.rotation.x * (float)M_PI / 180.0f;
+    float rad_y = ctrl_transform->transform.rotation.y * (float)M_PI / 180.0f;
+    float rad_z = ctrl_transform->transform.rotation.z * (float)M_PI / 180.0f;
+
+    float cos_x = cosf(rad_x);
+    float sin_x = sinf(rad_x);
+    float cos_y = cosf(rad_y);
+    float sin_y = sinf(rad_y);
+    float cos_z = cosf(rad_z);
+    float sin_z = sinf(rad_z);
+
+    // Update world position for each LED
+    for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
+    {
+        LEDPosition3D* led_pos = &ctrl_transform->led_positions[i];
+        Vector3D local = led_pos->local_position;
+        Vector3D rotated = local;
+
+        // Apply X rotation
+        float y = rotated.y * cos_x - rotated.z * sin_x;
+        float z = rotated.y * sin_x + rotated.z * cos_x;
+        rotated.y = y;
+        rotated.z = z;
+
+        // Apply Y rotation
+        float x = rotated.x * cos_y + rotated.z * sin_y;
+        z = -rotated.x * sin_y + rotated.z * cos_y;
+        rotated.x = x;
+        rotated.z = z;
+
+        // Apply Z rotation
+        x = rotated.x * cos_z - rotated.y * sin_z;
+        y = rotated.x * sin_z + rotated.y * cos_z;
+        rotated.x = x;
+        rotated.y = y;
+
+        // Apply translation
+        led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
+        led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
+        led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
+    }
+
+    ctrl_transform->world_positions_dirty = false;
+}
