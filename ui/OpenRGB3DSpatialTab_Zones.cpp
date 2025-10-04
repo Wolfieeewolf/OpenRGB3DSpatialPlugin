@@ -269,8 +269,9 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
         }
     }
 
-    // Also update the zone dropdown in effects tab
+    // Also update the zone dropdowns in effects tab and effect stack tab
     UpdateEffectZoneCombo();
+    UpdateStackEffectZoneCombo();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()

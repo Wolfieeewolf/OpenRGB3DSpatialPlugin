@@ -112,6 +112,9 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     stack_layout->addWidget(settings_group);
     stack_layout->addStretch();
 
+    // Populate zone combo with current zones
+    UpdateStackEffectZoneCombo();
+
     // Add tab to specified tab widget
     tab_widget->addTab(stack_tab, "Effect Stack");
 }
