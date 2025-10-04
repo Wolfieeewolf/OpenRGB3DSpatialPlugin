@@ -11,6 +11,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
+#include "LogManager.h"
 #include <QMessageBox>
 
 void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
@@ -121,6 +122,12 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
 
 void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
 {
+    if(!stack_effect_type_combo || stack_effect_type_combo->count() == 0)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - no effects available");
+        return;
+    }
+
     // Create new effect instance
     auto instance = std::make_unique<EffectInstance3D>();
     instance->id = next_effect_instance_id++;
@@ -130,19 +137,25 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     instance->enabled = true;
 
     // Create default effect (first in list)
-    if(stack_effect_type_combo->count() > 0)
-    {
-        QString class_name = stack_effect_type_combo->itemData(0).toString();
-        QString ui_name = stack_effect_type_combo->itemText(0);
+    QString class_name = stack_effect_type_combo->itemData(0).toString();
+    QString ui_name = stack_effect_type_combo->itemText(0);
 
-        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
-        if(effect)
-        {
-            instance->effect.reset(effect);
-            instance->effect_class_name = class_name.toStdString();
-            instance->name = ui_name.toStdString();
-        }
+    if(class_name.isEmpty())
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect class name is empty");
+        return;
     }
+
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
+    if(!effect)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", class_name.toStdString().c_str());
+        return;
+    }
+
+    instance->effect.reset(effect);
+    instance->effect_class_name = class_name.toStdString();
+    instance->name = ui_name.toStdString();
 
     // Add to list
     effect_stack.push_back(std::move(instance));
@@ -302,6 +315,9 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
 
 void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 {
+    if(!stack_effect_zone_combo)
+        return;
+
     stack_effect_zone_combo->clear();
     stack_effect_zone_combo->addItem("All Controllers", -1);
 
