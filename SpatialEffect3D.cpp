@@ -839,12 +839,12 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["speed"] = effect_speed;
     j["brightness"] = effect_brightness;
     j["frequency"] = effect_frequency;
-    j["rainbow_mode"] = effect_rainbow;
+    j["rainbow_mode"] = rainbow_mode;
     j["reverse"] = effect_reverse;
 
     // Save colors
     nlohmann::json colors_array = nlohmann::json::array();
-    for(const RGBColor& color : effect_colors)
+    for(const RGBColor& color : colors)
     {
         colors_array.push_back({
             {"r", RGBGetRValue(color)},
@@ -855,7 +855,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["colors"] = colors_array;
 
     // Save reference point settings
-    j["reference_mode"] = (int)effect_reference_mode;
+    j["reference_mode"] = (int)reference_mode;
     j["global_ref_x"] = global_reference_point.x;
     j["global_ref_y"] = global_reference_point.y;
     j["global_ref_z"] = global_reference_point.z;
@@ -934,8 +934,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         brightness_slider->setValue(effect_brightness);
     if(frequency_slider)
         frequency_slider->setValue(effect_frequency);
-    if(rainbow_check)
-        rainbow_check->setChecked(effect_rainbow);
+    if(rainbow_mode_check)
+        rainbow_mode_check->setChecked(rainbow_mode);
     if(reverse_check)
         reverse_check->setChecked(effect_reverse);
 }
