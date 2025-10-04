@@ -139,22 +139,23 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     instance->blend_mode = BlendMode::NO_BLEND;
     instance->enabled = true;
 
-    // Use currently selected effect if it's not "None", otherwise use first real effect
-    int selected_index = stack_effect_type_combo->currentIndex();
+    // Get currently selected effect - always use first real effect (not "None")
+    // Index 0 is "None", so always use index 1 or higher
+    int selected_index = 1; // Always use first real effect
+
+    // Check if user has a different effect selected
+    int current_index = stack_effect_type_combo->currentIndex();
+    if(current_index > 0) // If not "None"
+    {
+        selected_index = current_index;
+    }
+
     QString class_name = stack_effect_type_combo->itemData(selected_index).toString();
     QString ui_name = stack_effect_type_combo->itemText(selected_index);
 
-    // If "None" is selected (empty class_name), use first real effect instead
     if(class_name.isEmpty())
     {
-        selected_index = 1; // First real effect after "None"
-        class_name = stack_effect_type_combo->itemData(selected_index).toString();
-        ui_name = stack_effect_type_combo->itemText(selected_index);
-    }
-
-    if(class_name.isEmpty())
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect class name is empty");
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - effect class name is empty");
         return;
     }
 
