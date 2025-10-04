@@ -64,6 +64,9 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     type_layout->addWidget(new QLabel("Effect Type:"));
     stack_effect_type_combo = new QComboBox();
 
+    // Add "None" option first
+    stack_effect_type_combo->addItem("None", "");
+
     // Populate with all available effects (display UI name, store class name)
     std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
     for(const EffectRegistration3D& effect_reg : effects)
@@ -122,7 +125,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
 
 void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
 {
-    if(!stack_effect_type_combo || stack_effect_type_combo->count() == 0)
+    if(!stack_effect_type_combo || stack_effect_type_combo->count() <= 1)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - no effects available");
         return;
@@ -136,9 +139,9 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     instance->blend_mode = BlendMode::NO_BLEND;
     instance->enabled = true;
 
-    // Create default effect (first in list)
-    QString class_name = stack_effect_type_combo->itemData(0).toString();
-    QString ui_name = stack_effect_type_combo->itemText(0);
+    // Create default effect (index 1 = first real effect after "None")
+    QString class_name = stack_effect_type_combo->itemData(1).toString();
+    QString ui_name = stack_effect_type_combo->itemText(1);
 
     if(class_name.isEmpty())
     {
@@ -242,24 +245,37 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 
     EffectInstance3D* instance = effect_stack[current_row].get();
 
-    // Create new effect of selected type
+    // Get selected effect type
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
-    SpatialEffect3D* new_effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
 
-    if(new_effect)
+    // If "None" is selected, clear the effect
+    if(class_name.isEmpty())
     {
-        instance->effect.reset(new_effect);
-        instance->effect_class_name = class_name.toStdString();
-        instance->name = ui_name.toStdString();
+        instance->effect.reset();
+        instance->effect_class_name = "";
+        instance->name = "None";
 
         // Update list display
         UpdateEffectStackList();
         effect_stack_list->setCurrentRow(current_row);
 
-        // Reload effect controls
+        // Clear effect controls
         LoadStackEffectControls(instance);
+        return;
     }
+
+    // Clear old effect and store new class name (effect will be created lazily)
+    instance->effect.reset();
+    instance->effect_class_name = class_name.toStdString();
+    instance->name = ui_name.toStdString();
+
+    // Update list display
+    UpdateEffectStackList();
+    effect_stack_list->setCurrentRow(current_row);
+
+    // Reload effect controls (will create effect if needed)
+    LoadStackEffectControls(instance);
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
