@@ -323,7 +323,10 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     {
         if(item->widget())
         {
-            item->widget()->deleteLater();
+            // Don't delete the widget - just remove it from layout
+            // The effect is owned by the EffectInstance3D
+            item->widget()->setParent(nullptr);
+            item->widget()->hide();
         }
         delete item;
     }
@@ -331,10 +334,18 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     if(!instance || !instance->effect)
         return;
 
-    // The effect itself is a QWidget - set it up and add to container
+    // The effect itself is a QWidget
     SpatialEffect3D* effect = instance->effect.get();
-    effect->setParent(stack_effect_controls_container);
-    effect->CreateCommonEffectControls(stack_effect_controls_container);
-    effect->SetupCustomUI(stack_effect_controls_container);
+
+    // If the effect hasn't been initialized yet, set it up
+    if(!effect->parent())
+    {
+        effect->setParent(stack_effect_controls_container);
+        effect->CreateCommonEffectControls(stack_effect_controls_container);
+        effect->SetupCustomUI(stack_effect_controls_container);
+    }
+
+    // Show the effect and add to layout
+    effect->show();
     stack_effect_controls_layout->addWidget(effect);
 }
