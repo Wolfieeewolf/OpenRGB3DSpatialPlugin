@@ -131,27 +131,20 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
         return;
     }
 
-    // Create new effect instance
-    auto instance = std::make_unique<EffectInstance3D>();
-    instance->id = next_effect_instance_id++;
-    instance->name = "New Effect";
-    instance->zone_index = -1; // All Controllers
-    instance->blend_mode = BlendMode::NO_BLEND;
-    instance->enabled = true;
-
-    // Get currently selected effect - always use first real effect (not "None")
-    // Index 0 is "None", so always use index 1 or higher
-    int selected_index = 1; // Always use first real effect
-
-    // Check if user has a different effect selected
+    // Check what's currently selected
     int current_index = stack_effect_type_combo->currentIndex();
-    if(current_index > 0) // If not "None"
+
+    // If "None" is selected (index 0), refuse to add
+    if(current_index == 0)
     {
-        selected_index = current_index;
+        QMessageBox::information(this, "No Effect Selected",
+                                "Please select an effect type before adding to the stack.\n\n"
+                                "\"None\" is a placeholder and cannot be added.");
+        return;
     }
 
-    QString class_name = stack_effect_type_combo->itemData(selected_index).toString();
-    QString ui_name = stack_effect_type_combo->itemText(selected_index);
+    QString class_name = stack_effect_type_combo->itemData(current_index).toString();
+    QString ui_name = stack_effect_type_combo->itemText(current_index);
 
     if(class_name.isEmpty())
     {
@@ -159,9 +152,16 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
         return;
     }
 
-    // Don't create the effect yet - wait until it's selected and we have a proper parent widget
-    instance->effect_class_name = class_name.toStdString();
+    // Create new effect instance
+    auto instance = std::make_unique<EffectInstance3D>();
+    instance->id = next_effect_instance_id++;
     instance->name = ui_name.toStdString();
+    instance->zone_index = -1; // All Controllers
+    instance->blend_mode = BlendMode::NO_BLEND;
+    instance->enabled = true;
+
+    // Store the effect class name (effect will be created lazily when selected)
+    instance->effect_class_name = class_name.toStdString();
 
     // Add to list
     effect_stack.push_back(std::move(instance));
