@@ -146,14 +146,7 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
         return;
     }
 
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
-    if(!effect)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", class_name.toStdString().c_str());
-        return;
-    }
-
-    instance->effect.reset(effect);
+    // Don't create the effect yet - wait until it's selected and we have a proper parent widget
     instance->effect_class_name = class_name.toStdString();
     instance->name = ui_name.toStdString();
 
@@ -350,7 +343,22 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         delete item;
     }
 
-    if(!instance || !instance->effect)
+    if(!instance)
+        return;
+
+    // Create effect if it doesn't exist yet
+    if(!instance->effect && !instance->effect_class_name.empty())
+    {
+        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
+        if(!effect)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", instance->effect_class_name.c_str());
+            return;
+        }
+        instance->effect.reset(effect);
+    }
+
+    if(!instance->effect)
         return;
 
     // The effect itself is a QWidget
