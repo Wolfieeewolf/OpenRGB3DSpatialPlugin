@@ -585,7 +585,7 @@ Contributions are welcome! Whether you want to add effects, fix bugs, improve pe
 ### Development Guidelines
 
 **Code Style:**
-- Follow OpenRGB coding standards (see [CONTRIBUTING.md](D:\MCP\CONTRIBUTING.md))
+- Follow OpenRGB coding standards (see [CONTRIBUTING.md](docs/CONTRIBUTING.md))
 - Use C-style conventions (no `auto`, indexed loops)
 - Use snake_case for variables, CamelCase for functions/classes
 - 4 spaces indentation (spaces, not tabs)

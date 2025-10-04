@@ -35,8 +35,8 @@ This guide will walk you through creating new spatial effects using the plugin's
 - Text editor or IDE (Qt Creator recommended)
 
 **Recommended Reading:**
-- [OpenRGB Contributing Guide](../../CONTRIBUTING.md)
-- [RGB Controller API](../../RGBControllerAPI.md)
+- [OpenRGB Contributing Guide](CONTRIBUTING.md)
+- [RGB Controller API](../OpenRGB/RGBControllerAPI.md)
 - Existing effect implementations in `Effects3D/`
 
 ---
@@ -1673,9 +1673,9 @@ Rotating tornado funnel with configurable intensity and height.
 ## Resources
 
 **Documentation:**
-- [OpenRGB Contributing Guide](../../CONTRIBUTING.md)
-- [RGB Controller API](../../RGBControllerAPI.md)
-- [Plugin README](README.md)
+- [OpenRGB Contributing Guide](CONTRIBUTING.md)
+- [RGB Controller API](../OpenRGB/RGBControllerAPI.md)
+- [Plugin README](../README.md)
 
 **Example Effects:**
 - `Effects3D/Wave3D/` - Simple radial wave
