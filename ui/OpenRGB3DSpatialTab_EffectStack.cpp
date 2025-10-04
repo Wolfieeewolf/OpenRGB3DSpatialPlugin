@@ -147,7 +147,7 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     UpdateEffectStackList();
 
     // Select the new effect
-    effect_stack_list->setCurrentRow(effect_stack.size() - 1);
+    effect_stack_list->setCurrentRow((int)effect_stack.size() - 1);
 }
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
