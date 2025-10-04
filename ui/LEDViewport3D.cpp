@@ -298,9 +298,12 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         int picked_ref_point = PickReferencePoint(event->x(), event->y());
         if(picked_ref_point >= 0)
         {
-            selected_ref_point_idx = picked_ref_point;
+            // Clear controller selection only
+            selected_controller_indices.clear();
             selected_controller_idx = -1;
-            ClearSelection();
+
+            // Set reference point selection
+            selected_ref_point_idx = picked_ref_point;
 
             // Set gizmo to target the reference point
             if(reference_points && picked_ref_point < (int)reference_points->size())
