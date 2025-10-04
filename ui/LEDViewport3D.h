@@ -24,6 +24,7 @@
 | System Includes                                          |
 \*---------------------------------------------------------*/
 #include <vector>
+#include <memory>
 
 /*---------------------------------------------------------*\
 | Local Includes                                           |
@@ -42,7 +43,7 @@ public:
     explicit LEDViewport3D(QWidget *parent = nullptr);
     ~LEDViewport3D();
 
-    void SetControllerTransforms(std::vector<ControllerTransform*>* transforms);
+    void SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms);
     void SelectController(int index);
     void SelectReferencePoint(int index);
     void UpdateColors();
@@ -50,7 +51,7 @@ public:
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
     void SetUserPosition(const UserPosition3D& position);
-    void SetReferencePoints(std::vector<VirtualReferencePoint3D*>* ref_points);
+    void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
     void EnforceFloorConstraint(ControllerTransform* ctrl);
     void UpdateGizmoPosition();
@@ -106,9 +107,9 @@ private:
 
     Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform);
 
-    std::vector<ControllerTransform*>*  controller_transforms;
-    int                                 selected_controller_idx;
-    std::vector<int>                    selected_controller_indices;
+    std::vector<std::unique_ptr<ControllerTransform>>*  controller_transforms;
+    int                                                  selected_controller_idx;
+    std::vector<int>                                     selected_controller_indices;
 
     // Grid dimensions for proper bounds and visualization
     int     grid_x;
@@ -124,7 +125,7 @@ private:
     /*---------------------------------------------------------*\
     | Reference Points                                         |
     \*---------------------------------------------------------*/
-    std::vector<VirtualReferencePoint3D*>* reference_points;
+    std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
     int                                     selected_ref_point_idx;
 
     /*---------------------------------------------------------*\

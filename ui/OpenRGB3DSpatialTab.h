@@ -29,6 +29,7 @@
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QLineEdit>
+#include <memory>
 
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
@@ -143,7 +144,7 @@ private:
 
     LEDViewport3D*              viewport;
 
-    std::vector<ControllerTransform*> controller_transforms;
+    std::vector<std::unique_ptr<ControllerTransform>> controller_transforms;
 
     QListWidget*                available_controllers_list;
     QListWidget*                custom_controllers_list;
@@ -242,9 +243,9 @@ private:
     QPushButton*                delete_zone_button;
     QComboBox*                  effect_zone_combo;
 
-    std::vector<VirtualController3D*> virtual_controllers;
-    std::vector<VirtualReferencePoint3D*> reference_points;
-    ZoneManager3D*              zone_manager;
+    std::vector<std::unique_ptr<VirtualController3D>> virtual_controllers;
+    std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
+    std::unique_ptr<ZoneManager3D> zone_manager;
 };
 
 #endif

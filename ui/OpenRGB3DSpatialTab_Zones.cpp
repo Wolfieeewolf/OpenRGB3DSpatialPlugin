@@ -58,7 +58,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
-        ControllerTransform* ctrl = controller_transforms[i];
+        ControllerTransform* ctrl = controller_transforms[i].get();
         QString name;
 
         if(ctrl->virtual_controller)
@@ -149,7 +149,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
-        ControllerTransform* ctrl = controller_transforms[i];
+        ControllerTransform* ctrl = controller_transforms[i].get();
         QString name;
 
         if(ctrl->virtual_controller)

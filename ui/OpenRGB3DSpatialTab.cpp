@@ -55,8 +55,20 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     current_effect_ui = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
+    effect_origin_combo = nullptr;
+    effect_zone_combo = nullptr;
+    effect_combo = nullptr;
+    effect_type_combo = nullptr;
 
-    zone_manager = new ZoneManager3D();
+    available_controllers_list = nullptr;
+    custom_controllers_list = nullptr;
+    controller_list = nullptr;
+    reference_points_list = nullptr;
+    zones_list = nullptr;
+
+    viewport = nullptr;
+
+    zone_manager = std::make_unique<ZoneManager3D>();
 
     grid_x_spin = nullptr;
     grid_y_spin = nullptr;
@@ -73,6 +85,43 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     led_spacing_y_spin = nullptr;
     led_spacing_z_spin = nullptr;
     led_spacing_preset_combo = nullptr;
+
+    edit_led_spacing_x_spin = nullptr;
+    edit_led_spacing_y_spin = nullptr;
+    edit_led_spacing_z_spin = nullptr;
+    apply_spacing_button = nullptr;
+
+    pos_x_spin = nullptr;
+    pos_y_spin = nullptr;
+    pos_z_spin = nullptr;
+    pos_x_slider = nullptr;
+    pos_y_slider = nullptr;
+    pos_z_slider = nullptr;
+
+    rot_x_spin = nullptr;
+    rot_y_spin = nullptr;
+    rot_z_spin = nullptr;
+    rot_x_slider = nullptr;
+    rot_y_slider = nullptr;
+    rot_z_slider = nullptr;
+
+    granularity_combo = nullptr;
+    item_combo = nullptr;
+
+    layout_profiles_combo = nullptr;
+    auto_load_checkbox = nullptr;
+    auto_load_timer = nullptr;
+    effect_timer = nullptr;
+
+    ref_point_name_edit = nullptr;
+    ref_point_type_combo = nullptr;
+    ref_point_color_button = nullptr;
+    add_ref_point_button = nullptr;
+    remove_ref_point_button = nullptr;
+
+    create_zone_button = nullptr;
+    edit_zone_button = nullptr;
+    delete_zone_button = nullptr;
 
     SetupUI();
     LoadDevices();
@@ -108,30 +157,6 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
     {
         effect_timer->stop();
         delete effect_timer;
-    }
-
-
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        delete controller_transforms[i];
-    }
-    controller_transforms.clear();
-
-    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
-    {
-        delete virtual_controllers[i];
-    }
-    virtual_controllers.clear();
-
-    for(unsigned int i = 0; i < reference_points.size(); i++)
-    {
-        delete reference_points[i];
-    }
-    reference_points.clear();
-
-    if(zone_manager)
-    {
-        delete zone_manager;
     }
 }
 
@@ -446,8 +471,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport = new LEDViewport3D();
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
-    viewport->SetGridSnapEnabled(false); // Initialize with snapping disabled
+    viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
+
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
             this, SLOT(on_controller_position_changed(int,float,float,float)));
@@ -546,24 +572,24 @@ void OpenRGB3DSpatialTab::SetupUI()
         double pos_value = value / 10.0;
         pos_x_spin->setValue(pos_value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.position.x = pos_value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.x = pos_value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.x = pos_value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_x_slider, 0, 1);
@@ -575,24 +601,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_x_slider->setValue((int)(value * 10));
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.position.x = value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.x = value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.x = value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_x_spin, 0, 2);
@@ -606,30 +632,30 @@ void OpenRGB3DSpatialTab::SetupUI()
         double pos_value = value / 10.0;
         pos_y_spin->setValue(pos_value);
 
-        // Check if a reference point is selected (no floor constraint for ref points)
+        // Check if a controller is selected first (higher priority, with floor constraint)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            if(pos_value < 0.0f) {
+                pos_value = 0.0f;
+                pos_y_slider->setValue((int)(pos_value * 10));
+            }
+            controller_transforms[ctrl_row]->transform.position.y = pos_value;
+            // Enforce floor constraint after position change
+            viewport->EnforceFloorConstraint(controller_transforms[ctrl_row].get());
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected (no floor constraint for ref points)
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.y = pos_value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected (with floor constraint)
-        if(pos_value < 0.0f) {
-            pos_value = 0.0f;
-            pos_y_slider->setValue((int)(pos_value * 10));
-        }
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.y = pos_value;
-            // Enforce floor constraint after position change
-            viewport->EnforceFloorConstraint(controller_transforms[row]);
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_y_slider, 1, 1);
@@ -641,30 +667,30 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_y_slider->setValue((int)(value * 10));
 
-        // Check if a reference point is selected (no floor constraint for ref points)
+        // Check if a controller is selected first (higher priority, with floor constraint)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            if(value < 0.0) {
+                value = 0.0;
+                pos_y_spin->setValue(value);
+            }
+            controller_transforms[ctrl_row]->transform.position.y = value;
+            // Enforce floor constraint after position change
+            viewport->EnforceFloorConstraint(controller_transforms[ctrl_row].get());
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected (no floor constraint for ref points)
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.y = value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected (with floor constraint)
-        if(value < 0.0) {
-            value = 0.0;
-            pos_y_spin->setValue(value);
-        }
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.y = value;
-            // Enforce floor constraint after position change
-            viewport->EnforceFloorConstraint(controller_transforms[row]);
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_y_spin, 1, 2);
@@ -678,24 +704,24 @@ void OpenRGB3DSpatialTab::SetupUI()
         double pos_value = value / 10.0;
         pos_z_spin->setValue(pos_value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.position.z = pos_value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.z = pos_value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.z = pos_value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_z_slider, 2, 1);
@@ -707,24 +733,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_z_slider->setValue((int)(value * 10));
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.position.z = value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Vector3D pos = ref_point->GetPosition();
             pos.z = value;
             ref_point->SetPosition(pos);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.position.z = value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(pos_z_spin, 2, 2);
@@ -738,24 +764,24 @@ void OpenRGB3DSpatialTab::SetupUI()
         double rot_value = value;
         rot_x_spin->setValue(rot_value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.x = rot_value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.x = rot_value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.x = rot_value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_x_slider, 3, 1);
@@ -767,24 +793,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_x_slider->setValue((int)value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.x = value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.x = value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.x = value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_x_spin, 3, 2);
@@ -798,24 +824,24 @@ void OpenRGB3DSpatialTab::SetupUI()
         double rot_value = value;
         rot_y_spin->setValue(rot_value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.y = rot_value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.y = rot_value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.y = rot_value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_y_slider, 4, 1);
@@ -827,24 +853,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_y_slider->setValue((int)value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.y = value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.y = value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.y = value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_y_spin, 4, 2);
@@ -858,24 +884,24 @@ void OpenRGB3DSpatialTab::SetupUI()
         double rot_value = value;
         rot_z_spin->setValue(rot_value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.z = rot_value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.z = rot_value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.z = rot_value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_z_slider, 5, 1);
@@ -887,24 +913,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         rot_z_slider->setValue((int)value);
 
-        // Check if a reference point is selected
+        // Check if a controller is selected first (higher priority)
+        int ctrl_row = controller_list->currentRow();
+        if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+        {
+            controller_transforms[ctrl_row]->transform.rotation.z = value;
+            viewport->NotifyControllerTransformChanged();
+            return;
+        }
+
+        // Otherwise check if a reference point is selected
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
-            VirtualReferencePoint3D* ref_point = reference_points[ref_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_idx].get();
             Rotation3D rot = ref_point->GetRotation();
             rot.z = value;
             ref_point->SetRotation(rot);
             viewport->update();
-            return;
-        }
-
-        // Otherwise check if a controller is selected
-        int row = controller_list->currentRow();
-        if(row >= 0 && row < (int)controller_transforms.size())
-        {
-            controller_transforms[row]->transform.rotation.z = value;
-            viewport->NotifyControllerTransformChanged();
         }
     });
     position_layout->addWidget(rot_z_spin, 5, 2);
@@ -1159,7 +1185,7 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
     {
         controller_list->setCurrentRow(index);
 
-        ControllerTransform* ctrl = controller_transforms[index];
+        ControllerTransform* ctrl = controller_transforms[index].get();
 
         // Block signals to prevent feedback loops
         pos_x_spin->blockSignals(true);
@@ -1262,7 +1288,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
 {
     if(index >= 0 && index < (int)controller_transforms.size())
     {
-        ControllerTransform* ctrl = controller_transforms[index];
+        ControllerTransform* ctrl = controller_transforms[index].get();
         ctrl->transform.position.x = x;
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
@@ -1298,7 +1324,7 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
 {
     if(index >= 0 && index < (int)controller_transforms.size())
     {
-        ControllerTransform* ctrl = controller_transforms[index];
+        ControllerTransform* ctrl = controller_transforms[index].get();
         ctrl->transform.rotation.x = x;
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
@@ -1351,7 +1377,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     bool has_valid_controller = false;
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
-        ControllerTransform* transform = controller_transforms[ctrl_idx];
+        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
         if(!transform)
         {
             continue;
@@ -1507,7 +1533,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
         {
             // Use selected reference point position
-            VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx];
+            VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
             Vector3D origin = ref_point->GetPosition();
             origin_offset_x = origin.x;
             origin_offset_y = origin.y;
@@ -1580,7 +1606,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             continue; // Controller not in selected zone
         }
 
-        ControllerTransform* transform = controller_transforms[ctrl_idx];
+        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
         if(!transform)
         {
             continue;
@@ -1870,10 +1896,9 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             return;
         }
 
-        VirtualController3D* virtual_ctrl = virtual_controllers[item_row];
+        VirtualController3D* virtual_ctrl = virtual_controllers[item_row].get();
 
-
-        ControllerTransform* ctrl_transform = new ControllerTransform();
+        auto ctrl_transform = std::make_unique<ControllerTransform>();
         ctrl_transform->controller = nullptr;
         ctrl_transform->virtual_controller = virtual_ctrl;
         ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
@@ -1895,7 +1920,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         QColor color = QColor::fromHsv(hue, 200, 255);
         ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
 
-        controller_transforms.push_back(ctrl_transform);
+        controller_transforms.push_back(std::move(ctrl_transform));
 
         QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(name);
@@ -1915,7 +1940,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     RGBController* controller = controllers[ctrl_idx];
 
-    ControllerTransform* ctrl_transform = new ControllerTransform();
+    auto ctrl_transform = std::make_unique<ControllerTransform>();
     ctrl_transform->controller = controller;
     ctrl_transform->virtual_controller = nullptr;
     ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
@@ -1945,8 +1970,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     {
         if(item_row >= (int)controller->zones.size())
         {
-            delete ctrl_transform;
-            return;
+            return;  // ctrl_transform auto-deleted
         }
 
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
@@ -1969,8 +1993,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     {
         if(item_row >= (int)controller->leds.size())
         {
-            delete ctrl_transform;
-            return;
+            return;  // ctrl_transform auto-deleted
         }
 
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
@@ -1995,7 +2018,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     QColor color = QColor::fromHsv(hue, 200, 255);
     ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
 
-    controller_transforms.push_back(ctrl_transform);
+    controller_transforms.push_back(std::move(ctrl_transform));
 
     QListWidgetItem* item = new QListWidgetItem(name);
     controller_list->addItem(item);
@@ -2015,8 +2038,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         return;
     }
 
-    delete controller_transforms[selected_row];
-    controller_transforms.erase(controller_transforms.begin() + selected_row);
+    controller_transforms.erase(controller_transforms.begin() + selected_row);  // Auto-deleted
 
     controller_list->takeItem(selected_row);
 
@@ -2033,7 +2055,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
         return;
     }
 
-    delete controller_transforms[index];
     controller_transforms.erase(controller_transforms.begin() + index);
 
     controller_list->takeItem(index);
@@ -2046,10 +2067,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
 
 void OpenRGB3DSpatialTab::on_clear_all_clicked()
 {
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        delete controller_transforms[i];
-    }
     controller_transforms.clear();
 
     controller_list->clear();
@@ -2068,7 +2085,7 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
         return;
     }
 
-    ControllerTransform* ctrl = controller_transforms[selected_row];
+    ControllerTransform* ctrl = controller_transforms[selected_row].get();
 
     // Update LED spacing values
     ctrl->led_spacing_mm_x = edit_led_spacing_x_spin ? (float)edit_led_spacing_x_spin->value() : 10.0f;
@@ -2187,7 +2204,7 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        VirtualController3D* virtual_ctrl = new VirtualController3D(
+        auto virtual_ctrl = std::make_unique<VirtualController3D>(
             dialog.GetControllerName().toStdString(),
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
@@ -2198,10 +2215,9 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
             dialog.GetSpacingZ()
         );
 
-        virtual_controllers.push_back(virtual_ctrl);
-
-
         available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
+
+        virtual_controllers.push_back(std::move(virtual_ctrl));
 
         SaveCustomControllers();
 
@@ -2232,7 +2248,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         return;
     }
 
-    VirtualController3D* ctrl = virtual_controllers[list_row];
+    VirtualController3D* ctrl = virtual_controllers[list_row].get();
 
     QString filename = QFileDialog::getSaveFileName(this, "Export Custom Controller",
                                                     QString::fromStdString(ctrl->GetName()) + ".3dctrl",
@@ -2289,13 +2305,15 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
         if(virtual_ctrl)
         {
+            std::string ctrl_name = virtual_ctrl->GetName();
+
             for(unsigned int i = 0; i < virtual_controllers.size(); i++)
             {
-                if(virtual_controllers[i]->GetName() == virtual_ctrl->GetName())
+                if(virtual_controllers[i]->GetName() == ctrl_name)
                 {
                     QMessageBox::StandardButton reply = QMessageBox::question(this, "Duplicate Name",
                         QString("A custom controller named '%1' already exists.\n\nDo you want to replace it?")
-                        .arg(QString::fromStdString(virtual_ctrl->GetName())),
+                        .arg(QString::fromStdString(ctrl_name)),
                         QMessageBox::Yes | QMessageBox::No);
 
                     if(reply == QMessageBox::No)
@@ -2307,9 +2325,8 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                     {
                         for(unsigned int j = 0; j < virtual_controllers.size(); j++)
                         {
-                            if(virtual_controllers[j]->GetName() == virtual_ctrl->GetName())
+                            if(virtual_controllers[j]->GetName() == ctrl_name)
                             {
-                                delete virtual_controllers[j];
                                 virtual_controllers.erase(virtual_controllers.begin() + j);
                                 break;
                             }
@@ -2319,7 +2336,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                 }
             }
 
-            virtual_controllers.push_back(virtual_ctrl);
+            virtual_controllers.push_back(std::unique_ptr<VirtualController3D>(virtual_ctrl));
             SaveCustomControllers();
             UpdateAvailableControllersList();
 
@@ -2364,7 +2381,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         return;
     }
 
-    VirtualController3D* virtual_ctrl = virtual_controllers[list_row];
+    VirtualController3D* virtual_ctrl = virtual_controllers[list_row].get();
 
     CustomControllerDialog dialog(resource_manager, this);
     dialog.setWindowTitle("Edit Custom 3D Controller");
@@ -2400,8 +2417,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             }
         }
 
-        delete virtual_ctrl;
-        virtual_controllers[list_row] = new VirtualController3D(
+        virtual_controllers[list_row] = std::make_unique<VirtualController3D>(
             new_name,
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
@@ -2456,7 +2472,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        ControllerTransform* ct = controller_transforms[i];
+        ControllerTransform* ct = controller_transforms[i].get();
         nlohmann::json controller_json;
 
         if(ct->controller == nullptr)
@@ -2526,6 +2542,8 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["reference_points"] = nlohmann::json::array();
     for(const auto& ref_point : reference_points)
     {
+        if(!ref_point) continue; // Skip null pointers
+
         layout_json["reference_points"].push_back(ref_point->ToJson());
     }
 
@@ -2657,7 +2675,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
             }
 
-            ControllerTransform* ctrl_transform = new ControllerTransform();
+            auto ctrl_transform = std::make_unique<ControllerTransform>();
             ctrl_transform->controller = controller;
             ctrl_transform->virtual_controller = nullptr;
 
@@ -2701,7 +2719,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 {
                     if(QString::fromStdString(virtual_controllers[i]->GetName()) == virtual_name)
                     {
-                        virtual_ctrl = virtual_controllers[i];
+                        virtual_ctrl = virtual_controllers[i].get();
                         break;
                     }
                 }
@@ -2714,8 +2732,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
                 else
                 {
-                    delete ctrl_transform;
-                    continue;
+                    continue;  // ctrl_transform auto-deleted
                 }
             }
             else
@@ -2853,12 +2870,20 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
             ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
 
-            controller_transforms.push_back(ctrl_transform);
+            // Save values before moving ctrl_transform
+            unsigned int display_color = ctrl_transform->display_color;
+            int granularity = ctrl_transform->granularity;
+            int item_idx = ctrl_transform->item_idx;
+            size_t led_positions_size = ctrl_transform->led_positions.size();
+            unsigned int first_zone_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].zone_idx : 0;
+            unsigned int first_led_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].led_idx : 0;
+
+            controller_transforms.push_back(std::move(ctrl_transform));
 
             QColor color;
-            color.setRgb(ctrl_transform->display_color & 0xFF,
-                         (ctrl_transform->display_color >> 8) & 0xFF,
-                         (ctrl_transform->display_color >> 16) & 0xFF);
+            color.setRgb(display_color & 0xFF,
+                         (display_color >> 8) & 0xFF,
+                         (display_color >> 16) & 0xFF);
 
             QString name;
             if(is_virtual)
@@ -2868,41 +2893,40 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             else
             {
                 // Use granularity info to create proper name with prefix
-                if(ctrl_transform->granularity == 0)
+                if(granularity == 0)
                 {
                     name = QString("[Device] ") + QString::fromStdString(controller->name);
                 }
-                else if(ctrl_transform->granularity == 1)
+                else if(granularity == 1)
                 {
                     name = QString("[Zone] ") + QString::fromStdString(controller->name);
-                    if(ctrl_transform->item_idx >= 0 && ctrl_transform->item_idx < (int)controller->zones.size())
+                    if(item_idx >= 0 && item_idx < (int)controller->zones.size())
                     {
-                        name += " - " + QString::fromStdString(controller->zones[ctrl_transform->item_idx].name);
+                        name += " - " + QString::fromStdString(controller->zones[item_idx].name);
                     }
                 }
-                else if(ctrl_transform->granularity == 2)
+                else if(granularity == 2)
                 {
                     name = QString("[LED] ") + QString::fromStdString(controller->name);
-                    if(ctrl_transform->item_idx >= 0 && ctrl_transform->item_idx < (int)controller->leds.size())
+                    if(item_idx >= 0 && item_idx < (int)controller->leds.size())
                     {
-                        name += " - " + QString::fromStdString(controller->leds[ctrl_transform->item_idx].name);
+                        name += " - " + QString::fromStdString(controller->leds[item_idx].name);
                     }
                 }
                 else
                 {
                     // Fallback for old files without granularity
                     name = QString::fromStdString(controller->name);
-                    if(ctrl_transform->led_positions.size() < controller->leds.size())
+                    if(led_positions_size < controller->leds.size())
                     {
-                        if(ctrl_transform->led_positions.size() == 1)
+                        if(led_positions_size == 1)
                         {
-                            unsigned int led_global_idx = controller->zones[ctrl_transform->led_positions[0].zone_idx].start_idx +
-                                                          ctrl_transform->led_positions[0].led_idx;
+                            unsigned int led_global_idx = controller->zones[first_zone_idx].start_idx + first_led_idx;
                             name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->leds[led_global_idx].name);
                         }
                         else
                         {
-                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[ctrl_transform->led_positions[0].zone_idx].name);
+                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[first_zone_idx].name);
                         }
                     }
                     else
@@ -2921,20 +2945,16 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     | Load Reference Points                                    |
     \*---------------------------------------------------------*/
     // Clear existing reference points
-    for(auto& ref_point : reference_points)
-    {
-        delete ref_point;
-    }
     reference_points.clear();
 
     if(layout_json.contains("reference_points"))
     {
         for(const auto& ref_point_json : layout_json["reference_points"])
         {
-            VirtualReferencePoint3D* ref_point = VirtualReferencePoint3D::FromJson(ref_point_json);
-            if(ref_point)
+            VirtualReferencePoint3D* raw_ptr = VirtualReferencePoint3D::FromJson(ref_point_json);
+            if(raw_ptr)
             {
-                reference_points.push_back(ref_point);
+                reference_points.push_back(std::unique_ptr<VirtualReferencePoint3D>(raw_ptr));
             }
         }
     }
@@ -3097,6 +3117,11 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
 
     first_load = false;
 
+    if(!auto_load_checkbox || !layout_profiles_combo)
+    {
+        return;
+    }
+
     if(auto_load_checkbox->isChecked())
     {
         QString profile_name = layout_profiles_combo->currentText();
@@ -3185,8 +3210,8 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                         VirtualController3D* virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
                         if(virtual_ctrl)
                         {
-                            virtual_controllers.push_back(virtual_ctrl);
                             available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
+                            virtual_controllers.push_back(std::unique_ptr<VirtualController3D>(virtual_ctrl));
                             loaded_count++;
                         }
                     }
@@ -3207,7 +3232,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
 {
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        ControllerTransform* ct = controller_transforms[i];
+        ControllerTransform* ct = controller_transforms[i].get();
         if(ct->controller == nullptr) continue;
         if(ct->controller != controller) continue;
 
@@ -3525,7 +3550,7 @@ void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
     \*---------------------------------------------------------*/
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        RegenerateLEDPositions(controller_transforms[i]);
+        RegenerateLEDPositions(controller_transforms[i].get());
     }
 
     /*---------------------------------------------------------*\
@@ -3637,7 +3662,9 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     // Add all reference points
     for(size_t i = 0; i < reference_points.size(); i++)
     {
-        VirtualReferencePoint3D* ref_point = reference_points[i];
+        VirtualReferencePoint3D* ref_point = reference_points[i].get();
+        if(!ref_point) continue; // Skip null pointers
+
         QString name = QString::fromStdString(ref_point->GetName());
         QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
         QString display = QString("%1 (%2)").arg(name).arg(type);
@@ -3658,7 +3685,7 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
 
     if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
     {
-        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx];
+        VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
         origin = ref_point->GetPosition();
     }
 

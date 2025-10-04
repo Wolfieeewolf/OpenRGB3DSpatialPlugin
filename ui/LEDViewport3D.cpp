@@ -83,7 +83,7 @@ LEDViewport3D::~LEDViewport3D()
 {
 }
 
-void LEDViewport3D::SetControllerTransforms(std::vector<ControllerTransform*>* transforms)
+void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
 {
     controller_transforms = transforms;
 
@@ -93,7 +93,7 @@ void LEDViewport3D::SetControllerTransforms(std::vector<ControllerTransform*>* t
         {
             if((*controller_transforms)[i])
             {
-                EnforceFloorConstraint((*controller_transforms)[i]);
+                EnforceFloorConstraint((*controller_transforms)[i].get());
             }
         }
     }
@@ -106,7 +106,7 @@ void LEDViewport3D::SelectController(int index)
     if(controller_transforms && index >= 0 && index < (int)controller_transforms->size())
     {
         selected_controller_idx = index;
-        ControllerTransform* ctrl = (*controller_transforms)[index];
+        ControllerTransform* ctrl = (*controller_transforms)[index].get();
 
         EnforceFloorConstraint(ctrl);
 
@@ -131,7 +131,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
         selected_controller_idx = -1;
         selected_ref_point_idx = index;
 
-        VirtualReferencePoint3D* ref_point = (*reference_points)[index];
+        VirtualReferencePoint3D* ref_point = (*reference_points)[index].get();
         gizmo.SetTarget(ref_point);
         gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
         UpdateGizmoPosition();
@@ -163,7 +163,7 @@ void LEDViewport3D::UpdateGizmoPosition()
     if(selected_ref_point_idx >= 0 && reference_points &&
         selected_ref_point_idx < (int)reference_points->size())
     {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx];
+        VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
         if(ref_point)
         {
             Vector3D pos = ref_point->GetPosition();
@@ -173,7 +173,7 @@ void LEDViewport3D::UpdateGizmoPosition()
     else if(selected_controller_idx >= 0 && controller_transforms &&
         selected_controller_idx < (int)controller_transforms->size())
     {
-        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl)
         {
             gizmo.SetPosition(ctrl->transform.position.x,
@@ -308,7 +308,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             // Set gizmo to target the reference point
             if(reference_points && picked_ref_point < (int)reference_points->size())
             {
-                VirtualReferencePoint3D* ref_point = (*reference_points)[picked_ref_point];
+                VirtualReferencePoint3D* ref_point = (*reference_points)[picked_ref_point].get();
                 gizmo.SetTarget(ref_point);
                 gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
                 UpdateGizmoPosition();
@@ -335,7 +335,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                     AddControllerToSelection(picked_controller);
                     if(controller_transforms && picked_controller < (int)controller_transforms->size())
                     {
-                        ControllerTransform* ctrl = (*controller_transforms)[picked_controller];
+                        ControllerTransform* ctrl = (*controller_transforms)[picked_controller].get();
                         EnforceFloorConstraint(ctrl);
                         gizmo.SetTarget(ctrl);
                         gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
@@ -393,7 +393,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         if(selected_controller_idx >= 0 && controller_transforms &&
             selected_controller_idx < (int)controller_transforms->size())
         {
-            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
             EnforceFloorConstraint(ctrl);
             UpdateGizmoPosition();
 
@@ -409,7 +409,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         else if(selected_ref_point_idx >= 0 && reference_points &&
                 selected_ref_point_idx < (int)reference_points->size())
         {
-            VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx];
+            VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
             Vector3D pos = ref_point->GetPosition();
 
             emit ReferencePointPositionChanged(selected_ref_point_idx,
@@ -580,7 +580,7 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
         if(selected_controller_idx >= 0 && controller_transforms &&
            selected_controller_idx < (int)controller_transforms->size())
         {
-            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx];
+            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
             QString controller_name = "Unknown";
 
             if(ctrl && ctrl->controller)
@@ -863,7 +863,7 @@ void LEDViewport3D::DrawControllers()
 
     for(size_t i = 0; i < controller_transforms->size(); i++)
     {
-        ControllerTransform* ctrl = (*controller_transforms)[i];
+        ControllerTransform* ctrl = (*controller_transforms)[i].get();
         if(!ctrl) continue;
 
         glPushMatrix();
@@ -1063,7 +1063,7 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
 
     for(size_t i = 0; i < controller_transforms->size(); i++)
     {
-        ControllerTransform* ctrl = (*controller_transforms)[i];
+        ControllerTransform* ctrl = (*controller_transforms)[i].get();
         if(!ctrl) continue;
 
         Vector3D min_bounds, max_bounds;
@@ -1246,7 +1246,7 @@ int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
 
     for(unsigned int i = 0; i < reference_points->size(); i++)
     {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[i];
+        VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
         if(!ref_point->IsVisible()) continue;
 
         Vector3D pos = ref_point->GetPosition();
@@ -1492,7 +1492,7 @@ void LEDViewport3D::SetUserPosition(const UserPosition3D& position)
     user_position = position;
 }
 
-void LEDViewport3D::SetReferencePoints(std::vector<VirtualReferencePoint3D*>* ref_points)
+void LEDViewport3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
 {
     reference_points = ref_points;
 }
@@ -1504,7 +1504,7 @@ void LEDViewport3D::DrawUserFigure()
 
     for(size_t idx = 0; idx < reference_points->size(); idx++)
     {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[idx];
+        VirtualReferencePoint3D* ref_point = (*reference_points)[idx].get();
         if(ref_point->GetType() == REF_POINT_USER && ref_point->IsVisible())
         {
             bool is_selected = ((int)idx == selected_ref_point_idx);
@@ -1609,7 +1609,7 @@ void LEDViewport3D::DrawReferencePoints()
 
     for(size_t idx = 0; idx < reference_points->size(); idx++)
     {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[idx];
+        VirtualReferencePoint3D* ref_point = (*reference_points)[idx].get();
         if(!ref_point->IsVisible()) continue;
 
         // Skip User type - drawn as smiley face in DrawUserFigure()

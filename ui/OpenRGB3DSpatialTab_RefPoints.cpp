@@ -26,11 +26,11 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
     ReferencePointType type = (ReferencePointType)ref_point_type_combo->currentIndex();
 
-    VirtualReferencePoint3D* ref_point = new VirtualReferencePoint3D(name, type, 0.0f, 0.0f, 0.0f);
+    auto ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, 0.0f, 0.0f, 0.0f);
     ref_point->SetDisplayColor(selected_ref_point_color);
     ref_point->SetVisible(true);
 
-    reference_points.push_back(ref_point);
+    reference_points.push_back(std::move(ref_point));
     UpdateReferencePointsList();
 
     // Clear inputs for next point
@@ -49,7 +49,6 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
     int index = reference_points_list->currentRow();
     if(index >= 0 && index < (int)reference_points.size())
     {
-        delete reference_points[index];
         reference_points.erase(reference_points.begin() + index);
         UpdateReferencePointsList();
         viewport->update();
@@ -74,7 +73,7 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         controller_list->blockSignals(false);
 
         // Update position/rotation controls with reference point values
-        VirtualReferencePoint3D* ref_point = reference_points[index];
+        VirtualReferencePoint3D* ref_point = reference_points[index].get();
         Vector3D pos = ref_point->GetPosition();
 
         pos_x_slider->blockSignals(true);
@@ -142,7 +141,7 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
 {
     if(index >= 0 && index < (int)reference_points.size())
     {
-        VirtualReferencePoint3D* ref_point = reference_points[index];
+        VirtualReferencePoint3D* ref_point = reference_points[index].get();
         Vector3D pos = {x, y, z};
         ref_point->SetPosition(pos);
 
@@ -193,6 +192,8 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     reference_points_list->clear();
     for(const auto& ref_point : reference_points)
     {
+        if(!ref_point) continue; // Skip null pointers
+
         QString item_text = QString::fromStdString(ref_point->GetName());
         reference_points_list->addItem(item_text);
     }
