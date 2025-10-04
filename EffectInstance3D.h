@@ -16,6 +16,7 @@
 #include <memory>
 #include "SpatialEffect3D.h"
 #include "RGBController.h"
+#include "EffectListManager3D.h"
 #include <nlohmann/json.hpp>
 
 /*---------------------------------------------------------*\
@@ -80,7 +81,28 @@ struct EffectInstance3D
     std::string GetDisplayName() const
     {
         std::string zone_name = (zone_index == -1) ? "All" : "Zone " + std::to_string(zone_index);
-        std::string effect_type = effect ? effect->GetEffectInfo().effect_name : "None";
+
+        // Use effect name if available, otherwise use stored name or class_name
+        std::string effect_type;
+        if(effect)
+        {
+            effect_type = effect->GetEffectInfo().effect_name;
+        }
+        else if(!name.empty() && name != "New Effect")
+        {
+            effect_type = name;
+        }
+        else if(!effect_class_name.empty())
+        {
+            // Get UI name from effect manager
+            EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(effect_class_name);
+            effect_type = info.ui_name.empty() ? effect_class_name : info.ui_name;
+        }
+        else
+        {
+            effect_type = "None";
+        }
+
         return effect_type + " - " + zone_name + " - " + BlendModeToString(blend_mode);
     }
 
