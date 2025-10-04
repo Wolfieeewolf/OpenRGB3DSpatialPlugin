@@ -23,6 +23,7 @@
 \*---------------------------------------------------------*/
 enum class BlendMode
 {
+    NO_BLEND,   // No blending - effect runs independently
     REPLACE,    // Replace existing color (last effect wins)
     ADD,        // Add colors together (brighten)
     MULTIPLY,   // Multiply colors (darken)
@@ -38,6 +39,7 @@ inline const char* BlendModeToString(BlendMode mode)
 {
     switch(mode)
     {
+        case BlendMode::NO_BLEND:  return "No Blend";
         case BlendMode::REPLACE:   return "Replace";
         case BlendMode::ADD:       return "Add";
         case BlendMode::MULTIPLY:  return "Multiply";
@@ -66,7 +68,7 @@ struct EffectInstance3D
         , effect_class_name("")
         , effect(nullptr)
         , zone_index(-1)
-        , blend_mode(BlendMode::ADD)
+        , blend_mode(BlendMode::NO_BLEND)
         , enabled(true)
         , id(0)
     {
@@ -106,6 +108,10 @@ inline RGBColor BlendColors(RGBColor base, RGBColor overlay, BlendMode mode)
 
     switch(mode)
     {
+        case BlendMode::NO_BLEND:
+            // No blending - return overlay as-is (effect runs independently)
+            return overlay;
+
         case BlendMode::REPLACE:
             return overlay;
 

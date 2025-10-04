@@ -90,13 +90,14 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     QHBoxLayout* blend_layout = new QHBoxLayout();
     blend_layout->addWidget(new QLabel("Blend Mode:"));
     stack_effect_blend_combo = new QComboBox();
+    stack_effect_blend_combo->addItem("No Blend", (int)BlendMode::NO_BLEND);
     stack_effect_blend_combo->addItem("Replace", (int)BlendMode::REPLACE);
     stack_effect_blend_combo->addItem("Add", (int)BlendMode::ADD);
     stack_effect_blend_combo->addItem("Multiply", (int)BlendMode::MULTIPLY);
     stack_effect_blend_combo->addItem("Screen", (int)BlendMode::SCREEN);
     stack_effect_blend_combo->addItem("Max", (int)BlendMode::MAX);
     stack_effect_blend_combo->addItem("Min", (int)BlendMode::MIN);
-    stack_effect_blend_combo->setCurrentIndex(1); // Default to Add
+    stack_effect_blend_combo->setCurrentIndex(0); // Default to No Blend
     connect(stack_effect_blend_combo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(on_stack_effect_blend_changed(int)));
     blend_layout->addWidget(stack_effect_blend_combo);
@@ -122,7 +123,7 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     instance->id = next_effect_instance_id++;
     instance->name = "New Effect";
     instance->zone_index = -1; // All Controllers
-    instance->blend_mode = BlendMode::ADD;
+    instance->blend_mode = BlendMode::NO_BLEND;
     instance->enabled = true;
 
     // Create default effect (first in list)
