@@ -200,7 +200,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     /*---------------------------------------------------------*\
     | Create and add color controls                            |
     \*---------------------------------------------------------*/
-    CreateColorControls(parent);
+    CreateColorControls();
     main_layout->addWidget(color_controls_group);
 
     effect_controls_group->setLayout(main_layout);
@@ -266,7 +266,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
 /*---------------------------------------------------------*\
 | Create Color Controls                                    |
 \*---------------------------------------------------------*/
-void SpatialEffect3D::CreateColorControls(QWidget* /* parent */)
+void SpatialEffect3D::CreateColorControls()
 {
     color_controls_group = new QGroupBox("Colors");
     QVBoxLayout* color_layout = new QVBoxLayout();
