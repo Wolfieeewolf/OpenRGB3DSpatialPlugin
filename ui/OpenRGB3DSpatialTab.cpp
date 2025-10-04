@@ -127,6 +127,14 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     edit_zone_button = nullptr;
     delete_zone_button = nullptr;
 
+    effect_stack_list = nullptr;
+    stack_effect_type_combo = nullptr;
+    stack_effect_zone_combo = nullptr;
+    stack_effect_blend_combo = nullptr;
+    stack_effect_controls_container = nullptr;
+    stack_effect_controls_layout = nullptr;
+    next_effect_instance_id = 1;
+
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
@@ -198,7 +206,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     /*---------------------------------------------------------*\
     | Tab Widget for left panel                                |
     \*---------------------------------------------------------*/
-    QTabWidget* left_tabs = new QTabWidget();
+    left_tabs = new QTabWidget();
 
     /*---------------------------------------------------------*\
     | Available Controllers Tab                                |
@@ -404,6 +412,11 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     ref_points_tab->setLayout(ref_points_layout);
     left_tabs->addTab(ref_points_tab, "Reference Points");
+
+    /*---------------------------------------------------------*\
+    | Effect Stack Tab (setup in separate function)            |
+    \*---------------------------------------------------------*/
+    SetupEffectStackTab();
 
     left_panel->addWidget(left_tabs);
 

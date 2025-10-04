@@ -43,6 +43,7 @@
 #include "SpatialEffectTypes.h"
 #include "SpatialEffect3D.h"
 #include "EffectListManager3D.h"
+#include "EffectInstance3D.h"
 #include "Effects3D/Wave3D/Wave3D.h"
 #include "Effects3D/Wipe3D/Wipe3D.h"
 #include "Effects3D/Plasma3D/Plasma3D.h"
@@ -117,6 +118,14 @@ private slots:
     void on_apply_spacing_clicked();
     void UpdateEffectOriginCombo();
 
+    // Effect Stack slots
+    void on_add_effect_to_stack_clicked();
+    void on_remove_effect_from_stack_clicked();
+    void on_effect_stack_selection_changed(int index);
+    void on_stack_effect_type_changed(int index);
+    void on_stack_effect_zone_changed(int index);
+    void on_stack_effect_blend_changed(int index);
+
 private:
     void SetupUI();
     void LoadDevices();
@@ -146,9 +155,16 @@ private:
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
 
+    // Effect Stack helpers
+    void SetupEffectStackTab();
+    void UpdateEffectStackList();
+    void UpdateStackEffectZoneCombo();
+    void LoadStackEffectControls(EffectInstance3D* instance);
+
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
 
+    QTabWidget*                 left_tabs;
     LEDViewport3D*              viewport;
 
     std::vector<std::unique_ptr<ControllerTransform>> controller_transforms;
@@ -253,6 +269,22 @@ private:
     std::vector<std::unique_ptr<VirtualController3D>> virtual_controllers;
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
+
+    /*---------------------------------------------------------*\
+    | Effect Stack Section Controls                            |
+    \*---------------------------------------------------------*/
+    QListWidget*                effect_stack_list;
+    QComboBox*                  stack_effect_type_combo;
+    QComboBox*                  stack_effect_zone_combo;
+    QComboBox*                  stack_effect_blend_combo;
+    QWidget*                    stack_effect_controls_container;
+    QVBoxLayout*                stack_effect_controls_layout;
+
+    /*---------------------------------------------------------*\
+    | Effect Stack Data                                        |
+    \*---------------------------------------------------------*/
+    std::vector<std::unique_ptr<EffectInstance3D>> effect_stack;
+    int next_effect_instance_id;
 
     /*---------------------------------------------------------*\
     | Background Threading for Effect Calculation              |
