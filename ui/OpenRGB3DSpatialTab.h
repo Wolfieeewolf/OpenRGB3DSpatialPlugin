@@ -110,6 +110,7 @@ private slots:
 
     void on_effect_updated();
     void on_effect_timer_timeout();
+    void RenderEffectStack();
     void on_grid_dimensions_changed();
     void on_grid_snap_toggled(bool enabled);
     void on_effect_changed(int index);

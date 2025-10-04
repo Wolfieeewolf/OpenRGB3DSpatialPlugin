@@ -1494,6 +1494,25 @@ void OpenRGB3DSpatialTab::on_effect_updated()
 
 void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 {
+    // Check if we should render effect stack instead of single effect
+    bool has_stack_effects = false;
+    for(const auto& instance : effect_stack)
+    {
+        if(instance->enabled && instance->effect)
+        {
+            has_stack_effects = true;
+            break;
+        }
+    }
+
+    if(has_stack_effects)
+    {
+        // Render effect stack (multi-effect mode)
+        RenderEffectStack();
+        return;
+    }
+
+    // Fall back to single effect rendering (legacy Effects tab)
     if(!effect_running || !current_effect_ui)
     {
         return;

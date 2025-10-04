@@ -162,6 +162,7 @@ SOURCES +=                                                                      
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \
     ui/OpenRGB3DSpatialTab_EffectStack.cpp                                                      \
+    ui/OpenRGB3DSpatialTab_EffectStackRender.cpp                                                \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \
