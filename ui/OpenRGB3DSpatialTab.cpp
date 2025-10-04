@@ -3754,6 +3754,14 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
     /*---------------------------------------------------------*\
+    | Validate index range                                     |
+    \*---------------------------------------------------------*/
+    if(index < 0)
+    {
+        return;
+    }
+
+    /*---------------------------------------------------------*\
     | Stop effect timer and set flag BEFORE clearing UI        |
     \*---------------------------------------------------------*/
     if(effect_running && effect_timer)
