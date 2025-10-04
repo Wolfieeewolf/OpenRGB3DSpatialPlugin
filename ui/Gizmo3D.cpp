@@ -506,7 +506,7 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
     (void)projection;
     (void)viewport;
 
-    if(!target_transform)
+    if(!target_transform && !target_ref_point)
         return;
 
     float delta_x = mouse_x - last_mouse_pos.x();
