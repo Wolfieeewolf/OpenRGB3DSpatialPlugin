@@ -13,6 +13,7 @@
 | Local Includes                                           |
 \*---------------------------------------------------------*/
 #include "Gizmo3D.h"
+#include "QtCompat.h"
 
 /*---------------------------------------------------------*\
 | System Includes                                          |
@@ -169,7 +170,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
     /*---------------------------------------------------------*\
     | Check for gizmo interaction                             |
     \*---------------------------------------------------------*/
-    selected_axis = PickGizmoAxis(event->x(), event->y(), modelview, projection, viewport);
+    selected_axis = PickGizmoAxis(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event), modelview, projection, viewport);
 
     if(selected_axis == GIZMO_AXIS_CENTER)
     {
@@ -192,7 +193,7 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, const float* modelview, const 
     if(!active || !dragging || (!target_transform && !target_ref_point))
         return false;
 
-    UpdateTransform(event->x(), event->y(), modelview, projection, viewport);
+    UpdateTransform(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event), modelview, projection, viewport);
     last_mouse_pos = event->pos();
 
     // Force gizmo to stay locked to controller center

@@ -134,6 +134,7 @@ HEADERS +=                                                                      
     VirtualReferencePoint3D.h                                                                   \
     Zone3D.h                                                                                    \
     ZoneManager3D.h                                                                             \
+    QtCompat.h                                                                                  \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \

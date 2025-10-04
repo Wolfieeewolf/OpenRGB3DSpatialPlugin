@@ -26,6 +26,11 @@
 #include <algorithm>
 
 /*---------------------------------------------------------*\
+| Local Includes                                           |
+\*---------------------------------------------------------*/
+#include "QtCompat.h"
+
+/*---------------------------------------------------------*\
 | OpenRGB Includes                                         |
 \*---------------------------------------------------------*/
 #include "Colors.h"
@@ -301,7 +306,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         }
 
         // Check if clicking on a reference point first (priority over controllers)
-        int picked_ref_point = PickReferencePoint(event->x(), event->y());
+        int picked_ref_point = PickReferencePoint(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_ref_point >= 0)
         {
             // Clear controller selection only
@@ -326,7 +331,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         }
 
         // Check if clicking on a controller
-        int picked_controller = PickController(event->x(), event->y());
+        int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_controller >= 0)
         {
             selected_ref_point_idx = -1; // Deselect reference point
@@ -509,7 +514,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
         // If barely moved (< 3 pixels), treat as click for selection
         if(distance < 3.0f)
         {
-            int picked_controller = PickController(event->x(), event->y());
+            int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
             if(picked_controller >= 0)
             {
                 // Select the controller
@@ -533,7 +538,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     // Handle middle-click selection
     else if(event->button() == Qt::MiddleButton)
     {
-        int picked_controller = PickController(event->x(), event->y());
+        int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_controller >= 0)
         {
             // Select the controller
