@@ -171,14 +171,6 @@ private:
 
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;
-    Wave3D*                     wave3d_effect;
-    Wipe3D*                     wipe3d_effect;
-    Plasma3D*                   plasma3d_effect;
-    Spiral3D*                   spiral3d_effect;
-    Spin3D*                     spin3d_effect;
-    Explosion3D*                explosion3d_effect;
-    BreathingSphere3D*          breathingsphere3d_effect;
-    DNAHelix3D*                 dnahelix3d_effect;
 
     QComboBox*                  layout_profiles_combo;
     QCheckBox*                  auto_load_checkbox;

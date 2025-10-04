@@ -53,14 +53,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_controls_widget = nullptr;
     effect_controls_layout = nullptr;
     current_effect_ui = nullptr;
-    wave3d_effect = nullptr;
-    wipe3d_effect = nullptr;
-    plasma3d_effect = nullptr;
-    spiral3d_effect = nullptr;
-    spin3d_effect = nullptr;
-    explosion3d_effect = nullptr;
-    breathingsphere3d_effect = nullptr;
-    dnahelix3d_effect = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 
@@ -3402,8 +3394,69 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up effect UI for effect type %d", effect_type);
 
     /*---------------------------------------------------------*\
-    | Create appropriate effect UI based on type              |
+    | Map effect type index to effect class name              |
     \*---------------------------------------------------------*/
+    const char* effect_names[] = {
+        "Wave3D",           // 0
+        "Wipe3D",           // 1
+        "Plasma3D",         // 2
+        "Spiral3D",         // 3
+        "Spin3D",           // 4
+        "DNAHelix3D",       // 5
+        "BreathingSphere3D",// 6
+        "Explosion3D"       // 7
+    };
+    const int num_effects = sizeof(effect_names) / sizeof(effect_names[0]);
+
+    if(effect_type < 0 || effect_type >= num_effects)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Invalid effect type: %d", effect_type);
+        return;
+    }
+
+    /*---------------------------------------------------------*\
+    | Create effect using the registration system             |
+    \*---------------------------------------------------------*/
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_names[effect_type]);
+    if(!effect)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", effect_names[effect_type]);
+        return;
+    }
+
+    /*---------------------------------------------------------*\
+    | Setup effect UI (same for ALL effects)                  |
+    \*---------------------------------------------------------*/
+    effect->setParent(effect_controls_widget);
+    effect->CreateCommonEffectControls(effect_controls_widget);
+    effect->SetupCustomUI(effect_controls_widget);
+    current_effect_ui = effect;
+
+    /*---------------------------------------------------------*\
+    | Get and connect buttons                                  |
+    \*---------------------------------------------------------*/
+    start_effect_button = effect->GetStartButton();
+    stop_effect_button = effect->GetStopButton();
+    connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+    connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+    connect(effect, &SpatialEffect3D::ParametersChanged, [this]() {});
+
+    /*---------------------------------------------------------*\
+    | Add effect to layout                                     |
+    \*---------------------------------------------------------*/
+    effect_controls_layout->addWidget(effect);
+
+    /*---------------------------------------------------------*\
+    | Force geometry update to ensure layout is ready         |
+    \*---------------------------------------------------------*/
+    effect_controls_widget->updateGeometry();
+    effect_controls_widget->update();
+}
+
+/*---------------------------------------------------------*\
+| OLD CODE BELOW - keeping for reference, will delete     |
+\*---------------------------------------------------------*/
+#if 0
     if(effect_type == 0)  // Wave effect
     {
         /*---------------------------------------------------------*\
@@ -3567,56 +3620,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         unknown_label->setStyleSheet("color: #666; font-style: italic; padding: 20px;");
         effect_controls_layout->addWidget(unknown_label);
     }
-
-    // Update the layout to show the new controls
-    if(effect_controls_widget && effect_controls_layout)
-    {
-        effect_controls_widget->updateGeometry();
-        effect_controls_widget->update();
-    }
-}
-
-/*---------------------------------------------------------*\
-| NEW: Simplified effect creation using auto-registration |
-| This replaces the 100+ lines of if/else above          |
-\*---------------------------------------------------------*/
-void OpenRGB3DSpatialTab::SetupCustomEffectUI_NEW(const std::string& effect_class_name)
-{
-    if(!effect_controls_widget)
-    {
-        return;
-    }
-
-    // Create effect using the manager
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_class_name);
-    if(!effect)
-    {
-        QLabel* error_label = new QLabel(QString("Failed to create effect: %1").arg(QString::fromStdString(effect_class_name)));
-        error_label->setAlignment(Qt::AlignCenter);
-        error_label->setStyleSheet("color: red; font-style: italic; padding: 20px;");
-        effect_controls_layout->addWidget(error_label);
-        return;
-    }
-
-    // Setup effect UI (same 3 lines for ALL effects!)
-    effect->setParent(effect_controls_widget);
-    effect->CreateCommonEffectControls(effect_controls_widget);
-    effect->SetupCustomUI(effect_controls_widget);
-    current_effect_ui = effect;
-
-    // Get and connect buttons
-    start_effect_button = effect->GetStartButton();
-    stop_effect_button = effect->GetStopButton();
-    connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
-    connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
-    connect(effect, &SpatialEffect3D::ParametersChanged, [this]() {});
-
-    // Update layout
-    if(effect_controls_widget && effect_controls_layout)
-    {
-        effect_controls_widget->updateGeometry();
-        effect_controls_widget->update();
-    }
+#endif
 }
 
 void OpenRGB3DSpatialTab::SetupEffectSignals(SpatialEffect3D* effect, int effect_type)
@@ -3669,14 +3673,6 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     | Reset effect UI pointers BEFORE deletion                 |
     \*---------------------------------------------------------*/
     current_effect_ui = nullptr;
-    wave3d_effect = nullptr;
-    plasma3d_effect = nullptr;
-    spiral3d_effect = nullptr;
-    spin3d_effect = nullptr;
-    explosion3d_effect = nullptr;
-    breathingsphere3d_effect = nullptr;
-    dnahelix3d_effect = nullptr;
-    wipe3d_effect = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 
@@ -3846,15 +3842,11 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
         origin = ref_point->GetPosition();
     }
 
-    // Update all effect instances
-    if(wave3d_effect) wave3d_effect->SetCustomReferencePoint(origin);
-    if(wipe3d_effect) wipe3d_effect->SetCustomReferencePoint(origin);
-    if(plasma3d_effect) plasma3d_effect->SetCustomReferencePoint(origin);
-    if(spiral3d_effect) spiral3d_effect->SetCustomReferencePoint(origin);
-    if(spin3d_effect) spin3d_effect->SetCustomReferencePoint(origin);
-    if(explosion3d_effect) explosion3d_effect->SetCustomReferencePoint(origin);
-    if(breathingsphere3d_effect) breathingsphere3d_effect->SetCustomReferencePoint(origin);
-    if(dnahelix3d_effect) dnahelix3d_effect->SetCustomReferencePoint(origin);
+    // Update current effect instance
+    if(current_effect_ui)
+    {
+        current_effect_ui->SetCustomReferencePoint(origin);
+    }
 
     // Trigger viewport update
     if(viewport) viewport->UpdateColors();
