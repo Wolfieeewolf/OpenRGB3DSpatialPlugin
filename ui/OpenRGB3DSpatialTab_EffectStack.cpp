@@ -138,8 +138,7 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
     if(current_index == 0)
     {
         QMessageBox::information(this, "No Effect Selected",
-                                "Please select an effect type before adding to the stack.\n\n"
-                                "\"None\" is a placeholder and cannot be added.");
+                                "Please select an effect type before adding to the stack.");
         return;
     }
 
