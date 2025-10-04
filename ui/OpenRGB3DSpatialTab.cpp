@@ -1029,6 +1029,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     right_tabs->addTab(effects_tab, "Effects");
 
     /*---------------------------------------------------------*\
+    | Force layout update to prevent crash when selecting      |
+    | effects before switching tabs                             |
+    \*---------------------------------------------------------*/
+    effect_controls_widget->updateGeometry();
+    effects_tab->updateGeometry();
+
+    /*---------------------------------------------------------*\
     | Zones Tab                                                |
     \*---------------------------------------------------------*/
     QWidget* zones_tab = new QWidget();
