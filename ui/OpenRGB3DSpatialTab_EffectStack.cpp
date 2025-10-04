@@ -63,6 +63,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     QHBoxLayout* type_layout = new QHBoxLayout();
     type_layout->addWidget(new QLabel("Effect Type:"));
     stack_effect_type_combo = new QComboBox();
+    stack_effect_type_combo->setToolTip("Select which effect to run on this layer");
 
     // Add "None" option first
     stack_effect_type_combo->addItem("None", "");
@@ -84,6 +85,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     QHBoxLayout* zone_layout = new QHBoxLayout();
     zone_layout->addWidget(new QLabel("Target Zone:"));
     stack_effect_zone_combo = new QComboBox();
+    stack_effect_zone_combo->setToolTip("Choose which zone/controllers this effect applies to");
     stack_effect_zone_combo->addItem("All Controllers", -1);
     connect(stack_effect_zone_combo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(on_stack_effect_zone_changed(int)));
@@ -94,14 +96,34 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     QHBoxLayout* blend_layout = new QHBoxLayout();
     blend_layout->addWidget(new QLabel("Blend Mode:"));
     stack_effect_blend_combo = new QComboBox();
+
+    // Add blend modes with tooltips
     stack_effect_blend_combo->addItem("No Blend", (int)BlendMode::NO_BLEND);
+    stack_effect_blend_combo->setItemData(0, "Effect runs independently without combining with other effects", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Replace", (int)BlendMode::REPLACE);
+    stack_effect_blend_combo->setItemData(1, "Completely replaces colors from previous effects (last effect wins)", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Add", (int)BlendMode::ADD);
+    stack_effect_blend_combo->setItemData(2, "Adds colors together (brightens - good for combining lights)", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Multiply", (int)BlendMode::MULTIPLY);
+    stack_effect_blend_combo->setItemData(3, "Multiplies colors (darkens - good for shadows/filters)", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Screen", (int)BlendMode::SCREEN);
+    stack_effect_blend_combo->setItemData(4, "Screen blend (brightens without overexposure - softer than Add)", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Max", (int)BlendMode::MAX);
+    stack_effect_blend_combo->setItemData(5, "Takes the brightest color channel from each effect", Qt::ToolTipRole);
+
     stack_effect_blend_combo->addItem("Min", (int)BlendMode::MIN);
+    stack_effect_blend_combo->setItemData(6, "Takes the darkest color channel from each effect", Qt::ToolTipRole);
+
     stack_effect_blend_combo->setCurrentIndex(0); // Default to No Blend
+
+    // Set tooltip for the combo box itself
+    stack_effect_blend_combo->setToolTip("How this effect combines with other effects in the stack");
+
     connect(stack_effect_blend_combo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(on_stack_effect_blend_changed(int)));
     blend_layout->addWidget(stack_effect_blend_combo);
