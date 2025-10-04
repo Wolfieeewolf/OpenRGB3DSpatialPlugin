@@ -207,6 +207,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     // Load effect instance settings
     EffectInstance3D* instance = effect_stack[index].get();
 
+    // Block signals while updating UI to prevent infinite recursion
+    stack_effect_type_combo->blockSignals(true);
+    stack_effect_zone_combo->blockSignals(true);
+    stack_effect_blend_combo->blockSignals(true);
+
     // Set effect type
     if(!instance->effect_class_name.empty())
     {
@@ -216,6 +221,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
         {
             stack_effect_type_combo->setCurrentIndex(type_index);
         }
+    }
+    else
+    {
+        // No effect - select "None"
+        stack_effect_type_combo->setCurrentIndex(0);
     }
 
     // Set zone
@@ -232,6 +242,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     {
         stack_effect_blend_combo->setCurrentIndex(blend_index);
     }
+
+    // Re-enable signals
+    stack_effect_type_combo->blockSignals(false);
+    stack_effect_zone_combo->blockSignals(false);
+    stack_effect_blend_combo->blockSignals(false);
 
     // Load effect-specific controls
     LoadStackEffectControls(instance);
@@ -258,7 +273,6 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 
         // Update list display
         UpdateEffectStackList();
-        effect_stack_list->setCurrentRow(current_row);
 
         // Clear effect controls
         LoadStackEffectControls(instance);
@@ -272,7 +286,6 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 
     // Update list display
     UpdateEffectStackList();
-    effect_stack_list->setCurrentRow(current_row);
 
     // Reload effect controls (will create effect if needed)
     LoadStackEffectControls(instance);
@@ -289,7 +302,6 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
 
     // Update list display
     UpdateEffectStackList();
-    effect_stack_list->setCurrentRow(current_row);
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
@@ -303,7 +315,6 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 
     // Update list display
     UpdateEffectStackList();
-    effect_stack_list->setCurrentRow(current_row);
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
