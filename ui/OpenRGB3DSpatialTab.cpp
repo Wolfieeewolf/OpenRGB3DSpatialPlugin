@@ -413,11 +413,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     ref_points_tab->setLayout(ref_points_layout);
     left_tabs->addTab(ref_points_tab, "Reference Points");
 
-    /*---------------------------------------------------------*\
-    | Effect Stack Tab (setup in separate function)            |
-    \*---------------------------------------------------------*/
-    SetupEffectStackTab();
-
     left_panel->addWidget(left_tabs);
 
     /*---------------------------------------------------------*\
@@ -1083,6 +1078,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     \*---------------------------------------------------------*/
     effect_controls_widget->updateGeometry();
     effects_tab->updateGeometry();
+
+    /*---------------------------------------------------------*\
+    | Effect Stack Tab (setup in separate function)            |
+    \*---------------------------------------------------------*/
+    SetupEffectStackTab(right_tabs);
 
     /*---------------------------------------------------------*\
     | Zones Tab                                                |

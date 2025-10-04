@@ -156,7 +156,7 @@ private:
     void RegenerateLEDPositions(ControllerTransform* transform);
 
     // Effect Stack helpers
-    void SetupEffectStackTab();
+    void SetupEffectStackTab(QTabWidget* tab_widget);
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
     void LoadStackEffectControls(EffectInstance3D* instance);

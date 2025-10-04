@@ -13,7 +13,7 @@
 #include "EffectListManager3D.h"
 #include <QMessageBox>
 
-void OpenRGB3DSpatialTab::SetupEffectStackTab()
+void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
 {
     QWidget* stack_tab = new QWidget();
     QVBoxLayout* stack_layout = new QVBoxLayout(stack_tab);
@@ -111,8 +111,8 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab()
     stack_layout->addWidget(settings_group);
     stack_layout->addStretch();
 
-    // Add tab to main tab widget
-    left_tabs->addTab(stack_tab, "Effect Stack");
+    // Add tab to specified tab widget
+    tab_widget->addTab(stack_tab, "Effect Stack");
 }
 
 void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
