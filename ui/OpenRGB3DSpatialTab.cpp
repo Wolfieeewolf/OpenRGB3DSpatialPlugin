@@ -3453,9 +3453,6 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     effect_controls_widget->update();
 }
 
-
-}
-
 void OpenRGB3DSpatialTab::ClearCustomEffectUI()
 {
     if(!effect_controls_layout)
