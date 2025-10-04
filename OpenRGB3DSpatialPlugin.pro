@@ -128,7 +128,6 @@ HEADERS +=                                                                      
     ControllerLayout3D.h                                                                        \
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
-    SpatialHash3D.h                                                                             \
     EffectListManager3D.h                                                                       \
     EffectRegisterer3D.h                                                                        \
     VirtualController3D.h                                                                       \
@@ -152,7 +151,6 @@ SOURCES +=                                                                      
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
     SpatialEffect3D.cpp                                                                         \
-    SpatialHash3D.cpp                                                                           \
     VirtualController3D.cpp                                                                     \
     VirtualReferencePoint3D.cpp                                                                 \
     Zone3D.cpp                                                                                  \

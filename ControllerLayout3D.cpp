@@ -12,6 +12,7 @@
 #include "ControllerLayout3D.h"
 #include "RGBController.h"
 #include <cmath>
+#include <limits>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -232,4 +233,176 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
     }
 
     ctrl_transform->world_positions_dirty = false;
+}
+
+/*---------------------------------------------------------*\
+| SpatialHash Implementation                               |
+\*---------------------------------------------------------*/
+
+ControllerLayout3D::SpatialHash::SpatialHash(float cell_size)
+    : cell_size(cell_size)
+{
+}
+
+void ControllerLayout3D::SpatialHash::Clear()
+{
+    grid.clear();
+}
+
+int64_t ControllerLayout3D::SpatialHash::HashCell(int x, int y, int z) const
+{
+    // Cantor pairing function for 3D
+    // Combine x,y,z into unique 64-bit hash
+    int64_t hash = (int64_t)x;
+    hash = hash * 73856093;
+    hash ^= (int64_t)y * 19349663;
+    hash ^= (int64_t)z * 83492791;
+    return hash;
+}
+
+void ControllerLayout3D::SpatialHash::GetCellCoords(float x, float y, float z, int& cx, int& cy, int& cz) const
+{
+    cx = (int)floorf(x / cell_size);
+    cy = (int)floorf(y / cell_size);
+    cz = (int)floorf(z / cell_size);
+}
+
+void ControllerLayout3D::SpatialHash::Insert(LEDPosition3D* led_pos)
+{
+    if(!led_pos) return;
+
+    int cx, cy, cz;
+    GetCellCoords(led_pos->world_position.x,
+                  led_pos->world_position.y,
+                  led_pos->world_position.z,
+                  cx, cy, cz);
+
+    int64_t hash = HashCell(cx, cy, cz);
+    grid[hash].leds.push_back(led_pos);
+}
+
+void ControllerLayout3D::SpatialHash::Build(const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
+{
+    Clear();
+
+    for(unsigned int i = 0; i < transforms.size(); i++)
+    {
+        ControllerTransform* transform = transforms[i].get();
+        if(!transform) continue;
+
+        for(unsigned int j = 0; j < transform->led_positions.size(); j++)
+        {
+            Insert(&transform->led_positions[j]);
+        }
+    }
+}
+
+float ControllerLayout3D::SpatialHash::DistanceSquared(float x1, float y1, float z1, float x2, float y2, float z2) const
+{
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float dz = z2 - z1;
+    return dx*dx + dy*dy + dz*dz;
+}
+
+std::vector<LEDPosition3D*> ControllerLayout3D::SpatialHash::QueryRadius(float x, float y, float z, float radius)
+{
+    std::vector<LEDPosition3D*> results;
+
+    // Calculate cell range to check
+    int min_cx = (int)floorf((x - radius) / cell_size);
+    int max_cx = (int)floorf((x + radius) / cell_size);
+    int min_cy = (int)floorf((y - radius) / cell_size);
+    int max_cy = (int)floorf((y + radius) / cell_size);
+    int min_cz = (int)floorf((z - radius) / cell_size);
+    int max_cz = (int)floorf((z + radius) / cell_size);
+
+    float radius_sq = radius * radius;
+
+    // Check all cells within range
+    for(int cx = min_cx; cx <= max_cx; cx++)
+    {
+        for(int cy = min_cy; cy <= max_cy; cy++)
+        {
+            for(int cz = min_cz; cz <= max_cz; cz++)
+            {
+                int64_t hash = HashCell(cx, cy, cz);
+                auto it = grid.find(hash);
+                if(it == grid.end()) continue;
+
+                // Check each LED in cell
+                for(unsigned int i = 0; i < it->second.leds.size(); i++)
+                {
+                    LEDPosition3D* led = it->second.leds[i];
+                    float dist_sq = DistanceSquared(x, y, z,
+                                                    led->world_position.x,
+                                                    led->world_position.y,
+                                                    led->world_position.z);
+                    if(dist_sq <= radius_sq)
+                    {
+                        results.push_back(led);
+                    }
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
+LEDPosition3D* ControllerLayout3D::SpatialHash::FindNearest(float x, float y, float z)
+{
+    LEDPosition3D* nearest = nullptr;
+    float min_dist_sq = std::numeric_limits<float>::max();
+
+    int cx, cy, cz;
+    GetCellCoords(x, y, z, cx, cy, cz);
+
+    // Start with current cell and expand if needed
+    int search_radius = 0;
+    const int max_search_radius = 10; // Limit search to avoid infinite loop
+
+    while(!nearest && search_radius <= max_search_radius)
+    {
+        for(int dx = -search_radius; dx <= search_radius; dx++)
+        {
+            for(int dy = -search_radius; dy <= search_radius; dy++)
+            {
+                for(int dz = -search_radius; dz <= search_radius; dz++)
+                {
+                    // Only check cells on the current shell (not already checked)
+                    if(search_radius > 0 &&
+                       abs(dx) != search_radius &&
+                       abs(dy) != search_radius &&
+                       abs(dz) != search_radius)
+                    {
+                        continue;
+                    }
+
+                    int64_t hash = HashCell(cx + dx, cy + dy, cz + dz);
+                    auto it = grid.find(hash);
+                    if(it == grid.end()) continue;
+
+                    // Check each LED in cell
+                    for(unsigned int i = 0; i < it->second.leds.size(); i++)
+                    {
+                        LEDPosition3D* led = it->second.leds[i];
+                        float dist_sq = DistanceSquared(x, y, z,
+                                                        led->world_position.x,
+                                                        led->world_position.y,
+                                                        led->world_position.z);
+                        if(dist_sq < min_dist_sq)
+                        {
+                            min_dist_sq = dist_sq;
+                            nearest = led;
+                        }
+                    }
+                }
+            }
+        }
+
+        search_radius++;
+    }
+
+    return nearest;
 }

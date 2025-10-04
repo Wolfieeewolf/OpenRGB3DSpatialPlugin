@@ -143,10 +143,21 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
     effect_running = false;
     effect_time = 0.0f;
+
+    worker_thread = new EffectWorkerThread(this);
+    connect(worker_thread, &EffectWorkerThread::ColorsReady, this, &OpenRGB3DSpatialTab::ApplyColorsFromWorker);
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
+    if(worker_thread)
+    {
+        worker_thread->StopEffect();
+        worker_thread->quit();
+        worker_thread->wait();
+        delete worker_thread;
+    }
+
     if(auto_load_timer)
     {
         auto_load_timer->stop();
@@ -3712,5 +3723,216 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
 
     // Trigger viewport update
     if(viewport) viewport->UpdateColors();
+}
+
+/*---------------------------------------------------------*\
+| Background Effect Worker Thread Implementation           |
+\*---------------------------------------------------------*/
+
+OpenRGB3DSpatialTab::EffectWorkerThread::EffectWorkerThread(QObject* parent)
+    : QThread(parent), effect(nullptr), active_zone(-1)
+{
+}
+
+OpenRGB3DSpatialTab::EffectWorkerThread::~EffectWorkerThread()
+{
+    StopEffect();
+    quit();
+    wait();
+}
+
+void OpenRGB3DSpatialTab::EffectWorkerThread::StartEffect(
+    SpatialEffect3D* eff,
+    const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+    const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
+    ZoneManager3D* zone_mgr,
+    int active_zone_idx)
+{
+    QMutexLocker locker(&state_mutex);
+
+    effect = eff;
+    active_zone = active_zone_idx;
+
+    // Create snapshots of transforms
+    transform_snapshots.clear();
+    for(const auto& transform : transforms)
+    {
+        auto snapshot = std::make_unique<ControllerTransform>();
+        snapshot->controller = transform->controller;
+        snapshot->virtual_controller = transform->virtual_controller;
+        snapshot->transform = transform->transform;
+        snapshot->led_positions = transform->led_positions;
+        snapshot->world_positions_dirty = false;
+        transform_snapshots.push_back(std::move(snapshot));
+    }
+
+    // Create snapshots of reference points
+    ref_point_snapshots.clear();
+    for(const auto& ref_point : ref_points)
+    {
+        auto snapshot = std::make_unique<VirtualReferencePoint3D>(
+            ref_point->GetName(),
+            ref_point->GetPosition(),
+            ref_point->GetColor()
+        );
+        ref_point_snapshots.push_back(std::move(snapshot));
+    }
+
+    // Create zone manager snapshot
+    if(zone_mgr)
+    {
+        zone_snapshot = std::make_unique<ZoneManager3D>();
+        // Copy zones from zone_mgr to zone_snapshot
+        for(int i = 0; i < zone_mgr->GetZoneCount(); i++)
+        {
+            Zone3D* zone = zone_mgr->GetZone(i);
+            if(zone)
+            {
+                zone_snapshot->CreateZone(zone->GetName(), zone->GetControllers());
+            }
+        }
+    }
+
+    should_stop = false;
+    running = true;
+
+    if(!isRunning())
+    {
+        start();
+    }
+
+    start_condition.wakeOne();
+}
+
+void OpenRGB3DSpatialTab::EffectWorkerThread::StopEffect()
+{
+    should_stop = true;
+    running = false;
+    start_condition.wakeOne();
+}
+
+void OpenRGB3DSpatialTab::EffectWorkerThread::UpdateTime(float time)
+{
+    current_time = time;
+}
+
+bool OpenRGB3DSpatialTab::EffectWorkerThread::GetColors(
+    std::vector<RGBColor>& out_colors,
+    std::vector<LEDPosition3D*>& out_leds)
+{
+    QMutexLocker locker(&buffer_mutex);
+
+    if(front_buffer.colors.empty())
+    {
+        return false;
+    }
+
+    out_colors = front_buffer.colors;
+    out_leds = front_buffer.leds;
+
+    return true;
+}
+
+void OpenRGB3DSpatialTab::EffectWorkerThread::run()
+{
+    while(!should_stop)
+    {
+        QMutexLocker locker(&state_mutex);
+
+        if(!running)
+        {
+            start_condition.wait(&state_mutex);
+            continue;
+        }
+
+        if(!effect || transform_snapshots.empty())
+        {
+            msleep(16); // ~60 FPS
+            continue;
+        }
+
+        locker.unlock();
+
+        // Calculate colors on background thread
+        std::vector<RGBColor> colors;
+        std::vector<LEDPosition3D*> leds;
+
+        float time = current_time.load();
+
+        // Calculate colors for all LEDs
+        for(auto& transform : transform_snapshots)
+        {
+            for(auto& led_pos : transform->led_positions)
+            {
+                RGBColor color = effect->CalculateColor(
+                    led_pos.world_position.x,
+                    led_pos.world_position.y,
+                    led_pos.world_position.z,
+                    time
+                );
+
+                colors.push_back(color);
+                leds.push_back(&led_pos);
+            }
+        }
+
+        // Swap buffers
+        {
+            QMutexLocker buffer_locker(&buffer_mutex);
+            back_buffer.colors = std::move(colors);
+            back_buffer.leds = std::move(leds);
+            std::swap(front_buffer, back_buffer);
+        }
+
+        emit ColorsReady();
+
+        msleep(33); // ~30 FPS
+    }
+}
+
+void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
+{
+    std::vector<RGBColor> colors;
+    std::vector<LEDPosition3D*> leds;
+
+    if(!worker_thread->GetColors(colors, leds))
+    {
+        return;
+    }
+
+    // Apply colors to controllers
+    for(size_t i = 0; i < leds.size() && i < colors.size(); i++)
+    {
+        LEDPosition3D* led = leds[i];
+        if(!led || !led->controller) continue;
+
+        if(led->zone_idx >= led->controller->zones.size()) continue;
+
+        unsigned int led_global_idx = led->controller->zones[led->zone_idx].start_idx + led->led_idx;
+
+        if(led_global_idx < led->controller->colors.size())
+        {
+            led->controller->colors[led_global_idx] = colors[i];
+        }
+    }
+
+    // Update all controllers
+    std::set<RGBController*> updated_controllers;
+    for(size_t i = 0; i < leds.size(); i++)
+    {
+        if(leds[i] && leds[i]->controller)
+        {
+            if(updated_controllers.find(leds[i]->controller) == updated_controllers.end())
+            {
+                leds[i]->controller->UpdateLEDs();
+                updated_controllers.insert(leds[i]->controller);
+            }
+        }
+    }
+
+    if(viewport)
+    {
+        viewport->UpdateColors();
+    }
 }
 
