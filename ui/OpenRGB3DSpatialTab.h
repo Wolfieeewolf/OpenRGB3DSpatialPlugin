@@ -58,6 +58,9 @@ namespace Ui
     class OpenRGB3DSpatialTab;
 }
 
+// Forward declaration for worker thread
+class EffectWorkerThread3D;
+
 class OpenRGB3DSpatialTab : public QWidget
 {
     Q_OBJECT
@@ -254,57 +257,60 @@ private:
     /*---------------------------------------------------------*\
     | Background Threading for Effect Calculation              |
     \*---------------------------------------------------------*/
-    class EffectWorkerThread : public QThread
+    EffectWorkerThread3D* worker_thread;
+    void ApplyColorsFromWorker();
+};
+
+/*---------------------------------------------------------*\
+| Background Effect Worker Thread (outside main class)     |
+\*---------------------------------------------------------*/
+class EffectWorkerThread3D : public QThread
+{
+    Q_OBJECT
+public:
+    EffectWorkerThread3D(QObject* parent = nullptr);
+    ~EffectWorkerThread3D();
+
+    void StartEffect(SpatialEffect3D* effect,
+                    const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+                    const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
+                    ZoneManager3D* zone_mgr,
+                    int active_zone_idx);
+    void StopEffect();
+    void UpdateTime(float time);
+
+    // Get calculated colors (thread-safe)
+    bool GetColors(std::vector<RGBColor>& out_colors, std::vector<LEDPosition3D*>& out_leds);
+
+signals:
+    void ColorsReady();
+
+protected:
+    void run() override;
+
+private:
+    struct ColorBuffer
     {
-        Q_OBJECT
-    public:
-        EffectWorkerThread(QObject* parent = nullptr);
-        ~EffectWorkerThread();
-
-        void StartEffect(SpatialEffect3D* effect,
-                        const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                        const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
-                        ZoneManager3D* zone_mgr,
-                        int active_zone_idx);
-        void StopEffect();
-        void UpdateTime(float time);
-
-        // Get calculated colors (thread-safe)
-        bool GetColors(std::vector<RGBColor>& out_colors, std::vector<LEDPosition3D*>& out_leds);
-
-    signals:
-        void ColorsReady();
-
-    protected:
-        void run() override;
-
-    private:
-        struct ColorBuffer
-        {
-            std::vector<RGBColor> colors;
-            std::vector<LEDPosition3D*> leds;
-        };
-
-        std::atomic<bool> running{false};
-        std::atomic<bool> should_stop{false};
-        std::atomic<float> current_time{0.0f};
-
-        QMutex state_mutex;
-        QMutex buffer_mutex;
-        QWaitCondition start_condition;
-
-        SpatialEffect3D* effect;
-        std::vector<std::unique_ptr<ControllerTransform>> transform_snapshots;
-        std::vector<std::unique_ptr<VirtualReferencePoint3D>> ref_point_snapshots;
-        std::unique_ptr<ZoneManager3D> zone_snapshot;
-        int active_zone;
-
-        ColorBuffer front_buffer;
-        ColorBuffer back_buffer;
+        std::vector<RGBColor> colors;
+        std::vector<LEDPosition3D*> leds;
     };
 
-    EffectWorkerThread* worker_thread;
-    void ApplyColorsFromWorker();
+    std::atomic<bool> running{false};
+    std::atomic<bool> should_stop{false};
+    std::atomic<float> current_time{0.0f};
+
+    QMutex state_mutex;
+    QMutex buffer_mutex;
+    QWaitCondition start_condition;
+
+    SpatialEffect3D* effect;
+    std::vector<std::unique_ptr<ControllerTransform>> transform_snapshots;
+    std::vector<std::unique_ptr<VirtualReferencePoint3D>> ref_point_snapshots;
+    std::unique_ptr<ZoneManager3D> zone_snapshot;
+    int active_zone;
+
+    ColorBuffer front_buffer;
+    ColorBuffer back_buffer;
 };
 
 #endif

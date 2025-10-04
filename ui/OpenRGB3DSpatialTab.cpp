@@ -144,8 +144,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_running = false;
     effect_time = 0.0f;
 
-    worker_thread = new EffectWorkerThread(this);
-    connect(worker_thread, &EffectWorkerThread::ColorsReady, this, &OpenRGB3DSpatialTab::ApplyColorsFromWorker);
+    worker_thread = new EffectWorkerThread3D(this);
+    connect(worker_thread, &EffectWorkerThread3D::ColorsReady, this, &OpenRGB3DSpatialTab::ApplyColorsFromWorker);
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
@@ -3729,19 +3729,19 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
 | Background Effect Worker Thread Implementation           |
 \*---------------------------------------------------------*/
 
-OpenRGB3DSpatialTab::EffectWorkerThread::EffectWorkerThread(QObject* parent)
+EffectWorkerThread3D::EffectWorkerThread3D(QObject* parent)
     : QThread(parent), effect(nullptr), active_zone(-1)
 {
 }
 
-OpenRGB3DSpatialTab::EffectWorkerThread::~EffectWorkerThread()
+EffectWorkerThread3D::~EffectWorkerThread3D()
 {
     StopEffect();
     quit();
     wait();
 }
 
-void OpenRGB3DSpatialTab::EffectWorkerThread::StartEffect(
+void EffectWorkerThread3D::StartEffect(
     SpatialEffect3D* eff,
     const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
     const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
@@ -3772,9 +3772,12 @@ void OpenRGB3DSpatialTab::EffectWorkerThread::StartEffect(
     {
         auto snapshot = std::make_unique<VirtualReferencePoint3D>(
             ref_point->GetName(),
-            ref_point->GetPosition(),
-            ref_point->GetColor()
+            ref_point->GetType(),
+            ref_point->GetPosition().x,
+            ref_point->GetPosition().y,
+            ref_point->GetPosition().z
         );
+        snapshot->SetDisplayColor(ref_point->GetDisplayColor());
         ref_point_snapshots.push_back(std::move(snapshot));
     }
 
@@ -3788,7 +3791,16 @@ void OpenRGB3DSpatialTab::EffectWorkerThread::StartEffect(
             Zone3D* zone = zone_mgr->GetZone(i);
             if(zone)
             {
-                zone_snapshot->CreateZone(zone->GetName(), zone->GetControllers());
+                Zone3D* new_zone = zone_snapshot->CreateZone(zone->GetName());
+                if(new_zone)
+                {
+                    // Copy all controllers from the original zone
+                    const std::vector<int>& controllers = zone->GetControllers();
+                    for(int ctrl_idx : controllers)
+                    {
+                        new_zone->AddController(ctrl_idx);
+                    }
+                }
             }
         }
     }
@@ -3804,19 +3816,19 @@ void OpenRGB3DSpatialTab::EffectWorkerThread::StartEffect(
     start_condition.wakeOne();
 }
 
-void OpenRGB3DSpatialTab::EffectWorkerThread::StopEffect()
+void EffectWorkerThread3D::StopEffect()
 {
     should_stop = true;
     running = false;
     start_condition.wakeOne();
 }
 
-void OpenRGB3DSpatialTab::EffectWorkerThread::UpdateTime(float time)
+void EffectWorkerThread3D::UpdateTime(float time)
 {
     current_time = time;
 }
 
-bool OpenRGB3DSpatialTab::EffectWorkerThread::GetColors(
+bool EffectWorkerThread3D::GetColors(
     std::vector<RGBColor>& out_colors,
     std::vector<LEDPosition3D*>& out_leds)
 {
@@ -3833,7 +3845,7 @@ bool OpenRGB3DSpatialTab::EffectWorkerThread::GetColors(
     return true;
 }
 
-void OpenRGB3DSpatialTab::EffectWorkerThread::run()
+void EffectWorkerThread3D::run()
 {
     while(!should_stop)
     {
