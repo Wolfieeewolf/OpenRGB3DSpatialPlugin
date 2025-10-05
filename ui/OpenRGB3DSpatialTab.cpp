@@ -133,6 +133,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stack_effect_blend_combo = nullptr;
     stack_effect_controls_container = nullptr;
     stack_effect_controls_layout = nullptr;
+    stack_presets_list = nullptr;
     next_effect_instance_id = 1;
 
     SetupUI();

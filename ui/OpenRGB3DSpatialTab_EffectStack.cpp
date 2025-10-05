@@ -143,10 +143,45 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     settings_layout->addWidget(stack_effect_controls_container);
 
     stack_layout->addWidget(settings_group);
+
+    /*---------------------------------------------------------*\
+    | Stack Presets Section                                    |
+    \*---------------------------------------------------------*/
+    QLabel* presets_label = new QLabel("Saved Stack Presets:");
+    presets_label->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    stack_layout->addWidget(presets_label);
+
+    stack_presets_list = new QListWidget();
+    stack_presets_list->setSelectionMode(QAbstractItemView::SingleSelection);
+    stack_presets_list->setMinimumHeight(100);
+    stack_layout->addWidget(stack_presets_list);
+
+    QHBoxLayout* presets_button_layout = new QHBoxLayout();
+    presets_button_layout->addStretch();
+
+    QPushButton* save_stack_btn = new QPushButton("Save Stack As...");
+    connect(save_stack_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_save_stack_preset_clicked);
+    presets_button_layout->addWidget(save_stack_btn);
+
+    QPushButton* load_stack_btn = new QPushButton("Load");
+    connect(load_stack_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_load_stack_preset_clicked);
+    presets_button_layout->addWidget(load_stack_btn);
+
+    QPushButton* delete_stack_btn = new QPushButton("Delete");
+    connect(delete_stack_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_delete_stack_preset_clicked);
+    presets_button_layout->addWidget(delete_stack_btn);
+
+    stack_layout->addLayout(presets_button_layout);
     stack_layout->addStretch();
 
     // Populate zone combo with current zones
     UpdateStackEffectZoneCombo();
+
+    // Load saved presets
+    LoadStackPresets();
 
     // Add tab to specified tab widget
     tab_widget->addTab(stack_tab, "Effect Stack");

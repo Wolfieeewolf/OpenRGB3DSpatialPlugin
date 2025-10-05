@@ -131,6 +131,7 @@ HEADERS +=                                                                      
     EffectListManager3D.h                                                                       \
     EffectRegisterer3D.h                                                                        \
     EffectInstance3D.h                                                                          \
+    StackPreset3D.h                                                                             \
     VirtualController3D.h                                                                       \
     VirtualReferencePoint3D.h                                                                   \
     Zone3D.h                                                                                    \
@@ -154,6 +155,7 @@ SOURCES +=                                                                      
     ControllerLayout3D.cpp                                                                      \
     SpatialEffect3D.cpp                                                                         \
     EffectInstance3D.cpp                                                                        \
+    StackPreset3D.cpp                                                                           \
     VirtualController3D.cpp                                                                     \
     VirtualReferencePoint3D.cpp                                                                 \
     Zone3D.cpp                                                                                  \
@@ -163,6 +165,7 @@ SOURCES +=                                                                      
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \
     ui/OpenRGB3DSpatialTab_EffectStack.cpp                                                      \
     ui/OpenRGB3DSpatialTab_EffectStackRender.cpp                                                \
+    ui/OpenRGB3DSpatialTab_StackPresets.cpp                                                     \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \

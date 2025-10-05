@@ -44,6 +44,7 @@
 #include "SpatialEffect3D.h"
 #include "EffectListManager3D.h"
 #include "EffectInstance3D.h"
+#include "StackPreset3D.h"
 #include "Effects3D/Wave3D/Wave3D.h"
 #include "Effects3D/Wipe3D/Wipe3D.h"
 #include "Effects3D/Plasma3D/Plasma3D.h"
@@ -128,6 +129,11 @@ private slots:
     void on_stack_effect_zone_changed(int index);
     void on_stack_effect_blend_changed(int index);
 
+    // Stack Preset slots
+    void on_save_stack_preset_clicked();
+    void on_load_stack_preset_clicked();
+    void on_delete_stack_preset_clicked();
+
 private:
     void SetupUI();
     void LoadDevices();
@@ -162,6 +168,12 @@ private:
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
     void LoadStackEffectControls(EffectInstance3D* instance);
+
+    // Stack Preset helpers
+    void LoadStackPresets();
+    void SaveStackPresets();
+    void UpdateStackPresetsList();
+    std::string GetStackPresetsPath();
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -287,6 +299,12 @@ private:
     \*---------------------------------------------------------*/
     std::vector<std::unique_ptr<EffectInstance3D>> effect_stack;
     int next_effect_instance_id;
+
+    /*---------------------------------------------------------*\
+    | Stack Presets                                            |
+    \*---------------------------------------------------------*/
+    QListWidget*                stack_presets_list;
+    std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
     /*---------------------------------------------------------*\
     | Background Threading for Effect Calculation              |
