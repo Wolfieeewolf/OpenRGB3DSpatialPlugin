@@ -14,11 +14,14 @@
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
+    LOG_TRACE("[OpenRGB3DSpatialPlugin] RenderEffectStack called, stack size: %d", (int)effect_stack.size());
+
     /*---------------------------------------------------------*\
     | Safety: Check if we have any controllers                |
     \*---------------------------------------------------------*/
     if(controller_transforms.empty())
     {
+        LOG_TRACE("[OpenRGB3DSpatialPlugin] No controllers to render");
         return; // No controllers to update
     }
 
@@ -103,6 +106,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             // Skip disabled effects or effects without an effect object
                             if(!instance->enabled || !instance->effect)
                             {
+                                LOG_TRACE("[OpenRGB3DSpatialPlugin] Skipping effect: enabled=%d, has_effect=%d",
+                                         instance->enabled, instance->effect != nullptr);
                                 continue;
                             }
 
@@ -135,6 +140,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                             // Calculate effect color
                             RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
+
+                            LOG_TRACE("[OpenRGB3DSpatialPlugin] Effect color: R=%d G=%d B=%d, blend_mode=%d",
+                                     RGBGetRValue(effect_color), RGBGetGValue(effect_color), RGBGetBValue(effect_color),
+                                     (int)instance->blend_mode);
 
                             // Blend with accumulated color
                             final_color = BlendColors(final_color, effect_color, instance->blend_mode);

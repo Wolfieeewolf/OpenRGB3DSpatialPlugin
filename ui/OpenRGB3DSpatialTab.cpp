@@ -1496,14 +1496,21 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 {
     // Check if we should render effect stack instead of single effect
     bool has_stack_effects = false;
+    int enabled_count = 0;
+    int with_effect_count = 0;
     for(const auto& instance : effect_stack)
     {
+        if(instance->enabled) enabled_count++;
+        if(instance->effect) with_effect_count++;
         if(instance->enabled && instance->effect)
         {
             has_stack_effects = true;
             break;
         }
     }
+
+    LOG_TRACE("[OpenRGB3DSpatialPlugin] Timer: stack_size=%d, enabled=%d, with_effect=%d, has_stack_effects=%d",
+              (int)effect_stack.size(), enabled_count, with_effect_count, has_stack_effects);
 
     if(has_stack_effects)
     {
