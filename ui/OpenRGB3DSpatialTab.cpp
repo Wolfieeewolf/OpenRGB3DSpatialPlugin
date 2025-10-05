@@ -114,6 +114,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     layout_profiles_combo = nullptr;
     auto_load_checkbox = nullptr;
+    effect_profiles_combo = nullptr;
+    effect_auto_load_checkbox = nullptr;
     auto_load_timer = nullptr;
     effect_timer = nullptr;
 
@@ -962,56 +964,13 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     transform_tab->setLayout(position_layout);
 
-    /*---------------------------------------------------------*\
-    | Layout Profiles Tab                                      |
-    \*---------------------------------------------------------*/
-    QWidget* profile_tab = new QWidget();
-    QVBoxLayout* profile_layout = new QVBoxLayout();
-    profile_layout->setSpacing(5);
-
-    layout_profiles_combo = new QComboBox();
-    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_layout_profile_changed(int)));
-    profile_layout->addWidget(layout_profiles_combo);
-
-    QHBoxLayout* save_load_layout = new QHBoxLayout();
-    QPushButton* save_button = new QPushButton("Save Layout");
-    connect(save_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
-    save_load_layout->addWidget(save_button);
-
-    QPushButton* load_button = new QPushButton("Load Layout");
-    connect(load_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_load_layout_clicked);
-    save_load_layout->addWidget(load_button);
-    profile_layout->addLayout(save_load_layout);
-
-    QPushButton* delete_button = new QPushButton("Delete Profile");
-    connect(delete_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_layout_clicked);
-    profile_layout->addWidget(delete_button);
-
-    auto_load_checkbox = new QCheckBox("Auto-load selected profile on startup");
-
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-    bool auto_load_enabled = false;
-    if(settings.contains("AutoLoad"))
-    {
-        auto_load_enabled = settings["AutoLoad"];
-    }
-    auto_load_checkbox->setChecked(auto_load_enabled);
-
-    connect(auto_load_checkbox, &QCheckBox::toggled, [this](bool checked) {
-        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
-        settings["AutoLoad"] = checked;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-        resource_manager->GetSettingsManager()->SaveSettings();
-    });
-    profile_layout->addWidget(auto_load_checkbox);
-
-    PopulateLayoutDropdown();
-
-    profile_tab->setLayout(profile_layout);
-
     settings_tabs->addTab(transform_tab, "Position & Rotation");
     settings_tabs->addTab(grid_settings_tab, "Grid Settings");
-    settings_tabs->addTab(profile_tab, "Layout Profiles");
+
+    /*---------------------------------------------------------*\
+    | Unified Profiles Tab (Layout + Effect profiles)         |
+    \*---------------------------------------------------------*/
+    SetupProfilesTab(settings_tabs);
 
     middle_panel->addWidget(settings_tabs);
 
@@ -1033,15 +992,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Effect selection
     effect_combo = new QComboBox();
     effect_combo->blockSignals(true);  // Block signals during initialization
-    effect_combo->addItem("None");
-    effect_combo->addItem("Wave 3D");         // effect_type 0
-    effect_combo->addItem("Wipe 3D");         // effect_type 1
-    effect_combo->addItem("Plasma 3D");       // effect_type 2
-    effect_combo->addItem("Spiral 3D");       // effect_type 3
-    effect_combo->addItem("Spin 3D");         // effect_type 4
-    effect_combo->addItem("DNA Helix 3D");    // effect_type 5
-    effect_combo->addItem("Breathing Sphere 3D"); // effect_type 6
-    effect_combo->addItem("Explosion 3D");    // effect_type 7
+    // Populate effect combo (will be updated after loading presets)
+    UpdateEffectCombo();
     effect_combo->blockSignals(false); // Re-enable signals after initialization
 
     connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -1388,7 +1340,72 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
 
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
+    /*---------------------------------------------------------*\
+    | Check if a stack preset is selected                      |
+    \*---------------------------------------------------------*/
+    if(effect_combo && effect_combo->currentIndex() > 0)
+    {
+        QVariant data = effect_combo->itemData(effect_combo->currentIndex());
+        if(data.isValid() && data.toInt() < 0)
+        {
+            /*---------------------------------------------------------*\
+            | This is a stack preset - load it and start rendering     |
+            \*---------------------------------------------------------*/
+            int preset_index = -(data.toInt() + 1);
+            if(preset_index >= 0 && preset_index < (int)stack_presets.size())
+            {
+                StackPreset3D* preset = stack_presets[preset_index].get();
 
+                /*---------------------------------------------------------*\
+                | Clear current stack                                      |
+                \*---------------------------------------------------------*/
+                effect_stack.clear();
+
+                /*---------------------------------------------------------*\
+                | Load preset effects (deep copy)                          |
+                \*---------------------------------------------------------*/
+                for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
+                {
+                    nlohmann::json instance_json      = preset->effect_instances[i]->ToJson();
+                    EffectInstance3D* copied_instance = EffectInstance3D::FromJson(instance_json);
+                    if(copied_instance)
+                    {
+                        effect_stack.push_back(std::unique_ptr<EffectInstance3D>(copied_instance));
+                    }
+                }
+
+                /*---------------------------------------------------------*\
+                | Update Effect Stack tab UI (if visible)                  |
+                \*---------------------------------------------------------*/
+                UpdateEffectStackList();
+                if(!effect_stack.empty())
+                {
+                    effect_stack_list->setCurrentRow(0);
+                }
+
+                /*---------------------------------------------------------*\
+                | Start effect timer                                       |
+                \*---------------------------------------------------------*/
+                if(effect_timer && !effect_timer->isActive())
+                {
+                    effect_timer->start(33);
+                }
+
+                /*---------------------------------------------------------*\
+                | Update button states                                     |
+                \*---------------------------------------------------------*/
+                start_effect_button->setEnabled(false);
+                stop_effect_button->setEnabled(true);
+
+                LOG_INFO("[OpenRGB3DSpatialPlugin] Started stack preset: %s", preset->name.c_str());
+                return;
+            }
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Regular effect handling                                  |
+    \*---------------------------------------------------------*/
     if(!current_effect_ui)
     {
         QMessageBox::warning(this, "No Effect Selected", "Please select an effect before starting.");
@@ -1475,9 +1492,38 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 {
+    /*---------------------------------------------------------*\
+    | Check if a stack preset is currently running             |
+    \*---------------------------------------------------------*/
+    if(effect_combo && effect_combo->currentIndex() > 0)
+    {
+        QVariant data = effect_combo->itemData(effect_combo->currentIndex());
+        if(data.isValid() && data.toInt() < 0)
+        {
+            /*---------------------------------------------------------*\
+            | This is a stack preset - stop and clear the stack        |
+            \*---------------------------------------------------------*/
+            effect_timer->stop();
+
+            /*---------------------------------------------------------*\
+            | Clear effect stack                                       |
+            \*---------------------------------------------------------*/
+            effect_stack.clear();
+            UpdateEffectStackList();
+
+            /*---------------------------------------------------------*\
+            | Update button states                                     |
+            \*---------------------------------------------------------*/
+            start_effect_button->setEnabled(true);
+            stop_effect_button->setEnabled(false);
+
+            LOG_INFO("[OpenRGB3DSpatialPlugin] Stopped stack preset");
+            return;
+        }
+    }
 
     /*---------------------------------------------------------*\
-    | Stop the effect                                          |
+    | Regular effect stop handling                             |
     \*---------------------------------------------------------*/
     effect_running = false;
     effect_timer->stop();
@@ -1496,14 +1542,13 @@ void OpenRGB3DSpatialTab::on_effect_updated()
 
 void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 {
-    // Check if we should render effect stack instead of single effect
+    /*---------------------------------------------------------*\
+    | Check if we should render effect stack instead of       |
+    | single effect                                            |
+    \*---------------------------------------------------------*/
     bool has_stack_effects = false;
-    int enabled_count = 0;
-    int with_effect_count = 0;
     for(const auto& instance : effect_stack)
     {
-        if(instance->enabled) enabled_count++;
-        if(instance->effect) with_effect_count++;
         if(instance->enabled && instance->effect)
         {
             has_stack_effects = true;
@@ -1511,15 +1556,18 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
     }
 
-
     if(has_stack_effects)
     {
-        // Render effect stack (multi-effect mode)
+        /*---------------------------------------------------------*\
+        | Render effect stack (multi-effect mode)                 |
+        \*---------------------------------------------------------*/
         RenderEffectStack();
         return;
     }
 
-    // Fall back to single effect rendering (legacy Effects tab)
+    /*---------------------------------------------------------*\
+    | Fall back to single effect rendering (Effects tab)       |
+    \*---------------------------------------------------------*/
     if(!effect_running || !current_effect_ui)
     {
         return;
@@ -1620,29 +1668,67 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     }
     else
     {
-        int zone_idx = effect_zone_combo->currentIndex();
+        int combo_idx = effect_zone_combo->currentIndex();
+        int zone_count = zone_manager ? zone_manager->GetZoneCount() : 0;
 
-        if(zone_idx == 0)
+        /*---------------------------------------------------------*\
+        | Safety: If index is invalid, default to all controllers |
+        \*---------------------------------------------------------*/
+        if(combo_idx < 0 || combo_idx >= effect_zone_combo->count())
         {
-            // "All Controllers" selected - allow all
             for(unsigned int i = 0; i < controller_transforms.size(); i++)
             {
                 allowed_controllers.push_back(i);
             }
         }
-        else
+        else if(combo_idx == 0)
         {
-            // Specific zone selected - get controllers from zone manager
-            // Zone index 0 is "All Controllers", so actual zones start at index 1
-            Zone3D* zone = zone_manager->GetZone(zone_idx - 1);
+            /*---------------------------------------------------------*\
+            | "All Controllers" selected - allow all                   |
+            \*---------------------------------------------------------*/
+            for(unsigned int i = 0; i < controller_transforms.size(); i++)
+            {
+                allowed_controllers.push_back(i);
+            }
+        }
+        else if(zone_count > 0 && combo_idx >= 1 && combo_idx <= zone_count)
+        {
+            /*---------------------------------------------------------*\
+            | Zone selected - get controllers from zone manager       |
+            | Zone indices: combo index 1 = zone 0, etc.              |
+            \*---------------------------------------------------------*/
+            Zone3D* zone = zone_manager->GetZone(combo_idx - 1);
             if(zone)
             {
                 allowed_controllers = zone->GetControllers();
             }
             else
             {
-                // Zone not found - allow all as fallback
-                LOG_WARNING("[OpenRGB3DSpatialPlugin] Selected zone not found, applying effect to all controllers");
+                /*---------------------------------------------------------*\
+                | Zone not found - allow all as fallback                  |
+                \*---------------------------------------------------------*/
+                for(unsigned int i = 0; i < controller_transforms.size(); i++)
+                {
+                    allowed_controllers.push_back(i);
+                }
+            }
+        }
+        else
+        {
+            /*---------------------------------------------------------*\
+            | Individual controller selected                           |
+            | Combo index = zone_count + 1 + controller_index          |
+            \*---------------------------------------------------------*/
+            int ctrl_idx = combo_idx - zone_count - 1;
+            if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
+            {
+                allowed_controllers.push_back(ctrl_idx);
+            }
+            else
+            {
+                /*---------------------------------------------------------*\
+                | Invalid controller index - allow all as fallback        |
+                \*---------------------------------------------------------*/
                 for(unsigned int i = 0; i < controller_transforms.size(); i++)
                 {
                     allowed_controllers.push_back(i);
@@ -2187,6 +2273,22 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     }
 
     std::string layout_path = GetLayoutPath(profile_name.toStdString());
+
+    /*---------------------------------------------------------*\
+    | Check if profile already exists                          |
+    \*---------------------------------------------------------*/
+    if(filesystem::exists(layout_path))
+    {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, "Overwrite Profile",
+            QString("Layout profile \"%1\" already exists. Overwrite?").arg(profile_name),
+            QMessageBox::Yes | QMessageBox::No);
+
+        if(reply != QMessageBox::Yes)
+        {
+            return;
+        }
+    }
+
     SaveLayout(layout_path);
 
     PopulateLayoutDropdown();
@@ -3206,13 +3308,22 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
 
 void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
 {
+    if(!layout_profiles_combo || !auto_load_checkbox)
+    {
+        return;
+    }
+
     std::string profile_name = layout_profiles_combo->currentText().toStdString();
+    bool auto_load_enabled = auto_load_checkbox->isChecked();
 
     nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
     settings["SelectedProfile"] = profile_name;
+    settings["AutoLoadEnabled"] = auto_load_enabled;
     resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
     resource_manager->GetSettingsManager()->SaveSettings();
 
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Saved layout settings: profile='%s', auto_load=%d",
+             profile_name.c_str(), auto_load_enabled);
 }
 
 void OpenRGB3DSpatialTab::TryAutoLoadLayout()
@@ -3229,21 +3340,66 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         return;
     }
 
-    if(auto_load_checkbox->isChecked())
+    /*---------------------------------------------------------*\
+    | Load saved settings                                      |
+    \*---------------------------------------------------------*/
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+
+    bool auto_load_enabled = false;
+    std::string saved_profile;
+
+    if(settings.contains("AutoLoadEnabled"))
     {
-        QString profile_name = layout_profiles_combo->currentText();
+        auto_load_enabled = settings["AutoLoadEnabled"].get<bool>();
+    }
 
-        if(!profile_name.isEmpty())
+    if(settings.contains("SelectedProfile"))
+    {
+        saved_profile = settings["SelectedProfile"].get<std::string>();
+    }
+
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Loaded layout settings: profile='%s', auto_load=%d",
+             saved_profile.c_str(), auto_load_enabled);
+
+    /*---------------------------------------------------------*\
+    | Restore checkbox state                                   |
+    \*---------------------------------------------------------*/
+    auto_load_checkbox->blockSignals(true);
+    auto_load_checkbox->setChecked(auto_load_enabled);
+    auto_load_checkbox->blockSignals(false);
+
+    /*---------------------------------------------------------*\
+    | Restore profile selection                                |
+    \*---------------------------------------------------------*/
+    if(!saved_profile.empty())
+    {
+        int index = layout_profiles_combo->findText(QString::fromStdString(saved_profile));
+        if(index >= 0)
         {
-            std::string layout_path = GetLayoutPath(profile_name.toStdString());
-            QFileInfo check_file(QString::fromStdString(layout_path));
-
-            if(check_file.exists())
-            {
-                LoadLayout(layout_path);
-            }
+            layout_profiles_combo->blockSignals(true);
+            layout_profiles_combo->setCurrentIndex(index);
+            layout_profiles_combo->blockSignals(false);
         }
     }
+
+    /*---------------------------------------------------------*\
+    | Auto-load if enabled                                     |
+    \*---------------------------------------------------------*/
+    if(auto_load_enabled && !saved_profile.empty())
+    {
+        std::string layout_path = GetLayoutPath(saved_profile);
+        QFileInfo check_file(QString::fromStdString(layout_path));
+
+        if(check_file.exists())
+        {
+            LoadLayout(layout_path);
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Try to auto-load effect profile after layout loads      |
+    \*---------------------------------------------------------*/
+    TryAutoLoadEffectProfile();
 }
 
 void OpenRGB3DSpatialTab::SaveCustomControllers()
@@ -3611,6 +3767,70 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     effect_controls_widget->update();
 }
 
+void OpenRGB3DSpatialTab::SetupStackPresetUI()
+{
+    /*---------------------------------------------------------*\
+    | Validate required UI components                          |
+    \*---------------------------------------------------------*/
+    if(!effect_controls_widget || !effect_controls_layout)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect controls widget or layout is null!");
+        return;
+    }
+
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up stack preset UI");
+
+    /*---------------------------------------------------------*\
+    | Create informational label                               |
+    \*---------------------------------------------------------*/
+    QLabel* info_label = new QLabel(
+        "This is a saved stack preset with pre-configured settings.\n\n"
+        "Click Start to load and run all effects in this preset.\n\n"
+        "To edit this preset, go to the Effect Stack tab, load it,\n"
+        "modify the effects, and save with the same name."
+    );
+    info_label->setWordWrap(true);
+    info_label->setStyleSheet(
+        "QLabel {"
+        "    padding: 10px;"
+        "    background-color: #2a2a2a;"
+        "    border: 1px solid #444;"
+        "    border-radius: 4px;"
+        "    color: #ccc;"
+        "}"
+    );
+    effect_controls_layout->addWidget(info_label);
+
+    /*---------------------------------------------------------*\
+    | Create Start/Stop button container                       |
+    \*---------------------------------------------------------*/
+    QWidget* button_container = new QWidget();
+    QHBoxLayout* button_layout = new QHBoxLayout(button_container);
+    button_layout->setContentsMargins(0, 10, 0, 0);
+
+    start_effect_button = new QPushButton("Start Effect");
+    stop_effect_button = new QPushButton("Stop Effect");
+    stop_effect_button->setEnabled(false);
+
+    button_layout->addWidget(start_effect_button);
+    button_layout->addWidget(stop_effect_button);
+    button_layout->addStretch();
+
+    effect_controls_layout->addWidget(button_container);
+
+    /*---------------------------------------------------------*\
+    | Connect buttons to handlers                              |
+    \*---------------------------------------------------------*/
+    connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+    connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+
+    /*---------------------------------------------------------*\
+    | Force geometry update                                    |
+    \*---------------------------------------------------------*/
+    effect_controls_widget->updateGeometry();
+    effect_controls_widget->update();
+}
+
 void OpenRGB3DSpatialTab::ClearCustomEffectUI()
 {
     if(!effect_controls_layout)
@@ -3776,7 +3996,18 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     \*---------------------------------------------------------*/
     if(index > 0)  // Skip "None" option
     {
-        SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
+        // Check if this is a stack preset (has user data)
+        QVariant data = effect_combo->itemData(index);
+        if(data.isValid() && data.toInt() < 0)
+        {
+            // This is a stack preset - show simplified UI
+            SetupStackPresetUI();
+        }
+        else
+        {
+            // This is a regular effect
+            SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
+        }
     }
 }
 
@@ -3805,6 +4036,39 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     }
 
     effect_origin_combo->blockSignals(false);
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectCombo()
+{
+    if(!effect_combo) return;
+
+    effect_combo->blockSignals(true);
+    effect_combo->clear();
+
+    // Add "None" option first
+    effect_combo->addItem("None");  // index 0
+
+    // Add all individual effects
+    effect_combo->addItem("Wave 3D");          // index 1 (effect_type 0)
+    effect_combo->addItem("Wipe 3D");          // index 2 (effect_type 1)
+    effect_combo->addItem("Plasma 3D");        // index 3 (effect_type 2)
+    effect_combo->addItem("Spiral 3D");        // index 4 (effect_type 3)
+    effect_combo->addItem("Spin 3D");          // index 5 (effect_type 4)
+    effect_combo->addItem("DNA Helix 3D");     // index 6 (effect_type 5)
+    effect_combo->addItem("Breathing Sphere 3D"); // index 7 (effect_type 6)
+    effect_combo->addItem("Explosion 3D");     // index 8 (effect_type 7)
+
+    // Add stack presets with [Stack] suffix
+    // Store negative indices to distinguish presets from effects
+    for(size_t i = 0; i < stack_presets.size(); i++)
+    {
+        QString preset_name = QString::fromStdString(stack_presets[i]->name) + " [Stack]";
+        effect_combo->addItem(preset_name);
+        // Store preset index as user data (negative to distinguish from effect type)
+        effect_combo->setItemData(effect_combo->count() - 1, QVariant(-(int)i - 1));
+    }
+
+    effect_combo->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)

@@ -94,6 +94,10 @@ private slots:
     void on_load_layout_clicked();
     void on_delete_layout_clicked();
     void on_layout_profile_changed(int index);
+    void on_save_effect_profile_clicked();
+    void on_load_effect_profile_clicked();
+    void on_delete_effect_profile_clicked();
+    void on_effect_profile_changed(int index);
     void on_create_custom_controller_clicked();
     void on_import_custom_controller_clicked();
     void on_export_custom_controller_clicked();
@@ -154,12 +158,14 @@ private:
     void LoadReferencePoints();
     void UpdateZonesList();
     void UpdateEffectZoneCombo();
+    void UpdateEffectCombo();
     void SaveZones();
     void LoadZones();
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
     void SetupCustomEffectUI(int effect_type);
+    void SetupStackPresetUI();
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
 
@@ -174,6 +180,22 @@ private:
     void SaveStackPresets();
     void UpdateStackPresetsList();
     std::string GetStackPresetsPath();
+
+    // Effect Stack persistence
+    void SaveEffectStack();
+    void LoadEffectStack();
+    std::string GetEffectStackPath();
+
+    // Effect Profile helpers
+    void SaveEffectProfile(const std::string& filename);
+    void LoadEffectProfile(const std::string& filename);
+    std::string GetEffectProfilePath(const std::string& profile_name);
+    void PopulateEffectProfileDropdown();
+    void SaveCurrentEffectProfileName();
+    void TryAutoLoadEffectProfile();
+
+    // Profiles tab setup
+    void SetupProfilesTab(QTabWidget* tab_widget);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -210,6 +232,8 @@ private:
 
     QComboBox*                  layout_profiles_combo;
     QCheckBox*                  auto_load_checkbox;
+    QComboBox*                  effect_profiles_combo;
+    QCheckBox*                  effect_auto_load_checkbox;
     QTimer*                     auto_load_timer;
     QTimer*                     effect_timer;
     bool                        first_load;

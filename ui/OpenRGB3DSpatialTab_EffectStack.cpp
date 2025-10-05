@@ -72,15 +72,19 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     stack_effect_type_combo = new QComboBox();
     stack_effect_type_combo->setToolTip("Select which effect to run on this layer");
 
-    // Add "None" option first
+    /*---------------------------------------------------------*\
+    | Add "None" option first                                  |
+    \*---------------------------------------------------------*/
     stack_effect_type_combo->addItem("None", "");
 
-    // Populate with all available effects (display UI name, store class name)
+    /*---------------------------------------------------------*\
+    | Populate with all available effects                      |
+    \*---------------------------------------------------------*/
     std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
-    for(const EffectRegistration3D& effect_reg : effects)
+    for(unsigned int i = 0; i < effects.size(); i++)
     {
-        stack_effect_type_combo->addItem(QString::fromStdString(effect_reg.ui_name),
-                                         QString::fromStdString(effect_reg.class_name));
+        stack_effect_type_combo->addItem(QString::fromStdString(effects[i].ui_name),
+                                         QString::fromStdString(effects[i].class_name));
     }
 
     connect(stack_effect_type_combo, SIGNAL(currentIndexChanged(int)),
@@ -177,13 +181,24 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     stack_layout->addLayout(presets_button_layout);
     stack_layout->addStretch();
 
-    // Populate zone combo with current zones
+    /*---------------------------------------------------------*\
+    | Populate zone combo with current zones                   |
+    \*---------------------------------------------------------*/
     UpdateStackEffectZoneCombo();
 
-    // Load saved presets
+    /*---------------------------------------------------------*\
+    | Load saved presets                                       |
+    \*---------------------------------------------------------*/
     LoadStackPresets();
 
-    // Add tab to specified tab widget
+    /*---------------------------------------------------------*\
+    | Load saved effect stack from previous session            |
+    \*---------------------------------------------------------*/
+    LoadEffectStack();
+
+    /*---------------------------------------------------------*\
+    | Add tab to specified tab widget                          |
+    \*---------------------------------------------------------*/
     tab_widget->addTab(stack_tab, "Effect Stack");
 }
 
@@ -216,31 +231,48 @@ void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
         return;
     }
 
-    // Create new effect instance
-    auto instance = std::make_unique<EffectInstance3D>();
-    instance->id = next_effect_instance_id++;
-    instance->name = ui_name.toStdString();
-    instance->zone_index = -1; // All Controllers
-    instance->blend_mode = BlendMode::NO_BLEND;
-    instance->enabled = true;
+    /*---------------------------------------------------------*\
+    | Create new effect instance                               |
+    \*---------------------------------------------------------*/
+    std::unique_ptr<EffectInstance3D> instance = std::make_unique<EffectInstance3D>();
+    instance->id            = next_effect_instance_id++;
+    instance->name          = ui_name.toStdString();
+    instance->zone_index    = -1;
+    instance->blend_mode    = BlendMode::NO_BLEND;
+    instance->enabled       = true;
 
-    // Store the effect class name (effect will be created lazily when selected)
+    /*---------------------------------------------------------*\
+    | Store effect class name (created lazily when selected)   |
+    \*---------------------------------------------------------*/
     instance->effect_class_name = class_name.toStdString();
 
-    // Add to list
+    /*---------------------------------------------------------*\
+    | Add to list                                              |
+    \*---------------------------------------------------------*/
     effect_stack.push_back(std::move(instance));
 
-    // Update UI
+    /*---------------------------------------------------------*\
+    | Update UI                                                |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
 
-    // Select the new effect
+    /*---------------------------------------------------------*\
+    | Select the new effect                                    |
+    \*---------------------------------------------------------*/
     effect_stack_list->setCurrentRow((int)effect_stack.size() - 1);
 
-    // Start effect timer if not already running
+    /*---------------------------------------------------------*\
+    | Start effect timer if not already running                |
+    \*---------------------------------------------------------*/
     if(effect_timer && !effect_timer->isActive())
     {
-        effect_timer->start(33); // ~30 FPS
+        effect_timer->start(33);
     }
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
@@ -254,18 +286,29 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
         return;
     }
 
-    // Remove from vector
+    /*---------------------------------------------------------*\
+    | Remove from vector                                       |
+    \*---------------------------------------------------------*/
     effect_stack.erase(effect_stack.begin() + current_row);
 
-    // Update UI
+    /*---------------------------------------------------------*\
+    | Update UI                                                |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
 
-    // Select next item (or previous if we removed the last one)
+    /*---------------------------------------------------------*\
+    | Select next item (or previous if we removed the last one)|
+    \*---------------------------------------------------------*/
     if(!effect_stack.empty())
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
     }
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
@@ -277,15 +320,26 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
         return;
     }
 
-    // Toggle enabled state
+    /*---------------------------------------------------------*\
+    | Toggle enabled state                                     |
+    \*---------------------------------------------------------*/
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->enabled = !instance->enabled;
 
-    // Update list display
+    /*---------------------------------------------------------*\
+    | Update list display                                      |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
 
-    // Restore selection
+    /*---------------------------------------------------------*\
+    | Restore selection                                        |
+    \*---------------------------------------------------------*/
     effect_stack_list->setCurrentRow(current_row);
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
@@ -371,73 +425,117 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
         instance->effect_class_name = "";
         instance->name = "None";
 
-        // Update list display
+        /*---------------------------------------------------------*\
+        | Update list display                                      |
+        \*---------------------------------------------------------*/
         UpdateEffectStackList();
 
-        // Clear effect controls
+        /*---------------------------------------------------------*\
+        | Clear effect controls                                    |
+        \*---------------------------------------------------------*/
         LoadStackEffectControls(instance);
+
+        /*---------------------------------------------------------*\
+        | Auto-save effect stack                                   |
+        \*---------------------------------------------------------*/
+        SaveEffectStack();
         return;
     }
 
-    // Clear old effect and store new class name (effect will be created lazily)
+    /*---------------------------------------------------------*\
+    | Clear old effect and store new class name                |
+    \*---------------------------------------------------------*/
     instance->effect.reset();
     instance->effect_class_name = class_name.toStdString();
-    instance->name = ui_name.toStdString();
+    instance->name              = ui_name.toStdString();
 
-    // Update list display
+    /*---------------------------------------------------------*\
+    | Update list display                                      |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
 
-    // Reload effect controls (will create effect if needed)
+    /*---------------------------------------------------------*\
+    | Reload effect controls (will create effect if needed)    |
+    \*---------------------------------------------------------*/
     LoadStackEffectControls(instance);
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
 {
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
+    {
         return;
+    }
 
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = stack_effect_zone_combo->currentData().toInt();
 
-    // Update list display
+    /*---------------------------------------------------------*\
+    | Update list display                                      |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 {
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
+    {
         return;
+    }
 
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->blend_mode = (BlendMode)stack_effect_blend_combo->currentData().toInt();
 
-    // Update list display
+    /*---------------------------------------------------------*\
+    | Update list display                                      |
+    \*---------------------------------------------------------*/
     UpdateEffectStackList();
+
+    /*---------------------------------------------------------*\
+    | Auto-save effect stack                                   |
+    \*---------------------------------------------------------*/
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
 {
-    // Save current selection
+    /*---------------------------------------------------------*\
+    | Save current selection                                   |
+    \*---------------------------------------------------------*/
     int current_row = effect_stack_list->currentRow();
 
-    // Block signals to prevent selection change during clear/rebuild
+    /*---------------------------------------------------------*\
+    | Block signals to prevent selection change                |
+    \*---------------------------------------------------------*/
     effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
-    for(size_t i = 0; i < effect_stack.size(); i++)
+    for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
         EffectInstance3D* instance = effect_stack[i].get();
 
         QString enabled_marker = instance->enabled ? "☑ " : "☐ ";
-        QString display_name = QString::fromStdString(instance->GetDisplayName());
+        QString display_name   = QString::fromStdString(instance->GetDisplayName());
 
         QListWidgetItem* item = new QListWidgetItem(enabled_marker + display_name);
         effect_stack_list->addItem(item);
     }
 
-    // Restore selection
+    /*---------------------------------------------------------*\
+    | Restore selection                                        |
+    \*---------------------------------------------------------*/
     if(current_row >= 0 && current_row < (int)effect_stack.size())
     {
         effect_stack_list->setCurrentRow(current_row);
@@ -449,11 +547,30 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
 void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 {
     if(!stack_effect_zone_combo)
+    {
         return;
+    }
 
+    /*---------------------------------------------------------*\
+    | Save current selection (zone_index value, not combo idx)|
+    \*---------------------------------------------------------*/
+    int saved_zone_index = -1;  // Default to "All Controllers"
+    if(stack_effect_zone_combo->currentIndex() >= 0)
+    {
+        saved_zone_index = stack_effect_zone_combo->currentData().toInt();
+    }
+
+    stack_effect_zone_combo->blockSignals(true);
     stack_effect_zone_combo->clear();
+
+    /*---------------------------------------------------------*\
+    | Add "All Controllers" option                             |
+    \*---------------------------------------------------------*/
     stack_effect_zone_combo->addItem("All Controllers", -1);
 
+    /*---------------------------------------------------------*\
+    | Add all zones                                            |
+    \*---------------------------------------------------------*/
     if(zone_manager)
     {
         for(int i = 0; i < zone_manager->GetZoneCount(); i++)
@@ -461,10 +578,50 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
             Zone3D* zone = zone_manager->GetZone(i);
             if(zone)
             {
-                stack_effect_zone_combo->addItem(QString::fromStdString(zone->GetName()), i);
+                QString zone_name = QString("[Zone] ") + QString::fromStdString(zone->GetName());
+                stack_effect_zone_combo->addItem(zone_name, i);
             }
         }
     }
+
+    /*---------------------------------------------------------*\
+    | Add individual controllers with special negative indices |
+    | Store as -(controller_index + 1000) to distinguish       |
+    | from zones (which use 0-999)                             |
+    \*---------------------------------------------------------*/
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* transform = controller_transforms[i].get();
+        if(transform && transform->controller)
+        {
+            QString ctrl_name = QString("[Controller] ") +
+                               QString::fromStdString(transform->controller->name);
+
+            /*---------------------------------------------------------*\
+            | Store as negative: -(index + 1000)                       |
+            | This allows us to distinguish:                           |
+            | -1 = All Controllers                                     |
+            | 0-999 = Zone indices                                     |
+            | -1000 and below = Individual controller indices          |
+            \*---------------------------------------------------------*/
+            stack_effect_zone_combo->addItem(ctrl_name, -(int)(i + 1000));
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Restore previous selection by finding matching data      |
+    \*---------------------------------------------------------*/
+    int restore_index = stack_effect_zone_combo->findData(saved_zone_index);
+    if(restore_index >= 0)
+    {
+        stack_effect_zone_combo->setCurrentIndex(restore_index);
+    }
+    else
+    {
+        stack_effect_zone_combo->setCurrentIndex(0);  // Default to "All Controllers"
+    }
+
+    stack_effect_zone_combo->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)

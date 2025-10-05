@@ -288,25 +288,65 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
         return;
     }
 
+    /*---------------------------------------------------------*\
+    | Save current selection to restore after rebuild         |
+    \*---------------------------------------------------------*/
+    int saved_index = effect_zone_combo->currentIndex();
+    if(saved_index < 0)
+    {
+        saved_index = 0;  // Default to "All Controllers"
+    }
+
     effect_zone_combo->blockSignals(true);
     effect_zone_combo->clear();
 
-    // Always add "All Controllers" as first option
+    /*---------------------------------------------------------*\
+    | Add "All Controllers" option                             |
+    \*---------------------------------------------------------*/
     effect_zone_combo->addItem("All Controllers");
 
-    // Add all zones
+    /*---------------------------------------------------------*\
+    | Add all zones with [Zone] prefix                         |
+    \*---------------------------------------------------------*/
     for(int i = 0; i < zone_manager->GetZoneCount(); i++)
     {
         Zone3D* zone = zone_manager->GetZone(i);
         if(zone)
         {
-            QString name = QString::fromStdString(zone->GetName());
-            effect_zone_combo->addItem(name);
+            QString zone_name = QString("[Zone] ") + QString::fromStdString(zone->GetName());
+            effect_zone_combo->addItem(zone_name);
         }
     }
 
+    /*---------------------------------------------------------*\
+    | Add individual controllers with [Controller] prefix      |
+    \*---------------------------------------------------------*/
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* transform = controller_transforms[i].get();
+        if(transform && transform->controller)
+        {
+            QString ctrl_name = QString("[Controller] ") +
+                               QString::fromStdString(transform->controller->name);
+            effect_zone_combo->addItem(ctrl_name);
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Restore previous selection (or default to 0 if invalid) |
+    \*---------------------------------------------------------*/
+    if(saved_index < effect_zone_combo->count())
+    {
+        effect_zone_combo->setCurrentIndex(saved_index);
+    }
+    else
+    {
+        effect_zone_combo->setCurrentIndex(0);  // Default to "All Controllers"
+    }
+
     effect_zone_combo->blockSignals(false);
-    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect zone combo updated with %d zones", zone_manager->GetZoneCount());
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect zone combo updated with %d zones and %d controllers",
+                zone_manager->GetZoneCount(), (int)controller_transforms.size());
 }
 
 void OpenRGB3DSpatialTab::SaveZones()

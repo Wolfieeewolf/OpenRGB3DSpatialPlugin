@@ -26,7 +26,9 @@ nlohmann::json EffectInstance3D::ToJson() const
     {
         j["effect_type"] = effect_class_name;
 
-        // Save effect parameters
+        /*---------------------------------------------------------*\
+        | Save effect parameters                                   |
+        \*---------------------------------------------------------*/
         if(effect)
         {
             j["effect_settings"] = effect->SaveSettings();
@@ -41,21 +43,33 @@ EffectInstance3D* EffectInstance3D::FromJson(const nlohmann::json& j)
     EffectInstance3D* instance = new EffectInstance3D();
 
     if(j.contains("name"))
+    {
         instance->name = j["name"].get<std::string>();
+    }
 
     if(j.contains("zone_index"))
+    {
         instance->zone_index = j["zone_index"].get<int>();
+    }
 
     if(j.contains("blend_mode"))
+    {
         instance->blend_mode = (BlendMode)j["blend_mode"].get<int>();
+    }
 
     if(j.contains("enabled"))
+    {
         instance->enabled = j["enabled"].get<bool>();
+    }
 
     if(j.contains("id"))
+    {
         instance->id = j["id"].get<int>();
+    }
 
-    // Restore effect from type
+    /*---------------------------------------------------------*\
+    | Restore effect from type                                 |
+    \*---------------------------------------------------------*/
     if(j.contains("effect_type"))
     {
         std::string effect_type = j["effect_type"].get<std::string>();
@@ -66,7 +80,9 @@ EffectInstance3D* EffectInstance3D::FromJson(const nlohmann::json& j)
         {
             instance->effect.reset(effect);
 
-            // Load effect parameters if they exist
+            /*---------------------------------------------------------*\
+            | Load effect parameters if they exist                     |
+            \*---------------------------------------------------------*/
             if(j.contains("effect_settings"))
             {
                 effect->LoadSettings(j["effect_settings"]);

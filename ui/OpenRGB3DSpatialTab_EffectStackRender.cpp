@@ -94,29 +94,57 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             continue;
                         }
 
-                        // Initialize with black (no color)
+                        /*---------------------------------------------------------*\
+                        | Initialize with black (no color)                         |
+                        \*---------------------------------------------------------*/
                         RGBColor final_color = ToRGBColor(0, 0, 0);
 
-                        // Iterate through effect stack and blend colors
-                        for(const auto& instance : effect_stack)
+                        /*---------------------------------------------------------*\
+                        | Iterate through effect stack and blend colors            |
+                        \*---------------------------------------------------------*/
+                        for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
                         {
-                            // Skip disabled effects or effects without an effect object
+                            EffectInstance3D* instance = effect_stack[effect_idx].get();
+
+                            /*---------------------------------------------------------*\
+                            | Skip disabled effects or effects without object          |
+                            \*---------------------------------------------------------*/
                             if(!instance->enabled || !instance->effect)
                             {
                                 continue;
                             }
 
-                            // Check if this effect targets this controller
+                            /*---------------------------------------------------------*\
+                            | Check if this effect targets this controller            |
+                            | -1 = All Controllers                                     |
+                            | 0-999 = Zone index                                       |
+                            | -1000 and below = Individual controller (-idx - 1000)   |
+                            \*---------------------------------------------------------*/
                             bool apply_to_this_controller = false;
 
                             if(instance->zone_index == -1)
                             {
-                                // All Controllers
+                                /*---------------------------------------------------------*\
+                                | Apply to all controllers                                 |
+                                \*---------------------------------------------------------*/
                                 apply_to_this_controller = true;
                             }
-                            else if(zone_manager)
+                            else if(instance->zone_index <= -1000)
                             {
-                                // Check if controller is in the effect's target zone
+                                /*---------------------------------------------------------*\
+                                | Individual controller targeting                          |
+                                \*---------------------------------------------------------*/
+                                int target_ctrl_idx = -(instance->zone_index + 1000);
+                                if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
+                                {
+                                    apply_to_this_controller = true;
+                                }
+                            }
+                            else if(zone_manager && instance->zone_index >= 0)
+                            {
+                                /*---------------------------------------------------------*\
+                                | Zone targeting                                           |
+                                \*---------------------------------------------------------*/
                                 Zone3D* zone = zone_manager->GetZone(instance->zone_index);
                                 if(zone)
                                 {
@@ -130,17 +158,23 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                             if(!apply_to_this_controller)
                             {
-                                continue; // This effect doesn't target this controller
+                                continue;
                             }
 
-                            // Calculate effect color
+                            /*---------------------------------------------------------*\
+                            | Calculate effect color                                   |
+                            \*---------------------------------------------------------*/
                             RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
-                            // Blend with accumulated color
+                            /*---------------------------------------------------------*\
+                            | Blend with accumulated color                             |
+                            \*---------------------------------------------------------*/
                             final_color = BlendColors(final_color, effect_color, instance->blend_mode);
                         }
 
-                        // Apply final blended color to LED
+                        /*---------------------------------------------------------*\
+                        | Apply final blended color to LED                        |
+                        \*---------------------------------------------------------*/
                         if(mapping.zone_idx < mapping.controller->zones.size())
                         {
                             unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
@@ -192,29 +226,57 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                    y >= grid_min_y && y <= grid_max_y &&
                    z >= grid_min_z && z <= grid_max_z)
                 {
-                    // Initialize with black (no color)
+                    /*---------------------------------------------------------*\
+                    | Initialize with black (no color)                         |
+                    \*---------------------------------------------------------*/
                     RGBColor final_color = ToRGBColor(0, 0, 0);
 
-                    // Iterate through effect stack and blend colors
-                    for(const auto& instance : effect_stack)
+                    /*---------------------------------------------------------*\
+                    | Iterate through effect stack and blend colors            |
+                    \*---------------------------------------------------------*/
+                    for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
                     {
-                        // Skip disabled effects or effects without an effect object
+                        EffectInstance3D* instance = effect_stack[effect_idx].get();
+
+                        /*---------------------------------------------------------*\
+                        | Skip disabled effects or effects without object          |
+                        \*---------------------------------------------------------*/
                         if(!instance->enabled || !instance->effect)
                         {
                             continue;
                         }
 
-                        // Check if this effect targets this controller
+                        /*---------------------------------------------------------*\
+                        | Check if this effect targets this controller            |
+                        | -1 = All Controllers                                     |
+                        | 0-999 = Zone index                                       |
+                        | -1000 and below = Individual controller (-idx - 1000)   |
+                        \*---------------------------------------------------------*/
                         bool apply_to_this_controller = false;
 
                         if(instance->zone_index == -1)
                         {
-                            // All Controllers
+                            /*---------------------------------------------------------*\
+                            | Apply to all controllers                                 |
+                            \*---------------------------------------------------------*/
                             apply_to_this_controller = true;
                         }
-                        else if(zone_manager)
+                        else if(instance->zone_index <= -1000)
                         {
-                            // Check if controller is in the effect's target zone
+                            /*---------------------------------------------------------*\
+                            | Individual controller targeting                          |
+                            \*---------------------------------------------------------*/
+                            int target_ctrl_idx = -(instance->zone_index + 1000);
+                            if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
+                            {
+                                apply_to_this_controller = true;
+                            }
+                        }
+                        else if(zone_manager && instance->zone_index >= 0)
+                        {
+                            /*---------------------------------------------------------*\
+                            | Zone targeting                                           |
+                            \*---------------------------------------------------------*/
                             Zone3D* zone = zone_manager->GetZone(instance->zone_index);
                             if(zone)
                             {
@@ -228,26 +290,33 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         if(!apply_to_this_controller)
                         {
-                            continue; // This effect doesn't target this controller
+                            continue;
                         }
 
-                        // Calculate effect color
+                        /*---------------------------------------------------------*\
+                        | Calculate effect color                                   |
+                        \*---------------------------------------------------------*/
                         RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
-                        // Blend with accumulated color
+                        /*---------------------------------------------------------*\
+                        | Blend with accumulated color                             |
+                        \*---------------------------------------------------------*/
                         final_color = BlendColors(final_color, effect_color, instance->blend_mode);
                     }
 
-                    // Apply final blended color to LED
+                    /*---------------------------------------------------------*\
+                    | Apply final blended color to LED                        |
+                    \*---------------------------------------------------------*/
                     if(led_global_idx < controller->colors.size())
                     {
                         controller->colors[led_global_idx] = final_color;
                     }
                 }
-                // LEDs outside the grid remain unlit (keep their current color)
             }
 
-            // Update the controller
+            /*---------------------------------------------------------*\
+            | Update the controller                                    |
+            \*---------------------------------------------------------*/
             controller->UpdateLEDs();
         }
     }

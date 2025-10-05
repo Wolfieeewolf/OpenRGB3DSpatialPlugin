@@ -14,12 +14,12 @@
 nlohmann::json StackPreset3D::ToJson() const
 {
     nlohmann::json j;
-    j["name"] = name;
+    j["name"]    = name;
     j["effects"] = nlohmann::json::array();
 
-    for(const auto& instance : effect_instances)
+    for(unsigned int i = 0; i < effect_instances.size(); i++)
     {
-        j["effects"].push_back(instance->ToJson());
+        j["effects"].push_back(effect_instances[i]->ToJson());
     }
 
     return j;
@@ -27,7 +27,7 @@ nlohmann::json StackPreset3D::ToJson() const
 
 std::unique_ptr<StackPreset3D> StackPreset3D::FromJson(const nlohmann::json& j)
 {
-    auto preset = std::make_unique<StackPreset3D>();
+    std::unique_ptr<StackPreset3D> preset = std::make_unique<StackPreset3D>();
 
     if(j.contains("name"))
     {
@@ -36,9 +36,10 @@ std::unique_ptr<StackPreset3D> StackPreset3D::FromJson(const nlohmann::json& j)
 
     if(j.contains("effects") && j["effects"].is_array())
     {
-        for(const auto& effect_json : j["effects"])
+        const nlohmann::json& effects_array = j["effects"];
+        for(unsigned int i = 0; i < effects_array.size(); i++)
         {
-            EffectInstance3D* instance = EffectInstance3D::FromJson(effect_json);
+            EffectInstance3D* instance = EffectInstance3D::FromJson(effects_array[i]);
             if(instance)
             {
                 preset->effect_instances.push_back(std::unique_ptr<EffectInstance3D>(instance));
@@ -53,14 +54,18 @@ std::unique_ptr<StackPreset3D> StackPreset3D::CreateFromStack(
     const std::string& preset_name,
     const std::vector<std::unique_ptr<EffectInstance3D>>& stack)
 {
-    auto preset = std::make_unique<StackPreset3D>();
+    std::unique_ptr<StackPreset3D> preset = std::make_unique<StackPreset3D>();
     preset->name = preset_name;
 
-    // Deep copy each effect instance
-    for(const auto& instance : stack)
+    /*---------------------------------------------------------*\
+    | Deep copy each effect instance                           |
+    \*---------------------------------------------------------*/
+    for(unsigned int i = 0; i < stack.size(); i++)
     {
-        // Convert to JSON and back to create a deep copy
-        nlohmann::json instance_json = instance->ToJson();
+        /*---------------------------------------------------------*\
+        | Convert to JSON and back to create a deep copy           |
+        \*---------------------------------------------------------*/
+        nlohmann::json instance_json      = stack[i]->ToJson();
         EffectInstance3D* copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)
         {

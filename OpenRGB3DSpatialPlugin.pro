@@ -161,10 +161,13 @@ SOURCES +=                                                                      
     Zone3D.cpp                                                                                  \
     ZoneManager3D.cpp                                                                           \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
+    ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \
     ui/OpenRGB3DSpatialTab_EffectStack.cpp                                                      \
     ui/OpenRGB3DSpatialTab_EffectStackRender.cpp                                                \
+    ui/OpenRGB3DSpatialTab_EffectStackPersist.cpp                                               \
+    ui/OpenRGB3DSpatialTab_EffectProfiles.cpp                                                   \
     ui/OpenRGB3DSpatialTab_StackPresets.cpp                                                     \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
