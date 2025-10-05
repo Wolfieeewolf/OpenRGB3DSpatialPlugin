@@ -163,13 +163,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         else
         {
             // Handle regular controllers
-            if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] Rendering regular controller %d", ctrl_idx);
-
             RGBController* controller = transform->controller;
             if(!controller || controller->zones.empty() || controller->colors.empty())
             {
                 continue;
             }
+
+            int leds_rendered = 0;
+            int leds_total = transform->led_positions.size();
 
             // Update cached world positions if dirty
             if(transform->world_positions_dirty)
@@ -251,10 +252,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     if(led_global_idx < controller->colors.size())
                     {
                         controller->colors[led_global_idx] = final_color;
+                        leds_rendered++;
                     }
                 }
                 // LEDs outside the grid remain unlit (keep their current color)
             }
+
+            if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] Controller %d: %d/%d LEDs rendered", ctrl_idx, leds_rendered, leds_total);
 
             // Update the controller
             controller->UpdateLEDs();

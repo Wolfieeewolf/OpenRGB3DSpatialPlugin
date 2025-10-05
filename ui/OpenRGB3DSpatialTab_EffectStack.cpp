@@ -30,11 +30,17 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     list_label->setStyleSheet("font-weight: bold;");
     stack_layout->addWidget(list_label);
 
+    QLabel* hint_label = new QLabel("☑ = enabled, ☐ = disabled. Double-click to toggle.");
+    hint_label->setStyleSheet("font-size: 9pt; color: gray;");
+    stack_layout->addWidget(hint_label);
+
     effect_stack_list = new QListWidget();
     effect_stack_list->setSelectionMode(QAbstractItemView::SingleSelection);
     effect_stack_list->setMinimumHeight(150);
     connect(effect_stack_list, &QListWidget::currentRowChanged,
             this, &OpenRGB3DSpatialTab::on_effect_stack_selection_changed);
+    connect(effect_stack_list, &QListWidget::itemDoubleClicked,
+            this, &OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked);
     stack_layout->addWidget(effect_stack_list);
 
     /*---------------------------------------------------------*\
@@ -227,6 +233,26 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
     }
+}
+
+void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
+{
+    int current_row = effect_stack_list->currentRow();
+
+    if(current_row < 0 || current_row >= (int)effect_stack.size())
+    {
+        return;
+    }
+
+    // Toggle enabled state
+    EffectInstance3D* instance = effect_stack[current_row].get();
+    instance->enabled = !instance->enabled;
+
+    // Update list display
+    UpdateEffectStackList();
+
+    // Restore selection
+    effect_stack_list->setCurrentRow(current_row);
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)

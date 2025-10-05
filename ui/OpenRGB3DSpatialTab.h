@@ -122,6 +122,7 @@ private slots:
     // Effect Stack slots
     void on_add_effect_to_stack_clicked();
     void on_remove_effect_from_stack_clicked();
+    void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
     void on_stack_effect_type_changed(int index);
     void on_stack_effect_zone_changed(int index);
