@@ -53,7 +53,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     resource_manager(rm),
     first_load(true)
 {
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== CONSTRUCTOR CALLED ==========");
 
     effect_controls_widget = nullptr;
     effect_controls_layout = nullptr;
@@ -186,7 +185,6 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 
 void OpenRGB3DSpatialTab::SetupUI()
 {
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== SETUP UI CALLED ==========");
 
     QHBoxLayout* main_layout = new QHBoxLayout(this);
     main_layout->setSpacing(8);
@@ -1085,9 +1083,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     /*---------------------------------------------------------*\
     | Effect Stack Tab (setup in separate function)            |
     \*---------------------------------------------------------*/
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] About to call SetupEffectStackTab");
     SetupEffectStackTab(right_tabs);
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] SetupEffectStackTab completed");
 
     /*---------------------------------------------------------*\
     | Zones Tab                                                |
@@ -1514,13 +1510,6 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
     }
 
-    // Log every 30 frames (~1 second) to avoid spam
-    static int frame_count = 0;
-    if(frame_count++ % 30 == 0)
-    {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Timer: stack_size=%d, enabled=%d, with_effect=%d, has_stack_effects=%d",
-                  (int)effect_stack.size(), enabled_count, with_effect_count, has_stack_effects);
-    }
 
     if(has_stack_effects)
     {

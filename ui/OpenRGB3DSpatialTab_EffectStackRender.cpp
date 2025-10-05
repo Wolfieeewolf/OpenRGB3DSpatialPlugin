@@ -14,19 +14,13 @@
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
-    static int log_counter = 0;
-    bool should_log = (log_counter++ % 30 == 0);
-
     /*---------------------------------------------------------*\
     | Safety: Check if we have any controllers                |
     \*---------------------------------------------------------*/
     if(controller_transforms.empty())
     {
-        if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] RenderEffectStack: No controllers");
         return; // No controllers to update
     }
-
-    if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] RenderEffectStack: %d controllers", (int)controller_transforms.size());
 
     /*---------------------------------------------------------*\
     | Update effect time                                       |
@@ -67,7 +61,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         // Handle virtual controllers
         if(transform->virtual_controller && !transform->controller)
         {
-            if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] Rendering virtual controller %d", ctrl_idx);
             VirtualController3D* virtual_ctrl = transform->virtual_controller;
             const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
 
@@ -169,9 +162,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 continue;
             }
 
-            int leds_rendered = 0;
-            int leds_total = transform->led_positions.size();
-
             // Update cached world positions if dirty
             if(transform->world_positions_dirty)
             {
@@ -252,13 +242,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     if(led_global_idx < controller->colors.size())
                     {
                         controller->colors[led_global_idx] = final_color;
-                        leds_rendered++;
                     }
                 }
                 // LEDs outside the grid remain unlit (keep their current color)
             }
-
-            if(should_log) LOG_WARNING("[OpenRGB3DSpatialPlugin] Controller %d: %d/%d LEDs rendered", ctrl_idx, leds_rendered, leds_total);
 
             // Update the controller
             controller->UpdateLEDs();
