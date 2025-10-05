@@ -53,6 +53,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     resource_manager(rm),
     first_load(true)
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] ========== CONSTRUCTOR CALLED ==========");
 
     effect_controls_widget = nullptr;
     effect_controls_layout = nullptr;
@@ -185,6 +186,8 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 
 void OpenRGB3DSpatialTab::SetupUI()
 {
+    LOG_INFO("[OpenRGB3DSpatialPlugin] ========== SETUP UI CALLED ==========");
+
     QHBoxLayout* main_layout = new QHBoxLayout(this);
     main_layout->setSpacing(8);
     main_layout->setContentsMargins(8, 8, 8, 8);
