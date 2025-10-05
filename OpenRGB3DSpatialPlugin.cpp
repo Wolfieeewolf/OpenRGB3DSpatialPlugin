@@ -47,19 +47,19 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] ========== GET WIDGET CALLED ==========");
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== GET WIDGET CALLED ==========");
 
     RMPointer->WaitForDeviceDetection();
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Creating OpenRGB3DSpatialTab...");
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Creating OpenRGB3DSpatialTab...");
     ui = new OpenRGB3DSpatialTab(RMPointer);
-    LOG_INFO("[OpenRGB3DSpatialPlugin] OpenRGB3DSpatialTab created");
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] OpenRGB3DSpatialTab created");
 
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     RMPointer->RegisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Returning UI widget");
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Returning UI widget");
     return ui;
 }
 
