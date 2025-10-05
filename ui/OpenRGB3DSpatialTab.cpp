@@ -1082,7 +1082,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     /*---------------------------------------------------------*\
     | Effect Stack Tab (setup in separate function)            |
     \*---------------------------------------------------------*/
+    LOG_INFO("[OpenRGB3DSpatialPlugin] About to call SetupEffectStackTab");
     SetupEffectStackTab(right_tabs);
+    LOG_INFO("[OpenRGB3DSpatialPlugin] SetupEffectStackTab completed");
 
     /*---------------------------------------------------------*\
     | Zones Tab                                                |
@@ -1509,8 +1511,13 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
     }
 
-    LOG_TRACE("[OpenRGB3DSpatialPlugin] Timer: stack_size=%d, enabled=%d, with_effect=%d, has_stack_effects=%d",
-              (int)effect_stack.size(), enabled_count, with_effect_count, has_stack_effects);
+    // Log every 30 frames (~1 second) to avoid spam
+    static int frame_count = 0;
+    if(frame_count++ % 30 == 0)
+    {
+        LOG_INFO("[OpenRGB3DSpatialPlugin] Timer: stack_size=%d, enabled=%d, with_effect=%d, has_stack_effects=%d",
+                  (int)effect_stack.size(), enabled_count, with_effect_count, has_stack_effects);
+    }
 
     if(has_stack_effects)
     {
