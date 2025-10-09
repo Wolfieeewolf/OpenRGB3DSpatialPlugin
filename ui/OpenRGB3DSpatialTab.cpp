@@ -998,6 +998,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_changed);
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Connected effect_combo signal to on_effect_changed slot");
 
     effects_layout->addWidget(new QLabel("Effect:"));
     effects_layout->addWidget(effect_combo);
@@ -1364,13 +1365,22 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 /*---------------------------------------------------------*\
                 | Load preset effects (deep copy)                          |
                 \*---------------------------------------------------------*/
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Loading %u effects from preset '%s'",
+                         (unsigned int)preset->effect_instances.size(), preset->name.c_str());
+
                 for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
                 {
-                    nlohmann::json instance_json      = preset->effect_instances[i]->ToJson();
-                    EffectInstance3D* copied_instance = EffectInstance3D::FromJson(instance_json);
+                    nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
+                    auto copied_instance = EffectInstance3D::FromJson(instance_json);
                     if(copied_instance)
                     {
-                        effect_stack.push_back(std::unique_ptr<EffectInstance3D>(copied_instance));
+                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Added effect to stack: enabled=%d, has_effect=%d, zone_index=%d",
+                                 copied_instance->enabled, copied_instance->effect.get() != nullptr, copied_instance->zone_index);
+                        effect_stack.push_back(std::move(copied_instance));
+                    }
+                    else
+                    {
+                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create effect instance from JSON");
                     }
                 }
 
@@ -1384,11 +1394,72 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 }
 
                 /*---------------------------------------------------------*\
+                | Put all controllers in direct control mode               |
+                \*---------------------------------------------------------*/
+                bool has_valid_controller = false;
+                for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+                {
+                    ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+                    if(!transform)
+                    {
+                        continue;
+                    }
+
+                    // Handle virtual controllers - they map to physical controllers
+                    if(transform->virtual_controller)
+                    {
+                        VirtualController3D* virtual_ctrl = transform->virtual_controller;
+                        const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+
+                        // Set all physical controllers mapped to this virtual controller to direct mode
+                        std::set<RGBController*> controllers_to_set;
+                        for(unsigned int i = 0; i < mappings.size(); i++)
+                        {
+                            if(mappings[i].controller)
+                            {
+                                controllers_to_set.insert(mappings[i].controller);
+                            }
+                        }
+
+                        for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
+                        {
+                            (*it)->SetCustomMode();
+                            has_valid_controller = true;
+                        }
+                        continue;
+                    }
+
+                    // Handle regular controllers
+                    RGBController* controller = transform->controller;
+                    if(!controller)
+                    {
+                        continue;
+                    }
+
+                    controller->SetCustomMode();
+                    has_valid_controller = true;
+                }
+
+                if(!has_valid_controller)
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] No valid controllers found for stack preset");
+                }
+                else
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Set controllers to Direct mode for stack preset");
+                }
+
+                /*---------------------------------------------------------*\
                 | Start effect timer                                       |
                 \*---------------------------------------------------------*/
                 if(effect_timer && !effect_timer->isActive())
                 {
                     effect_timer->start(33);
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Started effect timer for stack preset");
+                }
+                else
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect timer already running or null");
                 }
 
                 /*---------------------------------------------------------*\
@@ -1397,7 +1468,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 start_effect_button->setEnabled(false);
                 stop_effect_button->setEnabled(true);
 
-                LOG_INFO("[OpenRGB3DSpatialPlugin] Started stack preset: %s", preset->name.c_str());
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Started stack preset: %s", preset->name.c_str());
                 return;
             }
         }
@@ -1561,8 +1632,13 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         /*---------------------------------------------------------*\
         | Render effect stack (multi-effect mode)                 |
         \*---------------------------------------------------------*/
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Rendering effect stack (%u effects)", (unsigned int)effect_stack.size());
         RenderEffectStack();
         return;
+    }
+    else
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Not rendering stack - has_stack_effects=false, stack size=%u", (unsigned int)effect_stack.size());
     }
 
     /*---------------------------------------------------------*\
@@ -2470,7 +2546,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
         file.close();
 
         std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-        VirtualController3D* virtual_ctrl = VirtualController3D::FromJson(import_data, controllers);
+        auto virtual_ctrl = VirtualController3D::FromJson(import_data, controllers);
 
         if(virtual_ctrl)
         {
@@ -2487,8 +2563,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
 
                     if(reply == QMessageBox::No)
                     {
-                        delete virtual_ctrl;
-                        return;
+                        return;  // unique_ptr automatically cleans up
                     }
                     else
                     {
@@ -2505,7 +2580,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                 }
             }
 
-            virtual_controllers.push_back(std::unique_ptr<VirtualController3D>(virtual_ctrl));
+            virtual_controllers.push_back(std::move(virtual_ctrl));
             SaveCustomControllers();
             UpdateAvailableControllersList();
 
@@ -3142,10 +3217,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     {
         for(const auto& ref_point_json : layout_json["reference_points"])
         {
-            VirtualReferencePoint3D* raw_ptr = VirtualReferencePoint3D::FromJson(ref_point_json);
-            if(raw_ptr)
+            auto ref_point = VirtualReferencePoint3D::FromJson(ref_point_json);
+            if(ref_point)
             {
-                reference_points.push_back(std::unique_ptr<VirtualReferencePoint3D>(raw_ptr));
+                reference_points.push_back(std::move(ref_point));
             }
         }
     }
@@ -3482,14 +3557,15 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                         file >> ctrl_json;
                         file.close();
 
-                        VirtualController3D* virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
+                        auto virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
                         if(virtual_ctrl)
                         {
-                            available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
-                            virtual_controllers.push_back(std::unique_ptr<VirtualController3D>(virtual_ctrl));
+                            std::string ctrl_name = virtual_ctrl->GetName();
+                            available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(ctrl_name));
+                            virtual_controllers.push_back(std::move(virtual_ctrl));
                             loaded_count++;
                             LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Loaded custom controller: %s",
-                                      virtual_ctrl->GetName().c_str());
+                                      ctrl_name.c_str());
                         }
                         else
                         {
@@ -3731,12 +3807,14 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     /*---------------------------------------------------------*\
     | Create effect using the registration system             |
     \*---------------------------------------------------------*/
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Creating effect: %s (type %d)", effect_names[effect_type], effect_type);
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_names[effect_type]);
     if(!effect)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", effect_names[effect_type]);
         return;
     }
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect created successfully: %p", effect);
 
     /*---------------------------------------------------------*\
     | Setup effect UI (same for ALL effects)                  |
@@ -3957,13 +4035,22 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed called with index: %d", index);
+
     /*---------------------------------------------------------*\
     | Validate index range                                     |
     \*---------------------------------------------------------*/
     if(index < 0)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed: invalid index %d", index);
         return;
     }
+
+    /*---------------------------------------------------------*\
+    | Remember if effect was running so we can restart it      |
+    \*---------------------------------------------------------*/
+    bool was_running = effect_running;
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect was running: %d", was_running);
 
     /*---------------------------------------------------------*\
     | Stop effect timer and set flag BEFORE clearing UI        |
@@ -3998,15 +4085,69 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     {
         // Check if this is a stack preset (has user data)
         QVariant data = effect_combo->itemData(index);
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Item data valid: %d, value: %d",
+                 data.isValid(), data.isValid() ? data.toInt() : 0);
+
         if(data.isValid() && data.toInt() < 0)
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up stack preset UI");
             // This is a stack preset - show simplified UI
             SetupStackPresetUI();
+
+            /*---------------------------------------------------------*\
+            | Disable zone and origin combos - stack has own settings |
+            \*---------------------------------------------------------*/
+            if(effect_zone_combo)
+            {
+                effect_zone_combo->setEnabled(false);
+            }
+            if(effect_origin_combo)
+            {
+                effect_origin_combo->setEnabled(false);
+            }
         }
         else
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up regular effect UI for effect_type: %d", index - 1);
             // This is a regular effect
             SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
+
+            /*---------------------------------------------------------*\
+            | Enable zone and origin combos for regular effects       |
+            \*---------------------------------------------------------*/
+            if(effect_zone_combo)
+            {
+                effect_zone_combo->setEnabled(true);
+            }
+            if(effect_origin_combo)
+            {
+                effect_origin_combo->setEnabled(true);
+            }
+        }
+
+        /*---------------------------------------------------------*\
+        | If effect was running, automatically start the new one   |
+        \*---------------------------------------------------------*/
+        if(was_running)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Auto-starting new effect since previous was running");
+            on_start_effect_clicked();
+        }
+    }
+    else
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Index is 0 (None), clearing effect UI");
+
+        /*---------------------------------------------------------*\
+        | Enable zone and origin combos when no effect selected   |
+        \*---------------------------------------------------------*/
+        if(effect_zone_combo)
+        {
+            effect_zone_combo->setEnabled(true);
+        }
+        if(effect_origin_combo)
+        {
+            effect_origin_combo->setEnabled(true);
         }
     }
 }

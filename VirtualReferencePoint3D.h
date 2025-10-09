@@ -66,7 +66,7 @@ public:
     | Serialization (same pattern as VirtualController3D)     |
     \*---------------------------------------------------------*/
     json ToJson() const;
-    static VirtualReferencePoint3D* FromJson(const json& j);
+    static std::unique_ptr<VirtualReferencePoint3D> FromJson(const json& j);
 
     /*---------------------------------------------------------*\
     | Static Helper for UI                                     |

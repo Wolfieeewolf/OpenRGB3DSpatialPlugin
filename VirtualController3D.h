@@ -43,7 +43,7 @@ public:
     std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f);
 
     json ToJson() const;
-    static VirtualController3D* FromJson(const json& j, std::vector<RGBController*>& controllers);
+    static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
 
 private:
     std::string name;

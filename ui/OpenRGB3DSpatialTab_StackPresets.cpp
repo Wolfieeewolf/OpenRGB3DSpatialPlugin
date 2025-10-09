@@ -213,11 +213,11 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
     \*---------------------------------------------------------*/
     for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
     {
-        nlohmann::json instance_json      = preset->effect_instances[i]->ToJson();
-        EffectInstance3D* copied_instance = EffectInstance3D::FromJson(instance_json);
+        nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
+        auto copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)
         {
-            effect_stack.push_back(std::unique_ptr<EffectInstance3D>(copied_instance));
+            effect_stack.push_back(std::move(copied_instance));
         }
     }
 

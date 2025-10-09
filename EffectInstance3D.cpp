@@ -11,6 +11,7 @@
 
 #include "EffectInstance3D.h"
 #include "EffectListManager3D.h"
+#include "LogManager.h"
 
 nlohmann::json EffectInstance3D::ToJson() const
 {
@@ -38,9 +39,9 @@ nlohmann::json EffectInstance3D::ToJson() const
     return j;
 }
 
-EffectInstance3D* EffectInstance3D::FromJson(const nlohmann::json& j)
+std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::json& j)
 {
-    EffectInstance3D* instance = new EffectInstance3D();
+    auto instance = std::make_unique<EffectInstance3D>();
 
     if(j.contains("name"))
     {
@@ -75,18 +76,35 @@ EffectInstance3D* EffectInstance3D::FromJson(const nlohmann::json& j)
         std::string effect_type = j["effect_type"].get<std::string>();
         instance->effect_class_name = effect_type;
 
+        /*---------------------------------------------------------*\
+        | Store settings for lazy loading                         |
+        \*---------------------------------------------------------*/
+        if(j.contains("effect_settings"))
+        {
+            instance->saved_settings = std::make_unique<nlohmann::json>(j["effect_settings"]);
+        }
+
+        /*---------------------------------------------------------*\
+        | Create effect immediately and load settings              |
+        \*---------------------------------------------------------*/
         SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_type);
         if(effect)
         {
             instance->effect.reset(effect);
+            LOG_WARNING("[EffectInstance3D] Created effect '%s' successfully", effect_type.c_str());
 
             /*---------------------------------------------------------*\
             | Load effect parameters if they exist                     |
             \*---------------------------------------------------------*/
-            if(j.contains("effect_settings"))
+            if(instance->saved_settings)
             {
-                effect->LoadSettings(j["effect_settings"]);
+                effect->LoadSettings(*instance->saved_settings);
+                LOG_WARNING("[EffectInstance3D] Loaded saved settings for effect '%s'", effect_type.c_str());
             }
+        }
+        else
+        {
+            LOG_WARNING("[EffectInstance3D] Failed to create effect '%s'", effect_type.c_str());
         }
     }
 

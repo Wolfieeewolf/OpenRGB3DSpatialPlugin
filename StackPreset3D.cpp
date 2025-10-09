@@ -39,10 +39,10 @@ std::unique_ptr<StackPreset3D> StackPreset3D::FromJson(const nlohmann::json& j)
         const nlohmann::json& effects_array = j["effects"];
         for(unsigned int i = 0; i < effects_array.size(); i++)
         {
-            EffectInstance3D* instance = EffectInstance3D::FromJson(effects_array[i]);
+            auto instance = EffectInstance3D::FromJson(effects_array[i]);
             if(instance)
             {
-                preset->effect_instances.push_back(std::unique_ptr<EffectInstance3D>(instance));
+                preset->effect_instances.push_back(std::move(instance));
             }
         }
     }
@@ -65,11 +65,11 @@ std::unique_ptr<StackPreset3D> StackPreset3D::CreateFromStack(
         /*---------------------------------------------------------*\
         | Convert to JSON and back to create a deep copy           |
         \*---------------------------------------------------------*/
-        nlohmann::json instance_json      = stack[i]->ToJson();
-        EffectInstance3D* copied_instance = EffectInstance3D::FromJson(instance_json);
+        nlohmann::json instance_json = stack[i]->ToJson();
+        auto copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)
         {
-            preset->effect_instances.push_back(std::unique_ptr<EffectInstance3D>(copied_instance));
+            preset->effect_instances.push_back(std::move(copied_instance));
         }
     }
 

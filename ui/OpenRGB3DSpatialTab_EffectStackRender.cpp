@@ -11,6 +11,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "LogManager.h"
+#include <set>
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
@@ -19,8 +20,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     \*---------------------------------------------------------*/
     if(controller_transforms.empty())
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] RenderEffectStack: No controllers!");
         return; // No controllers to update
     }
+
+    static int log_counter = 0;
+    if(log_counter == 0)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] RenderEffectStack: %u controllers, %u effects",
+                    (unsigned int)controller_transforms.size(), (unsigned int)effect_stack.size());
+    }
+    log_counter = (log_counter + 1) % 30; // Log every 30 frames (once per second)
 
     /*---------------------------------------------------------*\
     | Update effect time                                       |
@@ -55,7 +65,21 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
         if(!transform)
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Controller %u is NULL!", ctrl_idx);
             continue;
+        }
+
+        /*---------------------------------------------------------*\
+        | Log Controller 0 details for diagnosis                   |
+        \*---------------------------------------------------------*/
+        static bool logged_ctrl_0 = false;
+        if(ctrl_idx == 0 && !logged_ctrl_0)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Controller 0 details: virtual=%d, regular=%d, name=%s",
+                       transform->virtual_controller != nullptr,
+                       transform->controller != nullptr,
+                       transform->controller ? transform->controller->name.c_str() : "(no controller)");
+            logged_ctrl_0 = true;
         }
 
         // Handle virtual controllers
@@ -102,6 +126,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         /*---------------------------------------------------------*\
                         | Iterate through effect stack and blend colors            |
                         \*---------------------------------------------------------*/
+                        static int effect_log_counter = 0;
                         for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
                         {
                             EffectInstance3D* instance = effect_stack[effect_idx].get();
@@ -112,6 +137,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             if(!instance->enabled || !instance->effect)
                             {
                                 continue;
+                            }
+
+                            if(effect_log_counter == 0 && effect_idx == 0)
+                            {
+                                LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect %u: zone_index=%d, enabled=%d, has_effect=%d",
+                                           effect_idx, instance->zone_index, instance->enabled, instance->effect.get() != nullptr);
                             }
 
                             /*---------------------------------------------------------*\
@@ -158,7 +189,16 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                             if(!apply_to_this_controller)
                             {
+                                if(effect_log_counter == 0 && effect_idx == 0)
+                                {
+                                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect %u not applied to controller %u", effect_idx, ctrl_idx);
+                                }
                                 continue;
+                            }
+
+                            if(effect_log_counter == 0 && effect_idx == 0)
+                            {
+                                LOG_WARNING("[OpenRGB3DSpatialPlugin] Applying effect %u to controller %u", effect_idx, ctrl_idx);
                             }
 
                             /*---------------------------------------------------------*\
@@ -171,6 +211,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             \*---------------------------------------------------------*/
                             final_color = BlendColors(final_color, effect_color, instance->blend_mode);
                         }
+                        effect_log_counter = (effect_log_counter + 1) % 30;
 
                         /*---------------------------------------------------------*\
                         | Apply final blended color to LED                        |
@@ -184,6 +225,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             }
                         }
                     }
+                }
+            }
+
+            /*---------------------------------------------------------*\
+            | Update the virtual controller's physical controllers     |
+            \*---------------------------------------------------------*/
+            std::set<RGBController*> updated_controllers;
+
+            for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
+            {
+                if(mappings[mapping_idx].controller && updated_controllers.find(mappings[mapping_idx].controller) == updated_controllers.end())
+                {
+                    mappings[mapping_idx].controller->UpdateLEDs();
+                    updated_controllers.insert(mappings[mapping_idx].controller);
                 }
             }
         }

@@ -129,7 +129,7 @@ json VirtualReferencePoint3D::ToJson() const
 /*---------------------------------------------------------*\
 | Deserialize from JSON                                    |
 \*---------------------------------------------------------*/
-VirtualReferencePoint3D* VirtualReferencePoint3D::FromJson(const json& j)
+std::unique_ptr<VirtualReferencePoint3D> VirtualReferencePoint3D::FromJson(const json& j)
 {
     if(!j.contains("name") || !j.contains("type") || !j.contains("transform"))
     {
@@ -140,7 +140,7 @@ VirtualReferencePoint3D* VirtualReferencePoint3D::FromJson(const json& j)
     ReferencePointType type = (ReferencePointType)j["type"];
 
     nlohmann::json pos = j["transform"]["position"];
-    VirtualReferencePoint3D* ref_point = new VirtualReferencePoint3D(name, type, pos["x"], pos["y"], pos["z"]);
+    auto ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, pos["x"], pos["y"], pos["z"]);
 
     // Restore other properties
     if(j.contains("id")) ref_point->id = j["id"];

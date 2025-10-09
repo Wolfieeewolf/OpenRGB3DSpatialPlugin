@@ -98,7 +98,7 @@ json VirtualController3D::ToJson() const
     return j;
 }
 
-VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RGBController*>& controllers)
+std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j, std::vector<RGBController*>& controllers)
 {
     std::string name = j["name"];
     int width = j["width"];
@@ -145,7 +145,7 @@ VirtualController3D* VirtualController3D::FromJson(const json& j, std::vector<RG
 
     if(!mappings.empty())
     {
-        return new VirtualController3D(name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
+        return std::make_unique<VirtualController3D>(name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
     }
 
     return nullptr;

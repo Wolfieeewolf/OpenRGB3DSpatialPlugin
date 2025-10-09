@@ -63,6 +63,7 @@ struct EffectInstance3D
     BlendMode blend_mode;                       // How to combine with other effects
     bool enabled;                               // Is this effect active?
     int id;                                     // Unique ID for this instance
+    std::unique_ptr<nlohmann::json> saved_settings; // Saved effect settings for lazy loading
 
     EffectInstance3D()
         : name("New Effect")
@@ -72,6 +73,7 @@ struct EffectInstance3D
         , blend_mode(BlendMode::NO_BLEND)
         , enabled(true)
         , id(0)
+        , saved_settings(nullptr)
     {
     }
 
@@ -110,7 +112,7 @@ struct EffectInstance3D
     | Serialization                                            |
     \*---------------------------------------------------------*/
     nlohmann::json ToJson() const;
-    static EffectInstance3D* FromJson(const nlohmann::json& j);
+    static std::unique_ptr<EffectInstance3D> FromJson(const nlohmann::json& j);
 };
 
 /*---------------------------------------------------------*\
