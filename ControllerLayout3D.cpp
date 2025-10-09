@@ -327,7 +327,7 @@ std::vector<LEDPosition3D*> ControllerLayout3D::SpatialHash::QueryRadius(float x
             for(int cz = min_cz; cz <= max_cz; cz++)
             {
                 int64_t hash = HashCell(cx, cy, cz);
-                auto it = grid.find(hash);
+                std::unordered_map<int64_t, SpatialCell>::iterator it = grid.find(hash);
                 if(it == grid.end()) continue;
 
                 // Check each LED in cell
@@ -380,7 +380,7 @@ LEDPosition3D* ControllerLayout3D::SpatialHash::FindNearest(float x, float y, fl
                     }
 
                     int64_t hash = HashCell(cx + dx, cy + dy, cz + dz);
-                    auto it = grid.find(hash);
+                    std::unordered_map<int64_t, SpatialCell>::iterator it = grid.find(hash);
                     if(it == grid.end()) continue;
 
                     // Check each LED in cell

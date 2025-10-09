@@ -140,7 +140,7 @@ std::unique_ptr<VirtualReferencePoint3D> VirtualReferencePoint3D::FromJson(const
     ReferencePointType type = (ReferencePointType)j["type"];
 
     nlohmann::json pos = j["transform"]["position"];
-    auto ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, pos["x"], pos["y"], pos["z"]);
+    std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, pos["x"], pos["y"], pos["z"]);
 
     // Restore other properties
     if(j.contains("id")) ref_point->id = j["id"];

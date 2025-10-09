@@ -68,9 +68,9 @@ public:
     std::vector<EffectRegistration3D> GetAllEffects() const
     {
         std::vector<EffectRegistration3D> result;
-        for(const auto& name : effect_order)
+        for(size_t i = 0; i < effect_order.size(); i++)
         {
-            result.push_back(effects.at(name));
+            result.push_back(effects.at(effect_order[i]));
         }
         return result;
     }

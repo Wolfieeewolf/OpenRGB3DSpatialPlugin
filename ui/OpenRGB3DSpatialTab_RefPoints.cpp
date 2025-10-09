@@ -26,7 +26,7 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
     ReferencePointType type = (ReferencePointType)ref_point_type_combo->currentIndex();
 
-    auto ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, 0.0f, 0.0f, 0.0f);
+    std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, 0.0f, 0.0f, 0.0f);
     ref_point->SetDisplayColor(selected_ref_point_color);
     ref_point->SetVisible(true);
 
@@ -190,8 +190,9 @@ void OpenRGB3DSpatialTab::on_ref_point_color_clicked()
 void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 {
     reference_points_list->clear();
-    for(const auto& ref_point : reference_points)
+    for(size_t i = 0; i < reference_points.size(); i++)
     {
+        const std::unique_ptr<VirtualReferencePoint3D>& ref_point = reference_points[i];
         if(!ref_point) continue; // Skip null pointers
 
         QString item_text = QString::fromStdString(ref_point->GetName());

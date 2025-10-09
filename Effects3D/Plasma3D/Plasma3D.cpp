@@ -136,23 +136,19 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 
     /*---------------------------------------------------------*\
     | Check if LED is within scaled effect radius             |
+    | Uses standardized boundary helper                        |
     \*---------------------------------------------------------*/
-    float scale_radius = GetNormalizedScale() * 10.0f;
-    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    if(distance_from_origin > scale_radius)
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
     {
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve;
-    float actual_speed = speed_curve * 4.0f;
+    /*---------------------------------------------------------*\
+    | Use standardized parameter helpers                       |
+    \*---------------------------------------------------------*/
+    float actual_frequency = GetScaledFrequency();
 
-    float freq_curve = (GetFrequency() / 100.0f);
-    freq_curve = freq_curve * freq_curve;
-    float actual_frequency = freq_curve * 20.0f;
-
-    progress = time * actual_speed;
+    progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
     | Calculate primary and secondary coordinates based on axis|

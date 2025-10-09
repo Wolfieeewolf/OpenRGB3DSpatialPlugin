@@ -375,9 +375,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     type_layout->addWidget(new QLabel("Type:"));
     ref_point_type_combo = new QComboBox();
     std::vector<std::string> type_names = VirtualReferencePoint3D::GetTypeNames();
-    for(const auto& name : type_names)
+    for(size_t i = 0; i < type_names.size(); i++)
     {
-        ref_point_type_combo->addItem(QString::fromStdString(name));
+        ref_point_type_combo->addItem(QString::fromStdString(type_names[i]));
     }
     type_layout->addWidget(ref_point_type_combo);
     ref_points_layout->addLayout(type_layout);
@@ -1371,7 +1371,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
                 {
                     nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
-                    auto copied_instance = EffectInstance3D::FromJson(instance_json);
+                    std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
                     if(copied_instance)
                     {
                         LOG_WARNING("[OpenRGB3DSpatialPlugin] Added effect to stack: enabled=%d, has_effect=%d, zone_index=%d",
@@ -1618,9 +1618,9 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     | single effect                                            |
     \*---------------------------------------------------------*/
     bool has_stack_effects = false;
-    for(const auto& instance : effect_stack)
+    for(size_t i = 0; i < effect_stack.size(); i++)
     {
-        if(instance->enabled && instance->effect)
+        if(effect_stack[i]->enabled && effect_stack[i]->effect)
         {
             has_stack_effects = true;
             break;
@@ -2120,7 +2120,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         VirtualController3D* virtual_ctrl = virtual_controllers[item_row].get();
 
-        auto ctrl_transform = std::make_unique<ControllerTransform>();
+        std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
         ctrl_transform->controller = nullptr;
         ctrl_transform->virtual_controller = virtual_ctrl;
         ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
@@ -2166,7 +2166,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     RGBController* controller = controllers[ctrl_idx];
 
-    auto ctrl_transform = std::make_unique<ControllerTransform>();
+    std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
     ctrl_transform->controller = controller;
     ctrl_transform->virtual_controller = nullptr;
     ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
@@ -2449,7 +2449,7 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        auto virtual_ctrl = std::make_unique<VirtualController3D>(
+        std::unique_ptr<VirtualController3D> virtual_ctrl = std::make_unique<VirtualController3D>(
             dialog.GetControllerName().toStdString(),
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
@@ -2546,7 +2546,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
         file.close();
 
         std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-        auto virtual_ctrl = VirtualController3D::FromJson(import_data, controllers);
+        std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJson(import_data, controllers);
 
         if(virtual_ctrl)
         {
@@ -2784,11 +2784,11 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     | Reference Points                                         |
     \*---------------------------------------------------------*/
     layout_json["reference_points"] = nlohmann::json::array();
-    for(const auto& ref_point : reference_points)
+    for(size_t i = 0; i < reference_points.size(); i++)
     {
-        if(!ref_point) continue; // Skip null pointers
+        if(!reference_points[i]) continue; // Skip null pointers
 
-        layout_json["reference_points"].push_back(ref_point->ToJson());
+        layout_json["reference_points"].push_back(reference_points[i]->ToJson());
     }
 
     /*---------------------------------------------------------*\
@@ -2911,8 +2911,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     \*---------------------------------------------------------*/
     if(layout_json.contains("controllers"))
     {
-        for(const auto& controller_json : layout_json["controllers"])
+        const nlohmann::json& controllers_array = layout_json["controllers"];
+        for(size_t i = 0; i < controllers_array.size(); i++)
         {
+            const nlohmann::json& controller_json = controllers_array[i];
             std::string ctrl_name = controller_json["name"].get<std::string>();
             std::string ctrl_location = controller_json["location"].get<std::string>();
             std::string ctrl_type = controller_json["type"].get<std::string>();
@@ -2937,7 +2939,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
             }
 
-            auto ctrl_transform = std::make_unique<ControllerTransform>();
+            std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
             ctrl_transform->controller = controller;
             ctrl_transform->virtual_controller = nullptr;
 
@@ -3000,8 +3002,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             else
             {
                 // Load LED mappings for physical controllers
-                for(const auto& led_mapping : controller_json["led_mappings"])
+                const nlohmann::json& led_mappings_array = controller_json["led_mappings"];
+                for(size_t j = 0; j < led_mappings_array.size(); j++)
                 {
+                    const nlohmann::json& led_mapping = led_mappings_array[j];
                     unsigned int zone_idx = led_mapping["zone_index"].get<unsigned int>();
                     unsigned int led_idx = led_mapping["led_index"].get<unsigned int>();
 
@@ -3215,9 +3219,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     if(layout_json.contains("reference_points"))
     {
-        for(const auto& ref_point_json : layout_json["reference_points"])
+        const nlohmann::json& ref_points_array = layout_json["reference_points"];
+        for(size_t i = 0; i < ref_points_array.size(); i++)
         {
-            auto ref_point = VirtualReferencePoint3D::FromJson(ref_point_json);
+            std::unique_ptr<VirtualReferencePoint3D> ref_point = VirtualReferencePoint3D::FromJson(ref_points_array[i]);
             if(ref_point)
             {
                 reference_points.push_back(std::move(ref_point));
@@ -3557,7 +3562,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                         file >> ctrl_json;
                         file.close();
 
-                        auto virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
+                        std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJson(ctrl_json, controllers);
                         if(virtual_ctrl)
                         {
                             std::string ctrl_name = virtual_ctrl->GetName();
@@ -4267,22 +4272,23 @@ void EffectWorkerThread3D::StartEffect(
 
     // Create snapshots of transforms
     transform_snapshots.clear();
-    for(const auto& transform : transforms)
+    for(size_t i = 0; i < transforms.size(); i++)
     {
-        auto snapshot = std::make_unique<ControllerTransform>();
-        snapshot->controller = transform->controller;
-        snapshot->virtual_controller = transform->virtual_controller;
-        snapshot->transform = transform->transform;
-        snapshot->led_positions = transform->led_positions;
+        std::unique_ptr<ControllerTransform> snapshot = std::make_unique<ControllerTransform>();
+        snapshot->controller = transforms[i]->controller;
+        snapshot->virtual_controller = transforms[i]->virtual_controller;
+        snapshot->transform = transforms[i]->transform;
+        snapshot->led_positions = transforms[i]->led_positions;
         snapshot->world_positions_dirty = false;
         transform_snapshots.push_back(std::move(snapshot));
     }
 
     // Create snapshots of reference points
     ref_point_snapshots.clear();
-    for(const auto& ref_point : ref_points)
+    for(size_t i = 0; i < ref_points.size(); i++)
     {
-        auto snapshot = std::make_unique<VirtualReferencePoint3D>(
+        const std::unique_ptr<VirtualReferencePoint3D>& ref_point = ref_points[i];
+        std::unique_ptr<VirtualReferencePoint3D> snapshot = std::make_unique<VirtualReferencePoint3D>(
             ref_point->GetName(),
             ref_point->GetType(),
             ref_point->GetPosition().x,
@@ -4308,9 +4314,9 @@ void EffectWorkerThread3D::StartEffect(
                 {
                     // Copy all controllers from the original zone
                     const std::vector<int>& controllers = zone->GetControllers();
-                    for(int ctrl_idx : controllers)
+                    for(size_t j = 0; j < controllers.size(); j++)
                     {
-                        new_zone->AddController(ctrl_idx);
+                        new_zone->AddController(controllers[j]);
                     }
                 }
             }
@@ -4384,19 +4390,21 @@ void EffectWorkerThread3D::run()
         float time = current_time.load();
 
         // Calculate colors for all LEDs
-        for(auto& transform : transform_snapshots)
+        for(size_t i = 0; i < transform_snapshots.size(); i++)
         {
-            for(auto& led_pos : transform->led_positions)
+            ControllerTransform* transform = transform_snapshots[i].get();
+            for(size_t j = 0; j < transform->led_positions.size(); j++)
             {
+                LEDPosition3D* led_pos = &transform->led_positions[j];
                 RGBColor color = effect->CalculateColor(
-                    led_pos.world_position.x,
-                    led_pos.world_position.y,
-                    led_pos.world_position.z,
+                    led_pos->world_position.x,
+                    led_pos->world_position.y,
+                    led_pos->world_position.z,
                     time
                 );
 
                 colors.push_back(color);
-                leds.push_back(&led_pos);
+                leds.push_back(led_pos);
             }
         }
 

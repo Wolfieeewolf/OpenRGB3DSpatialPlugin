@@ -52,9 +52,9 @@ void ZoneManager3D::DeleteZone(const std::string& name)
 
 void ZoneManager3D::ClearAllZones()
 {
-    for(auto* zone : zones)
+    for(size_t i = 0; i < zones.size(); i++)
     {
-        delete zone;
+        delete zones[i];
     }
     zones.clear();
 }
@@ -70,11 +70,11 @@ Zone3D* ZoneManager3D::GetZone(int idx)
 
 Zone3D* ZoneManager3D::GetZoneByName(const std::string& name)
 {
-    for(auto* zone : zones)
+    for(size_t i = 0; i < zones.size(); i++)
     {
-        if(zone->GetName() == name)
+        if(zones[i]->GetName() == name)
         {
-            return zone;
+            return zones[i];
         }
     }
     return nullptr;
@@ -102,9 +102,9 @@ std::vector<int> ZoneManager3D::GetControllersInZone(int zone_idx)
 
 bool ZoneManager3D::ZoneExists(const std::string& name) const
 {
-    for(const auto* zone : zones)
+    for(size_t i = 0; i < zones.size(); i++)
     {
-        if(zone->GetName() == name)
+        if(zones[i]->GetName() == name)
         {
             return true;
         }
@@ -117,9 +117,9 @@ nlohmann::json ZoneManager3D::ToJSON() const
     nlohmann::json json;
     nlohmann::json zones_array = nlohmann::json::array();
 
-    for(const auto* zone : zones)
+    for(size_t i = 0; i < zones.size(); i++)
     {
-        zones_array.push_back(zone->ToJSON());
+        zones_array.push_back(zones[i]->ToJSON());
     }
 
     json["zones"] = zones_array;
@@ -132,9 +132,10 @@ void ZoneManager3D::FromJSON(const nlohmann::json& json)
 
     if(json.contains("zones") && json["zones"].is_array())
     {
-        for(const auto& zone_json : json["zones"])
+        const nlohmann::json& zones_array = json["zones"];
+        for(size_t i = 0; i < zones_array.size(); i++)
         {
-            Zone3D* zone = Zone3D::FromJSON(zone_json);
+            Zone3D* zone = Zone3D::FromJSON(zones_array[i]);
             zones.push_back(zone);
         }
     }

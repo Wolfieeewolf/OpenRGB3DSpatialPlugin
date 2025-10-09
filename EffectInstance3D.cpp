@@ -41,7 +41,7 @@ nlohmann::json EffectInstance3D::ToJson() const
 
 std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::json& j)
 {
-    auto instance = std::make_unique<EffectInstance3D>();
+    std::unique_ptr<EffectInstance3D> instance = std::make_unique<EffectInstance3D>();
 
     if(j.contains("name"))
     {

@@ -673,6 +673,17 @@ float SpatialEffect3D::CalculateProgress(float time) const
 }
 
 /*---------------------------------------------------------*\
+| Boundary checking helper                                 |
+| Returns false if LED is outside the effect radius        |
+\*---------------------------------------------------------*/
+bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
+{
+    float scale_radius = GetNormalizedScale() * 10.0f;
+    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+    return distance_from_origin <= scale_radius;
+}
+
+/*---------------------------------------------------------*\
 | Parameter Update Methods                                 |
 \*---------------------------------------------------------*/
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
@@ -694,8 +705,9 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
         if(parent)
         {
             QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
+            for(int i = 0; i < labels.size(); i++)
             {
+                QLabel* label = labels[i];
                 if(label->text() == label_text)
                 {
                     label->setVisible(visible);
@@ -745,8 +757,9 @@ void SpatialEffect3D::ApplyControlVisibility()
         if(parent)
         {
             QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(QLabel* label : labels)
+            for(int i = 0; i < labels.size(); i++)
             {
+                QLabel* label = labels[i];
                 if(label->text() == "Axis:")
                 {
                     label->setVisible(show_axis);
@@ -844,8 +857,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
 
     // Save colors
     nlohmann::json colors_array = nlohmann::json::array();
-    for(const RGBColor& color : colors)
+    for(size_t i = 0; i < colors.size(); i++)
     {
+        RGBColor color = colors[i];
         colors_array.push_back({
             {"r", RGBGetRValue(color)},
             {"g", RGBGetGValue(color)},
@@ -891,15 +905,17 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     // Load colors
     if(settings.contains("colors"))
     {
-        std::vector<RGBColor> colors;
-        for(const auto& color_json : settings["colors"])
+        std::vector<RGBColor> loaded_colors;
+        const nlohmann::json& colors_array = settings["colors"];
+        for(size_t i = 0; i < colors_array.size(); i++)
         {
+            const nlohmann::json& color_json = colors_array[i];
             unsigned char r = color_json["r"].get<unsigned char>();
             unsigned char g = color_json["g"].get<unsigned char>();
             unsigned char b = color_json["b"].get<unsigned char>();
-            colors.push_back(ToRGBColor(r, g, b));
+            loaded_colors.push_back(ToRGBColor(r, g, b));
         }
-        SetColors(colors);
+        SetColors(loaded_colors);
     }
 
     // Load reference point settings

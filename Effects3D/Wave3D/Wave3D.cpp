@@ -68,8 +68,8 @@ EffectInfo3D Wave3D::GetEffectInfo()
     info.needs_frequency = true;
 
     // Standardized parameter scaling
-    info.default_speed_scale = 400.0f;      // (speed/100)² * 200 * 2.0
-    info.default_frequency_scale = 10.0f;   // (freq/100)² * 10
+    info.default_speed_scale = 400.0f;      // Normalized speed (0.0-1.0) * 400.0
+    info.default_frequency_scale = 10.0f;   // Normalized frequency (0.0-1.0) * 10.0
     info.use_size_parameter = true;
 
     // Control visibility (show all controls)
@@ -152,30 +152,23 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 
     /*---------------------------------------------------------*\
     | Check if LED is within scaled effect radius             |
-    | Scale controls the boundary - outside = black            |
+    | Uses standardized boundary helper                        |
     \*---------------------------------------------------------*/
-    float scale_radius = GetNormalizedScale() * 10.0f;  // 0.1 to 2.0 -> 1 to 20 units
-    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    if(distance_from_origin > scale_radius)
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
     {
         return 0x00000000;  // Black - outside effect boundary
     }
 
     /*---------------------------------------------------------*\
-    | Create smooth curves for speed and frequency            |
+    | Use standardized parameter helpers                       |
+    | These apply the correct curves and scaling automatically |
     \*---------------------------------------------------------*/
-    float speed_curve = (effect_speed / 100.0f);
-    speed_curve = speed_curve * speed_curve;
-    float actual_speed = speed_curve * 200.0f;
-
-    float freq_curve = (effect_frequency / 100.0f);
-    freq_curve = freq_curve * freq_curve;
-    float actual_frequency = freq_curve * 10.0f;
+    float actual_frequency = GetScaledFrequency();
 
     /*---------------------------------------------------------*\
-    | Update progress for animation                            |
+    | Update progress for animation using universal helper    |
     \*---------------------------------------------------------*/
-    progress = time * (actual_speed * 2.0f);
+    progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
     | Calculate wave based on axis and shape type             |

@@ -44,7 +44,8 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
     /*---------------------------------------------------------*\
     | Iterate through all .stack.json files                    |
     \*---------------------------------------------------------*/
-    for(filesystem::directory_iterator entry(presets_dir); entry != filesystem::directory_iterator(); ++entry)
+    filesystem::directory_iterator end_iter;
+    for(filesystem::directory_iterator entry(presets_dir); entry != end_iter; ++entry)
     {
         if(entry->path().extension() == ".json")
         {
@@ -214,7 +215,7 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
     for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
     {
         nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
-        auto copied_instance = EffectInstance3D::FromJson(instance_json);
+        std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)
         {
             effect_stack.push_back(std::move(copied_instance));

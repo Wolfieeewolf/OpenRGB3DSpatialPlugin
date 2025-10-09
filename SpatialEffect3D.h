@@ -272,6 +272,9 @@ protected:
     // Universal progress calculator - use this for ANY effect animation
     float CalculateProgress(float time) const;  // Returns time * scaled_speed (handles reverse too)
 
+    // Boundary checking helper - check if LED is within effect radius
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;
+
 private slots:
     void OnParameterChanged();
     void OnRainbowModeChanged();

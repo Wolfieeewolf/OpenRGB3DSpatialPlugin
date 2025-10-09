@@ -96,7 +96,7 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
             const nlohmann::json& effects_array = j["effects"];
             for(unsigned int i = 0; i < effects_array.size(); i++)
             {
-                auto instance = EffectInstance3D::FromJson(effects_array[i]);
+                std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
                 if(instance)
                 {
                     effect_stack.push_back(std::move(instance));
