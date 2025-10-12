@@ -77,7 +77,7 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     // Control visibility (show all controls except frequency - has custom)
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = false;    // Spiral has custom frequency in arms/gap
+    info.show_frequency_control = true;     // Show standard frequency control
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;

@@ -75,7 +75,7 @@ EffectInfo3D DiagnosticTest3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;  // We have custom test mode selector
+    info.show_axis_control = true;   // Show standard axis control
     info.show_color_controls = true;
 
     return info;

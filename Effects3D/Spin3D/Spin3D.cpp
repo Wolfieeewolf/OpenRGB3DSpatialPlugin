@@ -75,11 +75,11 @@ EffectInfo3D Spin3D::GetEffectInfo()
     // Control visibility (show all controls except frequency)
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = false;    // Spin doesn't use frequency
+    info.show_frequency_control = true;     // Show standard frequency control
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;         // Spin has custom surface selection
+    info.show_axis_control = true;          // Show standard axis control as well
     info.show_color_controls = true;
 
     return info;
