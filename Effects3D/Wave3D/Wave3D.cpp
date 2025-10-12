@@ -10,6 +10,7 @@
 \*---------------------------------------------------------*/
 
 #include "Wave3D.h"
+#include "LogManager.h"
 
 /*---------------------------------------------------------*\
 | Register this effect with the effect manager             |
@@ -186,10 +187,10 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right
             position = rel_x;
             break;
-        case AXIS_Y:  // Floor to Ceiling
+        case AXIS_Y:  // Front to Back
             position = rel_y;
             break;
-        case AXIS_Z:  // Front to Back
+        case AXIS_Z:  // Floor to Ceiling
             position = rel_z;
             break;
         case AXIS_RADIAL:  // Radial from center
@@ -236,6 +237,187 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
         // Use custom colors with position-based selection
         float position = hue / 360.0f;
         final_color = GetColorAtPosition(position);
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply brightness                                         |
+    \*---------------------------------------------------------*/
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = effect_brightness / 100.0f;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+    | 1 grid unit = 10mm. GridContext3D dimensions are also   |
+    | in grid units, ensuring consistent coordinate system.   |
+    \*---------------------------------------------------------*/
+
+    // Debug: Log first call
+    static bool logged_wave = false;
+    if(!logged_wave)
+    {
+        LOG_WARNING("[Wave3D] ========== FIRST CALL DEBUG ==========");
+        LOG_WARNING("[Wave3D] LED position: X=%.1f Y=%.1f Z=%.1f (grid units)", x, y, z);
+        LOG_WARNING("[Wave3D] Grid: Width=%.1f Depth=%.1f Height=%.1f (grid units)", grid.width, grid.depth, grid.height);
+        LOG_WARNING("[Wave3D] Grid center: X=%.1f Y=%.1f Z=%.1f (grid units)", grid.center_x, grid.center_y, grid.center_z);
+        LOG_WARNING("[Wave3D] Reference mode: %d", (int)reference_mode);
+        logged_wave = true;
+    }
+
+    /*---------------------------------------------------------*\
+    | Get effect origin using grid-aware helper               |
+    | Automatically uses grid.center for room center mode     |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOriginGrid(grid);
+
+    // Debug: Log origin for first call
+    static bool logged_origin = false;
+    if(!logged_origin)
+    {
+        LOG_WARNING("[Wave3D] Effect origin: X=%.1f Y=%.1f Z=%.1f (grid units)", origin.x, origin.y, origin.z);
+        logged_origin = true;
+    }
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    // Debug: Log relative position for first call
+    static bool logged_rel = false;
+    if(!logged_rel)
+    {
+        float distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+        LOG_WARNING("[Wave3D] Relative position: X=%.1f Y=%.1f Z=%.1f Distance=%.1f", rel_x, rel_y, rel_z, distance);
+
+        // Calculate scale radius the SAME way as IsWithinEffectBoundary() does
+        float half_width = grid.width / 2.0f;
+        float half_depth = grid.depth / 2.0f;
+        float half_height = grid.height / 2.0f;
+        float max_distance_from_center = sqrt(half_width * half_width +
+                                             half_depth * half_depth +
+                                             half_height * half_height);
+        float scale_percentage = effect_scale / 100.0f;
+        float scale_radius = max_distance_from_center * scale_percentage;
+
+        LOG_WARNING("[Wave3D] Scale: effect_scale=%u%% max_distance=%.1f scale_radius=%.1f",
+                   effect_scale, max_distance_from_center, scale_radius);
+        LOG_WARNING("[Wave3D] Within boundary: %s", (distance <= scale_radius) ? "YES" : "NO");
+        LOG_WARNING("[Wave3D] Effect params: speed=%u brightness=%u frequency=%u axis=%d",
+                   effect_speed, effect_brightness, effect_frequency, (int)effect_axis);
+        logged_rel = true;
+    }
+
+    /*---------------------------------------------------------*\
+    | Check if LED is within scaled effect radius             |
+    | Uses room-aware boundary checking                        |
+    \*---------------------------------------------------------*/
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;  // Black - outside effect boundary
+    }
+
+    /*---------------------------------------------------------*\
+    | Use standardized parameter helpers                       |
+    \*---------------------------------------------------------*/
+    float actual_frequency = GetScaledFrequency();
+
+    /*---------------------------------------------------------*\
+    | Update progress for animation                            |
+    \*---------------------------------------------------------*/
+    progress = CalculateProgress(time);
+
+    /*---------------------------------------------------------*\
+    | Calculate wave based on axis and shape type             |
+    | IMPORTANT: Normalize position to 0-1 for consistent     |
+    | wave density regardless of room size                     |
+    \*---------------------------------------------------------*/
+    float wave_value = 0.0f;
+    float size_multiplier = GetNormalizedSize();
+    float freq_scale = actual_frequency * 0.1f / size_multiplier;
+    float position = 0.0f;
+    float normalized_position = 0.0f;
+
+    /*---------------------------------------------------------*\
+    | Calculate position based on selected axis               |
+    \*---------------------------------------------------------*/
+    switch(effect_axis)
+    {
+        case AXIS_X:  // Left to Right
+            position = rel_x;
+            normalized_position = (x - grid.min_x) / grid.width;
+            break;
+        case AXIS_Y:  // Front to Back (DEPTH not height!)
+            position = rel_y;
+            normalized_position = (y - grid.min_y) / grid.depth;  // FIXED: was grid.height
+            break;
+        case AXIS_Z:  // Floor to Ceiling (HEIGHT not depth!)
+            position = rel_z;
+            normalized_position = (z - grid.min_z) / grid.height;  // FIXED: was grid.depth
+            break;
+        case AXIS_RADIAL:  // Radial from center
+        default:
+            if(shape_type == 0)  // Sphere
+            {
+                position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            }
+            else  // Cube
+            {
+                position = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
+            }
+            // Normalize radial distance
+            float max_distance = sqrt(grid.width*grid.width +
+                                    grid.height*grid.height +
+                                    grid.depth*grid.depth) / 2.0f;
+            normalized_position = position / max_distance;
+            break;
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        normalized_position = 1.0f - normalized_position;
+    }
+
+    // Use normalized position (0-1) scaled by room size
+    // This ensures consistent wave density across different room sizes
+    float spatial_scale = (grid.width + grid.height + grid.depth) / 3.0f;  // Average room dimension
+    wave_value = sin(normalized_position * freq_scale * spatial_scale * 0.01f - progress);
+
+    /*---------------------------------------------------------*\
+    | Convert wave to hue (0-360 degrees)                     |
+    \*---------------------------------------------------------*/
+    float hue = (wave_value + 1.0f) * 180.0f;
+    hue = fmod(hue, 360.0f);
+    if(hue < 0.0f) hue += 360.0f;
+
+    /*---------------------------------------------------------*\
+    | Get color based on mode                                  |
+    \*---------------------------------------------------------*/
+    RGBColor final_color;
+
+    if(GetRainbowMode())
+    {
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        float color_position = hue / 360.0f;
+        final_color = GetColorAtPosition(color_position);
     }
 
     /*---------------------------------------------------------*\

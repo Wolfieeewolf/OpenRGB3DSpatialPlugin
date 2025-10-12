@@ -44,6 +44,8 @@
 
 /*---------------------------------------------------------*\
 | Grid context for dynamic effect scaling                 |
+| IMPORTANT: All values are in GRID UNITS (1 unit = 10mm) |
+| LED world_position and GridContext3D use same units!    |
 \*---------------------------------------------------------*/
 struct GridContext3D
 {
@@ -51,13 +53,20 @@ struct GridContext3D
     float min_y, max_y;
     float min_z, max_z;
     float width, height, depth;
+    float center_x, center_y, center_z;  // Room center point for effect calculations
 
     GridContext3D(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
         : min_x(minX), max_x(maxX), min_y(minY), max_y(maxY), min_z(minZ), max_z(maxZ)
     {
-        width = max_x - min_x + 1.0f;
-        height = max_y - min_y + 1.0f;
-        depth = max_z - min_z + 1.0f;
+        // Calculate room dimensions (no +1 needed - we're using actual coordinates)
+        width = max_x - min_x;
+        depth = max_y - min_y;   // Y-axis is depth (front to back)
+        height = max_z - min_z;  // Z-axis is height (floor to ceiling)
+
+        // Calculate room center (for corner-origin coordinate system)
+        center_x = (min_x + max_x) / 2.0f;
+        center_y = (min_y + max_y) / 2.0f;
+        center_z = (min_z + max_z) / 2.0f;
     }
 };
 
@@ -251,7 +260,8 @@ protected:
     /*---------------------------------------------------------*\
     | Helper methods for derived classes                       |
     \*---------------------------------------------------------*/
-    Vector3D GetEffectOrigin() const;           // Returns correct origin based on reference mode
+    Vector3D GetEffectOrigin() const;           // Returns correct origin based on reference mode (legacy - returns 0,0,0 for room center)
+    Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;  // Grid-aware origin (uses grid.center for room center)
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
 
@@ -272,8 +282,9 @@ protected:
     // Universal progress calculator - use this for ANY effect animation
     float CalculateProgress(float time) const;  // Returns time * scaled_speed (handles reverse too)
 
-    // Boundary checking helper - check if LED is within effect radius
-    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;
+    // Boundary checking helpers
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;  // Legacy version (uses fixed radius)
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;  // Room-aware version (RECOMMENDED)
 
 private slots:
     void OnParameterChanged();

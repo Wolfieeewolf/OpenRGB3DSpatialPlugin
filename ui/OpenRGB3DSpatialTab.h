@@ -255,6 +255,18 @@ private:
     float                       grid_scale_mm;
 
     /*---------------------------------------------------------*\
+    | Room Dimension Settings (Manual room size)              |
+    \*---------------------------------------------------------*/
+    QDoubleSpinBox*             room_width_spin;
+    QDoubleSpinBox*             room_depth_spin;
+    QDoubleSpinBox*             room_height_spin;
+    QCheckBox*                  use_manual_room_size_checkbox;
+    float                       manual_room_width;
+    float                       manual_room_depth;
+    float                       manual_room_height;
+    bool                        use_manual_room_size;
+
+    /*---------------------------------------------------------*\
     | LED Spacing Controls (for adding controllers)           |
     \*---------------------------------------------------------*/
     QDoubleSpinBox*             led_spacing_x_spin;

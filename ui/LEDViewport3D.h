@@ -50,6 +50,7 @@ public:
     void SetGridDimensions(int x, int y, int z);
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
+    void SetRoomDimensions(float width, float depth, float height, bool use_manual);
     void SetUserPosition(const UserPosition3D& position);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
@@ -90,6 +91,7 @@ private:
     void DrawControllers();
     void DrawLEDs(ControllerTransform* ctrl);
     void DrawUserFigure();
+    void DrawRoomBoundary();
 
     int PickController(int mouse_x, int mouse_y);
     int PickReferencePoint(int mouse_x, int mouse_y);
@@ -116,6 +118,14 @@ private:
     int     grid_y;
     int     grid_z;
     bool    grid_snap_enabled;
+
+    /*---------------------------------------------------------*\
+    | Room Dimensions (Corner-Origin System)                   |
+    \*---------------------------------------------------------*/
+    float   room_width;          // X-axis: 0 (left wall) to width (right wall)
+    float   room_depth;          // Y-axis: 0 (front wall) to depth (back wall)
+    float   room_height;         // Z-axis: 0 (floor) to height (ceiling)
+    bool    use_manual_room_dimensions;
 
     /*---------------------------------------------------------*\
     | User Position Reference Point                            |

@@ -25,6 +25,8 @@
 #include <QStyledItemDelegate>
 #include <QPainter>
 #include <QTimer>
+#include <QSlider>
+#include <QCheckBox>
 #include <vector>
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
@@ -85,6 +87,15 @@ private slots:
     void on_save_clicked();
     void refresh_colors();
 
+    // LED Layout Transform slots
+    void on_lock_transform_toggled(bool locked);
+    void on_rotation_angle_changed(int angle);
+    void on_rotate_grid_90();
+    void on_rotate_grid_180();
+    void on_rotate_grid_270();
+    void on_flip_grid_horizontal();
+    void on_flip_grid_vertical();
+
 private:
     void SetupUI();
     void UpdateItemCombo();
@@ -125,9 +136,21 @@ private:
     QPushButton*    remove_from_grid_button;
     QPushButton*    save_button;
 
+    // LED Layout Transform controls
+    QCheckBox*      lock_transform_checkbox;
+    QSlider*        rotate_angle_slider;
+    QSpinBox*       rotate_angle_spin;
+    QPushButton*    rotate_90_button;
+    QPushButton*    rotate_180_button;
+    QPushButton*    rotate_270_button;
+    QPushButton*    flip_horizontal_button;
+    QPushButton*    flip_vertical_button;
+
     QTimer*         color_refresh_timer;
 
     std::vector<GridLEDMapping> led_mappings;
+    std::vector<GridLEDMapping> original_led_mappings;  // Locked original positions
+    bool transform_locked;  // Whether we've locked the original layout
     int current_layer;
     int selected_row;
     int selected_col;

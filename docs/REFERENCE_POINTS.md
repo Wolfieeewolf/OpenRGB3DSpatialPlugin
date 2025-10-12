@@ -92,10 +92,12 @@ All effects inherit from `SpatialEffect3D`, which provides:
 
 ```cpp
 // Get the effect origin based on current mode
+// Note: In CalculateColorGrid(), use grid.center_x/y/z for room center
 Vector3D origin = GetEffectOrigin();
 
 // Returns:
-// - (0, 0, 0) if REF_MODE_ROOM_CENTER
+// - Room center (width/2, depth/2, height/2) if REF_MODE_ROOM_CENTER
+//   IMPORTANT: Use grid.center_x/y/z from GridContext3D, not GetEffectOrigin()
 // - User head position if REF_MODE_USER_POSITION
 // - Custom point if REF_MODE_CUSTOM_POINT (future)
 ```
@@ -103,10 +105,11 @@ Vector3D origin = GetEffectOrigin();
 ### Example Usage in Effects
 
 ```cpp
-RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
+RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Get effect origin (room center or user head)
-    Vector3D origin = GetEffectOrigin();
+    // Get effect origin using grid-aware helper
+    // Automatically uses grid.center_x/y/z for room center mode
+    Vector3D origin = GetEffectOriginGrid(grid);
 
     // Calculate distance from origin to LED
     float dx = x - origin.x;
@@ -114,12 +117,23 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     float dz = z - origin.z;
     float distance = sqrtf(dx*dx + dy*dy + dz*dz);
 
+    // Check if LED is within effect boundary (room-aware scaling)
+    if(!IsWithinEffectBoundary(dx, dy, dz, grid))
+    {
+        return 0x00000000;  // Black - outside effect boundary
+    }
+
     // Wave propagates from origin outward
     float wave = sinf(distance * 0.5f - time);
 
     return GetColorAtPosition(wave);
 }
 ```
+
+**New Universal Helpers (Added 2025-10-12):**
+- `GetEffectOriginGrid(grid)` - Grid-aware origin, automatically uses room center from GridContext3D
+- `IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid)` - Room-aware boundary check, scales relative to room size
+- These helpers work with ANY room size, LED positions, and reference points
 
 ## Future: Game Integration
 
@@ -202,11 +216,13 @@ void TriggerSpatialEffect(string effect_name, Vector3D game_position)
 
 ### Coordinate System
 
-- **Origin**: Room center (0, 0, 0) by convention
-- **X Axis**: Left wall (-X) to Right wall (+X)
-- **Y Axis**: Floor (0) to Ceiling (+Y)
-- **Z Axis**: Front wall (-Z) to Rear wall (+Z)
+- **Origin**: Front-left-floor corner (0, 0, 0) - corner-origin system
+- **Room Center**: (width/2, depth/2, height/2) - calculated from room dimensions
+- **X Axis**: Left wall (0) to Right wall (+width)
+- **Y Axis**: Front wall (0) to Back wall (+depth)
+- **Z Axis**: Floor (0) to Ceiling (+height)
 - **User Head**: Can be positioned anywhere in this space
+- **Reference Points**: Stored as absolute positions in room coordinates
 
 ### Performance
 

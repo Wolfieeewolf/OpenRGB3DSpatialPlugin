@@ -179,12 +179,12 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
             angle = atan2(rel_z, rel_y);
             twist_coord = rel_x;
             break;
-        case AXIS_Y:  // Spiral along Y-axis (Floor to Ceiling)
+        case AXIS_Y:  // Spiral along Y-axis (Front to Back)
             radius = sqrt(rel_x*rel_x + rel_z*rel_z);
             angle = atan2(rel_z, rel_x);
             twist_coord = rel_y;
             break;
-        case AXIS_Z:  // Spiral along Z-axis (Front to Back)
+        case AXIS_Z:  // Spiral along Z-axis (Floor to Ceiling)
         default:
             radius = sqrt(rel_x*rel_x + rel_y*rel_y);
             angle = atan2(rel_y, rel_x);

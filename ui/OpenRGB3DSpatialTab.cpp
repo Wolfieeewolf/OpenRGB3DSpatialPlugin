@@ -85,6 +85,15 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     custom_grid_z = 10;
     grid_scale_mm = 10.0f;  // Default: 10mm = 1 grid unit
 
+    room_width_spin = nullptr;
+    room_depth_spin = nullptr;
+    room_height_spin = nullptr;
+    use_manual_room_size_checkbox = nullptr;
+    manual_room_width = 3668.0f;   // Default: ~12 feet (user's room)
+    manual_room_depth = 2423.0f;   // Default: ~8 feet
+    manual_room_height = 2723.0f;  // Default: ~9 feet
+    use_manual_room_size = false;  // Start with auto-detect
+
     led_spacing_x_spin = nullptr;
     led_spacing_y_spin = nullptr;
     led_spacing_z_spin = nullptr;
@@ -500,6 +509,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
+    viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
 
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
@@ -558,6 +568,50 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_snap_checkbox->setToolTip("Snap controller positions to grid intersections");
     layout_layout->addWidget(grid_snap_checkbox, 1, 3, 1, 3);
 
+    /*---------------------------------------------------------*\
+    | Room Dimensions Section                                  |
+    \*---------------------------------------------------------*/
+    layout_layout->addWidget(new QLabel("━━━ Room Dimensions (Origin: Front-Left-Floor Corner) ━━━"), 2, 0, 1, 6);
+
+    // Manual room size checkbox
+    use_manual_room_size_checkbox = new QCheckBox("Use Manual Room Size");
+    use_manual_room_size_checkbox->setChecked(use_manual_room_size);
+    use_manual_room_size_checkbox->setToolTip("Enable to set room dimensions manually. Disable to auto-detect from LED positions.");
+    layout_layout->addWidget(use_manual_room_size_checkbox, 3, 0, 1, 2);
+
+    // Room Width (X-axis: Left to Right)
+    layout_layout->addWidget(new QLabel("Width (X):"), 4, 0);
+    room_width_spin = new QDoubleSpinBox();
+    room_width_spin->setRange(100.0, 50000.0);
+    room_width_spin->setSingleStep(10.0);
+    room_width_spin->setValue(manual_room_width);
+    room_width_spin->setSuffix(" mm");
+    room_width_spin->setToolTip("Room width (left wall to right wall)");
+    room_width_spin->setEnabled(use_manual_room_size);
+    layout_layout->addWidget(room_width_spin, 4, 1);
+
+    // Room Depth (Y-axis: Front to Back)
+    layout_layout->addWidget(new QLabel("Depth (Y):"), 4, 2);
+    room_depth_spin = new QDoubleSpinBox();
+    room_depth_spin->setRange(100.0, 50000.0);
+    room_depth_spin->setSingleStep(10.0);
+    room_depth_spin->setValue(manual_room_depth);
+    room_depth_spin->setSuffix(" mm");
+    room_depth_spin->setToolTip("Room depth (front wall to back wall)");
+    room_depth_spin->setEnabled(use_manual_room_size);
+    layout_layout->addWidget(room_depth_spin, 4, 3);
+
+    // Room Height (Z-axis: Floor to Ceiling)
+    layout_layout->addWidget(new QLabel("Height (Z):"), 4, 4);
+    room_height_spin = new QDoubleSpinBox();
+    room_height_spin->setRange(100.0, 50000.0);
+    room_height_spin->setSingleStep(10.0);
+    room_height_spin->setValue(manual_room_height);
+    room_height_spin->setSuffix(" mm");
+    room_height_spin->setToolTip("Room height (floor to ceiling)");
+    room_height_spin->setEnabled(use_manual_room_size);
+    layout_layout->addWidget(room_height_spin, 4, 5);
+
     // Selection Info Label
     selection_info_label = new QLabel("No selection");
     selection_info_label->setStyleSheet("color: gray; font-size: 10px; font-weight: bold;");
@@ -565,15 +619,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     layout_layout->addWidget(selection_info_label, 1, 3, 1, 3);
 
     // Add helpful labels with text wrapping
-    QLabel* grid_help1 = new QLabel("LEDs mapped sequentially to grid positions (X, Y, Z)");
+    QLabel* grid_help1 = new QLabel("Measure from front-left-floor corner • Positions in grid units (×" + QString::number(grid_scale_mm) + "mm)");
     grid_help1->setStyleSheet("color: gray; font-size: 10px;");
     grid_help1->setWordWrap(true);
-    layout_layout->addWidget(grid_help1, 2, 0, 1, 6);
+    layout_layout->addWidget(grid_help1, 5, 0, 1, 6);
 
     QLabel* grid_help2 = new QLabel("Use Ctrl+Click for multi-select • Add User position in Reference Points tab");
     grid_help2->setStyleSheet("color: gray; font-size: 10px;");
     grid_help2->setWordWrap(true);
-    layout_layout->addWidget(grid_help2, 3, 0, 1, 6);
+    layout_layout->addWidget(grid_help2, 6, 0, 1, 6);
 
     grid_settings_tab->setLayout(layout_layout);
 
@@ -582,6 +636,50 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
     connect(grid_z_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
     connect(grid_snap_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_grid_snap_toggled);
+
+    // Connect room dimension signals
+    connect(use_manual_room_size_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        use_manual_room_size = checked;
+        if(room_width_spin) room_width_spin->setEnabled(checked);
+        if(room_depth_spin) room_depth_spin->setEnabled(checked);
+        if(room_height_spin) room_height_spin->setEnabled(checked);
+
+        // Update viewport with new settings
+        if(viewport)
+        {
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
+    });
+
+    connect(room_width_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        manual_room_width = value;
+
+        // Update viewport with new width
+        if(viewport)
+        {
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
+    });
+
+    connect(room_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        manual_room_depth = value;
+
+        // Update viewport with new depth
+        if(viewport)
+        {
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
+    });
+
+    connect(room_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        manual_room_height = value;
+
+        // Update viewport with new height
+        if(viewport)
+        {
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
+    });
 
     /*---------------------------------------------------------*\
     | Position & Rotation Tab                                  |
@@ -593,7 +691,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
 
     pos_x_slider = new QSlider(Qt::Horizontal);
-    pos_x_slider->setRange(-1000, 1000);
+    pos_x_slider->setRange(0, 5000);  // Corner-origin: 0 (left wall) to 500 grid units (5000mm = 5m)
     pos_x_slider->setValue(0);
     connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
@@ -622,7 +720,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_x_slider, 0, 1);
 
     pos_x_spin = new QDoubleSpinBox();
-    pos_x_spin->setRange(-100, 100);
+    pos_x_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_x_spin->setDecimals(1);
     pos_x_spin->setMaximumWidth(80);
     connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
@@ -653,23 +751,17 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
 
     pos_y_slider = new QSlider(Qt::Horizontal);
-    pos_y_slider->setRange(0, 1000);  // Start from 0 (floor level)
+    pos_y_slider->setRange(0, 5000);  // Corner-origin: 0 (front wall) to 500 grid units (5000mm = 5m)
     pos_y_slider->setValue(0);
     connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
         pos_y_spin->setValue(pos_value);
 
-        // Check if a controller is selected first (higher priority, with floor constraint)
+        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            if(pos_value < 0.0f) {
-                pos_value = 0.0f;
-                pos_y_slider->setValue((int)(pos_value * 10));
-            }
             controller_transforms[ctrl_row]->transform.position.y = pos_value;
-            // Enforce floor constraint after position change
-            viewport->EnforceFloorConstraint(controller_transforms[ctrl_row].get());
             viewport->NotifyControllerTransformChanged();
             return;
         }
@@ -688,23 +780,17 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_y_slider, 1, 1);
 
     pos_y_spin = new QDoubleSpinBox();
-    pos_y_spin->setRange(0, 100);  // Floor constraint
+    pos_y_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_y_spin->setDecimals(1);
     pos_y_spin->setMaximumWidth(80);
     connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         pos_y_slider->setValue((int)(value * 10));
 
-        // Check if a controller is selected first (higher priority, with floor constraint)
+        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            if(value < 0.0) {
-                value = 0.0;
-                pos_y_spin->setValue(value);
-            }
             controller_transforms[ctrl_row]->transform.position.y = value;
-            // Enforce floor constraint after position change
-            viewport->EnforceFloorConstraint(controller_transforms[ctrl_row].get());
             viewport->NotifyControllerTransformChanged();
             return;
         }
@@ -725,7 +811,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
 
     pos_z_slider = new QSlider(Qt::Horizontal);
-    pos_z_slider->setRange(-1000, 1000);
+    pos_z_slider->setRange(0, 5000);  // Corner-origin: 0 (floor) to 500 grid units (5000mm = 5m)
     pos_z_slider->setValue(0);
     connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
@@ -754,7 +840,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_z_slider, 2, 1);
 
     pos_z_spin = new QDoubleSpinBox();
-    pos_z_spin->setRange(-100, 100);
+    pos_z_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_z_spin->setDecimals(1);
     pos_z_spin->setMaximumWidth(80);
     connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
@@ -1012,7 +1098,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Effect origin selector
     effects_layout->addWidget(new QLabel("Origin:"));
     effect_origin_combo = new QComboBox();
-    effect_origin_combo->addItem("Room Center (0,0,0)", QVariant(-1)); // -1 = no reference point
+    effect_origin_combo->addItem("Room Center", QVariant(-1)); // -1 = no reference point (uses calculated room center)
     connect(effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
     effects_layout->addWidget(effect_origin_combo);
@@ -1644,10 +1730,25 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     /*---------------------------------------------------------*\
     | Fall back to single effect rendering (Effects tab)       |
     \*---------------------------------------------------------*/
+    static int single_effect_log_counter = 0;
+    if(single_effect_log_counter == 0)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect check: effect_running=%d, current_effect_ui=%p",
+                   effect_running, current_effect_ui);
+    }
+    single_effect_log_counter = (single_effect_log_counter + 1) % 30;
+
     if(!effect_running || !current_effect_ui)
     {
+        if(single_effect_log_counter == 0)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect NOT running: effect_running=%d, current_effect_ui=%p",
+                       effect_running, current_effect_ui);
+        }
         return;
     }
+
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== RENDERING SINGLE EFFECT ==========");
 
     /*---------------------------------------------------------*\
     | Safety: Check if we have any controllers                |
@@ -1673,27 +1774,100 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     effect_time += 0.033f; // ~30 FPS
 
     /*---------------------------------------------------------*\
-    | Apply effect over the entire grid space                 |
+    | Calculate room bounds for effects                        |
+    | Uses same corner-origin system as Effect Stack          |
     \*---------------------------------------------------------*/
-    // Safety check: ensure grid dimensions are valid
-    if(custom_grid_x < 1) custom_grid_x = 10;
-    if(custom_grid_y < 1) custom_grid_y = 10;
-    if(custom_grid_z < 1) custom_grid_z = 10;
+    float grid_min_x = 0.0f, grid_max_x = 0.0f;
+    float grid_min_y = 0.0f, grid_max_y = 0.0f;
+    float grid_min_z = 0.0f, grid_max_z = 0.0f;
 
-    // Calculate room-centered grid bounds (user at center)
-    int half_x = custom_grid_x / 2;
-    int half_y = custom_grid_y / 2;
-    int half_z = custom_grid_z / 2;
+    if(use_manual_room_size)
+    {
+        /*---------------------------------------------------------*\
+        | Use manually configured room dimensions                  |
+        | Origin at front-left-floor corner (0,0,0)               |
+        | IMPORTANT: Convert millimeters to grid units (/ 10.0f)  |
+        | LED world_position uses grid units, not millimeters!    |
+        \*---------------------------------------------------------*/
+        grid_min_x = 0.0f;
+        grid_max_x = manual_room_width / 10.0f;  // Convert mm to grid units
+        grid_min_y = 0.0f;
+        grid_max_y = manual_room_depth / 10.0f;  // Convert mm to grid units
+        grid_min_z = 0.0f;
+        grid_max_z = manual_room_height / 10.0f; // Convert mm to grid units
 
-    float grid_min_x = -half_x;
-    float grid_max_x = custom_grid_x - half_x - 1;
-    float grid_min_y = -half_y;
-    float grid_max_y = custom_grid_y - half_y - 1;
-    float grid_min_z = -half_z;
-    float grid_max_z = custom_grid_z - half_z - 1;
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using MANUAL room: %.1fx%.1fx%.1f mm (%.1fx%.1fx%.1f grid units)",
+                   manual_room_width, manual_room_depth, manual_room_height,
+                   grid_max_x, grid_max_y, grid_max_z);
+    }
+    else
+    {
+        /*---------------------------------------------------------*\
+        | Auto-detect from LED positions                           |
+        \*---------------------------------------------------------*/
+        bool has_leds = false;
+
+        // Update world positions first
+        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+        {
+            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+            if(transform && transform->world_positions_dirty)
+            {
+                ControllerLayout3D::UpdateWorldPositions(transform);
+            }
+        }
+
+        // Find min/max positions from ALL LEDs
+        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+        {
+            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+            if(!transform) continue;
+
+            for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
+            {
+                float x = transform->led_positions[led_idx].world_position.x;
+                float y = transform->led_positions[led_idx].world_position.y;
+                float z = transform->led_positions[led_idx].world_position.z;
+
+                if(!has_leds)
+                {
+                    grid_min_x = grid_max_x = x;
+                    grid_min_y = grid_max_y = y;
+                    grid_min_z = grid_max_z = z;
+                    has_leds = true;
+                }
+                else
+                {
+                    if(x < grid_min_x) grid_min_x = x;
+                    if(x > grid_max_x) grid_max_x = x;
+                    if(y < grid_min_y) grid_min_y = y;
+                    if(y > grid_max_y) grid_max_y = y;
+                    if(z < grid_min_z) grid_min_z = z;
+                    if(z > grid_max_z) grid_max_z = z;
+                }
+            }
+        }
+
+        if(!has_leds)
+        {
+            // Fallback if no LEDs found
+            grid_min_x = 0.0f;
+            grid_max_x = 3668.0f;
+            grid_min_y = 0.0f;
+            grid_max_y = 2423.0f;
+            grid_min_z = 0.0f;
+            grid_max_z = 2723.0f;
+        }
+
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using AUTO-DETECT room: X[%.1f-%.1f] Y[%.1f-%.1f] Z[%.1f-%.1f]",
+                   grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
+    }
 
     // Create grid context for effects
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
+
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
+               grid_context.center_x, grid_context.center_y, grid_context.center_z);
 
     /*---------------------------------------------------------*\
     | Get effect origin from the selected reference point     |
@@ -1720,11 +1894,12 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         }
         else
         {
-            // Room Center (0,0,0) selected
+            // Room Center selected - effect will use grid.center (calculated from room bounds)
+            // No offset needed; GetEffectOriginGrid() returns grid.center automatically
             origin_offset_x = 0.0f;
             origin_offset_y = 0.0f;
             origin_offset_z = 0.0f;
-            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using room center origin: 0,0,0");
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using room center origin (grid.center will be calculated)");
         }
     }
 
@@ -2205,13 +2380,22 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             grid_scale_mm);
         zone* z = &controller->zones[item_row];
 
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Zone granularity - item_row=%d, zone_name=%s, total_positions=%u, zone_leds_count=%u",
+                    item_row, z->name.c_str(), (unsigned int)all_positions.size(), z->leds_count);
+
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
             if(all_positions[i].zone_idx == (unsigned int)item_row)
             {
                 ctrl_transform->led_positions.push_back(all_positions[i]);
+                LOG_WARNING("[OpenRGB3DSpatialPlugin]   Added position[%u]: zone_idx=%u, led_idx=%u, local_pos=(%.1f,%.1f,%.1f)",
+                           i, all_positions[i].zone_idx, all_positions[i].led_idx,
+                           all_positions[i].local_position.x, all_positions[i].local_position.y, all_positions[i].local_position.z);
             }
         }
+
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Zone filtering complete: %u LEDs added to ctrl_transform",
+                    (unsigned int)ctrl_transform->led_positions.size());
 
         name = QString("[Zone] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
     }
@@ -2702,6 +2886,14 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
     /*---------------------------------------------------------*\
+    | Room Dimensions (Manual room size settings)             |
+    \*---------------------------------------------------------*/
+    layout_json["room"]["use_manual_size"] = use_manual_room_size;
+    layout_json["room"]["width"] = manual_room_width;
+    layout_json["room"]["depth"] = manual_room_depth;
+    layout_json["room"]["height"] = manual_room_height;
+
+    /*---------------------------------------------------------*\
     | User Position                                            |
     \*---------------------------------------------------------*/
     layout_json["user_position"]["x"] = user_position.x;
@@ -2881,6 +3073,59 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 grid_scale_spin->blockSignals(true);
                 grid_scale_spin->setValue(grid_scale_mm);
                 grid_scale_spin->blockSignals(false);
+            }
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Load Room Dimensions                                     |
+    \*---------------------------------------------------------*/
+    if(layout_json.contains("room"))
+    {
+        if(layout_json["room"].contains("use_manual_size"))
+        {
+            use_manual_room_size = layout_json["room"]["use_manual_size"].get<bool>();
+            if(use_manual_room_size_checkbox)
+            {
+                use_manual_room_size_checkbox->blockSignals(true);
+                use_manual_room_size_checkbox->setChecked(use_manual_room_size);
+                use_manual_room_size_checkbox->blockSignals(false);
+            }
+        }
+
+        if(layout_json["room"].contains("width"))
+        {
+            manual_room_width = layout_json["room"]["width"].get<float>();
+            if(room_width_spin)
+            {
+                room_width_spin->blockSignals(true);
+                room_width_spin->setValue(manual_room_width);
+                room_width_spin->setEnabled(use_manual_room_size);
+                room_width_spin->blockSignals(false);
+            }
+        }
+
+        if(layout_json["room"].contains("depth"))
+        {
+            manual_room_depth = layout_json["room"]["depth"].get<float>();
+            if(room_depth_spin)
+            {
+                room_depth_spin->blockSignals(true);
+                room_depth_spin->setValue(manual_room_depth);
+                room_depth_spin->setEnabled(use_manual_room_size);
+                room_depth_spin->blockSignals(false);
+            }
+        }
+
+        if(layout_json["room"].contains("height"))
+        {
+            manual_room_height = layout_json["room"]["height"].get<float>();
+            if(room_height_spin)
+            {
+                room_height_spin->blockSignals(true);
+                room_height_spin->setValue(manual_room_height);
+                room_height_spin->setEnabled(use_manual_room_size);
+                room_height_spin->blockSignals(false);
             }
         }
     }
@@ -4166,8 +4411,8 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     effect_origin_combo->blockSignals(true);
     effect_origin_combo->clear();
 
-    // Always add "Room Center" as first option
-    effect_origin_combo->addItem("Room Center (0,0,0)", QVariant(-1));
+    // Always add "Room Center" as first option (calculated center, not 0,0,0)
+    effect_origin_combo->addItem("Room Center", QVariant(-1));
 
     // Add all reference points
     for(size_t i = 0; i < reference_points.size(); i++)

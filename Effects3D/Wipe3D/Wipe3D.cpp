@@ -164,10 +164,10 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right wipe
             position = rel_x;
             break;
-        case AXIS_Y:  // Floor to Ceiling wipe
+        case AXIS_Y:  // Front to Back wipe
             position = rel_y;
             break;
-        case AXIS_Z:  // Front to Back wipe
+        case AXIS_Z:  // Floor to Ceiling wipe
         default:
             position = rel_z;
             break;
@@ -210,6 +210,123 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     }
 
     // Get color using universal base class methods
+    RGBColor final_color;
+    if(GetRainbowMode())
+    {
+        float hue = progress * 360.0f + time * 30.0f;
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        final_color = GetColorAtPosition(progress);
+    }
+
+    // Apply intensity and brightness
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = (effect_brightness / 100.0f) * intensity;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
+
+RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+    | 1 grid unit = 10mm. GridContext3D dimensions are also   |
+    | in grid units, ensuring consistent coordinate system.   |
+    \*---------------------------------------------------------*/
+
+    /*---------------------------------------------------------*\
+    | Get effect origin using grid-aware helper               |
+    | Automatically uses grid.center for room center mode     |
+    \*---------------------------------------------------------*/
+    Vector3D origin = GetEffectOriginGrid(grid);
+
+    /*---------------------------------------------------------*\
+    | Calculate position relative to origin                    |
+    \*---------------------------------------------------------*/
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    /*---------------------------------------------------------*\
+    | Check if LED is within scaled effect radius             |
+    | Uses room-aware boundary checking                        |
+    \*---------------------------------------------------------*/
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;  // Black - outside effect boundary
+    }
+
+    /*---------------------------------------------------------*\
+    | Update progress                                          |
+    \*---------------------------------------------------------*/
+    progress = fmod(CalculateProgress(time), 2.0f);
+    if(progress > 1.0f) progress = 2.0f - progress;
+
+    /*---------------------------------------------------------*\
+    | Calculate position based on axis - NORMALIZED 0-1        |
+    \*---------------------------------------------------------*/
+    float position;
+    switch(effect_axis)
+    {
+        case AXIS_X:  // Left to Right wipe
+            position = (x - grid.min_x) / grid.width;
+            break;
+        case AXIS_Y:  // Front to Back wipe (DEPTH not height!)
+            position = (y - grid.min_y) / grid.depth;  // FIXED: was grid.height
+            break;
+        case AXIS_Z:  // Floor to Ceiling wipe (HEIGHT not depth!)
+            position = (z - grid.min_z) / grid.height;  // FIXED: was grid.depth
+            break;
+        case AXIS_RADIAL:  // Radial wipe from center (using origin)
+        default:
+            {
+                float distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+                // Normalize to room diagonal
+                float max_distance = sqrt(grid.width*grid.width +
+                                        grid.height*grid.height +
+                                        grid.depth*grid.depth) / 2.0f;
+                position = distance / max_distance;
+            }
+            break;
+    }
+
+    /*---------------------------------------------------------*\
+    | Apply reverse if enabled                                 |
+    \*---------------------------------------------------------*/
+    if(effect_reverse)
+    {
+        position = 1.0f - position;
+    }
+
+    // Position is now 0.0-1.0, no need to clamp
+    // Calculate wipe edge with thickness
+    float edge_distance = fabs(position - progress);
+    float thickness_factor = wipe_thickness / 100.0f;
+
+    float intensity;
+    switch(edge_shape)
+    {
+        case 0: // Round
+            intensity = 1.0f - smoothstep(0.0f, thickness_factor, edge_distance);
+            break;
+        case 1: // Sharp
+            intensity = edge_distance < thickness_factor * 0.5f ? 1.0f : 0.0f;
+            break;
+        case 2: // Square
+        default:
+            intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
+            break;
+    }
+
+    // Get color
     RGBColor final_color;
     if(GetRainbowMode())
     {

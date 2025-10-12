@@ -30,6 +30,12 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_axis = AXIS_RADIAL;
     effect_reverse = false;
 
+    // Initialize reference point parameters
+    reference_mode = REF_MODE_ROOM_CENTER;
+    global_reference_point = {0.0f, 0.0f, 0.0f};
+    custom_reference_point = {0.0f, 0.0f, 0.0f};
+    use_custom_reference = false;
+
     // Initialize default colors
     colors.push_back(COLOR_RED);
     colors.push_back(COLOR_BLUE);
@@ -154,9 +160,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
-    scale_slider->setRange(10, 200);
+    scale_slider->setRange(1, 200);
     scale_slider->setValue(effect_scale);
-    scale_slider->setToolTip("Effect coverage area - small localized effects to room-wide coverage");
+    scale_slider->setToolTip("Effect coverage area as % of room - 1=tiny, 50=half room, 100=whole room, 200=beyond room");
     scale_layout->addWidget(scale_slider);
     scale_label = new QLabel(QString::number(effect_scale));
     scale_label->setMinimumWidth(30);
@@ -595,7 +601,30 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
             return custom_reference_point;
         case REF_MODE_ROOM_CENTER:
         default:
+            // Legacy behavior: returns corner origin (0,0,0)
+            // This is kept for backward compatibility with old effects
+            // New effects should use GetEffectOriginGrid() instead
             return {0.0f, 0.0f, 0.0f};
+    }
+}
+
+Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
+{
+    if(use_custom_reference)
+    {
+        return custom_reference_point;
+    }
+
+    switch(reference_mode)
+    {
+        case REF_MODE_USER_POSITION:
+            return global_reference_point;
+        case REF_MODE_CUSTOM_POINT:
+            return custom_reference_point;
+        case REF_MODE_ROOM_CENTER:
+        default:
+            // Return actual room center from grid context
+            return {grid.center_x, grid.center_y, grid.center_z};
     }
 }
 
@@ -673,12 +702,47 @@ float SpatialEffect3D::CalculateProgress(float time) const
 }
 
 /*---------------------------------------------------------*\
-| Boundary checking helper                                 |
+| Boundary checking helper - LEGACY VERSION                |
 | Returns false if LED is outside the effect radius        |
+| Uses fixed radius - kept for backward compatibility      |
 \*---------------------------------------------------------*/
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
 {
+    // Legacy fixed radius calculation
+    // This assumes a "standard" room size for effects that don't have grid context
+    // Scale slider: 10 (10%) = 1mm radius, 100 (100%) = 10mm, 200 (200%) = 20mm
     float scale_radius = GetNormalizedScale() * 10.0f;
+    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+    return distance_from_origin <= scale_radius;
+}
+
+/*---------------------------------------------------------*\
+| Boundary checking helper - ROOM-AWARE VERSION            |
+| Returns false if LED is outside the effect radius        |
+| Scale is relative to room size for universal compatibility|
+| RECOMMENDED: Use this version in CalculateColorGrid()    |
+\*---------------------------------------------------------*/
+bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
+{
+    // Calculate room's half-diagonal (center to corner distance)
+    // This is the maximum distance from room center to any corner
+    float half_width = grid.width / 2.0f;
+    float half_depth = grid.depth / 2.0f;
+    float half_height = grid.height / 2.0f;
+    float max_distance_from_center = sqrt(half_width * half_width +
+                                         half_depth * half_depth +
+                                         half_height * half_height);
+
+    // Scale radius as direct percentage of max room radius
+    // Scale controls the "balloon" size - hard boundary, effect handles fade inside
+    // Direct percentage mapping:
+    //    1 → 1% of room radius (tiny balloon at center)
+    //   50 → 50% of room radius (halfway to corners)
+    //  100 → 100% of room radius (reaches all corners - whole room)
+    //  200 → 200% of room radius (extends beyond room)
+    float scale_percentage = effect_scale / 100.0f;  // Direct: 0.01 to 2.0
+    float scale_radius = max_distance_from_center * scale_percentage;
+
     float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     return distance_from_origin <= scale_radius;
 }

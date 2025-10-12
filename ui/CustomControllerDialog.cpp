@@ -21,10 +21,13 @@
 #include <QTimer>
 #include <QIcon>
 #include <QPixmap>
+#include <cmath>
+#include <algorithm>
 
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
       resource_manager(rm),
+      transform_locked(false),
       current_layer(0),
       selected_row(-1),
       selected_col(-1)
@@ -159,6 +162,86 @@ void CustomControllerDialog::SetupUI()
 
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
+
+    /*---------------------------------------------------------*\
+    | LED Layout Transform Controls                            |
+    \*---------------------------------------------------------*/
+    QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
+    QGridLayout* transform_grid = new QGridLayout();
+
+    // Lock transform checkbox
+    lock_transform_checkbox = new QCheckBox("Lock Layout (enable rotation)");
+    lock_transform_checkbox->setChecked(false);
+    lock_transform_checkbox->setToolTip("Lock the current layout to enable real-time rotation without messing up positions");
+    connect(lock_transform_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_lock_transform_toggled);
+    transform_grid->addWidget(lock_transform_checkbox, 0, 0, 1, 4);
+
+    QLabel* rotate_label = new QLabel("Rotate Grid:");
+    transform_grid->addWidget(rotate_label, 1, 0, 1, 4);
+
+    // Rotation slider with spinbox
+    QLabel* angle_label = new QLabel("Angle:");
+    transform_grid->addWidget(angle_label, 2, 0);
+
+    rotate_angle_slider = new QSlider(Qt::Horizontal);
+    rotate_angle_slider->setRange(0, 359);
+    rotate_angle_slider->setValue(0);
+    rotate_angle_slider->setTickPosition(QSlider::TicksBelow);
+    rotate_angle_slider->setTickInterval(45);
+    rotate_angle_slider->setToolTip("Rotate grid by any angle (0-359°) - Lock layout first!");
+    rotate_angle_slider->setEnabled(false);
+    transform_grid->addWidget(rotate_angle_slider, 2, 1, 1, 2);
+
+    rotate_angle_spin = new QSpinBox();
+    rotate_angle_spin->setRange(0, 359);
+    rotate_angle_spin->setValue(0);
+    rotate_angle_spin->setSuffix("°");
+    rotate_angle_spin->setToolTip("Rotation angle in degrees - Lock layout first!");
+    rotate_angle_spin->setEnabled(false);
+    transform_grid->addWidget(rotate_angle_spin, 2, 3);
+
+    // Connect slider and spinbox
+    connect(rotate_angle_slider, &QSlider::valueChanged, rotate_angle_spin, &QSpinBox::setValue);
+    connect(rotate_angle_spin, QOverload<int>::of(&QSpinBox::valueChanged), rotate_angle_slider, &QSlider::setValue);
+
+    // Connect to real-time rotation handler
+    connect(rotate_angle_slider, &QSlider::valueChanged, this, &CustomControllerDialog::on_rotation_angle_changed);
+    connect(rotate_angle_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_rotation_angle_changed);
+
+    // Quick rotation presets
+    QLabel* presets_label = new QLabel("Quick Presets:");
+    transform_grid->addWidget(presets_label, 3, 0, 1, 4);
+
+    rotate_90_button = new QPushButton("90°");
+    rotate_90_button->setToolTip("Rotate LED grid 90° clockwise");
+    connect(rotate_90_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_90);
+    transform_grid->addWidget(rotate_90_button, 4, 0);
+
+    rotate_180_button = new QPushButton("180°");
+    rotate_180_button->setToolTip("Rotate LED grid 180°");
+    connect(rotate_180_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_180);
+    transform_grid->addWidget(rotate_180_button, 4, 1);
+
+    rotate_270_button = new QPushButton("270°");
+    rotate_270_button->setToolTip("Rotate LED grid 270° clockwise");
+    connect(rotate_270_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_270);
+    transform_grid->addWidget(rotate_270_button, 4, 2);
+
+    QLabel* flip_label = new QLabel("Flip Grid:");
+    transform_grid->addWidget(flip_label, 5, 0, 1, 4);
+
+    flip_horizontal_button = new QPushButton("Flip Horizontal");
+    flip_horizontal_button->setToolTip("Flip LED grid horizontally");
+    connect(flip_horizontal_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_horizontal);
+    transform_grid->addWidget(flip_horizontal_button, 6, 0, 1, 2);
+
+    flip_vertical_button = new QPushButton("Flip Vertical");
+    flip_vertical_button->setToolTip("Flip LED grid vertically");
+    connect(flip_vertical_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_vertical);
+    transform_grid->addWidget(flip_vertical_button, 6, 2, 1, 2);
+
+    transform_group->setLayout(transform_grid);
+    right_layout->addWidget(transform_group);
 
     content_layout->addLayout(right_layout, 2);
 
@@ -1131,4 +1214,251 @@ void CustomControllerDialog::refresh_colors()
 {
     UpdateItemCombo();
     UpdateGridColors();
+}
+
+/*---------------------------------------------------------*\
+| LED Layout Transform Functions                           |
+| Transform the grid coordinates of LED mappings           |
+\*---------------------------------------------------------*/
+
+void CustomControllerDialog::on_lock_transform_toggled(bool locked)
+{
+    transform_locked = locked;
+
+    if(locked)
+    {
+        // Lock the current layout
+        original_led_mappings = led_mappings;
+
+        // Enable rotation controls
+        rotate_angle_slider->setEnabled(true);
+        rotate_angle_spin->setEnabled(true);
+
+        // Reset angle to 0
+        rotate_angle_slider->blockSignals(true);
+        rotate_angle_spin->blockSignals(true);
+        rotate_angle_slider->setValue(0);
+        rotate_angle_spin->setValue(0);
+        rotate_angle_slider->blockSignals(false);
+        rotate_angle_spin->blockSignals(false);
+    }
+    else
+    {
+        // Unlock - disable rotation controls
+        rotate_angle_slider->setEnabled(false);
+        rotate_angle_spin->setEnabled(false);
+
+        // Clear original mappings
+        original_led_mappings.clear();
+    }
+}
+
+void CustomControllerDialog::on_rotation_angle_changed(int angle)
+{
+    if(!transform_locked || original_led_mappings.empty())
+    {
+        return;
+    }
+
+    float angle_degrees = (float)angle;
+    float angle_radians = angle_degrees * 3.14159265f / 180.0f;
+    float cos_angle = std::cos(angle_radians);
+    float sin_angle = std::sin(angle_radians);
+
+    // Calculate center of ORIGINAL grid
+    int orig_width = width_spin->value();
+    int orig_height = height_spin->value();
+    float center_x = (orig_width - 1) / 2.0f;
+    float center_y = (orig_height - 1) / 2.0f;
+
+    // Calculate new positions and determine required grid size
+    std::vector<std::pair<int, int>> new_positions;
+    new_positions.reserve(original_led_mappings.size());
+
+    int min_x = INT_MAX, max_x = INT_MIN;
+    int min_y = INT_MAX, max_y = INT_MIN;
+
+    for(unsigned int i = 0; i < original_led_mappings.size(); i++)
+    {
+        // Translate to origin (using ORIGINAL positions)
+        float x = original_led_mappings[i].x - center_x;
+        float y = original_led_mappings[i].y - center_y;
+
+        // Rotate
+        float rotated_x = x * cos_angle - y * sin_angle;
+        float rotated_y = x * sin_angle + y * cos_angle;
+
+        // Translate back and round to nearest grid position
+        int new_x = (int)std::round(rotated_x + center_x);
+        int new_y = (int)std::round(rotated_y + center_y);
+
+        new_positions.push_back(std::make_pair(new_x, new_y));
+
+        // Track bounds
+        min_x = std::min(min_x, new_x);
+        max_x = std::max(max_x, new_x);
+        min_y = std::min(min_y, new_y);
+        max_y = std::max(max_y, new_y);
+    }
+
+    // Calculate required grid size
+    int required_width = max_x - min_x + 1;
+    int required_height = max_y - min_y + 1;
+
+    // Auto-expand grid if needed
+    bool grid_changed = false;
+    if(required_width > orig_width)
+    {
+        width_spin->blockSignals(true);
+        width_spin->setValue(required_width);
+        width_spin->blockSignals(false);
+        grid_changed = true;
+    }
+    if(required_height > orig_height)
+    {
+        height_spin->blockSignals(true);
+        height_spin->setValue(required_height);
+        height_spin->blockSignals(false);
+        grid_changed = true;
+    }
+
+    // Shift positions if any went negative
+    int shift_x = (min_x < 0) ? -min_x : 0;
+    int shift_y = (min_y < 0) ? -min_y : 0;
+
+    // Apply new positions to current mappings
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        led_mappings[i].x = new_positions[i].first + shift_x;
+        led_mappings[i].y = new_positions[i].second + shift_y;
+        led_mappings[i].z = original_led_mappings[i].z;  // Preserve Z
+    }
+
+    if(grid_changed)
+    {
+        RebuildLayerTabs();
+    }
+
+    UpdateGridDisplay();
+}
+
+void CustomControllerDialog::on_rotate_grid_90()
+{
+    if(led_mappings.empty())
+    {
+        QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
+        return;
+    }
+
+    int width = width_spin->value();
+    int height = height_spin->value();
+
+    // Rotate 90° clockwise: (x, y) → (y, width - 1 - x)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        int old_x = led_mappings[i].x;
+        int old_y = led_mappings[i].y;
+        led_mappings[i].x = old_y;
+        led_mappings[i].y = width - 1 - old_x;
+    }
+
+    // Swap width and height
+    width_spin->blockSignals(true);
+    height_spin->blockSignals(true);
+    width_spin->setValue(height);
+    height_spin->setValue(width);
+    width_spin->blockSignals(false);
+    height_spin->blockSignals(false);
+
+    UpdateGridDisplay();
+}
+
+void CustomControllerDialog::on_rotate_grid_180()
+{
+    if(led_mappings.empty())
+    {
+        QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
+        return;
+    }
+
+    int width = width_spin->value();
+    int height = height_spin->value();
+
+    // Rotate 180°: (x, y) → (width - 1 - x, height - 1 - y)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        led_mappings[i].x = width - 1 - led_mappings[i].x;
+        led_mappings[i].y = height - 1 - led_mappings[i].y;
+    }
+
+    UpdateGridDisplay();
+}
+
+void CustomControllerDialog::on_rotate_grid_270()
+{
+    if(led_mappings.empty())
+    {
+        QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
+        return;
+    }
+
+    int width = width_spin->value();
+    int height = height_spin->value();
+
+    // Rotate 270° clockwise (= 90° counter-clockwise): (x, y) → (height - 1 - y, x)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        int old_x = led_mappings[i].x;
+        int old_y = led_mappings[i].y;
+        led_mappings[i].x = height - 1 - old_y;
+        led_mappings[i].y = old_x;
+    }
+
+    // Swap width and height
+    width_spin->blockSignals(true);
+    height_spin->blockSignals(true);
+    width_spin->setValue(height);
+    height_spin->setValue(width);
+    width_spin->blockSignals(false);
+    height_spin->blockSignals(false);
+
+    UpdateGridDisplay();
+}
+
+void CustomControllerDialog::on_flip_grid_horizontal()
+{
+    if(led_mappings.empty())
+    {
+        QMessageBox::information(this, "Grid Empty", "No LEDs to flip");
+        return;
+    }
+
+    int width = width_spin->value();
+
+    // Flip horizontally: (x, y) → (width - 1 - x, y)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        led_mappings[i].x = width - 1 - led_mappings[i].x;
+    }
+
+    UpdateGridDisplay();
+}
+
+void CustomControllerDialog::on_flip_grid_vertical()
+{
+    if(led_mappings.empty())
+    {
+        QMessageBox::information(this, "Grid Empty", "No LEDs to flip");
+        return;
+    }
+
+    int height = height_spin->value();
+
+    // Flip vertically: (x, y) → (x, height - 1 - y)
+    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    {
+        led_mappings[i].y = height - 1 - led_mappings[i].y;
+    }
+
+    UpdateGridDisplay();
 }
