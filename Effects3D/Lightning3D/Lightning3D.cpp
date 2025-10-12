@@ -55,7 +55,7 @@ EffectInfo3D Lightning3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;
+    info.show_axis_control = true;
     info.show_color_controls = true;
     return info;
 }
@@ -117,23 +117,31 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float phase = time * strikes_per_sec;
     float flash = fmax(0.0f, 1.0f - fmodf(phase, 1.0f) * 15.0f); // brief flash at start of each period
 
-    // Main bolt path roughly from high Y toward origin with some lateral wobble
+    // Relative coords
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Normalize space
-    float height = grid.height > 0 ? grid.height : 10.0f;
-    float y_norm = (rel_y + height * 0.5f) / (height + 0.001f); // 0..1 from bottom to top
+    // Choose vertical axis for strike and lateral plane
+    float along, p1, p2, span1, span2, height;
+    switch(effect_axis)
+    {
+        case AXIS_X: along = rel_x; p1 = rel_y; p2 = rel_z; span1 = grid.height; span2 = grid.depth; height = grid.width; break;
+        case AXIS_Y: along = rel_y; p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; break;
+        case AXIS_Z: along = rel_z; p1 = rel_x; p2 = rel_y; span1 = grid.width; span2 = grid.height; height = grid.depth; break;
+        case AXIS_RADIAL:
+        default:
+            along = rel_y; p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; break;
+    }
 
-    // Bolt center line parametric: lateral offset per height
-    float wobble = sinf(y_norm * 40.0f + time * 10.0f) * (0.2f + 0.1f * branches);
-    float cx = wobble * (grid.width * 0.1f);
-    float cz = cosf(y_norm * 37.0f + time * 9.0f) * (0.2f + 0.1f * branches) * (grid.depth * 0.1f);
+    float norm = (along + height * 0.5f) / (height + 0.001f);
+    float wobble = sinf(norm * 40.0f + time * 10.0f) * (0.2f + 0.1f * branches);
+    float c1 = wobble * (span1 * 0.1f);
+    float c2 = cosf(norm * 37.0f + time * 9.0f) * (0.2f + 0.1f * branches) * (span2 * 0.1f);
 
-    float dx = rel_x - cx;
-    float dz = rel_z - cz;
-    float radial = sqrtf(dx*dx + dz*dz);
+    float d1 = p1 - c1;
+    float d2 = p2 - c2;
+    float radial = sqrtf(d1*d1 + d2*d2);
 
     // Core and glow falloff
     float core = fmax(0.0f, 1.0f - radial / (0.4f + 0.2f * branches));
@@ -141,7 +149,7 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float intensity = (core + glow) * flash;
 
     // Branching: modulate with angle bands to simulate branches
-    float angle = atan2f(dz, dx);
+    float angle = atan2f(d2, d1);
     float bands = fabsf(cosf(angle * branches * 2.0f + time * 5.0f));
     intensity *= 0.7f + 0.3f * bands;
 

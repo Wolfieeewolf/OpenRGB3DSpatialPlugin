@@ -59,7 +59,7 @@ EffectInfo3D Rain3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;
+    info.show_axis_control = true;
     info.show_color_controls = true;
 
     return info;
@@ -138,27 +138,43 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
+    // Axis selection: choose fall axis and lateral plane
+    float fall_axis, lat1, lat2;
+    switch(effect_axis)
+    {
+        case AXIS_X: fall_axis = rel_x; lat1 = rel_y; lat2 = rel_z; break;
+        case AXIS_Y: fall_axis = rel_y; lat1 = rel_x; lat2 = rel_z; break;
+        case AXIS_Z: fall_axis = rel_z; lat1 = rel_x; lat2 = rel_y; break;
+        case AXIS_RADIAL:
+        default:
+            // For radial, simulate concentric rainy waves expanding
+            fall_axis = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            lat1 = rel_x; lat2 = rel_z;
+            break;
+    }
+
     // Normalize world to grid spacing bands
     float fall = time * speed * 0.5f; // fall speed factor
-    float drop_phase = rel_y + fall;  // falling along +Y direction in our grid
+    float drop_phase = fall_axis + fall;  // falling along chosen axis
 
     // Wrap phase by spacing to create repeating drop fronts
     float band = fmodf(drop_phase, base_spacing);
     if(band < 0) band += base_spacing;
 
     // Distance to the center of the drop band
-    float band_center = base_spacing * 0.25f; // narrow highlight
+    float band_center = base_spacing * 0.25f; // highlight position
     float band_dist = fabsf(band - band_center);
 
     // Lateral modulation: create streaks with wind
-    float lateral = fmodf(rel_x + rel_z * 0.5f + time * wind_drift, base_spacing);
+    float lateral = fmodf(lat1 + lat2 * 0.5f + time * wind_drift, base_spacing);
     if(lateral < 0) lateral += base_spacing;
-    float lateral_center = base_spacing * 0.1f;
+    float lateral_center = base_spacing * 0.15f;
     float lateral_dist = fabsf(lateral - lateral_center);
 
     // Combine to get intensity; sharper near drops
-    float band_intensity = fmax(0.0f, 1.0f - (band_dist / (0.15f * size_m + 0.1f)));
-    float lateral_intensity = fmax(0.0f, 1.0f - (lateral_dist / (0.2f * size_m + 0.1f)));
+    // Broaden bands so corners light up as well
+    float band_intensity = fmax(0.0f, 1.0f - (band_dist / (0.3f * size_m + 0.15f)));
+    float lateral_intensity = fmax(0.0f, 1.0f - (lateral_dist / (0.35f * size_m + 0.15f)));
     float intensity = band_intensity * lateral_intensity;
 
     // Slight depth fade with distance from origin to reduce wall saturation

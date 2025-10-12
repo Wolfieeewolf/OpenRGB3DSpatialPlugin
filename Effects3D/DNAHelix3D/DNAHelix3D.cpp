@@ -150,8 +150,8 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
 
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
     // Room-scale: lower spatial frequency, larger radius scale
-    float freq_scale = actual_frequency * 0.006f / size_multiplier;
-    float radius_scale = helix_radius * 0.06f * size_multiplier;  // Bigger helix coils across the room
+    float freq_scale = actual_frequency * 0.004f / size_multiplier;
+    float radius_scale = helix_radius * 0.08f * size_multiplier;  // Bigger helix coils across the room
 
     /*---------------------------------------------------------*\
     | Calculate helix based on selected axis                  |
@@ -212,8 +212,8 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     /*---------------------------------------------------------*\
     | Create thicker, glowing strands with outer glow         |
     \*---------------------------------------------------------*/
-    float strand_core_thickness = 4.0f + radius_scale * 0.2f;
-    float strand_glow_thickness = 10.0f + radius_scale * 0.4f;
+    float strand_core_thickness = 6.0f + radius_scale * 0.25f;
+    float strand_glow_thickness = 16.0f + radius_scale * 0.5f;
 
     // Core brightness (solid strand)
     float helix1_core = 1.0f - smoothstep(0.0f, strand_core_thickness, helix1_distance);

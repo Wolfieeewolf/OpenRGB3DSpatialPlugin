@@ -53,7 +53,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;
+    info.show_axis_control = true;
     info.show_color_controls = true;
     return info;
 }
@@ -101,21 +101,33 @@ RGBColor Matrix3D::CalculateColor(float, float, float, float)
 
 RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Columns run along -Y; compute column index from X/Z
+    // Columns run along selected axis (default -Y); compute column index from orthogonal plane
     float speed = GetScaledSpeed();
     float size_m = GetNormalizedSize();
 
     float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
-    int col_x = (int)floorf(x / col_spacing);
-    int col_z = (int)floorf(z / col_spacing);
-    int col_id = col_x * 73856093 ^ col_z * 19349663;
+    // Map to plane coords based on axis
+    float a, u, v, a_min, a_max, a_span;
+    switch(effect_axis)
+    {
+        case AXIS_X: a = x; u = y; v = z; a_min = grid.min_x; a_max = grid.max_x; a_span = grid.width; break;
+        case AXIS_Y: a = y; u = x; v = z; a_min = grid.min_y; a_max = grid.max_y; a_span = grid.depth; break;
+        case AXIS_Z: a = z; u = x; v = y; a_min = grid.min_z; a_max = grid.max_z; a_span = grid.height; break;
+        case AXIS_RADIAL:
+        default:
+            a = y; u = x; v = z; a_min = grid.min_y; a_max = grid.max_y; a_span = grid.depth; break;
+    }
 
-    // Head position per column: falls with speed; offset by hash
+    int col_u = (int)floorf(u / col_spacing);
+    int col_v = (int)floorf(v / col_spacing);
+    int col_id = col_u * 73856093 ^ col_v * 19349663;
+
+    // Head position per column along axis a
     float offset = ((col_id & 255) / 255.0f) * 10.0f;
-    float head = (grid.max_y - 0.5f) - fmodf(time * (0.5f + speed * 0.3f) + offset, grid.height + 5.0f);
+    float head = (a_max - 0.5f) - fmodf(time * (0.5f + speed * 0.3f) + offset, (a_max - a_min) + 5.0f);
 
-    // Distance from head gives trail; convert y to distance
-    float d = fabsf(y - head);
+    // Distance from head gives trail
+    float d = fabsf(a - head);
     float trail_len = 1.0f + (trail * 0.05f) * size_m; // ~1..6
     float trail_intensity = fmax(0.0f, 1.0f - d / trail_len);
 

@@ -56,7 +56,7 @@ EffectInfo3D Tornado3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = false;
+    info.show_axis_control = true;
     info.show_color_controls = true;
 
     return info;
@@ -122,12 +122,21 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float funnel_radius = (core_radius * 0.02f + h_norm * core_radius * 0.03f) * size_m;
 
     // Swirl angle depends on height and time (twist)
-    float angle = atan2(rel_z, rel_x);
-    float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
-    float swirl = angle + rel_y * (0.05f * freq) - time * speed * 0.2f;
+    // Axis selection for rotation: default Y
+    float a = 0.0f, r = 0.0f, along = 0.0f;
+    switch(effect_axis)
+    {
+        case AXIS_X: a = atan2f(rel_z, rel_y); r = sqrtf(rel_y*rel_y + rel_z*rel_z); along = rel_x; break;
+        case AXIS_Y: a = atan2f(rel_z, rel_x); r = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
+        case AXIS_Z: a = atan2f(rel_y, rel_x); r = sqrtf(rel_x*rel_x + rel_y*rel_y); along = rel_z; break;
+        case AXIS_RADIAL:
+        default:
+            a = atan2f(rel_z, rel_x); r = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
+    }
+    float swirl = a + along * (0.05f * freq) - time * speed * 0.2f;
 
     // Distance to the funnel wall (ring)
-    float ring = fabsf(radius - funnel_radius);
+    float ring = fabsf(r - funnel_radius);
     float ring_thickness = 0.6f + 0.8f * size_m;
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 

@@ -4471,6 +4471,11 @@ void OpenRGB3DSpatialTab::UpdateEffectCombo()
     effect_combo->addItem("DNA Helix 3D");     // index 6 (effect_type 5)
     effect_combo->addItem("Breathing Sphere 3D"); // index 7 (effect_type 6)
     effect_combo->addItem("Explosion 3D");     // index 8 (effect_type 7)
+    effect_combo->addItem("Rain 3D");          // index 9 (effect_type 8)
+    effect_combo->addItem("Tornado 3D");       // index 10 (effect_type 9)
+    effect_combo->addItem("Lightning 3D");     // index 11 (effect_type 10)
+    effect_combo->addItem("Matrix 3D");        // index 12 (effect_type 11)
+    effect_combo->addItem("Bouncing Ball 3D"); // index 13 (effect_type 12)
 
     // Add stack presets with [Stack] suffix
     // Store negative indices to distinguish presets from effects
