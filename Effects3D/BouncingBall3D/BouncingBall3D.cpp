@@ -123,8 +123,11 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float x_ball = cosf(ang) * radius_xy;
     float z_ball = sinf(ang) * radius_xy;
 
-    // Ball radius from slider
-    float R = (ball_size * 0.03f) * GetNormalizedSize();
+    // Ball radius scales with room size for visibility across any room
+    float size_m = GetNormalizedSize();
+    float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
+    // ball_size (10..150) mapped to ~2%..30% of average room dimension
+    float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
     float dx = rel_x - x_ball;
     float dy = rel_y - (y_ball - origin.y);
@@ -132,7 +135,9 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
     float glow = fmax(0.0f, 1.0f - dist / (R + 0.001f));
-    float intensity = powf(glow, 1.5f);
+    float intensity = powf(glow, 1.2f);
+    // Ensure a minimal visibility so sparse layouts still show the ball
+    if(intensity < 0.02f && dist <= R * 1.2f) intensity = 0.02f;
 
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(ang * 57.2958f) : GetColorAtPosition(0.5f);
     unsigned char r = final_color & 0xFF;

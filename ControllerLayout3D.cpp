@@ -196,6 +196,39 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         return;
     }
 
+    // Compute local-space bounding box center so world positions match viewport centering
+    // The viewport renders controllers centered on their local bounds before applying the
+    // controller transform. To ensure effects use the same world positions, we center here too.
+    Vector3D local_min = {0.0f, 0.0f, 0.0f};
+    Vector3D local_max = {0.0f, 0.0f, 0.0f};
+    bool have_bounds = false;
+    for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
+    {
+        const Vector3D& p = ctrl_transform->led_positions[i].local_position;
+        if(!have_bounds)
+        {
+            local_min = p;
+            local_max = p;
+            have_bounds = true;
+        }
+        else
+        {
+            if(p.x < local_min.x) local_min.x = p.x;
+            if(p.y < local_min.y) local_min.y = p.y;
+            if(p.z < local_min.z) local_min.z = p.z;
+            if(p.x > local_max.x) local_max.x = p.x;
+            if(p.y > local_max.y) local_max.y = p.y;
+            if(p.z > local_max.z) local_max.z = p.z;
+        }
+    }
+    Vector3D local_center = {0.0f, 0.0f, 0.0f};
+    if(have_bounds)
+    {
+        local_center.x = (local_min.x + local_max.x) * 0.5f;
+        local_center.y = (local_min.y + local_max.y) * 0.5f;
+        local_center.z = (local_min.z + local_max.z) * 0.5f;
+    }
+
     // Pre-compute rotation matrices for efficiency
     float rad_x = ctrl_transform->transform.rotation.x * (float)M_PI / 180.0f;
     float rad_y = ctrl_transform->transform.rotation.y * (float)M_PI / 180.0f;
@@ -212,7 +245,12 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
     for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
     {
         LEDPosition3D* led_pos = &ctrl_transform->led_positions[i];
-        Vector3D local = led_pos->local_position;
+        // Center local position so rotation/translation match viewport rendering
+        Vector3D local = {
+            led_pos->local_position.x - local_center.x,
+            led_pos->local_position.y - local_center.y,
+            led_pos->local_position.z - local_center.z
+        };
         Vector3D rotated = local;
 
         // Apply X rotation

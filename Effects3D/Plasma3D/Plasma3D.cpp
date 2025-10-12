@@ -293,3 +293,100 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+// Grid-aware version with room-scale feature sizing
+RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    float actual_frequency = GetScaledFrequency();
+    progress = CalculateProgress(time);
+
+    // Normalize spatial scale so features remain readable across any room size
+    float size_multiplier = GetNormalizedSize();
+    float spatial_scale = (grid.width + grid.depth + grid.height) / 3.0f;
+
+    float coord1, coord2, coord3;
+    switch(effect_axis)
+    {
+        case AXIS_X:  coord1 = rel_y; coord2 = rel_z; coord3 = rel_x; break;
+        case AXIS_Y:  coord1 = rel_x; coord2 = rel_z; coord3 = rel_y; break;
+        case AXIS_Z:  coord1 = rel_x; coord2 = rel_y; coord3 = rel_z; break;
+        case AXIS_RADIAL: default: coord1 = rel_x; coord2 = rel_y; coord3 = rel_z; break;
+    }
+    if(effect_reverse) coord3 = -coord3;
+
+    // Larger rooms -> smaller scale factor so wavelengths are larger
+    float scale = (actual_frequency * 0.8f) / (spatial_scale + 0.001f) / fmax(0.1f, size_multiplier);
+
+    float plasma_value;
+    switch(pattern_type)
+    {
+        case 0: // Classic
+            plasma_value =
+                sin((coord1 + progress * 2.0f) * scale * spatial_scale) +
+                sin((coord2 + progress * 1.7f) * scale * spatial_scale * 0.8f) +
+                sin((coord1 + coord2 + progress * 1.3f) * scale * spatial_scale * 0.6f) +
+                cos((coord1 - coord2 + progress * 2.2f) * scale * spatial_scale * 0.7f) +
+                sin(sqrt(coord1*coord1 + coord2*coord2) * scale * spatial_scale * 0.5f + progress * 1.5f) +
+                cos(coord3 * scale * spatial_scale * 0.4f + progress * 0.9f);
+            break;
+        case 1: // Swirl
+            {
+                float angle = atan2(coord2, coord1);
+                float radius = sqrt(coord1*coord1 + coord2*coord2);
+                plasma_value =
+                    sin(angle * 4.0f + radius * scale * spatial_scale * 0.8f + progress * 2.0f) +
+                    sin(angle * 3.0f - radius * scale * spatial_scale * 0.6f + progress * 1.5f) +
+                    cos(angle * 5.0f + radius * scale * spatial_scale * 0.4f - progress * 1.8f) +
+                    sin(coord3 * scale * spatial_scale * 0.5f + progress) +
+                    cos((angle * 2.0f + coord3 * scale * spatial_scale * 0.3f) + progress * 1.2f);
+            }
+            break;
+        case 2: // Ripple
+            {
+                float dist_from_center = (effect_axis == AXIS_RADIAL)
+                    ? sqrt(coord1*coord1 + coord2*coord2 + coord3*coord3)
+                    : sqrt(coord1*coord1 + coord2*coord2);
+                plasma_value =
+                    sin(dist_from_center * scale * spatial_scale - progress * 3.0f) +
+                    sin(dist_from_center * scale * spatial_scale * 1.5f - progress * 2.3f) +
+                    cos(dist_from_center * scale * spatial_scale * 0.8f + progress * 1.8f) +
+                    sin((coord1 + coord2) * scale * spatial_scale * 0.6f + progress * 1.2f) +
+                    cos(coord3 * scale * spatial_scale * 0.5f - progress * 0.7f);
+            }
+            break;
+        case 3: // Organic
+        default:
+            {
+                float flow1 = sin(coord1 * scale * spatial_scale * 0.8f + sin(coord2 * scale * spatial_scale * 1.2f + progress) + progress * 0.5f);
+                float flow2 = cos(coord2 * scale * spatial_scale * 0.9f + cos(coord3 * scale * spatial_scale * 1.1f + progress * 1.3f));
+                float flow3 = sin(coord3 * scale * spatial_scale * 0.7f + sin(coord1 * scale * spatial_scale * 1.3f + progress * 0.7f));
+                float flow4 = cos((coord1 + coord2) * scale * spatial_scale * 0.6f + sin(progress * 1.5f));
+                float flow5 = sin((coord2 + coord3) * scale * spatial_scale * 0.5f + cos(progress * 1.8f));
+                plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
+            }
+            break;
+    }
+
+    plasma_value = (plasma_value + 6.0f) / 12.0f;
+    plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
+
+    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(plasma_value * 360.0f + progress * 60.0f)
+                                            : GetColorAtPosition(plasma_value);
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    float brightness_factor = (effect_brightness / 100.0f);
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+    return (b << 16) | (g << 8) | r;
+}

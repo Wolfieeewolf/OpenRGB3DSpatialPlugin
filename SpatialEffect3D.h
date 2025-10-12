@@ -200,6 +200,10 @@ public:
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
 
+    // Expose current axis and reverse for renderer ordering
+    EffectAxis GetAxis() const { return effect_axis; }
+    bool GetReverse() const { return effect_reverse; }
+
     /*---------------------------------------------------------*\
     | Serialization - save/load effect parameters             |
     \*---------------------------------------------------------*/

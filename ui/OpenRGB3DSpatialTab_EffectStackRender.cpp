@@ -469,26 +469,90 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     /*---------------------------------------------------------*\
-    | Step 2: Update controllers in spatial order (Y-axis)    |
-    | Front-to-back ensures effects propagate correctly       |
+    | Step 2: Axis-aware UpdateLEDs ordering                  |
+    | Sort controllers along the effect axis to reduce        |
+    | perceived temporal skew between devices.                |
     \*---------------------------------------------------------*/
 
-    // Create sorted list of controller indices by Y position (front to back)
+    // Select an axis and reverse flag from the first enabled stack effect
+    EffectAxis sort_axis = AXIS_Y; // default: front->back
+    bool sort_reverse = false;
+    for(unsigned int ei = 0; ei < effect_stack.size(); ei++)
+    {
+        EffectInstance3D* inst = effect_stack[ei].get();
+        if(inst && inst->enabled && inst->effect)
+        {
+            sort_axis = inst->effect->GetAxis();
+            sort_reverse = inst->effect->GetReverse();
+            break;
+        }
+    }
+
+    // Build sortable keys per controller
     std::vector<std::pair<float, unsigned int>> sorted_controllers;
+    sorted_controllers.reserve(controller_transforms.size());
+
+    auto avg_along_axis = [&](ControllerTransform* t) -> float
+    {
+        if(!t) return 0.0f;
+        if(!t->led_positions.empty())
+        {
+            // Ensure world positions are current
+            if(t->world_positions_dirty)
+            {
+                ControllerLayout3D::UpdateWorldPositions(t);
+            }
+
+            double acc = 0.0;
+            for(size_t k = 0; k < t->led_positions.size(); k++)
+            {
+                switch(sort_axis)
+                {
+                    case AXIS_X: acc += t->led_positions[k].world_position.x; break;
+                    case AXIS_Y: acc += t->led_positions[k].world_position.y; break;
+                    case AXIS_Z: acc += t->led_positions[k].world_position.z; break;
+                    case AXIS_RADIAL:
+                    default:
+                    {
+                        float dx = t->led_positions[k].world_position.x - stack_ref_origin.x;
+                        float dy = t->led_positions[k].world_position.y - stack_ref_origin.y;
+                        float dz = t->led_positions[k].world_position.z - stack_ref_origin.z;
+                        acc += sqrtf(dx*dx + dy*dy + dz*dz);
+                        break;
+                    }
+                }
+            }
+            return (float)(acc / (double)t->led_positions.size());
+        }
+        // Fallback to transform center if no LEDs present
+        switch(sort_axis)
+        {
+            case AXIS_X: return t->transform.position.x;
+            case AXIS_Y: return t->transform.position.y;
+            case AXIS_Z: return t->transform.position.z;
+            case AXIS_RADIAL:
+            default:
+            {
+                float dx = t->transform.position.x - stack_ref_origin.x;
+                float dy = t->transform.position.y - stack_ref_origin.y;
+                float dz = t->transform.position.z - stack_ref_origin.z;
+                return sqrtf(dx*dx + dy*dy + dz*dz);
+            }
+        }
+    };
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* transform = controller_transforms[i].get();
         if(!transform) continue;
-
-        // Calculate average Y position for this controller
-        float avg_y = transform->transform.position.y;
-
-        sorted_controllers.push_back(std::make_pair(avg_y, i));
+        float key = avg_along_axis(transform);
+        sorted_controllers.emplace_back(key, i);
     }
 
-    // Sort by Y position (front = lower Y value, back = higher Y value)
-    std::sort(sorted_controllers.begin(), sorted_controllers.end());
+    std::sort(sorted_controllers.begin(), sorted_controllers.end(), [&](const auto& a, const auto& b){
+        if(!sort_reverse) return a.first < b.first;  // ascending
+        return a.first > b.first;                    // descending when reversed
+    });
 
     // Update controllers in spatial order (front to back)
     std::set<RGBController*> updated_physical_controllers;

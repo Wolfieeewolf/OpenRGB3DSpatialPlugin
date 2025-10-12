@@ -117,14 +117,28 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float freq = GetScaledFrequency();
     float size_m = GetNormalizedSize();
 
-    // Funnel radius increases with height
-    float h_norm = fmax(0.0f, fmin(1.0f, (rel_y + tornado_height * 0.005f) / (tornado_height * 0.01f + 0.001f)));
-    float funnel_radius = (core_radius * 0.02f + h_norm * core_radius * 0.03f) * size_m;
+    // Room-aware height and radius scaling
+    float half_height = grid.height * 0.5f * (0.5f + 0.5f * (tornado_height / 500.0f)); // slider expands to full height
+    float axial = 0.0f;
+    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+
+    switch(use_axis)
+    {
+        case AXIS_X: axial = rel_x; break;
+        case AXIS_Y: axial = rel_y; break;
+        case AXIS_Z: axial = rel_z; break;
+        case AXIS_RADIAL: default: axial = rel_y; break;
+    }
+    float h_norm = fmax(0.0f, fmin(1.0f, (axial + half_height) / (2.0f * half_height + 0.0001f)));
+    float base_radius = 0.5f * fmin(grid.width, grid.depth); // half of min horizontal span
+    // core_radius (20..300) maps to ~4%..60% of base, grows with height
+    float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
+    float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m;
 
     // Swirl angle depends on height and time (twist)
     // Axis selection for rotation: default Y
     float a = 0.0f, rad = 0.0f, along = 0.0f;
-    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+
     switch(use_axis)
     {
         case AXIS_X: a = atan2f(rel_z, rel_y); rad = sqrtf(rel_y*rel_y + rel_z*rel_z); along = rel_x; break;
@@ -134,11 +148,13 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
         default:
             a = atan2f(rel_z, rel_x); rad = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
     }
-    float swirl = a + along * (0.05f * freq) - time * speed * 0.2f;
+    float swirl = a + along * (0.015f * freq) - time * speed * 0.25f;
 
     // Distance to the funnel wall (ring)
     float ring = fabsf(rad - funnel_radius);
-    float ring_thickness = 0.6f + 0.8f * size_m;
+    // Thickness scales with room size to remain visible
+    float thickness_base = (grid.width + grid.depth) * 0.01f;
+    float ring_thickness = thickness_base * (0.6f + 1.2f * size_m);
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 
     // Add azimuthal banding to suggest rotation arms
@@ -146,7 +162,7 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float band = 0.5f * (1.0f + cosf(swirl * arms));
 
     // Vertical fade outside active height
-    float y_fade = fmax(0.0f, 1.0f - fabsf(rel_y) / (tornado_height * 0.01f + 0.001f));
+    float y_fade = fmax(0.0f, 1.0f - fabsf(axial) / (half_height + 0.001f));
 
     float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade;
     intensity = fmax(0.0f, fmin(1.0f, intensity));

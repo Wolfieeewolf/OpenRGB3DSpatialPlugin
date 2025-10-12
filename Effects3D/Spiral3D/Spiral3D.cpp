@@ -326,3 +326,115 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+// Grid-aware version with room-sized spirals
+RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    float actual_frequency = GetScaledFrequency();
+    progress = CalculateProgress(time);
+
+    float size_multiplier = GetNormalizedSize();
+    float spatial_scale = (grid.width + grid.depth + grid.height) / 3.0f;
+    float freq_scale = (actual_frequency * 0.15f) / (spatial_scale + 0.001f) / fmax(0.1f, size_multiplier);
+
+    float radius, angle, twist_coord;
+    switch(effect_axis)
+    {
+        case AXIS_X: radius = sqrt(rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_z, rel_y); twist_coord = rel_x; break;
+        case AXIS_Y: radius = sqrt(rel_x*rel_x + rel_z*rel_z); angle = atan2(rel_z, rel_x); twist_coord = rel_y; break;
+        case AXIS_Z: default: radius = sqrt(rel_x*rel_x + rel_y*rel_y); angle = atan2(rel_y, rel_x); twist_coord = rel_z; break;
+        case AXIS_RADIAL: radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y)); twist_coord = radius; break;
+    }
+
+    if(effect_reverse) angle = -angle;
+
+    // Normalize radius to room size so arms span entire room roughly
+    float norm_radius = radius / (spatial_scale * 0.5f + 0.001f);
+    float z_twist = twist_coord * freq_scale * spatial_scale * 0.3f;
+    float spiral_angle = angle * num_arms + norm_radius * (actual_frequency * 0.6f) + z_twist - progress;
+
+    float spiral_value;
+    float gap_factor = gap_size / 100.0f;
+
+    switch(pattern_type)
+    {
+        case 0: // Smooth
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(twist_coord * freq_scale * spatial_scale + progress * 0.7f));
+            spiral_value += 0.3f * cos(spiral_angle * 0.5f + twist_coord * freq_scale * spatial_scale * 1.5f + progress * 1.2f);
+            spiral_value = (spiral_value + 1.5f) / 3.0f;
+            spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            break;
+        case 1: // Pinwheel
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = arm_angle / blade_width;
+                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float radial_fade = 1.0f - exp(-norm_radius * (actual_frequency * 0.8f));
+                spiral_value *= radial_fade;
+            }
+            break;
+        case 2: // Sharp Blades
+        default:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    spiral_value = 1.0f - blade_position * blade_position;
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float energy_pulse = 0.2f * sin(norm_radius * (actual_frequency * 1.2f) - progress * 2.0f);
+                spiral_value = fmax(0.0f, spiral_value + energy_pulse);
+            }
+            break;
+    }
+
+    RGBColor final_color;
+    if((pattern_type == 1 || pattern_type == 2) && !GetRainbowMode())
+    {
+        float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
+        if(arm_index < 0) arm_index += num_arms;
+        final_color = GetColorAtPosition(arm_index / (float)num_arms);
+    }
+    else if(GetRainbowMode())
+    {
+        float hue = spiral_angle * 57.2958f + progress * 20.0f;
+        final_color = GetRainbowColor(hue);
+    }
+    else
+    {
+        final_color = GetColorAtPosition(spiral_value);
+    }
+
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    float brightness_factor = effect_brightness / 100.0f;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+    return (b << 16) | (g << 8) | r;
+}

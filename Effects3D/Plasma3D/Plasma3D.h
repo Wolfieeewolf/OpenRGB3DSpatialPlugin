@@ -41,6 +41,7 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private slots:
     void OnPlasmaParameterChanged();

@@ -37,9 +37,11 @@ BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
+
 BreathingSphere3D::~BreathingSphere3D()
 {
 }
+
 
 EffectInfo3D BreathingSphere3D::GetEffectInfo()
 {
@@ -79,6 +81,7 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     return info;
 }
 
+
 void BreathingSphere3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* breathing_widget = new QWidget();
@@ -94,21 +97,25 @@ void BreathingSphere3D::SetupCustomUI(QWidget* parent)
     if(parent && parent->layout())
     {
         parent->layout()->addWidget(breathing_widget);
-    }
+}
+
 
     connect(size_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);
 }
+
 
 void BreathingSphere3D::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_BREATHING_SPHERE;
 }
 
+
 void BreathingSphere3D::OnBreathingParameterChanged()
 {
     if(size_slider) sphere_size = size_slider->value();
     emit ParametersChanged();
 }
+
 
 RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time)
 {
@@ -137,64 +144,60 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
         return 0x00000000;  // Black - outside effect boundary
     }
 
+    // Legacy fallback: return black when inside; grid-aware version handles actual rendering.
+    (void)x; (void)y; (void)z; (void)time; // suppress unused warnings when compiled without grid path
+    return 0x00000000;
+}
+
+/*---------------------------------------------------------*\
+| BreathingSphere3D.cpp                                     |
+|                                                           |
+|   3D Breathing Sphere effect - pulsing sphere from origin |
+|                                                           |
+|   Date: 2025-09-28                                        |
+|                                                           |
+|   This file is part of the OpenRGB project                |
+|   SPDX-License-Identifier: GPL-2.0-only                   |
+\*---------------------------------------------------------*/
+
+// Grid-aware version with radius proportional to room size
+RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+}
+
+
     float actual_frequency = GetScaledFrequency();
     progress = CalculateProgress(time);
 
-    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float freq_scale = actual_frequency * 0.003f / size_multiplier; // larger spatial wavelength
+    float size_multiplier = GetNormalizedSize();
+    float half_diag = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    // Sphere base radius spans a large portion of the room, scales with slider
+    float base_scale = 0.15f + (sphere_size / 200.0f) * 0.55f; // ~15%..70% of half-diagonal
+    float sphere_radius = half_diag * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * actual_frequency * 0.2f));
 
-    /*---------------------------------------------------------*\
-    | Calculate distance based on axis (sphere vs ellipsoid)  |
-    \*---------------------------------------------------------*/
-    float distance;
-    switch(effect_axis)
-    {
-        case AXIS_X:  // Ellipsoid stretched along X-axis (Left to Right)
-            distance = sqrt((rel_x * 0.5f)*(rel_x * 0.5f) + rel_y*rel_y + rel_z*rel_z);
-            break;
-        case AXIS_Y:  // Ellipsoid stretched along Y-axis (Front to Back)
-            distance = sqrt(rel_x*rel_x + (rel_y * 0.5f)*(rel_y * 0.5f) + rel_z*rel_z);
-            break;
-        case AXIS_Z:  // Ellipsoid stretched along Z-axis (Floor to Ceiling)
-            distance = sqrt(rel_x*rel_x + rel_y*rel_y + (rel_z * 0.5f)*(rel_z * 0.5f));
-            break;
-        case AXIS_RADIAL:  // Perfect sphere
-        default:
-            distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            break;
-    }
-
-    // Room-scale sphere: scale radius substantially
-    float sphere_radius = (sphere_size * 2.0f) * size_multiplier * (1.0f + 0.5f * sin(progress * freq_scale));
-
+    float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     float sphere_intensity = 1.0f - smoothstep(0.0f, sphere_radius, distance);
-
-    float pulse_wave = 0.3f * sin(distance * freq_scale * 2.0f - progress * 2.0f);
-    sphere_intensity += pulse_wave;
-
+    sphere_intensity += 0.25f * sinf(distance * (actual_frequency / (half_diag + 0.001f)) * 1.5f - progress * 2.0f);
     sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
 
-    RGBColor final_color;
-    if(GetRainbowMode())
-    {
-        float hue = distance * 50.0f + progress * 30.0f;
-        final_color = GetRainbowColor(hue);
-    }
-    else
-    {
-        float color_position = (distance * 0.1f + progress * 0.05f);
-        final_color = GetColorAtPosition(color_position);
-    }
-
-    // Apply intensity and brightness
+    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(distance * 30.0f + progress * 30.0f)
+                                            : GetColorAtPosition(fmin(1.0f, distance / (sphere_radius + 0.001f)));
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-
-    float brightness_factor = (effect_brightness / 100.0f) * sphere_intensity;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
-
+    float bf = (effect_brightness / 100.0f) * sphere_intensity;
+    r = (unsigned char)(r * bf);
+    g = (unsigned char)(g * bf);
+    b = (unsigned char)(b * bf);
     return (b << 16) | (g << 8) | r;
 }
+
+

@@ -524,3 +524,110 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
 
     return (b << 16) | (g << 8) | r;
 }
+
+// Grid-aware version with room-relative fades and radii
+RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    progress = CalculateProgress(time);
+
+    // Room-aware distances
+    auto fade01 = [](float v){ return fmax(0.0f, fmin(1.0f, v)); };
+    float half_w = grid.width * 0.5f;
+    float half_d = grid.depth * 0.5f;
+    float half_h = grid.height * 0.5f;
+
+    float intensity = 0.0f;
+
+    // Helper lambdas for repeated spin math
+    auto spinXZ = [&](float y_bias) {
+        float angle = atan2(rel_z, rel_x);
+        float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+        float spin_angle = angle * num_arms - progress;
+        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+        if(arm_position < 0) arm_position += 6.28318f / num_arms;
+        float blade_width = 0.4f * (6.28318f / num_arms);
+        if(arm_position < blade_width)
+        {
+            float blade = 1.0f - (arm_position / blade_width);
+            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_w + half_d)) * 0.8f);
+            float y_fade = fade01(1.0f - fabs((rel_y - y_bias) / (half_h * 0.8f)));
+            return blade * radial_fade * y_fade;
+        }
+        return 0.0f;
+    };
+
+    auto spinYZ = [&](float x_bias_sign) {
+        float angle = atan2(rel_z, rel_y);
+        float radius = sqrt(rel_y*rel_y + rel_z*rel_z);
+        float spin_angle = angle * num_arms - progress;
+        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+        if(arm_position < 0) arm_position += 6.28318f / num_arms;
+        float blade_width = 0.4f * (6.28318f / num_arms);
+        if(arm_position < blade_width)
+        {
+            float blade = 1.0f - (arm_position / blade_width);
+            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_d + half_h)) * 0.8f);
+            float wall_fade = fade01(1.0f - ((x_bias_sign > 0 ? (half_w - rel_x) : (half_w + rel_x)) / (half_w * 0.8f)));
+            return blade * radial_fade * wall_fade;
+        }
+        return 0.0f;
+    };
+
+    auto spinXY = [&](float z_bias_sign) {
+        float angle = atan2(rel_y, rel_x);
+        float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+        float spin_angle = angle * num_arms - progress;
+        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+        if(arm_position < 0) arm_position += 6.28318f / num_arms;
+        float blade_width = 0.4f * (6.28318f / num_arms);
+        if(arm_position < blade_width)
+        {
+            float blade = 1.0f - (arm_position / blade_width);
+            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_w + half_h)) * 0.8f);
+            float wall_fade = fade01(1.0f - ((z_bias_sign > 0 ? (half_d - rel_z) : (half_d + rel_z)) / (half_d * 0.8f)));
+            return blade * radial_fade * wall_fade;
+        }
+        return 0.0f;
+    };
+
+    switch(surface_type)
+    {
+        case 0: intensity = spinXZ(0.0f); break;                   // Floor
+        case 1: intensity = spinXZ(half_h); break;                  // Ceiling bias upwards
+        case 2: intensity = spinYZ(-1.0f); break;                   // Left wall
+        case 3: intensity = spinYZ(1.0f); break;                    // Right wall
+        case 4: intensity = spinXY(-1.0f); break;                   // Front wall
+        case 5: intensity = spinXY(1.0f); break;                    // Back wall
+        case 6: intensity = fmax(spinXZ(0.0f), spinXZ(half_h)); break;                // Floor & Ceiling
+        case 7: intensity = fmax(spinYZ(-1.0f), spinYZ(1.0f)); break;                 // Left & Right
+        case 8: intensity = fmax(spinXY(-1.0f), spinXY(1.0f)); break;                 // Front & Back
+        case 9: intensity = fmax(fmax(spinYZ(-1.0f), spinYZ(1.0f)), fmax(spinXY(-1.0f), spinXY(1.0f))); break; // All walls
+        case 10: // Entire room (max of all)
+        default:
+            intensity = fmax(spinXZ(0.0f), fmax(spinXZ(half_h), fmax(fmax(spinYZ(-1.0f), spinYZ(1.0f)), fmax(spinXY(-1.0f), spinXY(1.0f)))));
+            break;
+    }
+
+    intensity = fmax(0.0f, fmin(1.0f, intensity));
+
+    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(progress * 57.2958f + intensity * 120.0f)
+                                            : GetColorAtPosition(intensity);
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    float bf = (effect_brightness / 100.0f) * intensity;
+    r = (unsigned char)(r * bf);
+    g = (unsigned char)(g * bf);
+    b = (unsigned char)(b * bf);
+    return (b << 16) | (g << 8) | r;
+}
