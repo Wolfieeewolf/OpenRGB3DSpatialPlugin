@@ -1540,6 +1540,8 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 \*---------------------------------------------------------*/
                 if(effect_timer && !effect_timer->isActive())
                 {
+                    effect_time = 0.0f;
+                    effect_elapsed.restart();
                     effect_timer->start(33);
                     LOG_WARNING("[OpenRGB3DSpatialPlugin] Started effect timer for stack preset");
                 }
@@ -1633,6 +1635,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     \*---------------------------------------------------------*/
     effect_running = true;
     effect_time = 0.0f;
+    effect_elapsed.restart();
 
     /*---------------------------------------------------------*\
     | Set timer interval based on FPS (default 30 FPS = 33ms) |
@@ -1699,6 +1702,12 @@ void OpenRGB3DSpatialTab::on_effect_updated()
 
 void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 {
+    // Advance time based on real elapsed time for smooth animation
+    qint64 ms = effect_elapsed.isValid() ? effect_elapsed.restart() : 33;
+    if(ms <= 0) { ms = 33; }
+    float dt = static_cast<float>(ms) / 1000.0f;
+    if(dt > 0.1f) dt = 0.1f; // clamp spikes
+    effect_time += dt;
     /*---------------------------------------------------------*\
     | Check if we should render effect stack instead of       |
     | single effect                                            |
@@ -1768,10 +1777,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Update effect time                                       |
-    \*---------------------------------------------------------*/
-    effect_time += 0.033f; // ~30 FPS
+    // effect_time already advanced at timer start
 
     /*---------------------------------------------------------*\
     | Calculate room bounds for effects                        |

@@ -36,7 +36,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     /*---------------------------------------------------------*\
     | Update effect time                                       |
     \*---------------------------------------------------------*/
-    effect_time += 0.033f; // ~30 FPS
+    // effect_time is advanced in on_effect_timer_timeout()
 
     /*---------------------------------------------------------*\
     | Calculate room bounds for effects                        |
@@ -53,13 +53,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         /*---------------------------------------------------------*\
         | Use manually configured room dimensions                  |
         | Origin at front-left-floor corner                        |
+        | IMPORTANT: Convert millimeters to grid units (/ 10.0f)   |
         \*---------------------------------------------------------*/
         grid_min_x = 0.0f;
-        grid_max_x = manual_room_width;
+        grid_max_x = manual_room_width / 10.0f;
         grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth;
+        grid_max_y = manual_room_depth / 10.0f;
         grid_min_z = 0.0f;
-        grid_max_z = manual_room_height;
+        grid_max_z = manual_room_height / 10.0f;
     }
     else
     {

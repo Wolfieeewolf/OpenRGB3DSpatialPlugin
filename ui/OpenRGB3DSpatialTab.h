@@ -26,6 +26,7 @@
 #include <QListWidget>
 #include <QCheckBox>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QLineEdit>
@@ -239,6 +240,7 @@ private:
     bool                        first_load;
     bool                        effect_running;
     float                       effect_time;
+    QElapsedTimer               effect_elapsed;
 
     /*---------------------------------------------------------*\
     | Custom grid dimensions (always 1:1 LED mapping)         |

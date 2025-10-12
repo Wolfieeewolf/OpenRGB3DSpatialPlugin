@@ -210,3 +210,82 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
 
     return (b << 16) | (g << 8) | r;
 }
+
+// Grid-aware version using real room center and room-relative boundary
+RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    // Origin based on reference mode (room center/user/custom)
+    Vector3D origin = GetEffectOriginGrid(grid);
+
+    // Position relative to origin
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    // Respect room-relative boundary via scale slider and room size
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    float actual_frequency = GetScaledFrequency();
+    progress = CalculateProgress(time);
+
+    float size_multiplier = GetNormalizedSize();
+    float freq_scale = actual_frequency * 0.01f / size_multiplier;
+
+    float distance;
+    switch(effect_axis)
+    {
+        case AXIS_X:
+            distance = fabs(rel_x) + sqrt(rel_y*rel_y + rel_z*rel_z) * 0.3f;
+            break;
+        case AXIS_Y:
+            distance = fabs(rel_y) + sqrt(rel_x*rel_x + rel_z*rel_z) * 0.3f;
+            break;
+        case AXIS_Z:
+            distance = fabs(rel_z) + sqrt(rel_x*rel_x + rel_y*rel_y) * 0.3f;
+            break;
+        case AXIS_RADIAL:
+        default:
+            distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            break;
+    }
+
+    float explosion_radius = progress * (explosion_intensity * 0.1f) * size_multiplier;
+    float wave_thickness = (3.0f + explosion_intensity * 0.05f) * size_multiplier;
+
+    float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
+    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f);
+
+    float secondary_radius = explosion_radius * 0.7f;
+    float secondary_wave = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
+    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.15f) * 0.6f;
+
+    float shock_detail = 0.2f * sin(distance * freq_scale * 8.0f - progress * 4.0f);
+    shock_detail *= exp(-distance * 0.1f);
+
+    float explosion_intensity_final = primary_wave + secondary_wave + shock_detail;
+    explosion_intensity_final = fmax(0.0f, fmin(1.0f, explosion_intensity_final));
+
+    if(distance < explosion_radius * 0.3f)
+    {
+        float core_intensity = 1.0f - (distance / (explosion_radius * 0.3f));
+        explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.8f);
+    }
+
+    RGBColor final_color = GetRainbowMode()
+        ? GetRainbowColor(fmax(0.0f, 60.0f - (explosion_intensity_final * 60.0f) + progress * 10.0f))
+        : GetColorAtPosition(explosion_intensity_final);
+
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+
+    float brightness_factor = (GetBrightness() / 100.0f) * explosion_intensity_final;
+    r = (unsigned char)(r * brightness_factor);
+    g = (unsigned char)(g * brightness_factor);
+    b = (unsigned char)(b * brightness_factor);
+
+    return (b << 16) | (g << 8) | r;
+}
