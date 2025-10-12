@@ -4064,7 +4064,10 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         "BreathingSphere3D",// 6
         "Explosion3D",      // 7
         "Rain3D",           // 8
-        "Tornado3D"         // 9
+        "Tornado3D",        // 9
+        "Lightning3D",      // 10
+        "Matrix3D",         // 11
+        "BouncingBall3D"    // 12
     };
     const int num_effects = sizeof(effect_names) / sizeof(effect_names[0]);
 

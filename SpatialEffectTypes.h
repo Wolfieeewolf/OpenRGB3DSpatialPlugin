@@ -28,6 +28,9 @@ enum SpatialEffectType
     SPATIAL_EFFECT_EXPLOSION        = 6,
     SPATIAL_EFFECT_RAIN             = 7,
     SPATIAL_EFFECT_TORNADO          = 8,
+    SPATIAL_EFFECT_LIGHTNING        = 9,
+    SPATIAL_EFFECT_MATRIX           = 10,
+    SPATIAL_EFFECT_BOUNCING_BALL    = 11,
 };
 
 /*---------------------------------------------------------*\

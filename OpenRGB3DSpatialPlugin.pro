@@ -152,6 +152,9 @@ HEADERS +=                                                                      
     Effects3D/DiagnosticTest3D/DiagnosticTest3D.h                                               \
     Effects3D/Rain3D/Rain3D.h                                                                   \
     Effects3D/Tornado3D/Tornado3D.h                                                             \
+    Effects3D/Lightning3D/Lightning3D.h                                                         \
+    Effects3D/Matrix3D/Matrix3D.h                                                               \
+    Effects3D/BouncingBall3D/BouncingBall3D.h                                                   \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -186,6 +189,9 @@ SOURCES +=                                                                      
     Effects3D/DiagnosticTest3D/DiagnosticTest3D.cpp                                             \
     Effects3D/Rain3D/Rain3D.cpp                                                                 \
     Effects3D/Tornado3D/Tornado3D.cpp                                                           \
+    Effects3D/Lightning3D/Lightning3D.cpp                                                       \
+    Effects3D/Matrix3D/Matrix3D.cpp                                                             \
+    Effects3D/BouncingBall3D/BouncingBall3D.cpp                                                 \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
