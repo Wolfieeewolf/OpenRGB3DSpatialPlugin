@@ -24,7 +24,7 @@ REGISTER_EFFECT_3D(BreathingSphere3D);
 BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
-    sphere_size = 50;
+    sphere_size = 120;   // Larger default for room-scale
     progress = 0.0f;
 
     SetFrequency(50);
@@ -141,7 +141,7 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
     progress = CalculateProgress(time);
 
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float freq_scale = actual_frequency * 0.01f / size_multiplier;
+    float freq_scale = actual_frequency * 0.003f / size_multiplier; // larger spatial wavelength
 
     /*---------------------------------------------------------*\
     | Calculate distance based on axis (sphere vs ellipsoid)  |
@@ -164,7 +164,8 @@ RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time
             break;
     }
 
-    float sphere_radius = (sphere_size * 0.1f) * size_multiplier * (1.0f + 0.5f * sin(progress * freq_scale));
+    // Room-scale sphere: scale radius substantially
+    float sphere_radius = (sphere_size * 2.0f) * size_multiplier * (1.0f + 0.5f * sin(progress * freq_scale));
 
     float sphere_intensity = 1.0f - smoothstep(0.0f, sphere_radius, distance);
 

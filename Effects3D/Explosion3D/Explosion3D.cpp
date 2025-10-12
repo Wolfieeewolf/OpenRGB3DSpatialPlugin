@@ -62,8 +62,8 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.needs_frequency = true;
 
     // Standardized parameter scaling
-    info.default_speed_scale = 20.0f;       // (speed/100)² * 200 * 0.1
-    info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
+    info.default_speed_scale = 35.0f;       // (speed/100)² * 35 (room-scale expansion)
+    info.default_frequency_scale = 60.0f;   // (freq/100)² * 60 (less fine noise)
     info.use_size_parameter = true;
 
     // Control visibility (show all controls)
@@ -252,8 +252,9 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
             break;
     }
 
-    float explosion_radius = progress * (explosion_intensity * 0.1f) * size_multiplier;
-    float wave_thickness = (3.0f + explosion_intensity * 0.05f) * size_multiplier;
+    // Room-scale expansion: increase base radius and wave thickness
+    float explosion_radius = progress * (explosion_intensity * 0.25f) * size_multiplier;
+    float wave_thickness = (8.0f + explosion_intensity * 0.08f) * size_multiplier;
 
     float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
     primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f);

@@ -66,8 +66,8 @@ EffectInfo3D Plasma3D::GetEffectInfo()
     info.needs_frequency = true;
 
     // Standardized parameter scaling
-    info.default_speed_scale = 8.0f;        // (speed/100)² * 8.0 (room-scale motion)
-    info.default_frequency_scale = 8.0f;    // (freq/100)² * 8.0 (larger features)
+    info.default_speed_scale = 4.0f;        // (speed/100)² * 4.0
+    info.default_frequency_scale = 20.0f;   // (freq/100)² * 20
     info.use_size_parameter = true;
 
     // Control visibility (show all controls)
@@ -194,7 +194,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 
     float plasma_value;
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float scale = actual_frequency * 0.004f / size_multiplier;  // Room-scale features across the space
+    float scale = actual_frequency * 0.015f / size_multiplier;  // Larger size = more spread out
 
     switch(pattern_type)
     {
@@ -292,4 +292,5 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 
     return (b << 16) | (g << 8) | r;
 }
+
 
