@@ -24,7 +24,7 @@ REGISTER_EFFECT_3D(DNAHelix3D);
 DNAHelix3D::DNAHelix3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     radius_slider = nullptr;
-    helix_radius = 75;       // Default helix radius
+    helix_radius = 180;      // Larger default helix radius for room-scale
     progress = 0.0f;
 
     // Set up default DNA base pair colors (0x00BBGGRR format), allow user override via universal controls
@@ -149,8 +149,9 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     progress = CalculateProgress(time);
 
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float freq_scale = actual_frequency * 0.02f / size_multiplier;
-    float radius_scale = helix_radius * 0.02f * size_multiplier;  // Larger size = bigger helix
+    // Room-scale: lower spatial frequency, larger radius scale
+    float freq_scale = actual_frequency * 0.006f / size_multiplier;
+    float radius_scale = helix_radius * 0.06f * size_multiplier;  // Bigger helix coils across the room
 
     /*---------------------------------------------------------*\
     | Calculate helix based on selected axis                  |
@@ -211,8 +212,8 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     /*---------------------------------------------------------*\
     | Create thicker, glowing strands with outer glow         |
     \*---------------------------------------------------------*/
-    float strand_core_thickness = 1.5f + radius_scale * 0.3f;
-    float strand_glow_thickness = 3.5f + radius_scale * 0.6f;
+    float strand_core_thickness = 4.0f + radius_scale * 0.2f;
+    float strand_glow_thickness = 10.0f + radius_scale * 0.4f;
 
     // Core brightness (solid strand)
     float helix1_core = 1.0f - smoothstep(0.0f, strand_core_thickness, helix1_distance);
@@ -228,7 +229,7 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     /*---------------------------------------------------------*\
     | Add base pairs (rungs) with better spacing and glow     |
     \*---------------------------------------------------------*/
-    float base_pair_frequency = freq_scale * 3.0f;  // More frequent base pairs
+    float base_pair_frequency = freq_scale * 1.2f;  // Fewer, larger base pairs in room-scale
     float base_pair_phase = fmod(coord_along_helix * base_pair_frequency + progress * 0.5f, 6.28318f);
 
     // Create discrete base pairs at regular intervals

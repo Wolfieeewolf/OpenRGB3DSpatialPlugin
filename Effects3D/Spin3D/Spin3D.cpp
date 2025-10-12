@@ -67,8 +67,9 @@ EffectInfo3D Spin3D::GetEffectInfo()
     info.needs_frequency = false;
 
     // Standardized parameter scaling
-    info.default_speed_scale = 10.0f;       // (speed/100)² * 200 * 0.05
-    info.default_frequency_scale = 10.0f;
+    // Room-scale rotation defaults: faster spin, broader patterns
+    info.default_speed_scale = 25.0f;       // (speed/100)² * 25
+    info.default_frequency_scale = 6.0f;
     info.use_size_parameter = true;
 
     // Control visibility (show all controls except frequency)

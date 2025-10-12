@@ -69,8 +69,9 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     info.needs_frequency = false;
 
     // Standardized parameter scaling
-    info.default_speed_scale = 20.0f;       // (speed/100)² * 200 * 0.1
-    info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
+    // Room-scale spirals: larger arms and slower spatial twist by default
+    info.default_speed_scale = 35.0f;       // (speed/100)² * 35 (clear rotation at mid speeds)
+    info.default_frequency_scale = 40.0f;   // fewer twists/kinks across the room
     info.use_size_parameter = true;
 
     // Control visibility (show all controls except frequency - has custom)
@@ -170,7 +171,8 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
 
     progress = CalculateProgress(time);
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float freq_scale = actual_frequency * 0.01f / size_multiplier;
+    // Room-scale: reduce spatial frequency to expand arm spacing
+    float freq_scale = actual_frequency * 0.003f / size_multiplier;
 
     /*---------------------------------------------------------*\
     | Calculate spiral based on selected axis                 |
