@@ -1895,37 +1895,34 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                grid_context.center_x, grid_context.center_y, grid_context.center_z);
 
     /*---------------------------------------------------------*\
-    | Get effect origin from the selected reference point     |
+    | Configure effect origin mode                             |
+    | Pass absolute world coords to CalculateColorGrid         |
     \*---------------------------------------------------------*/
-    float origin_offset_x = 0.0f;
-    float origin_offset_y = 0.0f;
-    float origin_offset_z = 0.0f;
-
-    if(effect_origin_combo)
+    if(current_effect_ui)
     {
-        // Get the selected reference point index (-1 means room center)
-        int index = effect_origin_combo->currentIndex();
-        int ref_point_idx = effect_origin_combo->itemData(index).toInt();
+        ReferenceMode mode = REF_MODE_ROOM_CENTER;
+        Vector3D ref_origin = {0.0f, 0.0f, 0.0f};
 
-        if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+        if(effect_origin_combo)
         {
-            // Use selected reference point position
-            VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
-            Vector3D origin = ref_point->GetPosition();
-            origin_offset_x = origin.x;
-            origin_offset_y = origin.y;
-            origin_offset_z = origin.z;
-            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using reference point origin: %.1f, %.1f, %.1f", origin_offset_x, origin_offset_y, origin_offset_z);
+            int index = effect_origin_combo->currentIndex();
+            int ref_point_idx = effect_origin_combo->itemData(index).toInt();
+            if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
+            {
+                VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
+                ref_origin = ref_point->GetPosition();
+                mode = REF_MODE_USER_POSITION;
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect origin set to reference point: %.1f, %.1f, %.1f", ref_origin.x, ref_origin.y, ref_origin.z);
+            }
+            else
+            {
+                mode = REF_MODE_ROOM_CENTER;
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect origin set to room center (grid.center)");
+            }
         }
-        else
-        {
-            // Room Center selected - effect will use grid.center (calculated from room bounds)
-            // No offset needed; GetEffectOriginGrid() returns grid.center automatically
-            origin_offset_x = 0.0f;
-            origin_offset_y = 0.0f;
-            origin_offset_z = 0.0f;
-            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Using room center origin (grid.center will be calculated)");
-        }
+
+        current_effect_ui->SetGlobalReferencePoint(ref_origin);
+        current_effect_ui->SetReferenceMode(mode);
     }
 
     /*---------------------------------------------------------*\
@@ -2053,11 +2050,6 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                     float y = transform->led_positions[mapping_idx].world_position.y;
                     float z = transform->led_positions[mapping_idx].world_position.z;
 
-                    // Adjust coordinates relative to the effect origin (user position)
-                    float relative_x = x - origin_offset_x;
-                    float relative_y = y - origin_offset_y;
-                    float relative_z = z - origin_offset_z;
-
                     // Only apply effects to LEDs within the room-centered grid bounds
                     if(x >= grid_min_x && x <= grid_max_x &&
                        y >= grid_min_y && y <= grid_max_y &&
@@ -2069,8 +2061,8 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                             continue;
                         }
 
-                        // Calculate effect color using grid-aware method
-                        RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+                        // Calculate effect color using grid-aware method (world coords)
+                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
                         // Apply color to the mapped physical LED (with bounds checking)
                         if(mapping.zone_idx < mapping.controller->zones.size())
@@ -2137,11 +2129,6 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             // Get the actual LED index for color updates
             unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
 
-            // Adjust coordinates relative to the effect origin (user position)
-            float relative_x = x - origin_offset_x;
-            float relative_y = y - origin_offset_y;
-            float relative_z = z - origin_offset_z;
-
             // Only apply effects to LEDs within the room-centered grid bounds
             if(x >= grid_min_x && x <= grid_max_x &&
                y >= grid_min_y && y <= grid_max_y &&
@@ -2150,7 +2137,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                 /*---------------------------------------------------------*\
                 | Calculate effect color using grid-aware method          |
                 \*---------------------------------------------------------*/
-                RGBColor color = current_effect_ui->CalculateColorGrid(relative_x, relative_y, relative_z, effect_time, grid_context);
+                RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
                 // Apply color to the correct LED using the global LED index
                 if(led_global_idx < controller->colors.size())

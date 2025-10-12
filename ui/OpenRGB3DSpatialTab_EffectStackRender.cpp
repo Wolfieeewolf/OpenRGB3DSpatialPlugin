@@ -128,6 +128,23 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     // Create grid context with room bounds
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
 
+    /*---------------------------------------------------------*\
+    | Configure effect origin for all stack effects            |
+    | Uses selected reference point (if any) or room center    |
+    \*---------------------------------------------------------*/
+    ReferenceMode stack_origin_mode = REF_MODE_ROOM_CENTER;
+    Vector3D stack_ref_origin = {0.0f, 0.0f, 0.0f};
+    if(effect_origin_combo)
+    {
+        int origin_index = effect_origin_combo->currentIndex();
+        int ref_idx = effect_origin_combo->itemData(origin_index).toInt();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            stack_origin_mode = REF_MODE_USER_POSITION;
+            stack_ref_origin = reference_points[ref_idx]->GetPosition();
+        }
+    }
+
     // Log room bounds once for debugging
     static bool logged_bounds = false;
     if(!logged_bounds)
@@ -229,6 +246,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         {
                             continue;
                         }
+                        // Set origin for this effect instance (world coords provided below)
+                        instance->effect->SetGlobalReferencePoint(stack_ref_origin);
+                        instance->effect->SetReferenceMode(stack_origin_mode);
 
                         if(effect_log_counter == 0 && effect_idx == 0)
                         {
@@ -373,6 +393,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         continue;
                     }
+                    // Set origin for this effect instance (world coords provided below)
+                    instance->effect->SetGlobalReferencePoint(stack_ref_origin);
+                    instance->effect->SetReferenceMode(stack_origin_mode);
 
                     /*---------------------------------------------------------*\
                     | Check if this effect targets this controller            |
