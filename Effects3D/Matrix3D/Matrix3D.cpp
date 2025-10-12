@@ -108,7 +108,8 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
     float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
     // Map to plane coords based on axis
     float a, u, v, a_min, a_max, a_span;
-    switch(effect_axis)
+    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+    switch(use_axis)
     {
         case AXIS_X: a = x; u = y; v = z; a_min = grid.min_x; a_max = grid.max_x; a_span = grid.width; break;
         case AXIS_Y: a = y; u = x; v = z; a_min = grid.min_y; a_max = grid.max_y; a_span = grid.depth; break;

@@ -123,20 +123,21 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
 
     // Swirl angle depends on height and time (twist)
     // Axis selection for rotation: default Y
-    float a = 0.0f, r = 0.0f, along = 0.0f;
-    switch(effect_axis)
+    float a = 0.0f, rad = 0.0f, along = 0.0f;
+    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+    switch(use_axis)
     {
-        case AXIS_X: a = atan2f(rel_z, rel_y); r = sqrtf(rel_y*rel_y + rel_z*rel_z); along = rel_x; break;
-        case AXIS_Y: a = atan2f(rel_z, rel_x); r = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
-        case AXIS_Z: a = atan2f(rel_y, rel_x); r = sqrtf(rel_x*rel_x + rel_y*rel_y); along = rel_z; break;
+        case AXIS_X: a = atan2f(rel_z, rel_y); rad = sqrtf(rel_y*rel_y + rel_z*rel_z); along = rel_x; break;
+        case AXIS_Y: a = atan2f(rel_z, rel_x); rad = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
+        case AXIS_Z: a = atan2f(rel_y, rel_x); rad = sqrtf(rel_x*rel_x + rel_y*rel_y); along = rel_z; break;
         case AXIS_RADIAL:
         default:
-            a = atan2f(rel_z, rel_x); r = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
+            a = atan2f(rel_z, rel_x); rad = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
     }
     float swirl = a + along * (0.05f * freq) - time * speed * 0.2f;
 
     // Distance to the funnel wall (ring)
-    float ring = fabsf(r - funnel_radius);
+    float ring = fabsf(rad - funnel_radius);
     float ring_thickness = 0.6f + 0.8f * size_m;
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 
@@ -161,12 +162,12 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
         final_color = GetColorAtPosition(0.5f + 0.5f * intensity);
     }
 
-    unsigned char r = final_color & 0xFF;
+    unsigned char rr = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
     float brightness_factor = (GetBrightness() / 100.0f) * intensity;
-    r = (unsigned char)(r * brightness_factor);
+    rr = (unsigned char)(rr * brightness_factor);
     g = (unsigned char)(g * brightness_factor);
     b = (unsigned char)(b * brightness_factor);
-    return (b << 16) | (g << 8) | r;
+    return (b << 16) | (g << 8) | rr;
 }

@@ -191,14 +191,22 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* axis_layout = new QHBoxLayout();
     axis_layout->addWidget(new QLabel("Axis:"));
     axis_combo = new QComboBox();
-    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0
-    axis_combo->addItem("Y-Axis (Front to Back)");    // AXIS_Y = 1
-    axis_combo->addItem("Z-Axis (Bottom to Top)");    // AXIS_Z = 2
+    axis_combo->addItem("None (Effect Default)");      // index 0 -> no override
+    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0 (grid X)
+    axis_combo->addItem("Y-Axis (Front to Back)");    // AXIS_Y = 1 (grid Y)
+    axis_combo->addItem("Z-Axis (Bottom to Top)");    // AXIS_Z = 2 (grid Z)
     axis_combo->addItem("Radial (Outward from Center)"); // AXIS_RADIAL = 3
-    axis_combo->setCurrentIndex(effect_axis);
+    axis_combo->setToolTip(
+        "Axis mapping uses grid coordinates:\n"
+        "X: Left→Right, Y: Front→Back, Z: Bottom→Top.\n"
+        "Radial: distance from effect origin (room/user)."
+    );
+    axis_none = true; // default to no axis override
+    axis_combo->setCurrentIndex(axis_none ? 0 : (int)effect_axis + 1);
     axis_layout->addWidget(axis_combo);
 
     reverse_check = new QCheckBox("Reverse");
+    reverse_check->setToolTip("Reverse direction along the selected axis");
     reverse_check->setChecked(effect_reverse);
     axis_layout->addWidget(reverse_check);
     axis_layout->addStretch();
@@ -914,7 +922,16 @@ void SpatialEffect3D::OnAxisChanged()
 {
     if(axis_combo)
     {
-        effect_axis = (EffectAxis)axis_combo->currentIndex();
+        int idx = axis_combo->currentIndex();
+        if(idx == 0)
+        {
+            axis_none = true;
+        }
+        else
+        {
+            axis_none = false;
+            effect_axis = (EffectAxis)(idx - 1);
+        }
     }
     emit ParametersChanged();
 }

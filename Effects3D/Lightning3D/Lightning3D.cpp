@@ -124,7 +124,8 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
 
     // Choose vertical axis for strike and lateral plane
     float along, p1, p2, span1, span2, height;
-    switch(effect_axis)
+    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+    switch(use_axis)
     {
         case AXIS_X: along = rel_x; p1 = rel_y; p2 = rel_z; span1 = grid.height; span2 = grid.depth; height = grid.width; break;
         case AXIS_Y: along = rel_y; p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; break;

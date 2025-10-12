@@ -140,7 +140,8 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
 
     // Axis selection: choose fall axis and lateral plane
     float fall_axis, lat1, lat2;
-    switch(effect_axis)
+    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+    switch(use_axis)
     {
         case AXIS_X: fall_axis = rel_x; lat1 = rel_y; lat2 = rel_z; break;
         case AXIS_Y: fall_axis = rel_y; lat1 = rel_x; lat2 = rel_z; break;

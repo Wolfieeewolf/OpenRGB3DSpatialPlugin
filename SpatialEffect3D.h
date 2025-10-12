@@ -232,6 +232,7 @@ protected:
     \*---------------------------------------------------------*/
     QComboBox*          axis_combo;
     QCheckBox*          reverse_check;
+    bool                axis_none;            // When true, use effect's default axis behavior
 
     /*---------------------------------------------------------*\
     | Color management controls                                |
