@@ -4062,7 +4062,9 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         "Spin3D",           // 4
         "DNAHelix3D",       // 5
         "BreathingSphere3D",// 6
-        "Explosion3D"       // 7
+        "Explosion3D",      // 7
+        "Rain3D",           // 8
+        "Tornado3D"         // 9
     };
     const int num_effects = sizeof(effect_names) / sizeof(effect_names[0]);
 

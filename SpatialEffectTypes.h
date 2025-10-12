@@ -26,6 +26,8 @@ enum SpatialEffectType
     SPATIAL_EFFECT_DNA_HELIX        = 4,
     SPATIAL_EFFECT_BREATHING_SPHERE = 5,
     SPATIAL_EFFECT_EXPLOSION        = 6,
+    SPATIAL_EFFECT_RAIN             = 7,
+    SPATIAL_EFFECT_TORNADO          = 8,
 };
 
 /*---------------------------------------------------------*\

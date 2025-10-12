@@ -150,6 +150,8 @@ HEADERS +=                                                                      
     Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
     Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
     Effects3D/DiagnosticTest3D/DiagnosticTest3D.h                                               \
+    Effects3D/Rain3D/Rain3D.h                                                                   \
+    Effects3D/Tornado3D/Tornado3D.h                                                             \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -182,6 +184,8 @@ SOURCES +=                                                                      
     Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
     Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \
     Effects3D/DiagnosticTest3D/DiagnosticTest3D.cpp                                             \
+    Effects3D/Rain3D/Rain3D.cpp                                                                 \
+    Effects3D/Tornado3D/Tornado3D.cpp                                                           \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
