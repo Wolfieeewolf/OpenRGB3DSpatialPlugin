@@ -130,7 +130,18 @@ public:
     \*---------------------------------------------------------*/
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
     {
-        (void)grid;
+        // Default grid-aware behavior: compute origin with grid context and apply room-relative boundary.
+        Vector3D origin = GetEffectOriginGrid(grid);
+        float rel_x = x - origin.x;
+        float rel_y = y - origin.y;
+        float rel_z = z - origin.z;
+
+        if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+        {
+            return 0x00000000; // Outside coverage area
+        }
+
+        // Delegate actual color math to legacy CalculateColor implementation
         return CalculateColor(x, y, z, time);
     }
 

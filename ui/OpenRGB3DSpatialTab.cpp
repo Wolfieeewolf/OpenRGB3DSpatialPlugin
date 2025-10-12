@@ -1542,7 +1542,20 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 {
                     effect_time = 0.0f;
                     effect_elapsed.restart();
-                    effect_timer->start(33);
+                    // Compute timer interval from stack effects (use highest requested FPS)
+                    unsigned int target_fps = 30;
+                    for(size_t i = 0; i < effect_stack.size(); i++)
+                    {
+                        if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
+                        {
+                            unsigned int f = effect_stack[i]->effect->GetTargetFPS();
+                            if(f > target_fps) target_fps = f;
+                        }
+                    }
+                    if(target_fps < 1) target_fps = 30;
+                    int interval_ms = (int)(1000 / target_fps);
+                    if(interval_ms < 1) interval_ms = 1;
+                    effect_timer->start(interval_ms);
                     LOG_WARNING("[OpenRGB3DSpatialPlugin] Started effect timer for stack preset");
                 }
                 else
@@ -1638,9 +1651,15 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     effect_elapsed.restart();
 
     /*---------------------------------------------------------*\
-    | Set timer interval based on FPS (default 30 FPS = 33ms) |
+    | Set timer interval from effect FPS (default 30 FPS)      |
     \*---------------------------------------------------------*/
-    effect_timer->start(33);
+    {
+        unsigned int target_fps = current_effect_ui ? current_effect_ui->GetTargetFPS() : 30;
+        if(target_fps < 1) target_fps = 30;
+        int interval_ms = (int)(1000 / target_fps);
+        if(interval_ms < 1) interval_ms = 1;
+        effect_timer->start(interval_ms);
+    }
 
     /*---------------------------------------------------------*\
     | Update UI                                                |
