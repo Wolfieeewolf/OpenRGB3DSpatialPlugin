@@ -150,7 +150,11 @@ public:
         float y_adj = y - origin_grid.y + origin_legacy.y;
         float z_adj = z - origin_grid.z + origin_legacy.z;
 
-        return CalculateColor(x_adj, y_adj, z_adj, time);
+        // Temporarily mark boundary as prevalidated so legacy boundary check passes
+        boundary_prevalidated = true;
+        RGBColor result = CalculateColor(x_adj, y_adj, z_adj, time);
+        boundary_prevalidated = false;
+        return result;
     }
 
     /*---------------------------------------------------------*\
@@ -261,6 +265,8 @@ protected:
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
+    // When true, legacy boundary check is bypassed (grid boundary already validated)
+    bool                boundary_prevalidated;
 
     /*---------------------------------------------------------*\
     | Axis parameters                                          |

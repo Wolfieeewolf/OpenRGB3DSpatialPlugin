@@ -25,6 +25,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
+    boundary_prevalidated = false;
 
     // Initialize axis parameters
     effect_axis = AXIS_RADIAL;
@@ -717,6 +718,12 @@ float SpatialEffect3D::CalculateProgress(float time) const
 \*---------------------------------------------------------*/
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
 {
+    // If grid-aware boundary has already been validated upstream, skip legacy check
+    if(boundary_prevalidated)
+    {
+        return true;
+    }
+
     // Legacy fixed radius calculation
     // This assumes a "standard" room size for effects that don't have grid context
     // Scale slider: 10 (10%) = 1mm radius, 100 (100%) = 10mm, 200 (200%) = 20mm
