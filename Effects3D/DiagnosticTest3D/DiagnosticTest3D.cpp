@@ -196,6 +196,11 @@ void DiagnosticTest3D::OnLogDiagnostics()
 
 RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
 {
+    /*---------------------------------------------------------*\
+    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+    | 1 grid unit = 10mm. LED positions use grid units.       |
+    \*---------------------------------------------------------*/
+
     static bool first_run = true;
     static int sample_count = 0;
     static float min_x = 99999.0f, max_x = -99999.0f;

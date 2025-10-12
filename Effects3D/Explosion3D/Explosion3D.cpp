@@ -113,6 +113,11 @@ void Explosion3D::OnExplosionParameterChanged()
 RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
 {
     /*---------------------------------------------------------*\
+    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+    | 1 grid unit = 10mm. LED positions use grid units.       |
+    \*---------------------------------------------------------*/
+
+    /*---------------------------------------------------------*\
     | Get effect origin (room center or user head position)   |
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOrigin();

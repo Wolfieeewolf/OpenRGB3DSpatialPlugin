@@ -21,7 +21,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_brightness = 100;
     effect_frequency = 1;
     effect_size = 50;
-    effect_scale = 100;
+    effect_scale = 200;  // Default to 200 (100% of room - whole room coverage)
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
@@ -160,9 +160,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
-    scale_slider->setRange(1, 200);
+    scale_slider->setRange(0, 250);
     scale_slider->setValue(effect_scale);
-    scale_slider->setToolTip("Effect coverage area as % of room - 1=tiny, 50=half room, 100=whole room, 200=beyond room");
+    scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=whole room), 201-250 = 101-150% (beyond room)");
     scale_layout->addWidget(scale_slider);
     scale_label = new QLabel(QString::number(effect_scale));
     scale_label->setMinimumWidth(30);
@@ -663,10 +663,19 @@ float SpatialEffect3D::GetNormalizedSize() const
 
 float SpatialEffect3D::GetNormalizedScale() const
 {
-    // Linear scaling for coverage area
-    // Range: 0.1 (10% - small localized) to 1.0 (100% - normal) to 2.0 (200% - room-wide)
-    // This scales the spatial coordinates, affecting how far the effect reaches
-    return 0.1f + (effect_scale / 100.0f) * 1.9f;
+    // New scale mapping: 0-250 slider range
+    // 0-200: Maps to 0-100% of room (each 2 units = 1%)
+    // 201-250: Maps to 101-150% beyond room (each unit = 1%)
+    if(effect_scale <= 200)
+    {
+        // 0-200 range: 0% to 100% of room
+        return effect_scale / 200.0f;  // 0.0 to 1.0
+    }
+    else
+    {
+        // 201-250 range: 101% to 150% beyond room
+        return 1.0f + ((effect_scale - 200) / 100.0f);  // 1.01 to 1.5
+    }
 }
 
 unsigned int SpatialEffect3D::GetTargetFPS() const
@@ -733,14 +742,21 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
                                          half_depth * half_depth +
                                          half_height * half_height);
 
-    // Scale radius as direct percentage of max room radius
-    // Scale controls the "balloon" size - hard boundary, effect handles fade inside
-    // Direct percentage mapping:
-    //    1 → 1% of room radius (tiny balloon at center)
-    //   50 → 50% of room radius (halfway to corners)
-    //  100 → 100% of room radius (reaches all corners - whole room)
-    //  200 → 200% of room radius (extends beyond room)
-    float scale_percentage = effect_scale / 100.0f;  // Direct: 0.01 to 2.0
+    // New scale mapping: 0-250 slider range
+    // 0-200: Maps to 0-100% of room (each 2 units = 1%)
+    // 201-250: Maps to 101-150% beyond room (each unit = 1%)
+    float scale_percentage;
+    if(effect_scale <= 200)
+    {
+        // 0-200 range: 0% to 100% of room
+        scale_percentage = effect_scale / 200.0f;  // 0.0 to 1.0
+    }
+    else
+    {
+        // 201-250 range: 101% to 150% beyond room
+        scale_percentage = 1.0f + ((effect_scale - 200) / 100.0f);  // 1.01 to 1.5
+    }
+
     float scale_radius = max_distance_from_center * scale_percentage;
 
     float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);

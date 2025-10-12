@@ -388,8 +388,8 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::MiddleButton)
     {
-        // Middle mouse = Select only
-        return;
+        // Middle mouse = Vertical pan (up/down camera movement)
+        dragging_pan = true;
     }
     else if(event->button() == Qt::RightButton)
     {

@@ -3128,6 +3128,12 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 room_height_spin->blockSignals(false);
             }
         }
+
+        // Update viewport with loaded manual room dimensions
+        if(viewport)
+        {
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
     }
 
     /*---------------------------------------------------------*\

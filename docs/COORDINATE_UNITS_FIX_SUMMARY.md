@@ -75,6 +75,97 @@ LOG_WARNING("[Wave3D] Effect origin: X=%.1f Y=%.1f Z=%.1f (grid units)", origin.
 
 **Impact:** Documents coordinate system for Wipe3D effect.
 
+### 5. Plasma3D.cpp (Lines 123-128)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for Plasma3D effect.
+
+### 6. DNAHelix3D.cpp (Lines 121-126)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for DNAHelix3D effect.
+
+### 7. Explosion3D.cpp (Lines 113-118)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for Explosion3D effect.
+
+### 8. Spiral3D.cpp (Lines 138-143)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for Spiral3D effect.
+
+### 9. BreathingSphere3D.cpp (Lines 113-118)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for BreathingSphere3D effect.
+
+### 10. Spin3D.cpp (Lines 136-141)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for Spin3D effect.
+
+### 11. DiagnosticTest3D.cpp (Lines 197-202)
+
+**Added coordinate system note** at top of CalculateColor:
+
+```cpp
+/*---------------------------------------------------------*\
+| NOTE: All coordinates (x, y, z) are in GRID UNITS       |
+| 1 grid unit = 10mm. LED positions use grid units.       |
+\*---------------------------------------------------------*/
+```
+
+**Impact:** Documents coordinate system for DiagnosticTest3D effect.
+
 ## Coordinate System Summary
 
 ### Before Fix (WRONG)
@@ -156,8 +247,20 @@ After rebuilding, verify:
 
 ✅ **GridContext3D now uses grid units** - Divides mm by 10 before creation
 ✅ **All coordinate systems match** - LED positions, grid context, reference points all use grid units
-✅ **Documentation added** - Header comments clarify coordinate system
-✅ **Debug logging updated** - Shows grid units, not millimeters
+✅ **Documentation added to all effects** - All 11 effect files now have coordinate system comments
+✅ **Header documentation updated** - SpatialEffect3D.h documents GridContext3D coordinate system
+✅ **Debug logging updated** - Wave3D shows grid units, not millimeters
 ✅ **Effects will appear in correct visual position** - No more "way off to the right"!
+
+### All Updated Effects:
+1. **Wave3D** - CalculateColorGrid() with grid units note + debug logging
+2. **Wipe3D** - CalculateColorGrid() with grid units note
+3. **Plasma3D** - CalculateColor() with grid units note
+4. **DNAHelix3D** - CalculateColor() with grid units note
+5. **Explosion3D** - CalculateColor() with grid units note
+6. **Spiral3D** - CalculateColor() with grid units note
+7. **BreathingSphere3D** - CalculateColor() with grid units note
+8. **Spin3D** - CalculateColor() with grid units note
+9. **DiagnosticTest3D** - CalculateColor() with grid units note
 
 This was the FINAL critical fix needed for the corner-origin coordinate system! 🎉
