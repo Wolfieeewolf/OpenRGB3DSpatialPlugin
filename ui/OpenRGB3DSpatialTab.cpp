@@ -1548,7 +1548,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                     {
                         if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
                         {
-                            unsigned int f = effect_stack[i]->effect->GetTargetFPS();
+                            unsigned int f = effect_stack[i]->effect->GetTargetFPSSetting();
                             if(f > target_fps) target_fps = f;
                         }
                     }
@@ -1654,7 +1654,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     | Set timer interval from effect FPS (default 30 FPS)      |
     \*---------------------------------------------------------*/
     {
-        unsigned int target_fps = current_effect_ui ? current_effect_ui->GetTargetFPS() : 30;
+        unsigned int target_fps = current_effect_ui ? current_effect_ui->GetTargetFPSSetting() : 30;
         if(target_fps < 1) target_fps = 30;
         int interval_ms = (int)(1000 / target_fps);
         if(interval_ms < 1) interval_ms = 1;
@@ -4743,4 +4743,5 @@ void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
         viewport->UpdateColors();
     }
 }
+
 

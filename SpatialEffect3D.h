@@ -115,6 +115,8 @@ class SpatialEffect3D : public QWidget
 public:
     explicit SpatialEffect3D(QWidget* parent = nullptr);
     virtual ~SpatialEffect3D();
+    // Public accessor for target FPS so UI can query without needing protected access
+    unsigned int GetTargetFPSSetting() const { return GetTargetFPS(); }
 
     /*---------------------------------------------------------*\
     | Pure virtual methods each effect must implement         |
@@ -131,18 +133,24 @@ public:
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
     {
         // Default grid-aware behavior: compute origin with grid context and apply room-relative boundary.
-        Vector3D origin = GetEffectOriginGrid(grid);
-        float rel_x = x - origin.x;
-        float rel_y = y - origin.y;
-        float rel_z = z - origin.z;
+        Vector3D origin_grid = GetEffectOriginGrid(grid);
+        float rel_x = x - origin_grid.x;
+        float rel_y = y - origin_grid.y;
+        float rel_z = z - origin_grid.z;
 
         if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         {
             return 0x00000000; // Outside coverage area
         }
 
-        // Delegate actual color math to legacy CalculateColor implementation
-        return CalculateColor(x, y, z, time);
+        // Adjust coordinates so legacy CalculateColor() computes the same rel_* using its own origin
+        // x_adj = x - origin_grid + origin_legacy. For room-center, legacy origin is (0,0,0).
+        Vector3D origin_legacy = GetEffectOrigin();
+        float x_adj = x - origin_grid.x + origin_legacy.x;
+        float y_adj = y - origin_grid.y + origin_legacy.y;
+        float z_adj = z - origin_grid.z + origin_legacy.z;
+
+        return CalculateColor(x_adj, y_adj, z_adj, time);
     }
 
     /*---------------------------------------------------------*\
