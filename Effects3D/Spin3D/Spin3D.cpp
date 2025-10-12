@@ -104,6 +104,7 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     surface_combo->addItem("Front & Back Walls");
     surface_combo->addItem("All Walls");
     surface_combo->addItem("Entire Room");
+    surface_combo->addItem("Origin (Room/User Center)");
     surface_combo->setCurrentIndex(surface_type);
     layout->addWidget(surface_combo, 0, 1);
 
@@ -472,6 +473,25 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
                 }
 
                 intensity = max_intensity;
+            }
+            break;
+
+        case 11: // Origin (Room/User Center) - spin around Y axis with no wall/floor bias
+            {
+                // Pure radial spin in XZ plane around the effect origin (room center or user)
+                float angle = atan2(rel_z, rel_x);
+                float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+                float spin_angle = angle * num_arms - progress;
+                float arm_position = fmod(spin_angle, 6.28318f / num_arms);
+                if(arm_position < 0) arm_position += 6.28318f / num_arms;
+
+                float blade_width = 0.4f * (6.28318f / num_arms);
+                if(arm_position < blade_width)
+                {
+                    intensity = 1.0f - (arm_position / blade_width);
+                    // Light radial fade to keep center readable in large rooms
+                    intensity *= fmax(0.4f, 1.0f - radius * 0.03f);
+                }
             }
             break;
     }
