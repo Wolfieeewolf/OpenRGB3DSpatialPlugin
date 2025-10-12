@@ -115,6 +115,7 @@ static inline float hash31(int x, int y, int z)
 RGBColor Rain3D::CalculateColor(float x, float y, float z, float time)
 {
     // Legacy path not used - grid-aware version preferred
+    (void)x; (void)y; (void)z; (void)time;
     return 0x00000000;
 }
 
@@ -188,4 +189,3 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
-

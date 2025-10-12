@@ -103,7 +103,6 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
 {
     // Columns run along -Y; compute column index from X/Z
     float speed = GetScaledSpeed();
-    float freq = GetScaledFrequency();
     float size_m = GetNormalizedSize();
 
     float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
@@ -133,4 +132,3 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
     unsigned char b = 0;
     return (b << 16) | (g << 8) | r;
 }
-

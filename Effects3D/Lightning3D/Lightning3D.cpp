@@ -168,4 +168,3 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
-

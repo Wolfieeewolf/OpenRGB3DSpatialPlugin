@@ -161,4 +161,3 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
-

@@ -113,7 +113,7 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float e = elasticity / 100.0f; // 0.1..1.0
 
     // Vertical motion: y = -a*(t - T/2)^2 + H
-    float H = grid.height * 0.45f; // peak
+    float H = grid.height * (0.2f + 0.6f * e); // peak depends on elasticity
     float a = (4.0f * H) / (period * period);
     float y_ball = -a * (t - period * 0.5f) * (t - period * 0.5f) + H;
 
@@ -144,4 +144,3 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     b = (unsigned char)(b * bf);
     return (b << 16) | (g << 8) | r;
 }
-
