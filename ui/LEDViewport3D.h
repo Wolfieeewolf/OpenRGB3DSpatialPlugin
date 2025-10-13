@@ -51,6 +51,8 @@ public:
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
     void SetRoomDimensions(float width, float depth, float height, bool use_manual);
+    // Set physical millimeters represented by one grid unit (default 10mm)
+    void SetGridScaleMM(float mm_per_unit) { grid_scale_mm = (mm_per_unit > 0.001f) ? mm_per_unit : 10.0f; }
     void SetUserPosition(const UserPosition3D& position);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
@@ -118,6 +120,8 @@ private:
     int     grid_y;
     int     grid_z;
     bool    grid_snap_enabled;
+    // Millimeters per grid unit used for converting manual room dimensions to grid units
+    float   grid_scale_mm;
 
     /*---------------------------------------------------------*\
     | Room Dimensions (Corner-Origin System)                   |

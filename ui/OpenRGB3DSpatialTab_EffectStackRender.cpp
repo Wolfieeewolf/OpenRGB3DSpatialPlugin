@@ -56,11 +56,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         | IMPORTANT: Convert millimeters to grid units (/ 10.0f)   |
         \*---------------------------------------------------------*/
         grid_min_x = 0.0f;
-        grid_max_x = manual_room_width / 10.0f;
+        grid_max_x = manual_room_width / grid_scale_mm;
         grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth / 10.0f;
+        grid_max_y = manual_room_depth / grid_scale_mm;
         grid_min_z = 0.0f;
-        grid_max_z = manual_room_height / 10.0f;
+        grid_max_z = manual_room_height / grid_scale_mm;
     }
     else
     {
@@ -116,12 +116,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         // Fallback if no LEDs found
         if(!has_leds)
         {
+            // Convert default mm to grid units using current scale
             grid_min_x = 0.0f;
-            grid_max_x = 3668.0f;  // Default room width
+            grid_max_x = 3668.0f / grid_scale_mm;  // Default room width
             grid_min_y = 0.0f;
-            grid_max_y = 2423.0f;  // Default room depth
+            grid_max_y = 2423.0f / grid_scale_mm;  // Default room depth
             grid_min_z = 0.0f;
-            grid_max_z = 2723.0f;  // Default room height
+            grid_max_z = 2723.0f / grid_scale_mm;  // Default room height
         }
     }
 
@@ -154,8 +155,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Mode: %s", mode);
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Raw bounds: X[%.1f to %.1f] Y[%.1f to %.1f] Z[%.1f to %.1f]",
                     grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
+        // Convert grid units back to mm for logging clarity
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Grid context: Width=%.1fmm Depth=%.1fmm Height=%.1fmm",
-                    grid_context.width, grid_context.height, grid_context.depth);
+                    grid_context.width * grid_scale_mm,
+                    grid_context.height * grid_scale_mm,
+                    grid_context.depth * grid_scale_mm);
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
                     grid_context.center_x, grid_context.center_y, grid_context.center_z);
         logged_bounds = true;

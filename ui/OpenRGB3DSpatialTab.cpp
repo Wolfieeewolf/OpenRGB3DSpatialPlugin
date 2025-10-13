@@ -509,6 +509,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
+    // Ensure viewport uses the current grid scale for mm->grid conversion
+    viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
 
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
@@ -562,6 +564,26 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_scale_spin->setSuffix(" mm/unit");
     grid_scale_spin->setToolTip("Physical size of one grid unit in millimeters (default: 10mm = 1cm)");
     layout_layout->addWidget(grid_scale_spin, 1, 1, 1, 2);
+
+    // Update grid scale when changed: affects viewport conversion and LED spacing to grid units
+    connect(grid_scale_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value){
+        grid_scale_mm = (float)value;
+        if(viewport) {
+            viewport->SetGridScaleMM(grid_scale_mm);
+            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        }
+        // Regenerate LED positions for all controllers to reflect new grid scale
+        for(unsigned int i = 0; i < controller_transforms.size(); i++)
+        {
+            RegenerateLEDPositions(controller_transforms[i].get());
+            ControllerLayout3D::UpdateWorldPositions(controller_transforms[i].get());
+        }
+        if(viewport)
+        {
+            viewport->SetControllerTransforms(&controller_transforms);
+            viewport->update();
+        }
+    });
 
     // Grid Snap Checkbox
     grid_snap_checkbox = new QCheckBox("Grid Snapping");
@@ -1815,11 +1837,11 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         | LED world_position uses grid units, not millimeters!    |
         \*---------------------------------------------------------*/
         grid_min_x = 0.0f;
-        grid_max_x = manual_room_width / 10.0f;  // Convert mm to grid units
+        grid_max_x = manual_room_width / grid_scale_mm;  // Convert mm to grid units
         grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth / 10.0f;  // Convert mm to grid units
+        grid_max_y = manual_room_depth / grid_scale_mm;  // Convert mm to grid units
         grid_min_z = 0.0f;
-        grid_max_z = manual_room_height / 10.0f; // Convert mm to grid units
+        grid_max_z = manual_room_height / grid_scale_mm; // Convert mm to grid units
 
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using MANUAL room: %.1fx%.1fx%.1f mm (%.1fx%.1fx%.1f grid units)",
                    manual_room_width, manual_room_depth, manual_room_height,
@@ -1875,13 +1897,13 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 
         if(!has_leds)
         {
-            // Fallback if no LEDs found
+            // Fallback if no LEDs found (convert default mm to grid units)
             grid_min_x = 0.0f;
-            grid_max_x = 3668.0f;
+            grid_max_x = 3668.0f / grid_scale_mm;
             grid_min_y = 0.0f;
-            grid_max_y = 2423.0f;
+            grid_max_y = 2423.0f / grid_scale_mm;
             grid_min_z = 0.0f;
-            grid_max_z = 2723.0f;
+            grid_max_z = 2723.0f / grid_scale_mm;
         }
 
         LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using AUTO-DETECT room: X[%.1f-%.1f] Y[%.1f-%.1f] Z[%.1f-%.1f]",

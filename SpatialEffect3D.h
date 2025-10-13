@@ -44,8 +44,10 @@
 
 /*---------------------------------------------------------*\
 | Grid context for dynamic effect scaling                 |
-| IMPORTANT: All values are in GRID UNITS (1 unit = 10mm) |
-| LED world_position and GridContext3D use same units!    |
+| IMPORTANT: All values are in GRID UNITS                 |
+| One grid unit equals the configured viewport grid scale |
+| (default 10mm). LED world_position and GridContext3D    |
+| use the same units!                                     |
 \*---------------------------------------------------------*/
 struct GridContext3D
 {

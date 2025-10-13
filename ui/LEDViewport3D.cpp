@@ -84,6 +84,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , dragging_pan(false)
     , dragging_grab(false)
 {
+    // Default grid scale: 10mm per unit
+    grid_scale_mm = 10.0f;
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
 }
@@ -646,8 +648,8 @@ void LEDViewport3D::DrawGrid()
     glLineWidth(1.0f);
 
     // Calculate grid range based on room dimensions or grid size
-    float max_x = use_manual_room_dimensions ? (room_width / 10.0f) : (float)grid_x;
-    float max_y = use_manual_room_dimensions ? (room_depth / 10.0f) : (float)grid_y;
+    float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
+    float max_y = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_y;
 
     glBegin(GL_LINES);
 
@@ -800,9 +802,9 @@ void LEDViewport3D::DrawAxisLabels()
     };
 
     // Calculate max positions based on room dimensions or grid
-    float max_x = use_manual_room_dimensions ? (room_width / 10.0f) : (float)grid_x;
-    float max_y = use_manual_room_dimensions ? (room_depth / 10.0f) : (float)grid_y;
-    float max_z = use_manual_room_dimensions ? (room_height / 10.0f) : (float)grid_z;
+    float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
+    float max_y = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_y;
+    float max_z = use_manual_room_dimensions ? (room_height / grid_scale_mm) : (float)grid_z;
 
     double screen_x, screen_y;
 
@@ -852,9 +854,9 @@ void LEDViewport3D::DrawRoomBoundary()
     glLineWidth(2.0f);
 
     // Calculate room boundary in grid units
-    float max_x = room_width / 10.0f;
-    float max_y = room_depth / 10.0f;
-    float max_z = room_height / 10.0f;
+    float max_x = room_width / grid_scale_mm;
+    float max_y = room_depth / grid_scale_mm;
+    float max_z = room_height / grid_scale_mm;
 
     // Use cyan color for room boundary (distinct from other elements)
     glColor3f(0.0f, 0.8f, 0.8f); // Bright cyan
