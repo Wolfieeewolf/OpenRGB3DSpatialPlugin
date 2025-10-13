@@ -52,6 +52,7 @@ private:
     | Explosion-specific controls                              |
     \*---------------------------------------------------------*/
     QSlider*        intensity_slider;
+    QComboBox*      type_combo;           // Explosion type selector
 
     /*---------------------------------------------------------*\
     | Explosion-specific parameters                            |
@@ -59,6 +60,7 @@ private:
     \*---------------------------------------------------------*/
     unsigned int    explosion_intensity;
     float           progress;
+    int             explosion_type;       // 0=Standard,1=Nuke,2=Land Mine,3=Bomb,4=Wall Bounce
 };
 
 #endif

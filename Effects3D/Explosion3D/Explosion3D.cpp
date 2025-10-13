@@ -24,8 +24,10 @@ REGISTER_EFFECT_3D(Explosion3D);
 Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     intensity_slider = nullptr;
+    type_combo = nullptr;
     explosion_intensity = 75;
     progress = 0.0f;
+    explosion_type = 0;
 
     SetFrequency(50);
     SetRainbowMode(true);
@@ -91,12 +93,23 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     intensity_slider->setValue(explosion_intensity);
     layout->addWidget(intensity_slider, 0, 1);
 
+    layout->addWidget(new QLabel("Type:"), 1, 0);
+    type_combo = new QComboBox();
+    type_combo->addItem("Standard");
+    type_combo->addItem("Nuke");
+    type_combo->addItem("Land Mine");
+    type_combo->addItem("Bomb");
+    type_combo->addItem("Wall Bounce");
+    type_combo->setCurrentIndex(explosion_type);
+    layout->addWidget(type_combo, 1, 1);
+
     if(parent && parent->layout())
     {
         parent->layout()->addWidget(explosion_widget);
     }
 
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
+    connect(type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Explosion3D::OnExplosionParameterChanged);
 }
 
 void Explosion3D::UpdateParams(SpatialEffectParams& params)
@@ -107,6 +120,7 @@ void Explosion3D::UpdateParams(SpatialEffectParams& params)
 void Explosion3D::OnExplosionParameterChanged()
 {
     if(intensity_slider) explosion_intensity = intensity_slider->value();
+    if(type_combo) explosion_type = type_combo->currentIndex();
     emit ParametersChanged();
 }
 
@@ -252,9 +266,31 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
             break;
     }
 
-    // Room-scale expansion: increase base radius and wave thickness
+    // Type-specific distance shaping (Land Mine flattens vertical component)
+    if(explosion_type == 2)
+    {
+        float vz = rel_z * 0.35f;
+        distance = sqrtf(rel_x*rel_x + rel_y*rel_y + vz*vz);
+    }
+
+    // Room-scale expansion: base radius and wave thickness
     float explosion_radius = progress * (explosion_intensity * 0.25f) * size_multiplier;
     float wave_thickness = (8.0f + explosion_intensity * 0.08f) * size_multiplier;
+    // Nuke: much larger radius and thicker wave
+    if(explosion_type == 1)
+    {
+        explosion_radius *= 1.8f;
+        wave_thickness   *= 1.5f;
+    }
+    // Wall Bounce: ping-pong radius between center and walls
+    if(explosion_type == 4)
+    {
+        float max_extent = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+        float travel = explosion_radius;
+        float period = fmax(0.1f, max_extent);
+        float t = fmodf(travel, 2.0f * period);
+        explosion_radius = (t <= period) ? t : (2.0f * period - t);
+    }
 
     float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
     primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f);
@@ -263,8 +299,14 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     float secondary_wave = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
     secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.15f) * 0.6f;
 
-    float shock_detail = 0.2f * sin(distance * freq_scale * 8.0f - progress * 4.0f);
-    shock_detail *= exp(-distance * 0.1f);
+    float shock_detail = 0.2f * sinf(distance * freq_scale * 8.0f - progress * 4.0f);
+    // Bomb: add directional lobes
+    if(explosion_type == 3)
+    {
+        float ang = atan2f(rel_y, rel_x);
+        shock_detail *= (0.6f + 0.4f * fabsf(cosf(ang * 4.0f)));
+    }
+    shock_detail *= expf(-distance * 0.1f);
 
     float explosion_intensity_final = primary_wave + secondary_wave + shock_detail;
     explosion_intensity_final = fmax(0.0f, fmin(1.0f, explosion_intensity_final));
@@ -275,8 +317,9 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
         explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.8f);
     }
 
+    float hue_base = (explosion_type == 1 ? 30.0f : 60.0f);
     RGBColor final_color = GetRainbowMode()
-        ? GetRainbowColor(fmax(0.0f, 60.0f - (explosion_intensity_final * 60.0f) + progress * 10.0f))
+        ? GetRainbowColor(fmax(0.0f, hue_base - (explosion_intensity_final * 60.0f) + progress * 10.0f))
         : GetColorAtPosition(explosion_intensity_final);
 
     unsigned char r = final_color & 0xFF;
