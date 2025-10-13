@@ -2137,9 +2137,9 @@ color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
             {
                 /*---------------------------------------------------------*\
                 | Calculate effect color using grid-aware method          |
-                \*---------------------------------------------------------*/;
-color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
+                \*---------------------------------------------------------*/
                 RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
 
                 // Apply color to the correct LED using the global LED index
                 if(led_global_idx < controller->colors.size())

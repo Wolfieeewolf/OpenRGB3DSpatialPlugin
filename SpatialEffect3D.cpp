@@ -70,6 +70,14 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     // Effect control buttons
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
+
+    // Shaping defaults
+    intensity_slider = nullptr;
+    sharpness_slider = nullptr;
+    coverage_combo = nullptr;
+    effect_intensity = 100;
+    effect_sharpness = 100;
+    effect_coverage = 0;
 }
 
 SpatialEffect3D::~SpatialEffect3D()
@@ -762,6 +770,79 @@ float SpatialEffect3D::CalculateProgress(float time) const
 {
     float progress = time * GetScaledSpeed();
     return effect_reverse ? -progress : progress;
+}
+
+/*---------------------------------------------------------*\
+| Global coverage/intensity post-processing               |
+\*---------------------------------------------------------*/
+RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const
+{
+    // Compute coverage weight based on selection
+    float coverage = ComputeCoverageWeight(x, y, z, grid);
+    if(coverage <= 0.0f) return 0x00000000;
+
+    // Apply sharpness (gamma-like) and intensity multiplier
+    float gamma = powf(2.0f, ((float)effect_sharpness - 100.0f) / 100.0f);
+    coverage = (coverage < 1.0f) ? powf(coverage, gamma) : coverage;
+    float intensity_mul = effect_intensity / 100.0f; // 0..2.0
+    float factor = coverage * intensity_mul;
+    if(factor <= 0.0f) return 0x00000000;
+
+    // Apply to BGR color
+    unsigned char r = color & 0xFF;
+    unsigned char g = (color >> 8) & 0xFF;
+    unsigned char b = (color >> 16) & 0xFF;
+    int rr = (int)(r * factor); if(rr > 255) rr = 255;
+    int gg = (int)(g * factor); if(gg > 255) gg = 255;
+    int bb = (int)(b * factor); if(bb > 255) bb = 255;
+    return (bb << 16) | (gg << 8) | rr;
+}
+
+float SpatialEffect3D::ComputeCoverageWeight(float x, float y, float z, const GridContext3D& grid) const
+{
+    switch(effect_coverage)
+    {
+        case 1: // Floor (Z min)
+            return fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
+        case 2: // Ceiling (Z max)
+            return fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
+        case 3: // Left wall (X min)
+            return fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
+        case 4: // Right wall (X max)
+            return fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
+        case 5: // Front wall (Y min)
+            return fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
+        case 6: // Back wall (Y max)
+            return fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
+        case 7: // Floor & Ceiling
+        {
+            float floor_w = fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
+            float ceil_w  = fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
+            return fmax(floor_w, ceil_w);
+        }
+        case 8: // Left & Right
+        {
+            float left_w = fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
+            float right_w= fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
+            return fmax(left_w, right_w);
+        }
+        case 9: // Front & Back
+        {
+            float front_w= fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
+            float back_w = fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
+            return fmax(front_w, back_w);
+        }
+        case 10: // Origin center
+        {
+            float dx = x - grid.center_x;
+            float dy = y - grid.center_y;
+            float dz = z - grid.center_z;
+            float half_diag = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+            float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+            return fmax(0.0f, 1.0f - dist / (half_diag + 0.001f));
+        }
+        default: return 1.0f;
+    }
 }
 
 /*---------------------------------------------------------*\

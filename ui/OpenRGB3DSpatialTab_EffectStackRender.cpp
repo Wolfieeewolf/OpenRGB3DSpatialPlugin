@@ -447,9 +447,9 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
 
                     /*---------------------------------------------------------*\
                     | Calculate effect color                                   |
-                    \*---------------------------------------------------------*/;
-effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
+                    \*---------------------------------------------------------*/
                     RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                    effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
 
                     /*---------------------------------------------------------*\
                     | Blend with accumulated color                             |
