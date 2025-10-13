@@ -427,8 +427,6 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
 
-             ui_name.toStdString().c_str(), class_name.toStdString().c_str());
-
     // If "None" is selected, clear the effect
     if(class_name.isEmpty())
     {

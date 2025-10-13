@@ -27,7 +27,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     static int log_counter = 0;
     if(log_counter == 0)
     {
-                    (unsigned int)controller_transforms.size(), (unsigned int)effect_stack.size());
+        // logging removed
     }
     log_counter = (log_counter + 1) % 30; // Log every 30 frames (once per second)
 
@@ -148,15 +148,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     static bool logged_bounds = false;
     if(!logged_bounds)
     {
-        const char* mode = use_manual_room_size ? "MANUAL" : "AUTO-DETECT";
-        
-        
-                    grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
-        // Convert grid units back to mm for logging clarity
-                    grid_context.width * grid_scale_mm,
-                    grid_context.height * grid_scale_mm,
-                    grid_context.depth * grid_scale_mm);
-                    grid_context.center_x, grid_context.center_y, grid_context.center_z);
         logged_bounds = true;
     }
 
@@ -178,9 +169,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         static bool logged_ctrl_0 = false;
         if(ctrl_idx == 0 && !logged_ctrl_0)
         {
-                       transform->virtual_controller != nullptr,
-                       transform->controller != nullptr,
-                       transform->controller ? transform->controller->name.c_str() : "(no controller)");
             logged_ctrl_0 = true;
         }
 
@@ -249,7 +237,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         if(effect_log_counter == 0 && effect_idx == 0)
                         {
-                                       effect_idx, instance->zone_index, instance->enabled, instance->effect.get() != nullptr);
+                            // logging removed
                         }
 
                         /*---------------------------------------------------------*\

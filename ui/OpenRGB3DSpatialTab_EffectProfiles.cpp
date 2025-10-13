@@ -251,8 +251,6 @@ void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
         file << config.dump(4);
         file.close();
     }
-
-             profile_name.c_str(), auto_load_enabled);
 }
 
 void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
@@ -294,8 +292,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
         {
             profile_name = config["auto_load_profile"].get<std::string>();
         }
-
-                 profile_name.c_str(), auto_load_enabled);
 
         /*---------------------------------------------------------*\
         | Restore checkbox state                                   |
