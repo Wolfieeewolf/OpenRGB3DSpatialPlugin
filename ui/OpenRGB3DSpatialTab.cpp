@@ -1106,7 +1106,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_changed);
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] Connected effect_combo signal to on_effect_changed slot");
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Connected effect_combo signal to on_effect_changed slot"));
 
     effects_layout->addWidget(new QLabel("Effect:"));
     effects_layout->addWidget(effect_combo);
@@ -1768,13 +1768,13 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         /*---------------------------------------------------------*\
         | Render effect stack (multi-effect mode)                 |
         \*---------------------------------------------------------*/
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Rendering effect stack (%u effects)", (unsigned int)effect_stack.size());
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Rendering effect stack (%u effects)", (unsigned int)effect_stack.size());
         RenderEffectStack();
         return;
     }
     else
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Not rendering stack - has_stack_effects=false, stack size=%u", (unsigned int)effect_stack.size());
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Not rendering stack - has_stack_effects=false, stack size=%u", (unsigned int)effect_stack.size());
     }
 
     /*---------------------------------------------------------*\
@@ -1783,7 +1783,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     static int single_effect_log_counter = 0;
     if(single_effect_log_counter == 0)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect check: effect_running=%d, current_effect_ui=%p",
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Single effect check: effect_running=%d, current_effect_ui=%p",
                    effect_running, current_effect_ui);
     }
     single_effect_log_counter = (single_effect_log_counter + 1) % 30;
@@ -1792,13 +1792,13 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     {
         if(single_effect_log_counter == 0)
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect NOT running: effect_running=%d, current_effect_ui=%p",
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Single effect NOT running: effect_running=%d, current_effect_ui=%p",
                        effect_running, current_effect_ui);
         }
         return;
     }
 
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== RENDERING SINGLE EFFECT ==========");
+    //LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Rendering single effect");
 
     /*---------------------------------------------------------*\
     | Safety: Check if we have any controllers                |
@@ -1843,7 +1843,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         grid_min_z = 0.0f;
         grid_max_z = manual_room_height / grid_scale_mm; // Convert mm to grid units
 
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using MANUAL room: %.1fx%.1fx%.1f mm (%.1fx%.1fx%.1f grid units)",
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Single effect using MANUAL room: %.1fx%.1fx%.1f mm (%.1fx%.1fx%.1f grid units)",
                    manual_room_width, manual_room_depth, manual_room_height,
                    grid_max_x, grid_max_y, grid_max_z);
     }
@@ -1906,14 +1906,14 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             grid_max_z = 2723.0f / grid_scale_mm;
         }
 
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using AUTO-DETECT room: X[%.1f-%.1f] Y[%.1f-%.1f] Z[%.1f-%.1f]",
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Single effect using AUTO-DETECT room: X[%.1f-%.1f] Y[%.1f-%.1f] Z[%.1f-%.1f]",
                    grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
     }
 
     // Create grid context for effects
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
 
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
                grid_context.center_x, grid_context.center_y, grid_context.center_z);
 
     /*---------------------------------------------------------*\
@@ -4104,14 +4104,14 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     /*---------------------------------------------------------*\
     | Create effect using the registration system             |
     \*---------------------------------------------------------*/
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] Creating effect: %s (type %d)", effect_names[effect_type], effect_type);
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Creating effect: %s (type %d)", effect_names[effect_type], effect_type);
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_names[effect_type]);
     if(!effect)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", effect_names[effect_type]);
         return;
     }
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect created successfully: %p", effect);
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect created successfully: %p", effect);
 
     /*---------------------------------------------------------*\
     | Setup effect UI (same for ALL effects)                  |
@@ -4332,14 +4332,14 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed called with index: %d", index);
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] on_effect_changed called with index: %d", index);
 
     /*---------------------------------------------------------*\
     | Validate index range                                     |
     \*---------------------------------------------------------*/
     if(index < 0)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed: invalid index %d", index);
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] on_effect_changed: invalid index %d", index);
         return;
     }
 
@@ -4347,7 +4347,7 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     | Remember if effect was running so we can restart it      |
     \*---------------------------------------------------------*/
     bool was_running = effect_running;
-    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect was running: %d", was_running);
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect was running: %d", was_running);
 
     /*---------------------------------------------------------*\
     | Stop effect timer and set flag BEFORE clearing UI        |
@@ -4382,12 +4382,12 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     {
         // Check if this is a stack preset (has user data)
         QVariant data = effect_combo->itemData(index);
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Item data valid: %d, value: %d",
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Item data valid: %d, value: %d",
                  data.isValid(), data.isValid() ? data.toInt() : 0);
 
         if(data.isValid() && data.toInt() < 0)
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up stack preset UI");
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up stack preset UI"));
             // This is a stack preset - show simplified UI
             SetupStackPresetUI();
 
@@ -4405,7 +4405,7 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
         }
         else
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up regular effect UI for effect_type: %d", index - 1);
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up regular effect UI for effect_type: %d", index - 1);
             // This is a regular effect
             SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
 
@@ -4427,13 +4427,13 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
         \*---------------------------------------------------------*/
         if(was_running)
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Auto-starting new effect since previous was running");
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Auto-starting new effect since previous was running"));
             on_start_effect_clicked();
         }
     }
     else
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Index is 0 (None), clearing effect UI");
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Index is 0 (None), clearing effect UI"));
 
         /*---------------------------------------------------------*\
         | Enable zone and origin combos when no effect selected   |
