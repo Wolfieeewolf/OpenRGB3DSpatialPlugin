@@ -46,14 +46,7 @@
 #include "EffectListManager3D.h"
 #include "EffectInstance3D.h"
 #include "StackPreset3D.h"
-#include "Effects3D/Wave3D/Wave3D.h"
-#include "Effects3D/Wipe3D/Wipe3D.h"
-#include "Effects3D/Plasma3D/Plasma3D.h"
-#include "Effects3D/Spiral3D/Spiral3D.h"
-#include "Effects3D/Spin3D/Spin3D.h"
-#include "Effects3D/DNAHelix3D/DNAHelix3D.h"
-#include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
-#include "Effects3D/Explosion3D/Explosion3D.h"
+// Effect headers are included in the .cpp for registration
 #include "ZoneManager3D.h"
 
 namespace Ui
