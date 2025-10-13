@@ -262,17 +262,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         if(!apply_to_this_controller)
                         {
-                            if(effect_log_counter == 0 && effect_idx == 0)
-                            {
-                                
-                            }
                             continue;
                         }
 
-                        if(effect_log_counter == 0 && effect_idx == 0)
-                        {
-                            
-                        }
+                        // no-op: debug logging removed
 
                         /*---------------------------------------------------------*\
                         | Calculate effect color                                   |
