@@ -258,8 +258,8 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
 {
     /*---------------------------------------------------------*\
     | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | 1 grid unit = 10mm. GridContext3D dimensions are also   |
-    | in grid units, ensuring consistent coordinate system.   |
+    | One grid unit equals the configured grid scale          |
+    | (default 10mm). GridContext3D uses the same units.      |
     \*---------------------------------------------------------*/
 
     
