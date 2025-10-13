@@ -10,7 +10,6 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialTab.h"
-#include "LogManager.h"
 #include <set>
 #include <algorithm>
 
@@ -24,12 +23,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         return; // No controllers to update
     }
 
-    static int log_counter = 0;
-    if(log_counter == 0)
-    {
-        // logging removed
-    }
-    log_counter = (log_counter + 1) % 30; // Log every 30 frames (once per second)
+    // removed debug frame counter
 
     /*---------------------------------------------------------*\
     | Update effect time                                       |
@@ -144,12 +138,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    // Log room bounds once for debugging
-    static bool logged_bounds = false;
-    if(!logged_bounds)
-    {
-        logged_bounds = true;
-    }
+    // removed bounds logging
 
     /*---------------------------------------------------------*\
     | Step 1: Calculate colors for ALL controllers first      |
@@ -163,14 +152,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             continue;
         }
 
-        /*---------------------------------------------------------*\
-        | Log Controller 0 details for diagnosis                   |
-        \*---------------------------------------------------------*/
-        static bool logged_ctrl_0 = false;
-        if(ctrl_idx == 0 && !logged_ctrl_0)
-        {
-            logged_ctrl_0 = true;
-        }
+        // removed controller 0 diagnostic logging
 
         // Handle virtual controllers
         if(transform->virtual_controller && !transform->controller)
@@ -219,7 +201,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     /*---------------------------------------------------------*\
                     | Iterate through effect stack and blend colors            |
                     \*---------------------------------------------------------*/
-                    static int effect_log_counter = 0;
                     for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
                     {
                         EffectInstance3D* instance = effect_stack[effect_idx].get();
@@ -235,10 +216,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         instance->effect->SetGlobalReferencePoint(stack_ref_origin);
                         instance->effect->SetReferenceMode(stack_origin_mode);
 
-                        if(effect_log_counter == 0 && effect_idx == 0)
-                        {
-                            // logging removed
-                        }
+                        // removed effect logging
 
                         /*---------------------------------------------------------*\
                         | Check if this effect targets this controller            |
@@ -307,7 +285,7 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
                         \*---------------------------------------------------------*/
                         final_color = BlendColors(final_color, effect_color, instance->blend_mode);
                     }
-                    effect_log_counter = (effect_log_counter + 1) % 30;
+                    // removed effect log counter
 
                     /*---------------------------------------------------------*\
                     | Apply final blended color to LED                        |
