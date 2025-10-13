@@ -23,7 +23,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         return; // No controllers to update
     }
 
-    // removed debug frame counter
+    
 
     /*---------------------------------------------------------*\
     | Update effect time                                       |
@@ -265,7 +265,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             continue;
                         }
 
-                        // no-op: debug logging removed
+                        
 
                         /*---------------------------------------------------------*\
                         | Calculate effect color                                   |
