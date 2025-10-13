@@ -509,8 +509,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
-    // Ensure viewport uses the current grid scale for mm->grid conversion
-    viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
 
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
@@ -564,26 +562,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_scale_spin->setSuffix(" mm/unit");
     grid_scale_spin->setToolTip("Physical size of one grid unit in millimeters (default: 10mm = 1cm)");
     layout_layout->addWidget(grid_scale_spin, 1, 1, 1, 2);
-
-    // Update grid scale when changed: affects viewport conversion and LED spacing to grid units
-    connect(grid_scale_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value){
-        grid_scale_mm = (float)value;
-        if(viewport) {
-            viewport->SetGridScaleMM(grid_scale_mm);
-            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
-        }
-        // Regenerate LED positions for all controllers to reflect new grid scale
-        for(unsigned int i = 0; i < controller_transforms.size(); i++)
-        {
-            RegenerateLEDPositions(controller_transforms[i].get());
-            ControllerLayout3D::UpdateWorldPositions(controller_transforms[i].get());
-        }
-        if(viewport)
-        {
-            viewport->SetControllerTransforms(&controller_transforms);
-            viewport->update();
-        }
-    });
 
     // Grid Snap Checkbox
     grid_snap_checkbox = new QCheckBox("Grid Snapping");
@@ -1106,7 +1084,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     connect(effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_changed);
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Connected effect_combo signal to on_effect_changed slot");
 
     effects_layout->addWidget(new QLabel("Effect:"));
     effects_layout->addWidget(effect_combo);
@@ -1473,7 +1451,8 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 /*---------------------------------------------------------*\
                 | Load preset effects (deep copy)                          |
                 \*---------------------------------------------------------*/
-                
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Loading %u effects from preset '%s'",
+                         (unsigned int)preset->effect_instances.size(), preset->name.c_str());
 
                 for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
                 {
@@ -1481,11 +1460,13 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                     std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
                     if(copied_instance)
                     {
-                        
+                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Added effect to stack: enabled=%d, has_effect=%d, zone_index=%d",
+                                 copied_instance->enabled, copied_instance->effect.get() != nullptr, copied_instance->zone_index);
                         effect_stack.push_back(std::move(copied_instance));
                     }
                     else
                     {
+                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create effect instance from JSON");
                     }
                 }
 
@@ -1545,7 +1526,14 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                     has_valid_controller = true;
                 }
 
-                
+                if(!has_valid_controller)
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] No valid controllers found for stack preset");
+                }
+                else
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Set controllers to Direct mode for stack preset");
+                }
 
                 /*---------------------------------------------------------*\
                 | Start effect timer                                       |
@@ -1568,11 +1556,11 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                     int interval_ms = (int)(1000 / target_fps);
                     if(interval_ms < 1) interval_ms = 1;
                     effect_timer->start(interval_ms);
-                    
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Started effect timer for stack preset");
                 }
                 else
                 {
-                    
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect timer already running or null");
                 }
 
                 /*---------------------------------------------------------*\
@@ -1581,7 +1569,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 start_effect_button->setEnabled(false);
                 stop_effect_button->setEnabled(true);
 
-                
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Started stack preset: %s", preset->name.c_str());
                 return;
             }
         }
@@ -1708,6 +1696,7 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
             start_effect_button->setEnabled(true);
             stop_effect_button->setEnabled(false);
 
+            LOG_INFO("[OpenRGB3DSpatialPlugin] Stopped stack preset");
             return;
         }
     }
@@ -1757,26 +1746,37 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         /*---------------------------------------------------------*\
         | Render effect stack (multi-effect mode)                 |
         \*---------------------------------------------------------*/
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Rendering effect stack (%u effects)", (unsigned int)effect_stack.size());
         RenderEffectStack();
         return;
     }
     else
     {
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Not rendering stack - has_stack_effects=false, stack size=%u", (unsigned int)effect_stack.size());
     }
 
     /*---------------------------------------------------------*\
     | Fall back to single effect rendering (Effects tab)       |
     \*---------------------------------------------------------*/
-    
+    static int single_effect_log_counter = 0;
+    if(single_effect_log_counter == 0)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect check: effect_running=%d, current_effect_ui=%p",
+                   effect_running, current_effect_ui);
+    }
+    single_effect_log_counter = (single_effect_log_counter + 1) % 30;
 
     if(!effect_running || !current_effect_ui)
     {
+        if(single_effect_log_counter == 0)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect NOT running: effect_running=%d, current_effect_ui=%p",
+                       effect_running, current_effect_ui);
+        }
         return;
     }
 
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] ========== RENDERING SINGLE EFFECT ==========");
 
     /*---------------------------------------------------------*\
     | Safety: Check if we have any controllers                |
@@ -1815,13 +1815,15 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         | LED world_position uses grid units, not millimeters!    |
         \*---------------------------------------------------------*/
         grid_min_x = 0.0f;
-        grid_max_x = manual_room_width / grid_scale_mm;  // Convert mm to grid units
+        grid_max_x = manual_room_width / 10.0f;  // Convert mm to grid units
         grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth / grid_scale_mm;  // Convert mm to grid units
+        grid_max_y = manual_room_depth / 10.0f;  // Convert mm to grid units
         grid_min_z = 0.0f;
-        grid_max_z = manual_room_height / grid_scale_mm; // Convert mm to grid units
+        grid_max_z = manual_room_height / 10.0f; // Convert mm to grid units
 
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using MANUAL room: %.1fx%.1fx%.1f mm (%.1fx%.1fx%.1f grid units)",
+                   manual_room_width, manual_room_depth, manual_room_height,
+                   grid_max_x, grid_max_y, grid_max_z);
     }
     else
     {
@@ -1873,22 +1875,24 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 
         if(!has_leds)
         {
-            // Fallback if no LEDs found (convert default mm to grid units)
+            // Fallback if no LEDs found
             grid_min_x = 0.0f;
-            grid_max_x = 3668.0f / grid_scale_mm;
+            grid_max_x = 3668.0f;
             grid_min_y = 0.0f;
-            grid_max_y = 2423.0f / grid_scale_mm;
+            grid_max_y = 2423.0f;
             grid_min_z = 0.0f;
-            grid_max_z = 2723.0f / grid_scale_mm;
+            grid_max_z = 2723.0f;
         }
 
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Single effect using AUTO-DETECT room: X[%.1f-%.1f] Y[%.1f-%.1f] Z[%.1f-%.1f]",
+                   grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
     }
 
     // Create grid context for effects
     GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
 
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
+               grid_context.center_x, grid_context.center_y, grid_context.center_z);
 
     /*---------------------------------------------------------*\
     | Configure effect origin mode                             |
@@ -1908,12 +1912,12 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                 VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
                 ref_origin = ref_point->GetPosition();
                 mode = REF_MODE_USER_POSITION;
-                
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect origin set to reference point: %.1f, %.1f, %.1f", ref_origin.x, ref_origin.y, ref_origin.z);
             }
             else
             {
                 mode = REF_MODE_ROOM_CENTER;
-                
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect origin set to room center (grid.center)");
             }
         }
 
@@ -2058,8 +2062,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                         }
 
                         // Calculate effect color using grid-aware method (world coords)
-                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);;
-color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
+                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
                         // Apply color to the mapped physical LED (with bounds checking)
                         if(mapping.zone_idx < mapping.controller->zones.size())
@@ -2135,7 +2138,6 @@ color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
                 | Calculate effect color using grid-aware method          |
                 \*---------------------------------------------------------*/
                 RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
-                color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
 
                 // Apply color to the correct LED using the global LED index
                 if(led_global_idx < controller->colors.size())
@@ -2390,6 +2392,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             grid_scale_mm);
         zone* z = &controller->zones[item_row];
 
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Zone granularity - item_row=%d, zone_name=%s, total_positions=%u, zone_leds_count=%u",
                     item_row, z->name.c_str(), (unsigned int)all_positions.size(), z->leds_count);
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
@@ -2397,11 +2400,13 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             if(all_positions[i].zone_idx == (unsigned int)item_row)
             {
                 ctrl_transform->led_positions.push_back(all_positions[i]);
+                LOG_WARNING("[OpenRGB3DSpatialPlugin]   Added position[%u]: zone_idx=%u, led_idx=%u, local_pos=(%.1f,%.1f,%.1f)",
                            i, all_positions[i].zone_idx, all_positions[i].led_idx,
                            all_positions[i].local_position.x, all_positions[i].local_position.y, all_positions[i].local_position.z);
             }
         }
 
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Zone filtering complete: %u LEDs added to ctrl_transform",
                     (unsigned int)ctrl_transform->led_positions.size());
 
         name = QString("[Zone] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
@@ -3028,7 +3033,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         return;
     }
 
-    
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout saved successfully to: %s", filename.c_str());
 }
 
 void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
@@ -3300,6 +3305,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         // All LEDs loaded - this is whole device
                         if(ctrl_transform->granularity != 0)
                         {
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has all %d LEDs (changing to Whole Device)",
                                         controller->name.c_str(),
                                         (original_granularity == 1 ? "Zone" : (original_granularity == 2 ? "LED" : "Unknown")),
                                         (int)ctrl_transform->led_positions.size());
@@ -3312,6 +3318,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         // Single LED - granularity should be 2
                         if(ctrl_transform->granularity != 2)
                         {
+                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has only 1 LED (changing to LED level)",
                                         controller->name.c_str(),
                                         (original_granularity == 0 ? "Whole Device" : (original_granularity == 1 ? "Zone" : "Unknown")));
                             ctrl_transform->granularity = 2;
@@ -3343,6 +3350,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             // All from same zone
                             if(ctrl_transform->granularity != 1)
                             {
+                                LOG_WARNING("[OpenRGB3DSpatialPlugin] Correcting granularity for '%s': saved as %s but has %d LEDs from zone %d (changing to Zone level)",
                                             controller->name.c_str(),
                                             (original_granularity == 0 ? "Whole Device" : (original_granularity == 2 ? "LED" : "Unknown")),
                                             (int)ctrl_transform->led_positions.size(),
@@ -3365,9 +3373,13 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         }
                     }
 
-                    // Validation success - no logging needed
+                    // Log successful validation
                     if(ctrl_transform->granularity == original_granularity && ctrl_transform->item_idx == original_item_idx)
                     {
+                        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Granularity validated OK for '%s': %s with %d LEDs",
+                                    controller->name.c_str(),
+                                    (ctrl_transform->granularity == 0 ? "Whole Device" : (ctrl_transform->granularity == 1 ? "Zone" : "LED")),
+                                    (int)ctrl_transform->led_positions.size());
                     }
                 }
             }
@@ -3494,7 +3506,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             {
                 zone_manager->FromJSON(layout_json["zones"]);
                 UpdateZonesList();
-                
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Loaded %d zones from layout", zone_manager->GetZoneCount());
             }
             catch(const std::exception& e)
             {
@@ -3506,7 +3518,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         else
         {
             // Old layout file without zones - just initialize empty
-            
+            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout has no zones (old format) - starting with empty zone list");
             zone_manager->ClearAllZones();
             UpdateZonesList();
         }
@@ -3553,7 +3565,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     {
         nlohmann::json layout_json = nlohmann::json::parse(content.toStdString());
         LoadLayoutFromJSON(layout_json);
-        
+        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Layout loaded successfully from: %s", filename.c_str());
         return;
     }
     catch(const std::exception& e)
@@ -3653,6 +3665,7 @@ void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
     resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
     resource_manager->GetSettingsManager()->SaveSettings();
 
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Saved layout settings: profile='%s', auto_load=%d",
              profile_name.c_str(), auto_load_enabled);
 }
 
@@ -3688,6 +3701,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         saved_profile = settings["SelectedProfile"].get<std::string>();
     }
 
+    LOG_INFO("[OpenRGB3DSpatialPlugin] Loaded layout settings: profile='%s', auto_load=%d",
              saved_profile.c_str(), auto_load_enabled);
 
     /*---------------------------------------------------------*\
@@ -3768,7 +3782,7 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
             }
             else
             {
-                
+                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Saved custom controller: %s", safe_name.c_str());
             }
         }
         else
@@ -3818,7 +3832,7 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                             available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(ctrl_name));
                             virtual_controllers.push_back(std::move(virtual_ctrl));
                             loaded_count++;
-                            
+                            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Loaded custom controller: %s",
                                       ctrl_name.c_str());
                         }
                         else
@@ -4035,7 +4049,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         return;
     }
 
-    
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up effect UI for effect type %d", effect_type);
 
     /*---------------------------------------------------------*\
     | Map effect type index to effect class name              |
@@ -4066,14 +4080,14 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     /*---------------------------------------------------------*\
     | Create effect using the registration system             |
     \*---------------------------------------------------------*/
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Creating effect: %s (type %d)", effect_names[effect_type], effect_type);
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_names[effect_type]);
     if(!effect)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", effect_names[effect_type]);
         return;
     }
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect created successfully: %p", effect);
 
     /*---------------------------------------------------------*\
     | Setup effect UI (same for ALL effects)                  |
@@ -4115,7 +4129,7 @@ void OpenRGB3DSpatialTab::SetupStackPresetUI()
         return;
     }
 
-    
+    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Setting up stack preset UI");
 
     /*---------------------------------------------------------*\
     | Create informational label                               |
@@ -4294,14 +4308,14 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
 
 void OpenRGB3DSpatialTab::on_effect_changed(int index)
 {
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed called with index: %d", index);
 
     /*---------------------------------------------------------*\
     | Validate index range                                     |
     \*---------------------------------------------------------*/
     if(index < 0)
     {
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] on_effect_changed: invalid index %d", index);
         return;
     }
 
@@ -4309,7 +4323,7 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     | Remember if effect was running so we can restart it      |
     \*---------------------------------------------------------*/
     bool was_running = effect_running;
-    
+    LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect was running: %d", was_running);
 
     /*---------------------------------------------------------*\
     | Stop effect timer and set flag BEFORE clearing UI        |
@@ -4344,11 +4358,12 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     {
         // Check if this is a stack preset (has user data)
         QVariant data = effect_combo->itemData(index);
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Item data valid: %d, value: %d",
                  data.isValid(), data.isValid() ? data.toInt() : 0);
 
         if(data.isValid() && data.toInt() < 0)
         {
-            
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up stack preset UI");
             // This is a stack preset - show simplified UI
             SetupStackPresetUI();
 
@@ -4366,7 +4381,7 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
         }
         else
         {
-            
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Setting up regular effect UI for effect_type: %d", index - 1);
             // This is a regular effect
             SetupCustomEffectUI(index - 1);  // Adjust for "None" offset
 
@@ -4388,13 +4403,13 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
         \*---------------------------------------------------------*/
         if(was_running)
         {
-            
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Auto-starting new effect since previous was running");
             on_start_effect_clicked();
         }
     }
     else
     {
-        
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Index is 0 (None), clearing effect UI");
 
         /*---------------------------------------------------------*\
         | Enable zone and origin combos when no effect selected   |
@@ -4725,3 +4740,6 @@ void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
         viewport->UpdateColors();
     }
 }
+
+
+

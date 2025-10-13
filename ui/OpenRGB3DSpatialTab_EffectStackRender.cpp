@@ -21,14 +21,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     \*---------------------------------------------------------*/
     if(controller_transforms.empty())
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] RenderEffectStack: No controllers!");
         return; // No controllers to update
     }
 
     static int log_counter = 0;
     if(log_counter == 0)
     {
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] RenderEffectStack: %u controllers, %u effects",
                     (unsigned int)controller_transforms.size(), (unsigned int)effect_stack.size());
     }
     log_counter = (log_counter + 1) % 30; // Log every 30 frames (once per second)
@@ -151,16 +149,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(!logged_bounds)
     {
         const char* mode = use_manual_room_size ? "MANUAL" : "AUTO-DETECT";
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] ========== ROOM BOUNDS DEBUG ==========");
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Mode: %s", mode);
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Raw bounds: X[%.1f to %.1f] Y[%.1f to %.1f] Z[%.1f to %.1f]",
+        
+        
                     grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
         // Convert grid units back to mm for logging clarity
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Grid context: Width=%.1fmm Depth=%.1fmm Height=%.1fmm",
                     grid_context.width * grid_scale_mm,
                     grid_context.height * grid_scale_mm,
                     grid_context.depth * grid_scale_mm);
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Grid center: X=%.1f Y=%.1f Z=%.1f",
                     grid_context.center_x, grid_context.center_y, grid_context.center_z);
         logged_bounds = true;
     }
@@ -174,7 +169,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
         if(!transform)
         {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] Controller %u is NULL!", ctrl_idx);
             continue;
         }
 
@@ -184,7 +178,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         static bool logged_ctrl_0 = false;
         if(ctrl_idx == 0 && !logged_ctrl_0)
         {
-            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Controller 0 details: virtual=%d, regular=%d, name=%s",
                        transform->virtual_controller != nullptr,
                        transform->controller != nullptr,
                        transform->controller ? transform->controller->name.c_str() : "(no controller)");
@@ -220,7 +213,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     static int led_log_count = 0;
                     if(ctrl_idx == 0 && mapping_idx < 3 && led_log_count < 3)
                     {
-                        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] LED[%u] position: X=%.1f Y=%.1f Z=%.1f", mapping_idx, x, y, z);
+                        
                         led_log_count++;
                     }
 
@@ -256,7 +249,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         if(effect_log_counter == 0 && effect_idx == 0)
                         {
-                            LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect %u: zone_index=%d, enabled=%d, has_effect=%d",
                                        effect_idx, instance->zone_index, instance->enabled, instance->effect.get() != nullptr);
                         }
 
@@ -306,14 +298,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         {
                             if(effect_log_counter == 0 && effect_idx == 0)
                             {
-                                LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect %u not applied to controller %u", effect_idx, ctrl_idx);
+                                
                             }
                             continue;
                         }
 
                         if(effect_log_counter == 0 && effect_idx == 0)
                         {
-                            LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Applying effect %u to controller %u", effect_idx, ctrl_idx);
+                            
                         }
 
                         /*---------------------------------------------------------*\
@@ -605,4 +597,3 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
         viewport->UpdateColors();
     }
 }
-

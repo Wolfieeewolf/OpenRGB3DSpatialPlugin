@@ -412,12 +412,12 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] on_stack_effect_type_changed called");
+    
 
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Invalid stack row: %d (size: %d)", current_row, (int)effect_stack.size());
+        
         return;
     }
 
@@ -427,13 +427,12 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Changing stack effect to: %s (class: %s)",
              ui_name.toStdString().c_str(), class_name.toStdString().c_str());
 
     // If "None" is selected, clear the effect
     if(class_name.isEmpty())
     {
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Clearing effect (None selected)");
+        
         instance->effect.reset();
         instance->effect_class_name = "";
         instance->name = "None";
@@ -458,7 +457,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     /*---------------------------------------------------------*\
     | Clear old effect and store new class name                |
     \*---------------------------------------------------------*/
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Resetting old effect and creating new one");
+    
     instance->effect.reset();
     instance->effect_class_name = class_name.toStdString();
     instance->name              = ui_name.toStdString();
@@ -640,7 +639,7 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
-    LOG_INFO("[OpenRGB3DSpatialPlugin] LoadStackEffectControls called");
+    
 
     // Clear existing controls
     QLayoutItem* item;
@@ -658,17 +657,15 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 
     if(!instance)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] LoadStackEffectControls: instance is null");
         return;
     }
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Instance effect_class_name: %s, effect exists: %d",
-             instance->effect_class_name.c_str(), instance->effect.get() != nullptr);
+    
 
     // Create effect if it doesn't exist yet
     if(!instance->effect && !instance->effect_class_name.empty())
     {
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Creating new effect: %s", instance->effect_class_name.c_str());
+        
         SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
         if(!effect)
         {
@@ -676,14 +673,14 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
             return;
         }
         instance->effect.reset(effect);
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Effect created successfully: %p", effect);
+        
 
         /*---------------------------------------------------------*\
         | Load saved settings if they exist (from ToJson/FromJson) |
         \*---------------------------------------------------------*/
         if(instance->saved_settings && !instance->saved_settings->empty())
         {
-            LOG_INFO("[OpenRGB3DSpatialPlugin] Loading saved effect settings");
+            
             effect->LoadSettings(*instance->saved_settings);
         }
     }
@@ -691,18 +688,17 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     // If no effect (None selected), just return - controls are already cleared
     if(!instance->effect)
     {
-        LOG_INFO("[OpenRGB3DSpatialPlugin] No effect to load (None selected)");
         return;
     }
 
     // The effect itself is a QWidget
     SpatialEffect3D* effect = instance->effect.get();
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Setting up effect UI for: %p", effect);
+    
 
     // If the effect hasn't been initialized yet, set it up
     if(!effect->parent())
     {
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Effect has no parent, initializing UI");
+        
         effect->setParent(stack_effect_controls_container);
         effect->CreateCommonEffectControls(stack_effect_controls_container);
         effect->SetupCustomUI(stack_effect_controls_container);
@@ -711,5 +707,5 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     // Show the effect and add to layout
     effect->show();
     stack_effect_controls_layout->addWidget(effect);
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Effect controls loaded and displayed");
+    
 }

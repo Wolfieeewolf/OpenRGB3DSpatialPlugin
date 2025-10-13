@@ -52,7 +52,7 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
     {
         file << j.dump(4);
         file.close();
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect stack saved (%d effects)", (int)effect_stack.size());
+        
     }
     else
     {
@@ -66,7 +66,7 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
 
     if(!filesystem::exists(stack_file))
     {
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] No saved effect stack found");
+        
         return;
     }
 
@@ -113,7 +113,7 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
             effect_stack_list->setCurrentRow(0);
         }
 
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect stack loaded (%d effects)", (int)effect_stack.size());
+        
     }
     catch(const std::exception& e)
     {

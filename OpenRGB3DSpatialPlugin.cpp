@@ -40,7 +40,7 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Plugin loaded successfully");
+    
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -65,7 +65,7 @@ void OpenRGB3DSpatialPlugin::Unload()
 {
     RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Plugin unloaded");
+    
 }
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)

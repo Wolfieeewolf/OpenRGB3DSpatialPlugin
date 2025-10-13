@@ -39,13 +39,11 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     \*---------------------------------------------------------*/
     if(!effect_combo || effect_combo->currentIndex() <= 0)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] No effect selected to save");
         return;
     }
 
     if(!current_effect_ui)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] No effect UI to save");
         return;
     }
 
@@ -97,8 +95,7 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     out << QString::fromStdString(profile_json.dump(4));
     file.close();
 
-    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect profile saved: %s (effect type %d)",
-                filename.c_str(), effect_combo->currentIndex() - 1);
+    
 }
 
 void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
@@ -173,8 +170,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             current_effect_ui->LoadSettings(profile_json["effect_params"]);
         }
 
-        LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect profile loaded: %s (effect type %d)",
-                    filename.c_str(), effect_type);
+        
     }
     catch(const std::exception& e)
     {
@@ -256,7 +252,6 @@ void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
         file.close();
     }
 
-    LOG_INFO("[OpenRGB3DSpatialPlugin] Saved effect profile settings: profile='%s', auto_load=%d",
              profile_name.c_str(), auto_load_enabled);
 }
 
@@ -300,7 +295,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             profile_name = config["auto_load_profile"].get<std::string>();
         }
 
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Loaded effect profile settings: profile='%s', auto_load=%d",
                  profile_name.c_str(), auto_load_enabled);
 
         /*---------------------------------------------------------*\
@@ -334,7 +328,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             if(filesystem::exists(profile_path))
             {
                 LoadEffectProfile(profile_path);
-                LOG_INFO("[OpenRGB3DSpatialPlugin] Auto-loaded effect profile: %s", profile_name.c_str());
             }
         }
     }

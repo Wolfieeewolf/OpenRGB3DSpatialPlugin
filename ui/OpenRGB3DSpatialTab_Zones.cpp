@@ -251,7 +251,6 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
 {
     if(!zones_list || !zone_manager)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] UpdateZonesList called but UI not ready");
         return;
     }
 
@@ -278,13 +277,11 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
 {
     if(!effect_zone_combo)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] UpdateEffectZoneCombo called but combo not ready");
         return;
     }
 
     if(!zone_manager)
     {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] UpdateEffectZoneCombo called but zone_manager is null");
         return;
     }
 
@@ -345,8 +342,7 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
     }
 
     effect_zone_combo->blockSignals(false);
-    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Effect zone combo updated with %d zones and %d controllers",
-                zone_manager->GetZoneCount(), (int)controller_transforms.size());
+    
 }
 
 void OpenRGB3DSpatialTab::SaveZones()
@@ -354,8 +350,7 @@ void OpenRGB3DSpatialTab::SaveZones()
     // Zones are automatically saved as part of the layout JSON
     // when SaveLayout() is called. This function is kept for
     // future standalone save functionality if needed.
-    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Zones will be saved with next layout save (%d zones)",
-                zone_manager ? zone_manager->GetZoneCount() : 0);
+    
 }
 
 void OpenRGB3DSpatialTab::LoadZones()
@@ -363,6 +358,5 @@ void OpenRGB3DSpatialTab::LoadZones()
     // Zones are automatically loaded as part of the layout JSON
     // when LoadLayout() is called. This function is kept for
     // future standalone load functionality if needed.
-    LOG_VERBOSE("[OpenRGB3DSpatialPlugin] Zones loaded from layout (%d zones)",
-                zone_manager ? zone_manager->GetZoneCount() : 0);
+    
 }
