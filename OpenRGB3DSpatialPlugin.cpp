@@ -10,7 +10,6 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialPlugin.h"
-#include "LogManager.h"
 
 ResourceManagerInterface* OpenRGB3DSpatialPlugin::RMPointer = nullptr;
 
