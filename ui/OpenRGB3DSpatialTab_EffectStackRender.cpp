@@ -138,7 +138,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    // removed bounds logging
+    
 
     /*---------------------------------------------------------*\
     | Step 1: Calculate colors for ALL controllers first      |
@@ -210,7 +210,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         instance->effect->SetGlobalReferencePoint(stack_ref_origin);
                         instance->effect->SetReferenceMode(stack_origin_mode);
 
-                        // removed effect logging
+                        
 
                         /*---------------------------------------------------------*\
                         | Check if this effect targets this controller            |
