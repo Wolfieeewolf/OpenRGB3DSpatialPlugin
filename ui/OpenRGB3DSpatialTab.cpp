@@ -22,7 +22,6 @@
 #include "Effects3D/DNAHelix3D/DNAHelix3D.h"
 #include "Effects3D/BreathingSphere3D/BreathingSphere3D.h"
 #include "Effects3D/Explosion3D/Explosion3D.h"
-#include <QColorDialog>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>

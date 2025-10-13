@@ -10,8 +10,6 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialTab.h"
-#include <QMessageBox>
-#include <QInputDialog>
 
 void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 {
