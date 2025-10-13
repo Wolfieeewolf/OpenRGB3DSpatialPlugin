@@ -103,45 +103,79 @@ RGBColor Matrix3D::CalculateColor(float, float, float, float)
 
 RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Columns run along selected axis (default -Y); compute column index from orthogonal plane
+    // Matrix-style rain on selected room surfaces. We render vertical columns (along Z)
+    // on walls and project downward onto floor/ceiling as well when selected.
     float speed = GetScaledSpeed();
     float size_m = GetNormalizedSize();
 
+    // Column spacing: higher density -> smaller spacing
     float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
-    // Map to plane coords based on axis
-    float a, u, v, a_min, a_max, a_span;
-    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
-    switch(use_axis)
+
+    auto face_intensity = [&](int face) -> float {
+        // face: 0=Left(X=min),1=Right(X=max),2=Front(Y=min),3=Back(Y=max),4=Floor(Z=min),5=Ceiling(Z=max)
+        float u=0.0f, v=0.0f, a=0.0f, a_min=0.0f, a_max=0.0f, face_dist=0.0f;
+        switch(face)
+        {
+            case 0: // Left wall
+                u = y; v = z; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(x - grid.min_x); break;
+            case 1: // Right wall
+                u = y; v = z; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(x - grid.max_x); break;
+            case 2: // Front wall
+                u = x; v = z; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(y - grid.min_y); break;
+            case 3: // Back wall
+                u = x; v = z; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(y - grid.max_y); break;
+            case 4: // Floor
+                u = x; v = y; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(z - grid.min_z); break;
+            case 5: // Ceiling
+            default:
+                u = x; v = y; a = z; a_min = grid.min_z; a_max = grid.max_z; face_dist = fabsf(z - grid.max_z); break;
+        }
+
+        int col_u = (int)floorf(u / col_spacing);
+        int col_v = (int)floorf(v / col_spacing);
+        int col_id = col_u * 73856093 ^ col_v * 19349663;
+
+        float offset = ((col_id & 255) / 255.0f) * 10.0f;
+        float head = (a_max - 0.5f) - fmodf(time * (0.5f + speed * 0.3f) + offset, (a_max - a_min) + 5.0f);
+
+        float d = fabsf(a - head);
+        float trail_len = 1.0f + (trail * 0.05f) * size_m; // ~1..6
+        float trail_intensity = fmax(0.0f, 1.0f - d / trail_len);
+
+        float gap = fmodf((float)((col_id >> 8) & 1023), 10.0f) / 10.0f;
+        float gap_factor = 0.7f + 0.3f * (gap > 0.2f ? 1.0f : gap * 5.0f);
+
+        // Fade from the surface into the room (keeps effect on the face)
+        float face_falloff = expf(-face_dist * 3.0f);
+
+        float intensity = trail_intensity * gap_factor * face_falloff;
+        return fmax(0.0f, fmin(1.0f, intensity));
+    };
+
+    // Determine which faces to include based on coverage selection
+    // effect_coverage indices: 0=Effect Default,1=Entire Room,2=Floor,3=Ceiling,4=Left,5=Right,6=Front,7=Back,8=Floor&Ceil,9=Left&Right,10=Front&Back,11=Origin
+    int cov = (int)effect_coverage;
+    float intensity = 0.0f;
+    auto include_all = [&](){ for(int f=0; f<6; ++f) intensity = fmax(intensity, face_intensity(f)); };
+
+    switch(cov)
     {
-        case AXIS_X: a = x; u = y; v = z; a_min = grid.min_x; a_max = grid.max_x; a_span = grid.width; break;
-        case AXIS_Y: a = y; u = x; v = z; a_min = grid.min_y; a_max = grid.max_y; a_span = grid.depth; break;
-        case AXIS_Z: a = z; u = x; v = y; a_min = grid.min_z; a_max = grid.max_z; a_span = grid.height; break;
-        case AXIS_RADIAL:
-        default:
-            a = y; u = x; v = z; a_min = grid.min_y; a_max = grid.max_y; a_span = grid.depth; break;
+        case 0: // Effect Default -> treat as Entire Room for Matrix vibe
+        case 1: include_all(); break;
+        case 2: intensity = face_intensity(4); break; // Floor
+        case 3: intensity = face_intensity(5); break; // Ceiling
+        case 4: intensity = face_intensity(0); break; // Left
+        case 5: intensity = face_intensity(1); break; // Right
+        case 6: intensity = face_intensity(2); break; // Front
+        case 7: intensity = face_intensity(3); break; // Back
+        case 8: intensity = fmax(face_intensity(4), face_intensity(5)); break; // Floor & Ceiling
+        case 9: intensity = fmax(face_intensity(0), face_intensity(1)); break; // Left & Right
+        case 10: intensity = fmax(face_intensity(2), face_intensity(3)); break; // Front & Back
+        case 11: include_all(); break; // Origin center -> render all faces
+        default: include_all(); break;
     }
 
-    int col_u = (int)floorf(u / col_spacing);
-    int col_v = (int)floorf(v / col_spacing);
-    int col_id = col_u * 73856093 ^ col_v * 19349663;
-
-    // Head position per column along axis a
-    float offset = ((col_id & 255) / 255.0f) * 10.0f;
-    float head = (a_max - 0.5f) - fmodf(time * (0.5f + speed * 0.3f) + offset, (a_max - a_min) + 5.0f);
-
-    // Distance from head gives trail
-    float d = fabsf(a - head);
-    float trail_len = 1.0f + (trail * 0.05f) * size_m; // ~1..6
-    float trail_intensity = fmax(0.0f, 1.0f - d / trail_len);
-
-    // Fade columns slightly based on modulus to create gaps
-    float gap = fmodf((float)((col_id >> 8) & 1023), 10.0f) / 10.0f;
-    float gap_factor = 0.7f + 0.3f * (gap > 0.2f ? 1.0f : gap * 5.0f);
-
-    float intensity = trail_intensity * gap_factor;
-    intensity = fmax(0.0f, fmin(1.0f, intensity));
-
-    // Matrix green
+    // Matrix-green color
     unsigned char r = 0;
     unsigned char g = (unsigned char)(255 * intensity * (GetBrightness() / 100.0f));
     unsigned char b = 0;
