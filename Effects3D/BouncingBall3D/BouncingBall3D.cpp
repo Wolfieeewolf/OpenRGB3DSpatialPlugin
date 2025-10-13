@@ -114,10 +114,6 @@ RGBColor BouncingBall3D::CalculateColor(float, float, float, float)
 
 RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
 
     // Multi-ball elastic reflections off room bounds (all axes)
     float speed = GetScaledSpeed();
