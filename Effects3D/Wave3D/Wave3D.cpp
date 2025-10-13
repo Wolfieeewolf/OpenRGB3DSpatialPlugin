@@ -10,7 +10,7 @@
 \*---------------------------------------------------------*/
 
 #include "Wave3D.h"
-#include "LogManager.h"
+
 
 /*---------------------------------------------------------*\
 | Register this effect with the effect manager             |
@@ -262,17 +262,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     | in grid units, ensuring consistent coordinate system.   |
     \*---------------------------------------------------------*/
 
-    // Debug: Log first call
-    static bool logged_wave = false;
-    if(!logged_wave)
-    {
-        LOG_WARNING("[Wave3D] ========== FIRST CALL DEBUG ==========");
-        LOG_WARNING("[Wave3D] LED position: X=%.1f Y=%.1f Z=%.1f (grid units)", x, y, z);
-        LOG_WARNING("[Wave3D] Grid: Width=%.1f Depth=%.1f Height=%.1f (grid units)", grid.width, grid.depth, grid.height);
-        LOG_WARNING("[Wave3D] Grid center: X=%.1f Y=%.1f Z=%.1f (grid units)", grid.center_x, grid.center_y, grid.center_z);
-        LOG_WARNING("[Wave3D] Reference mode: %d", (int)reference_mode);
-        logged_wave = true;
-    }
+    
 
     /*---------------------------------------------------------*\
     | Get effect origin using grid-aware helper               |
@@ -280,13 +270,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
 
-    // Debug: Log origin for first call
-    static bool logged_origin = false;
-    if(!logged_origin)
-    {
-        LOG_WARNING("[Wave3D] Effect origin: X=%.1f Y=%.1f Z=%.1f (grid units)", origin.x, origin.y, origin.z);
-        logged_origin = true;
-    }
+    
 
     /*---------------------------------------------------------*\
     | Calculate position relative to origin                    |
@@ -295,30 +279,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Debug: Log relative position for first call
-    static bool logged_rel = false;
-    if(!logged_rel)
-    {
-        float distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-        LOG_WARNING("[Wave3D] Relative position: X=%.1f Y=%.1f Z=%.1f Distance=%.1f", rel_x, rel_y, rel_z, distance);
-
-        // Calculate scale radius the SAME way as IsWithinEffectBoundary() does
-        float half_width = grid.width / 2.0f;
-        float half_depth = grid.depth / 2.0f;
-        float half_height = grid.height / 2.0f;
-        float max_distance_from_center = sqrt(half_width * half_width +
-                                             half_depth * half_depth +
-                                             half_height * half_height);
-        float scale_percentage = effect_scale / 100.0f;
-        float scale_radius = max_distance_from_center * scale_percentage;
-
-        LOG_WARNING("[Wave3D] Scale: effect_scale=%u%% max_distance=%.1f scale_radius=%.1f",
-                   effect_scale, max_distance_from_center, scale_radius);
-        LOG_WARNING("[Wave3D] Within boundary: %s", (distance <= scale_radius) ? "YES" : "NO");
-        LOG_WARNING("[Wave3D] Effect params: speed=%u brightness=%u frequency=%u axis=%d",
-                   effect_speed, effect_brightness, effect_frequency, (int)effect_axis);
-        logged_rel = true;
-    }
+    
 
     /*---------------------------------------------------------*\
     | Check if LED is within scaled effect radius             |
