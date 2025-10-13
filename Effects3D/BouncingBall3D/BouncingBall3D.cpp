@@ -16,8 +16,10 @@ BouncingBall3D::BouncingBall3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
     elasticity_slider = nullptr;
+    count_slider = nullptr;
     ball_size = 40;
     elasticity = 70;
+    ball_count = 1;
     SetRainbowMode(true);
 }
 
@@ -78,10 +80,18 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     elasticity_slider->setToolTip("Bounce elasticity (higher = higher bounces)");
     layout->addWidget(elasticity_slider, 1, 1);
 
+    layout->addWidget(new QLabel("Balls:"), 2, 0);
+    count_slider = new QSlider(Qt::Horizontal);
+    count_slider->setRange(1, 50);
+    count_slider->setValue(ball_count);
+    count_slider->setToolTip("Number of balls (1..50)");
+    layout->addWidget(count_slider, 2, 1);
+
     if(parent && parent->layout()) parent->layout()->addWidget(w);
 
     connect(size_slider, &QSlider::valueChanged, this, &BouncingBall3D::OnBallParameterChanged);
     connect(elasticity_slider, &QSlider::valueChanged, this, &BouncingBall3D::OnBallParameterChanged);
+    connect(count_slider, &QSlider::valueChanged, this, &BouncingBall3D::OnBallParameterChanged);
 }
 
 void BouncingBall3D::UpdateParams(SpatialEffectParams& params)
@@ -93,6 +103,7 @@ void BouncingBall3D::OnBallParameterChanged()
 {
     if(size_slider) ball_size = size_slider->value();
     if(elasticity_slider) elasticity = elasticity_slider->value();
+    if(count_slider) ball_count = count_slider->value();
     emit ParametersChanged();
 }
 
@@ -108,44 +119,69 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Deterministic ball path: bounce between floor and ceiling with parabolic segments.
+    // Deterministic multi-ball paths with per-ball phase/offset variations
     float speed = GetScaledSpeed();
     float period = fmax(1.5f, 3.0f - speed * 0.02f); // seconds per bounce
-    float t = fmodf(time, period);
     float e = elasticity / 100.0f; // 0.1..1.0
-
-    // Vertical motion: y = -a*(t - T/2)^2 + H
-    float H = grid.height * (0.2f + 0.6f * e); // peak depends on elasticity
-    float a = (4.0f * H) / (period * period);
-    float y_ball = -a * (t - period * 0.5f) * (t - period * 0.5f) + H;
-
-    // Horizontal circular drift around origin
-    float radius_xy = (grid.width + grid.depth) * 0.1f;
-    float ang = time * (0.5f + speed * 0.05f);
-    float x_ball = cosf(ang) * radius_xy;
-    float z_ball = sinf(ang) * radius_xy;
 
     // Ball radius scales with room size for visibility across any room
     float size_m = GetNormalizedSize();
     float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
-    // ball_size (10..150) mapped to ~2%..30% of average room dimension
     float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
-    float dx = rel_x - x_ball;
-    float dy = rel_y - (y_ball - origin.y);
-    float dz = rel_z - z_ball;
-    float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+    float radius_xy_base = (grid.width + grid.depth) * 0.1f;
 
-    float glow = fmax(0.0f, 1.0f - dist / (R + 0.001f));
-    float intensity = powf(glow, 1.2f);
-    // Ensure a minimal visibility so sparse layouts still show the ball
-    if(intensity < 0.02f && dist <= R * 1.2f) intensity = 0.02f;
+    auto h01 = [](unsigned int n) -> float {
+        // simple integer hash to 0..1
+        n ^= 0x27d4eb2d;
+        n = (n ^ 61) ^ (n >> 16);
+        n = n + (n << 3);
+        n = n ^ (n >> 4);
+        n = n * 0x27d4eb2d;
+        n = n ^ (n >> 15);
+        return (n & 0xFFFF) / 65535.0f;
+    };
 
-    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(ang * 57.2958f) : GetColorAtPosition(0.5f);
+    float max_intensity = 0.0f;
+    float hue_for_max = 0.0f;
+
+    unsigned int N = ball_count == 0 ? 1u : ball_count;
+    for(unsigned int k = 0; k < N; k++)
+    {
+        float phase = h01(k * 97u) * period;            // time phase offset
+        float t = fmodf(time + phase, period);
+
+        float H = grid.height * (0.2f + 0.6f * e * (0.8f + 0.4f * h01(k * 593u))); // vary peak
+        float a = (4.0f * H) / (period * period);
+        float y_ball = -a * (t - period * 0.5f) * (t - period * 0.5f) + H;
+
+        float ang_off = h01(k * 379u) * 6.2831853f;
+        float radius_xy = radius_xy_base * (0.6f + 0.8f * h01(k * 883u));
+        float ang = (time * (0.5f + speed * 0.05f)) + ang_off;
+        float x_ball = cosf(ang) * radius_xy;
+        float z_ball = sinf(ang) * radius_xy;
+
+        float dx = rel_x - x_ball;
+        float dy = rel_y - (y_ball - origin.y);
+        float dz = rel_z - z_ball;
+        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+
+        float glow = fmax(0.0f, 1.0f - dist / (R + 0.001f));
+        float intensity = powf(glow, 1.2f);
+        if(intensity < 0.02f && dist <= R * 1.2f) intensity = 0.02f;
+
+        if(intensity > max_intensity)
+        {
+            max_intensity = intensity;
+            hue_for_max = (ang * 57.2958f);
+        }
+    }
+
+    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(hue_for_max) : GetColorAtPosition(0.5f);
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    float bf = (GetBrightness() / 100.0f) * intensity;
+    float bf = (GetBrightness() / 100.0f) * max_intensity;
     r = (unsigned char)(r * bf);
     g = (unsigned char)(g * bf);
     b = (unsigned char)(b * bf);
