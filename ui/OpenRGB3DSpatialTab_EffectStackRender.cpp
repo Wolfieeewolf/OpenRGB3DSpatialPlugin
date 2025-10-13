@@ -179,13 +179,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float y = transform->led_positions[mapping_idx].world_position.y;
                     float z = transform->led_positions[mapping_idx].world_position.z;
 
-                    // Debug: Log first 3 LED positions for controller 0
-                    static int led_log_count = 0;
-                    if(ctrl_idx == 0 && mapping_idx < 3 && led_log_count < 3)
-                    {
-                        
-                        led_log_count++;
-                    }
+                    
 
                     // Safety: Ensure controller is still valid
                     if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
