@@ -4326,7 +4326,6 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     {
         // Check if this is a stack preset (has user data)
         QVariant data = effect_combo->itemData(index);
-                 data.isValid(), data.isValid() ? data.toInt() : 0);
 
         if(data.isValid() && data.toInt() < 0)
         {
