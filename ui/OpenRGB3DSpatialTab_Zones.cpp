@@ -10,7 +10,6 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialTab.h"
-#include "LogManager.h"
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QDialog>
