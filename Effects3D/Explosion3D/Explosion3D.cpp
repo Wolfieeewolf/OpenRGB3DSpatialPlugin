@@ -16,8 +16,6 @@
 \*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(Explosion3D);
 
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGridLayout>
 #include "../EffectHelpers.h"
 

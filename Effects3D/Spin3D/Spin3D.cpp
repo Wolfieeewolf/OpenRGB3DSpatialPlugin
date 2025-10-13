@@ -15,8 +15,6 @@
 | Register this effect with the effect manager             |
 \*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(Spin3D);
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGridLayout>
 #include <cmath>
 

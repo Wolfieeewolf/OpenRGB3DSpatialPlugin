@@ -16,8 +16,6 @@
 \*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(DNAHelix3D);
 
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGridLayout>
 #include "../EffectHelpers.h"
 
