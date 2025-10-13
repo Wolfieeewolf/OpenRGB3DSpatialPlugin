@@ -16,10 +16,7 @@
 | Register this effect with the effect manager             |
 \*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(Wave3D);
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGridLayout>
-#include <QColorDialog>
 #include <algorithm>
 #include <cmath>
 

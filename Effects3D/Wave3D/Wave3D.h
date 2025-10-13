@@ -19,10 +19,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QScrollArea>
-#include <QColorDialog>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 
