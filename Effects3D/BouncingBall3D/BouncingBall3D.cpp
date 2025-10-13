@@ -119,20 +119,27 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Deterministic multi-ball paths with per-ball phase/offset variations
+    // Multi-ball elastic reflections off room bounds (all axes)
     float speed = GetScaledSpeed();
-    float period = fmax(1.5f, 3.0f - speed * 0.02f); // seconds per bounce
-    float e = elasticity / 100.0f; // 0.1..1.0
+    float e = fmax(0.1f, elasticity / 100.0f); // 0.1..1.0
 
     // Ball radius scales with room size for visibility across any room
     float size_m = GetNormalizedSize();
     float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
     float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
-    float radius_xy_base = (grid.width + grid.depth) * 0.1f;
+    // Reflection helper on [min,max]
+    auto reflect_pos = [](float p0, float v, float t, float minv, float maxv) -> float {
+        float L = maxv - minv;
+        if(L <= 0.0001f) return minv;
+        float p = (p0 - minv) + v * t;
+        float twoL = 2.0f * L;
+        float m = fmodf(p, twoL);
+        if(m < 0.0f) m += twoL;
+        return (m <= L) ? (minv + m) : (maxv - (m - L));
+    };
 
     auto h01 = [](unsigned int n) -> float {
-        // simple integer hash to 0..1
         n ^= 0x27d4eb2d;
         n = (n ^ 61) ^ (n >> 16);
         n = n + (n << 3);
@@ -142,28 +149,43 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
         return (n & 0xFFFF) / 65535.0f;
     };
 
+    float xmin = grid.min_x + R;
+    float xmax = grid.max_x - R;
+    float ymin = grid.min_y + R;
+    float ymax = grid.max_y - R;
+    float zmin = grid.min_z + R;
+    float zmax = grid.max_z - R;
+
     float max_intensity = 0.0f;
-    float hue_for_max = 0.0f;
+    float hue_for_max = 120.0f; // matrix-green base hue
 
     unsigned int N = ball_count == 0 ? 1u : ball_count;
     for(unsigned int k = 0; k < N; k++)
     {
-        float phase = h01(k * 97u) * period;            // time phase offset
-        float t = fmodf(time + phase, period);
+        // Initial positions pseudo-random within room
+        float p0x = xmin + h01(k * 131u) * (xmax - xmin);
+        float p0y = ymin + h01(k * 313u) * (ymax - ymin);
+        float p0z = zmin + h01(k * 919u) * (zmax - zmin);
 
-        float H = grid.height * (0.2f + 0.6f * e * (0.8f + 0.4f * h01(k * 593u))); // vary peak
-        float a = (4.0f * H) / (period * period);
-        float y_ball = -a * (t - period * 0.5f) * (t - period * 0.5f) + H;
+        // Velocity direction (unit-ish), speed factor scales with speed and elasticity
+        float ax = h01(k * 733u) * 2.0f - 1.0f;
+        float ay = h01(k * 577u) * 2.0f - 1.0f;
+        float az = h01(k * 829u) * 2.0f - 1.0f;
+        float norm = sqrtf(ax*ax + ay*ay + az*az);
+        if(norm < 0.0001f) norm = 1.0f;
+        ax /= norm; ay /= norm; az /= norm;
+        float base_speed = 0.5f + 1.5f * h01(k * 997u);
+        float vmag = base_speed * (0.2f + speed * 0.03f) * (0.6f + 0.8f * e);
 
-        float ang_off = h01(k * 379u) * 6.2831853f;
-        float radius_xy = radius_xy_base * (0.6f + 0.8f * h01(k * 883u));
-        float ang = (time * (0.5f + speed * 0.05f)) + ang_off;
-        float x_ball = cosf(ang) * radius_xy;
-        float z_ball = sinf(ang) * radius_xy;
+        // Position at time with elastic reflections
+        float bx = reflect_pos(p0x, ax * vmag, time, xmin, xmax);
+        float by = reflect_pos(p0y, ay * vmag, time, ymin, ymax);
+        float bz = reflect_pos(p0z, az * vmag, time, zmin, zmax);
 
-        float dx = rel_x - x_ball;
-        float dy = rel_y - (y_ball - origin.y);
-        float dz = rel_z - z_ball;
+        // Distance from LED to ball center
+        float dx = (x - bx);
+        float dy = (y - by);
+        float dz = (z - bz);
         float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
         float glow = fmax(0.0f, 1.0f - dist / (R + 0.001f));
@@ -173,7 +195,9 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
         if(intensity > max_intensity)
         {
             max_intensity = intensity;
-            hue_for_max = (ang * 57.2958f);
+            // Hue per-ball from velocity direction/time
+            float hue = fmodf((atan2f(az, ax) * 57.2958f) + time * 20.0f, 360.0f);
+            hue_for_max = hue;
         }
     }
 
