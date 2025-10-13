@@ -91,10 +91,12 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     intensity_slider = new QSlider(Qt::Horizontal);
     intensity_slider->setRange(10, 200);
     intensity_slider->setValue(explosion_intensity);
+    intensity_slider->setToolTip("Explosion energy (affects radius and wave thickness)");
     layout->addWidget(intensity_slider, 0, 1);
 
     layout->addWidget(new QLabel("Type:"), 1, 0);
     type_combo = new QComboBox();
+    type_combo->setToolTip("Explosion type behavior");
     type_combo->addItem("Standard");
     type_combo->addItem("Nuke");
     type_combo->addItem("Land Mine");

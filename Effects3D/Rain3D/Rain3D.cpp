@@ -75,12 +75,14 @@ void Rain3D::SetupCustomUI(QWidget* parent)
     density_slider = new QSlider(Qt::Horizontal);
     density_slider->setRange(5, 100);
     density_slider->setValue(rain_density);
+    density_slider->setToolTip("Rain density (higher = more drops)");
     layout->addWidget(density_slider, 0, 1);
 
     layout->addWidget(new QLabel("Wind:"), 1, 0);
     wind_slider = new QSlider(Qt::Horizontal);
     wind_slider->setRange(-50, 50);
     wind_slider->setValue(wind);
+    wind_slider->setToolTip("Wind drift (left/right)");
     layout->addWidget(wind_slider, 1, 1);
 
     if(parent && parent->layout())

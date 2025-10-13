@@ -68,12 +68,14 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(10, 150);
     size_slider->setValue(ball_size);
+    size_slider->setToolTip("Ball radius (room-aware)");
     layout->addWidget(size_slider, 0, 1);
 
     layout->addWidget(new QLabel("Elasticity:"), 1, 0);
     elasticity_slider = new QSlider(Qt::Horizontal);
     elasticity_slider->setRange(10, 100);
     elasticity_slider->setValue(elasticity);
+    elasticity_slider->setToolTip("Bounce elasticity (higher = higher bounces)");
     layout->addWidget(elasticity_slider, 1, 1);
 
     if(parent && parent->layout()) parent->layout()->addWidget(w);

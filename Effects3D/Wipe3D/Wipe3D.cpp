@@ -93,6 +93,7 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
     thickness_slider = new QSlider(Qt::Horizontal);
     thickness_slider->setRange(5, 100);
     thickness_slider->setValue(wipe_thickness);
+    thickness_slider->setToolTip("Wipe edge thickness (higher = wider edge)");
     layout->addWidget(thickness_slider, 0, 1);
 
     layout->addWidget(new QLabel("Edge Shape:"), 1, 0);
@@ -101,6 +102,7 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
     shape_combo->addItem("Sharp");
     shape_combo->addItem("Square");
     shape_combo->setCurrentIndex(edge_shape);
+    shape_combo->setToolTip("Wipe edge profile");
     layout->addWidget(shape_combo, 1, 1);
 
     if(parent && parent->layout())

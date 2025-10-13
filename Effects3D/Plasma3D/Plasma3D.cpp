@@ -97,6 +97,7 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Ripple");
     pattern_combo->addItem("Organic");
     pattern_combo->setCurrentIndex(pattern_type);
+    pattern_combo->setToolTip("Plasma pattern variant");
     layout->addWidget(pattern_combo, 0, 1);
 
     if(parent && parent->layout())

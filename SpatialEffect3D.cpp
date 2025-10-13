@@ -127,6 +127,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     brightness_slider = new QSlider(Qt::Horizontal);
     // Keep brightness at 1..100 to avoid breaking existing math
     brightness_slider->setRange(1, 100);
+    brightness_slider->setToolTip("Overall effect brightness (applied after intensity/sharpness)");
     brightness_slider->setValue(effect_brightness);
     brightness_layout->addWidget(brightness_slider);
     brightness_label = new QLabel(QString::number(effect_brightness));
@@ -204,6 +205,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     intensity_slider = new QSlider(Qt::Horizontal);
     intensity_slider->setRange(0, 200);
     intensity_slider->setValue(effect_intensity);
+    intensity_slider->setToolTip("Global intensity multiplier (0 = off, 100 = normal, 200 = 2x)");
     intensity_layout->addWidget(intensity_slider);
     main_layout->addLayout(intensity_layout);
 
@@ -215,6 +217,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     sharpness_slider = new QSlider(Qt::Horizontal);
     sharpness_slider->setRange(0, 200);
     sharpness_slider->setValue(effect_sharpness);
+    sharpness_slider->setToolTip("Edge contrast: lower = softer, higher = crisper (gamma-like)");
     sharpness_layout->addWidget(sharpness_slider);
     main_layout->addLayout(sharpness_layout);
 
@@ -264,6 +267,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     coverage_combo->addItem("Front & Back Walls");  // 10
     coverage_combo->addItem("Origin Center");       // 11
     coverage_combo->setCurrentIndex((int)effect_coverage);
+    coverage_combo->setToolTip("Room coverage shaping: choose areas to emphasize (Effect Default leaves coverage to the effect)");
     coverage_layout->addWidget(coverage_combo);
     main_layout->addLayout(coverage_layout);
 
@@ -349,6 +353,7 @@ void SpatialEffect3D::CreateColorControls()
     \*---------------------------------------------------------*/
     rainbow_mode_check = new QCheckBox("Rainbow Mode");
     rainbow_mode_check->setChecked(rainbow_mode);
+    rainbow_mode_check->setToolTip("Use rainbow gradient instead of custom colors");
     color_layout->addWidget(rainbow_mode_check);
 
     /*---------------------------------------------------------*\
@@ -370,11 +375,13 @@ void SpatialEffect3D::CreateColorControls()
     add_color_button = new QPushButton("+");
     add_color_button->setMaximumSize(30, 30);
     add_color_button->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
+    add_color_button->setToolTip("Add a new color stop");
 
     remove_color_button = new QPushButton("-");
     remove_color_button->setMaximumSize(30, 30);
     remove_color_button->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
     remove_color_button->setEnabled(colors.size() > 1);
+    remove_color_button->setToolTip("Remove the last color stop");
 
     color_buttons_layout->addWidget(add_color_button);
     color_buttons_layout->addWidget(remove_color_button);
@@ -399,6 +406,7 @@ void SpatialEffect3D::CreateColorButton(RGBColor color)
     QPushButton* color_button = new QPushButton();
     color_button->setMinimumSize(40, 30);
     color_button->setMaximumSize(40, 30);
+    color_button->setToolTip("Click to change color");
     color_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3); border: 1px solid #333;")
                               .arg((color >> 16) & 0xFF)
                               .arg((color >> 8) & 0xFF)

@@ -99,18 +99,21 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Pinwheel");
     pattern_combo->addItem("Sharp Blades");
     pattern_combo->setCurrentIndex(pattern_type);
+    pattern_combo->setToolTip("Spiral pattern style");
     layout->addWidget(pattern_combo, 0, 1);
 
     layout->addWidget(new QLabel("Arms:"), 1, 0);
     arms_slider = new QSlider(Qt::Horizontal);
     arms_slider->setRange(2, 8);
     arms_slider->setValue(num_arms);
+    arms_slider->setToolTip("Number of spiral arms");
     layout->addWidget(arms_slider, 1, 1);
 
     layout->addWidget(new QLabel("Gap Size:"), 2, 0);
     gap_slider = new QSlider(Qt::Horizontal);
     gap_slider->setRange(10, 80);
     gap_slider->setValue(gap_size);
+    gap_slider->setToolTip("Gap size between blades");
     layout->addWidget(gap_slider, 2, 1);
 
     if(parent && parent->layout())

@@ -72,12 +72,14 @@ void Tornado3D::SetupCustomUI(QWidget* parent)
     core_radius_slider = new QSlider(Qt::Horizontal);
     core_radius_slider->setRange(20, 300);
     core_radius_slider->setValue(core_radius);
+    core_radius_slider->setToolTip("Tornado core radius (affects base funnel size)");
     layout->addWidget(core_radius_slider, 0, 1);
 
     layout->addWidget(new QLabel("Height:"), 1, 0);
     height_slider = new QSlider(Qt::Horizontal);
     height_slider->setRange(50, 500);
     height_slider->setValue(tornado_height);
+    height_slider->setToolTip("Tornado height (relative to room height)");
     layout->addWidget(height_slider, 1, 1);
 
     if(parent && parent->layout())

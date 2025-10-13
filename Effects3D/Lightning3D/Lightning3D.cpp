@@ -70,12 +70,14 @@ void Lightning3D::SetupCustomUI(QWidget* parent)
     strike_rate_slider = new QSlider(Qt::Horizontal);
     strike_rate_slider->setRange(1, 60);
     strike_rate_slider->setValue(strike_rate);
+    strike_rate_slider->setToolTip("Strikes per minute (base rate)");
     layout->addWidget(strike_rate_slider, 0, 1);
 
     layout->addWidget(new QLabel("Branches:"), 1, 0);
     branch_slider = new QSlider(Qt::Horizontal);
     branch_slider->setRange(1, 8);
     branch_slider->setValue(branches);
+    branch_slider->setToolTip("Number of branches per strike");
     layout->addWidget(branch_slider, 1, 1);
 
     if(parent && parent->layout()) parent->layout()->addWidget(w);

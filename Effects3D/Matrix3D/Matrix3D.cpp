@@ -68,12 +68,14 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     density_slider = new QSlider(Qt::Horizontal);
     density_slider->setRange(10, 100);
     density_slider->setValue(density);
+    density_slider->setToolTip("Column density (higher = more columns)");
     layout->addWidget(density_slider, 0, 1);
 
     layout->addWidget(new QLabel("Trail Length:"), 1, 0);
     trail_slider = new QSlider(Qt::Horizontal);
     trail_slider->setRange(10, 100);
     trail_slider->setValue(trail);
+    trail_slider->setToolTip("Trail length (higher = longer trails)");
     layout->addWidget(trail_slider, 1, 1);
 
     if(parent && parent->layout()) parent->layout()->addWidget(w);

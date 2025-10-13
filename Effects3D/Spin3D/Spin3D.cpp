@@ -106,12 +106,14 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     surface_combo->addItem("Entire Room");
     surface_combo->addItem("Origin (Room/User Center)");
     surface_combo->setCurrentIndex(surface_type);
+    surface_combo->setToolTip("Select which surfaces to spin on");
     layout->addWidget(surface_combo, 0, 1);
 
     layout->addWidget(new QLabel("Arms:"), 1, 0);
     arms_slider = new QSlider(Qt::Horizontal);
     arms_slider->setRange(1, 8);
     arms_slider->setValue(num_arms);
+    arms_slider->setToolTip("Number of spinning arms");
     layout->addWidget(arms_slider, 1, 1);
 
     if(parent && parent->layout())
