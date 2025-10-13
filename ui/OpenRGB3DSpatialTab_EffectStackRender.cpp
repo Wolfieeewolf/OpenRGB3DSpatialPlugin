@@ -315,7 +315,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         /*---------------------------------------------------------*\
                         | Calculate effect color                                   |
                         \*---------------------------------------------------------*/
-                        RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                        RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);;
+effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
 
                         /*---------------------------------------------------------*\
                         | Blend with accumulated color                             |
@@ -446,7 +447,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                     /*---------------------------------------------------------*\
                     | Calculate effect color                                   |
-                    \*---------------------------------------------------------*/
+                    \*---------------------------------------------------------*/;
+effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
                     RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
                     /*---------------------------------------------------------*\
@@ -599,3 +601,4 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         viewport->UpdateColors();
     }
 }
+

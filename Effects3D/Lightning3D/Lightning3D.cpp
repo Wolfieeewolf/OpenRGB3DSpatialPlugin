@@ -144,9 +144,13 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float d2 = p2 - c2;
     float radial = sqrtf(d1*d1 + d2*d2);
 
-    // Core and glow falloff
-    float core = fmax(0.0f, 1.0f - radial / (0.4f + 0.2f * branches));
-    float glow = fmax(0.0f, 1.0f - radial / (1.0f + 0.4f * branches)) * 0.5f;
+    // Core and glow falloff scaled to room size and size parameter
+    float size_m = GetNormalizedSize();
+    float base_span = (span1 + span2) * 0.5f;
+    float core_width = base_span * (0.02f + 0.02f * size_m);   // thicker with size
+    float glow_width = base_span * (0.06f + 0.04f * size_m);
+    float core = fmax(0.0f, 1.0f - radial / (core_width + 0.001f));
+    float glow = fmax(0.0f, 1.0f - radial / (glow_width + 0.001f)) * 0.5f;
     float intensity = (core + glow) * flash;
 
     // Branching: modulate with angle bands to simulate branches

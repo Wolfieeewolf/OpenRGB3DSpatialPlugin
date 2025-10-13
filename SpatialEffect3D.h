@@ -205,6 +205,12 @@ public:
     bool GetReverse() const { return effect_reverse; }
 
     /*---------------------------------------------------------*\
+    | Global post-processing helpers                          |
+    | Apply coverage/intensity/sharpness shaping consistently |
+    \*---------------------------------------------------------*/
+    RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
+
+    /*---------------------------------------------------------*\
     | Serialization - save/load effect parameters             |
     \*---------------------------------------------------------*/
     virtual nlohmann::json SaveSettings() const;
@@ -230,6 +236,11 @@ protected:
     QLabel*             size_label;
     QLabel*             scale_label;
     QLabel*             fps_label;
+
+    // Shaping and coverage controls
+    QSlider*            intensity_slider;     // 0..200 (100 = neutral)
+    QSlider*            sharpness_slider;     // 0..200 (100 = neutral)
+    QComboBox*          coverage_combo;       // coverage selection
 
     /*---------------------------------------------------------*\
     | Axis selection controls                                  |
@@ -273,6 +284,11 @@ protected:
     // When true, legacy boundary check is bypassed (grid boundary already validated)
     bool                boundary_prevalidated;
 
+    // Global shaping params
+    unsigned int        effect_intensity;     // 0..200 (100 neutral)
+    unsigned int        effect_sharpness;     // 0..200 (100 neutral)
+    unsigned int        effect_coverage;      // Index into coverage_combo
+
     /*---------------------------------------------------------*\
     | Axis parameters                                          |
     \*---------------------------------------------------------*/
@@ -315,6 +331,10 @@ protected:
     // Boundary checking helpers
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;  // Legacy version (uses fixed radius)
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;  // Room-aware version (RECOMMENDED)
+
+    // Coverage/intensity helpers
+    float ComputeCoverageWeight(float x, float y, float z, const GridContext3D& grid) const;
+    float ApplySharpness(float value) const;    // gamma-like shaping around 1.0
 
 private slots:
     void OnParameterChanged();

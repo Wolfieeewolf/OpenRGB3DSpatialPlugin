@@ -102,7 +102,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* speed_layout = new QHBoxLayout();
     speed_layout->addWidget(new QLabel("Speed:"));
     speed_slider = new QSlider(Qt::Horizontal);
-    speed_slider->setRange(1, 100);
+    speed_slider->setRange(0, 200);
     speed_slider->setValue(effect_speed);
     speed_slider->setToolTip("Effect animation speed (uses logarithmic curve for smooth control)");
     speed_layout->addWidget(speed_slider);
@@ -117,6 +117,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* brightness_layout = new QHBoxLayout();
     brightness_layout->addWidget(new QLabel("Brightness:"));
     brightness_slider = new QSlider(Qt::Horizontal);
+    // Keep brightness at 1..100 to avoid breaking existing math
     brightness_slider->setRange(1, 100);
     brightness_slider->setValue(effect_brightness);
     brightness_layout->addWidget(brightness_slider);
@@ -131,7 +132,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* frequency_layout = new QHBoxLayout();
     frequency_layout->addWidget(new QLabel("Frequency:"));
     frequency_slider = new QSlider(Qt::Horizontal);
-    frequency_slider->setRange(1, 100);
+    frequency_slider->setRange(0, 200);
     frequency_slider->setValue(effect_frequency);
     frequency_slider->setToolTip("Pattern frequency - controls color wave/pattern density");
     frequency_layout->addWidget(frequency_slider);
@@ -146,7 +147,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
     size_slider = new QSlider(Qt::Horizontal);
-    size_slider->setRange(1, 100);
+    // Expand size range for room-scale control
+    size_slider->setRange(0, 200);
     size_slider->setValue(effect_size);
     size_slider->setToolTip("Pattern size - controls how tight/spread out the pattern is");
     size_layout->addWidget(size_slider);
@@ -161,6 +163,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
+    // Keep scale wide: 0..250 (0..150% of room)
     scale_slider->setRange(0, 250);
     scale_slider->setValue(effect_scale);
     scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=whole room), 201-250 = 101-150% (beyond room)");
@@ -176,7 +179,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* fps_layout = new QHBoxLayout();
     fps_layout->addWidget(new QLabel("FPS:"));
     fps_slider = new QSlider(Qt::Horizontal);
-    fps_slider->setRange(1, 60);
+    fps_slider->setRange(1, 120);
     fps_slider->setValue(effect_fps);
     fps_slider->setToolTip("Frames per second (1-60) - lower values reduce CPU usage");
     fps_layout->addWidget(fps_slider);
@@ -184,6 +187,28 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     fps_label->setMinimumWidth(30);
     fps_layout->addWidget(fps_label);
     main_layout->addLayout(fps_layout);
+
+    /*---------------------------------------------------------*\
+    | Intensity (global multiplier)                            |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* intensity_layout = new QHBoxLayout();
+    intensity_layout->addWidget(new QLabel("Intensity:"));
+    intensity_slider = new QSlider(Qt::Horizontal);
+    intensity_slider->setRange(0, 200);
+    intensity_slider->setValue(effect_intensity);
+    intensity_layout->addWidget(intensity_slider);
+    main_layout->addLayout(intensity_layout);
+
+    /*---------------------------------------------------------*\
+    | Sharpness (gamma-like shaping)                           |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* sharpness_layout = new QHBoxLayout();
+    sharpness_layout->addWidget(new QLabel("Sharpness:"));
+    sharpness_slider = new QSlider(Qt::Horizontal);
+    sharpness_slider->setRange(0, 200);
+    sharpness_slider->setValue(effect_sharpness);
+    sharpness_layout->addWidget(sharpness_slider);
+    main_layout->addLayout(sharpness_layout);
 
     /*---------------------------------------------------------*\
     | Axis control                                             |
@@ -213,6 +238,27 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     main_layout->addLayout(axis_layout);
 
     /*---------------------------------------------------------*\
+    | Coverage selection (room targeting)                      |
+    \*---------------------------------------------------------*/
+    QHBoxLayout* coverage_layout = new QHBoxLayout();
+    coverage_layout->addWidget(new QLabel("Coverage:"));
+    coverage_combo = new QComboBox();
+    coverage_combo->addItem("Entire Room");         // 0
+    coverage_combo->addItem("Floor");               // 1
+    coverage_combo->addItem("Ceiling");             // 2
+    coverage_combo->addItem("Left Wall");           // 3
+    coverage_combo->addItem("Right Wall");          // 4
+    coverage_combo->addItem("Front Wall");          // 5
+    coverage_combo->addItem("Back Wall");           // 6
+    coverage_combo->addItem("Floor & Ceiling");     // 7
+    coverage_combo->addItem("Left & Right Walls");  // 8
+    coverage_combo->addItem("Front & Back Walls");  // 9
+    coverage_combo->addItem("Origin Center");       // 10
+    coverage_combo->setCurrentIndex((int)effect_coverage);
+    coverage_layout->addWidget(coverage_combo);
+    main_layout->addLayout(coverage_layout);
+
+    /*---------------------------------------------------------*\
     | Create and add color controls                            |
     \*---------------------------------------------------------*/
     CreateColorControls();
@@ -231,6 +277,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(fps_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnAxisChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnReverseChanged);
+    connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(coverage_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnParameterChanged);
 
     // Effect control buttons - NOT connected here!
     // The parent tab needs to connect these to its on_start_effect_clicked/on_stop_effect_clicked handlers
@@ -647,27 +696,23 @@ Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
 \*---------------------------------------------------------*/
 float SpatialEffect3D::GetNormalizedSpeed() const
 {
-    // Apply quadratic curve for smooth acceleration
-    // Range: 0.0 (stopped) to 1.0 (max speed)
-    // This curve works well for ANY effect type
-    float normalized = effect_speed / 100.0f;
+    // Expanded slider range 0..200 -> map to 0..1 and square for smooth curve
+    float normalized = effect_speed / 200.0f;
     return normalized * normalized;
 }
 
 float SpatialEffect3D::GetNormalizedFrequency() const
 {
-    // Apply quadratic curve for smooth frequency scaling
-    // Range: 0.0 (low frequency) to 1.0 (high frequency)
-    float normalized = effect_frequency / 100.0f;
+    // Expanded slider range 0..200 -> map to 0..1 and square for smooth curve
+    float normalized = effect_frequency / 200.0f;
     return normalized * normalized;
 }
 
 float SpatialEffect3D::GetNormalizedSize() const
 {
-    // Linear scaling for size (pattern density)
-    // Range: 0.1 (tiny) to 1.0 (normal) to 2.0 (double size)
-    // Works for spatial effects, particle effects, wave effects, etc.
-    return 0.1f + (effect_size / 100.0f) * 1.9f;
+    // Expanded size semantics: 0..200 -> 0.0 .. 3.0
+    // At ~70, this yields ~1.05 (near full for many effects); at 100 ~1.5; at 200 ~3.0
+    return (effect_size / 200.0f) * 3.0f;
 }
 
 float SpatialEffect3D::GetNormalizedScale() const
@@ -911,6 +956,18 @@ void SpatialEffect3D::OnParameterChanged()
         effect_fps = fps_slider->value();
         fps_label->setText(QString::number(effect_fps));
     }
+    if(intensity_slider)
+    {
+        effect_intensity = intensity_slider->value();
+    }
+    if(sharpness_slider)
+    {
+        effect_sharpness = sharpness_slider->value();
+    }
+    if(coverage_combo)
+    {
+        effect_coverage = coverage_combo->currentIndex();
+    }
 
     emit ParametersChanged();
 }
@@ -958,6 +1015,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["frequency"] = effect_frequency;
     j["rainbow_mode"] = rainbow_mode;
     j["reverse"] = effect_reverse;
+    j["intensity"] = effect_intensity;
+    j["sharpness"] = effect_sharpness;
+    j["coverage"] = effect_coverage;
 
     // Save colors
     nlohmann::json colors_array = nlohmann::json::array();
@@ -1005,6 +1065,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("reverse"))
         effect_reverse = settings["reverse"].get<bool>();
+    if(settings.contains("intensity"))
+        effect_intensity = settings["intensity"].get<unsigned int>();
+    if(settings.contains("sharpness"))
+        effect_sharpness = settings["sharpness"].get<unsigned int>();
+    if(settings.contains("coverage"))
+        effect_coverage = settings["coverage"].get<unsigned int>();
 
     // Load colors
     if(settings.contains("colors"))
@@ -1058,4 +1124,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         rainbow_mode_check->setChecked(rainbow_mode);
     if(reverse_check)
         reverse_check->setChecked(effect_reverse);
+    if(intensity_slider)
+        intensity_slider->setValue(effect_intensity);
+    if(sharpness_slider)
+        sharpness_slider->setValue(effect_sharpness);
+    if(coverage_combo)
+        coverage_combo->setCurrentIndex((int)effect_coverage);
 }

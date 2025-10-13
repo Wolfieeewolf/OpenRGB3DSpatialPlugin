@@ -2062,7 +2062,8 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
                         }
 
                         // Calculate effect color using grid-aware method (world coords)
-                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);;
+color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
 
                         // Apply color to the mapped physical LED (with bounds checking)
                         if(mapping.zone_idx < mapping.controller->zones.size())
@@ -2136,7 +2137,8 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
             {
                 /*---------------------------------------------------------*\
                 | Calculate effect color using grid-aware method          |
-                \*---------------------------------------------------------*/
+                \*---------------------------------------------------------*/;
+color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
                 RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
 
                 // Apply color to the correct LED using the global LED index
