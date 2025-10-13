@@ -251,17 +251,18 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     QHBoxLayout* coverage_layout = new QHBoxLayout();
     coverage_layout->addWidget(new QLabel("Coverage:"));
     coverage_combo = new QComboBox();
-    coverage_combo->addItem("Entire Room");         // 0
-    coverage_combo->addItem("Floor");               // 1
-    coverage_combo->addItem("Ceiling");             // 2
-    coverage_combo->addItem("Left Wall");           // 3
-    coverage_combo->addItem("Right Wall");          // 4
-    coverage_combo->addItem("Front Wall");          // 5
-    coverage_combo->addItem("Back Wall");           // 6
-    coverage_combo->addItem("Floor & Ceiling");     // 7
-    coverage_combo->addItem("Left & Right Walls");  // 8
-    coverage_combo->addItem("Front & Back Walls");  // 9
-    coverage_combo->addItem("Origin Center");       // 10
+    coverage_combo->addItem("Effect Default");      // 0 (no post coverage shaping)
+    coverage_combo->addItem("Entire Room");         // 1
+    coverage_combo->addItem("Floor");               // 2
+    coverage_combo->addItem("Ceiling");             // 3
+    coverage_combo->addItem("Left Wall");           // 4
+    coverage_combo->addItem("Right Wall");          // 5
+    coverage_combo->addItem("Front Wall");          // 6
+    coverage_combo->addItem("Back Wall");           // 7
+    coverage_combo->addItem("Floor & Ceiling");     // 8
+    coverage_combo->addItem("Left & Right Walls");  // 9
+    coverage_combo->addItem("Front & Back Walls");  // 10
+    coverage_combo->addItem("Origin Center");       // 11
     coverage_combo->setCurrentIndex((int)effect_coverage);
     coverage_layout->addWidget(coverage_combo);
     main_layout->addLayout(coverage_layout);
@@ -802,37 +803,41 @@ float SpatialEffect3D::ComputeCoverageWeight(float x, float y, float z, const Gr
 {
     switch(effect_coverage)
     {
-        case 1: // Floor (Z min)
+        case 0: // Effect Default (no shaping)
+            return 1.0f;
+        case 1: // Entire Room
+            return 1.0f;
+        case 2: // Floor (Z min)
             return fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
-        case 2: // Ceiling (Z max)
+        case 3: // Ceiling (Z max)
             return fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
-        case 3: // Left wall (X min)
+        case 4: // Left wall (X min)
             return fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
-        case 4: // Right wall (X max)
+        case 5: // Right wall (X max)
             return fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
-        case 5: // Front wall (Y min)
+        case 6: // Front wall (Y min)
             return fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
-        case 6: // Back wall (Y max)
+        case 7: // Back wall (Y max)
             return fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
-        case 7: // Floor & Ceiling
+        case 8: // Floor & Ceiling
         {
             float floor_w = fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
             float ceil_w  = fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
             return fmax(floor_w, ceil_w);
         }
-        case 8: // Left & Right
+        case 9: // Left & Right
         {
             float left_w = fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
             float right_w= fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
             return fmax(left_w, right_w);
         }
-        case 9: // Front & Back
+        case 10: // Front & Back
         {
             float front_w= fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
             float back_w = fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
             return fmax(front_w, back_w);
         }
-        case 10: // Origin center
+        case 11: // Origin center
         {
             float dx = x - grid.center_x;
             float dy = y - grid.center_y;
