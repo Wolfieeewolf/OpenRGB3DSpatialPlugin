@@ -278,7 +278,7 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
                         \*---------------------------------------------------------*/
                         final_color = BlendColors(final_color, effect_color, instance->blend_mode);
                     }
-                    // removed effect log counter
+                    
 
                     /*---------------------------------------------------------*\
                     | Apply final blended color to LED                        |
