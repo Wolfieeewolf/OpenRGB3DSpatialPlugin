@@ -16,7 +16,6 @@
 #include <QInputDialog>
 #include <QFile>
 #include <QTextStream>
-#include <QDir>
 #include <fstream>
 
 std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile_name)

@@ -14,7 +14,6 @@
 #include "filesystem.h"
 #include <QInputDialog>
 #include <QMessageBox>
-#include <QDir>
 #include <fstream>
 
 std::string OpenRGB3DSpatialTab::GetStackPresetsPath()
