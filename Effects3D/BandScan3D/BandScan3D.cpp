@@ -10,6 +10,7 @@
 
 #include "BandScan3D.h"
 #include <algorithm>
+#include <cmath>
 
 BandScan3D::BandScan3D(QWidget* parent)
     : SpatialEffect3D(parent)

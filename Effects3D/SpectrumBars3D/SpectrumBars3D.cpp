@@ -10,6 +10,7 @@
 
 #include "SpectrumBars3D.h"
 #include <algorithm>
+#include <cmath>
 
 SpectrumBars3D::SpectrumBars3D(QWidget* parent)
     : SpatialEffect3D(parent)

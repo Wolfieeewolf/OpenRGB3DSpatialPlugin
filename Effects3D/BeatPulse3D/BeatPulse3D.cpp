@@ -10,6 +10,7 @@
 
 #include "BeatPulse3D.h"
 #include <algorithm>
+#include <cmath>
 
 BeatPulse3D::BeatPulse3D(QWidget* parent)
     : SpatialEffect3D(parent)
