@@ -1,4 +1,8 @@
 /*---------------------------------------------------------*\
+
+    // Custom Audio Effects (save/load)
+    SetupAudioCustomEffectsUI(layout);
+/*---------------------------------------------------------*\
 | OpenRGB3DSpatialTab.cpp                                   |
 |                                                           |
 |   Main UI tab for 3D spatial control                     |
@@ -38,6 +42,8 @@
 #include <cmath>
 #include "SettingsManager.h"
 #include <nlohmann/json.hpp>
+#include "Audio/AudioInputManager.h"
+#include "Zone3D.h"
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -1127,6 +1133,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     right_tabs->addTab(effects_tab, "Effects");
 
     /*---------------------------------------------------------*\
+    | Audio Tab                                                |
+    \*---------------------------------------------------------*/
+    SetupAudioTab(right_tabs);
+
+    /*---------------------------------------------------------*\
     | Force layout update to prevent crash when selecting      |
     | effects before switching tabs                             |
     \*---------------------------------------------------------*/
@@ -1205,6 +1216,511 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     setLayout(main_layout);
 }
+
+void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
+{
+    audio_tab = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(audio_tab);
+
+    QLabel* hdr = new QLabel("Audio Input (used by Audio effects)");
+    hdr->setStyleSheet("font-weight: bold;");
+    layout->addWidget(hdr);
+
+    // Top controls: Start/Stop and Level meter
+    QHBoxLayout* top_controls = new QHBoxLayout();
+    audio_start_button = new QPushButton("Start Listening");
+    audio_stop_button = new QPushButton("Stop");
+    audio_stop_button->setEnabled(false);
+    top_controls->addWidget(audio_start_button);
+    top_controls->addWidget(audio_stop_button);
+    top_controls->addStretch();
+    layout->addLayout(top_controls);
+
+    layout->addWidget(new QLabel("Level:"));
+    audio_level_bar = new QProgressBar();
+    audio_level_bar->setRange(0, 1000);
+    audio_level_bar->setValue(0);
+    layout->addWidget(audio_level_bar);
+
+    connect(audio_start_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_start_clicked);
+    connect(audio_stop_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_stop_clicked);
+    connect(AudioInputManager::instance(), &AudioInputManager::LevelUpdated, this, &OpenRGB3DSpatialTab::on_audio_level_updated);
+
+    // Capture source (Windows only)
+#ifdef _WIN32
+    // Render device combo removed; unified device list used
+#endif
+
+    // Device selection
+    layout->addWidget(new QLabel("Input Device:"));
+    audio_device_combo = new QComboBox();
+    QStringList devs = AudioInputManager::instance()->listInputDevices();
+    if(devs.isEmpty())
+    {
+        audio_device_combo->addItem("No input devices detected");
+        audio_device_combo->setEnabled(false);
+    }
+    else
+    {
+        audio_device_combo->addItems(devs);
+        connect(audio_device_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_device_changed);
+        // Initialize selection to first device
+        audio_device_combo->setCurrentIndex(0);
+        on_audio_device_changed(0);
+    }
+    layout->addWidget(audio_device_combo);
+
+    // Gain
+    QHBoxLayout* gain_layout = new QHBoxLayout();
+    gain_layout->addWidget(new QLabel("Gain:"));
+    audio_gain_slider = new QSlider(Qt::Horizontal);
+    audio_gain_slider->setRange(1, 100); // maps to 0.1..10.0
+    audio_gain_slider->setValue(10);     // 1.0x
+    connect(audio_gain_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_gain_changed);
+    gain_layout->addWidget(audio_gain_slider);
+    layout->addLayout(gain_layout);
+
+    // Input smoothing removed; per-effect smoothing is configured below
+
+    // Bands & crossovers
+    QHBoxLayout* bands_layout = new QHBoxLayout();
+    bands_layout->addWidget(new QLabel("Bands:"));
+    audio_bands_combo = new QComboBox();
+    audio_bands_combo->addItems({"8", "16", "32"});
+    audio_bands_combo->setCurrentText("16");
+    connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_bands_changed);
+    bands_layout->addWidget(audio_bands_combo);
+    bands_layout->addStretch();
+    layout->addLayout(bands_layout);
+
+    // Crossovers removed from UI; per-effect Hz mapping used instead
+    // Audio Effects section
+    QGroupBox* audio_fx_group = new QGroupBox("Audio Effects");
+    QVBoxLayout* audio_fx_layout = new QVBoxLayout(audio_fx_group);
+    QHBoxLayout* fx_row1 = new QHBoxLayout();
+    fx_row1->addWidget(new QLabel("Effect:"));
+    audio_effect_combo = new QComboBox();
+    audio_effect_combo->addItem("Audio Level 3D");
+    audio_effect_combo->addItem("Spectrum Bars 3D");
+    audio_effect_combo->addItem("Beat Pulse 3D");
+    audio_effect_combo->addItem("Band Scan 3D");
+    fx_row1->addWidget(audio_effect_combo);
+    audio_fx_layout->addLayout(fx_row1);
+
+    QHBoxLayout* fx_row2 = new QHBoxLayout();
+    fx_row2->addWidget(new QLabel("Zone:"));
+    audio_effect_zone_combo = new QComboBox();
+    // Build All Controllers, zones, then controllers with encoded data
+    audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
+    if(zone_manager)
+    {
+        for(int i=0;i<zone_manager->GetZoneCount();i++)
+        {
+            Zone3D* z = zone_manager->GetZone(i);
+            if(z) audio_effect_zone_combo->addItem(QString::fromStdString(z->GetName()), QVariant(i));
+        }
+    }
+    for(unsigned int ci=0; ci<controller_transforms.size(); ++ci)
+    {
+        ControllerTransform* t = controller_transforms[ci].get();
+        QString name;
+        if(t && t->controller) name = QString::fromStdString(t->controller->name);
+        else if(t && t->virtual_controller) name = QString("[Virtual] ") + QString::fromStdString(t->virtual_controller->GetName());
+        else name = QString("Controller %1").arg((int)ci);
+        audio_effect_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
+    }
+    fx_row2->addWidget(audio_effect_zone_combo);
+    connect(audio_effect_zone_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_zone_changed);
+
+    // Origin selector (Room Center + reference points)
+    fx_row2->addWidget(new QLabel("Origin:"));
+    audio_effect_origin_combo = new QComboBox();
+    audio_effect_origin_combo->addItem("Room Center", QVariant(-1));
+    connect(audio_effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_origin_changed);
+    fx_row2->addWidget(audio_effect_origin_combo);
+
+    audio_fx_layout->addLayout(fx_row2);
+
+    // Per-effect Hz mapping
+    // Dynamic effect controls (consistent with main Effects tab)
+    audio_effect_controls_widget = new QWidget();
+    audio_effect_controls_layout = new QVBoxLayout(audio_effect_controls_widget);
+    audio_effect_controls_layout->setContentsMargins(0,0,0,0);
+    audio_effect_controls_widget->setLayout(audio_effect_controls_layout);
+    audio_fx_layout->addWidget(audio_effect_controls_widget);
+
+    // Standard Audio Controls panel (Hz, smoothing, falloff)
+    SetupStandardAudioControls(audio_fx_layout);
+
+    // Dynamic effect UI provides Start/Stop (consistent with main Effects tab)
+    layout->addWidget(audio_fx_group);
+
+    connect(audio_effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::SetupAudioEffectUI);
+    SetupAudioEffectUI(audio_effect_combo->currentIndex());
+
+    // Help text
+    QLabel* help = new QLabel("Use Effects > select 'Audio Level 3D' to react to audio.\nThis tab manages input device and sensitivity shared by audio effects.");
+    help->setStyleSheet("color: gray; font-size: 10px;");
+    help->setWordWrap(true);
+    layout->addWidget(help);
+
+    // Load persisted audio settings (device, gain, bands, audio controls)
+    {
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        // Device index
+        if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
+        {
+            int di = settings["AudioDeviceIndex"].get<int>();
+            if(di >= 0 && di < audio_device_combo->count())
+            {
+                audio_device_combo->blockSignals(true);
+                audio_device_combo->setCurrentIndex(di);
+                audio_device_combo->blockSignals(false);
+                on_audio_device_changed(di);
+            }
+        }
+        // Gain (slider 1..100)
+        if(audio_gain_slider && settings.contains("AudioGain"))
+        {
+            int gv = settings["AudioGain"].get<int>();
+            gv = std::max(1, std::min(100, gv));
+            audio_gain_slider->blockSignals(true);
+            audio_gain_slider->setValue(gv);
+            audio_gain_slider->blockSignals(false);
+            on_audio_gain_changed(gv);
+        }
+        // Input smoothing removed (now per-effect)
+        // Bands (8/16/32)
+        if(audio_bands_combo && settings.contains("AudioBands"))
+        {
+            int bc = settings["AudioBands"].get<int>();
+            int idx = audio_bands_combo->findText(QString::number(bc));
+            if(idx >= 0)
+            {
+                audio_bands_combo->blockSignals(true);
+                audio_bands_combo->setCurrentIndex(idx);
+                audio_bands_combo->blockSignals(false);
+                on_audio_bands_changed(idx);
+            }
+        }
+        // Standard Audio Controls
+        if(audio_low_spin && settings.contains("AudioLowHz"))
+        {
+            audio_low_spin->blockSignals(true);
+            audio_low_spin->setValue(settings["AudioLowHz"].get<int>());
+            audio_low_spin->blockSignals(false);
+        }
+        if(audio_high_spin && settings.contains("AudioHighHz"))
+        {
+            audio_high_spin->blockSignals(true);
+            audio_high_spin->setValue(settings["AudioHighHz"].get<int>());
+            audio_high_spin->blockSignals(false);
+        }
+        if(audio_smooth_slider && settings.contains("AudioSmoothing"))
+        {
+            int sv = settings["AudioSmoothing"].get<int>();
+            sv = std::max(0, std::min(99, sv));
+            audio_smooth_slider->blockSignals(true);
+            audio_smooth_slider->setValue(sv);
+            audio_smooth_slider->blockSignals(false);
+        }
+        if(audio_falloff_slider && settings.contains("AudioFalloff"))
+        {
+            int fv = settings["AudioFalloff"].get<int>();
+            fv = std::max(20, std::min(500, fv));
+            audio_falloff_slider->blockSignals(true);
+            audio_falloff_slider->setValue(fv);
+            audio_falloff_slider->blockSignals(false);
+        }
+        if(audio_fft_combo && settings.contains("AudioFFTSize"))
+        {
+            int n = settings["AudioFFTSize"].get<int>();
+            int idx = audio_fft_combo->findText(QString::number(n));
+            if(idx >= 0)
+            {
+                audio_fft_combo->blockSignals(true);
+                audio_fft_combo->setCurrentIndex(idx);
+                audio_fft_combo->blockSignals(false);
+                on_audio_fft_changed(idx);
+            }
+        }
+        // Apply audio controls to effect UI if present
+        on_audio_std_low_changed(audio_low_spin ? audio_low_spin->value() : 0.0);
+        on_audio_std_smooth_changed(audio_smooth_slider ? audio_smooth_slider->value() : 60);
+        on_audio_std_falloff_changed(audio_falloff_slider ? audio_falloff_slider->value() : 100);
+    }
+    // Populate origin combo after zones
+    UpdateAudioEffectOriginCombo();
+
+    layout->addStretch();
+
+    tab_widget->addTab(audio_tab, "Audio");
+}
+
+void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
+{
+    if(!audio_effect_combo) return;
+    if(!audio_effect_combo) return;
+    int eff_idx = audio_effect_combo->currentIndex();
+    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
+    if(eff_idx < 0 || eff_idx > 3) return;
+    std::string class_name = class_names[eff_idx];
+
+    // Build a single-effect stack from current audio effect UI settings
+    effect_stack.clear();
+    if(!current_audio_effect_ui) { SetupAudioEffectUI(eff_idx); }
+    nlohmann::json settings = current_audio_effect_ui ? current_audio_effect_ui->SaveSettings() : nlohmann::json();
+    SpatialEffect3D* eff = EffectListManager3D::get()->CreateEffect(class_name);
+    if(!eff) return;
+    std::unique_ptr<EffectInstance3D> inst = std::make_unique<EffectInstance3D>();
+    inst->name = class_name;
+    inst->effect_class_name = class_name;
+    inst->effect.reset(eff);
+
+    int target = -1;
+    if(audio_effect_zone_combo)
+    {
+        QVariant data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
+        if(data.isValid()) target = data.toInt();
+    }
+    inst->zone_index = target; // -1 all, >=0 zone, <=-1000 controller
+    inst->blend_mode = BlendMode::ADD;
+    inst->enabled = true;
+    inst->id = next_effect_instance_id++;
+
+    // Apply per-effect settings captured from UI
+    eff->LoadSettings(settings);
+    eff->LoadSettings(settings);
+    inst->saved_settings = std::make_unique<nlohmann::json>(settings);
+    effect_stack.push_back(std::move(inst));
+    UpdateEffectStackList();
+
+    // Start rendering (ensure controllers in custom mode, start timer)
+    bool has_valid_controller = false;
+    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+    {
+        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
+        if(!transform) continue;
+        if(transform->virtual_controller)
+        {
+            VirtualController3D* virtual_ctrl = transform->virtual_controller;
+            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+            std::set<RGBController*> controllers_to_set;
+            for(unsigned int i = 0; i < mappings.size(); i++)
+            {
+                if(mappings[i].controller) controllers_to_set.insert(mappings[i].controller);
+            }
+            for(auto* c : controllers_to_set)
+            {
+                c->SetCustomMode();
+                has_valid_controller = true;
+            }
+            continue;
+        }
+        RGBController* controller = transform->controller;
+        if(!controller) continue;
+        controller->SetCustomMode();
+        has_valid_controller = true;
+    }
+    if(has_valid_controller && effect_timer && !effect_timer->isActive())
+    {
+        effect_time = 0.0f;
+        effect_elapsed.restart();
+        unsigned int target_fps = 30;
+        for(size_t i = 0; i < effect_stack.size(); i++)
+        {
+            if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
+            {
+                unsigned int f = effect_stack[i]->effect->GetTargetFPSSetting();
+                if(f > target_fps) target_fps = f;
+            }
+        }
+        if(target_fps < 1) target_fps = 30;
+        int interval_ms = (int)(1000 / target_fps);
+        if(interval_ms < 1) interval_ms = 1;
+        effect_timer->start(interval_ms);
+    }
+    running_audio_effect = eff;
+    if(audio_effect_start_button) audio_effect_start_button->setEnabled(false);
+    if(audio_effect_stop_button) audio_effect_stop_button->setEnabled(true);
+}
+
+void OpenRGB3DSpatialTab::on_audio_effect_stop_clicked()
+{
+    if(effect_timer && effect_timer->isActive()) effect_timer->stop();
+    effect_stack.clear();
+    running_audio_effect = nullptr;
+    UpdateEffectStackList();
+    if(audio_effect_start_button) audio_effect_start_button->setEnabled(true);
+    if(audio_effect_stop_button) audio_effect_stop_button->setEnabled(false);
+}
+
+ 
+
+void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
+{
+    AudioInputManager::instance()->setDeviceByIndex(index);
+    // Persist setting
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    settings["AudioDeviceIndex"] = index;
+    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->GetSettingsManager()->SaveSettings();
+}
+
+void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
+{
+    float g = std::max(0.1f, std::min(10.0f, value / 10.0f));
+    AudioInputManager::instance()->setGain(g);
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    settings["AudioGain"] = value;
+    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->GetSettingsManager()->SaveSettings();
+}
+
+// input smoothing removed
+
+void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
+{
+    if(!audio_effect_controls_widget || !audio_effect_controls_layout) return;
+    // Clear previous controls
+    while(QLayoutItem* it = audio_effect_controls_layout->takeAt(0))
+    {
+        if(QWidget* w = it->widget()) { w->deleteLater(); }
+        delete it;
+    }
+    current_audio_effect_ui = nullptr;
+
+    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
+    if(eff_index < 0 || eff_index > 3) return;
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_names[eff_index]);
+    if(!effect) return;
+    effect->setParent(audio_effect_controls_widget);
+    effect->CreateCommonEffectControls(audio_effect_controls_widget);
+    effect->SetupCustomUI(audio_effect_controls_widget);
+    current_audio_effect_ui = effect;
+    // Hook Start/Stop from effect's own buttons to our audio handlers
+    audio_effect_start_button = effect->GetStartButton();
+    audio_effect_stop_button  = effect->GetStopButton();
+    if(audio_effect_start_button)
+    {
+        // Avoid duplicate connections by disconnecting previous
+        QObject::disconnect(audio_effect_start_button, nullptr, this, nullptr);
+        connect(audio_effect_start_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_effect_start_clicked);
+    }
+    if(audio_effect_stop_button)
+    {
+        QObject::disconnect(audio_effect_stop_button, nullptr, this, nullptr);
+        connect(audio_effect_stop_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_effect_stop_clicked);
+        audio_effect_stop_button->setEnabled(false);
+    }
+    connect(effect, &SpatialEffect3D::ParametersChanged, this, &OpenRGB3DSpatialTab::OnAudioEffectParamsChanged);
+    // Sync standard audio controls from effect settings
+    if(audio_std_group && current_audio_effect_ui)
+    {
+        nlohmann::json s = current_audio_effect_ui->SaveSettings();
+        if(audio_low_spin && s.contains("low_hz")) audio_low_spin->setValue(s["low_hz"].get<int>());
+        if(audio_high_spin && s.contains("high_hz")) audio_high_spin->setValue(s["high_hz"].get<int>());
+        if(audio_smooth_slider && s.contains("smoothing"))
+        {
+            int sv = (int)std::round(std::max(0.0f, std::min(0.99f, s["smoothing"].get<float>())) * 100.0f);
+            audio_smooth_slider->setValue(sv);
+        }
+        if(audio_falloff_slider && s.contains("falloff"))
+        {
+            int fv = (int)std::round(std::max(0.2f, std::min(5.0f, s["falloff"].get<float>())) * 100.0f);
+            audio_falloff_slider->setValue(fv);
+        }
+    }
+    // Apply current origin selection to the new UI
+    if(audio_effect_origin_combo)
+    {
+        int idx = audio_effect_origin_combo->currentIndex();
+        on_audio_effect_origin_changed(idx);
+    }
+    audio_effect_controls_widget->updateGeometry();
+    audio_effect_controls_widget->update();
+}
+
+void OpenRGB3DSpatialTab::UpdateAudioEffectOriginCombo()
+{
+    if(!audio_effect_origin_combo) return;
+    audio_effect_origin_combo->blockSignals(true);
+    audio_effect_origin_combo->clear();
+    audio_effect_origin_combo->addItem("Room Center", QVariant(-1));
+    for(size_t i = 0; i < reference_points.size(); ++i)
+    {
+        VirtualReferencePoint3D* ref = reference_points[i].get();
+        if(!ref) continue;
+        QString name = QString::fromStdString(ref->GetName());
+        QString type = QString(VirtualReferencePoint3D::GetTypeName(ref->GetType()));
+        audio_effect_origin_combo->addItem(QString("%1 (%2)").arg(name).arg(type), QVariant((int)i));
+    }
+    audio_effect_origin_combo->blockSignals(false);
+}
+
+void OpenRGB3DSpatialTab::on_audio_effect_origin_changed(int index)
+{
+    if(!audio_effect_origin_combo) return;
+    int ref_idx = audio_effect_origin_combo->itemData(index).toInt();
+
+    ReferenceMode mode = REF_MODE_ROOM_CENTER;
+    Vector3D origin = {0.0f, 0.0f, 0.0f};
+    if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref = reference_points[ref_idx].get();
+        if(ref)
+        {
+            origin = ref->GetPosition();
+            mode = REF_MODE_CUSTOM_POINT;
+        }
+    }
+
+    if(current_audio_effect_ui)
+    {
+        current_audio_effect_ui->SetCustomReferencePoint(origin);
+        current_audio_effect_ui->SetReferenceMode(mode);
+    }
+    if(running_audio_effect)
+    {
+        running_audio_effect->SetCustomReferencePoint(origin);
+        running_audio_effect->SetReferenceMode(mode);
+    }
+    if(viewport) viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::on_audio_start_clicked()
+{
+    AudioInputManager::instance()->start();
+    audio_start_button->setEnabled(false);
+    audio_stop_button->setEnabled(true);
+}
+
+void OpenRGB3DSpatialTab::on_audio_stop_clicked()
+{
+    AudioInputManager::instance()->stop();
+    audio_start_button->setEnabled(true);
+    audio_stop_button->setEnabled(false);
+    if(audio_level_bar) audio_level_bar->setValue(0);
+}
+
+void OpenRGB3DSpatialTab::on_audio_level_updated(float level)
+{
+    if(!audio_level_bar) return;
+    int v = (int)std::round(level * 1000.0f);
+    audio_level_bar->setValue(v);
+}
+
+void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
+{
+    int bands = audio_bands_combo->itemText(index).toInt();
+    AudioInputManager::instance()->setBandsCount(bands);
+    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    settings["AudioBands"] = bands;
+    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->GetSettingsManager()->SaveSettings();
+}
+
+//
 
 void OpenRGB3DSpatialTab::LoadDevices()
 {
@@ -1374,6 +1890,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.x = x;
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
+        ctrl->world_positions_dirty = true;
 
         // Block signals to prevent feedback loops
         pos_x_spin->blockSignals(true);
@@ -1410,6 +1927,7 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ctrl->transform.rotation.x = x;
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
+        ctrl->world_positions_dirty = true;
 
         // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);
@@ -2501,6 +3019,9 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     // Regenerate LED positions with new spacing
     RegenerateLEDPositions(ctrl);
 
+    // Mark world positions dirty so effects and viewport can recompute
+    ctrl->world_positions_dirty = true;
+
     // Update viewport
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
@@ -2838,6 +3359,9 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             }
         }
 
+        // Keep pointer to old instance so we can retarget any viewport transforms
+        VirtualController3D* old_ptr = virtual_controllers[list_row].get();
+
         virtual_controllers[list_row] = std::make_unique<VirtualController3D>(
             new_name,
             dialog.GetGridWidth(),
@@ -2849,8 +3373,32 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             dialog.GetSpacingZ()
         );
 
+        // Update any transforms in the viewport that referenced the old custom controller
+        VirtualController3D* new_ptr = virtual_controllers[list_row].get();
+        for(size_t i = 0; i < controller_transforms.size(); i++)
+        {
+            ControllerTransform* t = controller_transforms[i].get();
+            if(t && t->virtual_controller == old_ptr)
+            {
+                t->virtual_controller = new_ptr;
+                // Regenerate LED positions from the updated mapping and spacing
+                t->led_positions = new_ptr->GenerateLEDPositions(grid_scale_mm);
+                t->world_positions_dirty = true;
+
+                // Update controller list item text to reflect the new name
+                if(i < (size_t)controller_list->count())
+                {
+                    controller_list->item((int)i)->setText(QString("[Custom] ") + QString::fromStdString(new_ptr->GetName()));
+                }
+            }
+        }
+
         SaveCustomControllers();
         UpdateAvailableControllersList();
+
+        // Refresh viewport so changes take effect immediately
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
 
         QMessageBox::information(this, "Custom Controller Updated",
                                 QString("Custom controller '%1' updated successfully!")
@@ -4026,7 +4574,11 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         "Tornado3D",        // 9
         "Lightning3D",      // 10
         "Matrix3D",         // 11
-        "BouncingBall3D"    // 12
+        "BouncingBall3D",   // 12
+        "AudioLevel3D",     // 13
+        "SpectrumBars3D",   // 14
+        "BeatPulse3D",      // 15
+        "BandScan3D"        // 16
     };
     const int num_effects = sizeof(effect_names) / sizeof(effect_names[0]);
 
@@ -4433,6 +4985,10 @@ void OpenRGB3DSpatialTab::UpdateEffectCombo()
     effect_combo->addItem("Lightning 3D");     // index 11 (effect_type 10)
     effect_combo->addItem("Matrix 3D");        // index 12 (effect_type 11)
     effect_combo->addItem("Bouncing Ball 3D"); // index 13 (effect_type 12)
+    effect_combo->addItem("Audio Level 3D");   // index 14 (effect_type 13)
+    effect_combo->addItem("Spectrum Bars 3D"); // index 15 (effect_type 14)
+    effect_combo->addItem("Beat Pulse 3D");    // index 16 (effect_type 15)
+    effect_combo->addItem("Band Scan 3D");     // index 17 (effect_type 16)
 
     // Add stack presets with [Stack] suffix
     // Store negative indices to distinguish presets from effects
@@ -4695,5 +5251,379 @@ void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
     if(viewport)
     {
         viewport->UpdateColors();
+    }
+}
+
+/*---------------------------------------------------------*
+| Custom Audio Effects (save/load)                         |
+*---------------------------------------------------------*/
+void OpenRGB3DSpatialTab::SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout)
+{
+    if(audio_custom_group) return;
+    audio_custom_group = new QGroupBox("Custom Audio Effects");
+    QVBoxLayout* v = new QVBoxLayout(audio_custom_group);
+
+    audio_custom_list = new QListWidget();
+    audio_custom_list->setMinimumHeight(140);
+    v->addWidget(audio_custom_list);
+
+    QHBoxLayout* name_row = new QHBoxLayout();
+    name_row->addWidget(new QLabel("Name:"));
+    audio_custom_name_edit = new QLineEdit();
+    name_row->addWidget(audio_custom_name_edit);
+    v->addLayout(name_row);
+
+    QHBoxLayout* btns = new QHBoxLayout();
+    audio_custom_save_btn = new QPushButton("Save");
+    audio_custom_load_btn = new QPushButton("Load");
+    audio_custom_delete_btn = new QPushButton("Delete");
+    audio_custom_add_to_stack_btn = new QPushButton("Add Selected to Stack");
+    btns->addWidget(audio_custom_save_btn);
+    btns->addWidget(audio_custom_load_btn);
+    btns->addWidget(audio_custom_delete_btn);
+    btns->addStretch();
+    btns->addWidget(audio_custom_add_to_stack_btn);
+    v->addLayout(btns);
+
+    parent_layout->addWidget(audio_custom_group);
+
+    connect(audio_custom_save_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_custom_save_clicked);
+    connect(audio_custom_load_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_custom_load_clicked);
+    connect(audio_custom_delete_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_custom_delete_clicked);
+    connect(audio_custom_add_to_stack_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked);
+
+    UpdateAudioCustomEffectsList();
+}
+
+std::string OpenRGB3DSpatialTab::GetAudioCustomEffectsDir()
+{
+    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+    std::string dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/AudioCustomEffects/";
+    filesystem::create_directories(dir);
+    return dir;
+}
+
+std::string OpenRGB3DSpatialTab::GetAudioCustomEffectPath(const std::string& name)
+{
+    return GetAudioCustomEffectsDir() + name + ".audiocust.json";
+}
+
+void OpenRGB3DSpatialTab::UpdateAudioCustomEffectsList()
+{
+    if(!audio_custom_list) return;
+    audio_custom_list->clear();
+    std::string dir = GetAudioCustomEffectsDir();
+    for(filesystem::directory_iterator entry(dir); entry != filesystem::directory_iterator(); ++entry)
+    {
+        if(entry->path().extension() == ".json")
+        {
+            std::string stem = entry->path().stem().string();
+            if(stem.size() > 10 && stem.substr(stem.size()-10) == ".audiocust")
+            {
+                std::string name = stem.substr(0, stem.size()-10);
+                audio_custom_list->addItem(QString::fromStdString(name));
+            }
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::on_audio_custom_save_clicked()
+{
+    if(!audio_effect_combo) return;
+    QString name = audio_custom_name_edit ? audio_custom_name_edit->text() : QString();
+    if(name.trimmed().isEmpty())
+    {
+        name = QInputDialog::getText(this, "Save Custom Audio Effect", "Enter name:");
+        if(name.trimmed().isEmpty()) return;
+    }
+
+    int eff_idx = audio_effect_combo->currentIndex();
+    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
+    if(eff_idx < 0 || eff_idx > 3) return;
+    std::string class_name = class_names[eff_idx];
+    // Capture settings from the currently mounted audio effect UI
+    if(!current_audio_effect_ui) { SetupAudioEffectUI(eff_idx); }
+    if(!current_audio_effect_ui) return;
+    nlohmann::json settings = current_audio_effect_ui->SaveSettings();
+
+    int target = -1;
+    if(audio_effect_zone_combo)
+    {
+        QVariant data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
+        if(data.isValid()) target = data.toInt();
+    }
+
+    nlohmann::json j;
+    j["name"] = name.toStdString();
+    j["effect_class"] = class_name;
+    j["target"] = target;
+    j["settings"] = settings;
+
+    std::string path = GetAudioCustomEffectPath(name.toStdString());
+    QFile file(QString::fromStdString(path));
+    if(file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream out(&file);
+        out << QString::fromStdString(j.dump(4));
+        file.close();
+    }
+    UpdateAudioCustomEffectsList();
+}
+
+void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
+{
+    if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
+    QString name = audio_custom_list->currentItem()->text();
+    std::string path = GetAudioCustomEffectPath(name.toStdString());
+    if(!filesystem::exists(path)) return;
+    QFile file(QString::fromStdString(path));
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QString json = file.readAll(); file.close();
+    try
+    {
+        nlohmann::json j = nlohmann::json::parse(json.toStdString());
+        std::string cls = j.value("effect_class", "");
+        int idx = 0;
+        if(cls == "AudioLevel3D") idx = 0; else if(cls == "SpectrumBars3D") idx = 1; else if(cls == "BeatPulse3D") idx = 2; else if(cls == "BandScan3D") idx = 3;
+        if(audio_effect_combo) audio_effect_combo->setCurrentIndex(idx);
+        int target = j.value("target", -1);
+        if(audio_effect_zone_combo)
+        {
+            int ti = audio_effect_zone_combo->findData(QVariant(target));
+            if(ti >= 0) audio_effect_zone_combo->setCurrentIndex(ti);
+        }
+        if(j.contains("settings"))
+        {
+            const auto& s = j["settings"];
+            // Ensure effect UI exists, then load settings into effect UI
+            SetupAudioEffectUI(idx);
+            if(current_audio_effect_ui) current_audio_effect_ui->LoadSettings(s);
+        }
+    }
+    catch(...){ }
+}
+
+void OpenRGB3DSpatialTab::on_audio_custom_delete_clicked()
+{
+    if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
+    QString name = audio_custom_list->currentItem()->text();
+    std::string path = GetAudioCustomEffectPath(name.toStdString());
+    if(filesystem::exists(path)) filesystem::remove(path);
+    UpdateAudioCustomEffectsList();
+}
+
+void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
+{
+    if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
+    QString name = audio_custom_list->currentItem()->text();
+    std::string path = GetAudioCustomEffectPath(name.toStdString());
+    if(!filesystem::exists(path)) return;
+    QFile file(QString::fromStdString(path));
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QString json = file.readAll(); file.close();
+    try
+    {
+        nlohmann::json j = nlohmann::json::parse(json.toStdString());
+        std::string cls = j.value("effect_class", "");
+        SpatialEffect3D* eff = EffectListManager3D::get()->CreateEffect(cls);
+        if(!eff) return;
+        std::unique_ptr<EffectInstance3D> inst = std::make_unique<EffectInstance3D>();
+        inst->name = j.value("name", name.toStdString());
+        inst->effect_class_name = cls;
+        inst->zone_index = j.value("target", -1);
+        inst->blend_mode = BlendMode::ADD;
+        inst->enabled = true;
+        inst->id = next_effect_instance_id++;
+        const auto& s = j["settings"];
+        eff->LoadSettings(s);
+        inst->effect.reset(eff);
+        inst->saved_settings = std::make_unique<nlohmann::json>(s);
+        effect_stack.push_back(std::move(inst));
+        UpdateEffectStackList();
+        if(effect_stack_list) effect_stack_list->setCurrentRow((int)effect_stack.size()-1);
+    }
+    catch(...){ }
+}
+
+
+
+
+
+void OpenRGB3DSpatialTab::OnAudioEffectParamsChanged()
+{
+    if(!current_audio_effect_ui || !running_audio_effect) return;
+    nlohmann::json s = current_audio_effect_ui->SaveSettings();
+    running_audio_effect->LoadSettings(s);
+    if(viewport) viewport->UpdateColors();
+}
+
+ 
+
+void OpenRGB3DSpatialTab::SetupStandardAudioControls(QVBoxLayout* parent_layout)
+{
+    if(audio_std_group) return;
+    audio_std_group = new QGroupBox("Audio Controls");
+    QGridLayout* g = new QGridLayout(audio_std_group);
+    int sr = AudioInputManager::instance()->getSampleRate();
+    int nyq = std::max(2000, sr > 0 ? sr/2 : 24000);
+
+    // Low/High Hz
+    g->addWidget(new QLabel("Low Hz:"), 0, 0);
+    audio_low_spin = new QDoubleSpinBox(audio_std_group);
+    audio_low_spin->setRange(0, nyq); audio_low_spin->setDecimals(0); audio_low_spin->setValue(60);
+    g->addWidget(audio_low_spin, 0, 1);
+
+    g->addWidget(new QLabel("High Hz:"), 0, 2);
+    audio_high_spin = new QDoubleSpinBox(audio_std_group);
+    audio_high_spin->setRange(0, nyq); audio_high_spin->setDecimals(0); audio_high_spin->setValue(200);
+    g->addWidget(audio_high_spin, 0, 3);
+
+    // Smoothing
+    g->addWidget(new QLabel("Smoothing:"), 1, 0);
+    audio_smooth_slider = new QSlider(Qt::Horizontal, audio_std_group);
+    audio_smooth_slider->setRange(0, 99); audio_smooth_slider->setValue(60);
+    g->addWidget(audio_smooth_slider, 1, 1, 1, 3);
+
+    // Falloff (gamma shaping)
+    g->addWidget(new QLabel("Falloff:"), 2, 0);
+    audio_falloff_slider = new QSlider(Qt::Horizontal, audio_std_group);
+    audio_falloff_slider->setRange(20, 500); // maps to 0.2 .. 5.0
+    audio_falloff_slider->setValue(100);     // 1.0
+    g->addWidget(audio_falloff_slider, 2, 1, 1, 3);
+
+    // FFT Size (advanced)
+    g->addWidget(new QLabel("FFT Size:"), 3, 0);
+    audio_fft_combo = new QComboBox(audio_std_group);
+    audio_fft_combo->addItems({"512","1024","2048","4096","8192"});
+    // Initialize to current analyzer size
+    {
+        int cur = AudioInputManager::instance()->getFFTSize();
+        int idx = audio_fft_combo->findText(QString::number(cur));
+        if(idx >= 0) audio_fft_combo->setCurrentIndex(idx);
+    }
+    g->addWidget(audio_fft_combo, 3, 1);
+    g->setColumnStretch(3, 1);
+
+    parent_layout->addWidget(audio_std_group);
+
+    connect(audio_low_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_audio_std_low_changed);
+    connect(audio_high_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_audio_std_high_changed);
+    connect(audio_smooth_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_std_smooth_changed);
+    connect(audio_falloff_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_std_falloff_changed);
+    connect(audio_fft_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_fft_changed);
+}
+
+static inline float mapFalloff(int slider) { return std::max(0.2f, std::min(5.0f, slider / 100.0f)); }
+
+void OpenRGB3DSpatialTab::on_audio_std_low_changed(double)
+{
+    if(!current_audio_effect_ui) return;
+    nlohmann::json s = current_audio_effect_ui->SaveSettings();
+    int lowhz = audio_low_spin ? (int)audio_low_spin->value() : 0;
+    int highhz = audio_high_spin ? (int)audio_high_spin->value() : lowhz+1;
+    // Write per-effect fields
+    s["low_hz"] = lowhz;
+    s["high_hz"] = highhz;
+    // For band-based effects, also map Hz to band indices if keys exist
+    if(s.contains("band_start") || s.contains("band_end"))
+    {
+        auto hz_to_idx = [&](float hz)->int{
+            int bands = AudioInputManager::instance()->getBandsCount();
+            float fs = (float)AudioInputManager::instance()->getSampleRate();
+            float f_min = std::max(1.0f, fs / (float)AudioInputManager::instance()->getFFTSize());
+            float f_max = fs * 0.5f;
+            if(hz < f_min) hz = f_min;
+            if(hz > f_max) hz = f_max;
+            float t = std::log(hz / f_min) / std::log(f_max / f_min);
+            int idx = (int)std::floor(t * bands);
+            if(idx < 0) idx = 0; if(idx > bands-1) idx = bands-1;
+            return idx;
+        };
+        int bs = hz_to_idx((float)lowhz);
+        int be = hz_to_idx((float)highhz);
+        if(be <= bs) be = std::min(bs+1, AudioInputManager::instance()->getBandsCount()-1);
+        s["band_start"] = bs;
+        s["band_end"] = be;
+    }
+    current_audio_effect_ui->LoadSettings(s);
+    if(running_audio_effect) running_audio_effect->LoadSettings(s);
+    if(viewport) viewport->UpdateColors();
+    // Persist
+    if(resource_manager)
+    {
+        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        st["AudioLowHz"] = lowhz;
+        st["AudioHighHz"] = highhz;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
+        resource_manager->GetSettingsManager()->SaveSettings();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_audio_std_high_changed(double v)
+{
+    on_audio_std_low_changed(v);
+}
+
+void OpenRGB3DSpatialTab::on_audio_std_smooth_changed(int)
+{
+    if(!current_audio_effect_ui) return;
+    nlohmann::json s = current_audio_effect_ui->SaveSettings();
+    float smooth = audio_smooth_slider ? (audio_smooth_slider->value() / 100.0f) : 0.6f;
+    if(smooth < 0.0f) smooth = 0.0f; if(smooth > 0.99f) smooth = 0.99f;
+    s["smoothing"] = smooth;
+    current_audio_effect_ui->LoadSettings(s);
+    if(running_audio_effect) running_audio_effect->LoadSettings(s);
+    if(viewport) viewport->UpdateColors();
+    if(resource_manager)
+    {
+        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        st["AudioSmoothing"] = audio_smooth_slider ? audio_smooth_slider->value() : 60;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
+        resource_manager->GetSettingsManager()->SaveSettings();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_audio_std_falloff_changed(int)
+{
+    if(!current_audio_effect_ui) return;
+    nlohmann::json s = current_audio_effect_ui->SaveSettings();
+    s["falloff"] = mapFalloff(audio_falloff_slider ? audio_falloff_slider->value() : 100);
+    current_audio_effect_ui->LoadSettings(s);
+    if(running_audio_effect) running_audio_effect->LoadSettings(s);
+    if(viewport) viewport->UpdateColors();
+    if(resource_manager)
+    {
+        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        st["AudioFalloff"] = audio_falloff_slider ? audio_falloff_slider->value() : 100;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
+        resource_manager->GetSettingsManager()->SaveSettings();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_audio_effect_zone_changed(int index)
+{
+    Q_UNUSED(index);
+    if(effect_stack.empty()) return;
+    if(!audio_effect_zone_combo) return;
+    QVariant data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
+    if(!data.isValid()) return;
+    int target = data.toInt();
+    effect_stack[0]->zone_index = target;
+}
+
+void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
+{
+    if(!audio_fft_combo) return;
+    int n = audio_fft_combo->currentText().toInt();
+    AudioInputManager::instance()->setFFTSize(n);
+    // Re-apply Hz mapping for band-based effects since resolution changed
+    on_audio_std_low_changed(audio_low_spin ? audio_low_spin->value() : 0.0);
+    // Persist setting
+    if(resource_manager)
+    {
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        settings["AudioFFTSize"] = n;
+        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        resource_manager->GetSettingsManager()->SaveSettings();
     }
 }

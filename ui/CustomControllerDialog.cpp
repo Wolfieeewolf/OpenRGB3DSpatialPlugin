@@ -1,4 +1,4 @@
-/*---------------------------------------------------------*\
+﻿/*---------------------------------------------------------*\
 | CustomControllerDialog.cpp                                |
 |                                                           |
 |   Dialog for creating custom 3D LED controllers          |
@@ -23,6 +23,7 @@
 #include <QPixmap>
 #include <cmath>
 #include <algorithm>
+#include <climits>
 
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
@@ -147,7 +148,8 @@ void CustomControllerDialog::SetupUI()
     QVBoxLayout* first_tab_layout = new QVBoxLayout(first_tab);
     first_tab_layout->setContentsMargins(0, 0, 0, 0);
     grid_table = new QTableWidget();
-    grid_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    grid_table->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    grid_table->setSelectionBehavior(QAbstractItemView::SelectItems);
     grid_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connect(grid_table, &QTableWidget::cellClicked, this, &CustomControllerDialog::on_grid_cell_clicked);
 
@@ -160,6 +162,35 @@ void CustomControllerDialog::SetupUI()
     layer_tabs->addTab(first_tab, "Layer 0");
     right_layout->addWidget(layer_tabs);
 
+    // Shape Remap tools
+    QGroupBox* shape_group = new QGroupBox("Remap Selected");
+    QGridLayout* shape_layout = new QGridLayout();
+    shape_layout->addWidget(new QLabel("Pattern:"), 0, 0);
+    shape_pattern_combo = new QComboBox();
+    shape_pattern_combo->addItem("Perimeter (Ring)");
+    shape_layout->addWidget(shape_pattern_combo, 0, 1);
+
+    shape_layout->addWidget(new QLabel("Start:"), 1, 0);
+    shape_start_combo = new QComboBox();
+    shape_start_combo->addItem("Top-Left");
+    shape_start_combo->addItem("Top-Right");
+    shape_start_combo->addItem("Bottom-Right");
+    shape_start_combo->addItem("Bottom-Left");
+    shape_layout->addWidget(shape_start_combo, 1, 1);
+
+    shape_layout->addWidget(new QLabel("Direction:"), 2, 0);
+    shape_dir_combo = new QComboBox();
+    shape_dir_combo->addItem("Clockwise");
+    shape_dir_combo->addItem("Counter-Clockwise");
+    shape_layout->addWidget(shape_dir_combo, 2, 1);
+
+    apply_shape_button = new QPushButton("Apply Shape Remap");
+    apply_shape_button->setToolTip("Remap selected LEDs to the chosen pattern across selected cells");
+    connect(apply_shape_button, &QPushButton::clicked, this, &CustomControllerDialog::on_apply_shape_remap_clicked);
+    shape_layout->addWidget(apply_shape_button, 3, 0, 1, 2);
+    shape_group->setLayout(shape_layout);
+    right_layout->addWidget(shape_group);
+
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
 
@@ -170,9 +201,9 @@ void CustomControllerDialog::SetupUI()
     QGridLayout* transform_grid = new QGridLayout();
 
     // Lock transform checkbox
-    lock_transform_checkbox = new QCheckBox("Lock Layout (enable rotation)");
+    lock_transform_checkbox = new QCheckBox("Lock Effect Direction (preview-only)");
     lock_transform_checkbox->setChecked(false);
-    lock_transform_checkbox->setToolTip("Lock the current layout to enable real-time rotation without messing up positions");
+    lock_transform_checkbox->setToolTip("Keeps preview effect flowing left-to-right. Disables transforms or treats them as preview-only.");
     connect(lock_transform_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_lock_transform_toggled);
     transform_grid->addWidget(lock_transform_checkbox, 0, 0, 1, 4);
 
@@ -188,14 +219,14 @@ void CustomControllerDialog::SetupUI()
     rotate_angle_slider->setValue(0);
     rotate_angle_slider->setTickPosition(QSlider::TicksBelow);
     rotate_angle_slider->setTickInterval(45);
-    rotate_angle_slider->setToolTip("Rotate grid by any angle (0-359°) - Lock layout first!");
+    rotate_angle_slider->setToolTip("Rotate grid by any angle (0-359\xC2\xB0) - Lock layout first!");
     rotate_angle_slider->setEnabled(false);
     transform_grid->addWidget(rotate_angle_slider, 2, 1, 1, 2);
 
     rotate_angle_spin = new QSpinBox();
     rotate_angle_spin->setRange(0, 359);
     rotate_angle_spin->setValue(0);
-    rotate_angle_spin->setSuffix("°");
+    rotate_angle_spin->setSuffix(QString::fromUtf8("\xC2\xB0"));
     rotate_angle_spin->setToolTip("Rotation angle in degrees - Lock layout first!");
     rotate_angle_spin->setEnabled(false);
     transform_grid->addWidget(rotate_angle_spin, 2, 3);
@@ -212,18 +243,18 @@ void CustomControllerDialog::SetupUI()
     QLabel* presets_label = new QLabel("Quick Presets:");
     transform_grid->addWidget(presets_label, 3, 0, 1, 4);
 
-    rotate_90_button = new QPushButton("90°");
-    rotate_90_button->setToolTip("Rotate LED grid 90° clockwise");
+    rotate_90_button = new QPushButton(QString::fromUtf8("90\xC2\xB0"));
+    rotate_90_button->setToolTip("Rotate LED grid 90\xC2\xB0 clockwise");
     connect(rotate_90_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_90);
     transform_grid->addWidget(rotate_90_button, 4, 0);
 
-    rotate_180_button = new QPushButton("180°");
-    rotate_180_button->setToolTip("Rotate LED grid 180°");
+    rotate_180_button = new QPushButton(QString::fromUtf8("180\xC2\xB0"));
+    rotate_180_button->setToolTip("Rotate LED grid 180\xC2\xB0");
     connect(rotate_180_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_180);
     transform_grid->addWidget(rotate_180_button, 4, 1);
 
-    rotate_270_button = new QPushButton("270°");
-    rotate_270_button->setToolTip("Rotate LED grid 270° clockwise");
+    rotate_270_button = new QPushButton(QString::fromUtf8("270\xC2\xB0"));
+    rotate_270_button->setToolTip("Rotate LED grid 270\xC2\xB0 clockwise");
     connect(rotate_270_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_270);
     transform_grid->addWidget(rotate_270_button, 4, 2);
 
@@ -239,6 +270,13 @@ void CustomControllerDialog::SetupUI()
     flip_vertical_button->setToolTip("Flip LED grid vertically");
     connect(flip_vertical_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_vertical);
     transform_grid->addWidget(flip_vertical_button, 6, 2, 1, 2);
+
+    // Apply Preview Remap button (shown when Lock is ON)
+    apply_preview_button = new QPushButton("Apply Preview Remap");
+    apply_preview_button->setToolTip("Commit current preview remap to the mapping");
+    apply_preview_button->setEnabled(false);
+    connect(apply_preview_button, &QPushButton::clicked, this, &CustomControllerDialog::on_apply_preview_remap_clicked);
+    transform_grid->addWidget(apply_preview_button, 7, 0, 1, 4);
 
     transform_group->setLayout(transform_grid);
     right_layout->addWidget(transform_group);
@@ -282,6 +320,10 @@ void CustomControllerDialog::on_granularity_changed(int)
 
 void CustomControllerDialog::UpdateItemCombo()
 {
+    // Preserve current selection where possible
+    int prev_index = item_combo->currentIndex();
+    int prev_data = item_combo->currentData().isValid() ? item_combo->currentData().toInt() : -9999;
+
     item_combo->clear();
 
     int ctrl_idx = available_controllers->currentRow();
@@ -332,6 +374,25 @@ void CustomControllerDialog::UpdateItemCombo()
                 item_combo->addItem(icon, QString::fromStdString(controller->leds[i].name), i);
             }
         }
+    }
+
+    // Try to restore previous selection
+    int restore_index = -1;
+    for(int i = 0; i < item_combo->count(); i++)
+    {
+        if(item_combo->itemData(i).isValid() && item_combo->itemData(i).toInt() == prev_data)
+        {
+            restore_index = i;
+            break;
+        }
+    }
+    if(restore_index >= 0)
+    {
+        item_combo->setCurrentIndex(restore_index);
+    }
+    else if(prev_index >= 0 && prev_index < item_combo->count())
+    {
+        item_combo->setCurrentIndex(prev_index);
     }
 }
 
@@ -432,12 +493,13 @@ void CustomControllerDialog::UpdateGridDisplay()
         {
             QTableWidgetItem* item = new QTableWidgetItem();
 
+            const std::vector<GridLEDMapping>& mappings_ref = transform_locked ? preview_led_mappings : led_mappings;
             std::vector<GridLEDMapping> cell_mappings;
-            for(unsigned int k = 0; k < led_mappings.size(); k++)
+            for(unsigned int k = 0; k < mappings_ref.size(); k++)
             {
-                if(led_mappings[k].x == j && led_mappings[k].y == i && led_mappings[k].z == current_layer)
+                if(mappings_ref[k].x == j && mappings_ref[k].y == i && mappings_ref[k].z == current_layer)
                 {
-                    cell_mappings.push_back(led_mappings[k]);
+                    cell_mappings.push_back(mappings_ref[k]);
                 }
             }
 
@@ -550,7 +612,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                             }
                         }
 
-                        tooltip_text += QString("• %1%2\n")
+                        tooltip_text += QString("â€¢ %1%2\n")
                                        .arg(QString::fromStdString(mapping.controller->name))
                                        .arg(assignment_type);
                     }
@@ -566,7 +628,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                 // Add indicator based on number of LEDs
                 if(cell_mappings.size() == 1)
                 {
-                    item->setText("●");
+                    item->setText("â—");
                 }
                 else
                 {
@@ -766,35 +828,106 @@ void CustomControllerDialog::on_assign_clicked()
 
     if(granularity == 0)
     {
+        // Whole device: lay out all LEDs in a line starting at selected cell
+        int grid_w = width_spin->value();
+        int grid_h = height_spin->value();
+
+        int start_x = selected_col;
+        int start_y = selected_row;
+
+        int placed = 0;
         for(unsigned int p = 0; p < positions.size(); p++)
         {
+            int index = placed;
+            int x = (start_x + index) % grid_w;
+            int y = start_y + (start_x + index) / grid_w;
+            if(y >= grid_h)
+                break;
+
+            // Clear any existing mapping at target cell
+            for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
+            {
+                if(it->x == x && it->y == y && it->z == current_layer)
+                    it = led_mappings.erase(it);
+                else
+                    ++it;
+            }
+
             GridLEDMapping mapping;
-            mapping.x = selected_col;
-            mapping.y = selected_row;
+            mapping.x = x;
+            mapping.y = y;
             mapping.z = current_layer;
             mapping.controller = controller;
             mapping.zone_idx = positions[p].zone_idx;
             mapping.led_idx = positions[p].led_idx;
-            mapping.granularity = 0; // Whole device
+            mapping.granularity = 0; // Whole device selection
             led_mappings.push_back(mapping);
+
+            placed++;
+        }
+
+        if(placed < (int)positions.size())
+        {
+            QMessageBox::information(this, "Grid Too Small",
+                                     QString("Placed %1 of %2 LEDs (expand grid or choose a different start cell)")
+                                     .arg(placed).arg((int)positions.size()));
         }
     }
     else if(granularity == 1)
     {
+        // Zone: lay out all LEDs in the zone in a line starting at selected cell
+        int grid_w = width_spin->value();
+        int grid_h = height_spin->value();
+
+        int start_x = selected_col;
+        int start_y = selected_row;
+
+        // Collect zone LEDs in order
+        std::vector<std::pair<unsigned,int>> zone_leds; zone_leds.reserve(positions.size());
         for(unsigned int p = 0; p < positions.size(); p++)
         {
             if(positions[p].zone_idx == (unsigned int)item_idx)
             {
-                GridLEDMapping mapping;
-                mapping.x = selected_col;
-                mapping.y = selected_row;
-                mapping.z = current_layer;
-                mapping.controller = controller;
-                mapping.zone_idx = positions[p].zone_idx;
-                mapping.led_idx = positions[p].led_idx;
-                mapping.granularity = 1; // Zone
-                led_mappings.push_back(mapping);
+                zone_leds.push_back({positions[p].zone_idx, (int)positions[p].led_idx});
             }
+        }
+
+        int placed = 0;
+        for(unsigned int idx = 0; idx < zone_leds.size(); idx++)
+        {
+            int index = placed;
+            int x = (start_x + index) % grid_w;
+            int y = start_y + (start_x + index) / grid_w;
+            if(y >= grid_h)
+                break;
+
+            // Clear existing mapping at target cell
+            for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
+            {
+                if(it->x == x && it->y == y && it->z == current_layer)
+                    it = led_mappings.erase(it);
+                else
+                    ++it;
+            }
+
+            GridLEDMapping mapping;
+            mapping.x = x;
+            mapping.y = y;
+            mapping.z = current_layer;
+            mapping.controller = controller;
+            mapping.zone_idx = zone_leds[idx].first;
+            mapping.led_idx = zone_leds[idx].second;
+            mapping.granularity = 1; // Zone selection
+            led_mappings.push_back(mapping);
+
+            placed++;
+        }
+
+        if(placed < (int)zone_leds.size())
+        {
+            QMessageBox::information(this, "Grid Too Small",
+                                     QString("Placed %1 of %2 zone LEDs (expand grid or choose a different start cell)")
+                                     .arg(placed).arg((int)zone_leds.size()));
         }
     }
     else if(granularity == 2)
@@ -819,6 +952,12 @@ void CustomControllerDialog::on_assign_clicked()
                 led_mappings.push_back(mapping);
             }
         }
+    }
+
+    // Keep preview in sync if locked
+    if(transform_locked)
+    {
+        preview_led_mappings = led_mappings;
     }
 
     UpdateGridColors();
@@ -1130,12 +1269,13 @@ void CustomControllerDialog::UpdateGridColors()
             QTableWidgetItem* item = grid_table->item(i, j);
             if(!item) continue;
 
+            const std::vector<GridLEDMapping>& mappings_ref = transform_locked ? preview_led_mappings : led_mappings;
             std::vector<GridLEDMapping> cell_mappings;
-            for(unsigned int k = 0; k < led_mappings.size(); k++)
+            for(unsigned int k = 0; k < mappings_ref.size(); k++)
             {
-                if(led_mappings[k].x == j && led_mappings[k].y == i && led_mappings[k].z == current_layer)
+                if(mappings_ref[k].x == j && mappings_ref[k].y == i && mappings_ref[k].z == current_layer)
                 {
-                    cell_mappings.push_back(led_mappings[k]);
+                    cell_mappings.push_back(mappings_ref[k]);
                 }
             }
 
@@ -1227,12 +1367,23 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 
     if(locked)
     {
-        // Lock the current layout
+        // Lock the current layout: snapshot both original and preview mappings
         original_led_mappings = led_mappings;
+        preview_led_mappings = led_mappings;
 
-        // Enable rotation controls
-        rotate_angle_slider->setEnabled(true);
-        rotate_angle_spin->setEnabled(true);
+        // Disable free-angle rotation; allow preview remap via 180/Flips; disable 90/270 (dimension swap)
+        rotate_angle_slider->setEnabled(false);
+        rotate_angle_spin->setEnabled(false);
+        rotate_angle_slider->setToolTip("Disabled while effect direction is locked");
+        rotate_angle_spin->setToolTip("Disabled while effect direction is locked");
+
+        if(rotate_90_button)      { rotate_90_button->setEnabled(false); rotate_90_button->setToolTip("Rotation 90° disabled while locked (requires geometry change)"); }
+        if(rotate_180_button)     { rotate_180_button->setEnabled(true);  rotate_180_button->setToolTip("Preview-only remap: rotates assignments 180°"); }
+        if(rotate_270_button)     { rotate_270_button->setEnabled(false); rotate_270_button->setToolTip("Rotation 270° disabled while locked (requires geometry change)"); }
+        if(flip_horizontal_button){ flip_horizontal_button->setEnabled(true); flip_horizontal_button->setToolTip("Preview-only remap: flips assignments horizontally"); }
+        if(flip_vertical_button)  { flip_vertical_button->setEnabled(true);  flip_vertical_button->setToolTip("Preview-only remap: flips assignments vertically"); }
+
+        if(apply_preview_button)  apply_preview_button->setEnabled(true);
 
         // Reset angle to 0
         rotate_angle_slider->blockSignals(true);
@@ -1244,12 +1395,22 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
     }
     else
     {
-        // Unlock - disable rotation controls
-        rotate_angle_slider->setEnabled(false);
-        rotate_angle_spin->setEnabled(false);
+        // Unlock - re-enable rotation/flip controls
+        rotate_angle_slider->setEnabled(true);
+        rotate_angle_spin->setEnabled(true);
+        rotate_angle_slider->setToolTip("");
+        rotate_angle_spin->setToolTip("");
+        if(rotate_90_button)      { rotate_90_button->setEnabled(true); rotate_90_button->setToolTip("Rotate LED grid 90° clockwise"); }
+        if(rotate_180_button)     { rotate_180_button->setEnabled(true); rotate_180_button->setToolTip("Rotate LED grid 180°"); }
+        if(rotate_270_button)     { rotate_270_button->setEnabled(true); rotate_270_button->setToolTip("Rotate LED grid 270° clockwise"); }
+        if(flip_horizontal_button){ flip_horizontal_button->setEnabled(true); flip_horizontal_button->setToolTip("Flip LED grid horizontally"); }
+        if(flip_vertical_button)  { flip_vertical_button->setEnabled(true);  flip_vertical_button->setToolTip("Flip LED grid vertically"); }
 
-        // Clear original mappings
+        if(apply_preview_button)  apply_preview_button->setEnabled(false);
+
+        // Clear snapshots
         original_led_mappings.clear();
+        preview_led_mappings.clear();
     }
 }
 
@@ -1344,7 +1505,7 @@ void CustomControllerDialog::on_rotation_angle_changed(int angle)
 
 void CustomControllerDialog::on_rotate_grid_90()
 {
-    if(led_mappings.empty())
+    if((transform_locked ? preview_led_mappings : led_mappings).empty())
     {
         QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
         return;
@@ -1353,29 +1514,37 @@ void CustomControllerDialog::on_rotate_grid_90()
     int width = width_spin->value();
     int height = height_spin->value();
 
-    // Rotate 90° clockwise: (x, y) → (y, width - 1 - x)
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    if(transform_locked)
     {
-        int old_x = led_mappings[i].x;
-        int old_y = led_mappings[i].y;
-        led_mappings[i].x = old_y;
-        led_mappings[i].y = width - 1 - old_x;
+        QMessageBox::information(this, "Rotation Disabled", "90° rotation requires geometry change. Unlock to rotate the grid.");
+        return;
     }
+    else
+    {
+        // Rotate 90° clockwise: (x, y) -> (y, width - 1 - x)
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
+        {
+            int old_x = led_mappings[i].x;
+            int old_y = led_mappings[i].y;
+            led_mappings[i].x = old_y;
+            led_mappings[i].y = width - 1 - old_x;
+        }
 
-    // Swap width and height
-    width_spin->blockSignals(true);
-    height_spin->blockSignals(true);
-    width_spin->setValue(height);
-    height_spin->setValue(width);
-    width_spin->blockSignals(false);
-    height_spin->blockSignals(false);
+        // Swap width and height
+        width_spin->blockSignals(true);
+        height_spin->blockSignals(true);
+        width_spin->setValue(height);
+        height_spin->setValue(width);
+        width_spin->blockSignals(false);
+        height_spin->blockSignals(false);
 
-    UpdateGridDisplay();
+        UpdateGridDisplay();
+    }
 }
 
 void CustomControllerDialog::on_rotate_grid_180()
 {
-    if(led_mappings.empty())
+    if((transform_locked ? preview_led_mappings : led_mappings).empty())
     {
         QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
         return;
@@ -1384,19 +1553,29 @@ void CustomControllerDialog::on_rotate_grid_180()
     int width = width_spin->value();
     int height = height_spin->value();
 
-    // Rotate 180°: (x, y) → (width - 1 - x, height - 1 - y)
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    if(transform_locked)
     {
-        led_mappings[i].x = width - 1 - led_mappings[i].x;
-        led_mappings[i].y = height - 1 - led_mappings[i].y;
+        for(unsigned int i = 0; i < preview_led_mappings.size(); i++)
+        {
+            preview_led_mappings[i].x = width - 1 - preview_led_mappings[i].x;
+            preview_led_mappings[i].y = height - 1 - preview_led_mappings[i].y;
+        }
+        UpdateGridColors();
     }
-
-    UpdateGridDisplay();
+    else
+    {
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
+        {
+            led_mappings[i].x = width - 1 - led_mappings[i].x;
+            led_mappings[i].y = height - 1 - led_mappings[i].y;
+        }
+        UpdateGridDisplay();
+    }
 }
 
 void CustomControllerDialog::on_rotate_grid_270()
 {
-    if(led_mappings.empty())
+    if((transform_locked ? preview_led_mappings : led_mappings).empty())
     {
         QMessageBox::information(this, "Grid Empty", "No LEDs to rotate");
         return;
@@ -1405,29 +1584,37 @@ void CustomControllerDialog::on_rotate_grid_270()
     int width = width_spin->value();
     int height = height_spin->value();
 
-    // Rotate 270° clockwise (= 90° counter-clockwise): (x, y) → (height - 1 - y, x)
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    if(transform_locked)
     {
-        int old_x = led_mappings[i].x;
-        int old_y = led_mappings[i].y;
-        led_mappings[i].x = height - 1 - old_y;
-        led_mappings[i].y = old_x;
+        QMessageBox::information(this, "Rotation Disabled", "270° rotation requires geometry change. Unlock to rotate the grid.");
+        return;
     }
+    else
+    {
+        // Rotate 270° clockwise (= 90° counter-clockwise): (x, y) -> (height - 1 - y, x)
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
+        {
+            int old_x = led_mappings[i].x;
+            int old_y = led_mappings[i].y;
+            led_mappings[i].x = height - 1 - old_y;
+            led_mappings[i].y = old_x;
+        }
 
-    // Swap width and height
-    width_spin->blockSignals(true);
-    height_spin->blockSignals(true);
-    width_spin->setValue(height);
-    height_spin->setValue(width);
-    width_spin->blockSignals(false);
-    height_spin->blockSignals(false);
+        // Swap width and height
+        width_spin->blockSignals(true);
+        height_spin->blockSignals(true);
+        width_spin->setValue(height);
+        height_spin->setValue(width);
+        width_spin->blockSignals(false);
+        height_spin->blockSignals(false);
 
-    UpdateGridDisplay();
+        UpdateGridDisplay();
+    }
 }
 
 void CustomControllerDialog::on_flip_grid_horizontal()
 {
-    if(led_mappings.empty())
+    if((transform_locked ? preview_led_mappings : led_mappings).empty())
     {
         QMessageBox::information(this, "Grid Empty", "No LEDs to flip");
         return;
@@ -1435,18 +1622,27 @@ void CustomControllerDialog::on_flip_grid_horizontal()
 
     int width = width_spin->value();
 
-    // Flip horizontally: (x, y) → (width - 1 - x, y)
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    if(transform_locked)
     {
-        led_mappings[i].x = width - 1 - led_mappings[i].x;
+        for(unsigned int i = 0; i < preview_led_mappings.size(); i++)
+        {
+            preview_led_mappings[i].x = width - 1 - preview_led_mappings[i].x;
+        }
+        UpdateGridColors();
     }
-
-    UpdateGridDisplay();
+    else
+    {
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
+        {
+            led_mappings[i].x = width - 1 - led_mappings[i].x;
+        }
+        UpdateGridDisplay();
+    }
 }
 
 void CustomControllerDialog::on_flip_grid_vertical()
 {
-    if(led_mappings.empty())
+    if((transform_locked ? preview_led_mappings : led_mappings).empty())
     {
         QMessageBox::information(this, "Grid Empty", "No LEDs to flip");
         return;
@@ -1454,11 +1650,131 @@ void CustomControllerDialog::on_flip_grid_vertical()
 
     int height = height_spin->value();
 
-    // Flip vertically: (x, y) → (x, height - 1 - y)
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    if(transform_locked)
     {
-        led_mappings[i].y = height - 1 - led_mappings[i].y;
+        for(unsigned int i = 0; i < preview_led_mappings.size(); i++)
+        {
+            preview_led_mappings[i].y = height - 1 - preview_led_mappings[i].y;
+        }
+        UpdateGridColors();
+    }
+    else
+    {
+        for(unsigned int i = 0; i < led_mappings.size(); i++)
+        {
+            led_mappings[i].y = height - 1 - led_mappings[i].y;
+        }
+        UpdateGridDisplay();
+    }
+}
+
+void CustomControllerDialog::on_apply_preview_remap_clicked()
+{
+    if(!transform_locked)
+    {
+        QMessageBox::information(this, "Not Locked", "Effect direction is not locked. No preview remap to apply.");
+        return;
     }
 
+    if(preview_led_mappings.empty())
+    {
+        QMessageBox::information(this, "Nothing To Apply", "No preview remap is available.");
+        return;
+    }
+
+    // Commit preview into actual mappings
+    led_mappings = preview_led_mappings;
     UpdateGridDisplay();
 }
+
+void CustomControllerDialog::on_apply_shape_remap_clicked()
+{
+    // Gather selected cells. If discontiguous, use bounding rect and fill perimeter.
+    QList<QTableWidgetItem*> selected = grid_table->selectedItems();
+    if(selected.isEmpty())
+    {
+        QMessageBox::information(this, "No Selection", "Select some cells to remap.");
+        return;
+    }
+
+    int min_row = INT_MAX, max_row = -1, min_col = INT_MAX, max_col = -1;
+    for(QTableWidgetItem* it : selected)
+    {
+        min_row = std::min(min_row, it->row());
+        max_row = std::max(max_row, it->row());
+        min_col = std::min(min_col, it->column());
+        max_col = std::max(max_col, it->column());
+    }
+
+    // Build target cells list as perimeter of bounding rectangle
+    std::vector<std::pair<int,int>> canonical;
+    for(int c = min_col; c <= max_col; ++c) canonical.emplace_back(min_row, c);
+    for(int r = min_row+1; r <= max_row-1; ++r) canonical.emplace_back(r, max_col);
+    if(max_row > min_row)
+        for(int c = max_col; c >= min_col; --c) canonical.emplace_back(max_row, c);
+    if(max_col > min_col)
+        for(int r = max_row-1; r >= min_row+1; --r) canonical.emplace_back(r, min_col);
+
+    int corner = shape_start_combo ? shape_start_combo->currentIndex() : 0; // 0 TL, 1 TR, 2 BR, 3 BL
+    bool clockwise = !shape_dir_combo || shape_dir_combo->currentIndex() == 0;
+
+    std::pair<int,int> desired_start = (corner==0) ? std::make_pair(min_row,min_col)
+                                  : (corner==1) ? std::make_pair(min_row,max_col)
+                                  : (corner==2) ? std::make_pair(max_row,max_col)
+                                                : std::make_pair(max_row,min_col);
+    // rotate canonical to start
+    std::vector<std::pair<int,int>> perimeter;
+    if(!canonical.empty())
+    {
+        int idx = 0; for(size_t i=0;i<canonical.size();++i){ if(canonical[i]==desired_start){ idx=(int)i; break; } }
+        for(size_t k=0;k<canonical.size();++k) perimeter.push_back(canonical[(idx+k)%canonical.size()]);
+        if(!clockwise) std::reverse(perimeter.begin(), perimeter.end());
+    }
+
+    // Gather sources from current layer inside bounds, sorted by device order
+    std::vector<GridLEDMapping> sources;
+    for(const GridLEDMapping& m : led_mappings)
+    {
+        if(m.z != current_layer) continue;
+        if(m.x >= min_col && m.x <= max_col && m.y >= min_row && m.y <= max_row)
+            sources.push_back(m);
+    }
+    if(sources.empty())
+    {
+        QMessageBox::information(this, "No LEDs", "No LEDs assigned in the selected area to remap.");
+        return;
+    }
+    std::sort(sources.begin(), sources.end(), [&](const GridLEDMapping& a, const GridLEDMapping& b){
+        if(a.controller != b.controller) return a.controller < b.controller;
+        if(a.zone_idx != b.zone_idx) return a.zone_idx < b.zone_idx;
+        return a.led_idx < b.led_idx;
+    });
+
+    // Erase all mappings in selection on current layer
+    for(auto it = led_mappings.begin(); it != led_mappings.end(); )
+    {
+        if(it->z==current_layer && it->x>=min_col && it->x<=max_col && it->y>=min_row && it->y<=max_row)
+            it = led_mappings.erase(it);
+        else
+            ++it;
+    }
+
+    int count = std::min((int)perimeter.size(), (int)sources.size());
+    for(int i=0;i<count;i++)
+    {
+        GridLEDMapping m = sources[i];
+        m.y = perimeter[i].first;
+        m.x = perimeter[i].second;
+        led_mappings.push_back(m);
+    }
+
+    if(transform_locked) preview_led_mappings = led_mappings;
+    UpdateGridDisplay();
+}
+
+
+
+
+
+
+

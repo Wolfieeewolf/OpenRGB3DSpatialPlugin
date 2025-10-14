@@ -143,6 +143,11 @@ HEADERS +=                                                                      
     ui/Gizmo3D.h                                                                                \
     Effects3D/Wave3D/Wave3D.h                                                                   \
     Effects3D/Wipe3D/Wipe3D.h                                                                   \
+    Effects3D/SpectrumBars3D/SpectrumBars3D.h                                                   \
+    Effects3D/BeatPulse3D/BeatPulse3D.h                                                         \
+    Effects3D/BandScan3D/BandScan3D.h                                                           \
+    Effects3D/AudioLevel3D/AudioLevel3D.h                                                       \
+    Audio/AudioInputManager.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
     Effects3D/Spiral3D/Spiral3D.h                                                               \
     Effects3D/Spin3D/Spin3D.h                                                                   \
@@ -192,11 +197,23 @@ SOURCES +=                                                                      
     Effects3D/Lightning3D/Lightning3D.cpp                                                       \
     Effects3D/Matrix3D/Matrix3D.cpp                                                             \
     Effects3D/BouncingBall3D/BouncingBall3D.cpp                                                 \
+    Effects3D/SpectrumBars3D/SpectrumBars3D.cpp                                                 \
+    Effects3D/BeatPulse3D/BeatPulse3D.cpp                                                       \
+    Effects3D/BandScan3D/BandScan3D.cpp                                                         \
+    Effects3D/AudioLevel3D/AudioLevel3D.cpp                                                     \
+    Audio/AudioInputManager.cpp                                                                 \
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
 #-----------------------------------------------------------------------------------------------#
 win32:CONFIG += QTPLUGIN c++17
+win32:LIBS += \
+    -lOle32 \
+    -lOleAut32 \
+    -lAvrt \
+    -lMmdevapi \
+    -lPropsys \
+    -luuid
 
 win32:CONFIG(debug, debug|release) {
     win32:DESTDIR = debug

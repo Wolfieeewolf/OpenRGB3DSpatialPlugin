@@ -75,6 +75,22 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     \*---------------------------------------------------------*/
     profile_json["effect_params"] = current_effect_ui->SaveSettings();
 
+    // Save audio settings
+    nlohmann::json audio_json;
+#ifdef _WIN32
+    
+#else
+    
+#endif
+    audio_json["device_index"] = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
+#ifdef _WIN32
+    
+#endif
+    audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 10);
+    audio_json["bands_count"] = (audio_bands_combo ? audio_bands_combo->currentText().toInt() : 16);
+    // Crossovers removed from UI; omit from saved profile to avoid confusion
+    profile_json["audio_settings"] = audio_json;
+
     /*---------------------------------------------------------*\
     | Write to file                                            |
     \*---------------------------------------------------------*/
@@ -167,6 +183,39 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
         if(profile_json.contains("effect_params") && current_effect_ui)
         {
             current_effect_ui->LoadSettings(profile_json["effect_params"]);
+        }
+
+        // Restore audio settings
+        if(profile_json.contains("audio_settings"))
+        {
+            const nlohmann::json& a = profile_json["audio_settings"];
+            if(a.contains("device_index") && audio_device_combo && audio_device_combo->isEnabled())
+            {
+                int di = a["device_index"].get<int>();
+                if(di >= 0 && di < audio_device_combo->count())
+                {
+                    audio_device_combo->setCurrentIndex(di);
+                    on_audio_device_changed(di);
+                }
+            }
+            if(a.contains("gain_slider") && audio_gain_slider)
+            {
+                int gv = a["gain_slider"].get<int>();
+                audio_gain_slider->setValue(gv);
+                on_audio_gain_changed(gv);
+            }
+            // input smoothing removed (now per-effect)
+            if(a.contains("bands_count") && audio_bands_combo)
+            {
+                int bc = a["bands_count"].get<int>();
+                int idx = audio_bands_combo->findText(QString::number(bc));
+                if(idx >= 0)
+                {
+                    audio_bands_combo->setCurrentIndex(idx);
+                    on_audio_bands_changed(idx);
+                }
+            }
+            // Crossovers UI removed; ignore bass_upper_hz/mid_upper_hz if present
         }
 
         
@@ -470,3 +519,5 @@ void OpenRGB3DSpatialTab::on_effect_profile_changed(int)
     \*---------------------------------------------------------*/
     SaveCurrentEffectProfileName();
 }
+
+

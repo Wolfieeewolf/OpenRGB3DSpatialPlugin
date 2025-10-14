@@ -45,9 +45,8 @@
 #define GIZMO_SIZE                  1.5f
 #define AXIS_THICKNESS              0.1f
 #define AXIS_HIT_THICKNESS          0.25f    // Larger hit box for easier clicking
-#define CENTER_SPHERE_RADIUS        0.15f    // Reduced visual size
-#define CENTER_SPHERE_HIT_RADIUS    0.20f    // Tighter hit radius to avoid overlap with small controllers
-#define RAY_INTERSECTION_TOLERANCE  0.15f
+#define CENTER_SPHERE_RADIUS        0.30f    // Doubled visual size for center cube
+#define CENTER_SPHERE_HIT_RADIUS    0.40f    // Match larger visual size for easier picking
 
 Gizmo3D::Gizmo3D()
 {
@@ -55,6 +54,7 @@ Gizmo3D::Gizmo3D()
     dragging = false;
     mode = GIZMO_MODE_MOVE;
     selected_axis = GIZMO_AXIS_NONE;
+    hover_axis = GIZMO_AXIS_NONE;
     target_transform = nullptr;
     target_ref_point = nullptr;
 
@@ -65,6 +65,7 @@ Gizmo3D::Gizmo3D()
     viewport_width = 800;
     viewport_height = 600;
 
+    base_gizmo_size = GIZMO_SIZE;
     gizmo_size = GIZMO_SIZE;
     axis_thickness = AXIS_THICKNESS;
     center_sphere_radius = CENTER_SPHERE_RADIUS;
@@ -83,6 +84,18 @@ Gizmo3D::Gizmo3D()
     \*---------------------------------------------------------*/
     grid_snap_enabled = false;
     grid_size = 1.0f;
+
+    camera_distance = 20.0f;
+
+    drag_axis_t0 = 0.0f;
+    drag_axis_dir[0] = 1.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 0.0f;
+    drag_plane_normal[0] = 0.0f; drag_plane_normal[1] = 1.0f; drag_plane_normal[2] = 0.0f;
+    drag_start_world[0] = drag_start_world[1] = drag_start_world[2] = 0.0f;
+    center_press_pending = false;
+    rot_plane_normal[0] = 1.0f; rot_plane_normal[1] = 0.0f; rot_plane_normal[2] = 0.0f;
+    rot_u[0]=0.0f; rot_u[1]=1.0f; rot_u[2]=0.0f;
+    rot_v[0]=0.0f; rot_v[1]=0.0f; rot_v[2]=1.0f;
+    rot_angle0 = 0.0f;
 }
 
 Gizmo3D::~Gizmo3D()
@@ -159,13 +172,23 @@ void Gizmo3D::SetGridSnap(bool enabled, float size)
     grid_size = size;
 }
 
+void Gizmo3D::SetCameraDistance(float distance)
+{
+    if(distance < 0.01f) distance = 0.01f;
+    camera_distance = distance;
+    float scale = camera_distance * 0.05f; // ~1.0 when distance ≈ 20
+    if(scale < 0.25f) scale = 0.25f;
+    if(scale > 10.0f) scale = 10.0f;
+    gizmo_size = base_gizmo_size * scale;
+}
+
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
     if(!active || (!target_transform && !target_ref_point))
         return false;
 
-    last_mouse_pos = event->pos();
-    drag_start_pos = event->pos();
+    last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
+    drag_start_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
 
     /*---------------------------------------------------------*\
     | Check for gizmo interaction                             |
@@ -174,14 +197,86 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
 
     if(selected_axis == GIZMO_AXIS_CENTER)
     {
-        // Center sphere clicked - cycle mode instead of dragging
-        CycleMode();
-        // Note: The viewport will call UpdateGizmoPosition() to recenter the gizmo
-        return true; // Mode switched, don't start dragging
+        if(mode == GIZMO_MODE_FREEROAM)
+        {
+            // Defer: center can either drag (if mouse moves) or click to cycle
+            center_press_pending = true;
+            dragging = false;
+
+            // Prepare plane normal and start point for potential drag
+            float right[3] = { modelview[0], modelview[4], modelview[8] };
+            float up[3]    = { modelview[1], modelview[5], modelview[9] };
+            drag_plane_normal[0] = right[1]*up[2] - right[2]*up[1];
+            drag_plane_normal[1] = right[2]*up[0] - right[0]*up[2];
+            drag_plane_normal[2] = right[0]*up[1] - right[1]*up[0];
+            float len = sqrtf(drag_plane_normal[0]*drag_plane_normal[0] + drag_plane_normal[1]*drag_plane_normal[1] + drag_plane_normal[2]*drag_plane_normal[2]);
+            if(len > 1e-6f) { drag_plane_normal[0]/=len; drag_plane_normal[1]/=len; drag_plane_normal[2]/=len; }
+            drag_start_world[0] = gizmo_x;
+            drag_start_world[1] = gizmo_y;
+            drag_start_world[2] = gizmo_z;
+            return true;
+        }
+        else
+        {
+            // Center cycles modes in MOVE/ROTATE
+            CycleMode();
+            return true;
+        }
     }
     else if(selected_axis != GIZMO_AXIS_NONE)
     {
         dragging = true;
+        // If we're rotating, set up rotation plane and initial angle; else set up axis drag
+        if(mode == GIZMO_MODE_ROTATE && (selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z))
+        {
+            // Rotation plane normal is the selected axis
+            rot_plane_normal[0] = (selected_axis == GIZMO_AXIS_X) ? 1.0f : 0.0f;
+            rot_plane_normal[1] = (selected_axis == GIZMO_AXIS_Y) ? 1.0f : 0.0f;
+            rot_plane_normal[2] = (selected_axis == GIZMO_AXIS_Z) ? 1.0f : 0.0f;
+            // Basis on the plane for atan2
+            if(selected_axis == GIZMO_AXIS_X) { rot_u[0]=0.0f; rot_u[1]=1.0f; rot_u[2]=0.0f; rot_v[0]=0.0f; rot_v[1]=0.0f; rot_v[2]=1.0f; }
+            if(selected_axis == GIZMO_AXIS_Y) { rot_u[0]=1.0f; rot_u[1]=0.0f; rot_u[2]=0.0f; rot_v[0]=0.0f; rot_v[1]=0.0f; rot_v[2]=1.0f; }
+            if(selected_axis == GIZMO_AXIS_Z) { rot_u[0]=1.0f; rot_u[1]=0.0f; rot_u[2]=0.0f; rot_v[0]=0.0f; rot_v[1]=1.0f; rot_v[2]=0.0f; }
+
+            // Intersect mouse ray with rotation plane to get initial angle
+            Ray3D ray = GenerateRay((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
+            float center[3] = { gizmo_x, gizmo_y, gizmo_z };
+            float denom = rot_plane_normal[0]*ray.direction[0] + rot_plane_normal[1]*ray.direction[1] + rot_plane_normal[2]*ray.direction[2];
+            float angle = 0.0f;
+            if(fabsf(denom) > 1e-6f)
+            {
+                float w0x = center[0] - ray.origin[0];
+                float w0y = center[1] - ray.origin[1];
+                float w0z = center[2] - ray.origin[2];
+                float t = (rot_plane_normal[0]*w0x + rot_plane_normal[1]*w0y + rot_plane_normal[2]*w0z) / denom;
+                float hx = ray.origin[0] + t*ray.direction[0] - center[0];
+                float hy = ray.origin[1] + t*ray.direction[1] - center[1];
+                float hz = ray.origin[2] + t*ray.direction[2] - center[2];
+                float x = hx*rot_u[0] + hy*rot_u[1] + hz*rot_u[2];
+                float y = hx*rot_v[0] + hy*rot_v[1] + hz*rot_v[2];
+                angle = atan2f(y, x);
+            }
+            rot_angle0 = angle;
+        }
+        else
+        {
+            // Axis constrained drag setup
+            Ray3D ray = GenerateRay((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
+            float origin[3] = { gizmo_x, gizmo_y, gizmo_z };
+            if(selected_axis == GIZMO_AXIS_X) { drag_axis_dir[0] = 1.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 0.0f; }
+            if(selected_axis == GIZMO_AXIS_Y) { drag_axis_dir[0] = 0.0f; drag_axis_dir[1] = 1.0f; drag_axis_dir[2] = 0.0f; }
+            if(selected_axis == GIZMO_AXIS_Z) { drag_axis_dir[0] = 0.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 1.0f; }
+            float a[3] = { drag_axis_dir[0], drag_axis_dir[1], drag_axis_dir[2] };
+            float d[3] = { ray.direction[0], ray.direction[1], ray.direction[2] };
+            float w0[3] = { origin[0] - ray.origin[0], origin[1] - ray.origin[1], origin[2] - ray.origin[2] };
+            float A = a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
+            float B = a[0]*d[0] + a[1]*d[1] + a[2]*d[2];
+            float C = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+            float D = a[0]*w0[0] + a[1]*w0[1] + a[2]*w0[2];
+            float E = d[0]*w0[0] + d[1]*w0[1] + d[2]*w0[2];
+            float denom = A*C - B*B;
+            drag_axis_t0 = (fabsf(denom) < 1e-6f) ? D : ((B*E - C*D) / denom);
+        }
         return true; // Gizmo captured the mouse
     }
 
@@ -190,29 +285,67 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
 
 bool Gizmo3D::HandleMouseMove(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || !dragging || (!target_transform && !target_ref_point))
+    if(!active || (!target_transform && !target_ref_point))
         return false;
 
-    UpdateTransform(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event), modelview, projection, viewport);
-    last_mouse_pos = event->pos();
-
-    // Force gizmo to stay locked to controller center
-    // The viewport will call UpdateGizmoPosition() which recalculates the center
-
-    return true;
+    if(center_press_pending && !dragging)
+    {
+        // Decide between click vs drag based on movement threshold
+        QPoint cur((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
+        float dx = (float)(cur.x() - drag_start_pos.x());
+        float dy = (float)(cur.y() - drag_start_pos.y());
+        float dist = sqrtf(dx*dx + dy*dy);
+        if(dist >= 3.0f)
+        {
+            // Start dragging now
+            dragging = true;
+            // Keep selected_axis as CENTER; actual movement happens in UpdateTransform
+            last_mouse_pos = cur;
+            return true;
+        }
+        // Still pending; consume move to prevent other interactions
+        return true;
+    }
+    else if(dragging)
+    {
+        UpdateTransform((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
+        last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
+        return true;
+    }
+    else
+    {
+        // Update hover highlight when idle
+        hover_axis = PickGizmoAxis((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
+        return false;
+    }
 }
 
 bool Gizmo3D::HandleMouseRelease(QMouseEvent* event)
 {
     (void)event;
 
-    if(!active || !dragging)
+    if(!active)
         return false;
 
-    dragging = false;
-    selected_axis = GIZMO_AXIS_NONE;
+    if(center_press_pending && !dragging)
+    {
+        // Treat as a click on center in current mode
+        center_press_pending = false;
+        // Cycle mode
+        CycleMode();
+        return true;
+    }
 
-    return true;
+    if(dragging)
+    {
+        dragging = false;
+        selected_axis = GIZMO_AXIS_NONE;
+        hover_axis = GIZMO_AXIS_NONE;
+        center_press_pending = false;
+        return true;
+    }
+
+    return false;
 }
 
 void Gizmo3D::Render(const float* modelview, const float* projection, const int* viewport)
@@ -220,7 +353,6 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
     (void)modelview;
     (void)projection;
     (void)viewport;
-
     if(!active)
         return;
 
@@ -449,6 +581,25 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     }
 
     /*---------------------------------------------------------*\
+    | In FREEROAM mode, allow precise picking of top cube     |
+    \*---------------------------------------------------------*/
+    if(mode == GIZMO_MODE_FREEROAM)
+    {
+        // Purple cube centered at (0, gizmo_size, 0) in local coords
+        float cube_center[3] = { gizmo_x, gizmo_y + gizmo_size, gizmo_z };
+        float s = 0.3f; // half-size from DrawFreeroamGizmo
+        Box3D cube_box;
+        cube_box.min[0] = cube_center[0] - s; cube_box.max[0] = cube_center[0] + s;
+        cube_box.min[1] = cube_center[1] - s; cube_box.max[1] = cube_center[1] + s;
+        cube_box.min[2] = cube_center[2] - s; cube_box.max[2] = cube_center[2] + s;
+        float dist;
+        if(RayBoxIntersect(ray, cube_box, dist))
+        {
+            return GIZMO_AXIS_CENTER; // Use center/handle for freeroam dragging
+        }
+    }
+
+    /*---------------------------------------------------------*\
     | Check X axis (with larger hit box)                     |
     \*---------------------------------------------------------*/
     Box3D x_box;
@@ -503,70 +654,91 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
-    (void)modelview;
-    (void)projection;
-    (void)viewport;
-
     if(!target_transform && !target_ref_point)
         return;
-
-    float delta_x = mouse_x - last_mouse_pos.x();
-    float delta_y = mouse_y - last_mouse_pos.y();
-
-    float sensitivity = 0.05f;  // Increased from 0.01 for better responsiveness
 
     switch(mode)
     {
         case GIZMO_MODE_MOVE:
             {
-                float move_delta[3] = { 0.0f, 0.0f, 0.0f };
-
-                switch(selected_axis)
+                if(selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z)
                 {
-                    case GIZMO_AXIS_X:
-                        move_delta[0] = delta_x * sensitivity;
-                        break;
-                    case GIZMO_AXIS_Y:
-                        move_delta[1] = -delta_y * sensitivity;
-                        break;
-                    case GIZMO_AXIS_Z:
-                        move_delta[2] = -delta_x * sensitivity;  // Inverted for correct direction
-                        break;
-                    case GIZMO_AXIS_CENTER:
-                        move_delta[0] = delta_x * sensitivity;
-                        move_delta[1] = -delta_y * sensitivity;
-                        break;
+                    Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
+                    float origin[3] = { gizmo_x, gizmo_y, gizmo_z };
+                    // Compute closest t along the axis to current mouse ray
+                    float a[3] = { drag_axis_dir[0], drag_axis_dir[1], drag_axis_dir[2] };
+                    // Normalize axis just in case
+                    float alen = sqrtf(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+                    if(alen > 1e-6f) { a[0]/=alen; a[1]/=alen; a[2]/=alen; }
+                    float d[3] = { ray.direction[0], ray.direction[1], ray.direction[2] };
+                    float w0[3] = { origin[0] - ray.origin[0], origin[1] - ray.origin[1], origin[2] - ray.origin[2] };
+                    float A = a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
+                    float B = a[0]*d[0] + a[1]*d[1] + a[2]*d[2];
+                    float C = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+                    float D = a[0]*w0[0] + a[1]*w0[1] + a[2]*w0[2];
+                    float E = d[0]*w0[0] + d[1]*w0[1] + d[2]*w0[2];
+                    float denom = A*C - B*B;
+                    float t_now = (fabsf(denom) < 1e-6f) ? D : ((B*E - C*D) / denom);
+                    float dt = t_now - drag_axis_t0;
+                    float move_delta[3] = { a[0]*dt, a[1]*dt, a[2]*dt };
+                    ApplyTranslation(move_delta[0], move_delta[1], move_delta[2]);
+                    // Update baseline so dragging is incremental
+                    drag_axis_t0 = t_now;
                 }
-
-                ApplyTranslation(move_delta[0], move_delta[1], move_delta[2]);
             }
             break;
 
         case GIZMO_MODE_ROTATE:
             {
-                float rotate_delta[3] = { 0.0f, 0.0f, 0.0f };
-
-                switch(selected_axis)
+                if(selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z)
                 {
-                    case GIZMO_AXIS_X:
-                        rotate_delta[0] = delta_y * sensitivity * 10.0f;
-                        break;
-                    case GIZMO_AXIS_Y:
-                        rotate_delta[1] = delta_x * sensitivity * 10.0f;
-                        break;
-                    case GIZMO_AXIS_Z:
-                        rotate_delta[2] = delta_x * sensitivity * 10.0f;
-                        break;
+                    // Angle-based rotation around plane normal
+                    Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
+                    float center[3] = { gizmo_x, gizmo_y, gizmo_z };
+                    float denom = rot_plane_normal[0]*ray.direction[0] + rot_plane_normal[1]*ray.direction[1] + rot_plane_normal[2]*ray.direction[2];
+                    if(fabsf(denom) > 1e-6f)
+                    {
+                        float w0x = center[0] - ray.origin[0];
+                        float w0y = center[1] - ray.origin[1];
+                        float w0z = center[2] - ray.origin[2];
+                        float t = (rot_plane_normal[0]*w0x + rot_plane_normal[1]*w0y + rot_plane_normal[2]*w0z) / denom;
+                        float hx = ray.origin[0] + t*ray.direction[0] - center[0];
+                        float hy = ray.origin[1] + t*ray.direction[1] - center[1];
+                        float hz = ray.origin[2] + t*ray.direction[2] - center[2];
+                        float x = hx*rot_u[0] + hy*rot_u[1] + hz*rot_u[2];
+                        float y = hx*rot_v[0] + hy*rot_v[1] + hz*rot_v[2];
+                        float angle_now = atan2f(y, x);
+                        float dtheta = angle_now - rot_angle0; // radians
+                        // Normalize delta to [-pi, pi] to avoid jumps
+                        while(dtheta > (float)M_PI) dtheta -= (float)(2.0 * M_PI);
+                        while(dtheta < (float)-M_PI) dtheta += (float)(2.0 * M_PI);
+                        float deg = dtheta * (180.0f / (float)M_PI);
+                        float rx=0, ry=0, rz=0;
+                        if(selected_axis == GIZMO_AXIS_X) rx = deg;
+                        if(selected_axis == GIZMO_AXIS_Y) ry = deg;
+                        if(selected_axis == GIZMO_AXIS_Z) rz = deg;
+                        ApplyRotation(rx, ry, rz);
+                        rot_angle0 = angle_now; // incremental
+                    }
+                    else
+                    {
+                        // Fallback: small delta-based if ray is parallel
+                        float delta_x = (float)(mouse_x - last_mouse_pos.x());
+                        float delta_y = (float)(mouse_y - last_mouse_pos.y());
+                        float sensitivity = 0.05f;
+                        float rx = 0.0f, ry = 0.0f, rz = 0.0f;
+                        if(selected_axis == GIZMO_AXIS_X) rx = delta_y * sensitivity * 10.0f;
+                        if(selected_axis == GIZMO_AXIS_Y) ry = delta_x * sensitivity * 10.0f;
+                        if(selected_axis == GIZMO_AXIS_Z) rz = delta_x * sensitivity * 10.0f;
+                        ApplyRotation(rx, ry, rz);
+                    }
                 }
-
-                ApplyRotation(rotate_delta[0], rotate_delta[1], rotate_delta[2]);
             }
             break;
 
         case GIZMO_MODE_FREEROAM:
             {
-                // Freeroam movement in camera plane (screen space)
-                ApplyFreeroamMovement(delta_x, delta_y, modelview, projection, viewport);
+                ApplyFreeroamDragRayPlane(mouse_x, mouse_y, modelview, projection, viewport);
             }
             break;
     }
@@ -578,6 +750,40 @@ float Gizmo3D::SnapToGrid(float value)
         return value;
 
     return roundf(value / grid_size) * grid_size;
+}
+
+// Helpers
+float Gizmo3D::Dot3(const float a[3], const float b[3])
+{
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+}
+
+void Gizmo3D::Cross3(const float a[3], const float b[3], float out[3])
+{
+    out[0] = a[1]*b[2] - a[2]*b[1];
+    out[1] = a[2]*b[0] - a[0]*b[2];
+    out[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+void Gizmo3D::Normalize3(float v[3])
+{
+    float len = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    if(len > 1e-6f) { v[0]/=len; v[1]/=len; v[2]/=len; }
+}
+
+float Gizmo3D::ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray)
+{
+    float a[3] = { axis_dir_unit[0], axis_dir_unit[1], axis_dir_unit[2] };
+    float d[3] = { ray.direction[0], ray.direction[1], ray.direction[2] };
+    float w0[3] = { axis_origin[0] - ray.origin[0], axis_origin[1] - ray.origin[1], axis_origin[2] - ray.origin[2] };
+    float A = Dot3(a,a);
+    float B = Dot3(a,d);
+    float C = Dot3(d,d);
+    float D = Dot3(a,w0);
+    float E = Dot3(d,w0);
+    float denom = A*C - B*B;
+    if(fabsf(denom) < 1e-6f) return D;
+    return (B*E - C*D) / denom;
 }
 
 void Gizmo3D::ApplyTranslation(float delta_x, float delta_y, float delta_z)
@@ -731,6 +937,37 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
     }
 }
 
+void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
+{
+    (void)projection;
+    (void)viewport;
+
+    // Intersect ray with plane through drag_start_world, normal drag_plane_normal
+    Ray3D ray = GenerateRay(mouse_x, mouse_y, modelview, projection, viewport);
+    float n_dot_d = drag_plane_normal[0]*ray.direction[0] + drag_plane_normal[1]*ray.direction[1] + drag_plane_normal[2]*ray.direction[2];
+    if(fabsf(n_dot_d) < 1e-6f)
+    {
+        // Fallback to camera-plane screen-space movement
+        float dx = (float)(mouse_x - last_mouse_pos.x());
+        float dy = (float)(mouse_y - last_mouse_pos.y());
+        ApplyFreeroamMovement(dx, dy, modelview, projection, viewport);
+        return;
+    }
+    float w0x = drag_start_world[0] - ray.origin[0];
+    float w0y = drag_start_world[1] - ray.origin[1];
+    float w0z = drag_start_world[2] - ray.origin[2];
+    float t = (drag_plane_normal[0]*w0x + drag_plane_normal[1]*w0y + drag_plane_normal[2]*w0z) / n_dot_d;
+    float hitx = ray.origin[0] + t*ray.direction[0];
+    float hity = ray.origin[1] + t*ray.direction[1];
+    float hitz = ray.origin[2] + t*ray.direction[2];
+
+    // Compute delta from current gizmo position to intersection point
+    float move_dx = hitx - gizmo_x;
+    float move_dy = hity - gizmo_y;
+    float move_dz = hitz - gizmo_z;
+    ApplyTranslation(move_dx, move_dy, move_dz);
+}
+
 
 void Gizmo3D::DrawMoveGizmo()
 {
@@ -742,7 +979,8 @@ void Gizmo3D::DrawMoveGizmo()
     \*---------------------------------------------------------*/
 
     // X axis (Red) - pointing right
-    float* color = (selected_axis == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
+    GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
     glColor3f(color[0], color[1], color[2]);
 
     glBegin(GL_LINES);
@@ -762,7 +1000,7 @@ void Gizmo3D::DrawMoveGizmo()
     glEnd();
 
     // Y axis (Green) - pointing up
-    color = (selected_axis == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
+    color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
     glColor3f(color[0], color[1], color[2]);
 
     glBegin(GL_LINES);
@@ -782,7 +1020,7 @@ void Gizmo3D::DrawMoveGizmo()
     glEnd();
 
     // Z axis (Blue) - pointing forward
-    color = (selected_axis == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
+    color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
     glColor3f(color[0], color[1], color[2]);
 
     glBegin(GL_LINES);
@@ -805,7 +1043,7 @@ void Gizmo3D::DrawMoveGizmo()
     | Draw orange center cube for mode switching             |
     \*---------------------------------------------------------*/
     float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
-    color = (selected_axis == GIZMO_AXIS_CENTER) ? color_highlight : orange;
+    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, color);
 
@@ -875,7 +1113,8 @@ void Gizmo3D::DrawRotateGizmo()
     \*---------------------------------------------------------*/
 
     // X axis rotation ring (Red) - rotation around X axis (YZ plane)
-    float* color = (selected_axis == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
+    GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -893,7 +1132,7 @@ void Gizmo3D::DrawRotateGizmo()
     }
 
     // Y axis rotation ring (Green) - rotation around Y axis (XZ plane)
-    color = (selected_axis == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
+    color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -911,7 +1150,7 @@ void Gizmo3D::DrawRotateGizmo()
     }
 
     // Z axis rotation ring (Blue) - rotation around Z axis (XY plane)
-    color = (selected_axis == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
+    color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -932,7 +1171,7 @@ void Gizmo3D::DrawRotateGizmo()
     | Draw orange center cube for mode switching             |
     \*---------------------------------------------------------*/
     float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
-    color = (selected_axis == GIZMO_AXIS_CENTER) ? color_highlight : orange;
+    color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, color);
 
@@ -1052,7 +1291,8 @@ void Gizmo3D::DrawFreeroamGizmo()
 
     // Purple color for freeroam stick
     float purple[3] = {0.5f, 0.0f, 1.0f};
-    float* stick_color = (selected_axis == GIZMO_AXIS_CENTER) ? color_highlight : purple;
+    GizmoAxis hl = dragging ? selected_axis : hover_axis;
+    float* stick_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : purple;
     glColor3f(stick_color[0], stick_color[1], stick_color[2]);
 
     glBegin(GL_LINES);
@@ -1110,7 +1350,7 @@ void Gizmo3D::DrawFreeroamGizmo()
     | Draw orange center cube for mode switching             |
     \*---------------------------------------------------------*/
     float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
-    float* center_color = (selected_axis == GIZMO_AXIS_CENTER) ? color_highlight : orange;
+    float* center_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, center_color);
 

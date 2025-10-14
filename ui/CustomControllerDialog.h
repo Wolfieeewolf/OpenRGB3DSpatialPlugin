@@ -95,6 +95,8 @@ private slots:
     void on_rotate_grid_270();
     void on_flip_grid_horizontal();
     void on_flip_grid_vertical();
+    void on_apply_preview_remap_clicked();
+    void on_apply_shape_remap_clicked();
 
 private:
     void SetupUI();
@@ -145,11 +147,18 @@ private:
     QPushButton*    rotate_270_button;
     QPushButton*    flip_horizontal_button;
     QPushButton*    flip_vertical_button;
+    QPushButton*    apply_preview_button;
+    // Shape remap controls
+    QComboBox*      shape_pattern_combo;   // e.g., Perimeter (ring)
+    QComboBox*      shape_start_combo;     // Top-Left, Top-Right, Bottom-Right, Bottom-Left
+    QComboBox*      shape_dir_combo;       // Clockwise, Counter-Clockwise
+    QPushButton*    apply_shape_button;
 
     QTimer*         color_refresh_timer;
 
     std::vector<GridLEDMapping> led_mappings;
     std::vector<GridLEDMapping> original_led_mappings;  // Locked original positions
+    std::vector<GridLEDMapping> preview_led_mappings;    // Preview-only mappings when locked
     bool transform_locked;  // Whether we've locked the original layout
     int current_layer;
     int selected_row;

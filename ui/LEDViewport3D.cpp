@@ -17,6 +17,8 @@
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QMessageBox>
+#include <QPainter>
+#include <QFont>
 
 /*---------------------------------------------------------*\
 | System Includes                                          |
@@ -270,6 +272,7 @@ void LEDViewport3D::paintGL()
 
     if(has_controller_selected || has_ref_point_selected)
     {
+        gizmo.SetCameraDistance(camera_distance);
         gizmo.Render(modelview, projection, viewport);
     }
 }
@@ -287,12 +290,15 @@ void LEDViewport3D::resizeGL(int w, int h)
     gluPerspective(45.0, aspect, 0.1, 1000.0);
 
     glMatrixMode(GL_MODELVIEW);
+
+    // Keep gizmo aware of current viewport size for any screen/world helpers
+    gizmo.SetViewportSize(w, h);
 }
 
 void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 {
-    last_mouse_pos = event->pos();
-    click_start_pos = event->pos();
+    last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
+    click_start_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
 
     float modelview[16];
     float projection[16];
@@ -314,6 +320,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         if(has_controller_selected || has_ref_point_selected)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+            gizmo.SetCameraDistance(camera_distance);
             if(gizmo.HandleMousePress(event, modelview, projection, viewport))
             {
                 update();
@@ -402,7 +409,8 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
 void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 {
-    QPoint delta = event->pos() - last_mouse_pos;
+    QPoint current_pos((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
+    QPoint delta = current_pos - last_mouse_pos;
 
     float modelview[16];
     float projection[16];
@@ -414,6 +422,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     glGetIntegerv(GL_VIEWPORT, viewport);
 
     gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+    gizmo.SetCameraDistance(camera_distance);
 
     if(gizmo.HandleMouseMove(event, modelview, projection, viewport))
     {
@@ -444,8 +453,13 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         }
 
         update();
-        last_mouse_pos = event->pos();
+        last_mouse_pos = current_pos;
         return;
+    }
+    else
+    {
+        // Trigger repaint so hover highlighting updates
+        update();
     }
 
     if(dragging_grab)
@@ -515,7 +529,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         update();
     }
 
-    last_mouse_pos = event->pos();
+    last_mouse_pos = current_pos;
 }
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
@@ -1081,11 +1095,19 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
     }
     else
     {
-        for(size_t led_idx = 0; led_idx < ctrl->controller->colors.size() &&
-             led_idx < ctrl->led_positions.size(); led_idx++)
+        // For physical controllers, map each LEDPosition3D to the controller's global LED index
+        for(size_t i = 0; i < ctrl->led_positions.size(); i++)
         {
-            const LEDPosition3D& pos = ctrl->led_positions[led_idx];
-            const RGBColor& color = ctrl->controller->colors[led_idx];
+            const LEDPosition3D& pos = ctrl->led_positions[i];
+            // Bounds safety for zone index
+            if(pos.zone_idx >= ctrl->controller->zones.size())
+                continue;
+
+            unsigned int global_led_idx = ctrl->controller->zones[pos.zone_idx].start_idx + pos.led_idx;
+            if(global_led_idx >= ctrl->controller->colors.size())
+                continue;
+
+            const RGBColor& color = ctrl->controller->colors[global_led_idx];
 
             float r = (float)RGBGetRValue(color) / 255.0f;
             float g = (float)RGBGetGValue(color) / 255.0f;

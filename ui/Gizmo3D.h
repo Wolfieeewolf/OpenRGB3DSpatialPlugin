@@ -81,6 +81,7 @@ public:
     void SetTarget(VirtualReferencePoint3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
+    void SetCameraDistance(float distance);
 
     /*---------------------------------------------------------*\
     | Mouse Interaction                                        |
@@ -122,6 +123,7 @@ private:
     void ApplyTranslation(float delta_x, float delta_y, float delta_z);
     void ApplyRotation(float delta_x, float delta_y, float delta_z);
     void ApplyFreeroamMovement(float delta_x, float delta_y, const float* modelview, const float* projection, const int* viewport);
+    void ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
 
     /*---------------------------------------------------------*\
     | Rendering Helpers                                        |
@@ -146,6 +148,10 @@ private:
     | Grid Snapping Helper                                     |
     \*---------------------------------------------------------*/
     float SnapToGrid(float value);
+    float Dot3(const float a[3], const float b[3]);
+    void Cross3(const float a[3], const float b[3], float out[3]);
+    void Normalize3(float v[3]);
+    float ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray);
 
 private:
     /*---------------------------------------------------------*\
@@ -155,6 +161,7 @@ private:
     bool                    dragging;
     GizmoMode              mode;
     GizmoAxis              selected_axis;
+    GizmoAxis              hover_axis;
 
     /*---------------------------------------------------------*\
     | Target Transform                                         |
@@ -168,6 +175,7 @@ private:
     float                  gizmo_x;
     float                  gizmo_y;
     float                  gizmo_z;
+    float                  base_gizmo_size;
 
     /*---------------------------------------------------------*\
     | Mouse State                                              |
@@ -180,6 +188,7 @@ private:
     \*---------------------------------------------------------*/
     int                    viewport_width;
     int                    viewport_height;
+    float                  camera_distance;
 
     /*---------------------------------------------------------*\
     | Gizmo Appearance                                         |
@@ -202,6 +211,22 @@ private:
     \*---------------------------------------------------------*/
     bool                   grid_snap_enabled;
     float                  grid_size;
+
+    /*---------------------------------------------------------*\
+    | Drag State                                               |
+    \*---------------------------------------------------------*/
+    // Axis drag
+    float                  drag_axis_t0;
+    float                  drag_axis_dir[3];
+    // Freeroam drag (ray-plane)
+    float                  drag_plane_normal[3];
+    float                  drag_start_world[3];
+    bool                   center_press_pending; // center pressed, waiting to decide click vs drag
+    // Rotation drag (angle on ring plane)
+    float                  rot_plane_normal[3];
+    float                  rot_u[3];
+    float                  rot_v[3];
+    float                  rot_angle0; // radians
 };
 
 #endif

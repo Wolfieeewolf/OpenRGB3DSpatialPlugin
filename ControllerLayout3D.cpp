@@ -31,7 +31,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
         total_leds += controller->zones[zone_idx].leds_count;
     }
 
-    LOG_WARNING("[ControllerLayout3D] GenerateCustomGridLayout: controller=%s, total_zones=%u, total_leds=%u, grid=%dx%dx%d",
+    LOG_INFO("[ControllerLayout3D] GenerateCustomGridLayout: controller=%s, total_zones=%u, total_leds=%u, grid=%dx%dx%d",
                 controller->name.c_str(), (unsigned int)controller->zones.size(), total_leds, grid_x, grid_y, grid_z);
 
     unsigned int global_led_idx = 0;
@@ -39,7 +39,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     {
         zone* current_zone = &controller->zones[zone_idx];
 
-        LOG_WARNING("[ControllerLayout3D]   Zone[%u]: name=%s, leds_count=%u",
+        LOG_INFO("[ControllerLayout3D]   Zone[%u]: name=%s, leds_count=%u",
                    zone_idx, current_zone->name.c_str(), current_zone->leds_count);
 
         for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
