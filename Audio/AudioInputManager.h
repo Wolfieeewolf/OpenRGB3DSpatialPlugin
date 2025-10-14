@@ -74,9 +74,27 @@ public:
     float getOnsetLevel() const;               // spectral onset strength 0..1
     float getBandEnergyHz(float low_hz, float high_hz) const; // 0..1 avg across bands in Hz range
     // Channel diagnostics
-    int getChannelCount() const { return channel_count; }
-    QStringList getChannelNames() const { return channel_names; }
-    std::vector<float> getChannelLevels() const { return channel_levels; }
+    int getChannelCount() const {
+#ifdef _WIN32
+        return channel_count;
+#else
+        return 0;
+#endif
+    }
+    QStringList getChannelNames() const {
+#ifdef _WIN32
+        return channel_names;
+#else
+        return QStringList();
+#endif
+    }
+    std::vector<float> getChannelLevels() const {
+#ifdef _WIN32
+        return channel_levels;
+#else
+        return {};
+#endif
+    }
 
 signals:
     void LevelUpdated(float level);
