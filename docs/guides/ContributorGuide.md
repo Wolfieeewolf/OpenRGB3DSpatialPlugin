@@ -32,6 +32,12 @@ This project follows the OpenRGB community standards. Be respectful, constructiv
    git checkout -b feature/your-feature-name
    ```
 
+4. **Run the lint checks**
+   ```bash
+   python scripts/lint.py --fail-on-auto
+   ```
+   (omit the flag to receive warnings instead of failures for existing `auto` usage.)
+
 ## Reference Documentation
 
 Always consult the upstream OpenRGB resources when adding features or SDK touch points:
