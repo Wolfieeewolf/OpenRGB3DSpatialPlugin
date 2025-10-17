@@ -41,12 +41,12 @@ A concise walkthrough lives in `docs/guides/QuickStart.md`. The grid SDK interfa
   - `https://gitlab.com/CalcProgrammer1/OpenRGB/-/blob/master/OpenRGBSDK.md` (network SDK protocol)
 
 ## Documentation
-- `docs/guides/QuickStart.md` – user walkthrough
-- `docs/guides/GridSDK.md` – spatial SDK reference
-- `docs/guides/ContributorGuide.md` – development workflow
+- `docs/guides/QuickStart.md`  user walkthrough
+- `docs/guides/GridSDK.md`  spatial SDK reference
+- `docs/guides/ContributorGuide.md`  development workflow
 
 ## License
-GPL-2.0-only – same as OpenRGB.
+GPL-2.0-only  same as OpenRGB.
 
 ## Support
 - Report issues: <https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues>
