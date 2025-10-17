@@ -34,6 +34,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QProgressBar>
+#include <string>
 #include <memory>
 #include <atomic>
 
@@ -66,8 +67,30 @@ public:
     explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
-public slots:
-    void UpdateDeviceList();
+    // Minimal getters for SDK surface
+    float SDK_GetGridScaleMM() const { return grid_scale_mm; }
+    void  SDK_GetRoomDimensions(float& w, float& d, float& h, bool& use_manual);
+    size_t SDK_GetControllerCount() const { return controller_transforms.size(); }
+    bool  SDK_GetControllerName(size_t idx, std::string& out) const;
+    bool  SDK_IsControllerVirtual(size_t idx) const;
+    int   SDK_GetControllerGranularity(size_t idx) const;
+    int   SDK_GetControllerItemIndex(size_t idx) const;
+    size_t SDK_GetLEDCount(size_t ctrl_idx) const;
+    bool  SDK_GetLEDWorldPosition(size_t ctrl_idx, size_t led_idx, float& x, float& y, float& z) const;
+    // Bulk + order helpers
+    bool  SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_interleaved, size_t max_triplets, size_t& out_count) const;
+    size_t SDK_GetTotalLEDCount() const;
+    bool  SDK_GetAllLEDWorldPositions(float* xyz_interleaved, size_t max_triplets, size_t& out_count) const;
+    bool  SDK_GetAllLEDWorldPositionsWithOffsets(float* xyz_interleaved, size_t max_triplets, size_t& out_triplets, size_t* ctrl_offsets, size_t offsets_capacity, size_t& out_controllers) const;
+    bool  SDK_RegisterGridLayoutCallback(void (*cb)(void*), void* user);
+    bool  SDK_UnregisterGridLayoutCallback(void (*cb)(void*), void* user);
+    bool  SDK_SetControllerColors(size_t ctrl_idx, const unsigned int* bgr_colors, size_t count);
+    bool  SDK_SetSingleLEDColor(size_t ctrl_idx, size_t led_idx, unsigned int bgr_color);
+    bool  SDK_SetGridOrderColors(const unsigned int* bgr_colors_by_grid, size_t count);
+    bool  SDK_SetGridOrderColorsWithOrder(int order, const unsigned int* bgr_colors_by_grid, size_t count);
+
+signals:
+    void GridLayoutChanged();
 
 private slots:
     void on_effect_type_changed(int index);
@@ -132,6 +155,9 @@ private slots:
     void on_save_stack_preset_clicked();
     void on_load_stack_preset_clicked();
     void on_delete_stack_preset_clicked();
+
+    // Device list update (called via QMetaObject::invokeMethod)
+    void UpdateDeviceList();
 
 private:
     void SetupUI();
@@ -344,6 +370,8 @@ private:
     \*---------------------------------------------------------*/
     EffectWorkerThread3D* worker_thread;
     void ApplyColorsFromWorker();
+    Vector3D ComputeWorldPositionForSDK(const ControllerTransform* transform, size_t led_idx) const;
+    void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
     /*---------------------------------------------------------*\
     | Audio Tab Controls                                      |
@@ -355,6 +383,7 @@ private:
     QProgressBar*   audio_level_bar = nullptr;
     QPushButton*    audio_start_button = nullptr;
     QPushButton*    audio_stop_button = nullptr;
+    QLabel*         audio_gain_value_label = nullptr;     // shows gain as e.g. 1.0x
 
     // Bands (crossovers removed from UI)
     QComboBox*      audio_bands_combo = nullptr;   // 8/16/32
@@ -427,8 +456,13 @@ private:
     QSlider*        audio_smooth_slider = nullptr;
     QSlider*        audio_falloff_slider = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
+    QLabel*         audio_smooth_value_label = nullptr;   // shows smoothing as percent
+    QLabel*         audio_falloff_value_label = nullptr;  // shows falloff mapped (e.g., 1.00x)
     std::string GetAudioCustomEffectsDir();
     std::string GetAudioCustomEffectPath(const std::string& name);
+
+    // SDK callback listeners
+    std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
 };
 
 /*---------------------------------------------------------*\
@@ -453,6 +487,7 @@ public:
     bool GetColors(std::vector<RGBColor>& out_colors, std::vector<LEDPosition3D*>& out_leds);
 
 signals:
+    void GridLayoutChanged();
     void ColorsReady();
 
 protected:
@@ -484,3 +519,16 @@ private:
 };
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+

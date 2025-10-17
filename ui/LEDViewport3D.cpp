@@ -70,9 +70,9 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , grid_y(10)
     , grid_z(10)
     , grid_snap_enabled(false)
-    , room_width(3668.0f)          // Default: ~12 feet
-    , room_depth(2423.0f)          // Default: ~8 feet
-    , room_height(2723.0f)         // Default: ~9 feet
+    , room_width(1000.0f)          // Default: 1000 mm
+    , room_depth(1000.0f)          // Default: 1000 mm
+    , room_height(1000.0f)         // Default: 1000 mm
     , use_manual_room_dimensions(false)
     , reference_points(nullptr)
     , selected_ref_point_idx(-1)

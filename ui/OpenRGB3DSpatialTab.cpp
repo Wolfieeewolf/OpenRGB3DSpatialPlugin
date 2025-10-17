@@ -35,15 +35,53 @@
 #include <sys/types.h>
 #endif
 #include <QFileInfo>
+#include <QCoreApplication>
+#include <QVariant>
 #include <QInputDialog>
 #include <set>
 #include <QFileDialog>
+#include <cstring>
 #include <filesystem>
 #include <cmath>
 #include "SettingsManager.h"
 #include <nlohmann/json.hpp>
 #include "Audio/AudioInputManager.h"
 #include "Zone3D.h"
+#include "sdk/OpenRGB3DSpatialSDK.h"
+
+// SDK wrappers: expose data to other plugins without exposing internals
+static OpenRGB3DSpatialTab* g_spatial_tab_sdk = nullptr;
+static float SDK_Wrap_GetGridScaleMM() { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetGridScaleMM() : 10.0f; }
+static void  SDK_Wrap_GetRoomDimensions(float* w, float* d, float* h, bool* use_manual)
+{
+    if(!g_spatial_tab_sdk) { if(w) *w=0; if(d) *d=0; if(h) *h=0; if(use_manual) *use_manual=false; return; }
+    float ww, dd, hh; bool um;
+    g_spatial_tab_sdk->SDK_GetRoomDimensions(ww, dd, hh, um);
+    if(w) *w=ww; if(d) *d=dd; if(h) *h=hh; if(use_manual) *use_manual=um;
+}
+static size_t SDK_Wrap_GetControllerCount() { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetControllerCount() : 0; }
+static bool   SDK_Wrap_GetControllerName(size_t idx, char* buf, size_t buf_size)
+{
+    if(!g_spatial_tab_sdk || !buf || buf_size==0) return false;
+    std::string s; if(!g_spatial_tab_sdk->SDK_GetControllerName(idx, s)) return false;
+    size_t n = std::min(buf_size-1, s.size()); memcpy(buf, s.data(), n); buf[n]='\0'; return true;
+}
+static bool   SDK_Wrap_IsControllerVirtual(size_t idx) { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_IsControllerVirtual(idx) : false; }
+static int    SDK_Wrap_GetControllerGranularity(size_t idx) { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetControllerGranularity(idx) : 0; }
+static int    SDK_Wrap_GetControllerItemIndex(size_t idx) { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetControllerItemIndex(idx) : 0; }
+static size_t SDK_Wrap_GetLEDCount(size_t c) { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetLEDCount(c) : 0; }
+static bool   SDK_Wrap_GetLEDWorldPosition(size_t c, size_t i, float* x, float* y, float* z)
+{
+    if(!g_spatial_tab_sdk) return false; float xx,yy,zz; bool ok = g_spatial_tab_sdk->SDK_GetLEDWorldPosition(c,i,xx,yy,zz);
+    if(!ok) return false; if(x) *x=xx; if(y) *y=yy; if(z) *z=zz; return true;
+}
+static bool   SDK_Wrap_GetLEDWorldPositions(size_t c, float* xyz, size_t max_triplets, size_t* out_count)
+{
+    if(!g_spatial_tab_sdk || !xyz) { if(out_count) *out_count = 0; return false; }
+    size_t out = 0; bool ok = g_spatial_tab_sdk->SDK_GetLEDWorldPositions(c, xyz, max_triplets, out);
+    if(out_count) *out_count = out; return ok;
+}
+
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -86,9 +124,9 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     room_depth_spin = nullptr;
     room_height_spin = nullptr;
     use_manual_room_size_checkbox = nullptr;
-    manual_room_width = 3668.0f;   // Default: ~12 feet (user's room)
-    manual_room_depth = 2423.0f;   // Default: ~8 feet
-    manual_room_height = 2723.0f;  // Default: ~9 feet
+    manual_room_width = 1000.0f;   // Default: 1000 mm
+    manual_room_depth = 1000.0f;   // Default: 1000 mm
+    manual_room_height = 1000.0f;  // Default: 1000 mm
     use_manual_room_size = false;  // Start with auto-detect
 
     led_spacing_x_spin = nullptr;
@@ -144,6 +182,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stack_presets_list = nullptr;
     next_effect_instance_id = 1;
 
+    worker_thread = nullptr;
+
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
@@ -159,18 +199,97 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
     auto_load_timer->start(2000);
 
-
     effect_timer = new QTimer(this);
+    effect_timer->setTimerType(Qt::PreciseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
-    effect_running = false;
-    effect_time = 0.0f;
 
     worker_thread = new EffectWorkerThread3D(this);
     connect(worker_thread, &EffectWorkerThread3D::ColorsReady, this, &OpenRGB3DSpatialTab::ApplyColorsFromWorker);
+
+    // Connect GridLayoutChanged signal to invoke SDK callbacks
+    connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, [this]() {
+        for(const auto& cb_pair : grid_layout_callbacks)
+        {
+            if(cb_pair.first) cb_pair.first(cb_pair.second);
+        }
+    });
+
+    // Publish SDK surface for other plugins via Qt property
+    {
+        static ORGB3DGridAPI api; // static lifetime for stable address
+        api.api_version = 1;
+        g_spatial_tab_sdk = this;
+        api.GetGridScaleMM = &SDK_Wrap_GetGridScaleMM;
+        api.GetRoomDimensions = &SDK_Wrap_GetRoomDimensions;
+        api.GetControllerCount = &SDK_Wrap_GetControllerCount;
+        api.GetControllerName = &SDK_Wrap_GetControllerName;
+        api.IsControllerVirtual = &SDK_Wrap_IsControllerVirtual;
+        api.GetControllerGranularity = &SDK_Wrap_GetControllerGranularity;
+        api.GetControllerItemIndex = &SDK_Wrap_GetControllerItemIndex;
+        api.GetLEDCount = &SDK_Wrap_GetLEDCount;
+        api.GetLEDWorldPosition = &SDK_Wrap_GetLEDWorldPosition;
+        api.GetLEDWorldPositions = &SDK_Wrap_GetLEDWorldPositions;
+        api.GetTotalLEDCount = []() -> size_t { return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_GetTotalLEDCount() : 0; };
+        api.GetAllLEDWorldPositions = [](float* xyz, size_t max_triplets, size_t* out_count) -> bool {
+            if(!g_spatial_tab_sdk) { if(out_count) *out_count = 0; return false; }
+            size_t out = 0; bool ok = g_spatial_tab_sdk->SDK_GetAllLEDWorldPositions(xyz, max_triplets, out);
+            if(out_count) *out_count = out; return ok;
+        };
+        api.GetAllLEDWorldPositionsWithOffsets = [](float* xyz, size_t max_triplets, size_t* out_triplets, size_t* offsets, size_t offsets_cap, size_t* out_ctrls) -> bool {
+            if(!g_spatial_tab_sdk) { if(out_triplets) *out_triplets = 0; if(out_ctrls) *out_ctrls = 0; return false; }
+            size_t trips = 0, ctrls = 0;
+            bool ok = g_spatial_tab_sdk->SDK_GetAllLEDWorldPositionsWithOffsets(xyz, max_triplets, trips, offsets, offsets_cap, ctrls);
+            if(out_triplets) *out_triplets = trips;
+            if(out_ctrls) *out_ctrls = ctrls;
+            return ok;
+        };
+        api.RegisterGridLayoutCallback = [](void (*cb)(void*), void* user) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_RegisterGridLayoutCallback(cb, user) : false;
+        };
+        api.UnregisterGridLayoutCallback = [](void (*cb)(void*), void* user) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_UnregisterGridLayoutCallback(cb, user) : false;
+        };
+        api.SetControllerColors = [](size_t ctrl_idx, const unsigned int* bgr, size_t count) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_SetControllerColors(ctrl_idx, bgr, count) : false;
+        };
+        api.SetSingleLEDColor = [](size_t ctrl_idx, size_t led_idx, unsigned int bgr) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_SetSingleLEDColor(ctrl_idx, led_idx, bgr) : false;
+        };
+        api.SetGridOrderColors = [](const unsigned int* bgr, size_t count) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_SetGridOrderColors(bgr, count) : false;
+        };
+        api.SetGridOrderColorsWithOrder = [](int order, const unsigned int* bgr, size_t count) -> bool {
+            return g_spatial_tab_sdk ? g_spatial_tab_sdk->SDK_SetGridOrderColorsWithOrder(order, bgr, count) : false;
+        };
+        qApp->setProperty("OpenRGB3DSpatialGridAPI", QVariant::fromValue<qulonglong>((qulonglong)(uintptr_t)(&api)));
+    }
 }
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
+    // Clear published SDK pointer
+    qApp->setProperty("OpenRGB3DSpatialGridAPI", QVariant());
+    g_spatial_tab_sdk = nullptr;
+
+    // Persist last camera to settings before teardown
+    if(viewport)
+    {
+        float dist, yaw, pitch, tx, ty, tz;
+        viewport->GetCamera(dist, yaw, pitch, tx, ty, tz);
+        try
+        {
+            nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+            settings["Camera"]["Distance"] = dist;
+            settings["Camera"]["Yaw"] = yaw;
+            settings["Camera"]["Pitch"] = pitch;
+            settings["Camera"]["TargetX"] = tx;
+            settings["Camera"]["TargetY"] = ty;
+            settings["Camera"]["TargetZ"] = tz;
+            resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
+        }
+        catch(const std::exception&){ /* ignore settings errors */ }
+    }
+
     if(worker_thread)
     {
         worker_thread->StopEffect();
@@ -206,7 +325,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_scroll->setWidgetResizable(true);
     left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     left_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    left_scroll->setMinimumWidth(300);
+    // Make side panel more flexible in narrow windows and cap width when maximized
+    left_scroll->setMinimumWidth(260);
+    left_scroll->setMaximumWidth(420);
     left_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     QWidget* left_content = new QWidget();
@@ -499,6 +620,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* middle_panel = new QVBoxLayout();
 
     QLabel* controls_label = new QLabel("Camera: Right mouse = Rotate | Left drag = Pan | Scroll = Zoom | Left click = Select/Move objects");
+    controls_label->setWordWrap(true);
+    controls_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     middle_panel->addWidget(controls_label);
 
     viewport = new LEDViewport3D();
@@ -509,6 +632,24 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Ensure viewport uses the current grid scale for mm->grid conversion
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+
+    // Restore last camera from settings (if available)
+    try
+    {
+        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        if(settings.contains("Camera"))
+        {
+            const auto& cam = settings["Camera"];
+            float dist = cam.value("Distance", 20.0f);
+            float yaw  = cam.value("Yaw", 45.0f);
+            float pitch= cam.value("Pitch", 30.0f);
+            float tx   = cam.value("TargetX", 0.0f);
+            float ty   = cam.value("TargetY", 0.0f);
+            float tz   = cam.value("TargetZ", 0.0f);
+            viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
+        }
+    }
+    catch(const std::exception&){ /* ignore settings errors */ }
 
     connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
     connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
@@ -668,6 +809,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        emit GridLayoutChanged();
     });
 
     connect(room_width_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
@@ -678,6 +820,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        emit GridLayoutChanged();
     });
 
     connect(room_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
@@ -688,6 +831,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        emit GridLayoutChanged();
     });
 
     connect(room_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
@@ -698,6 +842,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        emit GridLayoutChanged();
     });
 
     /*---------------------------------------------------------*\
@@ -722,6 +867,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.x = pos_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -751,6 +897,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.x = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -782,6 +929,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.y = pos_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -811,6 +959,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.y = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -842,6 +991,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.z = pos_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -871,6 +1021,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.position.z = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -902,6 +1053,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.x = rot_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -931,6 +1083,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.x = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -962,6 +1115,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.y = rot_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -991,6 +1145,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.y = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -1022,6 +1177,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.z = rot_value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -1051,6 +1207,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             controller_transforms[ctrl_row]->transform.rotation.z = value;
             viewport->NotifyControllerTransformChanged();
+            emit GridLayoutChanged();
             return;
         }
 
@@ -1205,7 +1362,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     right_scroll->setWidgetResizable(true);
     right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    right_scroll->setMinimumWidth(300);
+    // Symmetric sizing with left panel; flexible when small, capped when large
+    right_scroll->setMinimumWidth(260);
+    right_scroll->setMaximumWidth(420);
     right_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     QWidget* right_content = new QWidget();
@@ -1240,6 +1399,8 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     audio_level_bar = new QProgressBar();
     audio_level_bar->setRange(0, 1000);
     audio_level_bar->setValue(0);
+    audio_level_bar->setTextVisible(false);
+    audio_level_bar->setFixedHeight(14);
     layout->addWidget(audio_level_bar);
 
     connect(audio_start_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_start_clicked);
@@ -1254,6 +1415,8 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     // Device selection
     layout->addWidget(new QLabel("Input Device:"));
     audio_device_combo = new QComboBox();
+    audio_device_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    audio_device_combo->setMinimumWidth(200);
     QStringList devs = AudioInputManager::instance()->listInputDevices();
     if(devs.isEmpty())
     {
@@ -1274,10 +1437,16 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     QHBoxLayout* gain_layout = new QHBoxLayout();
     gain_layout->addWidget(new QLabel("Gain:"));
     audio_gain_slider = new QSlider(Qt::Horizontal);
+    audio_gain_slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_gain_slider->setRange(1, 100); // maps to 0.1..10.0
     audio_gain_slider->setValue(10);     // 1.0x
     connect(audio_gain_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_gain_changed);
     gain_layout->addWidget(audio_gain_slider);
+    // Numeric readout (e.g., 1.0x)
+    audio_gain_value_label = new QLabel("1.0x");
+    audio_gain_value_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    audio_gain_value_label->setMinimumWidth(48);
+    gain_layout->addWidget(audio_gain_value_label);
     layout->addLayout(gain_layout);
 
     // Input smoothing removed; per-effect smoothing is configured below
@@ -1286,6 +1455,7 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     QHBoxLayout* bands_layout = new QHBoxLayout();
     bands_layout->addWidget(new QLabel("Bands:"));
     audio_bands_combo = new QComboBox();
+    audio_bands_combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     audio_bands_combo->addItems({"8", "16", "32"});
     audio_bands_combo->setCurrentText("16");
     connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_bands_changed);
@@ -1300,6 +1470,7 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     QHBoxLayout* fx_row1 = new QHBoxLayout();
     fx_row1->addWidget(new QLabel("Effect:"));
     audio_effect_combo = new QComboBox();
+    audio_effect_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_effect_combo->addItem("Audio Level 3D");
     audio_effect_combo->addItem("Spectrum Bars 3D");
     audio_effect_combo->addItem("Beat Pulse 3D");
@@ -1310,6 +1481,7 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     QHBoxLayout* fx_row2 = new QHBoxLayout();
     fx_row2->addWidget(new QLabel("Zone:"));
     audio_effect_zone_combo = new QComboBox();
+    audio_effect_zone_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     // Build All Controllers, zones, then controllers with encoded data
     audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
     if(zone_manager)
@@ -1334,7 +1506,9 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
 
     // Origin selector (Room Center + reference points)
     fx_row2->addWidget(new QLabel("Origin:"));
+    fx_row2->addWidget(new QLabel("Origin:"));
     audio_effect_origin_combo = new QComboBox();
+    audio_effect_origin_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_effect_origin_combo->addItem("Room Center", QVariant(-1));
     connect(audio_effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_origin_changed);
     fx_row2->addWidget(audio_effect_origin_combo);
@@ -1344,6 +1518,7 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     // Per-effect Hz mapping
     // Dynamic effect controls (consistent with main Effects tab)
     audio_effect_controls_widget = new QWidget();
+    audio_effect_controls_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::MinimumExpanding);
     audio_effect_controls_layout = new QVBoxLayout(audio_effect_controls_widget);
     audio_effect_controls_layout->setContentsMargins(0,0,0,0);
     audio_effect_controls_widget->setLayout(audio_effect_controls_layout);
@@ -1571,6 +1746,10 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
 {
     float g = std::max(0.1f, std::min(10.0f, value / 10.0f));
     AudioInputManager::instance()->setGain(g);
+    if(audio_gain_value_label)
+    {
+        audio_gain_value_label->setText(QString::number(g, 'f', (g < 10.0f ? 1 : 0)) + "x");
+    }
     nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
     settings["AudioGain"] = value;
     resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
@@ -2384,11 +2563,11 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
         {
             // Fallback if no LEDs found (convert default mm to grid units)
             grid_min_x = 0.0f;
-            grid_max_x = 3668.0f / grid_scale_mm;
+            grid_max_x = 1000.0f / grid_scale_mm;
             grid_min_y = 0.0f;
-            grid_max_y = 2423.0f / grid_scale_mm;
+            grid_max_y = 1000.0f / grid_scale_mm;
             grid_min_z = 0.0f;
-            grid_max_z = 2723.0f / grid_scale_mm;
+            grid_max_z = 1000.0f / grid_scale_mm;
         }
 
         
@@ -3443,6 +3622,21 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["user_position"]["visible"] = user_position.visible;
 
     /*---------------------------------------------------------*\
+    | Camera                                                   |
+    \*---------------------------------------------------------*/
+    if(viewport)
+    {
+        float dist, yaw, pitch, tx, ty, tz;
+        viewport->GetCamera(dist, yaw, pitch, tx, ty, tz);
+        layout_json["camera"]["distance"] = dist;
+        layout_json["camera"]["yaw"] = yaw;
+        layout_json["camera"]["pitch"] = pitch;
+        layout_json["camera"]["target"]["x"] = tx;
+        layout_json["camera"]["target"]["y"] = ty;
+        layout_json["camera"]["target"]["z"] = tz;
+    }
+
+    /*---------------------------------------------------------*\
     | Controllers                                              |
     \*---------------------------------------------------------*/
     layout_json["controllers"] = nlohmann::json::array();
@@ -3675,6 +3869,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        emit GridLayoutChanged();
     }
 
     /*---------------------------------------------------------*\
@@ -3689,6 +3884,26 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
         // User position UI controls have been removed - values stored for legacy compatibility
         if(viewport) viewport->SetUserPosition(user_position);
+    }
+
+    /*---------------------------------------------------------*\
+    | Load Camera                                              |
+    \*---------------------------------------------------------*/
+    if(layout_json.contains("camera") && viewport)
+    {
+        const auto& cam = layout_json["camera"];
+        float dist = cam.contains("distance") ? cam["distance"].get<float>() : 20.0f;
+        float yaw  = cam.contains("yaw") ? cam["yaw"].get<float>() : 45.0f;
+        float pitch= cam.contains("pitch") ? cam["pitch"].get<float>() : 30.0f;
+        float tx = 0.0f, ty = 0.0f, tz = 0.0f;
+        if(cam.contains("target"))
+        {
+            const auto& tgt = cam["target"];
+            if(tgt.contains("x")) tx = tgt["x"].get<float>();
+            if(tgt.contains("y")) ty = tgt["y"].get<float>();
+            if(tgt.contains("z")) tz = tgt["z"].get<float>();
+        }
+        viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
     }
 
     /*---------------------------------------------------------*\
@@ -5210,6 +5425,8 @@ void EffectWorkerThread3D::run()
 
 void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
 {
+    if(!worker_thread) return;
+
     std::vector<RGBColor> colors;
     std::vector<LEDPosition3D*> leds;
 
@@ -5252,6 +5469,72 @@ void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
     {
         viewport->UpdateColors();
     }
+}
+
+Vector3D OpenRGB3DSpatialTab::ComputeWorldPositionForSDK(const ControllerTransform* transform, size_t led_idx) const
+{
+    Vector3D zero{0.0f, 0.0f, 0.0f};
+    if(!transform || led_idx >= transform->led_positions.size())
+    {
+        return zero;
+    }
+
+    const LEDPosition3D& led = transform->led_positions[led_idx];
+    Vector3D world = transform->world_positions_dirty ?
+        ControllerLayout3D::CalculateWorldPosition(led.local_position, transform->transform) :
+        led.world_position;
+
+    world.x *= grid_scale_mm;
+    world.y *= grid_scale_mm;
+    world.z *= grid_scale_mm;
+    return world;
+}
+
+void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const
+{
+    bool has_leds = false;
+    float min_x = 0.0f, max_x = 0.0f;
+    float min_y = 0.0f, max_y = 0.0f;
+    float min_z = 0.0f, max_z = 0.0f;
+
+    for(const auto& transform_ptr : controller_transforms)
+    {
+        const ControllerTransform* transform = transform_ptr.get();
+        if(!transform) continue;
+
+        for(size_t i = 0; i < transform->led_positions.size(); ++i)
+        {
+            Vector3D world = ComputeWorldPositionForSDK(transform, i);
+            if(!has_leds)
+            {
+                min_x = max_x = world.x;
+                min_y = max_y = world.y;
+                min_z = max_z = world.z;
+                has_leds = true;
+            }
+            else
+            {
+                if(world.x < min_x) min_x = world.x;
+                if(world.x > max_x) max_x = world.x;
+                if(world.y < min_y) min_y = world.y;
+                if(world.y > max_y) max_y = world.y;
+                if(world.z < min_z) min_z = world.z;
+                if(world.z > max_z) max_z = world.z;
+            }
+        }
+    }
+
+    if(!has_leds)
+    {
+        width_mm = manual_room_width;
+        depth_mm = manual_room_depth;
+        height_mm = manual_room_height;
+        return;
+    }
+
+    width_mm  = std::max(0.0f, max_x - min_x);
+    depth_mm  = std::max(0.0f, max_y - min_y);
+    height_mm = std::max(0.0f, max_z - min_z);
 }
 
 /*---------------------------------------------------------*
@@ -5483,6 +5766,9 @@ void OpenRGB3DSpatialTab::SetupStandardAudioControls(QVBoxLayout* parent_layout)
     audio_smooth_slider = new QSlider(Qt::Horizontal, audio_std_group);
     audio_smooth_slider->setRange(0, 99); audio_smooth_slider->setValue(60);
     g->addWidget(audio_smooth_slider, 1, 1, 1, 3);
+    audio_smooth_value_label = new QLabel("60%");
+    audio_smooth_value_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    g->addWidget(audio_smooth_value_label, 1, 4);
 
     // Falloff (gamma shaping)
     g->addWidget(new QLabel("Falloff:"), 2, 0);
@@ -5490,6 +5776,9 @@ void OpenRGB3DSpatialTab::SetupStandardAudioControls(QVBoxLayout* parent_layout)
     audio_falloff_slider->setRange(20, 500); // maps to 0.2 .. 5.0
     audio_falloff_slider->setValue(100);     // 1.0
     g->addWidget(audio_falloff_slider, 2, 1, 1, 3);
+    audio_falloff_value_label = new QLabel("1.00x");
+    audio_falloff_value_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    g->addWidget(audio_falloff_value_label, 2, 4);
 
     // FFT Size (advanced)
     g->addWidget(new QLabel("FFT Size:"), 3, 0);
@@ -5502,6 +5791,7 @@ void OpenRGB3DSpatialTab::SetupStandardAudioControls(QVBoxLayout* parent_layout)
         if(idx >= 0) audio_fft_combo->setCurrentIndex(idx);
     }
     g->addWidget(audio_fft_combo, 3, 1);
+    g->setColumnStretch(1, 1);
     g->setColumnStretch(3, 1);
 
     parent_layout->addWidget(audio_std_group);
@@ -5571,6 +5861,10 @@ void OpenRGB3DSpatialTab::on_audio_std_smooth_changed(int)
     float smooth = audio_smooth_slider ? (audio_smooth_slider->value() / 100.0f) : 0.6f;
     if(smooth < 0.0f) smooth = 0.0f; if(smooth > 0.99f) smooth = 0.99f;
     s["smoothing"] = smooth;
+    if(audio_smooth_value_label && audio_smooth_slider)
+    {
+        audio_smooth_value_label->setText(QString::number(audio_smooth_slider->value()) + "%");
+    }
     current_audio_effect_ui->LoadSettings(s);
     if(running_audio_effect) running_audio_effect->LoadSettings(s);
     if(viewport) viewport->UpdateColors();
@@ -5587,7 +5881,12 @@ void OpenRGB3DSpatialTab::on_audio_std_falloff_changed(int)
 {
     if(!current_audio_effect_ui) return;
     nlohmann::json s = current_audio_effect_ui->SaveSettings();
-    s["falloff"] = mapFalloff(audio_falloff_slider ? audio_falloff_slider->value() : 100);
+    float fo = mapFalloff(audio_falloff_slider ? audio_falloff_slider->value() : 100);
+    s["falloff"] = fo;
+    if(audio_falloff_value_label)
+    {
+        audio_falloff_value_label->setText(QString::number(fo, 'f', 2) + "x");
+    }
     current_audio_effect_ui->LoadSettings(s);
     if(running_audio_effect) running_audio_effect->LoadSettings(s);
     if(viewport) viewport->UpdateColors();
@@ -5626,4 +5925,260 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
         resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
         resource_manager->GetSettingsManager()->SaveSettings();
     }
+}
+
+void OpenRGB3DSpatialTab::SDK_GetRoomDimensions(float& w, float& d, float& h, bool& use_manual)
+{
+    use_manual = use_manual_room_size;
+    if(use_manual_room_size)
+    {
+        w = manual_room_width;
+        d = manual_room_depth;
+        h = manual_room_height;
+        return;
+    }
+
+    ComputeAutoRoomExtents(w, d, h);
+}
+
+// --- SDK getters ---
+bool OpenRGB3DSpatialTab::SDK_GetControllerName(size_t idx, std::string& out) const
+{
+    if(idx >= controller_transforms.size()) return false;
+    ControllerTransform* t = controller_transforms[idx].get();
+    if(t && t->controller) out = t->controller->name;
+    else if(t && t->virtual_controller) out = std::string("[Virtual] ") + t->virtual_controller->GetName();
+    else out = std::string("Controller ") + std::to_string(idx);
+    return true;
+}
+
+bool OpenRGB3DSpatialTab::SDK_IsControllerVirtual(size_t idx) const
+{
+    if(idx >= controller_transforms.size()) return false;
+    ControllerTransform* t = controller_transforms[idx].get();
+    return (t && !t->controller && t->virtual_controller);
+}
+
+int OpenRGB3DSpatialTab::SDK_GetControllerGranularity(size_t idx) const
+{
+    if(idx >= controller_transforms.size()) return 0;
+    ControllerTransform* t = controller_transforms[idx].get();
+    return t ? t->granularity : 0;
+}
+
+int OpenRGB3DSpatialTab::SDK_GetControllerItemIndex(size_t idx) const
+{
+    if(idx >= controller_transforms.size()) return 0;
+    ControllerTransform* t = controller_transforms[idx].get();
+    return t ? t->item_idx : 0;
+}
+
+size_t OpenRGB3DSpatialTab::SDK_GetLEDCount(size_t ctrl_idx) const
+{
+    if(ctrl_idx >= controller_transforms.size()) return 0;
+    ControllerTransform* t = controller_transforms[ctrl_idx].get();
+    return t ? t->led_positions.size() : 0;
+}
+
+bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPosition(size_t ctrl_idx, size_t led_idx, float& x, float& y, float& z) const
+{
+    if(ctrl_idx >= controller_transforms.size()) return false;
+    ControllerTransform* t = controller_transforms[ctrl_idx].get();
+    if(!t || led_idx >= t->led_positions.size()) return false;
+    Vector3D world = ComputeWorldPositionForSDK(t, led_idx);
+    x = world.x;
+    y = world.y;
+    z = world.z;
+    return true;
+}
+
+
+
+
+bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_interleaved, size_t max_triplets, size_t& out_count) const
+{
+    out_count = 0;
+    if(ctrl_idx >= controller_transforms.size() || !xyz_interleaved || max_triplets == 0) return false;
+    ControllerTransform* t = controller_transforms[ctrl_idx].get();
+    if(!t) return false;
+    size_t n = std::min(max_triplets, t->led_positions.size());
+    for(size_t i = 0; i < n; ++i)
+    {
+        Vector3D world = ComputeWorldPositionForSDK(t, i);
+        xyz_interleaved[i*3+0] = world.x;
+        xyz_interleaved[i*3+1] = world.y;
+        xyz_interleaved[i*3+2] = world.z;
+    }
+    out_count = n;
+    return true;
+}
+
+
+
+
+
+
+size_t OpenRGB3DSpatialTab::SDK_GetTotalLEDCount() const
+{
+    size_t total = 0;
+    for(const auto& up : controller_transforms)
+    {
+        if(up) total += up->led_positions.size();
+    }
+    return total;
+}
+
+bool OpenRGB3DSpatialTab::SDK_GetAllLEDWorldPositions(float* xyz_interleaved, size_t max_triplets, size_t& out_count) const
+{
+    out_count = 0;
+    if(!xyz_interleaved || max_triplets == 0) return false;
+    size_t written = 0;
+    for(const auto& up : controller_transforms)
+    {
+        if(!up) continue;
+        for(size_t i = 0; i < up->led_positions.size(); ++i)
+        {
+            if(written >= max_triplets) { out_count = written; return true; }
+            Vector3D world = ComputeWorldPositionForSDK(up.get(), i);
+            xyz_interleaved[written*3+0] = world.x;
+            xyz_interleaved[written*3+1] = world.y;
+            xyz_interleaved[written*3+2] = world.z;
+            ++written;
+        }
+    }
+    out_count = written;
+    return true;
+}
+
+bool OpenRGB3DSpatialTab::SDK_RegisterGridLayoutCallback(void (*cb)(void*), void* user)
+{
+    if(!cb) return false;
+    grid_layout_callbacks.emplace_back(cb, user);
+    return true;
+}
+
+bool OpenRGB3DSpatialTab::SDK_UnregisterGridLayoutCallback(void (*cb)(void*), void* user)
+{
+    for(auto it = grid_layout_callbacks.begin(); it != grid_layout_callbacks.end(); ++it)
+    {
+        if(it->first == cb && it->second == user) { grid_layout_callbacks.erase(it); return true; }
+    }
+    return false;
+}
+
+bool OpenRGB3DSpatialTab::SDK_SetControllerColors(size_t ctrl_idx, const unsigned int* bgr_colors, size_t count)
+{
+    if(ctrl_idx >= controller_transforms.size() || !bgr_colors || count == 0) return false;
+    ControllerTransform* t = controller_transforms[ctrl_idx].get();
+    if(!t || !t->controller) return false;
+    size_t n = std::min<size_t>(count, t->controller->colors.size());
+    for(size_t i=0;i<n;++i) t->controller->colors[i] = (RGBColor)bgr_colors[i];
+    t->controller->UpdateLEDs();
+    return true;
+}
+
+bool OpenRGB3DSpatialTab::SDK_SetSingleLEDColor(size_t ctrl_idx, size_t led_idx, unsigned int bgr_color)
+{
+    if(ctrl_idx >= controller_transforms.size()) return false;
+    ControllerTransform* t = controller_transforms[ctrl_idx].get();
+    if(!t || !t->controller) return false;
+    if(led_idx >= t->controller->colors.size()) return false;
+    t->controller->colors[led_idx] = (RGBColor)bgr_color;
+    t->controller->UpdateSingleLED((int)led_idx);
+    return true;
+}
+
+
+// Order enum
+static const int GRID_ORDER_CONTROLLER = 0;
+static const int GRID_ORDER_RASTER_XYZ = 1;
+
+static inline bool PosLessXYZ(const LEDPosition3D* a, const LEDPosition3D* b)
+{
+    if(a->world_position.z != b->world_position.z) return a->world_position.z < b->world_position.z;
+    if(a->world_position.y != b->world_position.y) return a->world_position.y < b->world_position.y;
+    if(a->world_position.x != b->world_position.x) return a->world_position.x < b->world_position.x;
+    if(a->controller != b->controller) return a->controller < b->controller;
+    return a->led_idx < b->led_idx;
+}
+
+bool OpenRGB3DSpatialTab::SDK_GetAllLEDWorldPositionsWithOffsets(float* xyz_interleaved, size_t max_triplets, size_t& out_triplets, size_t* ctrl_offsets, size_t offsets_capacity, size_t& out_controllers) const
+{
+    out_triplets = 0; out_controllers = 0;
+    if(!xyz_interleaved || max_triplets == 0 || !ctrl_offsets || offsets_capacity == 0) return false;
+    size_t written = 0;
+    size_t ctrl_count = controller_transforms.size();
+    if(offsets_capacity < ctrl_count + 1) return false;
+    ctrl_offsets[0] = 0; size_t oi = 1;
+    for(size_t c=0; c<ctrl_count; ++c)
+    {
+        ControllerTransform* t = controller_transforms[c].get(); if(!t) { ctrl_offsets[oi++] = written; continue; }
+        size_t n = std::min(max_triplets - written, t->led_positions.size());
+        for(size_t i=0; i<n; ++i)
+        {
+            Vector3D world = ComputeWorldPositionForSDK(t, i);
+            xyz_interleaved[written*3+0] = world.x;
+            xyz_interleaved[written*3+1] = world.y;
+            xyz_interleaved[written*3+2] = world.z;
+            ++written;
+            if(written >= max_triplets) { ++out_controllers; break; }
+        }
+        ctrl_offsets[oi++] = written;
+        ++out_controllers;
+        if(written >= max_triplets) break;
+    }
+    out_triplets = written;
+    return true;
+}
+
+bool OpenRGB3DSpatialTab::SDK_SetGridOrderColors(const unsigned int* bgr_colors_by_grid, size_t count)
+{
+    return SDK_SetGridOrderColorsWithOrder(GRID_ORDER_CONTROLLER, bgr_colors_by_grid, count);
+}
+
+bool OpenRGB3DSpatialTab::SDK_SetGridOrderColorsWithOrder(int order, const unsigned int* bgr, size_t count)
+{
+    if(!bgr || count == 0) return false;
+    // Build mapping
+    std::vector<std::pair<size_t,size_t>> map; // (ctrl_idx, led_idx)
+    if(order == GRID_ORDER_CONTROLLER)
+    {
+        for(size_t c=0;c<controller_transforms.size();++c)
+        {
+            ControllerTransform* t = controller_transforms[c].get(); if(!t || !t->controller) continue;
+            for(size_t i=0;i<t->controller->colors.size();++i) map.emplace_back(c,i);
+        }
+    }
+    else if(order == GRID_ORDER_RASTER_XYZ)
+    {
+        std::vector<const LEDPosition3D*> all;
+        for(size_t c=0;c<controller_transforms.size();++c)
+        {
+            ControllerTransform* t = controller_transforms[c].get(); if(!t || !t->controller) continue;
+            for(size_t i=0;i<t->led_positions.size();++i) all.push_back(&t->led_positions[i]);
+        }
+        std::stable_sort(all.begin(), all.end(), PosLessXYZ);
+        map.reserve(all.size());
+        for(auto* p : all)
+        {
+            // Find controller index by pointer match (linear scan acceptable for moderate sizes)
+            size_t cidx = 0; for(; cidx<controller_transforms.size(); ++cidx){ if(controller_transforms[cidx].get() && controller_transforms[cidx]->controller == p->controller) break; }
+            map.emplace_back(cidx, (size_t)p->led_idx);
+        }
+    }
+    if(map.empty()) return false;
+    size_t n = std::min(count, map.size());
+    // Apply colors
+    for(size_t k=0;k<n;++k)
+    {
+        size_t c = map[k].first; size_t i = map[k].second;
+        ControllerTransform* t = controller_transforms[c].get(); if(!t || !t->controller) continue;
+        if(i < t->controller->colors.size()) t->controller->colors[i] = (RGBColor)bgr[k];
+    }
+    // Update devices
+    for(size_t c=0;c<controller_transforms.size();++c)
+    {
+        ControllerTransform* t = controller_transforms[c].get(); if(t && t->controller) t->controller->UpdateLEDs();
+    }
+    return true;
 }

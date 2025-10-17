@@ -96,7 +96,6 @@ private slots:
     void on_flip_grid_horizontal();
     void on_flip_grid_vertical();
     void on_apply_preview_remap_clicked();
-    void on_apply_shape_remap_clicked();
 
 private:
     void SetupUI();
@@ -148,11 +147,7 @@ private:
     QPushButton*    flip_horizontal_button;
     QPushButton*    flip_vertical_button;
     QPushButton*    apply_preview_button;
-    // Shape remap controls
-    QComboBox*      shape_pattern_combo;   // e.g., Perimeter (ring)
-    QComboBox*      shape_start_combo;     // Top-Left, Top-Right, Bottom-Right, Bottom-Left
-    QComboBox*      shape_dir_combo;       // Clockwise, Counter-Clockwise
-    QPushButton*    apply_shape_button;
+    // (Removed) Shape remap controls
 
     QTimer*         color_refresh_timer;
 

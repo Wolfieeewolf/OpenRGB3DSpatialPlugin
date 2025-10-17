@@ -162,34 +162,7 @@ void CustomControllerDialog::SetupUI()
     layer_tabs->addTab(first_tab, "Layer 0");
     right_layout->addWidget(layer_tabs);
 
-    // Shape Remap tools
-    QGroupBox* shape_group = new QGroupBox("Remap Selected");
-    QGridLayout* shape_layout = new QGridLayout();
-    shape_layout->addWidget(new QLabel("Pattern:"), 0, 0);
-    shape_pattern_combo = new QComboBox();
-    shape_pattern_combo->addItem("Perimeter (Ring)");
-    shape_layout->addWidget(shape_pattern_combo, 0, 1);
-
-    shape_layout->addWidget(new QLabel("Start:"), 1, 0);
-    shape_start_combo = new QComboBox();
-    shape_start_combo->addItem("Top-Left");
-    shape_start_combo->addItem("Top-Right");
-    shape_start_combo->addItem("Bottom-Right");
-    shape_start_combo->addItem("Bottom-Left");
-    shape_layout->addWidget(shape_start_combo, 1, 1);
-
-    shape_layout->addWidget(new QLabel("Direction:"), 2, 0);
-    shape_dir_combo = new QComboBox();
-    shape_dir_combo->addItem("Clockwise");
-    shape_dir_combo->addItem("Counter-Clockwise");
-    shape_layout->addWidget(shape_dir_combo, 2, 1);
-
-    apply_shape_button = new QPushButton("Apply Shape Remap");
-    apply_shape_button->setToolTip("Remap selected LEDs to the chosen pattern across selected cells");
-    connect(apply_shape_button, &QPushButton::clicked, this, &CustomControllerDialog::on_apply_shape_remap_clicked);
-    shape_layout->addWidget(apply_shape_button, 3, 0, 1, 2);
-    shape_group->setLayout(shape_layout);
-    right_layout->addWidget(shape_group);
+    // (Removed) Shape Remap tools: previously provided "Remap Selected" controls
 
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
@@ -1687,90 +1660,7 @@ void CustomControllerDialog::on_apply_preview_remap_clicked()
     UpdateGridDisplay();
 }
 
-void CustomControllerDialog::on_apply_shape_remap_clicked()
-{
-    // Gather selected cells. If discontiguous, use bounding rect and fill perimeter.
-    QList<QTableWidgetItem*> selected = grid_table->selectedItems();
-    if(selected.isEmpty())
-    {
-        QMessageBox::information(this, "No Selection", "Select some cells to remap.");
-        return;
-    }
-
-    int min_row = INT_MAX, max_row = -1, min_col = INT_MAX, max_col = -1;
-    for(QTableWidgetItem* it : selected)
-    {
-        min_row = std::min(min_row, it->row());
-        max_row = std::max(max_row, it->row());
-        min_col = std::min(min_col, it->column());
-        max_col = std::max(max_col, it->column());
-    }
-
-    // Build target cells list as perimeter of bounding rectangle
-    std::vector<std::pair<int,int>> canonical;
-    for(int c = min_col; c <= max_col; ++c) canonical.emplace_back(min_row, c);
-    for(int r = min_row+1; r <= max_row-1; ++r) canonical.emplace_back(r, max_col);
-    if(max_row > min_row)
-        for(int c = max_col; c >= min_col; --c) canonical.emplace_back(max_row, c);
-    if(max_col > min_col)
-        for(int r = max_row-1; r >= min_row+1; --r) canonical.emplace_back(r, min_col);
-
-    int corner = shape_start_combo ? shape_start_combo->currentIndex() : 0; // 0 TL, 1 TR, 2 BR, 3 BL
-    bool clockwise = !shape_dir_combo || shape_dir_combo->currentIndex() == 0;
-
-    std::pair<int,int> desired_start = (corner==0) ? std::make_pair(min_row,min_col)
-                                  : (corner==1) ? std::make_pair(min_row,max_col)
-                                  : (corner==2) ? std::make_pair(max_row,max_col)
-                                                : std::make_pair(max_row,min_col);
-    // rotate canonical to start
-    std::vector<std::pair<int,int>> perimeter;
-    if(!canonical.empty())
-    {
-        int idx = 0; for(size_t i=0;i<canonical.size();++i){ if(canonical[i]==desired_start){ idx=(int)i; break; } }
-        for(size_t k=0;k<canonical.size();++k) perimeter.push_back(canonical[(idx+k)%canonical.size()]);
-        if(!clockwise) std::reverse(perimeter.begin(), perimeter.end());
-    }
-
-    // Gather sources from current layer inside bounds, sorted by device order
-    std::vector<GridLEDMapping> sources;
-    for(const GridLEDMapping& m : led_mappings)
-    {
-        if(m.z != current_layer) continue;
-        if(m.x >= min_col && m.x <= max_col && m.y >= min_row && m.y <= max_row)
-            sources.push_back(m);
-    }
-    if(sources.empty())
-    {
-        QMessageBox::information(this, "No LEDs", "No LEDs assigned in the selected area to remap.");
-        return;
-    }
-    std::sort(sources.begin(), sources.end(), [&](const GridLEDMapping& a, const GridLEDMapping& b){
-        if(a.controller != b.controller) return a.controller < b.controller;
-        if(a.zone_idx != b.zone_idx) return a.zone_idx < b.zone_idx;
-        return a.led_idx < b.led_idx;
-    });
-
-    // Erase all mappings in selection on current layer
-    for(auto it = led_mappings.begin(); it != led_mappings.end(); )
-    {
-        if(it->z==current_layer && it->x>=min_col && it->x<=max_col && it->y>=min_row && it->y<=max_row)
-            it = led_mappings.erase(it);
-        else
-            ++it;
-    }
-
-    int count = std::min((int)perimeter.size(), (int)sources.size());
-    for(int i=0;i<count;i++)
-    {
-        GridLEDMapping m = sources[i];
-        m.y = perimeter[i].first;
-        m.x = perimeter[i].second;
-        led_mappings.push_back(m);
-    }
-
-    if(transform_locked) preview_led_mappings = led_mappings;
-    UpdateGridDisplay();
-}
+// (Removed) on_apply_shape_remap_clicked implementation
 
 
 

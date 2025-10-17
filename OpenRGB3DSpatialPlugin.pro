@@ -137,6 +137,7 @@ HEADERS +=                                                                      
     Zone3D.h                                                                                    \
     ZoneManager3D.h                                                                             \
     QtCompat.h                                                                                  \
+    sdk/OpenRGB3DSpatialSDK.h                                                                   \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
@@ -171,6 +172,7 @@ SOURCES +=                                                                      
     VirtualReferencePoint3D.cpp                                                                 \
     Zone3D.cpp                                                                                  \
     ZoneManager3D.cpp                                                                           \
+    sdk/OpenRGB3DSpatialSDK.cpp                                                                 \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \

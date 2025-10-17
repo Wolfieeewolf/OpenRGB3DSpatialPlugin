@@ -56,6 +56,29 @@ public:
     void SetUserPosition(const UserPosition3D& position);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
 
+    // Camera persistence helpers
+    void SetCamera(float distance, float yaw, float pitch,
+                   float target_x, float target_y, float target_z)
+    {
+        camera_distance = distance;
+        camera_yaw = yaw;
+        camera_pitch = pitch;
+        camera_target_x = target_x;
+        camera_target_y = target_y;
+        camera_target_z = target_z;
+        update();
+    }
+    void GetCamera(float& distance, float& yaw, float& pitch,
+                   float& target_x, float& target_y, float& target_z) const
+    {
+        distance = camera_distance;
+        yaw = camera_yaw;
+        pitch = camera_pitch;
+        target_x = camera_target_x;
+        target_y = camera_target_y;
+        target_z = camera_target_z;
+    }
+
     void EnforceFloorConstraint(ControllerTransform* ctrl);
     void UpdateGizmoPosition();
     void NotifyControllerTransformChanged();

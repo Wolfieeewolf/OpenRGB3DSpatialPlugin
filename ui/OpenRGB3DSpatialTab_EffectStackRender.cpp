@@ -110,11 +110,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         {
             // Convert default mm to grid units using current scale
             grid_min_x = 0.0f;
-            grid_max_x = 3668.0f / grid_scale_mm;  // Default room width
+            grid_max_x = 1000.0f / grid_scale_mm;  // Default room width
             grid_min_y = 0.0f;
-            grid_max_y = 2423.0f / grid_scale_mm;  // Default room depth
+            grid_max_y = 1000.0f / grid_scale_mm;  // Default room depth
             grid_min_z = 0.0f;
-            grid_max_z = 2723.0f / grid_scale_mm;  // Default room height
+            grid_max_z = 1000.0f / grid_scale_mm;  // Default room height
         }
     }
 
