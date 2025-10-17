@@ -4,7 +4,7 @@
 
 Transform your RGB setup into a spatially-aware lighting system. Position devices in 3D space, define reference points throughout your room, and apply physics-based effects that respond to real-world coordinates.
 
-## 🌟 Overview
+## Overview
 
 This plugin extends OpenRGB with a complete 3D spatial lighting framework:
 - **Interactive 3D viewport** with OpenGL visualization
@@ -15,7 +15,7 @@ This plugin extends OpenRGB with a complete 3D spatial lighting framework:
 - **Extensible architecture** for new effects
 - **API ready** for game/external integration (planned)
 
-## ✨ Features
+## Features
 
 ### 3D Spatial Effects (8 Implemented)
 
@@ -60,7 +60,7 @@ This plugin extends OpenRGB with a complete 3D spatial lighting framework:
 - **Left Click**: Select controllers or reference points
 
 **Grid System:**
-- Configurable dimensions (X×Y×Z)
+- Configurable dimensions (XYZ)
 - Grid snap toggle for precise positioning
 - Scale in mm per grid unit (1-100mm)
 - Visual grid overlay
@@ -118,7 +118,7 @@ This plugin extends OpenRGB with a complete 3D spatial lighting framework:
 - Scale (X, Y, Z multipliers)
 - Display color for visual identification
 - Visibility toggle
-- Gizmo manipulation support ✅
+- Gizmo manipulation support 
 - JSON save/load persistence
 
 **Coordinate System:**
@@ -191,7 +191,7 @@ This plugin extends OpenRGB with a complete 3D spatial lighting framework:
 **Create unified 3D grids from multiple devices:**
 
 **Features:**
-- Define grid dimensions (W×H×D)
+- Define grid dimensions (WHD)
 - Map individual LEDs to grid positions
 - Layer-based editing (Z-axis tabs)
 - Color preview visualization
@@ -268,7 +268,7 @@ EFFECT_REGISTERER_3D("Wave3D", "3D Wave", "3D Spatial",
 - Write color calculation function
 - Automatic registration and loading
 
-## 📋 System Requirements
+##  System Requirements
 
 ### Minimum Requirements
 - **OpenRGB**: 0.9 or later
@@ -290,7 +290,7 @@ EFFECT_REGISTERER_3D("Wave3D", "3D Wave", "3D Spatial",
 - **300-500 LEDs**: Acceptable, 30 FPS recommended
 - **500+ LEDs**: May experience lag, reduce FPS or use zone filtering
 
-## 🚀 Installation
+##  Installation
 
 ### Pre-built Binaries
 
@@ -346,7 +346,13 @@ make -j8
 # Output: libOpenRGB3DSpatialPlugin.dylib
 ```
 
-## 📖 Usage Guide
+## Usage Guide
+
+For expanded walkthroughs and API usage notes, see the documentation in `docs/guides/`:
+
+- `QuickStart.md` for end-to-end setup
+- `GridSDK.md` for the spatial SDK surface
+- `ContributorGuide.md` for development workflows
 
 ### Quick Start
 
@@ -413,7 +419,7 @@ make -j8
 
 1. Go to **Custom Controllers** sub-tab
 2. Click **Create Custom Controller**
-3. Set grid dimensions (e.g., 10×5×1 for wall grid)
+3. Set grid dimensions (e.g., 1051 for wall grid)
 4. Click through grid cells to assign LEDs:
    - Select source controller
    - Choose granularity (LED level recommended)
@@ -424,7 +430,7 @@ make -j8
 
 **Example - Unified Wall Grid:**
 - 3 separate LED strips on wall
-- Create 30×1×1 custom controller
+- Create 3011 custom controller
 - Map strip 1 to cells 0-9
 - Map strip 2 to cells 10-19
 - Map strip 3 to cells 20-29
@@ -470,7 +476,7 @@ make -j8
 - **G**: Cycle gizmo mode (planned)
 - **Del**: Delete selected controller (planned)
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -526,36 +532,36 @@ make -j8
 3. Reduce number of zones
 4. Close custom controller dialog when not in use
 
-## 🛣️ Roadmap
+##  Roadmap
 
-### Planned Features
+### Features
 
 **High Priority:**
-- 🔲 External API for game/trigger integration
-- 🔲 Effect stacking/layering (multiple simultaneous effects)
-- 🔲 Multi-zone effects (different effects per zone)
-- 🔲 Effect developer contribution guide
-- 🔲 Memory safety improvements (smart pointers)
-- 🔲 Performance optimization (spatial partitioning, LUTs)
-- 🔲 Thread safety for background effect calculations
-- 🔲 Input validation and error handling
+-  External API for game/trigger integration
+-  Effect stacking/layering (multiple simultaneous effects)
+-  Multi-zone effects (different effects per zone)
+-  Effect developer contribution guide
+-  Memory safety improvements (smart pointers)
+-  Performance optimization (spatial partitioning, LUTs)
+-  Thread safety for background effect calculations
+-  Input validation and error handling
 
 **Medium Priority:**
-- 🔲 Dual-point effects (Lightning Arc between two points)
-- 🔲 Multi-point effects (Network Pulse, Zone Influence)
-- 🔲 Reference point rotation UI and effects
-- 🔲 Effect chaining/sequencing system
-- 🔲 Preset library (shareable effect configs)
-- 🔲 Audio reactivity (frequency bands to zones)
-- 🔲 Motion tracking integration (webcam, VR)
+-  Dual-point effects (Lightning Arc between two points)
+-  Multi-point effects (Network Pulse, Zone Influence)
+-  Reference point rotation UI and effects
+-  Effect chaining/sequencing system
+-  Preset library (shareable effect configs)
+-  Audio reactivity (frequency bands to zones)
+-  Motion tracking integration (webcam, VR)
 
 **Low Priority:**
-- 🔲 Web UI for remote control
-- 🔲 MQTT integration for home automation
-- 🔲 Screen capture ambient lighting
-- 🔲 Physics simulation (gravity, bouncing)
-- 🔲 Particle system effects
-- 🔲 Video playback on LED grid
+-  Web UI for remote control
+-  MQTT integration for home automation
+-  Screen capture ambient lighting
+-  Physics simulation (gravity, bouncing)
+-  Particle system effects
+-  Video playback on LED grid
 
 ### Future Effect Ideas
 
@@ -569,7 +575,7 @@ make -j8
 - **Black Hole** (gravity well)
 - **Portal** (dual-point teleportation)
 
-## 🤝 Contributing
+##  Contributing
 
 Contributions are welcome! Whether you want to add effects, fix bugs, improve performance, or enhance the UI.
 
@@ -613,14 +619,14 @@ Contributions are welcome! Whether you want to add effects, fix bugs, improve pe
 6. Open pull request with detailed description
 
 **What We're Looking For:**
-- ✅ New spatial effects
-- ✅ Performance improvements
-- ✅ Bug fixes
-- ✅ UI enhancements
-- ✅ Documentation improvements
-- ✅ Cross-platform compatibility fixes
+-  New spatial effects
+-  Performance improvements
+-  Bug fixes
+-  UI enhancements
+-  Documentation improvements
+-  Cross-platform compatibility fixes
 
-## 📜 License
+##  License
 
 **GPL-2.0-only**
 
@@ -628,7 +634,7 @@ This program is free software; you can redistribute it and/or modify it under th
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-## 🙏 Credits
+##  Credits
 
 **Created by:** Wolfieee (WolfieeewWolf)
 
@@ -641,22 +647,22 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 - OpenRGB contributors and community
 - Beta testers and early adopters
 
-## 💬 Support & Community
+##  Support & Community
 
 **Get Help:**
-- 🐛 [Report Issues](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)
-- 💬 [OpenRGB Discord](https://discord.gg/AQwjJPY)
-- 📧 [Email Support](mailto:wolfieee@msn.com)
+-  [Report Issues](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/issues)
+-  [OpenRGB Discord](https://discord.gg/AQwjJPY)
+-  [Email Support](mailto:wolfieee@msn.com)
 
 **Support Development:**
-- ☕ [Buy me a pizza!](https://buymeacoffee.com/Wolfieee) *(I don't drink coffee)*
+-  [Buy me a pizza!](https://buymeacoffee.com/Wolfieee) *(I don't drink coffee)*
 
 **Links:**
 - [OpenRGB Official](https://openrgb.org)
 - [OpenRGB GitLab](https://gitlab.com/CalcProgrammer1/OpenRGB)
 - [Plugin Repository](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin)
 
-## ⚠️ Disclaimer
+##  Disclaimer
 
 This is **beta software**. While functional, it may contain bugs and incomplete features. Use at your own risk.
 
@@ -676,6 +682,8 @@ This is **beta software**. While functional, it may contain bugs and incomplete 
 
 ---
 
-**Made with ❤️ for the RGB community**
+**Made with  for the RGB community**
 
 *Transform your RGB setup from reactive to spatial - because your lighting should know where it is in the room.*
+
+
