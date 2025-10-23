@@ -440,3 +440,41 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
+
+nlohmann::json Spiral3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["num_arms"] = num_arms;
+    j["pattern_type"] = pattern_type;
+    j["gap_size"] = gap_size;
+    return j;
+}
+
+void Spiral3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("num_arms"))
+    {
+        num_arms = settings["num_arms"].get<unsigned int>();
+        if(arms_slider)
+        {
+            arms_slider->setValue(num_arms);
+        }
+    }
+    if(settings.contains("pattern_type"))
+    {
+        pattern_type = settings["pattern_type"].get<int>();
+        if(pattern_combo)
+        {
+            pattern_combo->setCurrentIndex(pattern_type);
+        }
+    }
+    if(settings.contains("gap_size"))
+    {
+        gap_size = settings["gap_size"].get<unsigned int>();
+        if(gap_slider)
+        {
+            gap_slider->setValue(gap_size);
+        }
+    }
+}

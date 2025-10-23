@@ -44,6 +44,12 @@ public:
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
+    /*---------------------------------------------------------*\
+    | Settings persistence                                     |
+    \*---------------------------------------------------------*/
+    nlohmann::json SaveSettings() const override;
+    void LoadSettings(const nlohmann::json& settings) override;
+
 private slots:
     void OnSpinParameterChanged();
 
@@ -60,6 +66,29 @@ private:
     int             surface_type;       // 0=Floor, 1=Ceiling, 2=Left Wall, etc.
     unsigned int    num_arms;
     float           progress;
+
+    static float Clamp01(float value);
+    float ComputeSpinXZ(float rel_x,
+                        float rel_y,
+                        float rel_z,
+                        float y_bias,
+                        float half_width,
+                        float half_depth,
+                        float half_height) const;
+    float ComputeSpinYZ(float rel_x,
+                        float rel_y,
+                        float rel_z,
+                        float bias_sign,
+                        float half_width,
+                        float half_depth,
+                        float half_height) const;
+    float ComputeSpinXY(float rel_x,
+                        float rel_y,
+                        float rel_z,
+                        float bias_sign,
+                        float half_width,
+                        float half_depth,
+                        float half_height) const;
 };
 
 #endif

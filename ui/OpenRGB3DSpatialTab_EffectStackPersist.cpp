@@ -16,16 +16,16 @@
 
 std::string OpenRGB3DSpatialTab::GetEffectStackPath()
 {
-    std::string config_dir  = resource_manager->GetConfigurationDirectory().string();
-    std::string stack_file  = config_dir + "plugins/OpenRGB3DSpatialPlugin/effect_stack.json";
+    filesystem::path config_dir  = resource_manager->GetConfigurationDirectory();
+    filesystem::path plugin_dir  = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
+    filesystem::path stack_file  = plugin_dir / "effect_stack.json";
 
     /*---------------------------------------------------------*\
     | Create directory if it doesn't exist                     |
     \*---------------------------------------------------------*/
-    std::string dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/";
-    filesystem::create_directories(dir);
+    filesystem::create_directories(plugin_dir);
 
-    return stack_file;
+    return stack_file.string();
 }
 
 void OpenRGB3DSpatialTab::SaveEffectStack()
@@ -63,14 +63,15 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
 void OpenRGB3DSpatialTab::LoadEffectStack()
 {
     std::string stack_file = GetEffectStackPath();
+    filesystem::path stack_path(stack_file);
 
-    if(!filesystem::exists(stack_file))
+    if(!filesystem::exists(stack_path))
     {
         
         return;
     }
 
-    std::ifstream file(stack_file);
+    std::ifstream file(stack_path.string());
     if(!file.is_open())
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open effect stack file: %s", stack_file.c_str());

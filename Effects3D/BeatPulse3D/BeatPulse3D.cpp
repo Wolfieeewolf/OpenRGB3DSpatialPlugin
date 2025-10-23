@@ -47,9 +47,15 @@ EffectInfo3D BeatPulse3D::GetEffectInfo()
     return info;
 }
 
-void BeatPulse3D::SetupCustomUI(QWidget* /*parent*/)
+void BeatPulse3D::SetupCustomUI(QWidget* parent)
 {
-    // No extra per-effect UI; use standard Audio Controls panel
+    /*---------------------------------------------------------*\
+    | Beat Pulse has no effect-specific controls               |
+    | All audio controls (Hz, Smoothing, Falloff) are handled |
+    | by the standard Audio Controls panel in the Audio tab   |
+    \*---------------------------------------------------------*/
+    (void)parent;
+    // No custom UI needed - all controls are standard
 }
 
 void BeatPulse3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -75,6 +81,16 @@ RGBColor BeatPulse3D::CalculateColor(float /*x*/, float /*y*/, float /*z*/, floa
     return (b << 16) | (g << 8) | r;
 }
 
+RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Audio effects are typically global (not spatially aware) |
+    | Simply delegate to CalculateColor                        |
+    \*---------------------------------------------------------*/
+    (void)grid;  // Unused parameter
+    return CalculateColor(x, y, z, time);
+}
+
 REGISTER_EFFECT_3D(BeatPulse3D)
 
 nlohmann::json BeatPulse3D::SaveSettings() const
@@ -90,8 +106,20 @@ nlohmann::json BeatPulse3D::SaveSettings() const
 void BeatPulse3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("low_hz")) low_hz = settings["low_hz"].get<int>();
-    if(settings.contains("high_hz")) high_hz = settings["high_hz"].get<int>();
-    if(settings.contains("smoothing")) smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
-    if(settings.contains("falloff")) falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    if(settings.contains("low_hz"))
+    {
+        low_hz = settings["low_hz"].get<int>();
+    }
+    if(settings.contains("high_hz"))
+    {
+        high_hz = settings["high_hz"].get<int>();
+    }
+    if(settings.contains("smoothing"))
+    {
+        smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
+    }
+    if(settings.contains("falloff"))
+    {
+        falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    }
 }

@@ -12,6 +12,19 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "VirtualReferencePoint3D.h"
 #include <QColorDialog>
+#include <QSignalBlocker>
+
+static QString RGBColorToCssHex(unsigned int color_value)
+{
+    unsigned int red = color_value & 0xFF;
+    unsigned int green = (color_value >> 8) & 0xFF;
+    unsigned int blue = (color_value >> 16) & 0xFF;
+    return QString("#%1%2%3")
+        .arg(red, 2, 16, QChar('0'))
+        .arg(green, 2, 16, QChar('0'))
+        .arg(blue, 2, 16, QChar('0'))
+        .toUpper();
+}
 
 /*---------------------------------------------------------*\
 | Reference Points Management                              |
@@ -57,6 +70,15 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
 
 void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
 {
+    if(display_planes_list)
+    {
+        QSignalBlocker block(*display_planes_list);
+        display_planes_list->clearSelection();
+    }
+    current_display_plane_index = -1;
+    RefreshDisplayPlaneDetails();
+    if(viewport) viewport->SelectDisplayPlane(-1);
+
     bool has_selection = (index >= 0 && index < (int)reference_points.size());
     remove_ref_point_button->setEnabled(has_selection);
 
@@ -183,7 +205,7 @@ void OpenRGB3DSpatialTab::on_ref_point_color_clicked()
     if(color.isValid())
     {
         selected_ref_point_color = (color.blue() << 16) | (color.green() << 8) | color.red();
-        ref_point_color_button->setStyleSheet(QString("background-color: #%1").arg(selected_ref_point_color & 0xFFFFFF, 6, 16, QChar('0')));
+        ref_point_color_button->setStyleSheet(QString("background-color: %1").arg(RGBColorToCssHex(selected_ref_point_color)));
     }
 }
 
@@ -201,6 +223,7 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 
     // Update effect origin combo whenever reference points change
     UpdateEffectOriginCombo();
+    UpdateAudioEffectOriginCombo();
 }
 
 void OpenRGB3DSpatialTab::SaveReferencePoints()

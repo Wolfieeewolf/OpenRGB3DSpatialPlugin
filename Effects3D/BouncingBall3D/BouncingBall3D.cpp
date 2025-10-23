@@ -12,6 +12,38 @@
 
 REGISTER_EFFECT_3D(BouncingBall3D);
 
+namespace
+{
+float ReflectPosition(float p0, float velocity, float time_value, float min_value, float max_value)
+{
+    float length = max_value - min_value;
+    if(length <= 0.0001f)
+    {
+        return min_value;
+    }
+
+    float relative = (p0 - min_value) + velocity * time_value;
+    float double_length = 2.0f * length;
+    float wrapped = fmodf(relative, double_length);
+    if(wrapped < 0.0f)
+    {
+        wrapped += double_length;
+    }
+    return (wrapped <= length) ? (min_value + wrapped) : (max_value - (wrapped - length));
+}
+
+float HashFloat01(unsigned int seed)
+{
+    unsigned int value = seed ^ 0x27d4eb2d;
+    value = (value ^ 61U) ^ (value >> 16U);
+    value = value + (value << 3U);
+    value = value ^ (value >> 4U);
+    value = value * 0x27d4eb2d;
+    value = value ^ (value >> 15U);
+    return (value & 0xFFFFU) / 65535.0f;
+}
+}
+
 BouncingBall3D::BouncingBall3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
@@ -124,27 +156,6 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
     float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
-    // Reflection helper on [min,max]
-    auto reflect_pos = [](float p0, float v, float t, float minv, float maxv) -> float {
-        float L = maxv - minv;
-        if(L <= 0.0001f) return minv;
-        float p = (p0 - minv) + v * t;
-        float twoL = 2.0f * L;
-        float m = fmodf(p, twoL);
-        if(m < 0.0f) m += twoL;
-        return (m <= L) ? (minv + m) : (maxv - (m - L));
-    };
-
-    auto h01 = [](unsigned int n) -> float {
-        n ^= 0x27d4eb2d;
-        n = (n ^ 61) ^ (n >> 16);
-        n = n + (n << 3);
-        n = n ^ (n >> 4);
-        n = n * 0x27d4eb2d;
-        n = n ^ (n >> 15);
-        return (n & 0xFFFF) / 65535.0f;
-    };
-
     float xmin = grid.min_x + R;
     float xmax = grid.max_x - R;
     float ymin = grid.min_y + R;
@@ -159,24 +170,24 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     for(unsigned int k = 0; k < N; k++)
     {
         // Initial positions pseudo-random within room
-        float p0x = xmin + h01(k * 131u) * (xmax - xmin);
-        float p0y = ymin + h01(k * 313u) * (ymax - ymin);
-        float p0z = zmin + h01(k * 919u) * (zmax - zmin);
+        float p0x = xmin + HashFloat01(k * 131U) * (xmax - xmin);
+        float p0y = ymin + HashFloat01(k * 313U) * (ymax - ymin);
+        float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
 
         // Velocity direction (unit-ish), speed factor scales with speed and elasticity
-        float ax = h01(k * 733u) * 2.0f - 1.0f;
-        float ay = h01(k * 577u) * 2.0f - 1.0f;
-        float az = h01(k * 829u) * 2.0f - 1.0f;
+        float ax = HashFloat01(k * 733U) * 2.0f - 1.0f;
+        float ay = HashFloat01(k * 577U) * 2.0f - 1.0f;
+        float az = HashFloat01(k * 829U) * 2.0f - 1.0f;
         float norm = sqrtf(ax*ax + ay*ay + az*az);
         if(norm < 0.0001f) norm = 1.0f;
         ax /= norm; ay /= norm; az /= norm;
-        float base_speed = 0.5f + 1.5f * h01(k * 997u);
+        float base_speed = 0.5f + 1.5f * HashFloat01(k * 997U);
         float vmag = base_speed * (0.2f + speed * 0.03f) * (0.6f + 0.8f * e);
 
         // Position at time with elastic reflections
-        float bx = reflect_pos(p0x, ax * vmag, time, xmin, xmax);
-        float by = reflect_pos(p0y, ay * vmag, time, ymin, ymax);
-        float bz = reflect_pos(p0z, az * vmag, time, zmin, zmax);
+        float bx = ReflectPosition(p0x, ax * vmag, time, xmin, xmax);
+        float by = ReflectPosition(p0y, ay * vmag, time, ymin, ymax);
+        float bz = ReflectPosition(p0z, az * vmag, time, zmin, zmax);
 
         // Distance from LED to ball center
         float dx = (x - bx);
@@ -206,4 +217,25 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     g = (unsigned char)(g * bf);
     b = (unsigned char)(b * bf);
     return (b << 16) | (g << 8) | r;
+}
+
+nlohmann::json BouncingBall3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["ball_size"] = ball_size;
+    j["elasticity"] = elasticity;
+    j["ball_count"] = ball_count;
+    return j;
+}
+
+void BouncingBall3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("ball_size")) ball_size = settings["ball_size"];
+    if(settings.contains("elasticity")) elasticity = settings["elasticity"];
+    if(settings.contains("ball_count")) ball_count = settings["ball_count"];
+
+    if(size_slider) size_slider->setValue(ball_size);
+    if(elasticity_slider) elasticity_slider->setValue(elasticity);
+    if(count_slider) count_slider->setValue(ball_count);
 }

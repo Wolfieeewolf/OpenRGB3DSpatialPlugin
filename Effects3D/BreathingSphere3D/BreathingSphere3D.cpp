@@ -199,4 +199,23 @@ RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float 
     return (b << 16) | (g << 8) | r;
 }
 
+nlohmann::json BreathingSphere3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["sphere_size"] = sphere_size;
+    return j;
+}
+
+void BreathingSphere3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("sphere_size"))
+    {
+        sphere_size = settings["sphere_size"].get<unsigned int>();
+        if(size_slider)
+        {
+            size_slider->setValue(sphere_size);
+        }
+    }
+}
 

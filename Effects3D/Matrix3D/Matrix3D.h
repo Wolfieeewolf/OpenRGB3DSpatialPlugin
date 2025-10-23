@@ -31,6 +31,12 @@ public:
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
+    /*---------------------------------------------------------*\
+    | Settings persistence                                     |
+    \*---------------------------------------------------------*/
+    nlohmann::json SaveSettings() const override;
+    void LoadSettings(const nlohmann::json& settings) override;
+
 private slots:
     void OnMatrixParameterChanged();
 
@@ -39,7 +45,16 @@ private:
     QSlider*        trail_slider;
     unsigned int    density;      // columns density
     unsigned int    trail;        // trail length factor
+
+    float ComputeFaceIntensity(int face,
+                               float x,
+                               float y,
+                               float z,
+                               float time,
+                               const GridContext3D& grid,
+                               float column_spacing,
+                               float size_normalized,
+                               float speed_scale) const;
 };
 
 #endif
-

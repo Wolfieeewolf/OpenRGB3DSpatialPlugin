@@ -219,7 +219,11 @@ QStringList AudioInputManager::listInputDevices()
     HRESULT coinithr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), (void**)&enumerator);
-    if(FAILED(hr)) return names;
+    if(FAILED(hr))
+    {
+        if(SUCCEEDED(coinithr)) CoUninitialize();
+        return names;
+    }
     // Render devices as loopback sources
     IMMDeviceCollection* coll = nullptr;
     hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &coll);
@@ -292,10 +296,19 @@ int AudioInputManager::defaultDeviceIndex() const
 
 void AudioInputManager::setDeviceByIndex(int index)
 {
-    QMutexLocker lock(&mutex);
-    if(index < 0) return;
-    selected_index = index;
-    if(running) { stop(); start(); }
+    bool was_running = false;
+    {
+        QMutexLocker lock(&mutex);
+        if(index < 0) return;
+        selected_index = index;
+        was_running = running;
+    }
+    // Release mutex before calling stop()/start() to avoid deadlock
+    if(was_running)
+    {
+        stop();
+        start();
+    }
 }
 
 // Unified device list; separate render list removed
@@ -650,5 +663,4 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
 }
 
 // Removed duplicate WasapiLoopback class (now defined at top)
-
 

@@ -43,6 +43,7 @@
 #include "LEDViewport3D.h"
 #include "VirtualController3D.h"
 #include "VirtualReferencePoint3D.h"
+#include "DisplayPlane3D.h"
 #include "SpatialEffectTypes.h"
 #include "SpatialEffect3D.h"
 #include "EffectListManager3D.h"
@@ -429,6 +430,7 @@ private slots:
     void on_audio_effect_origin_changed(int index);
     void UpdateAudioEffectOriginCombo();
     void on_audio_effect_zone_changed(int index);
+    void UpdateAudioEffectZoneCombo();
     void OnAudioEffectParamsChanged();
 
     // Standard Audio Controls (Hz, smoothing, falloff)
@@ -448,6 +450,19 @@ private slots:
     void on_audio_custom_load_clicked();
     void on_audio_custom_delete_clicked();
     void on_audio_custom_add_to_stack_clicked();
+
+    // Display plane management
+    void on_display_plane_selected(int index);
+    void on_add_display_plane_clicked();
+    void on_remove_display_plane_clicked();
+    void on_display_plane_name_edited(const QString& text);
+    void on_display_plane_width_changed(double value);
+    void on_display_plane_height_changed(double value);
+    void on_display_plane_bezel_changed(double value);
+    void on_display_plane_capture_id_changed(const QString& text);
+    void on_display_plane_visible_toggled(int state);
+    void on_display_plane_position_signal(int index, float x, float y, float z);
+    void on_display_plane_rotation_signal(int index, float x, float y, float z);
 private:
     // Audio Standard Controls (data members)
     QGroupBox*      audio_std_group = nullptr;
@@ -463,6 +478,27 @@ private:
 
     // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
+
+    /*---------------------------------------------------------*\
+    | Display Plane Management                                 |
+    \*---------------------------------------------------------*/
+    std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
+    QListWidget*    display_planes_list = nullptr;
+    QLineEdit*      display_plane_name_edit = nullptr;
+    QDoubleSpinBox* display_plane_width_spin = nullptr;
+    QDoubleSpinBox* display_plane_height_spin = nullptr;
+    QDoubleSpinBox* display_plane_bezel_spin = nullptr;
+    QLineEdit*      display_plane_capture_id_edit = nullptr;
+    QCheckBox*      display_plane_visible_check = nullptr;
+    QPushButton*    add_display_plane_button = nullptr;
+    QPushButton*    remove_display_plane_button = nullptr;
+    int             current_display_plane_index = -1;
+
+    void UpdateDisplayPlanesList();
+    void RefreshDisplayPlaneDetails();
+    DisplayPlane3D* GetSelectedDisplayPlane();
+    void NotifyDisplayPlaneChanged();
+    void SyncDisplayPlaneControls(DisplayPlane3D* plane);
 };
 
 /*---------------------------------------------------------*\

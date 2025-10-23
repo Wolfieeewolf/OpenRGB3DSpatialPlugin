@@ -189,3 +189,21 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | rr;
 }
+
+nlohmann::json Tornado3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["core_radius"] = core_radius;
+    j["tornado_height"] = tornado_height;
+    return j;
+}
+
+void Tornado3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("core_radius")) core_radius = settings["core_radius"];
+    if(settings.contains("tornado_height")) tornado_height = settings["tornado_height"];
+
+    if(core_radius_slider) core_radius_slider->setValue(core_radius);
+    if(height_slider) height_slider->setValue(tornado_height);
+}

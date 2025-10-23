@@ -428,3 +428,28 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
 
     return 0x00000000;
 }
+
+RGBColor DiagnosticTest3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Diagnostic Test is a spatial diagnostic effect - simply  |
+    | delegate to the standard CalculateColor implementation   |
+    \*---------------------------------------------------------*/
+    (void)grid;  // Unused parameter
+    return CalculateColor(x, y, z, time);
+}
+
+nlohmann::json DiagnosticTest3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["test_mode"] = test_mode;
+    return j;
+}
+
+void DiagnosticTest3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("test_mode")) test_mode = settings["test_mode"];
+
+    if(test_mode_combo) test_mode_combo->setCurrentIndex(test_mode);
+}

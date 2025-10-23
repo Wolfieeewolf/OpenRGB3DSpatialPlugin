@@ -226,6 +226,24 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+nlohmann::json Explosion3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["explosion_intensity"] = explosion_intensity;
+    j["explosion_type"] = explosion_type;
+    return j;
+}
+
+void Explosion3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("explosion_intensity")) explosion_intensity = settings["explosion_intensity"];
+    if(settings.contains("explosion_type")) explosion_type = settings["explosion_type"];
+
+    if(intensity_slider) intensity_slider->setValue(explosion_intensity);
+    if(type_combo) type_combo->setCurrentIndex(explosion_type);
+}
+
 // Grid-aware version using real room center and room-relative boundary
 RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

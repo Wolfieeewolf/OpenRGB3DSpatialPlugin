@@ -24,6 +24,7 @@
 #include "LEDPosition3D.h"
 #include "ControllerLayout3D.h"
 #include "VirtualReferencePoint3D.h"
+#include "DisplayPlane3D.h"
 
 /*---------------------------------------------------------*\
 | Gizmo Operation Modes                                    |
@@ -79,6 +80,7 @@ public:
     void SetPosition(float x, float y, float z);
     void SetTarget(ControllerTransform* target);
     void SetTarget(VirtualReferencePoint3D* target);
+    void SetTarget(DisplayPlane3D* target);
     void SetViewportSize(int width, int height);
     void SetGridSnap(bool enabled, float grid_size = 1.0f);
     void SetCameraDistance(float distance);
@@ -168,6 +170,7 @@ private:
     \*---------------------------------------------------------*/
     ControllerTransform*        target_transform;
     VirtualReferencePoint3D*    target_ref_point;
+    DisplayPlane3D*             target_display_plane;
 
     /*---------------------------------------------------------*\
     | Gizmo Position                                           |

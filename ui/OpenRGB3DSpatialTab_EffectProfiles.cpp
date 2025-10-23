@@ -20,15 +20,15 @@
 
 std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile_name)
 {
-    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string profiles_dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/EffectProfiles/";
+    filesystem::path base_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path profiles_dir = base_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "EffectProfiles";
 
     /*---------------------------------------------------------*\
     | Create directory if it doesn't exist                     |
     \*---------------------------------------------------------*/
     filesystem::create_directories(profiles_dir);
 
-    return profiles_dir + profile_name + ".effectprofile.json";
+    return (profiles_dir / (profile_name + ".effectprofile.json")).string();
 }
 
 void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
@@ -241,8 +241,8 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
     effect_profiles_combo->blockSignals(true);
     effect_profiles_combo->clear();
 
-    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string profiles_dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/EffectProfiles/";
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path profiles_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "EffectProfiles";
 
     if(!filesystem::exists(profiles_dir))
     {
@@ -281,10 +281,11 @@ void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
         return;
     }
 
-    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string config_file = config_dir + "plugins/OpenRGB3DSpatialPlugin/effect_profile_config.json";
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path plugin_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
+    filesystem::path config_file = plugin_dir / "effect_profile_config.json";
 
-    filesystem::create_directories(config_dir + "plugins/OpenRGB3DSpatialPlugin/");
+    filesystem::create_directories(plugin_dir);
 
     std::string profile_name = effect_profiles_combo->currentText().toStdString();
     bool auto_load_enabled = effect_auto_load_checkbox->isChecked();
@@ -293,7 +294,7 @@ void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
     config["auto_load_enabled"] = auto_load_enabled;
     config["auto_load_profile"]  = profile_name;
 
-    std::ofstream file(config_file);
+    std::ofstream file(config_file.string());
     if(file.is_open())
     {
         file << config.dump(4);
@@ -308,15 +309,15 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
         return;
     }
 
-    std::string config_dir  = resource_manager->GetConfigurationDirectory().string();
-    std::string config_file = config_dir + "plugins/OpenRGB3DSpatialPlugin/effect_profile_config.json";
+    filesystem::path config_dir  = resource_manager->GetConfigurationDirectory();
+    filesystem::path config_file = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "effect_profile_config.json";
 
     if(!filesystem::exists(config_file))
     {
         return;
     }
 
-    std::ifstream file(config_file);
+    std::ifstream file(config_file.string());
     if(!file.is_open())
     {
         return;
@@ -519,5 +520,3 @@ void OpenRGB3DSpatialTab::on_effect_profile_changed(int)
     \*---------------------------------------------------------*/
     SaveCurrentEffectProfileName();
 }
-
-

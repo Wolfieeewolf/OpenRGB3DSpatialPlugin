@@ -57,9 +57,15 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     return info;
 }
 
-void AudioLevel3D::SetupCustomUI(QWidget* /*parent*/)
+void AudioLevel3D::SetupCustomUI(QWidget* parent)
 {
-    // No extra per-effect UI; use standard Audio Controls panel
+    /*---------------------------------------------------------*\
+    | Audio Level has no effect-specific controls              |
+    | All audio controls (Hz, Smoothing, Falloff) are handled |
+    | by the standard Audio Controls panel in the Audio tab   |
+    \*---------------------------------------------------------*/
+    (void)parent;
+    // No custom UI needed - all controls are standard
 }
 
 void AudioLevel3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -104,6 +110,21 @@ RGBColor AudioLevel3D::CalculateColor(float /*x*/, float /*y*/, float /*z*/, flo
     return (bb << 16) | (gg << 8) | rr;
 }
 
+RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Audio effects are typically global (not spatially aware) |
+    | but we still need grid-aware implementation for          |
+    | consistency with the rendering pipeline                  |
+    \*---------------------------------------------------------*/
+    (void)grid;  // Unused parameter
+
+    // Audio effects don't use spatial coordinates, so we can
+    // simply call the base CalculateColor implementation
+    // (coordinates are ignored in audio effects anyway)
+    return CalculateColor(x, y, z, time);
+}
+
 // Register effect
 REGISTER_EFFECT_3D(AudioLevel3D)
 
@@ -120,8 +141,20 @@ nlohmann::json AudioLevel3D::SaveSettings() const
 void AudioLevel3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("low_hz")) low_hz = settings["low_hz"].get<int>();
-    if(settings.contains("high_hz")) high_hz = settings["high_hz"].get<int>();
-    if(settings.contains("smoothing")) smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
-    if(settings.contains("falloff")) falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    if(settings.contains("low_hz"))
+    {
+        low_hz = settings["low_hz"].get<int>();
+    }
+    if(settings.contains("high_hz"))
+    {
+        high_hz = settings["high_hz"].get<int>();
+    }
+    if(settings.contains("smoothing"))
+    {
+        smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
+    }
+    if(settings.contains("falloff"))
+    {
+        falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    }
 }

@@ -58,6 +58,25 @@
 #include <GL/glu.h>
 #endif
 
+static inline Vector3D Subtract(const Vector3D& a, const Vector3D& b)
+{
+    return { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+static inline Vector3D CrossVec(const Vector3D& a, const Vector3D& b)
+{
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
+
+static inline float DotVec(const Vector3D& a, const Vector3D& b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -75,6 +94,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , room_height(1000.0f)         // Default: 1000 mm
     , use_manual_room_dimensions(false)
     , reference_points(nullptr)
+    , display_planes(nullptr)
+    , selected_display_plane_idx(-1)
     , selected_ref_point_idx(-1)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
@@ -118,6 +139,7 @@ void LEDViewport3D::SelectController(int index)
 {
     if(controller_transforms && index >= 0 && index < (int)controller_transforms->size())
     {
+        selected_display_plane_idx = -1;
         selected_controller_idx = index;
         ControllerTransform* ctrl = (*controller_transforms)[index].get();
 
@@ -142,6 +164,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
     {
         selected_controller_indices.clear();
         selected_controller_idx = -1;
+        selected_display_plane_idx = -1;
         selected_ref_point_idx = index;
 
         VirtualReferencePoint3D* ref_point = (*reference_points)[index].get();
@@ -182,27 +205,49 @@ void LEDViewport3D::SetRoomDimensions(float width, float depth, float height, bo
 
 void LEDViewport3D::UpdateGizmoPosition()
 {
-    if(selected_ref_point_idx >= 0 && reference_points &&
-        selected_ref_point_idx < (int)reference_points->size())
+    if(display_planes && selected_display_plane_idx >= 0 &&
+       selected_display_plane_idx < (int)display_planes->size())
+    {
+        DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+        if(plane)
+        {
+            Transform3D& transform = plane->GetTransform();
+            gizmo.SetTarget(plane);
+            gizmo.SetPosition(transform.position.x,
+                              transform.position.y,
+                              transform.position.z);
+            return;
+        }
+    }
+
+    if(reference_points && selected_ref_point_idx >= 0 &&
+       selected_ref_point_idx < (int)reference_points->size())
     {
         VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
         if(ref_point)
         {
             Vector3D pos = ref_point->GetPosition();
+            gizmo.SetTarget(ref_point);
             gizmo.SetPosition(pos.x, pos.y, pos.z);
+            return;
         }
     }
-    else if(selected_controller_idx >= 0 && controller_transforms &&
-        selected_controller_idx < (int)controller_transforms->size())
+
+    if(controller_transforms && selected_controller_idx >= 0 &&
+       selected_controller_idx < (int)controller_transforms->size())
     {
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl)
         {
+            gizmo.SetTarget(ctrl);
             gizmo.SetPosition(ctrl->transform.position.x,
-                            ctrl->transform.position.y,
-                            ctrl->transform.position.z);
+                              ctrl->transform.position.y,
+                              ctrl->transform.position.z);
+            return;
         }
     }
+
+    gizmo.SetTarget((DisplayPlane3D*)nullptr);
 }
 
 void LEDViewport3D::NotifyControllerTransformChanged()
@@ -251,6 +296,7 @@ void LEDViewport3D::paintGL()
     DrawGrid();
     DrawAxes();
     DrawRoomBoundary();
+    DrawDisplayPlanes();
     DrawControllers();
     DrawUserFigure();
     DrawReferencePoints();
@@ -451,6 +497,24 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
             emit ReferencePointPositionChanged(selected_ref_point_idx,
                                               pos.x, pos.y, pos.z);
         }
+        else if(display_planes && selected_display_plane_idx >= 0 &&
+                selected_display_plane_idx < (int)display_planes->size())
+        {
+            DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                UpdateGizmoPosition();
+                emit DisplayPlanePositionChanged(selected_display_plane_idx,
+                                                 transform.position.x,
+                                                 transform.position.y,
+                                                 transform.position.z);
+                emit DisplayPlaneRotationChanged(selected_display_plane_idx,
+                                                 transform.rotation.x,
+                                                 transform.rotation.y,
+                                                 transform.rotation.z);
+            }
+        }
 
         update();
         last_mouse_pos = current_pos;
@@ -555,11 +619,18 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
             }
             else
             {
-                // Clicked empty space - deselect
-                if(!selected_controller_indices.empty())
+                int picked_plane = PickDisplayPlane(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
+                if(picked_plane >= 0)
                 {
                     ClearSelection();
+                    SelectDisplayPlane(picked_plane);
+                }
+                else
+                {
+                    ClearSelection();
+                    SelectDisplayPlane(-1);
                     emit ControllerSelected(-1);
+                    emit ReferencePointSelected(-1);
                 }
             }
         }
@@ -579,11 +650,19 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
         }
         else
         {
-            // Clicked empty space - deselect
-            if(!selected_controller_indices.empty())
+            int picked_plane = PickDisplayPlane(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
+            if(picked_plane >= 0)
             {
                 ClearSelection();
+                SelectDisplayPlane(picked_plane);
+            }
+            else
+            {
+                // Clicked empty space - deselect
+                ClearSelection();
+                SelectDisplayPlane(-1);
                 emit ControllerSelected(-1);
+                emit ReferencePointSelected(-1);
             }
         }
     }
@@ -906,6 +985,93 @@ void LEDViewport3D::DrawRoomBoundary()
     // Reset line width and color
     glLineWidth(1.0f);
     glColor3f(1.0f, 1.0f, 1.0f);
+}
+
+void LEDViewport3D::DrawDisplayPlanes()
+{
+    if(!display_planes) return;
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for(size_t plane_index = 0; plane_index < display_planes->size(); ++plane_index)
+    {
+        DisplayPlane3D* plane_ptr = (*display_planes)[plane_index].get();
+        if(!plane_ptr || !plane_ptr->IsVisible()) continue;
+
+        float width_units = plane_ptr->GetWidthMM() / grid_scale_mm;
+        float height_units = plane_ptr->GetHeightMM() / grid_scale_mm;
+
+        if(width_units <= 0.0f || height_units <= 0.0f) continue;
+
+        float half_w = width_units * 0.5f;
+        float half_h = height_units * 0.5f;
+
+        Vector3D local_corners[4] = {
+            { -half_w, -half_h, 0.0f },
+            {  half_w, -half_h, 0.0f },
+            {  half_w,  half_h, 0.0f },
+            { -half_w,  half_h, 0.0f }
+        };
+
+        Vector3D world_corners[4];
+        for(int i = 0; i < 4; ++i)
+        {
+            world_corners[i] = TransformLocalToWorld(local_corners[i], plane_ptr->GetTransform());
+        }
+
+        bool selected = ((int)plane_index == selected_display_plane_idx);
+        float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
+        float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
+        float bezel_color[4]  = { selected ? 0.50f : 0.15f, selected ? 0.75f : 0.50f, 0.90f, selected ? 0.90f : 0.70f };
+
+        glColor4fv(fill_color);
+        glBegin(GL_QUADS);
+        for(int i = 0; i < 4; ++i)
+        {
+            glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
+        }
+        glEnd();
+
+        glColor4fv(border_color);
+        glLineWidth(selected ? 3.0f : 2.0f);
+        glBegin(GL_LINE_LOOP);
+        for(int i = 0; i < 4; ++i)
+        {
+            glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
+        }
+        glEnd();
+        glLineWidth(1.0f);
+
+        float bezel_units = plane_ptr->GetBezelMM() / grid_scale_mm;
+        if(bezel_units > 0.01f)
+        {
+            float inner_half_w = std::max(0.0f, half_w - bezel_units);
+            float inner_half_h = std::max(0.0f, half_h - bezel_units);
+            if(inner_half_w > 0.0f && inner_half_h > 0.0f)
+            {
+                Vector3D inner_local[4] = {
+                    { -inner_half_w, -inner_half_h, 0.0f },
+                    {  inner_half_w, -inner_half_h, 0.0f },
+                    {  inner_half_w,  inner_half_h, 0.0f },
+                    { -inner_half_w,  inner_half_h, 0.0f }
+                };
+                glColor4fv(bezel_color);
+                glBegin(GL_LINE_LOOP);
+                for(int i = 0; i < 4; ++i)
+                {
+                    Vector3D inner_world = TransformLocalToWorld(inner_local[i], plane_ptr->GetTransform());
+                    glVertex3f(inner_world.x, inner_world.y, inner_world.z);
+                }
+                glEnd();
+            }
+        }
+    }
+
+    glDisable(GL_BLEND);
 }
 
 void LEDViewport3D::DrawControllers()
@@ -1530,6 +1696,148 @@ float LEDViewport3D::GetControllerMinY(ControllerTransform* ctrl)
     return min_y;
 }
 
+
+int LEDViewport3D::PickDisplayPlane(int mouse_x, int mouse_y)
+{
+    if(!display_planes) return -1;
+
+    float modelview[16];
+    float projection[16];
+    int viewport[4];
+
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    GLdouble near_x, near_y, near_z;
+    GLdouble far_x, far_y, far_z;
+
+    int gl_mouse_y = viewport[3] - mouse_y;
+
+    GLdouble mv[16], proj[16];
+    GLint vp[4];
+    for(int i = 0; i < 16; i++)
+    {
+        mv[i] = (GLdouble)modelview[i];
+        proj[i] = (GLdouble)projection[i];
+    }
+    for(int i = 0; i < 4; i++)
+    {
+        vp[i] = (GLint)viewport[i];
+    }
+
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 0.0,
+                 mv, proj, vp,
+                 &near_x, &near_y, &near_z);
+
+    gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 1.0,
+                 mv, proj, vp,
+                 &far_x, &far_y, &far_z);
+
+    float ray_origin[3] = { (float)near_x, (float)near_y, (float)near_z };
+    float ray_direction[3] = {
+        (float)(far_x - near_x),
+        (float)(far_y - near_y),
+        (float)(far_z - near_z)
+    };
+
+    float length = sqrtf(ray_direction[0] * ray_direction[0] +
+                         ray_direction[1] * ray_direction[1] +
+                         ray_direction[2] * ray_direction[2]);
+    if(length > 0.0f)
+    {
+        ray_direction[0] /= length;
+        ray_direction[1] /= length;
+        ray_direction[2] /= length;
+    }
+
+    float closest_distance = FLT_MAX;
+    int closest_plane = -1;
+
+    for(size_t i = 0; i < display_planes->size(); ++i)
+    {
+        DisplayPlane3D* plane = (*display_planes)[i].get();
+        if(!plane || !plane->IsVisible()) continue;
+
+        float width_units = plane->GetWidthMM() / grid_scale_mm;
+        float height_units = plane->GetHeightMM() / grid_scale_mm;
+        if(width_units <= 0.0f || height_units <= 0.0f) continue;
+
+        float half_w = width_units * 0.5f;
+        float half_h = height_units * 0.5f;
+
+        Vector3D local_corners[4] = {
+            { -half_w, -half_h, 0.0f },
+            {  half_w, -half_h, 0.0f },
+            {  half_w,  half_h, 0.0f },
+            { -half_w,  half_h, 0.0f }
+        };
+
+        Vector3D world_corners[4];
+        for(int corner = 0; corner < 4; ++corner)
+        {
+            world_corners[corner] = TransformLocalToWorld(local_corners[corner], plane->GetTransform());
+        }
+
+        Vector3D edge_u = Subtract(world_corners[1], world_corners[0]);
+        Vector3D edge_v = Subtract(world_corners[3], world_corners[0]);
+        Vector3D normal = CrossVec(edge_u, edge_v);
+        float normal_len = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+        if(normal_len < 1e-6f)
+        {
+            continue;
+        }
+        normal.x /= normal_len;
+        normal.y /= normal_len;
+        normal.z /= normal_len;
+
+        float denom = normal.x * ray_direction[0] + normal.y * ray_direction[1] + normal.z * ray_direction[2];
+        if(fabsf(denom) < 1e-6f)
+        {
+            continue;
+        }
+
+        Vector3D diff0 = { world_corners[0].x - ray_origin[0],
+                           world_corners[0].y - ray_origin[1],
+                           world_corners[0].z - ray_origin[2] };
+        float t = (diff0.x * normal.x + diff0.y * normal.y + diff0.z * normal.z) / denom;
+        if(t < 0.0f)
+        {
+            continue;
+        }
+
+        Vector3D hit = { ray_origin[0] + ray_direction[0] * t,
+                         ray_origin[1] + ray_direction[1] * t,
+                         ray_origin[2] + ray_direction[2] * t };
+
+        Vector3D hit_vec = Subtract(hit, world_corners[0]);
+        float dot00 = DotVec(edge_u, edge_u);
+        float dot01 = DotVec(edge_u, edge_v);
+        float dot11 = DotVec(edge_v, edge_v);
+        float dot20 = DotVec(hit_vec, edge_u);
+        float dot21 = DotVec(hit_vec, edge_v);
+        float denom_uv = dot00 * dot11 - dot01 * dot01;
+        if(fabsf(denom_uv) < 1e-6f)
+        {
+            continue;
+        }
+
+        float u = (dot11 * dot20 - dot01 * dot21) / denom_uv;
+        float v = (dot00 * dot21 - dot01 * dot20) / denom_uv;
+
+        if(u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f)
+        {
+            if(t < closest_distance)
+            {
+                closest_distance = t;
+                closest_plane = (int)i;
+            }
+        }
+    }
+
+    return closest_plane;
+}
+
 Vector3D LEDViewport3D::TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
 {
     Vector3D scaled = {
@@ -1601,8 +1909,9 @@ void LEDViewport3D::ClearSelection()
 {
     selected_controller_indices.clear();
     selected_controller_idx = -1;
+    selected_display_plane_idx = -1;
     selected_ref_point_idx = -1;
-    gizmo.SetTarget((ControllerTransform*)nullptr);
+    gizmo.SetTarget((DisplayPlane3D*)nullptr);
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const
@@ -1621,6 +1930,73 @@ void LEDViewport3D::SetUserPosition(const UserPosition3D& position)
 void LEDViewport3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
 {
     reference_points = ref_points;
+}
+
+void LEDViewport3D::SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes)
+{
+    display_planes = planes;
+    if(!display_planes)
+    {
+        selected_display_plane_idx = -1;
+    }
+    else if(selected_display_plane_idx >= (int)display_planes->size())
+    {
+        selected_display_plane_idx = -1;
+    }
+
+    UpdateGizmoPosition();
+    update();
+}
+
+void LEDViewport3D::SelectDisplayPlane(int index)
+{
+    if(display_planes && index >= 0 && index < (int)display_planes->size())
+    {
+        selected_controller_indices.clear();
+        selected_controller_idx = -1;
+        selected_ref_point_idx = -1;
+        selected_display_plane_idx = index;
+        gizmo.SetTarget((*display_planes)[index].get());
+    }
+    else
+    {
+        selected_controller_indices.clear();
+        selected_controller_idx = -1;
+        selected_ref_point_idx = -1;
+        selected_display_plane_idx = -1;
+        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+    }
+
+    NotifyDisplayPlaneChanged();
+}
+
+void LEDViewport3D::NotifyDisplayPlaneChanged()
+{
+    if(display_planes && selected_display_plane_idx >= 0 &&
+       selected_display_plane_idx < (int)display_planes->size())
+    {
+        DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+        if(plane)
+        {
+            Transform3D& transform = plane->GetTransform();
+            emit DisplayPlanePositionChanged(selected_display_plane_idx,
+                                             transform.position.x,
+                                             transform.position.y,
+                                             transform.position.z);
+            emit DisplayPlaneRotationChanged(selected_display_plane_idx,
+                                             transform.rotation.x,
+                                             transform.rotation.y,
+                                             transform.rotation.z);
+        }
+    }
+    else
+    {
+        emit DisplayPlanePositionChanged(-1, 0.0f, 0.0f, 0.0f);
+        emit DisplayPlaneRotationChanged(-1, 0.0f, 0.0f, 0.0f);
+    }
+
+    UpdateGizmoPosition();
+    update();
 }
 
 void LEDViewport3D::DrawUserFigure()
@@ -1838,3 +2214,5 @@ void LEDViewport3D::DrawReferencePoints()
         glPopMatrix();
     }
 }
+
+

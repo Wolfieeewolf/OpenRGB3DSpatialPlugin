@@ -267,10 +267,10 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
         }
     }
 
-    // Also update the zone dropdowns in effects tab and effect stack tab
+    // Also update the zone dropdowns in effects tab, effect stack tab, and audio tab
     UpdateEffectZoneCombo();
     UpdateStackEffectZoneCombo();
-    // Audio tab no longer has per-zone Bass/Mid/Treble mapping combos
+    UpdateAudioEffectZoneCombo();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()

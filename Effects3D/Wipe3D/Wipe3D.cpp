@@ -351,6 +351,24 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     return (b << 16) | (g << 8) | r;
 }
 
+nlohmann::json Wipe3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["wipe_thickness"] = wipe_thickness;
+    j["edge_shape"] = edge_shape;
+    return j;
+}
+
+void Wipe3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("wipe_thickness")) wipe_thickness = settings["wipe_thickness"];
+    if(settings.contains("edge_shape")) edge_shape = settings["edge_shape"];
+
+    if(thickness_slider) thickness_slider->setValue(wipe_thickness);
+    if(shape_combo) shape_combo->setCurrentIndex(edge_shape);
+}
+
 // Helper function for smooth interpolation
 float Wipe3D::smoothstep(float edge0, float edge1, float x)
 {

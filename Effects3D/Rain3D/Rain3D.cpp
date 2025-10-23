@@ -208,3 +208,21 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
+
+nlohmann::json Rain3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["rain_density"] = rain_density;
+    j["wind"] = wind;
+    return j;
+}
+
+void Rain3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("rain_density")) rain_density = settings["rain_density"];
+    if(settings.contains("wind")) wind = settings["wind"];
+
+    if(density_slider) density_slider->setValue(rain_density);
+    if(wind_slider) wind_slider->setValue(wind);
+}

@@ -24,6 +24,9 @@
 #include <QMessageBox>
 #include <fstream>
 #include <algorithm>
+#include <QList>
+#include <QSignalBlocker>
+#include <QColor>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -82,6 +85,18 @@ static bool   SDK_Wrap_GetLEDWorldPositions(size_t c, float* xyz, size_t max_tri
     if(out_count) *out_count = out; return ok;
 }
 
+static int MapHzToBandIndex(float hz, int bands, float f_min, float f_max)
+{
+    float clamped = hz;
+    if(clamped < f_min) clamped = f_min;
+    if(clamped > f_max) clamped = f_max;
+    float t = std::log(clamped / f_min) / std::log(f_max / f_min);
+    int idx = (int)std::floor(t * bands);
+    if(idx < 0) idx = 0;
+    if(idx > bands - 1) idx = bands - 1;
+    return idx;
+}
+
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -103,6 +118,16 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     custom_controllers_list = nullptr;
     controller_list = nullptr;
     reference_points_list = nullptr;
+    display_planes_list = nullptr;
+    display_plane_name_edit = nullptr;
+    display_plane_width_spin = nullptr;
+    display_plane_height_spin = nullptr;
+    display_plane_bezel_spin = nullptr;
+    display_plane_capture_id_edit = nullptr;
+    display_plane_visible_check = nullptr;
+    add_display_plane_button = nullptr;
+    remove_display_plane_button = nullptr;
+    current_display_plane_index = -1;
     zones_list = nullptr;
 
     viewport = nullptr;
@@ -187,12 +212,16 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
+    UpdateDisplayPlanesList();
+    RefreshDisplayPlaneDetails();
 
     /*---------------------------------------------------------*\
     | Initialize zone and effect combos                        |
     \*---------------------------------------------------------*/
-    UpdateEffectZoneCombo();     // Initialize zone dropdown with "All Controllers"
-    UpdateEffectOriginCombo();   // Initialize reference point dropdown
+    UpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
+    UpdateEffectOriginCombo();      // Initialize Effects tab origin dropdown
+    UpdateAudioEffectZoneCombo();   // Initialize Audio tab zone dropdown
+    UpdateAudioEffectOriginCombo(); // Initialize Audio tab origin dropdown
 
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
@@ -208,7 +237,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     // Connect GridLayoutChanged signal to invoke SDK callbacks
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, [this]() {
-        for(const auto& cb_pair : grid_layout_callbacks)
+        for(const std::pair<void (*)(void*), void*>& cb_pair : grid_layout_callbacks)
         {
             if(cb_pair.first) cb_pair.first(cb_pair.second);
         }
@@ -515,7 +544,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     ref_point_color_button = new QPushButton();
     ref_point_color_button->setFixedSize(30, 30);
     selected_ref_point_color = 0x00808080; // Default gray
-    ref_point_color_button->setStyleSheet(QString("background-color: #%1").arg(selected_ref_point_color & 0xFFFFFF, 6, 16, QChar('0')));
+    unsigned int default_red = selected_ref_point_color & 0xFF;
+    unsigned int default_green = (selected_ref_point_color >> 8) & 0xFF;
+    unsigned int default_blue = (selected_ref_point_color >> 16) & 0xFF;
+    QString default_hex = QString("#%1%2%3")
+        .arg(default_red, 2, 16, QChar('0'))
+        .arg(default_green, 2, 16, QChar('0'))
+        .arg(default_blue, 2, 16, QChar('0'))
+        .toUpper();
+    ref_point_color_button->setStyleSheet(QString("background-color: %1").arg(default_hex));
     connect(ref_point_color_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_ref_point_color_clicked);
     color_layout->addWidget(ref_point_color_button);
     color_layout->addStretch();
@@ -543,6 +580,98 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     ref_points_tab->setLayout(ref_points_layout);
     left_tabs->addTab(ref_points_tab, "Reference Points");
+
+    /*---------------------------------------------------------*\
+    | Display Planes Tab                                       |
+    \*---------------------------------------------------------*/
+    QWidget* display_tab = new QWidget();
+    QVBoxLayout* display_layout = new QVBoxLayout();
+    display_layout->setSpacing(5);
+
+    display_planes_list = new QListWidget();
+    display_planes_list->setMinimumHeight(150);
+    connect(display_planes_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_display_plane_selected);
+    display_layout->addWidget(display_planes_list);
+
+    QHBoxLayout* display_buttons = new QHBoxLayout();
+    add_display_plane_button = new QPushButton("Add Display");
+    connect(add_display_plane_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_display_plane_clicked);
+    display_buttons->addWidget(add_display_plane_button);
+
+    remove_display_plane_button = new QPushButton("Remove");
+    remove_display_plane_button->setEnabled(false);
+    connect(remove_display_plane_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_remove_display_plane_clicked);
+    display_buttons->addWidget(remove_display_plane_button);
+
+    display_layout->addLayout(display_buttons);
+
+    QGridLayout* plane_form = new QGridLayout();
+    plane_form->setColumnStretch(1, 1);
+
+    int plane_row = 0;
+    plane_form->addWidget(new QLabel("Name:"), plane_row, 0);
+    display_plane_name_edit = new QLineEdit();
+    connect(display_plane_name_edit, &QLineEdit::textEdited, this, &OpenRGB3DSpatialTab::on_display_plane_name_edited);
+    plane_form->addWidget(display_plane_name_edit, plane_row, 1, 1, 2);
+    plane_row++;
+
+    plane_form->addWidget(new QLabel("Width (mm):"), plane_row, 0);
+    display_plane_width_spin = new QDoubleSpinBox();
+    display_plane_width_spin->setRange(50.0, 5000.0);
+    display_plane_width_spin->setDecimals(1);
+    display_plane_width_spin->setSingleStep(10.0);
+    connect(display_plane_width_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &OpenRGB3DSpatialTab::on_display_plane_width_changed);
+    plane_form->addWidget(display_plane_width_spin, plane_row, 1);
+
+    plane_form->addWidget(new QLabel("Height (mm):"), plane_row, 2);
+    display_plane_height_spin = new QDoubleSpinBox();
+    display_plane_height_spin->setRange(50.0, 5000.0);
+    display_plane_height_spin->setDecimals(1);
+    display_plane_height_spin->setSingleStep(10.0);
+    connect(display_plane_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &OpenRGB3DSpatialTab::on_display_plane_height_changed);
+    plane_form->addWidget(display_plane_height_spin, plane_row, 3);
+    plane_row++;
+
+    plane_form->addWidget(new QLabel("Bezel (mm):"), plane_row, 0);
+    display_plane_bezel_spin = new QDoubleSpinBox();
+    display_plane_bezel_spin->setRange(0.0, 200.0);
+    display_plane_bezel_spin->setDecimals(1);
+    display_plane_bezel_spin->setSingleStep(1.0);
+    connect(display_plane_bezel_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &OpenRGB3DSpatialTab::on_display_plane_bezel_changed);
+    plane_form->addWidget(display_plane_bezel_spin, plane_row, 1);
+    plane_row++;
+
+    plane_form->addWidget(new QLabel("Position (grid):"), plane_row, 0);
+    QHBoxLayout* pos_layout = new QHBoxLayout();
+    pos_layout->setSpacing(4);
+        QLabel* transform_hint = new QLabel("Use the Position/Rotation controls below to place this display.");
+    transform_hint->setStyleSheet("color: gray;");
+    transform_hint->setWordWrap(true);
+    plane_form->addWidget(transform_hint, plane_row, 0, 1, 4);
+    plane_row++;
+
+plane_form->addWidget(new QLabel("Capture Source Id:"), plane_row, 0);
+    display_plane_capture_id_edit = new QLineEdit();
+    display_plane_capture_id_edit->setPlaceholderText("e.g. Monitor#1, CaptureCard0");
+    connect(display_plane_capture_id_edit, &QLineEdit::textEdited,
+            this, &OpenRGB3DSpatialTab::on_display_plane_capture_id_changed);
+    plane_form->addWidget(display_plane_capture_id_edit, plane_row, 1, 1, 3);
+    plane_row++;
+
+    display_layout->addLayout(plane_form);
+
+    display_plane_visible_check = new QCheckBox("Visible in viewport");
+    connect(display_plane_visible_check, &QCheckBox::stateChanged,
+            this, &OpenRGB3DSpatialTab::on_display_plane_visible_toggled);
+    display_layout->addWidget(display_plane_visible_check);
+
+    display_layout->addStretch();
+
+    display_tab->setLayout(display_layout);
+    left_tabs->addTab(display_tab, "Display Planes");
 
     left_panel->addWidget(left_tabs);
 
@@ -629,6 +758,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
+    viewport->SetDisplayPlanes(&display_planes);
+    viewport->SetDisplayPlanes(&display_planes);
     // Ensure viewport uses the current grid scale for mm->grid conversion
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
@@ -639,7 +770,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
         if(settings.contains("Camera"))
         {
-            const auto& cam = settings["Camera"];
+            const nlohmann::json& cam = settings["Camera"];
             float dist = cam.value("Distance", 20.0f);
             float yaw  = cam.value("Yaw", 45.0f);
             float pitch= cam.value("Pitch", 30.0f);
@@ -660,6 +791,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(viewport, SIGNAL(ReferencePointSelected(int)), this, SLOT(on_ref_point_selected(int)));
     connect(viewport, SIGNAL(ReferencePointPositionChanged(int,float,float,float)),
             this, SLOT(on_ref_point_position_changed(int,float,float,float)));
+    connect(viewport, SIGNAL(DisplayPlanePositionChanged(int,float,float,float)),
+            this, SLOT(on_display_plane_position_signal(int,float,float,float)));
+    connect(viewport, SIGNAL(DisplayPlaneRotationChanged(int,float,float,float)),
+            this, SLOT(on_display_plane_rotation_signal(int,float,float,float)));
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
@@ -855,11 +990,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position X:"), 0, 0);
 
     pos_x_slider = new QSlider(Qt::Horizontal);
-    pos_x_slider->setRange(0, 5000);  // Corner-origin: 0 (left wall) to 500 grid units (5000mm = 5m)
+    pos_x_slider->setRange(-5000, 5000);  // Corner-origin: 0 (left wall) to 500 grid units (5000mm = 5m)
     pos_x_slider->setValue(0);
     connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
-        pos_x_spin->setValue(pos_value);
+        if(pos_x_spin)
+        {
+            QSignalBlocker block_spin(pos_x_spin);
+            pos_x_spin->setValue(pos_value);
+        }
 
         // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
@@ -868,6 +1007,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             controller_transforms[ctrl_row]->transform.position.x = pos_value;
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
+            return;
+        }
+
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.x = (float)pos_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
             return;
         }
 
@@ -885,11 +1039,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_x_slider, 0, 1);
 
     pos_x_spin = new QDoubleSpinBox();
-    pos_x_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
+    pos_x_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_x_spin->setDecimals(1);
     pos_x_spin->setMaximumWidth(80);
     connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_x_slider->setValue((int)(value * 10));
+        if(pos_x_slider)
+        {
+            QSignalBlocker block_slider(pos_x_slider);
+            pos_x_slider->setValue((int)std::lround(value * 10.0));
+        }
 
         // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
@@ -898,6 +1056,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             controller_transforms[ctrl_row]->transform.position.x = value;
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
+            return;
+        }
+
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.x = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
             return;
         }
 
@@ -917,23 +1090,51 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
 
     pos_y_slider = new QSlider(Qt::Horizontal);
-    pos_y_slider->setRange(0, 5000);  // Corner-origin: 0 (front wall) to 500 grid units (5000mm = 5m)
+    pos_y_slider->setRange(-5000, 5000);
     pos_y_slider->setValue(0);
     connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
-        pos_y_spin->setValue(pos_value);
+        if(pos_y_spin)
+        {
+            QSignalBlocker block_spin(pos_y_spin);
+            pos_y_spin->setValue(pos_value);
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
+            if(pos_value < 0.0)
+            {
+                pos_value = 0.0;
+                if(pos_y_spin)
+                {
+                    QSignalBlocker block_spin(pos_y_spin);
+                    pos_y_spin->setValue(pos_value);
+                }
+                QSignalBlocker block_slider(pos_y_slider);
+                pos_y_slider->setValue((int)std::lround(pos_value * 10.0));
+            }
             controller_transforms[ctrl_row]->transform.position.y = pos_value;
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
         }
 
-        // Otherwise check if a reference point is selected (no floor constraint for ref points)
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.y = (float)pos_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -947,23 +1148,54 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_y_slider, 1, 1);
 
     pos_y_spin = new QDoubleSpinBox();
-    pos_y_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
+    pos_y_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_y_spin->setDecimals(1);
     pos_y_spin->setMaximumWidth(80);
     connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_y_slider->setValue((int)(value * 10));
+        if(pos_y_slider)
+        {
+            QSignalBlocker block_slider(pos_y_slider);
+            pos_y_slider->setValue((int)std::lround(value * 10.0));
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
+            if(value < 0.0)
+            {
+                value = 0.0;
+                if(pos_y_spin)
+                {
+                    QSignalBlocker block_spin(pos_y_spin);
+                    pos_y_spin->setValue(value);
+                }
+                if(pos_y_slider)
+                {
+                    QSignalBlocker block_slider(pos_y_slider);
+                    pos_y_slider->setValue((int)std::lround(value * 10.0));
+                }
+            }
             controller_transforms[ctrl_row]->transform.position.y = value;
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
         }
 
-        // Otherwise check if a reference point is selected (no floor constraint for ref points)
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.y = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -979,13 +1211,16 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
 
     pos_z_slider = new QSlider(Qt::Horizontal);
-    pos_z_slider->setRange(0, 5000);  // Corner-origin: 0 (floor) to 500 grid units (5000mm = 5m)
+    pos_z_slider->setRange(-5000, 5000);
     pos_z_slider->setValue(0);
     connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
         double pos_value = value / 10.0;
-        pos_z_spin->setValue(pos_value);
+        if(pos_z_spin)
+        {
+            QSignalBlocker block_spin(pos_z_spin);
+            pos_z_spin->setValue(pos_value);
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -995,7 +1230,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.z = (float)pos_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1009,13 +1258,16 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->addWidget(pos_z_slider, 2, 1);
 
     pos_z_spin = new QDoubleSpinBox();
-    pos_z_spin->setRange(-100, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
+    pos_z_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
     pos_z_spin->setDecimals(1);
     pos_z_spin->setMaximumWidth(80);
     connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        pos_z_slider->setValue((int)(value * 10));
+        if(pos_z_slider)
+        {
+            QSignalBlocker block_slider(pos_z_slider);
+            pos_z_slider->setValue((int)std::lround(value * 10.0));
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1025,7 +1277,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.position.z = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1045,9 +1311,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_x_slider->setValue(0);
     connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
-        rot_x_spin->setValue(rot_value);
+        if(rot_x_spin)
+        {
+            QSignalBlocker block_spin(rot_x_spin);
+            rot_x_spin->setValue(rot_value);
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1057,7 +1326,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.x = (float)rot_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1075,9 +1358,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_x_spin->setDecimals(1);
     rot_x_spin->setMaximumWidth(80);
     connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_x_slider->setValue((int)value);
+        if(rot_x_slider)
+        {
+            QSignalBlocker block_slider(rot_x_slider);
+            rot_x_slider->setValue((int)std::lround(value));
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1087,7 +1373,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.x = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1107,9 +1407,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_y_slider->setValue(0);
     connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
-        rot_y_spin->setValue(rot_value);
+        if(rot_y_spin)
+        {
+            QSignalBlocker block_spin(rot_y_spin);
+            rot_y_spin->setValue(rot_value);
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1119,7 +1422,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.y = (float)rot_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1137,9 +1454,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_y_spin->setDecimals(1);
     rot_y_spin->setMaximumWidth(80);
     connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_y_slider->setValue((int)value);
+        if(rot_y_slider)
+        {
+            QSignalBlocker block_slider(rot_y_slider);
+            rot_y_slider->setValue((int)std::lround(value));
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1149,7 +1469,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.y = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1169,9 +1503,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_z_slider->setValue(0);
     connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
         double rot_value = value;
-        rot_z_spin->setValue(rot_value);
+        if(rot_z_spin)
+        {
+            QSignalBlocker block_spin(rot_z_spin);
+            rot_z_spin->setValue(rot_value);
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1181,7 +1518,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.z = (float)rot_value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1199,9 +1550,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     rot_z_spin->setDecimals(1);
     rot_z_spin->setMaximumWidth(80);
     connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        rot_z_slider->setValue((int)value);
+        if(rot_z_slider)
+        {
+            QSignalBlocker block_slider(rot_z_slider);
+            rot_z_slider->setValue((int)std::lround(value));
+        }
 
-        // Check if a controller is selected first (higher priority)
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
@@ -1211,7 +1565,21 @@ void OpenRGB3DSpatialTab::SetupUI()
             return;
         }
 
-        // Otherwise check if a reference point is selected
+        if(current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
+        {
+            DisplayPlane3D* plane = display_planes[current_display_plane_index].get();
+            if(plane)
+            {
+                Transform3D& transform = plane->GetTransform();
+                transform.rotation.z = (float)value;
+                SyncDisplayPlaneControls(plane);
+                viewport->SelectDisplayPlane(current_display_plane_index);
+                viewport->NotifyDisplayPlaneChanged();
+                emit GridLayoutChanged();
+            }
+            return;
+        }
+
         int ref_idx = reference_points_list->currentRow();
         if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
         {
@@ -1471,49 +1839,32 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     fx_row1->addWidget(new QLabel("Effect:"));
     audio_effect_combo = new QComboBox();
     audio_effect_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    audio_effect_combo->addItem("Audio Level 3D");
-    audio_effect_combo->addItem("Spectrum Bars 3D");
-    audio_effect_combo->addItem("Beat Pulse 3D");
-    audio_effect_combo->addItem("Band Scan 3D");
+    audio_effect_combo->addItem("None");              // index 0
+    audio_effect_combo->addItem("Audio Level 3D");    // index 1
+    audio_effect_combo->addItem("Spectrum Bars 3D");  // index 2
+    audio_effect_combo->addItem("Beat Pulse 3D");     // index 3
+    audio_effect_combo->addItem("Band Scan 3D");      // index 4
     fx_row1->addWidget(audio_effect_combo);
     audio_fx_layout->addLayout(fx_row1);
 
+    // Zone selector (on its own row, matching Effects tab layout)
     QHBoxLayout* fx_row2 = new QHBoxLayout();
     fx_row2->addWidget(new QLabel("Zone:"));
     audio_effect_zone_combo = new QComboBox();
     audio_effect_zone_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    // Build All Controllers, zones, then controllers with encoded data
-    audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
-    if(zone_manager)
-    {
-        for(int i=0;i<zone_manager->GetZoneCount();i++)
-        {
-            Zone3D* z = zone_manager->GetZone(i);
-            if(z) audio_effect_zone_combo->addItem(QString::fromStdString(z->GetName()), QVariant(i));
-        }
-    }
-    for(unsigned int ci=0; ci<controller_transforms.size(); ++ci)
-    {
-        ControllerTransform* t = controller_transforms[ci].get();
-        QString name;
-        if(t && t->controller) name = QString::fromStdString(t->controller->name);
-        else if(t && t->virtual_controller) name = QString("[Virtual] ") + QString::fromStdString(t->virtual_controller->GetName());
-        else name = QString("Controller %1").arg((int)ci);
-        audio_effect_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
-    }
     fx_row2->addWidget(audio_effect_zone_combo);
     connect(audio_effect_zone_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_zone_changed);
+    audio_fx_layout->addLayout(fx_row2);
 
-    // Origin selector (Room Center + reference points)
-    fx_row2->addWidget(new QLabel("Origin:"));
-    fx_row2->addWidget(new QLabel("Origin:"));
+    // Origin selector (on its own row, matching Effects tab layout)
+    QHBoxLayout* fx_row3 = new QHBoxLayout();
+    fx_row3->addWidget(new QLabel("Origin:"));
     audio_effect_origin_combo = new QComboBox();
     audio_effect_origin_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_effect_origin_combo->addItem("Room Center", QVariant(-1));
     connect(audio_effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_origin_changed);
-    fx_row2->addWidget(audio_effect_origin_combo);
-
-    audio_fx_layout->addLayout(fx_row2);
+    fx_row3->addWidget(audio_effect_origin_combo);
+    audio_fx_layout->addLayout(fx_row3);
 
     // Per-effect Hz mapping
     // Dynamic effect controls (consistent with main Effects tab)
@@ -1531,7 +1882,8 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     layout->addWidget(audio_fx_group);
 
     connect(audio_effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::SetupAudioEffectUI);
-    SetupAudioEffectUI(audio_effect_combo->currentIndex());
+    audio_effect_combo->setCurrentIndex(0);  // Default to "None"
+    SetupAudioEffectUI(0);  // Initialize with "None" selected (hides controls)
 
     // Help text
     QLabel* help = new QLabel("Use Effects > select 'Audio Level 3D' to react to audio.\nThis tab manages input device and sensitivity shared by audio effects.");
@@ -1635,11 +1987,14 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
 void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
 {
     if(!audio_effect_combo) return;
-    if(!audio_effect_combo) return;
     int eff_idx = audio_effect_combo->currentIndex();
+
+    // Index 0 is "None", actual effects start at index 1
+    if(eff_idx <= 0 || eff_idx > 4) return;
+
     const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    if(eff_idx < 0 || eff_idx > 3) return;
-    std::string class_name = class_names[eff_idx];
+    int actual_idx = eff_idx - 1;  // Adjust for "None" at index 0
+    std::string class_name = class_names[actual_idx];
 
     // Build a single-effect stack from current audio effect UI settings
     effect_stack.clear();
@@ -1665,7 +2020,6 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
 
     // Apply per-effect settings captured from UI
     eff->LoadSettings(settings);
-    eff->LoadSettings(settings);
     inst->saved_settings = std::make_unique<nlohmann::json>(settings);
     effect_stack.push_back(std::move(inst));
     UpdateEffectStackList();
@@ -1685,9 +2039,9 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
             {
                 if(mappings[i].controller) controllers_to_set.insert(mappings[i].controller);
             }
-            for(auto* c : controllers_to_set)
+            for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
             {
-                c->SetCustomMode();
+                (*it)->SetCustomMode();
                 has_valid_controller = true;
             }
             continue;
@@ -1769,9 +2123,24 @@ void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
     }
     current_audio_effect_ui = nullptr;
 
+    // Handle "None" option (index 0)
+    if(eff_index == 0)
+    {
+        // Hide effect controls and audio controls panel when "None" is selected
+        if(audio_effect_controls_widget) audio_effect_controls_widget->hide();
+        if(audio_std_group) audio_std_group->hide();
+        return;
+    }
+
+    // Show controls for actual effects
+    if(audio_effect_controls_widget) audio_effect_controls_widget->show();
+    if(audio_std_group) audio_std_group->show();
+
+    // Adjust for "None" being index 0 (subtract 1 from effect index)
     const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    if(eff_index < 0 || eff_index > 3) return;
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_names[eff_index]);
+    int actual_index = eff_index - 1;  // Offset for "None" at index 0
+    if(actual_index < 0 || actual_index > 3) return;
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_names[actual_index]);
     if(!effect) return;
     effect->setParent(audio_effect_controls_widget);
     effect->CreateCommonEffectControls(audio_effect_controls_widget);
@@ -1835,6 +2204,81 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectOriginCombo()
         audio_effect_origin_combo->addItem(QString("%1 (%2)").arg(name).arg(type), QVariant((int)i));
     }
     audio_effect_origin_combo->blockSignals(false);
+}
+
+void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
+{
+    if(!audio_effect_zone_combo) return;
+
+    /*---------------------------------------------------------*\
+    | Save current selection to restore after rebuild         |
+    \*---------------------------------------------------------*/
+    int saved_index = audio_effect_zone_combo->currentIndex();
+    if(saved_index < 0)
+    {
+        saved_index = 0;  // Default to "All Controllers"
+    }
+
+    audio_effect_zone_combo->blockSignals(true);
+    audio_effect_zone_combo->clear();
+
+    /*---------------------------------------------------------*\
+    | Add "All Controllers" option with data -1               |
+    \*---------------------------------------------------------*/
+    audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
+
+    /*---------------------------------------------------------*\
+    | Add all zones with their index as data                  |
+    \*---------------------------------------------------------*/
+    if(zone_manager)
+    {
+        for(int i = 0; i < zone_manager->GetZoneCount(); i++)
+        {
+            Zone3D* zone = zone_manager->GetZone(i);
+            if(zone)
+            {
+                QString zone_name = QString::fromStdString(zone->GetName());
+                audio_effect_zone_combo->addItem(zone_name, QVariant(i));
+            }
+        }
+    }
+
+    /*---------------------------------------------------------*\
+    | Add individual controllers with encoded index           |
+    | Data is encoded as -(controller_index) - 1000           |
+    \*---------------------------------------------------------*/
+    for(unsigned int ci = 0; ci < controller_transforms.size(); ci++)
+    {
+        ControllerTransform* t = controller_transforms[ci].get();
+        QString name;
+        if(t && t->controller)
+        {
+            name = QString::fromStdString(t->controller->name);
+        }
+        else if(t && t->virtual_controller)
+        {
+            name = QString("[Virtual] ") + QString::fromStdString(t->virtual_controller->GetName());
+        }
+        else
+        {
+            name = QString("Controller %1").arg((int)ci);
+        }
+        audio_effect_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
+    }
+
+    /*---------------------------------------------------------*\
+    | Restore previous selection (or default to 0 if invalid) |
+    \*---------------------------------------------------------*/
+    if(saved_index < audio_effect_zone_combo->count())
+    {
+        audio_effect_zone_combo->setCurrentIndex(saved_index);
+    }
+    else
+    {
+        audio_effect_zone_combo->setCurrentIndex(0);  // Default to "All Controllers"
+    }
+
+    audio_effect_zone_combo->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::on_audio_effect_origin_changed(int index)
@@ -1958,6 +2402,14 @@ void OpenRGB3DSpatialTab::UpdateDeviceList()
 
 void OpenRGB3DSpatialTab::on_controller_selected(int index)
 {
+    if(display_planes_list)
+    {
+        QSignalBlocker block(display_planes_list);
+        display_planes_list->clearSelection();
+    }
+    current_display_plane_index = -1;
+    if(viewport) viewport->SelectDisplayPlane(-1);
+
     if(index >= 0 && index < (int)controller_transforms.size())
     {
         controller_list->setCurrentRow(index);
@@ -2059,6 +2511,7 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
     }
 
     UpdateSelectionInfo();
+    RefreshDisplayPlaneDetails();
 }
 
 void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, float y, float z)
@@ -3520,7 +3973,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         if(old_name != new_name)
         {
             std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-            std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+            std::string custom_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
 
             std::string safe_old_name = old_name;
             for(unsigned int i = 0; i < safe_old_name.length(); i++)
@@ -3594,7 +4047,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     | Header Information                                       |
     \*---------------------------------------------------------*/
     layout_json["format"] = "OpenRGB3DSpatialLayout";
-    layout_json["version"] = 5;
+    layout_json["version"] = 6;
 
     /*---------------------------------------------------------*\
     | Grid Settings                                            |
@@ -3716,6 +4169,16 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         if(!reference_points[i]) continue; // Skip null pointers
 
         layout_json["reference_points"].push_back(reference_points[i]->ToJson());
+    }
+
+    /*---------------------------------------------------------*\
+    | Display Planes                                           |
+    \*---------------------------------------------------------*/
+    layout_json["display_planes"] = nlohmann::json::array();
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        if(!display_planes[i]) continue;
+        layout_json["display_planes"].push_back(display_planes[i]->ToJson());
     }
 
     /*---------------------------------------------------------*\
@@ -3891,14 +4354,14 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     \*---------------------------------------------------------*/
     if(layout_json.contains("camera") && viewport)
     {
-        const auto& cam = layout_json["camera"];
+        const nlohmann::json& cam = layout_json["camera"];
         float dist = cam.contains("distance") ? cam["distance"].get<float>() : 20.0f;
         float yaw  = cam.contains("yaw") ? cam["yaw"].get<float>() : 45.0f;
         float pitch= cam.contains("pitch") ? cam["pitch"].get<float>() : 30.0f;
         float tx = 0.0f, ty = 0.0f, tz = 0.0f;
         if(cam.contains("target"))
         {
-            const auto& tgt = cam["target"];
+            const nlohmann::json& tgt = cam["target"];
             if(tgt.contains("x")) tx = tgt["x"].get<float>();
             if(tgt.contains("y")) ty = tgt["y"].get<float>();
             if(tgt.contains("z")) tz = tgt["z"].get<float>();
@@ -4224,6 +4687,27 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     UpdateReferencePointsList();
 
     /*---------------------------------------------------------*\
+    | Load Display Planes                                      |
+    \*---------------------------------------------------------*/
+    display_planes.clear();
+    current_display_plane_index = -1;
+    if(layout_json.contains("display_planes"))
+    {
+        const nlohmann::json& planes_array = layout_json["display_planes"];
+        for(size_t i = 0; i < planes_array.size(); i++)
+        {
+            std::unique_ptr<DisplayPlane3D> plane = DisplayPlane3D::FromJson(planes_array[i]);
+            if(plane)
+            {
+                display_planes.push_back(std::move(plane));
+            }
+        }
+    }
+    UpdateDisplayPlanesList();
+    RefreshDisplayPlaneDetails();
+    emit GridLayoutChanged();
+
+    /*---------------------------------------------------------*\
     | Load Zones                                               |
     \*---------------------------------------------------------*/
     if(zone_manager)
@@ -4310,7 +4794,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
 {
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
-    filesystem::path plugins_dir = config_dir / "plugins" / "3d_spatial_layouts";
+    filesystem::path plugins_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "layouts";
 
     QDir dir;
     dir.mkpath(QString::fromStdString(plugins_dir.string()));
@@ -4329,7 +4813,7 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
     layout_profiles_combo->clear();
 
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
-    filesystem::path layouts_dir = config_dir / "plugins" / "3d_spatial_layouts";
+    filesystem::path layouts_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "layouts";
 
 
     QDir dir(QString::fromStdString(layouts_dir.string()));
@@ -4471,7 +4955,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
 void OpenRGB3DSpatialTab::SaveCustomControllers()
 {
     std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+    std::string custom_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
 
 #ifdef _WIN32
     CreateDirectoryA(custom_dir.c_str(), NULL);
@@ -4519,7 +5003,7 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
 void OpenRGB3DSpatialTab::LoadCustomControllers()
 {
     std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string custom_dir = config_dir + "/plugins/3d_spatial_custom_controllers";
+    std::string custom_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
 
     filesystem::path dir_path(custom_dir);
     if(!filesystem::exists(dir_path))
@@ -5497,7 +5981,7 @@ void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_m
     float min_y = 0.0f, max_y = 0.0f;
     float min_z = 0.0f, max_z = 0.0f;
 
-    for(const auto& transform_ptr : controller_transforms)
+    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
     {
         const ControllerTransform* transform = transform_ptr.get();
         if(!transform) continue;
@@ -5580,15 +6064,17 @@ void OpenRGB3DSpatialTab::SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout)
 
 std::string OpenRGB3DSpatialTab::GetAudioCustomEffectsDir()
 {
-    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
-    std::string dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/AudioCustomEffects/";
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "AudioCustomEffects";
     filesystem::create_directories(dir);
-    return dir;
+    return dir.string();
 }
 
 std::string OpenRGB3DSpatialTab::GetAudioCustomEffectPath(const std::string& name)
 {
-    return GetAudioCustomEffectsDir() + name + ".audiocust.json";
+    filesystem::path base_dir(GetAudioCustomEffectsDir());
+    filesystem::path file_path = base_dir / (name + ".audiocust.json");
+    return file_path.string();
 }
 
 void OpenRGB3DSpatialTab::UpdateAudioCustomEffectsList()
@@ -5621,9 +6107,14 @@ void OpenRGB3DSpatialTab::on_audio_custom_save_clicked()
     }
 
     int eff_idx = audio_effect_combo->currentIndex();
+
+    // Index 0 is "None", actual effects start at index 1
+    if(eff_idx <= 0 || eff_idx > 4) return;
+
     const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    if(eff_idx < 0 || eff_idx > 3) return;
-    std::string class_name = class_names[eff_idx];
+    int actual_idx = eff_idx - 1;  // Adjust for "None" at index 0
+    std::string class_name = class_names[actual_idx];
+
     // Capture settings from the currently mounted audio effect UI
     if(!current_audio_effect_ui) { SetupAudioEffectUI(eff_idx); }
     if(!current_audio_effect_ui) return;
@@ -5666,8 +6157,13 @@ void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
     {
         nlohmann::json j = nlohmann::json::parse(json.toStdString());
         std::string cls = j.value("effect_class", "");
+        // Map class name to combo index (0="None", 1="AudioLevel3D", etc.)
         int idx = 0;
-        if(cls == "AudioLevel3D") idx = 0; else if(cls == "SpectrumBars3D") idx = 1; else if(cls == "BeatPulse3D") idx = 2; else if(cls == "BandScan3D") idx = 3;
+        if(cls == "AudioLevel3D") idx = 1;
+        else if(cls == "SpectrumBars3D") idx = 2;
+        else if(cls == "BeatPulse3D") idx = 3;
+        else if(cls == "BandScan3D") idx = 4;
+
         if(audio_effect_combo) audio_effect_combo->setCurrentIndex(idx);
         int target = j.value("target", -1);
         if(audio_effect_zone_combo)
@@ -5677,7 +6173,7 @@ void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
         }
         if(j.contains("settings"))
         {
-            const auto& s = j["settings"];
+            const nlohmann::json& s = j["settings"];
             // Ensure effect UI exists, then load settings into effect UI
             SetupAudioEffectUI(idx);
             if(current_audio_effect_ui) current_audio_effect_ui->LoadSettings(s);
@@ -5717,7 +6213,7 @@ void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
         inst->blend_mode = BlendMode::ADD;
         inst->enabled = true;
         inst->id = next_effect_instance_id++;
-        const auto& s = j["settings"];
+        const nlohmann::json& s = j["settings"];
         eff->LoadSettings(s);
         inst->effect.reset(eff);
         inst->saved_settings = std::make_unique<nlohmann::json>(s);
@@ -5817,21 +6313,15 @@ void OpenRGB3DSpatialTab::on_audio_std_low_changed(double)
     // For band-based effects, also map Hz to band indices if keys exist
     if(s.contains("band_start") || s.contains("band_end"))
     {
-        auto hz_to_idx = [&](float hz)->int{
-            int bands = AudioInputManager::instance()->getBandsCount();
-            float fs = (float)AudioInputManager::instance()->getSampleRate();
-            float f_min = std::max(1.0f, fs / (float)AudioInputManager::instance()->getFFTSize());
-            float f_max = fs * 0.5f;
-            if(hz < f_min) hz = f_min;
-            if(hz > f_max) hz = f_max;
-            float t = std::log(hz / f_min) / std::log(f_max / f_min);
-            int idx = (int)std::floor(t * bands);
-            if(idx < 0) idx = 0; if(idx > bands-1) idx = bands-1;
-            return idx;
-        };
-        int bs = hz_to_idx((float)lowhz);
-        int be = hz_to_idx((float)highhz);
-        if(be <= bs) be = std::min(bs+1, AudioInputManager::instance()->getBandsCount()-1);
+        int bands = AudioInputManager::instance()->getBandsCount();
+        float fs = (float)AudioInputManager::instance()->getSampleRate();
+        if(bands <= 0) bands = 1;
+        float f_min = std::max(1.0f, fs / (float)AudioInputManager::instance()->getFFTSize());
+        float f_max = fs * 0.5f;
+        if(f_max <= f_min) f_max = f_min + 1.0f;
+        int bs = MapHzToBandIndex((float)lowhz, bands, f_min, f_max);
+        int be = MapHzToBandIndex((float)highhz, bands, f_min, f_max);
+        if(be <= bs) be = std::min(bs + 1, bands - 1);
         s["band_start"] = bs;
         s["band_end"] = be;
     }
@@ -5902,12 +6392,18 @@ void OpenRGB3DSpatialTab::on_audio_std_falloff_changed(int)
 void OpenRGB3DSpatialTab::on_audio_effect_zone_changed(int index)
 {
     Q_UNUSED(index);
-    if(effect_stack.empty()) return;
     if(!audio_effect_zone_combo) return;
     QVariant data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
     if(!data.isValid()) return;
     int target = data.toInt();
-    effect_stack[0]->zone_index = target;
+
+    // Apply to running effect if one exists
+    if(!effect_stack.empty() && effect_stack[0])
+    {
+        effect_stack[0]->zone_index = target;
+        if(viewport) viewport->UpdateColors();
+    }
+    // Selection is already stored in combo and will be read when effect starts
 }
 
 void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
@@ -5995,6 +6491,487 @@ bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPosition(size_t ctrl_idx, size_t led_id
 
 
 
+/*---------------------------------------------------------*\
+| Display Plane Management                                 |
+\*---------------------------------------------------------*/
+
+DisplayPlane3D* OpenRGB3DSpatialTab::GetSelectedDisplayPlane()
+{
+    if(current_display_plane_index >= 0 &&
+       current_display_plane_index < (int)display_planes.size())
+    {
+        return display_planes[current_display_plane_index].get();
+    }
+    return nullptr;
+}
+
+void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
+{
+    if(!plane)
+    {
+        return;
+    }
+
+    const Transform3D& transform = plane->GetTransform();
+
+    if(pos_x_spin) { QSignalBlocker block(pos_x_spin); pos_x_spin->setValue(transform.position.x); }
+    if(pos_x_slider) { QSignalBlocker block(pos_x_slider); pos_x_slider->setValue((int)std::lround(transform.position.x * 10.0f)); }
+
+    if(pos_y_spin) { QSignalBlocker block(pos_y_spin); pos_y_spin->setValue(transform.position.y); }
+    if(pos_y_slider) { QSignalBlocker block(pos_y_slider); pos_y_slider->setValue((int)std::lround(transform.position.y * 10.0f)); }
+
+    if(pos_z_spin) { QSignalBlocker block(pos_z_spin); pos_z_spin->setValue(transform.position.z); }
+    if(pos_z_slider) { QSignalBlocker block(pos_z_slider); pos_z_slider->setValue((int)std::lround(transform.position.z * 10.0f)); }
+
+    if(rot_x_spin) { QSignalBlocker block(rot_x_spin); rot_x_spin->setValue(transform.rotation.x); }
+    if(rot_x_slider) { QSignalBlocker block(rot_x_slider); rot_x_slider->setValue((int)std::lround(transform.rotation.x)); }
+
+    if(rot_y_spin) { QSignalBlocker block(rot_y_spin); rot_y_spin->setValue(transform.rotation.y); }
+    if(rot_y_slider) { QSignalBlocker block(rot_y_slider); rot_y_slider->setValue((int)std::lround(transform.rotation.y)); }
+
+    if(rot_z_spin) { QSignalBlocker block(rot_z_spin); rot_z_spin->setValue(transform.rotation.z); }
+    if(rot_z_slider) { QSignalBlocker block(rot_z_slider); rot_z_slider->setValue((int)std::lround(transform.rotation.z)); }
+
+    if(display_plane_name_edit)
+    {
+        QSignalBlocker block(display_plane_name_edit);
+        display_plane_name_edit->setText(QString::fromStdString(plane->GetName()));
+    }
+    if(display_plane_width_spin)
+    {
+        QSignalBlocker block(display_plane_width_spin);
+        display_plane_width_spin->setValue(plane->GetWidthMM());
+    }
+    if(display_plane_height_spin)
+    {
+        QSignalBlocker block(display_plane_height_spin);
+        display_plane_height_spin->setValue(plane->GetHeightMM());
+    }
+    if(display_plane_bezel_spin)
+    {
+        QSignalBlocker block(display_plane_bezel_spin);
+        display_plane_bezel_spin->setValue(plane->GetBezelMM());
+    }
+    if(display_plane_capture_id_edit)
+    {
+        QSignalBlocker block(display_plane_capture_id_edit);
+        display_plane_capture_id_edit->setText(QString::fromStdString(plane->GetCaptureSourceId()));
+    }
+    if(display_plane_visible_check)
+    {
+        QSignalBlocker block(display_plane_visible_check);
+        display_plane_visible_check->setCheckState(plane->IsVisible() ? Qt::Checked : Qt::Unchecked);
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
+{
+    if(!display_planes_list)
+    {
+        return;
+    }
+
+    int desired_index = current_display_plane_index;
+
+    display_planes_list->blockSignals(true);
+    display_planes_list->clear();
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        const DisplayPlane3D* plane = display_planes[i].get();
+        if(!plane) continue;
+        QString label = QString::fromStdString(plane->GetName()) +
+                        QString(" (%1 x %2 mm)")
+                            .arg(plane->GetWidthMM(), 0, 'f', 0)
+                            .arg(plane->GetHeightMM(), 0, 'f', 0);
+        QListWidgetItem* item = new QListWidgetItem(label, display_planes_list);
+        if(!plane->IsVisible())
+        {
+            item->setForeground(QColor("#888888"));
+        }
+    }
+    display_planes_list->blockSignals(false);
+
+    if(display_planes.empty())
+    {
+        current_display_plane_index = -1;
+        if(remove_display_plane_button) remove_display_plane_button->setEnabled(false);
+        if(viewport) viewport->SelectDisplayPlane(-1);
+        RefreshDisplayPlaneDetails();
+        return;
+    }
+
+    if(desired_index < 0 || desired_index >= (int)display_planes.size())
+    {
+        desired_index = 0;
+    }
+
+    current_display_plane_index = desired_index;
+    display_planes_list->setCurrentRow(desired_index);
+    if(viewport) viewport->SelectDisplayPlane(desired_index);
+    RefreshDisplayPlaneDetails();
+}
+
+
+void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    bool has_plane = (plane != nullptr);
+
+    if(remove_display_plane_button) remove_display_plane_button->setEnabled(has_plane);
+
+    QList<QWidget*> widgets = {
+        display_plane_name_edit,
+        display_plane_width_spin,
+        display_plane_height_spin,
+        display_plane_bezel_spin,
+        display_plane_capture_id_edit,
+        display_plane_visible_check
+    };
+
+    for(QWidget* w : widgets)
+    {
+        if(w) w->setEnabled(has_plane);
+    }
+
+    if(!has_plane)
+    {
+        if(display_plane_name_edit) display_plane_name_edit->setText("");
+        if(display_plane_width_spin) display_plane_width_spin->setValue(1000.0);
+        if(display_plane_height_spin) display_plane_height_spin->setValue(600.0);
+        if(display_plane_bezel_spin) display_plane_bezel_spin->setValue(10.0);
+        if(display_plane_capture_id_edit) display_plane_capture_id_edit->setText("");
+        if(display_plane_visible_check) display_plane_visible_check->setCheckState(Qt::Unchecked);
+        return;
+    }
+
+    if(display_plane_name_edit)
+    {
+        QSignalBlocker block(display_plane_name_edit);
+        display_plane_name_edit->setText(QString::fromStdString(plane->GetName()));
+    }
+    if(display_plane_width_spin)
+    {
+        QSignalBlocker block(display_plane_width_spin);
+        display_plane_width_spin->setValue(plane->GetWidthMM());
+    }
+    if(display_plane_height_spin)
+    {
+        QSignalBlocker block(display_plane_height_spin);
+        display_plane_height_spin->setValue(plane->GetHeightMM());
+    }
+    if(display_plane_bezel_spin)
+    {
+        QSignalBlocker block(display_plane_bezel_spin);
+        display_plane_bezel_spin->setValue(plane->GetBezelMM());
+    }
+    if(display_plane_capture_id_edit)
+    {
+        QSignalBlocker block(display_plane_capture_id_edit);
+        display_plane_capture_id_edit->setText(QString::fromStdString(plane->GetCaptureSourceId()));
+    }
+    if(display_plane_visible_check)
+    {
+        QSignalBlocker block(display_plane_visible_check);
+        display_plane_visible_check->setCheckState(plane->IsVisible() ? Qt::Checked : Qt::Unchecked);
+    }
+
+    SyncDisplayPlaneControls(plane);
+}
+
+void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
+{
+    if(viewport)
+    {
+        viewport->NotifyDisplayPlaneChanged();
+    }
+    emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
+{
+    current_display_plane_index = index;
+
+    if(controller_list)
+    {
+        QSignalBlocker block(controller_list);
+        controller_list->clearSelection();
+    }
+    if(reference_points_list)
+    {
+        QSignalBlocker block(reference_points_list);
+        reference_points_list->clearSelection();
+    }
+
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    SyncDisplayPlaneControls(plane);
+    RefreshDisplayPlaneDetails();
+    if(viewport) viewport->SelectDisplayPlane(index);
+}
+
+void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
+{
+    std::string base_name = "Display Plane";
+    int suffix = (int)display_planes.size() + 1;
+    std::unique_ptr<DisplayPlane3D> plane = std::make_unique<DisplayPlane3D>(base_name + " " + std::to_string(suffix));
+
+    float room_depth_units = room_depth_spin ? ((float)room_depth_spin->value() / grid_scale_mm) : 100.0f;
+    float room_height_units = room_height_spin ? ((float)room_height_spin->value() / grid_scale_mm) : 100.0f;
+
+    plane->GetTransform().position.x = 0.0f;
+    plane->GetTransform().position.y = -room_depth_units * 0.25f;
+    plane->GetTransform().position.z = room_height_units * 0.5f;
+
+    display_planes.push_back(std::move(plane));
+    current_display_plane_index = (int)display_planes.size() - 1;
+    UpdateDisplayPlanesList();
+    DisplayPlane3D* new_plane = GetSelectedDisplayPlane();
+    SyncDisplayPlaneControls(new_plane);
+    RefreshDisplayPlaneDetails();
+    if(viewport) viewport->SelectDisplayPlane(current_display_plane_index);
+    NotifyDisplayPlaneChanged();
+    emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
+{
+    if(current_display_plane_index < 0 ||
+       current_display_plane_index >= (int)display_planes.size())
+    {
+        return;
+    }
+
+    display_planes.erase(display_planes.begin() + current_display_plane_index);
+    if(current_display_plane_index >= (int)display_planes.size())
+    {
+        current_display_plane_index = (int)display_planes.size() - 1;
+    }
+    UpdateDisplayPlanesList();
+    RefreshDisplayPlaneDetails();
+    NotifyDisplayPlaneChanged();
+    emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_name_edited(const QString& text)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane)
+    {
+        return;
+    }
+    plane->SetName(text.toStdString());
+    UpdateDisplayPlanesList();
+    NotifyDisplayPlaneChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_width_changed(double value)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane) return;
+    plane->SetWidthMM((float)value);
+    UpdateDisplayPlanesList();
+    NotifyDisplayPlaneChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_height_changed(double value)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane) return;
+    plane->SetHeightMM((float)value);
+    UpdateDisplayPlanesList();
+    NotifyDisplayPlaneChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_bezel_changed(double value)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane) return;
+    plane->SetBezelMM((float)value);
+    NotifyDisplayPlaneChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_capture_id_changed(const QString& text)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane) return;
+    plane->SetCaptureSourceId(text.toStdString());
+    NotifyDisplayPlaneChanged();
+}
+void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, float y, float z)
+{
+    if(index < 0)
+    {
+        current_display_plane_index = -1;
+        if(display_planes_list)
+        {
+            QSignalBlocker block(display_planes_list);
+            display_planes_list->clearSelection();
+        }
+        RefreshDisplayPlaneDetails();
+        return;
+    }
+
+    if(index >= (int)display_planes.size())
+    {
+        return;
+    }
+
+    current_display_plane_index = index;
+    if(display_planes_list)
+    {
+        QSignalBlocker block(display_planes_list);
+        display_planes_list->setCurrentRow(index);
+    }
+    if(controller_list)
+    {
+        QSignalBlocker block(controller_list);
+        controller_list->clearSelection();
+    }
+    if(reference_points_list)
+    {
+        QSignalBlocker block(reference_points_list);
+        reference_points_list->clearSelection();
+    }
+
+    DisplayPlane3D* plane = display_planes[index].get();
+    if(!plane)
+    {
+        return;
+    }
+
+    Transform3D& transform = plane->GetTransform();
+    transform.position.x = x;
+    transform.position.y = y;
+    transform.position.z = z;
+
+    SyncDisplayPlaneControls(plane);
+    RefreshDisplayPlaneDetails();
+    emit GridLayoutChanged();
+}
+
+
+    current_display_plane_index = index;
+    if(display_planes_list)
+    {
+        QSignalBlocker block(display_planes_list);
+        display_planes_list->setCurrentRow(index);
+    }
+    if(controller_list)
+    {
+        QSignalBlocker block(controller_list);
+        controller_list->clearSelection();
+    }
+    if(reference_points_list)
+    {
+        QSignalBlocker block(reference_points_list);
+        reference_points_list->clearSelection();
+    }
+
+    DisplayPlane3D* plane = display_planes[index].get();
+    if(!plane)
+    {
+        return;
+    }
+
+    Transform3D& transform = plane->GetTransform();
+    transform.position.x = x;
+    transform.position.y = y;
+    transform.position.z = z;
+
+    SyncDisplayPlaneControls(plane);
+    RefreshDisplayPlaneDetails();
+    emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, float y, float z)
+{
+    if(index < 0)
+    {
+        return;
+    }
+
+    if(index >= (int)display_planes.size())
+    {
+        return;
+    }
+
+    current_display_plane_index = index;
+    if(display_planes_list)
+    {
+        QSignalBlocker block(display_planes_list);
+        display_planes_list->setCurrentRow(index);
+    }
+    if(controller_list)
+    {
+        QSignalBlocker block(controller_list);
+        controller_list->clearSelection();
+    }
+    if(reference_points_list)
+    {
+        QSignalBlocker block(reference_points_list);
+        reference_points_list->clearSelection();
+    }
+
+    DisplayPlane3D* plane = display_planes[index].get();
+    if(!plane)
+    {
+        return;
+    }
+
+    Transform3D& transform = plane->GetTransform();
+    transform.rotation.x = x;
+    transform.rotation.y = y;
+    transform.rotation.z = z;
+
+    SyncDisplayPlaneControls(plane);
+    RefreshDisplayPlaneDetails();
+    emit GridLayoutChanged();
+}
+
+
+    current_display_plane_index = index;
+    if(display_planes_list)
+    {
+        QSignalBlocker block(display_planes_list);
+        display_planes_list->setCurrentRow(index);
+    }
+    if(controller_list)
+    {
+        QSignalBlocker block(controller_list);
+        controller_list->clearSelection();
+    }
+    if(reference_points_list)
+    {
+        QSignalBlocker block(reference_points_list);
+        reference_points_list->clearSelection();
+    }
+
+    DisplayPlane3D* plane = display_planes[index].get();
+    if(!plane)
+    {
+        return;
+    }
+
+    Transform3D& transform = plane->GetTransform();
+    transform.rotation.x = x;
+    transform.rotation.y = y;
+    transform.rotation.z = z;
+
+    SyncDisplayPlaneControls(plane);
+    RefreshDisplayPlaneDetails();
+    emit GridLayoutChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_visible_toggled(int state)
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane) return;
+    plane->SetVisible(state == Qt::Checked);
+    UpdateDisplayPlanesList();
+    SyncDisplayPlaneControls(plane);
+    NotifyDisplayPlaneChanged();
+    emit GridLayoutChanged();
+}
+
 bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_interleaved, size_t max_triplets, size_t& out_count) const
 {
     out_count = 0;
@@ -6021,7 +6998,7 @@ bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_i
 size_t OpenRGB3DSpatialTab::SDK_GetTotalLEDCount() const
 {
     size_t total = 0;
-    for(const auto& up : controller_transforms)
+    for(const std::unique_ptr<ControllerTransform>& up : controller_transforms)
     {
         if(up) total += up->led_positions.size();
     }
@@ -6033,7 +7010,7 @@ bool OpenRGB3DSpatialTab::SDK_GetAllLEDWorldPositions(float* xyz_interleaved, si
     out_count = 0;
     if(!xyz_interleaved || max_triplets == 0) return false;
     size_t written = 0;
-    for(const auto& up : controller_transforms)
+    for(const std::unique_ptr<ControllerTransform>& up : controller_transforms)
     {
         if(!up) continue;
         for(size_t i = 0; i < up->led_positions.size(); ++i)
@@ -6059,7 +7036,7 @@ bool OpenRGB3DSpatialTab::SDK_RegisterGridLayoutCallback(void (*cb)(void*), void
 
 bool OpenRGB3DSpatialTab::SDK_UnregisterGridLayoutCallback(void (*cb)(void*), void* user)
 {
-    for(auto it = grid_layout_callbacks.begin(); it != grid_layout_callbacks.end(); ++it)
+    for(std::vector<std::pair<void (*)(void*), void*>>::iterator it = grid_layout_callbacks.begin(); it != grid_layout_callbacks.end(); ++it)
     {
         if(it->first == cb && it->second == user) { grid_layout_callbacks.erase(it); return true; }
     }
@@ -6159,10 +7136,15 @@ bool OpenRGB3DSpatialTab::SDK_SetGridOrderColorsWithOrder(int order, const unsig
         }
         std::stable_sort(all.begin(), all.end(), PosLessXYZ);
         map.reserve(all.size());
-        for(auto* p : all)
+        for(size_t idx = 0; idx < all.size(); ++idx)
         {
+            const LEDPosition3D* p = all[idx];
             // Find controller index by pointer match (linear scan acceptable for moderate sizes)
-            size_t cidx = 0; for(; cidx<controller_transforms.size(); ++cidx){ if(controller_transforms[cidx].get() && controller_transforms[cidx]->controller == p->controller) break; }
+            size_t cidx = 0;
+            for(; cidx<controller_transforms.size(); ++cidx)
+            {
+                if(controller_transforms[cidx].get() && controller_transforms[cidx]->controller == p->controller) break;
+            }
             map.emplace_back(cidx, (size_t)p->led_idx);
         }
     }

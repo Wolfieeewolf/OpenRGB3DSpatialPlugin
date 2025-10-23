@@ -500,7 +500,8 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
         sorted_controllers.emplace_back(key, i);
     }
 
-    std::sort(sorted_controllers.begin(), sorted_controllers.end(), [&](const auto& a, const auto& b){
+    std::sort(sorted_controllers.begin(), sorted_controllers.end(),
+        [&](const std::pair<float, unsigned int>& a, const std::pair<float, unsigned int>& b){
         if(!sort_reverse) return a.first < b.first;  // ascending
         return a.first > b.first;                    // descending when reversed
     });

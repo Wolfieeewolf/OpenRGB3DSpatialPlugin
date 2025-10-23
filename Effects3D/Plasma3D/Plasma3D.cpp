@@ -390,3 +390,18 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
+
+nlohmann::json Plasma3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["pattern_type"] = pattern_type;
+    return j;
+}
+
+void Plasma3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("pattern_type")) pattern_type = settings["pattern_type"];
+
+    if(pattern_combo) pattern_combo->setCurrentIndex(pattern_type);
+}

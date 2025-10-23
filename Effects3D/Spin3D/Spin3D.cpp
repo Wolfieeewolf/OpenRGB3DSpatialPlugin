@@ -526,6 +526,115 @@ RGBColor Spin3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+float Spin3D::Clamp01(float value)
+{
+    if(value < 0.0f)
+    {
+        return 0.0f;
+    }
+    if(value > 1.0f)
+    {
+        return 1.0f;
+    }
+    return value;
+}
+
+float Spin3D::ComputeSpinXZ(float rel_x,
+                            float rel_y,
+                            float rel_z,
+                            float y_bias,
+                            float half_width,
+                            float half_depth,
+                            float half_height) const
+{
+    unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
+    float angle = atan2(rel_z, rel_x);
+    float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+    float spin_angle = angle * (float)arms - progress;
+    float period = 6.28318f / (float)arms;
+    float arm_position = fmod(spin_angle, period);
+    if(arm_position < 0.0f)
+    {
+        arm_position += period;
+    }
+    float blade_width = 0.4f * period;
+    if(arm_position >= blade_width)
+    {
+        return 0.0f;
+    }
+    float blade = 1.0f - (arm_position / blade_width);
+    float radial_fade = fmax(0.3f, 1.0f - (radius / (half_width + half_depth)) * 0.8f);
+    float y_distance = fabs((rel_y - y_bias) / (half_height * 0.8f));
+    float y_fade = Clamp01(1.0f - y_distance);
+    return blade * radial_fade * y_fade;
+}
+
+float Spin3D::ComputeSpinYZ(float rel_x,
+                            float rel_y,
+                            float rel_z,
+                            float bias_sign,
+                            float half_width,
+                            float half_depth,
+                            float half_height) const
+{
+    unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
+    float angle = atan2(rel_z, rel_y);
+    float radius = sqrt(rel_y*rel_y + rel_z*rel_z);
+    float spin_angle = angle * (float)arms - progress;
+    float period = 6.28318f / (float)arms;
+    float arm_position = fmod(spin_angle, period);
+    if(arm_position < 0.0f)
+    {
+        arm_position += period;
+    }
+    float blade_width = 0.4f * period;
+    if(arm_position >= blade_width)
+    {
+        return 0.0f;
+    }
+    float blade = 1.0f - (arm_position / blade_width);
+    float radial_fade = fmax(0.3f, 1.0f - (radius / (half_depth + half_height)) * 0.8f);
+    float wall_distance = (bias_sign > 0.0f)
+        ? (half_width - rel_x)
+        : (half_width + rel_x);
+    float wall_ratio = wall_distance / (half_width * 0.8f);
+    float wall_fade = Clamp01(1.0f - wall_ratio);
+    return blade * radial_fade * wall_fade;
+}
+
+float Spin3D::ComputeSpinXY(float rel_x,
+                            float rel_y,
+                            float rel_z,
+                            float bias_sign,
+                            float half_width,
+                            float half_depth,
+                            float half_height) const
+{
+    unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
+    float angle = atan2(rel_y, rel_x);
+    float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+    float spin_angle = angle * (float)arms - progress;
+    float period = 6.28318f / (float)arms;
+    float arm_position = fmod(spin_angle, period);
+    if(arm_position < 0.0f)
+    {
+        arm_position += period;
+    }
+    float blade_width = 0.4f * period;
+    if(arm_position >= blade_width)
+    {
+        return 0.0f;
+    }
+    float blade = 1.0f - (arm_position / blade_width);
+    float radial_fade = fmax(0.3f, 1.0f - (radius / (half_width + half_height)) * 0.8f);
+    float wall_distance = (bias_sign > 0.0f)
+        ? (half_depth - rel_z)
+        : (half_depth + rel_z);
+    float wall_ratio = wall_distance / (half_depth * 0.8f);
+    float wall_fade = Clamp01(1.0f - wall_ratio);
+    return blade * radial_fade * wall_fade;
+}
+
 // Grid-aware version with room-relative fades and radii
 RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -542,81 +651,55 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     progress = CalculateProgress(time);
 
     // Room-aware distances
-    auto fade01 = [](float v){ return fmax(0.0f, fmin(1.0f, v)); };
     float half_w = grid.width * 0.5f;
     float half_d = grid.depth * 0.5f;
     float half_h = grid.height * 0.5f;
 
     float intensity = 0.0f;
 
-    // Helper lambdas for repeated spin math
-    auto spinXZ = [&](float y_bias) {
-        float angle = atan2(rel_z, rel_x);
-        float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
-        float spin_angle = angle * num_arms - progress;
-        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-        if(arm_position < 0) arm_position += 6.28318f / num_arms;
-        float blade_width = 0.4f * (6.28318f / num_arms);
-        if(arm_position < blade_width)
-        {
-            float blade = 1.0f - (arm_position / blade_width);
-            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_w + half_d)) * 0.8f);
-            float y_fade = fade01(1.0f - fabs((rel_y - y_bias) / (half_h * 0.8f)));
-            return blade * radial_fade * y_fade;
-        }
-        return 0.0f;
-    };
-
-    auto spinYZ = [&](float x_bias_sign) {
-        float angle = atan2(rel_z, rel_y);
-        float radius = sqrt(rel_y*rel_y + rel_z*rel_z);
-        float spin_angle = angle * num_arms - progress;
-        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-        if(arm_position < 0) arm_position += 6.28318f / num_arms;
-        float blade_width = 0.4f * (6.28318f / num_arms);
-        if(arm_position < blade_width)
-        {
-            float blade = 1.0f - (arm_position / blade_width);
-            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_d + half_h)) * 0.8f);
-            float wall_fade = fade01(1.0f - ((x_bias_sign > 0 ? (half_w - rel_x) : (half_w + rel_x)) / (half_w * 0.8f)));
-            return blade * radial_fade * wall_fade;
-        }
-        return 0.0f;
-    };
-
-    auto spinXY = [&](float z_bias_sign) {
-        float angle = atan2(rel_y, rel_x);
-        float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
-        float spin_angle = angle * num_arms - progress;
-        float arm_position = fmod(spin_angle, 6.28318f / num_arms);
-        if(arm_position < 0) arm_position += 6.28318f / num_arms;
-        float blade_width = 0.4f * (6.28318f / num_arms);
-        if(arm_position < blade_width)
-        {
-            float blade = 1.0f - (arm_position / blade_width);
-            float radial_fade = fmax(0.3f, 1.0f - (radius / (half_w + half_h)) * 0.8f);
-            float wall_fade = fade01(1.0f - ((z_bias_sign > 0 ? (half_d - rel_z) : (half_d + rel_z)) / (half_d * 0.8f)));
-            return blade * radial_fade * wall_fade;
-        }
-        return 0.0f;
-    };
-
     switch(surface_type)
     {
-        case 0: intensity = spinXZ(0.0f); break;                   // Floor
-        case 1: intensity = spinXZ(half_h); break;                  // Ceiling bias upwards
-        case 2: intensity = spinYZ(-1.0f); break;                   // Left wall
-        case 3: intensity = spinYZ(1.0f); break;                    // Right wall
-        case 4: intensity = spinXY(-1.0f); break;                   // Front wall
-        case 5: intensity = spinXY(1.0f); break;                    // Back wall
-        case 6: intensity = fmax(spinXZ(0.0f), spinXZ(half_h)); break;                // Floor & Ceiling
-        case 7: intensity = fmax(spinYZ(-1.0f), spinYZ(1.0f)); break;                 // Left & Right
-        case 8: intensity = fmax(spinXY(-1.0f), spinXY(1.0f)); break;                 // Front & Back
-        case 9: intensity = fmax(fmax(spinYZ(-1.0f), spinYZ(1.0f)), fmax(spinXY(-1.0f), spinXY(1.0f))); break; // All walls
+        case 0: intensity = ComputeSpinXZ(rel_x, rel_y, rel_z, 0.0f, half_w, half_d, half_h); break;                   // Floor
+        case 1: intensity = ComputeSpinXZ(rel_x, rel_y, rel_z, half_h, half_w, half_d, half_h); break;                  // Ceiling bias upwards
+        case 2: intensity = ComputeSpinYZ(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h); break;                   // Left wall
+        case 3: intensity = ComputeSpinYZ(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h); break;                    // Right wall
+        case 4: intensity = ComputeSpinXY(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h); break;                   // Front wall
+        case 5: intensity = ComputeSpinXY(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h); break;                    // Back wall
+        case 6:
+            intensity = fmax(ComputeSpinXZ(rel_x, rel_y, rel_z, 0.0f, half_w, half_d, half_h),
+                             ComputeSpinXZ(rel_x, rel_y, rel_z, half_h, half_w, half_d, half_h));
+            break; // Floor & Ceiling
+        case 7:
+            intensity = fmax(ComputeSpinYZ(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h),
+                             ComputeSpinYZ(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h));
+            break; // Left & Right
+        case 8:
+            intensity = fmax(ComputeSpinXY(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h),
+                             ComputeSpinXY(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h));
+            break; // Front & Back
+        case 9:
+        {
+            float yz_neg = ComputeSpinYZ(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float yz_pos = ComputeSpinYZ(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            float xy_neg = ComputeSpinXY(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float xy_pos = ComputeSpinXY(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            intensity = fmax(fmax(yz_neg, yz_pos), fmax(xy_neg, xy_pos));
+            break;
+        }
         case 10: // Entire room (max of all)
         default:
-            intensity = fmax(spinXZ(0.0f), fmax(spinXZ(half_h), fmax(fmax(spinYZ(-1.0f), spinYZ(1.0f)), fmax(spinXY(-1.0f), spinXY(1.0f)))));
+        {
+            float xz_floor = ComputeSpinXZ(rel_x, rel_y, rel_z, 0.0f, half_w, half_d, half_h);
+            float xz_ceiling = ComputeSpinXZ(rel_x, rel_y, rel_z, half_h, half_w, half_d, half_h);
+            float yz_neg = ComputeSpinYZ(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float yz_pos = ComputeSpinYZ(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            float xy_neg = ComputeSpinXY(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float xy_pos = ComputeSpinXY(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            intensity = fmax(xz_floor,
+                             fmax(xz_ceiling,
+                                  fmax(fmax(yz_neg, yz_pos), fmax(xy_neg, xy_pos))));
             break;
+        }
     }
 
     intensity = fmax(0.0f, fmin(1.0f, intensity));
@@ -631,4 +714,22 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     g = (unsigned char)(g * bf);
     b = (unsigned char)(b * bf);
     return (b << 16) | (g << 8) | r;
+}
+
+nlohmann::json Spin3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["surface_type"] = surface_type;
+    j["num_arms"] = num_arms;
+    return j;
+}
+
+void Spin3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("surface_type")) surface_type = settings["surface_type"];
+    if(settings.contains("num_arms")) num_arms = settings["num_arms"];
+
+    if(surface_combo) surface_combo->setCurrentIndex(surface_type);
+    if(arms_slider) arms_slider->setValue(num_arms);
 }

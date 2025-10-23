@@ -315,3 +315,27 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+RGBColor DNAHelix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | DNA Helix is a 3D spatial effect - simply delegate to    |
+    | the standard CalculateColor implementation               |
+    \*---------------------------------------------------------*/
+    (void)grid;  // Unused parameter
+    return CalculateColor(x, y, z, time);
+}
+
+nlohmann::json DNAHelix3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["helix_radius"] = helix_radius;
+    return j;
+}
+
+void DNAHelix3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("helix_radius")) helix_radius = settings["helix_radius"];
+
+    if(radius_slider) radius_slider->setValue(helix_radius);
+}

@@ -57,6 +57,7 @@ Gizmo3D::Gizmo3D()
     hover_axis = GIZMO_AXIS_NONE;
     target_transform = nullptr;
     target_ref_point = nullptr;
+    target_display_plane = nullptr;
 
     gizmo_x = 0.0f;
     gizmo_y = 0.0f;
@@ -139,6 +140,7 @@ void Gizmo3D::SetTarget(ControllerTransform* target)
 {
     target_transform = target;
     target_ref_point = nullptr;
+    target_display_plane = nullptr;
     active = (target != nullptr);
 
     if(target)
@@ -151,12 +153,27 @@ void Gizmo3D::SetTarget(VirtualReferencePoint3D* target)
 {
     target_ref_point = target;
     target_transform = nullptr;
+    target_display_plane = nullptr;
     active = (target != nullptr);
 
     if(target)
     {
         Vector3D pos = target->GetPosition();
         SetPosition(pos.x, pos.y, pos.z);
+    }
+}
+
+void Gizmo3D::SetTarget(DisplayPlane3D* target)
+{
+    target_display_plane = target;
+    target_transform = nullptr;
+    target_ref_point = nullptr;
+    active = (target != nullptr);
+
+    if(target)
+    {
+        Transform3D& t = target->GetTransform();
+        SetPosition(t.position.x, t.position.y, t.position.z);
     }
 }
 
@@ -184,7 +201,7 @@ void Gizmo3D::SetCameraDistance(float distance)
 
 bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point))
+    if(!active || (!target_transform && !target_ref_point && !target_display_plane))
         return false;
 
     last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
@@ -285,7 +302,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
 
 bool Gizmo3D::HandleMouseMove(QMouseEvent* event, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!active || (!target_transform && !target_ref_point))
+    if(!active || (!target_transform && !target_ref_point && !target_display_plane))
         return false;
 
     if(center_press_pending && !dragging)
@@ -654,7 +671,7 @@ bool Gizmo3D::PickGizmoCenter(int mouse_x, int mouse_y, const float* modelview, 
 
 void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport)
 {
-    if(!target_transform && !target_ref_point)
+    if(!target_transform && !target_ref_point && !target_display_plane)
         return;
 
     switch(mode)
@@ -831,6 +848,24 @@ void Gizmo3D::ApplyTranslation(float delta_x, float delta_y, float delta_z)
         gizmo_y = pos.y;
         gizmo_z = pos.z;
     }
+    else if(target_display_plane)
+    {
+        Transform3D& transform = target_display_plane->GetTransform();
+        transform.position.x += delta_x;
+        transform.position.y += delta_y;
+        transform.position.z += delta_z;
+
+        if(grid_snap_enabled)
+        {
+            transform.position.x = SnapToGrid(transform.position.x);
+            transform.position.y = SnapToGrid(transform.position.y);
+            transform.position.z = SnapToGrid(transform.position.z);
+        }
+
+        gizmo_x = transform.position.x;
+        gizmo_y = transform.position.y;
+        gizmo_z = transform.position.z;
+    }
 }
 
 void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
@@ -869,6 +904,20 @@ void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
         // Keep gizmo centered on the controller - rotation doesn't change position
         // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
         // which calls GetControllerCenter() for proper bounds-based centering
+    }
+    else if(target_display_plane)
+    {
+        Transform3D& transform = target_display_plane->GetTransform();
+        transform.rotation.x += delta_x;
+        transform.rotation.y += delta_y;
+        transform.rotation.z += delta_z;
+
+        while(transform.rotation.x > 360.0f) transform.rotation.x -= 360.0f;
+        while(transform.rotation.x < 0.0f) transform.rotation.x += 360.0f;
+        while(transform.rotation.y > 360.0f) transform.rotation.y -= 360.0f;
+        while(transform.rotation.y < 0.0f) transform.rotation.y += 360.0f;
+        while(transform.rotation.z > 360.0f) transform.rotation.z -= 360.0f;
+        while(transform.rotation.z < 0.0f) transform.rotation.z += 360.0f;
     }
 }
 
@@ -934,6 +983,24 @@ void Gizmo3D::ApplyFreeroamMovement(float delta_x, float delta_y, const float* m
         gizmo_x = target_transform->transform.position.x;
         gizmo_y = target_transform->transform.position.y;
         gizmo_z = target_transform->transform.position.z;
+    }
+    else if(target_display_plane)
+    {
+        Transform3D& transform = target_display_plane->GetTransform();
+        transform.position.x += (right_x * delta_x - up_x * delta_y) * move_scale;
+        transform.position.y += (right_y * delta_x - up_y * delta_y) * move_scale;
+        transform.position.z += (right_z * delta_x - up_z * delta_y) * move_scale;
+
+        if(grid_snap_enabled)
+        {
+            transform.position.x = SnapToGrid(transform.position.x);
+            transform.position.y = SnapToGrid(transform.position.y);
+            transform.position.z = SnapToGrid(transform.position.z);
+        }
+
+        gizmo_x = transform.position.x;
+        gizmo_y = transform.position.y;
+        gizmo_z = transform.position.z;
     }
 }
 

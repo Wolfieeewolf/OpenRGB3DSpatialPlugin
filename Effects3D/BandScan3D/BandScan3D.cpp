@@ -47,9 +47,15 @@ EffectInfo3D BandScan3D::GetEffectInfo()
     return info;
 }
 
-void BandScan3D::SetupCustomUI(QWidget* /*parent*/)
+void BandScan3D::SetupCustomUI(QWidget* parent)
 {
-    // No extra per-effect UI; use standard Audio Controls panel
+    /*---------------------------------------------------------*\
+    | Band Scan has no effect-specific controls                |
+    | All audio controls (Hz, Smoothing, Falloff) are handled |
+    | by the standard Audio Controls panel in the Audio tab   |
+    \*---------------------------------------------------------*/
+    (void)parent;
+    // No custom UI needed - all controls are standard
 }
 
 void BandScan3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -105,11 +111,21 @@ RGBColor BandScan3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
+RGBColor BandScan3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    /*---------------------------------------------------------*\
+    | Audio effects are typically global (not spatially aware) |
+    | Simply delegate to CalculateColor                        |
+    \*---------------------------------------------------------*/
+    (void)grid;  // Unused parameter
+    return CalculateColor(x, y, z, time);
+}
+
 nlohmann::json BandScan3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["band_start"] = band_start;
-    j["band_end"] = band_end;
+    j["low_hz"] = low_hz;
+    j["high_hz"] = high_hz;
     j["smoothing"] = smoothing;
     j["falloff"] = falloff;
     return j;
@@ -118,10 +134,22 @@ nlohmann::json BandScan3D::SaveSettings() const
 void BandScan3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("band_start")) band_start = settings["band_start"].get<int>();
-    if(settings.contains("band_end")) band_end = settings["band_end"].get<int>();
-    if(settings.contains("smoothing")) smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
-    if(settings.contains("falloff")) falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    if(settings.contains("low_hz"))
+    {
+        low_hz = settings["low_hz"].get<int>();
+    }
+    if(settings.contains("high_hz"))
+    {
+        high_hz = settings["high_hz"].get<int>();
+    }
+    if(settings.contains("smoothing"))
+    {
+        smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
+    }
+    if(settings.contains("falloff"))
+    {
+        falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
+    }
 }
 
 REGISTER_EFFECT_3D(BandScan3D)

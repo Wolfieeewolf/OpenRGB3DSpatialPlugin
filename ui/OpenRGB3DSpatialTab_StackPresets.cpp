@@ -18,15 +18,15 @@
 
 std::string OpenRGB3DSpatialTab::GetStackPresetsPath()
 {
-    std::string config_dir  = resource_manager->GetConfigurationDirectory().string();
-    std::string presets_dir = config_dir + "plugins/OpenRGB3DSpatialPlugin/StackPresets/";
+    filesystem::path config_dir  = resource_manager->GetConfigurationDirectory();
+    filesystem::path presets_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "StackPresets";
 
     /*---------------------------------------------------------*\
     | Create directory if it doesn't exist                     |
     \*---------------------------------------------------------*/
     filesystem::create_directories(presets_dir);
 
-    return presets_dir;
+    return presets_dir.string();
 }
 
 void OpenRGB3DSpatialTab::LoadStackPresets()
@@ -34,8 +34,9 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
     stack_presets.clear();
 
     std::string presets_dir = GetStackPresetsPath();
+    filesystem::path presets_path(presets_dir);
 
-    if(!filesystem::exists(presets_dir))
+    if(!filesystem::exists(presets_path))
     {
         return;
     }
@@ -44,7 +45,7 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
     | Iterate through all .stack.json files                    |
     \*---------------------------------------------------------*/
     filesystem::directory_iterator end_iter;
-    for(filesystem::directory_iterator entry(presets_dir); entry != end_iter; ++entry)
+    for(filesystem::directory_iterator entry(presets_path); entry != end_iter; ++entry)
     {
         if(entry->path().extension() == ".json")
         {
@@ -88,10 +89,12 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
 void OpenRGB3DSpatialTab::SaveStackPresets()
 {
     std::string presets_dir = GetStackPresetsPath();
+    filesystem::path presets_path(presets_dir);
 
     for(unsigned int i = 0; i < stack_presets.size(); i++)
     {
-        std::string filename = presets_dir + stack_presets[i]->name + ".stack.json";
+        filesystem::path file_path = presets_path / (stack_presets[i]->name + ".stack.json");
+        std::string filename = file_path.string();
 
         std::ofstream file(filename);
         if(file.is_open())
@@ -273,10 +276,11 @@ void OpenRGB3DSpatialTab::on_delete_stack_preset_clicked()
     /*---------------------------------------------------------*\
     | Delete file                                              |
     \*---------------------------------------------------------*/
-    std::string filename = GetStackPresetsPath() + preset->name + ".stack.json";
-    if(filesystem::exists(filename))
+    filesystem::path presets_path(GetStackPresetsPath());
+    filesystem::path file_path = presets_path / (preset->name + ".stack.json");
+    if(filesystem::exists(file_path))
     {
-        filesystem::remove(filename);
+        filesystem::remove(file_path);
     }
 
     /*---------------------------------------------------------*\

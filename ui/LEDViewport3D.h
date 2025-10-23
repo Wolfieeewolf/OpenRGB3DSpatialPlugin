@@ -34,6 +34,7 @@
 #include "Gizmo3D.h"
 #include "SpatialEffectTypes.h"
 #include "VirtualController3D.h"
+#include "DisplayPlane3D.h"
 
 class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -55,6 +56,9 @@ public:
     void SetGridScaleMM(float mm_per_unit) { grid_scale_mm = (mm_per_unit > 0.001f) ? mm_per_unit : 10.0f; }
     void SetUserPosition(const UserPosition3D& position);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
+    void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
+    void SelectDisplayPlane(int index);
+    void NotifyDisplayPlaneChanged();
 
     // Camera persistence helpers
     void SetCamera(float distance, float yaw, float pitch,
@@ -96,6 +100,8 @@ signals:
     void ControllerDeleteRequested(int index);
     void ReferencePointSelected(int index);
     void ReferencePointPositionChanged(int index, float x, float y, float z);
+    void DisplayPlanePositionChanged(int index, float x, float y, float z);
+    void DisplayPlaneRotationChanged(int index, float x, float y, float z);
 
 protected:
     void initializeGL() override;
@@ -117,9 +123,11 @@ private:
     void DrawLEDs(ControllerTransform* ctrl);
     void DrawUserFigure();
     void DrawRoomBoundary();
+    void DrawDisplayPlanes();
 
     int PickController(int mouse_x, int mouse_y);
     int PickReferencePoint(int mouse_x, int mouse_y);
+    int PickDisplayPlane(int mouse_x, int mouse_y);
     bool RayBoxIntersect(float ray_origin[3], float ray_direction[3],
                         const Vector3D& box_min, const Vector3D& box_max, float& distance);
     bool RaySphereIntersect(float ray_origin[3], float ray_direction[3],
@@ -163,6 +171,8 @@ private:
     | Reference Points                                         |
     \*---------------------------------------------------------*/
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
+    std::vector<std::unique_ptr<DisplayPlane3D>>* display_planes;
+    int                                     selected_display_plane_idx;
     int                                     selected_ref_point_idx;
 
     /*---------------------------------------------------------*\

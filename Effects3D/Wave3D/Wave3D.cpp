@@ -259,7 +259,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     | (default 10mm). GridContext3D uses the same units.      |
     \*---------------------------------------------------------*/
 
-    
+
 
     /*---------------------------------------------------------*\
     | Get effect origin using grid-aware helper               |
@@ -267,7 +267,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
 
-    
+
 
     /*---------------------------------------------------------*\
     | Calculate position relative to origin                    |
@@ -276,7 +276,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    
+
 
     /*---------------------------------------------------------*\
     | Check if LED is within scaled effect radius             |
@@ -393,3 +393,22 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     return (b << 16) | (g << 8) | r;
 }
 
+nlohmann::json Wave3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["shape_type"] = shape_type;
+    return j;
+}
+
+void Wave3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("shape_type"))
+    {
+        shape_type = settings["shape_type"].get<int>();
+        if(shape_combo)
+        {
+            shape_combo->setCurrentIndex(shape_type);
+        }
+    }
+}

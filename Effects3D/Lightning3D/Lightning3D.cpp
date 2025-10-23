@@ -183,3 +183,21 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
+
+nlohmann::json Lightning3D::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["strike_rate"] = strike_rate;
+    j["branches"] = branches;
+    return j;
+}
+
+void Lightning3D::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("strike_rate")) strike_rate = settings["strike_rate"];
+    if(settings.contains("branches")) branches = settings["branches"];
+
+    if(strike_rate_slider) strike_rate_slider->setValue(strike_rate);
+    if(branch_slider) branch_slider->setValue(branches);
+}
