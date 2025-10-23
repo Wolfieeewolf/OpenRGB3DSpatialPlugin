@@ -644,16 +644,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_bezel_spin, plane_row, 1);
     plane_row++;
 
-    plane_form->addWidget(new QLabel("Position (grid):"), plane_row, 0);
-    QHBoxLayout* pos_layout = new QHBoxLayout();
-    pos_layout->setSpacing(4);
-        QLabel* transform_hint = new QLabel("Use the Position/Rotation controls below to place this display.");
-    transform_hint->setStyleSheet("color: gray;");
-    transform_hint->setWordWrap(true);
-    plane_form->addWidget(transform_hint, plane_row, 0, 1, 4);
-    plane_row++;
-
-plane_form->addWidget(new QLabel("Capture Source Id:"), plane_row, 0);
+    plane_form->addWidget(new QLabel("Capture Source Id:"), plane_row, 0);
     display_plane_capture_id_edit = new QLineEdit();
     display_plane_capture_id_edit->setPlaceholderText("e.g. Monitor#1, CaptureCard0");
     connect(display_plane_capture_id_edit, &QLineEdit::textEdited,
@@ -6848,40 +6839,6 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
     emit GridLayoutChanged();
 }
 
-
-    current_display_plane_index = index;
-    if(display_planes_list)
-    {
-        QSignalBlocker block(display_planes_list);
-        display_planes_list->setCurrentRow(index);
-    }
-    if(controller_list)
-    {
-        QSignalBlocker block(controller_list);
-        controller_list->clearSelection();
-    }
-    if(reference_points_list)
-    {
-        QSignalBlocker block(reference_points_list);
-        reference_points_list->clearSelection();
-    }
-
-    DisplayPlane3D* plane = display_planes[index].get();
-    if(!plane)
-    {
-        return;
-    }
-
-    Transform3D& transform = plane->GetTransform();
-    transform.position.x = x;
-    transform.position.y = y;
-    transform.position.z = z;
-
-    SyncDisplayPlaneControls(plane);
-    RefreshDisplayPlaneDetails();
-    emit GridLayoutChanged();
-}
-
 void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, float y, float z)
 {
     if(index < 0)
@@ -6893,40 +6850,6 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
     {
         return;
     }
-
-    current_display_plane_index = index;
-    if(display_planes_list)
-    {
-        QSignalBlocker block(display_planes_list);
-        display_planes_list->setCurrentRow(index);
-    }
-    if(controller_list)
-    {
-        QSignalBlocker block(controller_list);
-        controller_list->clearSelection();
-    }
-    if(reference_points_list)
-    {
-        QSignalBlocker block(reference_points_list);
-        reference_points_list->clearSelection();
-    }
-
-    DisplayPlane3D* plane = display_planes[index].get();
-    if(!plane)
-    {
-        return;
-    }
-
-    Transform3D& transform = plane->GetTransform();
-    transform.rotation.x = x;
-    transform.rotation.y = y;
-    transform.rotation.z = z;
-
-    SyncDisplayPlaneControls(plane);
-    RefreshDisplayPlaneDetails();
-    emit GridLayoutChanged();
-}
-
 
     current_display_plane_index = index;
     if(display_planes_list)

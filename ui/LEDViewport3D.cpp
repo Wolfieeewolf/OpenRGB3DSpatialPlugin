@@ -315,8 +315,10 @@ void LEDViewport3D::paintGL()
                                     selected_controller_idx < (int)controller_transforms->size());
     bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&
                                    selected_ref_point_idx < (int)reference_points->size());
+    bool has_display_plane_selected = (selected_display_plane_idx >= 0 && display_planes &&
+                                       selected_display_plane_idx < (int)display_planes->size());
 
-    if(has_controller_selected || has_ref_point_selected)
+    if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
     {
         gizmo.SetCameraDistance(camera_distance);
         gizmo.Render(modelview, projection, viewport);
@@ -362,8 +364,10 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                                         selected_controller_idx < (int)controller_transforms->size());
         bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&
                                        selected_ref_point_idx < (int)reference_points->size());
+        bool has_display_plane_selected = (selected_display_plane_idx >= 0 && display_planes &&
+                                           selected_display_plane_idx < (int)display_planes->size());
 
-        if(has_controller_selected || has_ref_point_selected)
+        if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
             gizmo.SetCameraDistance(camera_distance);
@@ -1957,6 +1961,8 @@ void LEDViewport3D::SelectDisplayPlane(int index)
         selected_ref_point_idx = -1;
         selected_display_plane_idx = index;
         gizmo.SetTarget((*display_planes)[index].get());
+        gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+        UpdateGizmoPosition();
     }
     else
     {
@@ -1968,6 +1974,7 @@ void LEDViewport3D::SelectDisplayPlane(int index)
     }
 
     NotifyDisplayPlaneChanged();
+    update();
 }
 
 void LEDViewport3D::NotifyDisplayPlaneChanged()
