@@ -1625,12 +1625,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
     /*---------------------------------------------------------*\
-    | Add Setup tab to main tabs                               |
-    \*---------------------------------------------------------*/
-    main_tabs->addTab(setup_tab, "Setup / Grid");
-
-    /*---------------------------------------------------------*\
     | Effects Tab (Effect Controls and Presets)                |
+    | Created first so it's the default tab on startup         |
     \*---------------------------------------------------------*/
     QWidget* effects_tab = new QWidget();
     QVBoxLayout* effects_tab_layout = new QVBoxLayout(effects_tab);
@@ -1769,9 +1765,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     effects_tab_layout->addWidget(effects_scroll);
 
     /*---------------------------------------------------------*\
-    | Add Effects tab to main tabs                             |
+    | Add tabs to main tab widget (Effects first as default)  |
     \*---------------------------------------------------------*/
     main_tabs->addTab(effects_tab, "Effects / Presets");
+    main_tabs->addTab(setup_tab, "Setup / Grid");
 
     /*---------------------------------------------------------*\
     | Set the root layout                                      |
