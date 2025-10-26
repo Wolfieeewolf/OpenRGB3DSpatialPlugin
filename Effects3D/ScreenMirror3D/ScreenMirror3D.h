@@ -27,6 +27,7 @@
 
 // Forward declarations
 class DisplayPlane3D;
+class VirtualReferencePoint3D;
 struct CaptureSourceInfo;
 
 class ScreenMirror3D : public SpatialEffect3D
@@ -61,6 +62,12 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+    /*---------------------------------------------------------*\
+    | Reference Points Access                                  |
+    \*---------------------------------------------------------*/
+    void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
+    void RefreshReferencePointDropdowns();
+
 signals:
     void ScreenPreviewChanged(bool enabled);
 
@@ -82,6 +89,7 @@ private:
         float edge_softness;   // 0-100%, feathering percentage
         float blend;           // 0-100%, blending with other monitors
         float edge_zone_depth; // 0.01-0.50, edge sampling depth
+        int reference_point_index; // Index into reference_points vector (-1 = use global)
 
         // UI widgets for this monitor
         QGroupBox* group_box;
@@ -90,6 +98,7 @@ private:
         QSlider* softness_slider;
         QSlider* blend_slider;
         QSlider* edge_zone_slider;
+        QComboBox* ref_point_combo;
 
         MonitorSettings()
             : enabled(true)
@@ -97,12 +106,14 @@ private:
             , edge_softness(30.0f)
             , blend(50.0f)
             , edge_zone_depth(0.01f)
+            , reference_point_index(-1)
             , group_box(nullptr)
             , enabled_check(nullptr)
             , scale_slider(nullptr)
             , softness_slider(nullptr)
             , blend_slider(nullptr)
             , edge_zone_slider(nullptr)
+            , ref_point_combo(nullptr)
         {}
     };
 
@@ -124,6 +135,9 @@ private:
     float                       brightness_multiplier;
     bool                        show_test_pattern;
     // Per-monitor settings stored in monitor_settings map
+
+    // Reference points (pointer to main tab's vector)
+    std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
 
     // Temporal smoothing per LED (simple exponential moving average)
     struct LEDState

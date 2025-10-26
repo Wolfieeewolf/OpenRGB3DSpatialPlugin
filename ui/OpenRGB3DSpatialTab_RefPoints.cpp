@@ -11,6 +11,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "VirtualReferencePoint3D.h"
+#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 
@@ -224,6 +225,20 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     // Update effect origin combo whenever reference points change
     UpdateEffectOriginCombo();
     UpdateAudioEffectOriginCombo();
+
+    // Update ScreenMirror3D reference point dropdowns
+    for (unsigned int i = 0; i < effect_stack.size(); i++)
+    {
+        std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
+        if (inst && inst->effect_class_name == "ScreenMirror3D" && inst->effect)
+        {
+            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(inst->effect.get());
+            if (screen_mirror)
+            {
+                screen_mirror->RefreshReferencePointDropdowns();
+            }
+        }
+    }
 }
 
 void OpenRGB3DSpatialTab::SaveReferencePoints()

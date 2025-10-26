@@ -2034,6 +2034,7 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
         {
             connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                     viewport, &LEDViewport3D::SetShowScreenPreview);
+            screen_mirror->SetReferencePoints(&reference_points);
         }
     }
 
@@ -2646,6 +2647,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                             {
                                 connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                                         viewport, &LEDViewport3D::SetShowScreenPreview);
+                                screen_mirror->SetReferencePoints(&reference_points);
                             }
                         }
 
@@ -6266,6 +6268,7 @@ void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
             {
                 connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                         viewport, &LEDViewport3D::SetShowScreenPreview);
+                screen_mirror->SetReferencePoints(&reference_points);
             }
         }
 

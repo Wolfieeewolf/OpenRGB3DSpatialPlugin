@@ -15,6 +15,7 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "LogManager.h"
+#include "VirtualReferencePoint3D.h"
 
 /*---------------------------------------------------------*\
 | Register this effect with the effect manager             |
@@ -40,6 +41,7 @@ ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     , smoothing_time_ms(50.0f)
     , brightness_multiplier(1.0f)
     , show_test_pattern(false)
+    , reference_points(nullptr)
 {
 }
 
@@ -188,6 +190,13 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
             settings.edge_zone_slider->setToolTip("Edge sampling depth (1 = 1% of screen for very edge pixels, 50 = 50%)");
             connect(settings.edge_zone_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
             monitor_form->addRow("Edge Zone:", settings.edge_zone_slider);
+
+            // Reference Point Selection
+            settings.ref_point_combo = new QComboBox();
+            settings.ref_point_combo->addItem("Use Global Reference", -1);
+            settings.ref_point_combo->setToolTip("Reference point for calculating falloff distance\nUse Reference Points tab to create custom viewing positions");
+            connect(settings.ref_point_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(OnParameterChanged()));
+            monitor_form->addRow("Reference Point:", settings.ref_point_combo);
 
             settings.group_box->setLayout(monitor_form);
             monitors_layout->addWidget(settings.group_box);
@@ -398,8 +407,19 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
         // Use spatial mapping for perceptually correct 3D ambilight
         // This maps LED position to screen UV based on spatial relationship
-        // Use user position as reference point for distance falloff
+        // Use per-monitor reference point if set, otherwise use global
         const Vector3D* falloff_ref = &global_reference_point;
+        if (mon_settings.reference_point_index >= 0 && reference_points &&
+            mon_settings.reference_point_index < (int)reference_points->size())
+        {
+            VirtualReferencePoint3D* ref_point = (*reference_points)[mon_settings.reference_point_index].get();
+            if (ref_point)
+            {
+                static Vector3D custom_ref;
+                custom_ref = ref_point->GetPosition();
+                falloff_ref = &custom_ref;
+            }
+        }
 
         // Grid scale: default 10mm per grid unit
         const float grid_scale_mm = 10.0f;
@@ -692,6 +712,7 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
         mon["edge_softness"] = pair.second.edge_softness;
         mon["blend"] = pair.second.blend;
         mon["edge_zone_depth"] = pair.second.edge_zone_depth;
+        mon["reference_point_index"] = pair.second.reference_point_index;
         monitors[pair.first] = mon;
     }
     settings["monitor_settings"] = monitors;
@@ -735,6 +756,7 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             if (mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
             if (mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
             if (mon.contains("edge_zone_depth")) msettings.edge_zone_depth = mon["edge_zone_depth"].get<float>();
+            if (mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
         }
     }
 
@@ -753,6 +775,16 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
         if (msettings.softness_slider) msettings.softness_slider->setValue((int)msettings.edge_softness);
         if (msettings.blend_slider) msettings.blend_slider->setValue((int)msettings.blend);
         if (msettings.edge_zone_slider) msettings.edge_zone_slider->setValue((int)(msettings.edge_zone_depth * 100));
+
+        // Update reference point dropdown
+        if (msettings.ref_point_combo)
+        {
+            int index = msettings.ref_point_combo->findData(msettings.reference_point_index);
+            if (index >= 0)
+            {
+                msettings.ref_point_combo->setCurrentIndex(index);
+            }
+        }
     }
 }
 
@@ -776,6 +808,7 @@ void ScreenMirror3D::OnParameterChanged()
         if (settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
         if (settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
         if (settings.edge_zone_slider) settings.edge_zone_depth = settings.edge_zone_slider->value() / 100.0f;
+        if (settings.ref_point_combo) settings.reference_point_index = settings.ref_point_combo->currentData().toInt();
     }
 }
 
@@ -785,6 +818,65 @@ void ScreenMirror3D::OnScreenPreviewChanged()
     {
         bool enabled = screen_preview_check->isChecked();
         emit ScreenPreviewChanged(enabled);
+    }
+}
+
+/*---------------------------------------------------------*\
+| Reference Points Management                              |
+\*---------------------------------------------------------*/
+void ScreenMirror3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
+{
+    reference_points = ref_points;
+    RefreshReferencePointDropdowns();
+}
+
+void ScreenMirror3D::RefreshReferencePointDropdowns()
+{
+    if (!reference_points) return;
+
+    // Update all monitor reference point dropdowns
+    for (auto& pair : monitor_settings)
+    {
+        MonitorSettings& settings = pair.second;
+        if (!settings.ref_point_combo) continue;
+
+        // Save current selection
+        int current_index = settings.ref_point_combo->currentIndex();
+        int current_data = -1;
+        if (current_index >= 0)
+        {
+            current_data = settings.ref_point_combo->currentData().toInt();
+        }
+
+        // Rebuild dropdown
+        settings.ref_point_combo->blockSignals(true);
+        settings.ref_point_combo->clear();
+
+        // Add "Use Global" option
+        settings.ref_point_combo->addItem("Use Global Reference", -1);
+
+        // Add all reference points
+        for (size_t i = 0; i < reference_points->size(); i++)
+        {
+            VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
+            if (ref_point)
+            {
+                QString name = QString::fromStdString(ref_point->GetName());
+                settings.ref_point_combo->addItem(name, (int)i);
+            }
+        }
+
+        // Restore selection
+        if (current_data >= -1)
+        {
+            int restore_index = settings.ref_point_combo->findData(current_data);
+            if (restore_index >= 0)
+            {
+                settings.ref_point_combo->setCurrentIndex(restore_index);
+            }
+        }
+
+        settings.ref_point_combo->blockSignals(false);
     }
 }
 
