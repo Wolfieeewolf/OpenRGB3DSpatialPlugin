@@ -1616,6 +1616,73 @@ void OpenRGB3DSpatialTab::SetupUI()
     settings_tabs->addTab(grid_settings_tab, "Grid Settings");
 
     /*---------------------------------------------------------*\
+    | Object Creator Tab (Custom Controllers, Ref Points, Displays) |
+    \*---------------------------------------------------------*/
+    QWidget* object_creator_tab = new QWidget();
+    QVBoxLayout* creator_layout = new QVBoxLayout();
+    creator_layout->setSpacing(10);
+
+    // Type selector dropdown
+    QLabel* type_label = new QLabel("Object Type:");
+    type_label->setStyleSheet("font-weight: bold;");
+    creator_layout->addWidget(type_label);
+
+    QComboBox* object_type_combo = new QComboBox();
+    object_type_combo->addItem("Select to Create...", -1);
+    object_type_combo->addItem("Custom Controller", 0);
+    object_type_combo->addItem("Reference Point", 1);
+    object_type_combo->addItem("Display Plane", 2);
+    creator_layout->addWidget(object_type_combo);
+
+    // Stacked widget for dynamic UI
+    QStackedWidget* creator_stack = new QStackedWidget();
+
+    // Page 0: Empty placeholder
+    QWidget* empty_page = new QWidget();
+    QVBoxLayout* empty_layout = new QVBoxLayout();
+    QLabel* empty_label = new QLabel("Select an object type from the dropdown above to begin creating custom objects.");
+    empty_label->setWordWrap(true);
+    empty_label->setStyleSheet("color: #888; font-style: italic; padding: 20px;");
+    empty_layout->addWidget(empty_label);
+    empty_layout->addStretch();
+    empty_page->setLayout(empty_layout);
+    creator_stack->addWidget(empty_page);
+
+    // Page 1: Custom Controller UI (will be moved here)
+    QWidget* custom_controller_page = new QWidget();
+    QVBoxLayout* custom_controller_layout = new QVBoxLayout();
+    custom_controller_layout->addWidget(new QLabel("Custom Controller UI - TODO"));
+    custom_controller_page->setLayout(custom_controller_layout);
+    creator_stack->addWidget(custom_controller_page);
+
+    // Page 2: Reference Point UI (will be moved here)
+    QWidget* ref_point_page = new QWidget();
+    QVBoxLayout* ref_point_layout = new QVBoxLayout();
+    ref_point_layout->addWidget(new QLabel("Reference Point UI - TODO"));
+    ref_point_page->setLayout(ref_point_layout);
+    creator_stack->addWidget(ref_point_page);
+
+    // Page 3: Display Plane UI (will be moved here)
+    QWidget* display_plane_page = new QWidget();
+    QVBoxLayout* display_plane_layout = new QVBoxLayout();
+    display_plane_layout->addWidget(new QLabel("Display Plane UI - TODO"));
+    display_plane_page->setLayout(display_plane_layout);
+    creator_stack->addWidget(display_plane_page);
+
+    creator_layout->addWidget(creator_stack);
+
+    // Connect dropdown to switch pages
+    connect(object_type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [creator_stack](int index) {
+        if(index == 0) creator_stack->setCurrentIndex(0); // Select to Create
+        else if(index == 1) creator_stack->setCurrentIndex(1); // Custom Controller
+        else if(index == 2) creator_stack->setCurrentIndex(2); // Reference Point
+        else if(index == 3) creator_stack->setCurrentIndex(3); // Display Plane
+    });
+
+    object_creator_tab->setLayout(creator_layout);
+    settings_tabs->addTab(object_creator_tab, "Object Creator");
+
+    /*---------------------------------------------------------*\
     | Unified Profiles Tab (Layout + Effect profiles)         |
     \*---------------------------------------------------------*/
     SetupProfilesTab(settings_tabs);
