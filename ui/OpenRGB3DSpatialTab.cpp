@@ -3415,6 +3415,31 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         return;
     }
 
+    // Check if the selected item has metadata (Reference Point, Display Plane, or Custom Controller)
+    QListWidgetItem* selected_item = available_controllers_list->item(list_row);
+    if(selected_item && selected_item->data(Qt::UserRole).isValid())
+    {
+        QPair<int, int> metadata = selected_item->data(Qt::UserRole).value<QPair<int, int>>();
+        int type_code = metadata.first;
+        int object_index = metadata.second;
+
+        if(type_code == -2) // Reference Point
+        {
+            item_combo->addItem("Whole Object", QVariant::fromValue(qMakePair(-2, object_index)));
+            return;
+        }
+        else if(type_code == -3) // Display Plane
+        {
+            item_combo->addItem("Whole Object", QVariant::fromValue(qMakePair(-3, object_index)));
+            return;
+        }
+        else if(type_code == -1) // Custom Controller
+        {
+            item_combo->addItem("Whole Device", QVariant::fromValue(qMakePair(-1, object_index)));
+            return;
+        }
+    }
+
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
     int actual_ctrl_idx = -1;
@@ -3467,12 +3492,6 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         }
         return;
     }
-
-    int virtual_offset = visible_idx;
-    if(list_row >= virtual_offset && list_row < virtual_offset + (int)virtual_controllers.size())
-    {
-        item_combo->addItem("Whole Device", QVariant::fromValue(qMakePair(-1, list_row - virtual_offset)));
-    }
 }
 
 void OpenRGB3DSpatialTab::on_add_clicked()
@@ -3493,7 +3512,47 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
-    if(ctrl_idx < 0)
+    // Handle Reference Points (-2)
+    if(ctrl_idx == -2)
+    {
+        if(item_row < 0 || item_row >= (int)reference_points.size())
+        {
+            return;
+        }
+
+        VirtualReferencePoint3D* ref_point = reference_points[item_row].get();
+        ref_point->SetVisible(true);
+        viewport->update();
+
+        QMessageBox::information(this, "Reference Point Added",
+                                QString("Reference point '%1' added to 3D view!\n\nYou can now position and configure it.")
+                                .arg(QString::fromStdString(ref_point->GetName())));
+        return;
+    }
+
+    // Handle Display Planes (-3)
+    if(ctrl_idx == -3)
+    {
+        if(item_row < 0 || item_row >= (int)display_planes.size())
+        {
+            return;
+        }
+
+        DisplayPlane3D* plane = display_planes[item_row].get();
+        plane->SetVisible(true);
+        viewport->SelectDisplayPlane(item_row);
+        viewport->update();
+        NotifyDisplayPlaneChanged();
+        emit GridLayoutChanged();
+
+        QMessageBox::information(this, "Display Plane Added",
+                                QString("Display plane '%1' added to 3D view!\n\nYou can now position and configure it.")
+                                .arg(QString::fromStdString(plane->GetName())));
+        return;
+    }
+
+    // Handle Custom Controllers (-1)
+    if(ctrl_idx == -1)
     {
         if(item_row >= (int)virtual_controllers.size())
         {
