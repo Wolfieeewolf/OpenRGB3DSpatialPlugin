@@ -6874,7 +6874,8 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
 {
     std::string base_name = "Display Plane";
     int suffix = (int)display_planes.size() + 1;
-    std::unique_ptr<DisplayPlane3D> plane = std::make_unique<DisplayPlane3D>(base_name + " " + std::to_string(suffix));
+    std::string full_name = base_name + " " + std::to_string(suffix);
+    std::unique_ptr<DisplayPlane3D> plane = std::make_unique<DisplayPlane3D>(full_name);
 
     float room_depth_units = room_depth_spin ? ((float)room_depth_spin->value() / grid_scale_mm) : 100.0f;
     float room_height_units = room_height_spin ? ((float)room_height_spin->value() / grid_scale_mm) : 100.0f;
@@ -6882,6 +6883,10 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->GetTransform().position.x = 0.0f;
     plane->GetTransform().position.y = -room_depth_units * 0.25f;
     plane->GetTransform().position.z = room_height_units * 0.5f;
+    plane->SetVisible(false);  // Not visible until added to viewport
+
+    // Add to available controllers list (not directly to viewport)
+    available_controllers_list->addItem(QString("[Display] ") + QString::fromStdString(full_name));
 
     display_planes.push_back(std::move(plane));
     current_display_plane_index = (int)display_planes.size() - 1;
@@ -6889,9 +6894,10 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     DisplayPlane3D* new_plane = GetSelectedDisplayPlane();
     SyncDisplayPlaneControls(new_plane);
     RefreshDisplayPlaneDetails();
-    if(viewport) viewport->SelectDisplayPlane(current_display_plane_index);
-    NotifyDisplayPlaneChanged();
-    emit GridLayoutChanged();
+
+    QMessageBox::information(this, "Display Plane Created",
+                            QString("Display plane '%1' created successfully!\n\nYou can now add it to the 3D view from the Available Controllers list.")
+                            .arg(QString::fromStdString(full_name)));
 }
 
 void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()

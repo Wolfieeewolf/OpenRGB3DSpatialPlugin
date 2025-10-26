@@ -42,7 +42,10 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
     std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, 0.0f, 0.0f, 0.0f);
     ref_point->SetDisplayColor(selected_ref_point_color);
-    ref_point->SetVisible(true);
+    ref_point->SetVisible(false);  // Not visible until added to viewport
+
+    // Add to available controllers list (not directly to viewport)
+    available_controllers_list->addItem(QString("[Ref Point] ") + QString::fromStdString(name));
 
     reference_points.push_back(std::move(ref_point));
     UpdateReferencePointsList();
@@ -54,8 +57,9 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     // Select the newly added reference point
     reference_points_list->setCurrentRow((int)reference_points.size() - 1);
 
-    // Refresh viewport
-    viewport->update();
+    QMessageBox::information(this, "Reference Point Created",
+                            QString("Reference point '%1' created successfully!\n\nYou can now add it to the 3D view from the Available Controllers list.")
+                            .arg(QString::fromStdString(name)));
 }
 
 void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()

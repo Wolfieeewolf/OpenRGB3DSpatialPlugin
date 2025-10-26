@@ -13,7 +13,8 @@
       "Read(//c/Users/wolfi/AppData/Roaming/OpenRGB/plugins/settings/OpenRGB3DSpatialPlugin/layouts/**)",
       "Bash(python:*)",
       "Bash(nmake:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
