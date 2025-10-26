@@ -1647,9 +1647,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     QTabWidget* right_tabs = new QTabWidget();
 
     /*---------------------------------------------------------*\
-    | Effects Tab                                              |
+    | Effects Sub-Tab                                          |
     \*---------------------------------------------------------*/
-    QWidget* effects_tab = new QWidget();
+    QWidget* effects_subtab = new QWidget();
     QVBoxLayout* effects_layout = new QVBoxLayout();
 
     // Effect selection
@@ -1687,8 +1687,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     effects_layout->addWidget(effect_controls_widget);
 
     effects_layout->addStretch();
-    effects_tab->setLayout(effects_layout);
-    right_tabs->addTab(effects_tab, "Effects");
+    effects_subtab->setLayout(effects_layout);
+    right_tabs->addTab(effects_subtab, "Effects");
 
     /*---------------------------------------------------------*\
     | Audio Tab                                                |
@@ -5377,7 +5377,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     current_effect_ui = effect;
 
     // Set reference points for ScreenMirror3D UI effect
-    if (class_name == "ScreenMirror3D")
+    if (std::string(effect_names[effect_type]) == "ScreenMirror3D")
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
         if (screen_mirror)
