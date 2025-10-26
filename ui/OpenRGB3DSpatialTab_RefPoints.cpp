@@ -13,6 +13,7 @@
 #include "VirtualReferencePoint3D.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <QColorDialog>
+#include <QMessageBox>
 #include <QSignalBlocker>
 
 static QString RGBColorToCssHex(unsigned int color_value)
