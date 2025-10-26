@@ -3522,6 +3522,13 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         VirtualReferencePoint3D* ref_point = reference_points[item_row].get();
         ref_point->SetVisible(true);
+
+        // Add to Controllers in 3D Scene list
+        QString name = QString("[Ref Point] ") + QString::fromStdString(ref_point->GetName());
+        QListWidgetItem* list_item = new QListWidgetItem(name);
+        list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, item_row)));
+        controller_list->addItem(list_item);
+
         viewport->update();
 
         QMessageBox::information(this, "Reference Point Added",
@@ -3540,6 +3547,13 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         DisplayPlane3D* plane = display_planes[item_row].get();
         plane->SetVisible(true);
+
+        // Add to Controllers in 3D Scene list
+        QString name = QString("[Display] ") + QString::fromStdString(plane->GetName());
+        QListWidgetItem* list_item = new QListWidgetItem(name);
+        list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, item_row)));
+        controller_list->addItem(list_item);
+
         viewport->SelectDisplayPlane(item_row);
         viewport->update();
         NotifyDisplayPlaneChanged();
@@ -3704,7 +3718,45 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 void OpenRGB3DSpatialTab::on_remove_controller_clicked()
 {
     int selected_row = controller_list->currentRow();
-    if(selected_row < 0 || selected_row >= (int)controller_transforms.size())
+    if(selected_row < 0 || selected_row >= controller_list->count())
+    {
+        return;
+    }
+
+    // Check if this item has metadata (Reference Point or Display Plane)
+    QListWidgetItem* item = controller_list->item(selected_row);
+    if(item && item->data(Qt::UserRole).isValid())
+    {
+        QPair<int, int> metadata = item->data(Qt::UserRole).value<QPair<int, int>>();
+        int type_code = metadata.first;
+        int object_index = metadata.second;
+
+        if(type_code == -2) // Reference Point
+        {
+            if(object_index >= 0 && object_index < (int)reference_points.size())
+            {
+                reference_points[object_index]->SetVisible(false);
+            }
+            controller_list->takeItem(selected_row);
+            viewport->update();
+            return;
+        }
+        else if(type_code == -3) // Display Plane
+        {
+            if(object_index >= 0 && object_index < (int)display_planes.size())
+            {
+                display_planes[object_index]->SetVisible(false);
+            }
+            controller_list->takeItem(selected_row);
+            viewport->update();
+            NotifyDisplayPlaneChanged();
+            emit GridLayoutChanged();
+            return;
+        }
+    }
+
+    // Handle regular controllers (in controller_transforms)
+    if(selected_row >= (int)controller_transforms.size())
     {
         return;
     }
@@ -3738,14 +3790,25 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
 
 void OpenRGB3DSpatialTab::on_clear_all_clicked()
 {
-    controller_transforms.clear();
+    // Hide all Reference Points and Display Planes
+    for(unsigned int i = 0; i < reference_points.size(); i++)
+    {
+        reference_points[i]->SetVisible(false);
+    }
+    for(unsigned int i = 0; i < display_planes.size(); i++)
+    {
+        display_planes[i]->SetVisible(false);
+    }
 
+    controller_transforms.clear();
     controller_list->clear();
 
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+    NotifyDisplayPlaneChanged();
+    emit GridLayoutChanged();
 }
 
 void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
