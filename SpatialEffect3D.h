@@ -61,9 +61,10 @@ struct GridContext3D
         : min_x(minX), max_x(maxX), min_y(minY), max_y(maxY), min_z(minZ), max_z(maxZ)
     {
         // Calculate room dimensions (no +1 needed - we're using actual coordinates)
-        width = max_x - min_x;
-        depth = max_y - min_y;   // Y-axis is depth (front to back)
-        height = max_z - min_z;  // Z-axis is height (floor to ceiling)
+        // Standard OpenGL Y-up coordinate system
+        width = max_x - min_x;    // X-axis is width (left to right)
+        height = max_y - min_y;   // Y-axis is height (floor to ceiling)
+        depth = max_z - min_z;    // Z-axis is depth (front to back)
 
         // Calculate room center (for corner-origin coordinate system)
         center_x = (min_x + max_x) / 2.0f;

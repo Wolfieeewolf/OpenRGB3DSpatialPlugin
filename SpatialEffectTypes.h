@@ -84,9 +84,9 @@ enum ReferenceMode
 \*---------------------------------------------------------*/
 enum EffectAxis
 {
-    AXIS_X              = 0,    // Left to Right
-    AXIS_Y              = 1,    // Front to Back
-    AXIS_Z              = 2,    // Bottom to Top
+    AXIS_X              = 0,    // Left to Right (width)
+    AXIS_Y              = 1,    // Bottom to Top (height, Y-up)
+    AXIS_Z              = 2,    // Front to Back (depth)
     AXIS_RADIAL         = 3,    // Outward from center
     AXIS_CUSTOM         = 4     // Custom direction vector
 };

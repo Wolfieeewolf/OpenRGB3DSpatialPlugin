@@ -228,13 +228,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     axis_layout->addWidget(new QLabel("Axis:"));
     axis_combo = new QComboBox();
     axis_combo->addItem("None (Effect Default)");      // index 0 -> no override
-    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0 (grid X)
-    axis_combo->addItem("Y-Axis (Front to Back)");    // AXIS_Y = 1 (grid Y)
-    axis_combo->addItem("Z-Axis (Bottom to Top)");    // AXIS_Z = 2 (grid Z)
+    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0 (grid X, width)
+    axis_combo->addItem("Y-Axis (Bottom to Top)");    // AXIS_Y = 1 (grid Y, height, Y-up)
+    axis_combo->addItem("Z-Axis (Front to Back)");    // AXIS_Z = 2 (grid Z, depth)
     axis_combo->addItem("Radial (Outward from Center)"); // AXIS_RADIAL = 3
     axis_combo->setToolTip(
-        "Axis mapping uses grid coordinates:\n"
-        "X: Left→Right, Y: Front→Back, Z: Bottom→Top.\n"
+        "Axis mapping uses grid coordinates (standard OpenGL Y-up):\n"
+        "X: Left→Right, Y: Bottom→Top, Z: Front→Back.\n"
         "Radial: distance from effect origin (room/user)."
     );
     axis_none = true; // default to no axis override

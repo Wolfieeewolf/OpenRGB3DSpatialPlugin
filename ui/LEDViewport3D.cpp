@@ -42,6 +42,7 @@
 \*---------------------------------------------------------*/
 #include "LEDViewport3D.h"
 #include "VirtualReferencePoint3D.h"
+#include "ScreenCaptureManager.h"
 
 /*---------------------------------------------------------*\
 | OpenGL Platform Includes                                 |
@@ -97,6 +98,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , display_planes(nullptr)
     , selected_display_plane_idx(-1)
     , selected_ref_point_idx(-1)
+    , show_screen_preview(false)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
     , camera_pitch(30.0f)
@@ -115,6 +117,14 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
 
 LEDViewport3D::~LEDViewport3D()
 {
+    // Clean up OpenGL textures
+    makeCurrent();
+    for(auto& pair : display_plane_textures)
+    {
+        glDeleteTextures(1, &pair.second);
+    }
+    display_plane_textures.clear();
+    doneCurrent();
 }
 
 void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
@@ -296,6 +306,13 @@ void LEDViewport3D::paintGL()
     DrawGrid();
     DrawAxes();
     DrawRoomBoundary();
+
+    // Update textures before drawing display planes
+    if(show_screen_preview)
+    {
+        UpdateDisplayPlaneTextures();
+    }
+
     DrawDisplayPlanes();
     DrawControllers();
     DrawUserFigure();
@@ -745,12 +762,13 @@ void LEDViewport3D::DrawGrid()
     glLineWidth(1.0f);
 
     // Calculate grid range based on room dimensions or grid size
+    // Note: For floor grid, we use X (width) and Z (depth), not Y (height)
     float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
-    float max_y = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_y;
+    float max_z = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_z;
 
     glBegin(GL_LINES);
 
-    // Draw vertical grid lines (parallel to Y-axis, extending front-to-back)
+    // Draw grid lines parallel to Z-axis (extending front-to-back along floor)
     for(int i = 0; i <= (int)max_x; i++)
     {
         if(i == 0)
@@ -767,15 +785,15 @@ void LEDViewport3D::DrawGrid()
         }
 
         glVertex3f((float)i, 0.0f, 0.0f);        // Front edge
-        glVertex3f((float)i, 0.0f, max_y);       // Back edge
+        glVertex3f((float)i, 0.0f, max_z);       // Back edge
     }
 
     // Draw horizontal grid lines (parallel to X-axis, extending left-to-right)
-    for(int i = 0; i <= (int)max_y; i++)
+    for(int i = 0; i <= (int)max_z; i++)
     {
         if(i == 0)
         {
-            glColor3f(0.4f, 0.4f, 0.8f); // Blue origin line (front wall, Y=0)
+            glColor3f(0.4f, 0.4f, 0.8f); // Blue origin line (front wall, Z=0)
         }
         else if(i % 5 == 0)
         {
@@ -798,8 +816,8 @@ void LEDViewport3D::DrawGrid()
     glBegin(GL_LINE_LOOP);
     glVertex3f(0.0f, 0.0f, 0.0f);           // Front-left corner (origin)
     glVertex3f(max_x, 0.0f, 0.0f);          // Front-right corner
-    glVertex3f(max_x, 0.0f, max_y);         // Back-right corner
-    glVertex3f(0.0f, 0.0f, max_y);          // Back-left corner
+    glVertex3f(max_x, 0.0f, max_z);         // Back-right corner
+    glVertex3f(0.0f, 0.0f, max_z);          // Back-left corner
     glEnd();
 
     glLineWidth(1.0f);
@@ -822,20 +840,20 @@ void LEDViewport3D::DrawAxes()
     \*---------------------------------------------------------*/
     glBegin(GL_LINES);
 
-    // X Axis (Red) - Left to Right (positive direction only)
+    // X Axis (Red) - Left to Right
     glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(3.0f, 0.0f, 0.0f);
 
-    // Z Axis (Green) - Front to Back (positive Y in grid coords, but Z visual)
+    // Y Axis (Green) - Floor to Ceiling (vertical up, standard OpenGL Y-up)
     glColor3f(0.0f, 1.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 0.0f, 3.0f);
+    glVertex3f(0.0f, 3.0f, 0.0f);
 
-    // Y Axis (Blue) - Floor to Ceiling (vertical up)
+    // Z Axis (Blue) - Front to Back (depth)
     glColor3f(0.0f, 0.0f, 1.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 3.0f, 0.0f);
+    glVertex3f(0.0f, 0.0f, 3.0f);
 
     glEnd();
 
@@ -852,20 +870,20 @@ void LEDViewport3D::DrawAxes()
     glVertex3f(2.7f, -0.15f, 0.0f);
     glEnd();
 
-    // Z Axis arrow (Green - Back Wall direction)
+    // Y Axis arrow (Green - Ceiling direction)
     glColor3f(0.0f, 1.0f, 0.0f);
-    glBegin(GL_TRIANGLES);
-    glVertex3f(0.0f, 0.0f, 3.0f);
-    glVertex3f(0.15f, 0.0f, 2.7f);
-    glVertex3f(-0.15f, 0.0f, 2.7f);
-    glEnd();
-
-    // Y Axis arrow (Blue - Ceiling direction)
-    glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_TRIANGLES);
     glVertex3f(0.0f, 3.0f, 0.0f);
     glVertex3f(0.15f, 2.7f, 0.0f);
     glVertex3f(-0.15f, 2.7f, 0.0f);
+    glEnd();
+
+    // Z Axis arrow (Blue - Back Wall direction)
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glBegin(GL_TRIANGLES);
+    glVertex3f(0.0f, 0.0f, 3.0f);
+    glVertex3f(0.15f, 0.0f, 2.7f);
+    glVertex3f(-0.15f, 0.0f, 2.7f);
     glEnd();
 
     glLineWidth(1.0f);
@@ -952,8 +970,8 @@ void LEDViewport3D::DrawRoomBoundary()
 
     // Calculate room boundary in grid units
     float max_x = room_width / grid_scale_mm;
-    float max_y = room_depth / grid_scale_mm;
-    float max_z = room_height / grid_scale_mm;
+    float max_y = room_height / grid_scale_mm;
+    float max_z = room_depth / grid_scale_mm;
 
     // Use cyan color for room boundary (distinct from other elements)
     glColor3f(0.0f, 0.8f, 0.8f); // Bright cyan
@@ -961,28 +979,28 @@ void LEDViewport3D::DrawRoomBoundary()
     glBegin(GL_LINES);
 
     /*---------------------------------------------------------*\
-    | Draw bottom rectangle (floor level, Z=0)                 |
+    | Draw bottom rectangle (floor level, Y=0)                 |
     \*---------------------------------------------------------*/
     glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);     // Front edge
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_y);    // Right edge
-    glVertex3f(max_x, 0.0f, max_y);     glVertex3f(0.0f, 0.0f, max_y);     // Back edge
-    glVertex3f(0.0f, 0.0f, max_y);      glVertex3f(0.0f, 0.0f, 0.0f);      // Left edge
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);    // Right edge
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);     // Back edge
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);      // Left edge
 
     /*---------------------------------------------------------*\
-    | Draw top rectangle (ceiling level, Z=max_z)             |
+    | Draw top rectangle (ceiling level, Y=max_y)             |
     \*---------------------------------------------------------*/
-    glVertex3f(0.0f, max_z, 0.0f);      glVertex3f(max_x, max_z, 0.0f);    // Front edge
-    glVertex3f(max_x, max_z, 0.0f);     glVertex3f(max_x, max_z, max_y);   // Right edge
-    glVertex3f(max_x, max_z, max_y);    glVertex3f(0.0f, max_z, max_y);    // Back edge
-    glVertex3f(0.0f, max_z, max_y);     glVertex3f(0.0f, max_z, 0.0f);     // Left edge
+    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);    // Front edge
+    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);   // Right edge
+    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);    // Back edge
+    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);     // Left edge
 
     /*---------------------------------------------------------*\
     | Draw vertical edges connecting floor to ceiling         |
     \*---------------------------------------------------------*/
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_z, 0.0f);     // Front-left corner
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_z, 0.0f);    // Front-right corner
-    glVertex3f(max_x, 0.0f, max_y);     glVertex3f(max_x, max_z, max_y);   // Back-right corner
-    glVertex3f(0.0f, 0.0f, max_y);      glVertex3f(0.0f, max_z, max_y);    // Back-left corner
+    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);     // Front-left corner
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);    // Front-right corner
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);   // Back-right corner
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);    // Back-left corner
 
     glEnd();
 
@@ -1032,13 +1050,121 @@ void LEDViewport3D::DrawDisplayPlanes()
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
         float bezel_color[4]  = { selected ? 0.50f : 0.15f, selected ? 0.75f : 0.50f, 0.90f, selected ? 0.90f : 0.70f };
 
-        glColor4fv(fill_color);
-        glBegin(GL_QUADS);
-        for(int i = 0; i < 4; ++i)
+        if(show_screen_preview)
         {
-            glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
+            // Try to get texture for this plane's capture source
+            std::string source_id = plane_ptr->GetCaptureSourceId();
+            GLuint texture_id = 0;
+            bool has_texture = false;
+
+            if(!source_id.empty())
+            {
+                auto it = display_plane_textures.find(source_id);
+                if(it != display_plane_textures.end())
+                {
+                    texture_id = it->second;
+                    has_texture = true;
+                }
+            }
+
+            if(has_texture)
+            {
+                // Draw textured quad showing live screen capture
+                glEnable(GL_TEXTURE_2D);
+                glBindTexture(GL_TEXTURE_2D, texture_id);
+                glColor4f(1.0f, 1.0f, 1.0f, 0.85f);
+
+                glBegin(GL_QUADS);
+                // Bottom-left corner (UV: 0, 1) - flipped V to correct upside-down capture
+                glTexCoord2f(0.0f, 1.0f);
+                glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
+                // Bottom-right corner (UV: 1, 1)
+                glTexCoord2f(1.0f, 1.0f);
+                glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
+                // Top-right corner (UV: 1, 0)
+                glTexCoord2f(1.0f, 0.0f);
+                glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
+                // Top-left corner (UV: 0, 0)
+                glTexCoord2f(0.0f, 0.0f);
+                glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
+                glEnd();
+
+                glBindTexture(GL_TEXTURE_2D, 0);
+                glDisable(GL_TEXTURE_2D);
+            }
+            else
+            {
+                // Fallback: Show 4 quadrants with distinct solid colors to visualize orientation
+                // This helps verify screen capture mapping is correct when no texture is available
+                Vector3D center;
+                center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
+                center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
+                center.z = (world_corners[0].z + world_corners[2].z) * 0.5f;
+
+                Vector3D mid_bottom, mid_top, mid_left, mid_right;
+                mid_bottom.x = (world_corners[0].x + world_corners[1].x) * 0.5f;
+                mid_bottom.y = (world_corners[0].y + world_corners[1].y) * 0.5f;
+                mid_bottom.z = (world_corners[0].z + world_corners[1].z) * 0.5f;
+
+                mid_top.x = (world_corners[2].x + world_corners[3].x) * 0.5f;
+                mid_top.y = (world_corners[2].y + world_corners[3].y) * 0.5f;
+                mid_top.z = (world_corners[2].z + world_corners[3].z) * 0.5f;
+
+                mid_left.x = (world_corners[0].x + world_corners[3].x) * 0.5f;
+                mid_left.y = (world_corners[0].y + world_corners[3].y) * 0.5f;
+                mid_left.z = (world_corners[0].z + world_corners[3].z) * 0.5f;
+
+                mid_right.x = (world_corners[1].x + world_corners[2].x) * 0.5f;
+                mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
+                mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
+
+                // Bottom-left quadrant: RED
+                glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
+                glBegin(GL_QUADS);
+                glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
+                glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
+                glVertex3f(center.x, center.y, center.z);
+                glVertex3f(mid_left.x, mid_left.y, mid_left.z);
+                glEnd();
+
+                // Bottom-right quadrant: GREEN
+                glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
+                glBegin(GL_QUADS);
+                glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
+                glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
+                glVertex3f(mid_right.x, mid_right.y, mid_right.z);
+                glVertex3f(center.x, center.y, center.z);
+                glEnd();
+
+                // Top-right quadrant: BLUE
+                glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
+                glBegin(GL_QUADS);
+                glVertex3f(center.x, center.y, center.z);
+                glVertex3f(mid_right.x, mid_right.y, mid_right.z);
+                glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
+                glVertex3f(mid_top.x, mid_top.y, mid_top.z);
+                glEnd();
+
+                // Top-left quadrant: YELLOW
+                glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
+                glBegin(GL_QUADS);
+                glVertex3f(mid_left.x, mid_left.y, mid_left.z);
+                glVertex3f(center.x, center.y, center.z);
+                glVertex3f(mid_top.x, mid_top.y, mid_top.z);
+                glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
+                glEnd();
+            }
         }
-        glEnd();
+        else
+        {
+            glColor4fv(fill_color);
+            glBegin(GL_QUADS);
+            for(int i = 0; i < 4; ++i)
+            {
+                glVertex3f(world_corners[i].x, world_corners[i].y, world_corners[i].z);
+            }
+            glEnd();
+        }
 
         glColor4fv(border_color);
         glLineWidth(selected ? 3.0f : 2.0f);
@@ -1076,6 +1202,51 @@ void LEDViewport3D::DrawDisplayPlanes()
     }
 
     glDisable(GL_BLEND);
+}
+
+void LEDViewport3D::UpdateDisplayPlaneTextures()
+{
+    if(!display_planes) return;
+
+    auto& capture_mgr = ScreenCaptureManager::Instance();
+    if(!capture_mgr.IsInitialized()) return;
+
+    for(size_t i = 0; i < display_planes->size(); ++i)
+    {
+        DisplayPlane3D* plane = (*display_planes)[i].get();
+        if(!plane || !plane->IsVisible()) continue;
+
+        std::string source_id = plane->GetCaptureSourceId();
+        if(source_id.empty()) continue;
+
+        // Get latest frame from capture manager
+        auto frame = capture_mgr.GetLatestFrame(source_id);
+        if(!frame || !frame->valid || frame->data.empty()) continue;
+
+        // Check if we already have a texture for this source
+        GLuint texture_id = 0;
+        auto it = display_plane_textures.find(source_id);
+        if(it != display_plane_textures.end())
+        {
+            texture_id = it->second;
+        }
+        else
+        {
+            // Create new texture
+            glGenTextures(1, &texture_id);
+            display_plane_textures[source_id] = texture_id;
+        }
+
+        // Update texture with frame data
+        glBindTexture(GL_TEXTURE_2D, texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame->width, frame->height,
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
 
 void LEDViewport3D::DrawControllers()
@@ -1655,8 +1826,8 @@ Vector3D LEDViewport3D::GetControllerSize(ControllerTransform* ctrl)
 void LEDViewport3D::EnforceFloorConstraint(ControllerTransform* ctrl)
 {
     // Floor constraint disabled for corner-origin coordinate system
-    // In this system, Y can range from 0 (front wall) to max (back wall)
-    // and Z can range from 0 (floor) to max (ceiling)
+    // Standard OpenGL Y-up: Y ranges from 0 (floor) to max (ceiling)
+    // Z ranges from 0 (front wall) to max (back wall)
     // No constraint is needed since all valid positions are positive
     (void)ctrl;  // Suppress unused parameter warning
     return;

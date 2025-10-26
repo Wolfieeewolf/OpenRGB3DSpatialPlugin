@@ -137,6 +137,9 @@ HEADERS +=                                                                      
     Zone3D.h                                                                                    \
     ZoneManager3D.h                                                                             \
     DisplayPlane3D.h                                                                            \
+    DisplayPlaneManager.h                                                                       \
+    ScreenCaptureManager.h                                                                      \
+    Geometry3DUtils.h                                                                           \
     QtCompat.h                                                                                  \
     sdk/OpenRGB3DSpatialSDK.h                                                                   \
     ui/OpenRGB3DSpatialTab.h                                                                    \
@@ -162,6 +165,7 @@ HEADERS +=                                                                      
     Effects3D/Lightning3D/Lightning3D.h                                                         \
     Effects3D/Matrix3D/Matrix3D.h                                                               \
     Effects3D/BouncingBall3D/BouncingBall3D.h                                                   \
+    Effects3D/ScreenMirror3D/ScreenMirror3D.h                                                   \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -174,6 +178,7 @@ SOURCES +=                                                                      
     Zone3D.cpp                                                                                  \
     ZoneManager3D.cpp                                                                           \
     DisplayPlane3D.cpp                                                                          \
+    ScreenCaptureManager.cpp                                                                    \
     sdk/OpenRGB3DSpatialSDK.cpp                                                                 \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
@@ -205,6 +210,7 @@ SOURCES +=                                                                      
     Effects3D/BeatPulse3D/BeatPulse3D.cpp                                                       \
     Effects3D/BandScan3D/BandScan3D.cpp                                                         \
     Effects3D/AudioLevel3D/AudioLevel3D.cpp                                                     \
+    Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                 \
     Audio/AudioInputManager.cpp                                                                 \
 
 #-----------------------------------------------------------------------------------------------#
@@ -217,7 +223,9 @@ win32:LIBS += \
     -lAvrt \
     -lMmdevapi \
     -lPropsys \
-    -luuid
+    -luuid \
+    -lgdi32 \
+    -luser32
 
 win32:CONFIG(debug, debug|release) {
     win32:DESTDIR = debug

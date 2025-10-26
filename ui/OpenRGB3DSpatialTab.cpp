@@ -18,6 +18,9 @@
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "VirtualController3D.h"
+#include "DisplayPlaneManager.h"
+#include "ScreenCaptureManager.h"
+#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
@@ -123,7 +126,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     display_plane_width_spin = nullptr;
     display_plane_height_spin = nullptr;
     display_plane_bezel_spin = nullptr;
-    display_plane_capture_id_edit = nullptr;
+    display_plane_capture_combo = nullptr;
+    display_plane_refresh_capture_btn = nullptr;
     display_plane_visible_check = nullptr;
     add_display_plane_button = nullptr;
     remove_display_plane_button = nullptr;
@@ -644,12 +648,18 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_bezel_spin, plane_row, 1);
     plane_row++;
 
-    plane_form->addWidget(new QLabel("Capture Source Id:"), plane_row, 0);
-    display_plane_capture_id_edit = new QLineEdit();
-    display_plane_capture_id_edit->setPlaceholderText("e.g. Monitor#1, CaptureCard0");
-    connect(display_plane_capture_id_edit, &QLineEdit::textEdited,
-            this, &OpenRGB3DSpatialTab::on_display_plane_capture_id_changed);
-    plane_form->addWidget(display_plane_capture_id_edit, plane_row, 1, 1, 3);
+    plane_form->addWidget(new QLabel("Capture Source:"), plane_row, 0);
+    display_plane_capture_combo = new QComboBox();
+    display_plane_capture_combo->setToolTip("Select which monitor/capture source to use");
+    connect(display_plane_capture_combo, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(on_display_plane_capture_changed(int)));
+    plane_form->addWidget(display_plane_capture_combo, plane_row, 1, 1, 2);
+
+    display_plane_refresh_capture_btn = new QPushButton("Refresh");
+    display_plane_refresh_capture_btn->setToolTip("Refresh list of available capture sources");
+    connect(display_plane_refresh_capture_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_display_plane_refresh_capture_clicked);
+    plane_form->addWidget(display_plane_refresh_capture_btn, plane_row, 3);
     plane_row++;
 
     display_layout->addLayout(plane_form);
@@ -663,6 +673,9 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     display_tab->setLayout(display_layout);
     left_tabs->addTab(display_tab, "Display Planes");
+
+    // Initialize capture source list
+    RefreshDisplayPlaneCaptureSourceList();
 
     left_panel->addWidget(left_tabs);
 
@@ -876,25 +889,25 @@ void OpenRGB3DSpatialTab::SetupUI()
     room_width_spin->setEnabled(use_manual_room_size);
     layout_layout->addWidget(room_width_spin, 4, 1);
 
-    // Room Depth (Y-axis: Front to Back)
-    layout_layout->addWidget(new QLabel("Depth (Y):"), 4, 2);
-    room_depth_spin = new QDoubleSpinBox();
+    // Room Height (Y-axis: Floor to Ceiling, Y-up)
+    layout_layout->addWidget(new QLabel("Height (Y):"), 4, 2);
+    room_depth_spin = new QDoubleSpinBox();  // NOTE: Variable name is legacy, actually controls HEIGHT
     room_depth_spin->setRange(100.0, 50000.0);
     room_depth_spin->setSingleStep(10.0);
-    room_depth_spin->setValue(manual_room_depth);
+    room_depth_spin->setValue(manual_room_depth);  // NOTE: Variable name is legacy, stores height
     room_depth_spin->setSuffix(" mm");
-    room_depth_spin->setToolTip("Room depth (front wall to back wall)");
+    room_depth_spin->setToolTip("Room height (floor to ceiling, Y-axis in standard OpenGL Y-up)");
     room_depth_spin->setEnabled(use_manual_room_size);
     layout_layout->addWidget(room_depth_spin, 4, 3);
 
-    // Room Height (Z-axis: Floor to Ceiling)
-    layout_layout->addWidget(new QLabel("Height (Z):"), 4, 4);
-    room_height_spin = new QDoubleSpinBox();
+    // Room Depth (Z-axis: Front to Back)
+    layout_layout->addWidget(new QLabel("Depth (Z):"), 4, 4);
+    room_height_spin = new QDoubleSpinBox();  // NOTE: Variable name is legacy, actually controls DEPTH
     room_height_spin->setRange(100.0, 50000.0);
     room_height_spin->setSingleStep(10.0);
-    room_height_spin->setValue(manual_room_height);
+    room_height_spin->setValue(manual_room_height);  // NOTE: Variable name is legacy, stores depth
     room_height_spin->setSuffix(" mm");
-    room_height_spin->setToolTip("Room height (floor to ceiling)");
+    room_height_spin->setToolTip("Room depth (front to back, Z-axis in standard OpenGL Y-up)");
     room_height_spin->setEnabled(use_manual_room_size);
     layout_layout->addWidget(room_height_spin, 4, 5);
 
@@ -2012,6 +2025,18 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
     // Apply per-effect settings captured from UI
     eff->LoadSettings(settings);
     inst->saved_settings = std::make_unique<nlohmann::json>(settings);
+
+    // Connect ScreenMirror3D screen preview signal to viewport
+    if (class_name == "ScreenMirror3D")
+    {
+        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(eff);
+        if (screen_mirror && viewport)
+        {
+            connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
+                    viewport, &LEDViewport3D::SetShowScreenPreview);
+        }
+    }
+
     effect_stack.push_back(std::move(inst));
     UpdateEffectStackList();
 
@@ -2613,7 +2638,17 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                     std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
                     if(copied_instance)
                     {
-                        
+                        // Connect ScreenMirror3D screen preview signal to viewport
+                        if (copied_instance->effect_class_name == "ScreenMirror3D" && copied_instance->effect)
+                        {
+                            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(copied_instance->effect.get());
+                            if (screen_mirror && viewport)
+                            {
+                                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
+                                        viewport, &LEDViewport3D::SetShowScreenPreview);
+                            }
+                        }
+
                         effect_stack.push_back(std::move(copied_instance));
                     }
                     else
@@ -4696,6 +4731,18 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
+
+    // Sync display planes to global manager
+    std::vector<DisplayPlane3D*> plane_ptrs;
+    for(auto& plane : display_planes)
+    {
+        if(plane)
+        {
+            plane_ptrs.push_back(plane.get());
+        }
+    }
+    DisplayPlaneManager::instance()->SetDisplayPlanes(plane_ptrs);
+
     emit GridLayoutChanged();
 
     /*---------------------------------------------------------*\
@@ -5268,7 +5315,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
         "AudioLevel3D",     // 13
         "SpectrumBars3D",   // 14
         "BeatPulse3D",      // 15
-        "BandScan3D"        // 16
+        "BandScan3D",       // 16
+        "ScreenMirror3D"    // 17
     };
     const int num_effects = sizeof(effect_names) / sizeof(effect_names[0]);
 
@@ -5679,6 +5727,7 @@ void OpenRGB3DSpatialTab::UpdateEffectCombo()
     effect_combo->addItem("Spectrum Bars 3D"); // index 15 (effect_type 14)
     effect_combo->addItem("Beat Pulse 3D");    // index 16 (effect_type 15)
     effect_combo->addItem("Band Scan 3D");     // index 17 (effect_type 16)
+    effect_combo->addItem("Screen Mirror 3D"); // index 18 (effect_type 17)
 
     // Add stack presets with [Stack] suffix
     // Store negative indices to distinguish presets from effects
@@ -6208,6 +6257,18 @@ void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
         eff->LoadSettings(s);
         inst->effect.reset(eff);
         inst->saved_settings = std::make_unique<nlohmann::json>(s);
+
+        // Connect ScreenMirror3D screen preview signal to viewport
+        if (cls == "ScreenMirror3D")
+        {
+            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(eff);
+            if (screen_mirror && viewport)
+            {
+                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
+                        viewport, &LEDViewport3D::SetShowScreenPreview);
+            }
+        }
+
         effect_stack.push_back(std::move(inst));
         UpdateEffectStackList();
         if(effect_stack_list) effect_stack_list->setCurrentRow((int)effect_stack.size()-1);
@@ -6543,10 +6604,38 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
         QSignalBlocker block(display_plane_bezel_spin);
         display_plane_bezel_spin->setValue(plane->GetBezelMM());
     }
-    if(display_plane_capture_id_edit)
+    if(display_plane_capture_combo)
     {
-        QSignalBlocker block(display_plane_capture_id_edit);
-        display_plane_capture_id_edit->setText(QString::fromStdString(plane->GetCaptureSourceId()));
+        QSignalBlocker block(display_plane_capture_combo);
+        std::string current_source = plane->GetCaptureSourceId();
+
+        // Try to find and select the current source
+        int index = -1;
+        for(int i = 0; i < display_plane_capture_combo->count(); i++)
+        {
+            if(display_plane_capture_combo->itemData(i).toString().toStdString() == current_source)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if(index >= 0)
+        {
+            display_plane_capture_combo->setCurrentIndex(index);
+        }
+        else if(!current_source.empty())
+        {
+            // Source not in list, but plane has one configured - add it as custom entry
+            display_plane_capture_combo->addItem(QString::fromStdString(current_source) + " (custom)",
+                                                  QString::fromStdString(current_source));
+            display_plane_capture_combo->setCurrentIndex(display_plane_capture_combo->count() - 1);
+        }
+        else
+        {
+            // No source configured, select "(None)"
+            display_plane_capture_combo->setCurrentIndex(0);
+        }
     }
     if(display_plane_visible_check)
     {
@@ -6615,7 +6704,8 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         display_plane_width_spin,
         display_plane_height_spin,
         display_plane_bezel_spin,
-        display_plane_capture_id_edit,
+        display_plane_capture_combo,
+        display_plane_refresh_capture_btn,
         display_plane_visible_check
     };
 
@@ -6630,7 +6720,7 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         if(display_plane_width_spin) display_plane_width_spin->setValue(1000.0);
         if(display_plane_height_spin) display_plane_height_spin->setValue(600.0);
         if(display_plane_bezel_spin) display_plane_bezel_spin->setValue(10.0);
-        if(display_plane_capture_id_edit) display_plane_capture_id_edit->setText("");
+        if(display_plane_capture_combo) display_plane_capture_combo->setCurrentIndex(0);
         if(display_plane_visible_check) display_plane_visible_check->setCheckState(Qt::Unchecked);
         return;
     }
@@ -6655,10 +6745,38 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         QSignalBlocker block(display_plane_bezel_spin);
         display_plane_bezel_spin->setValue(plane->GetBezelMM());
     }
-    if(display_plane_capture_id_edit)
+    if(display_plane_capture_combo)
     {
-        QSignalBlocker block(display_plane_capture_id_edit);
-        display_plane_capture_id_edit->setText(QString::fromStdString(plane->GetCaptureSourceId()));
+        QSignalBlocker block(display_plane_capture_combo);
+        std::string current_source = plane->GetCaptureSourceId();
+
+        // Try to find and select the current source
+        int index = -1;
+        for(int i = 0; i < display_plane_capture_combo->count(); i++)
+        {
+            if(display_plane_capture_combo->itemData(i).toString().toStdString() == current_source)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if(index >= 0)
+        {
+            display_plane_capture_combo->setCurrentIndex(index);
+        }
+        else if(!current_source.empty())
+        {
+            // Source not in list, but plane has one configured - add it as custom entry
+            display_plane_capture_combo->addItem(QString::fromStdString(current_source) + " (custom)",
+                                                  QString::fromStdString(current_source));
+            display_plane_capture_combo->setCurrentIndex(display_plane_capture_combo->count() - 1);
+        }
+        else
+        {
+            // No source configured, select "(None)"
+            display_plane_capture_combo->setCurrentIndex(0);
+        }
     }
     if(display_plane_visible_check)
     {
@@ -6675,6 +6793,18 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
     {
         viewport->NotifyDisplayPlaneChanged();
     }
+
+    // Sync display planes to global manager for effects to access
+    std::vector<DisplayPlane3D*> plane_ptrs;
+    for(auto& plane : display_planes)
+    {
+        if(plane)
+        {
+            plane_ptrs.push_back(plane.get());
+        }
+    }
+    DisplayPlaneManager::instance()->SetDisplayPlanes(plane_ptrs);
+
     emit GridLayoutChanged();
 }
 
@@ -6780,12 +6910,21 @@ void OpenRGB3DSpatialTab::on_display_plane_bezel_changed(double value)
     NotifyDisplayPlaneChanged();
 }
 
-void OpenRGB3DSpatialTab::on_display_plane_capture_id_changed(const QString& text)
+void OpenRGB3DSpatialTab::on_display_plane_capture_changed(int index)
 {
+    if(!display_plane_capture_combo) return;
+
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
-    plane->SetCaptureSourceId(text.toStdString());
+
+    QString capture_id = display_plane_capture_combo->itemData(index).toString();
+    plane->SetCaptureSourceId(capture_id.toStdString());
     NotifyDisplayPlaneChanged();
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_refresh_capture_clicked()
+{
+    RefreshDisplayPlaneCaptureSourceList();
 }
 void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, float y, float z)
 {
@@ -7086,4 +7225,77 @@ bool OpenRGB3DSpatialTab::SDK_SetGridOrderColorsWithOrder(int order, const unsig
         ControllerTransform* t = controller_transforms[c].get(); if(t && t->controller) t->controller->UpdateLEDs();
     }
     return true;
+}
+
+/*---------------------------------------------------------*\
+| Refresh Display Plane Capture Source List                |
+\*---------------------------------------------------------*/
+void OpenRGB3DSpatialTab::RefreshDisplayPlaneCaptureSourceList()
+{
+    if(!display_plane_capture_combo)
+    {
+        return;
+    }
+
+    // Get current selection before clearing
+    QString current_selection;
+    if(display_plane_capture_combo->currentIndex() >= 0)
+    {
+        current_selection = display_plane_capture_combo->currentData().toString();
+    }
+
+    // Initialize ScreenCaptureManager if needed
+    auto& capture_mgr = ScreenCaptureManager::Instance();
+    if(!capture_mgr.IsInitialized())
+    {
+        capture_mgr.Initialize();
+    }
+
+    // Refresh available sources
+    capture_mgr.RefreshSources();
+    auto sources = capture_mgr.GetAvailableSources();
+
+    // Clear and repopulate combo
+    display_plane_capture_combo->clear();
+    display_plane_capture_combo->addItem("(None)", "");
+
+    for(const auto& source : sources)
+    {
+        QString label = QString::fromStdString(source.name);
+        if(source.is_primary)
+        {
+            label += " [Primary]";
+        }
+        label += QString(" (%1x%2)").arg(source.width).arg(source.height);
+
+        display_plane_capture_combo->addItem(label, QString::fromStdString(source.id));
+    }
+
+    // Try to restore previous selection
+    if(!current_selection.isEmpty())
+    {
+        for(int i = 0; i < display_plane_capture_combo->count(); i++)
+        {
+            if(display_plane_capture_combo->itemData(i).toString() == current_selection)
+            {
+                display_plane_capture_combo->setCurrentIndex(i);
+                return;
+            }
+        }
+    }
+
+    // If we get here and have a selected plane, sync its capture source
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(plane)
+    {
+        std::string plane_source = plane->GetCaptureSourceId();
+        for(int i = 0; i < display_plane_capture_combo->count(); i++)
+        {
+            if(display_plane_capture_combo->itemData(i).toString().toStdString() == plane_source)
+            {
+                display_plane_capture_combo->setCurrentIndex(i);
+                return;
+            }
+        }
+    }
 }

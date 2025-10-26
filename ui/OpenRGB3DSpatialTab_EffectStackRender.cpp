@@ -426,7 +426,7 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
     \*---------------------------------------------------------*/
 
     // Select an axis and reverse flag from the first enabled stack effect
-    EffectAxis sort_axis = AXIS_Y; // default: front->back
+    EffectAxis sort_axis = AXIS_Y; // default: floor->ceiling (Y-up)
     bool sort_reverse = false;
     for(unsigned int ei = 0; ei < effect_stack.size(); ei++)
     {

@@ -164,10 +164,10 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right wipe
             position = rel_x;
             break;
-        case AXIS_Y:  // Front to Back wipe
+        case AXIS_Y:  // Bottom to Top wipe (Y-up)
             position = rel_y;
             break;
-        case AXIS_Z:  // Floor to Ceiling wipe
+        case AXIS_Z:  // Front to Back wipe
         default:
             position = rel_z;
             break;
@@ -279,11 +279,11 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         case AXIS_X:  // Left to Right wipe
             position = (x - grid.min_x) / grid.width;
             break;
-        case AXIS_Y:  // Front to Back wipe (DEPTH not height!)
-            position = (y - grid.min_y) / grid.depth;  // FIXED: was grid.height
+        case AXIS_Y:  // Floor to Ceiling wipe (Y-up, height)
+            position = (y - grid.min_y) / grid.height;
             break;
-        case AXIS_Z:  // Floor to Ceiling wipe (HEIGHT not depth!)
-            position = (z - grid.min_z) / grid.height;  // FIXED: was grid.depth
+        case AXIS_Z:  // Front to Back wipe (depth)
+            position = (z - grid.min_z) / grid.depth;
             break;
         case AXIS_RADIAL:  // Radial wipe from center (using origin)
         default:

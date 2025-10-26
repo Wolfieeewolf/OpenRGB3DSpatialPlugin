@@ -5,7 +5,10 @@ This guide walks through the minimum steps required to get spatial effects runni
 ## 1. Calibrate the Room
 
 1. Pick a reference corner: front-left floor corner when you face the room. That point is `(0,0,0)`.
-2. Measure the room width (X), depth (Y), and height (Z) in millimetres. Centimetres x 10 works fine.
+2. Measure the room width (X), height (Y), and depth (Z) in millimetres. Centimetres x 10 works fine.
+   - X = left to right (width)
+   - Y = floor to ceiling (height) - standard OpenGL Y-up
+   - Z = front to back (depth)
 3. In the **3D Spatial** tab open **Grid Settings**:
    - Enable **Use Manual Room Size**.
    - Enter the X/Y/Z measurements.
@@ -19,12 +22,12 @@ For each controller you load into the scene:
 
 1. Add it from **Available Controllers**.
 2. With the device selected, set its centre position:
-   - Measure the device width/depth/height.
+   - Measure the device width/height/depth.
    - Measure the distance from the origin corner to the device's front-left-bottom corner.
    - Centre coordinates (in mm) are:
-     - `X = corner_offset_x + width / 2`
-     - `Y = corner_offset_y + depth / 2`
-     - `Z = corner_offset_z + height / 2`
+     - `X = corner_offset_x + width / 2` (horizontal left/right)
+     - `Y = corner_offset_y + height / 2` (vertical floor/ceiling)
+     - `Z = corner_offset_z + depth / 2` (horizontal front/back)
    - Convert to grid units (divide by grid scale) and enter into **Position X/Y/Z**.
 3. Use the viewport gizmo for fine adjustments or rotation if needed.
 
@@ -48,7 +51,7 @@ If the effect only covers part of the room, revisit the room dimensions or devic
 
 | Symptom | Likely Cause | Quick Fix |
 | --- | --- | --- |
-| Device appears underground | Z centre too low | Raise Position Z by desk height / grid scale |
+| Device appears underground | Y centre too low | Raise Position Y by desk height / grid scale |
 | Effect stops halfway across room | Room width/depth too small | Re-measure and update Grid Settings |
 | LEDs animate diagonally instead of front-to-back | Measured from wrong wall | Swap X/Y values or rotate controller |
 | Nothing moves | Effect timer was stopped | Hit **Start Effect** or check plugin log |

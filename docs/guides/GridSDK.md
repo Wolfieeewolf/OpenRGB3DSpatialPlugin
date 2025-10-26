@@ -53,7 +53,7 @@ struct ORGB3DGridAPI {
 };
 ```
 
-- Coordinates: X=left?right, Y=front?back, Z=floor?ceiling, millimeters.
+- Coordinates: X=left→right, Y=floor→ceiling, Z=front→back, millimeters (standard OpenGL Y-up).
 - Colors: 0x00BBGGRR (OpenRGB standard).
 
 ## Minimal examples

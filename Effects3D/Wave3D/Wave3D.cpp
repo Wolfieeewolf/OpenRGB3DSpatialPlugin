@@ -184,10 +184,10 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
         case AXIS_X:  // Left to Right
             position = rel_x;
             break;
-        case AXIS_Y:  // Front to Back
+        case AXIS_Y:  // Bottom to Top (Y-up)
             position = rel_y;
             break;
-        case AXIS_Z:  // Floor to Ceiling
+        case AXIS_Z:  // Front to Back
             position = rel_z;
             break;
         case AXIS_RADIAL:  // Radial from center
@@ -317,13 +317,13 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
             position = rel_x;
             normalized_position = (x - grid.min_x) / grid.width;
             break;
-        case AXIS_Y:  // Front to Back (DEPTH not height!)
+        case AXIS_Y:  // Floor to Ceiling (Y-up, height)
             position = rel_y;
-            normalized_position = (y - grid.min_y) / grid.depth;  // FIXED: was grid.height
+            normalized_position = (y - grid.min_y) / grid.height;
             break;
-        case AXIS_Z:  // Floor to Ceiling (HEIGHT not depth!)
+        case AXIS_Z:  // Front to Back (depth)
             position = rel_z;
-            normalized_position = (z - grid.min_z) / grid.height;  // FIXED: was grid.depth
+            normalized_position = (z - grid.min_z) / grid.depth;
             break;
         case AXIS_RADIAL:  // Radial from center
         default:

@@ -25,6 +25,7 @@
 \*---------------------------------------------------------*/
 #include <vector>
 #include <memory>
+#include <map>
 
 /*---------------------------------------------------------*\
 | Local Includes                                           |
@@ -59,6 +60,7 @@ public:
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
     void SelectDisplayPlane(int index);
     void NotifyDisplayPlaneChanged();
+    void SetShowScreenPreview(bool show) { show_screen_preview = show; update(); }
 
     // Camera persistence helpers
     void SetCamera(float distance, float yaw, float pitch,
@@ -124,6 +126,7 @@ private:
     void DrawUserFigure();
     void DrawRoomBoundary();
     void DrawDisplayPlanes();
+    void UpdateDisplayPlaneTextures();
 
     int PickController(int mouse_x, int mouse_y);
     int PickReferencePoint(int mouse_x, int mouse_y);
@@ -156,10 +159,11 @@ private:
 
     /*---------------------------------------------------------*\
     | Room Dimensions (Corner-Origin System)                   |
+    | Standard OpenGL Y-up coordinate system                   |
     \*---------------------------------------------------------*/
     float   room_width;          // X-axis: 0 (left wall) to width (right wall)
-    float   room_depth;          // Y-axis: 0 (front wall) to depth (back wall)
-    float   room_height;         // Z-axis: 0 (floor) to height (ceiling)
+    float   room_height;         // Y-axis: 0 (floor) to height (ceiling)
+    float   room_depth;          // Z-axis: 0 (front wall) to depth (back wall)
     bool    use_manual_room_dimensions;
 
     /*---------------------------------------------------------*\
@@ -174,6 +178,8 @@ private:
     std::vector<std::unique_ptr<DisplayPlane3D>>* display_planes;
     int                                     selected_display_plane_idx;
     int                                     selected_ref_point_idx;
+    bool                                    show_screen_preview;
+    std::map<std::string, GLuint>           display_plane_textures;  // Texture IDs per capture source
 
     /*---------------------------------------------------------*\
     | Camera Controls                                          |

@@ -168,7 +168,7 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
             coord2 = rel_z;
             coord_along_helix = rel_x;
             break;
-        case AXIS_Y:  // Helix along Y-axis (Front to Back)
+        case AXIS_Y:  // Helix along Y-axis (Bottom to Top, Y-up)
             radial_distance = sqrt(rel_x*rel_x + rel_z*rel_z);
             angle = atan2(rel_z, rel_x);
             helix_height = rel_y * freq_scale + progress;
@@ -176,7 +176,7 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
             coord2 = rel_z;
             coord_along_helix = rel_y;
             break;
-        case AXIS_Z:  // Helix along Z-axis (Floor to Ceiling)
+        case AXIS_Z:  // Helix along Z-axis (Front to Back)
         default:
             radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y);
             angle = atan2(rel_y, rel_x);

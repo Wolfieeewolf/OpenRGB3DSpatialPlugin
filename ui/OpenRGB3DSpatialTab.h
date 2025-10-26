@@ -459,7 +459,8 @@ private slots:
     void on_display_plane_width_changed(double value);
     void on_display_plane_height_changed(double value);
     void on_display_plane_bezel_changed(double value);
-    void on_display_plane_capture_id_changed(const QString& text);
+    void on_display_plane_capture_changed(int index);
+    void on_display_plane_refresh_capture_clicked();
     void on_display_plane_visible_toggled(int state);
     void on_display_plane_position_signal(int index, float x, float y, float z);
     void on_display_plane_rotation_signal(int index, float x, float y, float z);
@@ -488,7 +489,8 @@ private:
     QDoubleSpinBox* display_plane_width_spin = nullptr;
     QDoubleSpinBox* display_plane_height_spin = nullptr;
     QDoubleSpinBox* display_plane_bezel_spin = nullptr;
-    QLineEdit*      display_plane_capture_id_edit = nullptr;
+    QComboBox*      display_plane_capture_combo = nullptr;
+    QPushButton*    display_plane_refresh_capture_btn = nullptr;
     QCheckBox*      display_plane_visible_check = nullptr;
     QPushButton*    add_display_plane_button = nullptr;
     QPushButton*    remove_display_plane_button = nullptr;
@@ -499,6 +501,7 @@ private:
     DisplayPlane3D* GetSelectedDisplayPlane();
     void NotifyDisplayPlaneChanged();
     void SyncDisplayPlaneControls(DisplayPlane3D* plane);
+    void RefreshDisplayPlaneCaptureSourceList();
 };
 
 /*---------------------------------------------------------*\
