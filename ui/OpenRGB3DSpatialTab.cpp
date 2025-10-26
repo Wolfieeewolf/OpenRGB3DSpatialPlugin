@@ -5348,6 +5348,16 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(int effect_type)
     effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = effect;
 
+    // Set reference points for ScreenMirror3D UI effect
+    if (class_name == "ScreenMirror3D")
+    {
+        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
+        if (screen_mirror)
+        {
+            screen_mirror->SetReferencePoints(&reference_points);
+        }
+    }
+
     /*---------------------------------------------------------*\
     | Get and connect buttons                                  |
     \*---------------------------------------------------------*/
