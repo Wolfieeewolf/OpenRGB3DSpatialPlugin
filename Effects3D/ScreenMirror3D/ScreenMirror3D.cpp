@@ -193,8 +193,8 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
 
             // Reference Point Selection
             settings.ref_point_combo = new QComboBox();
-            settings.ref_point_combo->addItem("Use Global Reference", -1);
-            settings.ref_point_combo->setToolTip("Reference point for calculating falloff distance\nUse Reference Points tab to create custom viewing positions");
+            settings.ref_point_combo->addItem("Room Center", -1);
+            settings.ref_point_combo->setToolTip("Reference point for calculating falloff distance\nRoom Center uses the calculated room center\nUse Reference Points tab to create custom viewing positions");
             connect(settings.ref_point_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(OnParameterChanged()));
             monitor_form->addRow("Reference Point:", settings.ref_point_combo);
 
@@ -852,8 +852,8 @@ void ScreenMirror3D::RefreshReferencePointDropdowns()
         settings.ref_point_combo->blockSignals(true);
         settings.ref_point_combo->clear();
 
-        // Add "Use Global" option
-        settings.ref_point_combo->addItem("Use Global Reference", -1);
+        // Add "Room Center" option (uses calculated room center, not a reference point)
+        settings.ref_point_combo->addItem("Room Center", -1);
 
         // Add all reference points
         for (size_t i = 0; i < reference_points->size(); i++)
@@ -862,7 +862,9 @@ void ScreenMirror3D::RefreshReferencePointDropdowns()
             if (ref_point)
             {
                 QString name = QString::fromStdString(ref_point->GetName());
-                settings.ref_point_combo->addItem(name, (int)i);
+                QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
+                QString display = QString("%1 (%2)").arg(name).arg(type);
+                settings.ref_point_combo->addItem(display, (int)i);
             }
         }
 
