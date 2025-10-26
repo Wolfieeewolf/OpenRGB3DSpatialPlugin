@@ -44,10 +44,13 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     ref_point->SetDisplayColor(selected_ref_point_color);
     ref_point->SetVisible(false);  // Not visible until added to viewport
 
-    // Add to available controllers list (not directly to viewport)
-    available_controllers_list->addItem(QString("[Ref Point] ") + QString::fromStdString(name));
-
     reference_points.push_back(std::move(ref_point));
+
+    // Add to available controllers list with metadata
+    int ref_index = (int)reference_points.size() - 1;
+    QListWidgetItem* item = new QListWidgetItem(QString("[Ref Point] ") + QString::fromStdString(name));
+    item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, ref_index))); // -2 = reference point
+    available_controllers_list->addItem(item);
     UpdateReferencePointsList();
 
     // Clear inputs for next point

@@ -6885,10 +6885,13 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->GetTransform().position.z = room_height_units * 0.5f;
     plane->SetVisible(false);  // Not visible until added to viewport
 
-    // Add to available controllers list (not directly to viewport)
-    available_controllers_list->addItem(QString("[Display] ") + QString::fromStdString(full_name));
-
     display_planes.push_back(std::move(plane));
+
+    // Add to available controllers list with metadata
+    int display_index = (int)display_planes.size() - 1;
+    QListWidgetItem* item = new QListWidgetItem(QString("[Display] ") + QString::fromStdString(full_name));
+    item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, display_index))); // -3 = display plane
+    available_controllers_list->addItem(item);
     current_display_plane_index = (int)display_planes.size() - 1;
     UpdateDisplayPlanesList();
     DisplayPlane3D* new_plane = GetSelectedDisplayPlane();
