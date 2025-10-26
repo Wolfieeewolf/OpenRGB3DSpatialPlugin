@@ -347,7 +347,21 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 void OpenRGB3DSpatialTab::SetupUI()
 {
 
-    QHBoxLayout* main_layout = new QHBoxLayout(this);
+    /*---------------------------------------------------------*\
+    | Create main tab widget to separate Setup and Effects     |
+    \*---------------------------------------------------------*/
+    QVBoxLayout* root_layout = new QVBoxLayout(this);
+    root_layout->setContentsMargins(0, 0, 0, 0);
+    root_layout->setSpacing(0);
+
+    QTabWidget* main_tabs = new QTabWidget();
+    root_layout->addWidget(main_tabs);
+
+    /*---------------------------------------------------------*\
+    | Setup Tab (Grid/Layout Configuration)                    |
+    \*---------------------------------------------------------*/
+    QWidget* setup_tab = new QWidget();
+    QHBoxLayout* main_layout = new QHBoxLayout(setup_tab);
     main_layout->setSpacing(8);
     main_layout->setContentsMargins(8, 8, 8, 8);
 
@@ -1610,7 +1624,26 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
-    QVBoxLayout* right_panel = new QVBoxLayout();
+    /*---------------------------------------------------------*\
+    | Add Setup tab to main tabs                               |
+    \*---------------------------------------------------------*/
+    main_tabs->addTab(setup_tab, "Setup / Grid");
+
+    /*---------------------------------------------------------*\
+    | Effects Tab (Effect Controls and Presets)                |
+    \*---------------------------------------------------------*/
+    QWidget* effects_tab = new QWidget();
+    QVBoxLayout* effects_tab_layout = new QVBoxLayout(effects_tab);
+    effects_tab_layout->setContentsMargins(8, 8, 8, 8);
+    effects_tab_layout->setSpacing(8);
+
+    QScrollArea* effects_scroll = new QScrollArea();
+    effects_scroll->setWidgetResizable(true);
+    effects_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    effects_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    QWidget* effects_content = new QWidget();
+    QVBoxLayout* right_panel = new QVBoxLayout(effects_content);
 
     /*---------------------------------------------------------*\
     | Right Tab Widget (Effects and Zones)                     |
@@ -1728,24 +1761,22 @@ void OpenRGB3DSpatialTab::SetupUI()
     right_panel->addStretch();
 
     /*---------------------------------------------------------*\
-    | Create right scroll area and add to main layout         |
+    | Configure effects scroll area and add to tab             |
     \*---------------------------------------------------------*/
-    QScrollArea* right_scroll = new QScrollArea();
-    right_scroll->setWidgetResizable(true);
-    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    // Symmetric sizing with left panel; flexible when small, capped when large
-    right_scroll->setMinimumWidth(260);
-    right_scroll->setMaximumWidth(420);
-    right_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    effects_scroll->setMinimumWidth(400);
+    effects_scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    effects_scroll->setWidget(effects_content);
+    effects_tab_layout->addWidget(effects_scroll);
 
-    QWidget* right_content = new QWidget();
-    right_content->setLayout(right_panel);
-    right_scroll->setWidget(right_content);
+    /*---------------------------------------------------------*\
+    | Add Effects tab to main tabs                             |
+    \*---------------------------------------------------------*/
+    main_tabs->addTab(effects_tab, "Effects / Presets");
 
-    main_layout->addWidget(right_scroll, 1);
-
-    setLayout(main_layout);
+    /*---------------------------------------------------------*\
+    | Set the root layout                                      |
+    \*---------------------------------------------------------*/
+    setLayout(root_layout);
 }
 
 void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
