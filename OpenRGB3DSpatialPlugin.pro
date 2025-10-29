@@ -181,6 +181,8 @@ SOURCES +=                                                                      
     ScreenCaptureManager.cpp                                                                    \
     sdk/OpenRGB3DSpatialSDK.cpp                                                                 \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
+    ui/OpenRGB3DSpatialTab_Audio.cpp                                                            \
+    ui/OpenRGB3DSpatialTab_ObjectCreator.cpp                                                    \
     ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \

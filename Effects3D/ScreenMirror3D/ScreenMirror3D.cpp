@@ -245,13 +245,29 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     test_pattern_check = new QCheckBox();
     test_pattern_check->setChecked(false);
     test_pattern_check->setToolTip("Show 4-color test pattern on LEDs instead of screen capture\nRED=bottom-left, GREEN=bottom-right, BLUE=top-right, YELLOW=top-left\nUse this to verify ray-tracing is working correctly");
-    connect(test_pattern_check, &QCheckBox::stateChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(test_pattern_check,
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            &QCheckBox::checkStateChanged,
+            this, [this](Qt::CheckState) { OnParameterChanged(); }
+#else
+            &QCheckBox::stateChanged,
+            this, [this](int) { OnParameterChanged(); }
+#endif
+    );
     capture_form->addRow("Test Pattern Mode:", test_pattern_check);
 
     screen_preview_check = new QCheckBox();
     screen_preview_check->setChecked(false);
     screen_preview_check->setToolTip("Display live screen capture on display planes in 3D viewport\nShows what the effect sees - useful for debugging UV mapping and screen alignment");
-    connect(screen_preview_check, &QCheckBox::stateChanged, this, &ScreenMirror3D::OnScreenPreviewChanged);
+    connect(screen_preview_check,
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            &QCheckBox::checkStateChanged,
+            this, [this](Qt::CheckState) { OnScreenPreviewChanged(); }
+#else
+            &QCheckBox::stateChanged,
+            this, [this](int) { OnScreenPreviewChanged(); }
+#endif
+    );
     capture_form->addRow("Show Screen Preview:", screen_preview_check);
 
     capture_group->setLayout(capture_form);

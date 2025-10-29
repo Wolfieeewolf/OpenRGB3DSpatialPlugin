@@ -38,6 +38,8 @@
 #include <memory>
 #include <atomic>
 
+class QStackedWidget;
+
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
@@ -175,6 +177,7 @@ private:
     void UpdateAvailableItemCombo();
     void UpdateAvailableControllersList();
     void UpdateCustomControllersList();
+    void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
     void SaveReferencePoints();
     void LoadReferencePoints();
@@ -230,6 +233,7 @@ private:
 
     QListWidget*                available_controllers_list;
     QListWidget*                custom_controllers_list;
+    QLabel*                     object_creator_status_label;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;
     QListWidget*                controller_list;
@@ -461,7 +465,7 @@ private slots:
     void on_display_plane_bezel_changed(double value);
     void on_display_plane_capture_changed(int index);
     void on_display_plane_refresh_capture_clicked();
-    void on_display_plane_visible_toggled(int state);
+    void on_display_plane_visible_toggled(Qt::CheckState state);
     void on_display_plane_position_signal(int index, float x, float y, float z);
     void on_display_plane_rotation_signal(int index, float x, float y, float z);
 private:
