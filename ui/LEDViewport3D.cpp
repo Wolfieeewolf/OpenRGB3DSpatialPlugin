@@ -2140,11 +2140,13 @@ void LEDViewport3D::SelectDisplayPlane(int index)
     }
     else
     {
-        selected_controller_indices.clear();
-        selected_controller_idx = -1;
-        selected_ref_point_idx = -1;
         selected_display_plane_idx = -1;
-        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+
+        // Only clear the gizmo target if nothing else is currently selected.
+        if(selected_controller_idx < 0 && selected_ref_point_idx < 0)
+        {
+            gizmo.SetTarget((DisplayPlane3D*)nullptr);
+        }
     }
 
     NotifyDisplayPlaneChanged();
