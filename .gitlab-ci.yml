@@ -22,3 +22,23 @@ build-linux:
   only:
     - master
     - tags
+
+
+build-windows:
+  stage: build
+  tags:
+    - windows
+  variables:
+    QT_BIN_PATH: 'C:\Qt\5.15.0\msvc2019_64\bin'
+    VC_VARS_BAT: 'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'
+  script:
+    - |
+      cmd /C "\"%VC_VARS_BAT%\" && \"%QT_BIN_PATH%\qmake.exe\" OpenRGB3DSpatialPlugin.pro CONFIG+=release && nmake"
+  artifacts:
+    name: "OpenRGB3DSpatialPlugin-Windows-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - release\OpenRGB3DSpatialPlugin.dll
+    expire_in: 30 days
+  only:
+    - master
+    - tags
