@@ -68,6 +68,10 @@ jobs:
           fetch-depth: 0
 
       - name: Mirror to GitLab
+        if: ${{ secrets.GITLAB_TOKEN != '' }}
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
-          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git || true
-          git push gitlab master --force
+          git remote add gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
+          git remote set-url gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
+          git push gitlab HEAD:master
