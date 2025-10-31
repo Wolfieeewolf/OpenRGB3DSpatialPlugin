@@ -462,7 +462,6 @@ private slots:
     void on_display_plane_name_edited(const QString& text);
     void on_display_plane_width_changed(double value);
     void on_display_plane_height_changed(double value);
-    void on_display_plane_bezel_changed(double value);
     void on_display_plane_capture_changed(int index);
     void on_display_plane_refresh_capture_clicked();
     void on_display_plane_visible_toggled(Qt::CheckState state);
@@ -492,7 +491,6 @@ private:
     QLineEdit*      display_plane_name_edit = nullptr;
     QDoubleSpinBox* display_plane_width_spin = nullptr;
     QDoubleSpinBox* display_plane_height_spin = nullptr;
-    QDoubleSpinBox* display_plane_bezel_spin = nullptr;
     QComboBox*      display_plane_capture_combo = nullptr;
     QPushButton*    display_plane_refresh_capture_btn = nullptr;
     QCheckBox*      display_plane_visible_check = nullptr;

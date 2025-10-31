@@ -232,6 +232,7 @@ protected:
     QSlider*            frequency_slider;
     QSlider*            size_slider;
     QSlider*            scale_slider;
+    QCheckBox*          scale_invert_check;
     QSlider*            fps_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
@@ -281,6 +282,7 @@ protected:
     unsigned int        effect_frequency;
     unsigned int        effect_size;
     unsigned int        effect_scale;
+    bool                scale_inverted;
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
@@ -323,6 +325,8 @@ protected:
     float GetNormalizedSize() const;            // Returns 0.1-2.0 size multiplier (linear)
     float GetNormalizedScale() const;           // Returns 0.1-2.0 scale multiplier (affects area coverage)
     unsigned int GetTargetFPS() const;          // Returns FPS setting (1-60)
+    bool IsScaleInverted() const { return scale_inverted; }
+    void SetScaleInverted(bool inverted);
 
     // Advanced: Scaled versions that apply effect-specific multipliers
     float GetScaledSpeed() const;               // Returns speed * effect's speed_scale

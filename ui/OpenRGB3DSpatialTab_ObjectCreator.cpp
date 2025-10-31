@@ -3126,11 +3126,6 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
         QSignalBlocker block(display_plane_height_spin);
         display_plane_height_spin->setValue(plane->GetHeightMM());
     }
-    if(display_plane_bezel_spin)
-    {
-        QSignalBlocker block(display_plane_bezel_spin);
-        display_plane_bezel_spin->setValue(plane->GetBezelMM());
-    }
     if(display_plane_capture_combo)
     {
         QSignalBlocker block(display_plane_capture_combo);
@@ -3230,7 +3225,6 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         display_plane_name_edit,
         display_plane_width_spin,
         display_plane_height_spin,
-        display_plane_bezel_spin,
         display_plane_capture_combo,
         display_plane_refresh_capture_btn,
         display_plane_visible_check
@@ -3246,7 +3240,6 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         if(display_plane_name_edit) display_plane_name_edit->setText("");
         if(display_plane_width_spin) display_plane_width_spin->setValue(1000.0);
         if(display_plane_height_spin) display_plane_height_spin->setValue(600.0);
-        if(display_plane_bezel_spin) display_plane_bezel_spin->setValue(10.0);
         if(display_plane_capture_combo) display_plane_capture_combo->setCurrentIndex(0);
         if(display_plane_visible_check) display_plane_visible_check->setCheckState(Qt::Unchecked);
         return;
@@ -3266,11 +3259,6 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
     {
         QSignalBlocker block(display_plane_height_spin);
         display_plane_height_spin->setValue(plane->GetHeightMM());
-    }
-    if(display_plane_bezel_spin)
-    {
-        QSignalBlocker block(display_plane_bezel_spin);
-        display_plane_bezel_spin->setValue(plane->GetBezelMM());
     }
     if(display_plane_capture_combo)
     {
@@ -3435,14 +3423,6 @@ void OpenRGB3DSpatialTab::on_display_plane_height_changed(double value)
     if(!plane) return;
     plane->SetHeightMM((float)value);
     UpdateDisplayPlanesList();
-    NotifyDisplayPlaneChanged();
-}
-
-void OpenRGB3DSpatialTab::on_display_plane_bezel_changed(double value)
-{
-    DisplayPlane3D* plane = GetSelectedDisplayPlane();
-    if(!plane) return;
-    plane->SetBezelMM((float)value);
     NotifyDisplayPlaneChanged();
 }
 

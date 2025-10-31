@@ -21,8 +21,8 @@
  * @brief Represents a rectangular display surface placed in 3D space.
  *
  * The plane is described by a Transform3D for position/orientation,
- * physical dimensions in millimetres, and optional bezel size and capture
- * identifiers used by screen capture subsystems.
+ * physical dimensions in millimetres, and capture identifiers used by
+ * screen capture subsystems.
  */
 class DisplayPlane3D
 {
@@ -42,9 +42,6 @@ public:
     float               GetHeightMM() const { return height_mm; }
     void                SetHeightMM(float h) { height_mm = (h > 1.0f) ? h : 1.0f; }
 
-    float               GetBezelMM() const { return bezel_mm; }
-    void                SetBezelMM(float b) { bezel_mm = (b >= 0.0f) ? b : 0.0f; }
-
     bool                IsVisible() const { return visible; }
     void                SetVisible(bool v) { visible = v; }
 
@@ -63,7 +60,6 @@ private:
     Transform3D     transform;
     float           width_mm;
     float           height_mm;
-    float           bezel_mm;
     bool            visible;
     std::string     capture_source_id;
     std::string     capture_label;
@@ -72,4 +68,3 @@ private:
 };
 
 #endif // DISPLAYPLANE3D_H
-

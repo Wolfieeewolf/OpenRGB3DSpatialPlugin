@@ -116,7 +116,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     display_plane_name_edit = nullptr;
     display_plane_width_spin = nullptr;
     display_plane_height_spin = nullptr;
-    display_plane_bezel_spin = nullptr;
     display_plane_capture_combo = nullptr;
     display_plane_refresh_capture_btn = nullptr;
     display_plane_visible_check = nullptr;
@@ -1592,16 +1591,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(display_plane_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &OpenRGB3DSpatialTab::on_display_plane_height_changed);
     plane_form->addWidget(display_plane_height_spin, plane_row, 3);
-    plane_row++;
-
-    plane_form->addWidget(new QLabel("Bezel (mm):"), plane_row, 0);
-    display_plane_bezel_spin = new QDoubleSpinBox();
-    display_plane_bezel_spin->setRange(0.0, 200.0);
-    display_plane_bezel_spin->setDecimals(1);
-    display_plane_bezel_spin->setSingleStep(1.0);
-    connect(display_plane_bezel_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, &OpenRGB3DSpatialTab::on_display_plane_bezel_changed);
-    plane_form->addWidget(display_plane_bezel_spin, plane_row, 1);
     plane_row++;
 
     plane_form->addWidget(new QLabel("Capture Source:"), plane_row, 0);

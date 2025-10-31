@@ -19,7 +19,6 @@ DisplayPlane3D::DisplayPlane3D(const std::string& name_value) :
     name(name_value),
     width_mm(1000.0f),
     height_mm(600.0f),
-    bezel_mm(10.0f),
     visible(true)
 {
     transform.position = {0.0f, 0.0f, 0.0f};
@@ -34,7 +33,6 @@ nlohmann::json DisplayPlane3D::ToJson() const
     j["name"]          = name;
     j["width_mm"]      = width_mm;
     j["height_mm"]     = height_mm;
-    j["bezel_mm"]      = bezel_mm;
     j["visible"]       = visible;
     j["capture_id"]    = capture_source_id;
     j["capture_label"] = capture_label;
@@ -69,7 +67,6 @@ std::unique_ptr<DisplayPlane3D> DisplayPlane3D::FromJson(const nlohmann::json& j
 
     plane->width_mm  = j.value("width_mm", 1000.0f);
     plane->height_mm = j.value("height_mm", 600.0f);
-    plane->bezel_mm  = j.value("bezel_mm", 10.0f);
     plane->visible   = j.value("visible", true);
     plane->capture_source_id = j.value("capture_id", std::string());
     plane->capture_label     = j.value("capture_label", std::string());
@@ -99,4 +96,3 @@ std::unique_ptr<DisplayPlane3D> DisplayPlane3D::FromJson(const nlohmann::json& j
 
     return plane;
 }
-

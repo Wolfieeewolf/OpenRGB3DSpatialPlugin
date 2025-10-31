@@ -14,6 +14,7 @@
 
 #include "LEDPosition3D.h"
 #include "DisplayPlane3D.h"
+#include <algorithm>
 #include <cmath>
 
 namespace Geometry3D
@@ -401,7 +402,7 @@ namespace Geometry3D
      * @param user_position Optional user/viewer position for distance falloff (if null, uses screen center)
      * @return PlaneProjection with UV coordinates and distance
      */
-    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float /*edge_zone_depth*/ = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
     {
         PlaneProjection result;
         result.is_valid = false;
@@ -478,6 +479,25 @@ namespace Geometry3D
         if (result.u > 1.0f) result.u = 1.0f;
         if (result.v < 0.0f) result.v = 0.0f;
         if (result.v > 1.0f) result.v = 1.0f;
+
+        // Apply edge sampling inset if requested (pulls sampling in from absolute edges)
+        float inset = edge_zone_depth;
+        if(inset > 0.0f)
+        {
+            inset = std::clamp(inset, 0.0f, 0.49f);
+            float min_uv = inset;
+            float max_uv = 1.0f - inset;
+            float span = std::max(0.0f, max_uv - min_uv);
+            if(span > 0.0f)
+            {
+                result.u = min_uv + span * result.u;
+                result.v = min_uv + span * result.v;
+            }
+            else
+            {
+                result.u = result.v = 0.5f;
+            }
+        }
 
         // NOTE: V coordinate is NOT flipped here because screen capture is already
         // in the correct orientation (verified with 3D viewport texture display)

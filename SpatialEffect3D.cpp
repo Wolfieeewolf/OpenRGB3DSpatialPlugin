@@ -12,6 +12,8 @@
 #include "SpatialEffect3D.h"
 #include "Colors.h"
 #include <cmath>
+#include <algorithm>
+#include <QSignalBlocker>
 
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 {
@@ -22,6 +24,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_frequency = 1;
     effect_size = 50;
     effect_scale = 200;  // Default to 200 (100% of room - whole room coverage)
+    scale_inverted = false;
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
@@ -47,6 +50,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     frequency_slider = nullptr;
     size_slider = nullptr;
     scale_slider = nullptr;
+    scale_invert_check = nullptr;
     fps_slider = nullptr;
     speed_label = nullptr;
     brightness_label = nullptr;
@@ -180,6 +184,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     scale_label = new QLabel(QString::number(effect_scale));
     scale_label->setMinimumWidth(30);
     scale_layout->addWidget(scale_label);
+    scale_invert_check = new QCheckBox("Invert");
+    scale_invert_check->setToolTip("Collapse effect toward the reference point instead of expanding outward.");
+    scale_invert_check->setChecked(scale_inverted);
+    scale_layout->addWidget(scale_invert_check);
     main_layout->addLayout(scale_layout);
 
     /*---------------------------------------------------------*\
@@ -288,6 +296,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(fps_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    if(scale_invert_check)
+    {
+        connect(scale_invert_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
+    }
     connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnAxisChanged);
     connect(reverse_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnReverseChanged);
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -737,16 +749,31 @@ float SpatialEffect3D::GetNormalizedScale() const
     // New scale mapping: 0-250 slider range
     // 0-200: Maps to 0-100% of room (each 2 units = 1%)
     // 201-250: Maps to 101-150% beyond room (each unit = 1%)
+    float normalized;
+
     if(effect_scale <= 200)
     {
-        // 0-200 range: 0% to 100% of room
-        return effect_scale / 200.0f;  // 0.0 to 1.0
+        normalized = effect_scale / 200.0f;  // 0.0 to 1.0
     }
     else
     {
-        // 201-250 range: 101% to 150% beyond room
-        return 1.0f + ((effect_scale - 200) / 100.0f);  // 1.01 to 1.5
+        normalized = 1.0f + ((effect_scale - 200) / 100.0f);  // 1.01 to 1.5
     }
+
+    if(scale_inverted)
+    {
+        if(normalized <= 1.0f)
+        {
+            normalized = 1.0f - normalized;
+        }
+        else
+        {
+            float extra = normalized - 1.0f;
+            normalized = std::max(0.0f, 1.0f - extra);
+        }
+    }
+
+    return std::max(0.0f, normalized);
 }
 
 unsigned int SpatialEffect3D::GetTargetFPS() const
@@ -896,21 +923,7 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
                                          half_depth * half_depth +
                                          half_height * half_height);
 
-    // New scale mapping: 0-250 slider range
-    // 0-200: Maps to 0-100% of room (each 2 units = 1%)
-    // 201-250: Maps to 101-150% beyond room (each unit = 1%)
-    float scale_percentage;
-    if(effect_scale <= 200)
-    {
-        // 0-200 range: 0% to 100% of room
-        scale_percentage = effect_scale / 200.0f;  // 0.0 to 1.0
-    }
-    else
-    {
-        // 201-250 range: 101% to 150% beyond room
-        scale_percentage = 1.0f + ((effect_scale - 200) / 100.0f);  // 1.01 to 1.5
-    }
-
+    float scale_percentage = GetNormalizedScale();
     float scale_radius = max_distance_from_center * scale_percentage;
 
     float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
@@ -948,6 +961,11 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
                     break;
                 }
             }
+        }
+
+        if(slider == scale_slider && scale_invert_check)
+        {
+            scale_invert_check->setVisible(visible);
         }
     }
 }
@@ -1045,6 +1063,11 @@ void SpatialEffect3D::OnParameterChanged()
         scale_label->setText(QString::number(effect_scale));
     }
 
+    if(scale_invert_check)
+    {
+        scale_inverted = scale_invert_check->isChecked();
+    }
+
     if(fps_slider && fps_label)
     {
         effect_fps = fps_slider->value();
@@ -1107,6 +1130,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["speed"] = effect_speed;
     j["brightness"] = effect_brightness;
     j["frequency"] = effect_frequency;
+    j["size"] = effect_size;
+    j["scale_value"] = effect_scale;
+    j["scale_inverted"] = scale_inverted;
     j["rainbow_mode"] = rainbow_mode;
     j["reverse"] = effect_reverse;
     j["intensity"] = effect_intensity;
@@ -1165,6 +1191,13 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_sharpness = settings["sharpness"].get<unsigned int>();
     if(settings.contains("coverage"))
         effect_coverage = settings["coverage"].get<unsigned int>();
+    if(settings.contains("size"))
+        effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
+    if(settings.contains("scale_value"))
+        effect_scale = std::clamp(settings["scale_value"].get<unsigned int>(), 0u, 250u);
+    if(settings.contains("scale_inverted"))
+        scale_inverted = settings["scale_inverted"].get<bool>();
+
 
     // Load colors
     if(settings.contains("colors"))
@@ -1207,21 +1240,118 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("use_custom_ref"))
         SetUseCustomReference(settings["use_custom_ref"].get<bool>());
 
-    // Update UI controls if they exist
+    // Update UI controls if they exist (block signals to avoid re-entry)
     if(speed_slider)
+    {
+        QSignalBlocker blocker(speed_slider);
         speed_slider->setValue(effect_speed);
+    }
+    if(speed_label)
+    {
+        speed_label->setText(QString::number(effect_speed));
+    }
+
     if(brightness_slider)
+    {
+        QSignalBlocker blocker(brightness_slider);
         brightness_slider->setValue(effect_brightness);
+    }
+    if(brightness_label)
+    {
+        brightness_label->setText(QString::number(effect_brightness));
+    }
+
     if(frequency_slider)
+    {
+        QSignalBlocker blocker(frequency_slider);
         frequency_slider->setValue(effect_frequency);
+    }
+    if(frequency_label)
+    {
+        frequency_label->setText(QString::number(effect_frequency));
+    }
+
     if(rainbow_mode_check)
+    {
+        QSignalBlocker blocker(rainbow_mode_check);
         rainbow_mode_check->setChecked(rainbow_mode);
+    }
+
     if(reverse_check)
+    {
+        QSignalBlocker blocker(reverse_check);
         reverse_check->setChecked(effect_reverse);
+    }
+
     if(intensity_slider)
+    {
+        QSignalBlocker blocker(intensity_slider);
         intensity_slider->setValue(effect_intensity);
+    }
+
     if(sharpness_slider)
+    {
+        QSignalBlocker blocker(sharpness_slider);
         sharpness_slider->setValue(effect_sharpness);
+    }
+
+    if(size_slider)
+    {
+        QSignalBlocker blocker(size_slider);
+        size_slider->setValue(effect_size);
+    }
+    if(size_label)
+    {
+        size_label->setText(QString::number(effect_size));
+    }
+
+    if(scale_slider)
+    {
+        QSignalBlocker blocker(scale_slider);
+        scale_slider->setValue(effect_scale);
+    }
+    if(scale_label)
+    {
+        scale_label->setText(QString::number(effect_scale));
+    }
+
+    if(scale_invert_check)
+    {
+        QSignalBlocker blocker(scale_invert_check);
+        scale_invert_check->setChecked(scale_inverted);
+    }
+
+    if(fps_slider)
+    {
+        QSignalBlocker blocker(fps_slider);
+        fps_slider->setValue(effect_fps);
+    }
+    if(fps_label)
+    {
+        fps_label->setText(QString::number(effect_fps));
+    }
+
     if(coverage_combo)
+    {
+        QSignalBlocker blocker(coverage_combo);
         coverage_combo->setCurrentIndex((int)effect_coverage);
+    }
 }
+
+void SpatialEffect3D::SetScaleInverted(bool inverted)
+{
+    if(scale_inverted == inverted)
+    {
+        return;
+    }
+
+    scale_inverted = inverted;
+    if(scale_invert_check)
+    {
+        QSignalBlocker blocker(scale_invert_check);
+        scale_invert_check->setChecked(inverted);
+    }
+    emit ParametersChanged();
+}
+
+

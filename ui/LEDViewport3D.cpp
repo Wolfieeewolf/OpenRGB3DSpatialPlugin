@@ -1179,29 +1179,6 @@ void LEDViewport3D::DrawDisplayPlanes()
         glEnd();
         glLineWidth(1.0f);
 
-        float bezel_units = plane_ptr->GetBezelMM() / grid_scale_mm;
-        if(bezel_units > 0.01f)
-        {
-            float inner_half_w = std::max(0.0f, half_w - bezel_units);
-            float inner_half_h = std::max(0.0f, half_h - bezel_units);
-            if(inner_half_w > 0.0f && inner_half_h > 0.0f)
-            {
-                Vector3D inner_local[4] = {
-                    { -inner_half_w, -inner_half_h, 0.0f },
-                    {  inner_half_w, -inner_half_h, 0.0f },
-                    {  inner_half_w,  inner_half_h, 0.0f },
-                    { -inner_half_w,  inner_half_h, 0.0f }
-                };
-                glColor4fv(bezel_color);
-                glBegin(GL_LINE_LOOP);
-                for(int i = 0; i < 4; ++i)
-                {
-                    Vector3D inner_world = TransformLocalToWorld(inner_local[i], plane_ptr->GetTransform());
-                    glVertex3f(inner_world.x, inner_world.y, inner_world.z);
-                }
-                glEnd();
-            }
-        }
     }
 
     glDisable(GL_BLEND);
