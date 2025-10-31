@@ -72,7 +72,7 @@ EffectInfo3D ScreenMirror3D::GetEffectInfo()
     info.effect_name            = "Screen Mirror 3D";
     info.effect_description     = "Projects screen content onto LEDs using 3D spatial mapping";
     info.category               = "Ambilight";
-    info.effect_type            = SPATIAL_EFFECT_WAVE;  // TODO: Add ambilight type
+    info.effect_type            = SPATIAL_EFFECT_WAVE;
     info.is_reversible          = false;
     info.supports_random        = false;
     info.max_speed              = 100;
@@ -110,8 +110,9 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     // Show active planes count
     std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
     int active_count = 0;
-    for (auto plane : planes)
+    for (unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
     {
+        DisplayPlane3D* plane = planes[plane_index];
         if (plane && !plane->GetCaptureSourceId().empty())
         {
             active_count++;
@@ -131,8 +132,9 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     monitors_layout->setSpacing(6);
 
     // Create expandable settings group for each monitor
-    for (auto plane : planes)
+    for (unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
     {
+        DisplayPlane3D* plane = planes[plane_index];
         if (plane && !plane->GetCaptureSourceId().empty())
         {
             std::string plane_name = plane->GetName();
@@ -438,26 +440,16 @@ namespace
 
 RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*time*/, const GridContext3D& grid)
 {
-    static bool logged_once = false;
-
-    // Get ALL display planes from the manager
     std::vector<DisplayPlane3D*> all_planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
 
     if (all_planes.empty())
     {
-        if (!logged_once)
-        {
-            LOG_WARNING("[ScreenMirror3D] No display planes configured");
-            logged_once = true;
-        }
         return ToRGBColor(0, 0, 0);
     }
 
-    // MULTI-MONITOR BLENDING: Collect contributions from ALL monitors (like colored spotlights)
     Vector3D led_pos = {x, y, z};
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
 
-    // Store each monitor's contribution
     struct MonitorContribution
     {
         DisplayPlane3D* plane;
@@ -484,14 +476,13 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     float normalized_scale = std::clamp(global_scale / 2.0f, 0.0f, 1.0f);
 
-    // Calculate contribution from each monitor
     for (DisplayPlane3D* plane : all_planes)
     {
         if (!plane) continue;
 
         // Check if this monitor is enabled in the effect settings
         std::string plane_name = plane->GetName();
-        auto settings_it = monitor_settings.find(plane_name);
+        std::map<std::string, MonitorSettings>::iterator settings_it = monitor_settings.find(plane_name);
         if (settings_it == monitor_settings.end())
         {
             settings_it = monitor_settings.emplace(plane_name, MonitorSettings()).first;
@@ -517,10 +508,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             // Normal mode: need valid capture source and frames
             if (capture_id.empty())
             {
-                if (!logged_once)
-                {
-                    LOG_WARNING("[ScreenMirror3D] Skipping plane '%s' - no capture source", plane->GetName().c_str());
-                }
                 continue;
             }
 
@@ -530,11 +517,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                 capture_mgr.StartCapture(capture_id);
                 if (!capture_mgr.IsCapturing(capture_id))
                 {
-                    if (!logged_once)
-                    {
-                        LOG_WARNING("[ScreenMirror3D] Skipping plane '%s' - capture not running for '%s'",
-                                   plane->GetName().c_str(), capture_id.c_str());
-                    }
                     continue;
                 }
             }
@@ -542,20 +524,12 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             frame = capture_mgr.GetLatestFrame(capture_id);
             if (!frame || !frame->valid || frame->data.empty())
             {
-                if (!logged_once)
-                {
-                    LOG_WARNING("[ScreenMirror3D] Skipping plane '%s' - no valid frames for '%s'",
-                               plane->GetName().c_str(), capture_id.c_str());
-                }
                 continue;
             }
 
             AddFrameToHistory(capture_id, frame);
         }
 
-        // Use spatial mapping for perceptually correct 3D ambilight
-        // This maps LED position to screen UV based on spatial relationship
-        // Use per-monitor reference point if set, otherwise use global
         const Vector3D* falloff_ref = base_falloff_ref;
         if (mon_settings.reference_point_index >= 0 && reference_points &&
             mon_settings.reference_point_index < (int)reference_points->size())
@@ -627,37 +601,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             wave_envelope = std::exp(-delay_ms / wave_decay_ms);
         }
 
-        // TEMPORARILY DISABLED: Angular falloff was rejecting too many LEDs
-        // float angular_falloff = Geometry3D::ComputeAngularFalloff(
-        //     led_pos, *plane,
-        //     horizontal_wrap_angle, vertical_wrap_angle, wrap_strength
-        // );
+        float weight = distance_falloff * wave_envelope;
 
-        float weight = distance_falloff * wave_envelope; // * angular_falloff;
-
-        // DEBUG: Log what's happening with first LED and right-side LEDs
-        static bool logged_falloff = false;
-        if (!logged_falloff)
-        {
-            LOG_WARNING("[ScreenMirror3D DEBUG] First LED: pos(%.1f,%.1f,%.1f) plane:'%s' distance=%.1fmm dist_falloff=%.3f weight=%.3f UV=(%.3f,%.3f)",
-                     led_pos.x, led_pos.y, led_pos.z, plane->GetName().c_str(),
-                     proj.distance, distance_falloff, weight, proj.u, proj.v);
-            logged_falloff = true;
-        }
-
-        // DEBUG: Log ALL keyboard and speaker LEDs for debugging
-        static int debug_led_count = 0;
-        if (debug_led_count < 20)
-        {
-            LOG_WARNING("[ScreenMirror3D DEBUG] LED: pos(%.1f,%.1f,%.1f) screen:'%s'@(%.1f,%.1f,%.1f) UV=(%.3f,%.3f) weight=%.3f",
-                     led_pos.x, led_pos.y, led_pos.z, plane->GetName().c_str(),
-                     plane->GetTransform().position.x, plane->GetTransform().position.y, plane->GetTransform().position.z,
-                     proj.u, proj.v, weight);
-            debug_led_count++;
-        }
-
-        // Only include if weight is significant (avoid unnecessary sampling)
-        if (weight > 0.01f) // 1% threshold
+        if (weight > 0.01f)
         {
             MonitorContribution contrib;
             contrib.plane = plane;
@@ -670,38 +616,10 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                                        (frame ? frame->timestamp_ms : 0);
             contributions.push_back(contrib);
         }
-        else if (debug_led_count < 15 && (led_pos.z < 25.0f || led_pos.x < 210.0f || led_pos.x > 330.0f))
-        {
-            LOG_WARNING("[ScreenMirror3D DEBUG] Edge LED REJECTED: pos(%.1f,%.1f,%.1f) plane:'%s' distance=%.1fmm weight=%.3f (threshold=0.01)",
-                     led_pos.x, led_pos.y, led_pos.z, plane->GetName().c_str(), proj.distance, weight);
-        }
     }
 
     if (contributions.empty())
     {
-        if (!logged_once)
-        {
-            // Count how many planes have capture sources vs total
-            int with_capture = 0;
-            int capturing = 0;
-            for (DisplayPlane3D* plane : all_planes)
-            {
-                if (plane && !plane->GetCaptureSourceId().empty())
-                {
-                    with_capture++;
-                    if (capture_mgr.IsCapturing(plane->GetCaptureSourceId()))
-                    {
-                        capturing++;
-                    }
-                }
-            }
-            LOG_WARNING("[ScreenMirror3D] No active planes ready. Total: %zu, With capture source: %d, Actively capturing: %d",
-                       all_planes.size(), with_capture, capturing);
-            logged_once = true;
-        }
-
-        // If captures are running but no frames yet, return black (falloff working, just no frames yet)
-        // If nothing is capturing, return purple (error - setup issue)
         int capturing_count = 0;
         for (DisplayPlane3D* plane : all_planes)
         {
@@ -724,16 +642,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
     }
 
-    // Log success once
-    if (!logged_once)
-    {
-        LOG_WARNING("[ScreenMirror3D] Successfully blending from %zu monitor(s)", contributions.size());
-        logged_once = true;
-    }
-
-    // BLEND ALL MONITOR CONTRIBUTIONS (like colored spotlights mixing)
-    // Each monitor's blend setting controls how much it mixes with others
-    // Calculate average blend factor from contributing monitors
+    // Blend monitor contributions
     float avg_blend = 0.0f;
     for (const MonitorContribution& contrib : contributions)
     {
@@ -742,10 +651,8 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     avg_blend /= fmaxf(1.0f, (float)contributions.size());
     float blend_factor = avg_blend / 100.0f; // Convert to 0-1
 
-    // At low blend values, keep only the strongest (nearest) monitor
     if (blend_factor < 0.01f && contributions.size() > 1)
     {
-        // Find strongest contribution
         float max_weight = 0.0f;
         size_t strongest_idx = 0;
         for (size_t i = 0; i < contributions.size(); i++)
@@ -757,7 +664,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             }
         }
 
-        // Keep only the strongest
         MonitorContribution strongest = contributions[strongest_idx];
         contributions.clear();
         contributions.push_back(strongest);
@@ -769,34 +675,15 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     for (const MonitorContribution& contrib : contributions)
     {
-        // Ray-trace: Sample the exact pixel this LED sees on this monitor
-        // Allow UV coordinates outside [0,1] for ambilight edge extension
+        // Sample the pixel this LED maps to on the monitor
         float sample_u = contrib.proj.u;
         float sample_v = contrib.proj.v;
-
-        // DEBUG: Log first few LEDs with WHICH SCREEN they're sampling
-        static int debug_count = 0;
-        if (debug_count < 20)
-        {
-            const char* quadrant = "";
-            if (sample_u < 0.5f && sample_v < 0.5f) quadrant = "BOTTOM-LEFT";
-            else if (sample_u >= 0.5f && sample_v < 0.5f) quadrant = "BOTTOM-RIGHT";
-            else if (sample_u >= 0.5f && sample_v >= 0.5f) quadrant = "TOP-RIGHT";
-            else quadrant = "TOP-LEFT";
-
-            LOG_WARNING("[ScreenMirror3D] LED#%d pos(%.0f,%.0f,%.0f) -> SCREEN:'%s' UV=(%.3f,%.3f) %s weight=%.2f",
-                     debug_count, led_pos.x, led_pos.y, led_pos.z,
-                     contrib.plane->GetName().c_str(), sample_u, sample_v, quadrant, contrib.weight);
-            debug_count++;
-        }
 
         float r, g, b;
 
         if (show_test_pattern)
         {
-            // Test pattern: 4 quadrants with solid colors
-            // RED=bottom-left, GREEN=bottom-right, BLUE=top-right, YELLOW=top-left
-            // Clamp for test pattern only to show quadrants
+            // Test pattern: assign solid colors per quadrant
             float clamped_u = sample_u;
             float clamped_v = sample_v;
             if (clamped_u < 0.0f) clamped_u = 0.0f;
@@ -809,28 +696,24 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
             if (bottom_half && left_half)
             {
-                // Bottom-left: RED
                 r = 255.0f;
                 g = 0.0f;
                 b = 0.0f;
             }
             else if (bottom_half && !left_half)
             {
-                // Bottom-right: GREEN
                 r = 0.0f;
                 g = 255.0f;
                 b = 0.0f;
             }
             else if (!bottom_half && !left_half)
             {
-                // Top-right: BLUE
                 r = 0.0f;
                 g = 0.0f;
                 b = 255.0f;
             }
             else
             {
-                // Top-left: YELLOW
                 r = 255.0f;
                 g = 255.0f;
                 b = 0.0f;
@@ -838,7 +721,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
         else
         {
-            // Normal mode: Sample from captured screen
             // Screen capture is upside-down, so flip V coordinate
             if (!contrib.frame || contrib.frame->data.empty())
             {
@@ -847,7 +729,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
             float flipped_v = 1.0f - sample_v;
 
-            // SampleFrame will automatically clamp to edges for ambilight extension
             RGBColor sampled_color = Geometry3D::SampleFrame(
                 contrib.frame->data.data(),
                 contrib.frame->width,
@@ -857,7 +738,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                 true             // Always use bilinear for smooth ambilight
             );
 
-            // Extract RGB
             r = (float)RGBGetRValue(sampled_color);
             g = (float)RGBGetGValue(sampled_color);
             b = (float)RGBGetBValue(sampled_color);
@@ -901,7 +781,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         LEDKey key = MakeLEDKey(x, y, z);
         LEDState& state = led_states[key];
 
-        auto now = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
         uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
         uint64_t sample_time_ms = latest_timestamp ? latest_timestamp : now_ms;
 
@@ -960,16 +840,19 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
 
     // Save per-monitor settings
     nlohmann::json monitors = nlohmann::json::object();
-    for (const auto& pair : monitor_settings)
+    for (std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
+         it != monitor_settings.end();
+         ++it)
     {
+        const MonitorSettings& settings = it->second;
         nlohmann::json mon;
-        mon["enabled"] = pair.second.enabled;
-        mon["scale"] = pair.second.scale;
-        mon["edge_softness"] = pair.second.edge_softness;
-        mon["blend"] = pair.second.blend;
-        mon["edge_zone_depth"] = pair.second.edge_zone_depth;
-        mon["reference_point_index"] = pair.second.reference_point_index;
-        monitors[pair.first] = mon;
+        mon["enabled"] = settings.enabled;
+        mon["scale"] = settings.scale;
+        mon["edge_softness"] = settings.edge_softness;
+        mon["blend"] = settings.blend;
+        mon["edge_zone_depth"] = settings.edge_zone_depth;
+        mon["reference_point_index"] = settings.reference_point_index;
+        monitors[it->first] = mon;
     }
     settings["monitor_settings"] = monitors;
 
@@ -1378,7 +1261,7 @@ void ScreenMirror3D::StartCaptureIfNeeded()
         if (!capture_mgr.IsCapturing(capture_id))
         {
             capture_mgr.StartCapture(capture_id);
-            LOG_WARNING("[ScreenMirror3D] Started capture for '%s' (plane: %s)",
+            LOG_INFO("[ScreenMirror3D] Started capture for '%s' (plane: %s)",
                        capture_id.c_str(), plane->GetName().c_str());
         }
     }

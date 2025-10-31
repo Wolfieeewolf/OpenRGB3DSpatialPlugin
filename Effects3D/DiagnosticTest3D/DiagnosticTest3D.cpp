@@ -93,10 +93,10 @@ void DiagnosticTest3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* test_layout = new QHBoxLayout();
     test_layout->addWidget(new QLabel("Test Mode:"));
     test_mode_combo = new QComboBox();
-    test_mode_combo->addItem("X-Axis Gradient (Left→Right)");
-    test_mode_combo->addItem("Y-Axis Gradient (Bottom→Top)");
-    test_mode_combo->addItem("Z-Axis Gradient (Front→Back)");
-    test_mode_combo->addItem("Radial Distance (Center→Out)");
+    test_mode_combo->addItem("X-Axis Gradient (Left->Right)");
+    test_mode_combo->addItem("Y-Axis Gradient (Bottom->Top)");
+    test_mode_combo->addItem("Z-Axis Gradient (Front->Back)");
+    test_mode_combo->addItem("Radial Distance (Center->Out)");
     test_mode_combo->addItem("Grid Corners (8 Points)");
     test_mode_combo->addItem("Distance Rings");
     test_mode_combo->addItem("Axis Planes (XYZ Split)");
@@ -117,14 +117,14 @@ void DiagnosticTest3D::SetupCustomUI(QWidget* parent)
     \*---------------------------------------------------------*/
     QLabel* info_label = new QLabel(
         "This effect visualizes the 3D grid system:\n"
-        "• X-Axis: Red (left) → Green (right)\n"
-        "• Y-Axis: Red (bottom) → Green (top)\n"
-        "• Z-Axis: Red (front) → Green (back)\n"
-        "• Radial: Red (center) → Rainbow (edges)\n"
-        "• Corners: Highlights 8 corner positions\n"
-        "• Distance Rings: Concentric spheres from center\n"
-        "• Axis Planes: Red(X-) Green(Y-) Blue(Z+)\n"
-        "• Sequential Flash: Shows Y position order\n"
+        "- X-Axis: Red (left) -> Green (right)\n"
+        "- Y-Axis: Red (bottom) -> Green (top)\n"
+        "- Z-Axis: Red (front) -> Green (back)\n"
+        "- Radial: Red (center) -> Rainbow (edges)\n"
+        "- Corners: Highlights 8 corner positions\n"
+        "- Distance Rings: Concentric spheres from center\n"
+        "- Axis Planes: Red(X-) Green(Y-) Blue(Z+)\n"
+        "- Sequential Flash: Shows Y position order\n"
         "  (bottom controllers flash first, top last)"
     );
     info_label->setWordWrap(true);
@@ -162,36 +162,14 @@ void DiagnosticTest3D::OnTestModeChanged()
 
 void DiagnosticTest3D::OnLogDiagnostics()
 {
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] DIAGNOSTIC TEST STARTED");
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] Current Parameters:");
-    LOG_WARNING("[DiagnosticTest3D]   Speed: %u", GetSpeed());
-    LOG_WARNING("[DiagnosticTest3D]   Brightness: %u", GetBrightness());
-    LOG_WARNING("[DiagnosticTest3D]   Frequency: %u", GetFrequency());
-    LOG_WARNING("[DiagnosticTest3D]   Size: %u", effect_size);
-    LOG_WARNING("[DiagnosticTest3D]   Scale: %u", effect_scale);
-    LOG_WARNING("[DiagnosticTest3D]   Normalized Scale: %.2f", GetNormalizedScale());
-    LOG_WARNING("[DiagnosticTest3D]   Scale Radius: %.2f", GetNormalizedScale() * 10.0f);
-    LOG_WARNING("[DiagnosticTest3D]   Test Mode: %d", test_mode);
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] AXIS DIRECTION GUIDE:");
-    LOG_WARNING("[DiagnosticTest3D]   X-Axis: Negative (left) → Positive (right)");
-    LOG_WARNING("[DiagnosticTest3D]   Y-Axis: Negative (bottom) → Positive (top)");
-    LOG_WARNING("[DiagnosticTest3D]   Z-Axis: Negative (front) → Positive (back)");
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] EXPECTED TEST RESULTS:");
-    LOG_WARNING("[DiagnosticTest3D]   X-Axis Test: Red on LEFT, Green on RIGHT");
-    LOG_WARNING("[DiagnosticTest3D]   Y-Axis Test: Red on BOTTOM, Green on TOP");
-    LOG_WARNING("[DiagnosticTest3D]   Z-Axis Test: Red in FRONT, Green in BACK");
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] IF COLORS ARE REVERSED:");
-    LOG_WARNING("[DiagnosticTest3D]   - Check controller rotation in 3D viewport");
-    LOG_WARNING("[DiagnosticTest3D]   - Verify controller position (Y axis)");
-    LOG_WARNING("[DiagnosticTest3D]   - Controllers should be ordered bottom-to-top");
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
-    LOG_WARNING("[DiagnosticTest3D] Next LED updates will log position data");
-    LOG_WARNING("[DiagnosticTest3D] ========================================");
+    LOG_INFO("[DiagnosticTest3D] speed=%u brightness=%u freq=%u size=%u scale=%u norm_scale=%.2f mode=%d",
+             GetSpeed(),
+             GetBrightness(),
+             GetFrequency(),
+             effect_size,
+             effect_scale,
+             GetNormalizedScale(),
+             test_mode);
 }
 
 RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
@@ -202,8 +180,6 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
     | (default 10mm). LED positions use grid units.           |
     \*---------------------------------------------------------*/
 
-    static bool first_run = true;
-    static int sample_count = 0;
     static float min_x = 99999.0f, max_x = -99999.0f;
     static float min_y = 99999.0f, max_y = -99999.0f;
     static float min_z = 99999.0f, max_z = -99999.0f;
@@ -225,18 +201,6 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
 
     if(distance < min_dist) min_dist = distance;
     if(distance > max_dist) max_dist = distance;
-
-    // Log sample data every 30 frames
-    if(first_run || sample_count == 30)
-    {
-        LOG_WARNING("[DiagnosticTest3D] Position Sample: world(%.2f, %.2f, %.2f) rel(%.2f, %.2f, %.2f) dist=%.2f",
-                   x, y, z, rel_x, rel_y, rel_z, distance);
-        LOG_WARNING("[DiagnosticTest3D] Bounds: X[%.2f to %.2f] Y[%.2f to %.2f] Z[%.2f to %.2f] Dist[%.2f to %.2f]",
-                   min_x, max_x, min_y, max_y, min_z, max_z, min_dist, max_dist);
-        sample_count = 0;
-        first_run = false;
-    }
-    sample_count++;
 
     // Check if within effect boundary
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
@@ -406,15 +370,6 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         {
             float intensity = 1.0f - (distance_from_wave / flash_width);
             unsigned char white = (unsigned char)(intensity * 255 * brightness_factor);
-
-            // Log when we hit different Y positions
-            static float last_logged_y = -999.0f;
-            if(fabs(rel_y - last_logged_y) > 5.0f && intensity > 0.8f)
-            {
-                LOG_WARNING("[DiagnosticTest3D] Flash at Y=%.2f (normalized=%.2f) world(%.2f, %.2f, %.2f)",
-                           rel_y, normalized_y, x, y, z);
-                last_logged_y = rel_y;
-            }
 
             return (white << 16) | (white << 8) | white;
         }

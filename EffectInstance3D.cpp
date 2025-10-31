@@ -91,7 +91,6 @@ std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::jso
         if(effect)
         {
             instance->effect.reset(effect);
-            LOG_WARNING("[EffectInstance3D] Created effect '%s' successfully", effect_type.c_str());
 
             /*---------------------------------------------------------*\
             | Load effect parameters if they exist                     |
@@ -99,12 +98,11 @@ std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::jso
             if(instance->saved_settings)
             {
                 effect->LoadSettings(*instance->saved_settings);
-                LOG_WARNING("[EffectInstance3D] Loaded saved settings for effect '%s'", effect_type.c_str());
             }
         }
         else
         {
-            LOG_WARNING("[EffectInstance3D] Failed to create effect '%s'", effect_type.c_str());
+            LOG_ERROR("[EffectInstance3D] Failed to create effect '%s'", effect_type.c_str());
         }
     }
 

@@ -26,7 +26,6 @@ OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
     info.Label          = "3D Spatial";
     info.Location       = OPENRGB_PLUGIN_LOCATION_TOP;
 
-
     return info;
 }
 
@@ -38,8 +37,6 @@ unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
 void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
-
-    
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -63,8 +60,6 @@ QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 void OpenRGB3DSpatialPlugin::Unload()
 {
     RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
-
-    
 }
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)

@@ -36,7 +36,7 @@ A concise walkthrough lives in `docs/guides/QuickStart.md`. The grid SDK interfa
 ## Development
 - Coding style mirrors upstream OpenRGB: explicit types, indexed loops, braces on new lines.
 - `docs/guides/ContributorGuide.md` covers build steps, effect architecture, and PR expectations.
-- Run `python scripts/lint.py` before committing (`--fail-on-auto` makes `auto` usage fatal).
+- Before committing, self-audit for `auto`, range-for, or other style violations called out in the contributor guide.
 - External references:
   - https://gitlab.com/CalcProgrammer1/OpenRGB/-/blob/master/RGBControllerAPI.md (device abstraction)
   - https://gitlab.com/CalcProgrammer1/OpenRGB/-/blob/master/OpenRGBSDK.md (network SDK protocol)

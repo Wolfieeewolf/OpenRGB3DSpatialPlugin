@@ -23,15 +23,6 @@
 
     // Forward declaration for Qt internal function
     extern QPixmap qt_pixmapFromWinHBITMAP(HBITMAP bitmap, int format = 0);
-
-    /**
-     * @brief Platform-specific data for Windows Qt/GDI capture
-     */
-    struct Win32CaptureData
-    {
-        QScreen*    screen = nullptr;
-        int         screen_index = -1;
-    };
 #endif
 
 /*---------------------------------------------------------*\
@@ -59,7 +50,6 @@ ScreenCaptureManager::ScreenCaptureManager()
     , target_width(320)
     , target_height(180)
     , target_fps(30)
-    , platform_data(nullptr)
 {
 }
 
@@ -101,20 +91,24 @@ void ScreenCaptureManager::Shutdown()
     // Stop all capture threads
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        for (auto& pair : capture_active)
+        for (std::map<std::string, std::atomic<bool>>::iterator it = capture_active.begin();
+             it != capture_active.end();
+             ++it)
         {
-            pair.second.store(false);
+            it->second.store(false);
         }
     }
 
     // Wait for threads to finish
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        for (auto& pair : capture_threads)
+        for (std::map<std::string, std::thread>::iterator it = capture_threads.begin();
+             it != capture_threads.end();
+             ++it)
         {
-            if (pair.second.joinable())
+            if (it->second.joinable())
             {
-                pair.second.join();
+                it->second.join();
             }
         }
         capture_threads.clear();
@@ -155,9 +149,11 @@ std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
     std::vector<CaptureSourceInfo> result;
     result.reserve(sources.size());
 
-    for (const auto& pair : sources)
+    for (std::map<std::string, CaptureSourceInfo>::const_iterator it = sources.begin();
+         it != sources.end();
+         ++it)
     {
-        result.push_back(pair.second);
+        result.push_back(it->second);
     }
 
     return result;
@@ -177,15 +173,12 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         }
     }
 
-    LOG_WARNING("[ScreenCapture] StartCapture called for '%s'", source_id.c_str());
-
     // Check if already capturing
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         if (capture_active.find(source_id) != capture_active.end() &&
             capture_active[source_id].load())
         {
-            LOG_WARNING("[ScreenCapture] Already capturing '%s'", source_id.c_str());
             return true; // Already running
         }
     }
@@ -197,16 +190,12 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         return false;
     }
 
-    LOG_WARNING("[ScreenCapture] Launching thread for '%s'", source_id.c_str());
-
     // Launch capture thread
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         capture_active[source_id].store(true);
         capture_threads[source_id] = std::thread(&ScreenCaptureManager::CaptureThreadFunction, this, source_id);
     }
-
-    LOG_WARNING("[ScreenCapture] Thread launched for '%s'", source_id.c_str());
 
     return true;
 }
@@ -219,21 +208,21 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
     // Signal thread to stop
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        auto it = capture_active.find(source_id);
-        if (it != capture_active.end())
+        std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
+        if (active_it != capture_active.end())
         {
-            it->second.store(false);
+            active_it->second.store(false);
         }
     }
 
     // Wait for thread to finish
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        auto it = capture_threads.find(source_id);
-        if (it != capture_threads.end() && it->second.joinable())
+        std::map<std::string, std::thread>::iterator thread_it = capture_threads.find(source_id);
+        if (thread_it != capture_threads.end() && thread_it->second.joinable())
         {
-            it->second.join();
-            capture_threads.erase(it);
+            thread_it->second.join();
+            capture_threads.erase(thread_it);
         }
         capture_active.erase(source_id);
     }
@@ -247,7 +236,7 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
 bool ScreenCaptureManager::IsCapturing(const std::string& source_id) const
 {
     std::lock_guard<std::mutex> lock(threads_mutex);
-    auto it = capture_active.find(source_id);
+    std::map<std::string, std::atomic<bool>>::const_iterator it = capture_active.find(source_id);
     return (it != capture_active.end() && it->second.load());
 }
 
@@ -257,7 +246,7 @@ bool ScreenCaptureManager::IsCapturing(const std::string& source_id) const
 std::shared_ptr<CapturedFrame> ScreenCaptureManager::GetLatestFrame(const std::string& source_id) const
 {
     std::lock_guard<std::mutex> lock(frames_mutex);
-    auto it = latest_frames.find(source_id);
+    std::map<std::string, std::shared_ptr<CapturedFrame>>::const_iterator it = latest_frames.find(source_id);
     if (it != latest_frames.end())
     {
         return it->second;
@@ -329,8 +318,6 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
 
 bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
-    LOG_WARNING("[ScreenCapture] StartCapturePlatform called for '%s'", source_id.c_str());
-
     // Extract screen index from source_id (format: "screen_N")
     size_t underscore_pos = source_id.find('_');
     if (underscore_pos == std::string::npos)
@@ -347,8 +334,6 @@ bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
         LOG_WARNING("[ScreenCapture] Invalid screen index %d (total screens: %d)", screen_index, screens.size());
         return false;
     }
-
-    LOG_WARNING("[ScreenCapture] StartCapturePlatform ready for screen %d", screen_index);
 
     // No platform-specific initialization needed - will be done in capture thread
     return true;
@@ -401,8 +386,6 @@ static QPixmap GrabScreen(QScreen* screen)
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 {
-    LOG_WARNING("[ScreenCapture] Thread started for '%s'", source_id.c_str());
-
     // Extract screen index from source_id (format: "screen_N")
     size_t underscore_pos = source_id.find('_');
     if (underscore_pos == std::string::npos)
@@ -427,8 +410,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         LOG_WARNING("[ScreenCapture] Screen %d is null", screen_index);
         return;
     }
-
-    LOG_WARNING("[ScreenCapture] Successfully initialized capture for screen %d", screen_index);
 
     // Capture loop
     uint64_t frame_counter = 0;
@@ -501,7 +482,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
     }
 
-    LOG_WARNING("[ScreenCapture] Thread ended for '%s'", source_id.c_str());
 }
 
 #else
@@ -511,7 +491,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
 bool ScreenCaptureManager::InitializePlatform()
 {
-    // TODO: Implement PipeWire/X11 capture for Linux
+    // Linux capture is not implemented yet
     return false;
 }
 

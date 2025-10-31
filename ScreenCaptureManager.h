@@ -210,9 +210,6 @@ private:
     mutable std::mutex                      threads_mutex;
     std::map<std::string, std::thread>      capture_threads;
     std::map<std::string, std::atomic<bool>> capture_active;
-
-    // Platform-specific opaque handles
-    void*                                   platform_data;
 };
 
 #endif // SCREENCAPTUREMANAGER_H

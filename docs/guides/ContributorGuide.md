@@ -32,11 +32,9 @@ This project follows the OpenRGB community standards. Be respectful, constructiv
    git checkout -b feature/your-feature-name
    ```
 
-4. **Run the lint checks**
-   ```bash
-   python scripts/lint.py --fail-on-auto
-   ```
-   (omit the flag to receive warnings instead of failures for existing `auto` usage.)
+4. **Pre-submit review**
+   - Scan your changes for `auto`, range-based loops, Qt usage outside `ui/`, or other violations listed below.
+   - Ensure builds succeed on at least one supported toolchain before opening a merge request.
 
 ## Reference Documentation
 
