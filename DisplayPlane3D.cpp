@@ -24,6 +24,7 @@ DisplayPlane3D::DisplayPlane3D(const std::string& name_value) :
     transform.position = {0.0f, 0.0f, 0.0f};
     transform.rotation = {0.0f, 0.0f, 0.0f};
     transform.scale    = {1.0f, 1.0f, 1.0f};
+    monitor_preset_id.clear();
 }
 
 nlohmann::json DisplayPlane3D::ToJson() const
@@ -36,6 +37,10 @@ nlohmann::json DisplayPlane3D::ToJson() const
     j["visible"]       = visible;
     j["capture_id"]    = capture_source_id;
     j["capture_label"] = capture_label;
+    if(!monitor_preset_id.empty())
+    {
+        j["monitor_preset_id"] = monitor_preset_id;
+    }
 
     nlohmann::json t;
     t["position"] = { transform.position.x, transform.position.y, transform.position.z };
@@ -70,6 +75,7 @@ std::unique_ptr<DisplayPlane3D> DisplayPlane3D::FromJson(const nlohmann::json& j
     plane->visible   = j.value("visible", true);
     plane->capture_source_id = j.value("capture_id", std::string());
     plane->capture_label     = j.value("capture_label", std::string());
+    plane->monitor_preset_id = j.value("monitor_preset_id", std::string());
 
     if(j.contains("transform"))
     {

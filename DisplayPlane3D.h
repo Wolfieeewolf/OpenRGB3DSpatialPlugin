@@ -51,6 +51,9 @@ public:
     const std::string&  GetCaptureLabel() const { return capture_label; }
     void                SetCaptureLabel(const std::string& label) { capture_label = label; }
 
+    const std::string&  GetMonitorPresetId() const { return monitor_preset_id; }
+    void                SetMonitorPresetId(const std::string& preset_id) { monitor_preset_id = preset_id; }
+
     nlohmann::json      ToJson() const;
     static std::unique_ptr<DisplayPlane3D> FromJson(const nlohmann::json& j);
 
@@ -63,6 +66,7 @@ private:
     bool            visible;
     std::string     capture_source_id;
     std::string     capture_label;
+    std::string     monitor_preset_id;
 
     static int      next_id;
 };

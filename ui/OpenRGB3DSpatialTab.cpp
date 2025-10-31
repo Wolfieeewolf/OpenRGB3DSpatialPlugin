@@ -116,6 +116,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     display_plane_name_edit = nullptr;
     display_plane_width_spin = nullptr;
     display_plane_height_spin = nullptr;
+    display_plane_monitor_combo = nullptr;
     display_plane_capture_combo = nullptr;
     display_plane_refresh_capture_btn = nullptr;
     display_plane_visible_check = nullptr;
@@ -123,6 +124,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     remove_display_plane_button = nullptr;
     current_display_plane_index = -1;
     zones_list = nullptr;
+    monitor_preset_completer = nullptr;
 
     viewport = nullptr;
 
@@ -1574,6 +1576,23 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_name_edit, plane_row, 1, 1, 2);
     plane_row++;
 
+    plane_form->addWidget(new QLabel("Monitor Preset:"), plane_row, 0);
+    display_plane_monitor_combo = new QComboBox();
+    display_plane_monitor_combo->setEditable(true);
+    display_plane_monitor_combo->setInsertPolicy(QComboBox::NoInsert);
+    display_plane_monitor_combo->setPlaceholderText("Search brand or model...");
+    display_plane_monitor_combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    if(QLineEdit* monitor_edit = display_plane_monitor_combo->lineEdit())
+    {
+        monitor_edit->setClearButtonEnabled(true);
+        connect(monitor_edit, &QLineEdit::textEdited,
+                this, &OpenRGB3DSpatialTab::on_monitor_preset_text_edited);
+    }
+    connect(display_plane_monitor_combo, QOverload<int>::of(&QComboBox::activated),
+            this, &OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected);
+    plane_form->addWidget(display_plane_monitor_combo, plane_row, 1, 1, 3);
+    plane_row++;
+
     plane_form->addWidget(new QLabel("Width (mm):"), plane_row, 0);
     display_plane_width_spin = new QDoubleSpinBox();
     display_plane_width_spin->setRange(50.0, 5000.0);
@@ -1639,6 +1658,8 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     object_creator_tab->setLayout(creator_layout);
     settings_tabs->addTab(object_creator_tab, "Object Creator");
+
+    LoadMonitorPresets();
 
     // Initialize capture source list for display planes page
     RefreshDisplayPlaneCaptureSourceList();

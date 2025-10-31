@@ -34,6 +34,8 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QProgressBar>
+#include <QCompleter>
+#include <vector>
 #include <string>
 #include <memory>
 #include <atomic>
@@ -467,6 +469,9 @@ private slots:
     void on_display_plane_visible_toggled(Qt::CheckState state);
     void on_display_plane_position_signal(int index, float x, float y, float z);
     void on_display_plane_rotation_signal(int index, float x, float y, float z);
+    void on_display_plane_monitor_preset_selected(int index);
+
+    void on_monitor_preset_text_edited(const QString& text);
 private:
     // Audio Standard Controls (data members)
     QGroupBox*      audio_std_group = nullptr;
@@ -504,6 +509,33 @@ private:
     void NotifyDisplayPlaneChanged();
     void SyncDisplayPlaneControls(DisplayPlane3D* plane);
     void RefreshDisplayPlaneCaptureSourceList();
+    void LoadMonitorPresets();
+    void PopulateMonitorPresetCombo();
+    int  FindAvailableControllerRow(int type_code, int object_index) const;
+    void SelectAvailableControllerEntry(int type_code, int object_index);
+    void ClearMonitorPresetSelectionIfManualEdit();
+
+    struct MonitorPreset
+    {
+        QString id;
+        QString brand;
+        QString model;
+        double  width_mm;
+        double  height_mm;
+
+        QString DisplayLabel() const
+        {
+            return QString("%1 %2 (%3 x %4 mm)")
+                .arg(brand)
+                .arg(model)
+                .arg(width_mm, 0, 'f', 0)
+                .arg(height_mm, 0, 'f', 0);
+        }
+    };
+
+    std::vector<MonitorPreset> monitor_presets;
+    QComboBox*      display_plane_monitor_combo = nullptr;
+    QCompleter*     monitor_preset_completer = nullptr;
 };
 
 /*---------------------------------------------------------*\

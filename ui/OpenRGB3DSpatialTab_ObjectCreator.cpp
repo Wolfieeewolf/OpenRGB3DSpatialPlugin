@@ -28,14 +28,28 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QByteArray>
 #include <set>
+#include <unordered_set>
 #include <fstream>
 #include <filesystem>
 #include <cmath>
 #include <algorithm>
 #include <system_error>
+#include <limits>
 
 namespace filesystem = std::filesystem;
+
+namespace
+{
+const char* kDefaultMonitorPresetJson = R"([
+    {"id":"lg_27gp950","brand":"LG","model":"27GP950-B","width_mm":609.0,"height_mm":355.0},
+    {"id":"dell_aw3423dw","brand":"Dell","model":"Alienware AW3423DW","width_mm":799.0,"height_mm":339.0},
+    {"id":"asus_pg32uqx","brand":"ASUS","model":"ROG Swift PG32UQX","width_mm":715.0,"height_mm":403.0},
+    {"id":"samsung_odyssey_g9","brand":"Samsung","model":"Odyssey G9","width_mm":1149.0,"height_mm":363.0},
+    {"id":"lg_c2_42","brand":"LG","model":"C2 42\" OLED","width_mm":932.0,"height_mm":532.0}
+])";
+}
 
 
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
@@ -73,9 +87,41 @@ void OpenRGB3DSpatialTab::LoadDevices()
 
 void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 {
+    if(!available_controllers_list)
+    {
+        return;
+    }
+
+    QPair<int, int> previous_metadata( std::numeric_limits<int>::min(), 0 );
+    QString previous_text;
+    int previous_row = available_controllers_list->currentRow();
+    if(previous_row >= 0 && previous_row < available_controllers_list->count())
+    {
+        QListWidgetItem* prev_item = available_controllers_list->item(previous_row);
+        if(prev_item)
+        {
+            QVariant data = prev_item->data(Qt::UserRole);
+            if(data.isValid())
+            {
+                previous_metadata = data.value<QPair<int, int>>();
+            }
+            previous_text = prev_item->text();
+        }
+    }
+
+    available_controllers_list->blockSignals(true);
     available_controllers_list->clear();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    std::unordered_set<const VirtualController3D*> virtuals_in_scene;
+    for(const auto& transform_ptr : controller_transforms)
+    {
+        if(transform_ptr && transform_ptr->virtual_controller)
+        {
+            virtuals_in_scene.insert(transform_ptr->virtual_controller);
+        }
+    }
 
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
@@ -86,17 +132,87 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
         {
             QString display_text = QString::fromStdString(controllers[i]->name) +
                                    QString(" [%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
-            available_controllers_list->addItem(display_text);
+            QListWidgetItem* item = new QListWidgetItem(display_text);
+            item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(static_cast<int>(i), -1)));
+            available_controllers_list->addItem(item);
         }
     }
 
     for(unsigned int i = 0; i < virtual_controllers.size(); i++)
     {
-        available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_controllers[i]->GetName()));
+        VirtualController3D* virtual_ctrl = virtual_controllers[i].get();
+        if(!virtual_ctrl)
+        {
+            continue;
+        }
+
+        if(virtuals_in_scene.find(virtual_ctrl) != virtuals_in_scene.end())
+        {
+            continue; // Already placed in 3D scene
+        }
+
+        QListWidgetItem* item = new QListWidgetItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
+        item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-1, static_cast<int>(i))));
+        available_controllers_list->addItem(item);
     }
+
+    for(unsigned int i = 0; i < reference_points.size(); i++)
+    {
+        if(reference_points[i] && !reference_points[i]->IsVisible())
+        {
+            QListWidgetItem* item = new QListWidgetItem(QString("[Ref Point] ") + QString::fromStdString(reference_points[i]->GetName()));
+            item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, static_cast<int>(i))));
+            available_controllers_list->addItem(item);
+        }
+    }
+
+    for(unsigned int i = 0; i < display_planes.size(); i++)
+    {
+        if(display_planes[i] && !display_planes[i]->IsVisible())
+        {
+            QListWidgetItem* item = new QListWidgetItem(QString("[Display] ") + QString::fromStdString(display_planes[i]->GetName()));
+            item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, static_cast<int>(i))));
+            available_controllers_list->addItem(item);
+        }
+    }
+
+    available_controllers_list->blockSignals(false);
 
     // Also update the custom controllers list
     UpdateCustomControllersList();
+
+    // Restore previous selection when possible
+    bool selection_restored = false;
+    if(previous_metadata.first != std::numeric_limits<int>::min())
+    {
+        int row = FindAvailableControllerRow(previous_metadata.first, previous_metadata.second);
+        if(row >= 0)
+        {
+            available_controllers_list->setCurrentRow(row);
+            selection_restored = true;
+        }
+    }
+
+    if(!selection_restored && !previous_text.isEmpty())
+    {
+        for(int row = 0; row < available_controllers_list->count(); row++)
+        {
+            QListWidgetItem* item = available_controllers_list->item(row);
+            if(item && item->text() == previous_text)
+            {
+                available_controllers_list->setCurrentRow(row);
+                selection_restored = true;
+                break;
+            }
+        }
+    }
+
+    if(!selection_restored && available_controllers_list->count() > 0)
+    {
+        available_controllers_list->setCurrentRow(0);
+    }
+
+    UpdateAvailableItemCombo();
 }
 
 void OpenRGB3DSpatialTab::UpdateCustomControllersList()
@@ -107,6 +223,59 @@ void OpenRGB3DSpatialTab::UpdateCustomControllersList()
     {
         custom_controllers_list->addItem(QString::fromStdString(virtual_controllers[i]->GetName()));
     }
+}
+
+int OpenRGB3DSpatialTab::FindAvailableControllerRow(int type_code, int object_index) const
+{
+    if(!available_controllers_list)
+    {
+        return -1;
+    }
+
+    for(int row = 0; row < available_controllers_list->count(); row++)
+    {
+        QListWidgetItem* item = available_controllers_list->item(row);
+        if(!item)
+        {
+            continue;
+        }
+        QVariant data = item->data(Qt::UserRole);
+        if(!data.isValid())
+        {
+            continue;
+        }
+        QPair<int, int> metadata = data.value<QPair<int, int>>();
+        if(metadata.first == type_code && metadata.second == object_index)
+        {
+            return row;
+        }
+    }
+
+    return -1;
+}
+
+void OpenRGB3DSpatialTab::SelectAvailableControllerEntry(int type_code, int object_index)
+{
+    if(!available_controllers_list)
+    {
+        return;
+    }
+
+    int row = FindAvailableControllerRow(type_code, object_index);
+    if(row < 0)
+    {
+        return;
+    }
+
+    if(available_controllers_list->currentRow() == row)
+    {
+        UpdateAvailableItemCombo();
+        return;
+    }
+
+    QSignalBlocker blocker(available_controllers_list);
+    available_controllers_list->setCurrentRow(row);
+    UpdateAvailableItemCombo();
 }
 
 void OpenRGB3DSpatialTab::UpdateDeviceList()
@@ -1084,7 +1253,9 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         return;
     }
 
-    // Check if the selected item has metadata (Reference Point, Display Plane, or Custom Controller)
+    int actual_ctrl_idx = -1;
+
+    // Check if the selected item has metadata (Reference Point, Display Plane, Custom Controller, or Physical Controller index)
     QListWidgetItem* selected_item = available_controllers_list->item(list_row);
     if(selected_item && selected_item->data(Qt::UserRole).isValid())
     {
@@ -1107,23 +1278,29 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
             item_combo->addItem("Whole Device", QVariant::fromValue(qMakePair(-1, object_index)));
             return;
         }
+        else if(type_code >= 0)
+        {
+            actual_ctrl_idx = type_code;
+        }
     }
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
-    int actual_ctrl_idx = -1;
-    int visible_idx = 0;
-
-    for(unsigned int i = 0; i < controllers.size(); i++)
+    if(actual_ctrl_idx < 0)
     {
-        if(GetUnassignedLEDCount(controllers[i]) > 0)
+        int visible_idx = 0;
+
+        for(unsigned int i = 0; i < controllers.size(); i++)
         {
-            if(visible_idx == list_row)
+            if(GetUnassignedLEDCount(controllers[i]) > 0)
             {
-                actual_ctrl_idx = i;
-                break;
+                if(visible_idx == list_row)
+                {
+                    actual_ctrl_idx = i;
+                    break;
+                }
+                visible_idx++;
             }
-            visible_idx++;
         }
     }
 
@@ -1199,6 +1376,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         controller_list->addItem(list_item);
 
         viewport->update();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
 
         QMessageBox::information(this, "Reference Point Added",
                                 QString("Reference point '%1' added to 3D view!\n\nYou can now position and configure it.")
@@ -1227,6 +1406,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         viewport->update();
         NotifyDisplayPlaneChanged();
         emit GridLayoutChanged();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
 
         QMessageBox::information(this, "Display Plane Added",
                                 QString("Display plane '%1' added to 3D view!\n\nYou can now position and configure it.")
@@ -1408,6 +1589,8 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             }
             controller_list->takeItem(selected_row);
             viewport->update();
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
             return;
         }
         else if(type_code == -3) // Display Plane
@@ -1420,6 +1603,8 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             viewport->update();
             NotifyDisplayPlaneChanged();
             emit GridLayoutChanged();
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
             return;
         }
     }
@@ -1626,8 +1811,9 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
+        QString controller_name = dialog.GetControllerName();
         std::unique_ptr<VirtualController3D> virtual_ctrl = std::make_unique<VirtualController3D>(
-            dialog.GetControllerName().toStdString(),
+            controller_name.toStdString(),
             dialog.GetGridWidth(),
             dialog.GetGridHeight(),
             dialog.GetGridDepth(),
@@ -1637,15 +1823,18 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
             dialog.GetSpacingZ()
         );
 
-        available_controllers_list->addItem(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()));
-
+        int new_index = (int)virtual_controllers.size();
         virtual_controllers.push_back(std::move(virtual_ctrl));
 
         SaveCustomControllers();
+        UpdateAvailableControllersList();
+        SelectAvailableControllerEntry(-1, new_index);
 
         QMessageBox::information(this, "Custom Controller Created",
                                 QString("Custom controller '%1' created successfully!\n\nYou can now add it to the 3D view.")
-                                .arg(QString::fromStdString(virtual_ctrl->GetName())));
+                                .arg(controller_name));
+        SetObjectCreatorStatus(QString("Custom controller '%1' saved. Select it from Available Controllers to add it to the scene.")
+                               .arg(controller_name));
     }
 }
 
@@ -3074,6 +3263,228 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
 | Display Plane Management                                 |
 \*---------------------------------------------------------*/
 
+void OpenRGB3DSpatialTab::LoadMonitorPresets()
+{
+    monitor_presets.clear();
+
+    nlohmann::json json_data;
+    bool loaded_from_disk = false;
+
+    std::string preset_path;
+    if(resource_manager)
+    {
+        std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+        if(!config_dir.empty())
+        {
+            preset_path = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/monitors.json";
+        }
+    }
+
+    if(!preset_path.empty())
+    {
+        filesystem::path preset_fs(preset_path);
+        std::error_code ec;
+        filesystem::create_directories(preset_fs.parent_path(), ec);
+
+        QFileInfo file_info(QString::fromStdString(preset_path));
+        if(!file_info.exists())
+        {
+            QFile out_file(QString::fromStdString(preset_path));
+            if(out_file.open(QIODevice::WriteOnly | QIODevice::Text))
+            {
+                out_file.write(kDefaultMonitorPresetJson);
+                out_file.close();
+            }
+            else
+            {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to create monitor preset file: %s (%s)",
+                         preset_path.c_str(), out_file.errorString().toStdString().c_str());
+            }
+        }
+
+        QFile in_file(QString::fromStdString(preset_path));
+        if(in_file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            QByteArray contents = in_file.readAll();
+            in_file.close();
+            try
+            {
+                json_data = nlohmann::json::parse(contents.constData());
+                loaded_from_disk = true;
+            }
+            catch(const std::exception& e)
+            {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to parse monitor preset file %s: %s",
+                         preset_path.c_str(), e.what());
+            }
+        }
+    }
+
+    if(!loaded_from_disk)
+    {
+        try
+        {
+            json_data = nlohmann::json::parse(kDefaultMonitorPresetJson);
+        }
+        catch(const std::exception& e)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to parse built-in monitor presets: %s", e.what());
+            json_data = nlohmann::json::array();
+        }
+    }
+
+    std::set<QString> seen_ids;
+    if(json_data.is_array())
+    {
+        for(const auto& entry : json_data)
+        {
+            MonitorPreset preset;
+            preset.brand = QString::fromStdString(entry.value("brand", std::string()));
+            preset.model = QString::fromStdString(entry.value("model", std::string()));
+            preset.width_mm = entry.value("width_mm", 0.0);
+            preset.height_mm = entry.value("height_mm", 0.0);
+
+            QString preset_id = QString::fromStdString(entry.value("id", std::string()));
+            QString combined = (preset.brand + " " + preset.model).trimmed();
+            if(preset_id.isEmpty())
+            {
+                QString sanitized;
+                sanitized.reserve(combined.length());
+                bool last_was_underscore = false;
+                for(const QChar& ch : combined)
+                {
+                    if(ch.isLetterOrNumber())
+                    {
+                        sanitized.append(ch.toLower());
+                        last_was_underscore = false;
+                    }
+                    else
+                    {
+                        if(!last_was_underscore)
+                        {
+                            sanitized.append('_');
+                            last_was_underscore = true;
+                        }
+                    }
+                }
+                while(sanitized.endsWith('_'))
+                {
+                    sanitized.chop(1);
+                }
+                preset_id = sanitized;
+            }
+            if(preset_id.isEmpty())
+            {
+                continue;
+            }
+            if(preset.brand.isEmpty() && preset.model.isEmpty())
+            {
+                continue;
+            }
+            if(preset.width_mm <= 0.0 || preset.height_mm <= 0.0)
+            {
+                continue;
+            }
+            if(seen_ids.find(preset_id) != seen_ids.end())
+            {
+                continue;
+            }
+            preset.id = preset_id;
+            seen_ids.insert(preset.id);
+            monitor_presets.push_back(preset);
+        }
+    }
+
+    PopulateMonitorPresetCombo();
+}
+
+void OpenRGB3DSpatialTab::PopulateMonitorPresetCombo()
+{
+    if(!display_plane_monitor_combo)
+    {
+        return;
+    }
+
+    QString current_id;
+    if(display_plane_monitor_combo->currentIndex() >= 0)
+    {
+        current_id = display_plane_monitor_combo->currentData().toString();
+    }
+
+    display_plane_monitor_combo->blockSignals(true);
+    display_plane_monitor_combo->clear();
+    display_plane_monitor_combo->setCurrentIndex(-1);
+    display_plane_monitor_combo->setEditText(QString());
+
+    for(const MonitorPreset& preset : monitor_presets)
+    {
+        display_plane_monitor_combo->addItem(preset.DisplayLabel(), preset.id);
+    }
+
+    display_plane_monitor_combo->blockSignals(false);
+
+    if(!monitor_preset_completer)
+    {
+        monitor_preset_completer = new QCompleter(display_plane_monitor_combo->model(), display_plane_monitor_combo);
+        monitor_preset_completer->setCaseSensitivity(Qt::CaseInsensitive);
+        monitor_preset_completer->setFilterMode(Qt::MatchContains);
+        display_plane_monitor_combo->setCompleter(monitor_preset_completer);
+    }
+    else
+    {
+        monitor_preset_completer->setModel(display_plane_monitor_combo->model());
+    }
+
+    if(!current_id.isEmpty())
+    {
+        for(int i = 0; i < display_plane_monitor_combo->count(); i++)
+        {
+            if(display_plane_monitor_combo->itemData(i).toString() == current_id)
+            {
+                display_plane_monitor_combo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::ClearMonitorPresetSelectionIfManualEdit()
+{
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane || !display_plane_monitor_combo)
+    {
+        return;
+    }
+
+    QString current_id = QString::fromStdString(plane->GetMonitorPresetId());
+    if(current_id.isEmpty())
+    {
+        return;
+    }
+
+    auto it = std::find_if(monitor_presets.begin(), monitor_presets.end(),
+                           [&current_id](const MonitorPreset& preset) {
+                               return preset.id == current_id;
+                           });
+    if(it == monitor_presets.end())
+    {
+        plane->SetMonitorPresetId(std::string());
+        SetObjectCreatorStatus(QString());
+        return;
+    }
+
+    double width_diff = std::abs(plane->GetWidthMM() - it->width_mm);
+    double height_diff = std::abs(plane->GetHeightMM() - it->height_mm);
+    if(width_diff > 0.5 || height_diff > 0.5)
+    {
+        plane->SetMonitorPresetId(std::string());
+        QSignalBlocker block(display_plane_monitor_combo);
+        display_plane_monitor_combo->setCurrentIndex(-1);
+        display_plane_monitor_combo->setEditText(QString());
+        SetObjectCreatorStatus("Custom display dimensions set. Monitor preset cleared.");
+    }
+}
+
 DisplayPlane3D* OpenRGB3DSpatialTab::GetSelectedDisplayPlane()
 {
     if(current_display_plane_index >= 0 &&
@@ -3225,6 +3636,7 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         display_plane_name_edit,
         display_plane_width_spin,
         display_plane_height_spin,
+        display_plane_monitor_combo,
         display_plane_capture_combo,
         display_plane_refresh_capture_btn,
         display_plane_visible_check
@@ -3240,6 +3652,12 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         if(display_plane_name_edit) display_plane_name_edit->setText("");
         if(display_plane_width_spin) display_plane_width_spin->setValue(1000.0);
         if(display_plane_height_spin) display_plane_height_spin->setValue(600.0);
+        if(display_plane_monitor_combo)
+        {
+            QSignalBlocker block(display_plane_monitor_combo);
+            display_plane_monitor_combo->setCurrentIndex(-1);
+            display_plane_monitor_combo->setEditText(QString());
+        }
         if(display_plane_capture_combo) display_plane_capture_combo->setCurrentIndex(0);
         if(display_plane_visible_check) display_plane_visible_check->setCheckState(Qt::Unchecked);
         return;
@@ -3259,6 +3677,34 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
     {
         QSignalBlocker block(display_plane_height_spin);
         display_plane_height_spin->setValue(plane->GetHeightMM());
+    }
+    if(display_plane_monitor_combo)
+    {
+        QSignalBlocker block(display_plane_monitor_combo);
+        QString preset_id = QString::fromStdString(plane->GetMonitorPresetId());
+        if(!preset_id.isEmpty())
+        {
+            bool found = false;
+            for(int i = 0; i < display_plane_monitor_combo->count(); i++)
+            {
+                if(display_plane_monitor_combo->itemData(i).toString() == preset_id)
+                {
+                    display_plane_monitor_combo->setCurrentIndex(i);
+                    found = true;
+                    break;
+                }
+            }
+            if(!found)
+            {
+                display_plane_monitor_combo->setCurrentIndex(-1);
+                display_plane_monitor_combo->setEditText(QString());
+            }
+        }
+        else
+        {
+            display_plane_monitor_combo->setCurrentIndex(-1);
+            display_plane_monitor_combo->setEditText(QString());
+        }
     }
     if(display_plane_capture_combo)
     {
@@ -3375,6 +3821,89 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     QMessageBox::information(this, "Display Plane Created",
                             QString("Display plane '%1' created successfully!\n\nYou can now add it to the 3D view from the Available Controllers list.")
                             .arg(QString::fromStdString(full_name)));
+
+    UpdateAvailableControllersList();
+    SelectAvailableControllerEntry(-3, display_index);
+}
+
+void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
+{
+    if(!display_plane_monitor_combo || index < 0 || index >= display_plane_monitor_combo->count())
+    {
+        return;
+    }
+
+    QString preset_id = display_plane_monitor_combo->itemData(index).toString();
+    if(preset_id.isEmpty())
+    {
+        return;
+    }
+
+    auto it = std::find_if(monitor_presets.begin(), monitor_presets.end(),
+                           [&preset_id](const MonitorPreset& preset) {
+                               return preset.id == preset_id;
+                           });
+    if(it == monitor_presets.end())
+    {
+        return;
+    }
+
+    if(display_plane_width_spin)
+    {
+        QSignalBlocker block(display_plane_width_spin);
+        display_plane_width_spin->setValue(it->width_mm);
+    }
+    if(display_plane_height_spin)
+    {
+        QSignalBlocker block(display_plane_height_spin);
+        display_plane_height_spin->setValue(it->height_mm);
+    }
+
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(!plane)
+    {
+        return;
+    }
+
+    plane->SetWidthMM(static_cast<float>(it->width_mm));
+    plane->SetHeightMM(static_cast<float>(it->height_mm));
+    plane->SetMonitorPresetId(preset_id.toStdString());
+
+    if(display_plane_name_edit)
+    {
+        QString current_name = display_plane_name_edit->text().trimmed();
+        if(current_name.isEmpty())
+        {
+            QString suggested = QString("%1 %2").arg(it->brand).arg(it->model);
+            {
+                QSignalBlocker name_block(display_plane_name_edit);
+                display_plane_name_edit->setText(suggested);
+            }
+            plane->SetName(suggested.toStdString());
+        }
+    }
+
+    UpdateDisplayPlanesList();
+    NotifyDisplayPlaneChanged();
+    UpdateAvailableControllersList();
+
+    SetObjectCreatorStatus(QString("Preset applied: %1 %2 (%3 x %4 mm)")
+                               .arg(it->brand)
+                               .arg(it->model)
+                               .arg(it->width_mm, 0, 'f', 0)
+                               .arg(it->height_mm, 0, 'f', 0));
+}
+
+void OpenRGB3DSpatialTab::on_monitor_preset_text_edited(const QString& text)
+{
+    if(text.isEmpty())
+    {
+        DisplayPlane3D* plane = GetSelectedDisplayPlane();
+        if(plane)
+        {
+            plane->SetMonitorPresetId(std::string());
+        }
+    }
 }
 
 void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
@@ -3394,6 +3923,7 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
     RefreshDisplayPlaneDetails();
     NotifyDisplayPlaneChanged();
     emit GridLayoutChanged();
+    UpdateAvailableControllersList();
 }
 
 void OpenRGB3DSpatialTab::on_display_plane_name_edited(const QString& text)
@@ -3406,6 +3936,7 @@ void OpenRGB3DSpatialTab::on_display_plane_name_edited(const QString& text)
     plane->SetName(text.toStdString());
     UpdateDisplayPlanesList();
     NotifyDisplayPlaneChanged();
+    UpdateAvailableControllersList();
 }
 
 void OpenRGB3DSpatialTab::on_display_plane_width_changed(double value)
@@ -3415,6 +3946,7 @@ void OpenRGB3DSpatialTab::on_display_plane_width_changed(double value)
     plane->SetWidthMM((float)value);
     UpdateDisplayPlanesList();
     NotifyDisplayPlaneChanged();
+    ClearMonitorPresetSelectionIfManualEdit();
 }
 
 void OpenRGB3DSpatialTab::on_display_plane_height_changed(double value)
@@ -3424,6 +3956,7 @@ void OpenRGB3DSpatialTab::on_display_plane_height_changed(double value)
     plane->SetHeightMM((float)value);
     UpdateDisplayPlanesList();
     NotifyDisplayPlaneChanged();
+    ClearMonitorPresetSelectionIfManualEdit();
 }
 
 void OpenRGB3DSpatialTab::on_display_plane_capture_changed(int index)

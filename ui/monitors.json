@@ -1,0 +1,37 @@
+[
+    {
+        "id": "lg_27gp950",
+        "brand": "LG",
+        "model": "27GP950-B",
+        "width_mm": 609.0,
+        "height_mm": 355.0
+    },
+    {
+        "id": "dell_aw3423dw",
+        "brand": "Dell",
+        "model": "Alienware AW3423DW",
+        "width_mm": 799.0,
+        "height_mm": 339.0
+    },
+    {
+        "id": "asus_pg32uqx",
+        "brand": "ASUS",
+        "model": "ROG Swift PG32UQX",
+        "width_mm": 715.0,
+        "height_mm": 403.0
+    },
+    {
+        "id": "samsung_odyssey_g9",
+        "brand": "Samsung",
+        "model": "Odyssey G9",
+        "width_mm": 1149.0,
+        "height_mm": 363.0
+    },
+    {
+        "id": "lg_c2_42",
+        "brand": "LG",
+        "model": "C2 42\" OLED",
+        "width_mm": 932.0,
+        "height_mm": 532.0
+    }
+]
