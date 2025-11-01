@@ -233,8 +233,9 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     // Connect GridLayoutChanged signal to invoke SDK callbacks
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, [this]() {
-        for(const std::pair<void (*)(void*), void*>& cb_pair : grid_layout_callbacks)
+        for(size_t callback_index = 0; callback_index < grid_layout_callbacks.size(); callback_index++)
         {
+            const std::pair<void (*)(void*), void*>& cb_pair = grid_layout_callbacks[callback_index];
             if(cb_pair.first) cb_pair.first(cb_pair.second);
         }
     });
@@ -2615,8 +2616,9 @@ void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_m
     float min_y = 0.0f, max_y = 0.0f;
     float min_z = 0.0f, max_z = 0.0f;
 
-    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+    for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
     {
+        const std::unique_ptr<ControllerTransform>& transform_ptr = controller_transforms[transform_index];
         const ControllerTransform* transform = transform_ptr.get();
         if(!transform) continue;
 
@@ -2797,8 +2799,9 @@ bool OpenRGB3DSpatialTab::SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_i
 size_t OpenRGB3DSpatialTab::SDK_GetTotalLEDCount() const
 {
     size_t total = 0;
-    for(const std::unique_ptr<ControllerTransform>& up : controller_transforms)
+    for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
     {
+        const std::unique_ptr<ControllerTransform>& up = controller_transforms[transform_index];
         if(up) total += up->led_positions.size();
     }
     return total;
@@ -2809,8 +2812,9 @@ bool OpenRGB3DSpatialTab::SDK_GetAllLEDWorldPositions(float* xyz_interleaved, si
     out_count = 0;
     if(!xyz_interleaved || max_triplets == 0) return false;
     size_t written = 0;
-    for(const std::unique_ptr<ControllerTransform>& up : controller_transforms)
+    for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
     {
+        const std::unique_ptr<ControllerTransform>& up = controller_transforms[transform_index];
         if(!up) continue;
         for(size_t i = 0; i < up->led_positions.size(); ++i)
         {

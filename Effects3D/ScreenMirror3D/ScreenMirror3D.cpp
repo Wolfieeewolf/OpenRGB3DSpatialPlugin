@@ -373,12 +373,15 @@ namespace
         std::array<float, 2> zs = {grid.min_z, grid.max_z};
 
         float max_distance_sq = 0.0f;
-        for(float cx : xs)
+        for(size_t x_index = 0; x_index < xs.size(); x_index++)
         {
-            for(float cy : ys)
+            float cx = xs[x_index];
+            for(size_t y_index = 0; y_index < ys.size(); y_index++)
             {
-                for(float cz : zs)
+                float cy = ys[y_index];
+                for(size_t z_index = 0; z_index < zs.size(); z_index++)
                 {
+                    float cz = zs[z_index];
                     float dx = (cx - reference.x) * grid_scale_mm;
                     float dy = (cy - reference.y) * grid_scale_mm;
                     float dz = (cz - reference.z) * grid_scale_mm;
@@ -476,8 +479,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     float normalized_scale = std::clamp(global_scale / 2.0f, 0.0f, 1.0f);
 
-    for (DisplayPlane3D* plane : all_planes)
+    for (size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
     {
+        DisplayPlane3D* plane = all_planes[plane_index];
         if (!plane) continue;
 
         // Check if this monitor is enabled in the effect settings
@@ -621,8 +625,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     if (contributions.empty())
     {
         int capturing_count = 0;
-        for (DisplayPlane3D* plane : all_planes)
+        for (size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
         {
+            DisplayPlane3D* plane = all_planes[plane_index];
             if (plane && !plane->GetCaptureSourceId().empty())
             {
                 if (capture_mgr.IsCapturing(plane->GetCaptureSourceId()))
@@ -644,9 +649,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     // Blend monitor contributions
     float avg_blend = 0.0f;
-    for (const MonitorContribution& contrib : contributions)
+    for (size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
-        avg_blend += contrib.blend;
+        avg_blend += contributions[contrib_index].blend;
     }
     avg_blend /= fmaxf(1.0f, (float)contributions.size());
     float blend_factor = avg_blend / 100.0f; // Convert to 0-1
@@ -673,9 +678,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     float total_weight = 0.0f;
     uint64_t latest_timestamp = 0;
 
-    for (const MonitorContribution& contrib : contributions)
+    for (size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
-        // Sample the pixel this LED maps to on the monitor
+        const MonitorContribution& contrib = contributions[contrib_index];
         float sample_u = contrib.proj.u;
         float sample_v = contrib.proj.v;
 
@@ -683,7 +688,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
         if (show_test_pattern)
         {
-            // Test pattern: assign solid colors per quadrant
             float clamped_u = sample_u;
             float clamped_v = sample_v;
             if (clamped_u < 0.0f) clamped_u = 0.0f;
@@ -721,7 +725,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
         else
         {
-            // Screen capture is upside-down, so flip V coordinate
             if (!contrib.frame || contrib.frame->data.empty())
             {
                 continue;
@@ -733,9 +736,9 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                 contrib.frame->data.data(),
                 contrib.frame->width,
                 contrib.frame->height,
-                sample_u,        // U coordinate (may be outside [0,1])
-                flipped_v,       // Flipped V for upside-down capture
-                true             // Always use bilinear for smooth ambilight
+                sample_u,
+                flipped_v,
+                true
             );
 
             r = (float)RGBGetRValue(sampled_color);
@@ -743,7 +746,6 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             b = (float)RGBGetBValue(sampled_color);
         }
 
-        // Apply blend factor to contribution strength
         float adjusted_weight = contrib.weight * (0.5f + 0.5f * blend_factor);
 
         total_r += r * adjusted_weight;
@@ -901,7 +903,7 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
     if (settings.contains("monitor_settings"))
     {
         const nlohmann::json& monitors = settings["monitor_settings"];
-        for (auto it = monitors.begin(); it != monitors.end(); ++it)
+        for (nlohmann::json::const_iterator it = monitors.begin(); it != monitors.end(); ++it)
         {
             const std::string& monitor_name = it.key();
             const nlohmann::json& mon = it.value();
@@ -967,9 +969,11 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
     }
 
     // Update monitor UI widgets to match loaded state
-    for (auto& pair : monitor_settings)
+    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+         it != monitor_settings.end();
+         ++it)
     {
-        MonitorSettings& msettings = pair.second;
+        MonitorSettings& msettings = it->second;
         if (msettings.group_box)
         {
             QSignalBlocker blocker(msettings.group_box);
@@ -1039,9 +1043,11 @@ void ScreenMirror3D::OnParameterChanged()
     if (test_pattern_check) show_test_pattern = test_pattern_check->isChecked();
 
     // Update per-monitor settings (convert slider values to float)
-    for (auto& pair : monitor_settings)
+    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+         it != monitor_settings.end();
+         ++it)
     {
-        MonitorSettings& settings = pair.second;
+        MonitorSettings& settings = it->second;
         if (settings.group_box) settings.enabled = settings.group_box->isChecked();
         if (settings.scale_slider) settings.scale = settings.scale_slider->value() / 100.0f;
         if (settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
@@ -1077,9 +1083,11 @@ void ScreenMirror3D::RefreshReferencePointDropdowns()
     if (!reference_points) return;
 
     // Update all monitor reference point dropdowns
-    for (auto& pair : monitor_settings)
+    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+         it != monitor_settings.end();
+         ++it)
     {
-        MonitorSettings& settings = pair.second;
+        MonitorSettings& settings = it->second;
         if (!settings.ref_point_combo) continue;
 
         // Save current selection
@@ -1190,13 +1198,13 @@ void ScreenMirror3D::AddFrameToHistory(const std::string& capture_id, const std:
 
 std::shared_ptr<CapturedFrame> ScreenMirror3D::GetFrameForDelay(const std::string& capture_id, float delay_ms) const
 {
-    auto it = capture_history.find(capture_id);
-    if(it == capture_history.end() || it->second.frames.empty())
+    std::unordered_map<std::string, FrameHistory>::const_iterator history_it = capture_history.find(capture_id);
+    if(history_it == capture_history.end() || history_it->second.frames.empty())
     {
         return nullptr;
     }
 
-    const auto& frames = it->second.frames;
+    const std::deque<std::shared_ptr<CapturedFrame>>& frames = history_it->second.frames;
     if(delay_ms <= 0.0f)
     {
         return frames.back();
@@ -1206,11 +1214,13 @@ std::shared_ptr<CapturedFrame> ScreenMirror3D::GetFrameForDelay(const std::strin
     uint64_t delay_u64 = delay_ms >= (float)std::numeric_limits<uint64_t>::max() ? latest_timestamp : (uint64_t)delay_ms;
     uint64_t target_timestamp = (latest_timestamp > delay_u64) ? latest_timestamp - delay_u64 : 0;
 
-    for(auto rit = frames.rbegin(); rit != frames.rend(); ++rit)
+    for(std::deque<std::shared_ptr<CapturedFrame>>::const_reverse_iterator frame_it = frames.rbegin();
+        frame_it != frames.rend();
+        ++frame_it)
     {
-        if((*rit)->timestamp_ms <= target_timestamp)
+        if((*frame_it)->timestamp_ms <= target_timestamp)
         {
-            return *rit;
+            return *frame_it;
         }
     }
 
@@ -1244,15 +1254,16 @@ void ScreenMirror3D::StartCaptureIfNeeded()
     // Get ALL planes and start capture for each one with a capture source
     std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
 
-    auto& capture_mgr = ScreenCaptureManager::Instance();
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
 
     if (!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();
     }
 
-    for (auto plane : planes)
+    for (size_t plane_index = 0; plane_index < planes.size(); plane_index++)
     {
+        DisplayPlane3D* plane = planes[plane_index];
         if (!plane) continue;
 
         std::string capture_id = plane->GetCaptureSourceId();

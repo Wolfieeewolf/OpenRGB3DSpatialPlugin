@@ -81,6 +81,23 @@ static inline float DotVec(const Vector3D& a, const Vector3D& b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+static void ProjectPointToScreen(float x,
+                                 float y,
+                                 float z,
+                                 const GLdouble modelview[16],
+                                 const GLdouble projection[16],
+                                 const GLint viewport[4],
+                                 double& screen_x,
+                                 double& screen_y)
+{
+    GLdouble winX;
+    GLdouble winY;
+    GLdouble winZ;
+    gluProject(x, y, z, modelview, projection, viewport, &winX, &winY, &winZ);
+    screen_x = winX;
+    screen_y = viewport[3] - winY;
+}
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -122,9 +139,11 @@ LEDViewport3D::~LEDViewport3D()
 {
     // Clean up OpenGL textures
     makeCurrent();
-    for(auto& pair : display_plane_textures)
+    for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
+        it != display_plane_textures.end();
+        ++it)
     {
-        glDeleteTextures(1, &pair.second);
+        glDeleteTextures(1, &it->second);
     }
     display_plane_textures.clear();
     doneCurrent();
@@ -912,13 +931,6 @@ void LEDViewport3D::DrawAxisLabels()
     glGetDoublev(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    auto project3Dto2D = [&](float x, float y, float z, double& screenX, double& screenY) {
-        GLdouble winX, winY, winZ;
-        gluProject(x, y, z, modelview, projection, viewport, &winX, &winY, &winZ);
-        screenX = winX;
-        screenY = viewport[3] - winY; // Flip Y for Qt coordinates
-    };
-
     // Calculate max positions based on room dimensions or grid
     float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
     float max_y = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_y;
@@ -928,28 +940,28 @@ void LEDViewport3D::DrawAxisLabels()
 
     // Draw X axis labels (Red - Left/Right)
     painter.setPen(QColor(255, 100, 100));
-    project3Dto2D(max_x, 0.5f, 0.0f, screen_x, screen_y);
+    ProjectPointToScreen(max_x, 0.5f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), QString("Right Wall (X=%1)").arg((int)max_x));
-    project3Dto2D(0.3f, 0.5f, 0.0f, screen_x, screen_y);
+    ProjectPointToScreen(0.3f, 0.5f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Left Wall (X=0)");
 
     // Draw Z axis labels (Green - Front/Back)
     painter.setPen(QColor(100, 255, 100));
-    project3Dto2D(0.5f, 0.0f, max_y, screen_x, screen_y);
+    ProjectPointToScreen(0.5f, 0.0f, max_y, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), QString("Back Wall (Y=%1)").arg((int)max_y));
-    project3Dto2D(0.5f, 0.0f, 0.3f, screen_x, screen_y);
+    ProjectPointToScreen(0.5f, 0.0f, 0.3f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Front Wall (Y=0)");
 
     // Draw Y axis labels (Blue - Floor/Ceiling)
     painter.setPen(QColor(100, 100, 255));
-    project3Dto2D(0.5f, max_z, 0.0f, screen_x, screen_y);
+    ProjectPointToScreen(0.5f, max_z, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), QString("Ceiling (Z=%1)").arg((int)max_z));
-    project3Dto2D(0.5f, 0.2f, 0.0f, screen_x, screen_y);
+    ProjectPointToScreen(0.5f, 0.2f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Floor (Z=0)");
 
     // Draw origin label (Front-Left-Floor Corner)
     painter.setPen(QColor(255, 255, 255));
-    project3Dto2D(0.5f, 0.5f, 0.5f, screen_x, screen_y);
+    ProjectPointToScreen(0.5f, 0.5f, 0.5f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x, screen_y), "Origin (0,0,0)\nFront-Left-Floor");
 
     painter.end();
@@ -1062,10 +1074,10 @@ void LEDViewport3D::DrawDisplayPlanes()
 
             if(!source_id.empty())
             {
-                auto it = display_plane_textures.find(source_id);
-                if(it != display_plane_textures.end())
+                std::map<std::string, GLuint>::iterator texture_it = display_plane_textures.find(source_id);
+                if(texture_it != display_plane_textures.end())
                 {
-                    texture_id = it->second;
+                    texture_id = texture_it->second;
                     has_texture = true;
                 }
             }
@@ -1188,7 +1200,7 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
 {
     if(!display_planes) return;
 
-    auto& capture_mgr = ScreenCaptureManager::Instance();
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
     if(!capture_mgr.IsInitialized()) return;
 
     for(size_t i = 0; i < display_planes->size(); ++i)
@@ -1200,15 +1212,15 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         if(source_id.empty()) continue;
 
         // Get latest frame from capture manager
-        auto frame = capture_mgr.GetLatestFrame(source_id);
+        std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
         if(!frame || !frame->valid || frame->data.empty()) continue;
 
         // Check if we already have a texture for this source
         GLuint texture_id = 0;
-        auto it = display_plane_textures.find(source_id);
-        if(it != display_plane_textures.end())
+        std::map<std::string, GLuint>::iterator texture_it = display_plane_textures.find(source_id);
+        if(texture_it != display_plane_textures.end())
         {
-            texture_id = it->second;
+            texture_id = texture_it->second;
         }
         else
         {

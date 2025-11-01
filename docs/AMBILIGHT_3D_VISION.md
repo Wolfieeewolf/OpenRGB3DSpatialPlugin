@@ -43,7 +43,7 @@ The goal is immersion through spatial depth:
 #### 2. Screen Capture Manager (To Build)
 - Platform-specific capture (DXGI Desktop Duplication for Windows first)
 - Per-monitor capture streams
-- Downscaling pipeline (e.g., 320×180 for performance)
+- Downscaling pipeline (e.g., 320180 for performance)
 - Thread-safe frame buffer access
 - Target: 30fps capture, <50ms latency
 
@@ -72,7 +72,7 @@ The goal is immersion through spatial depth:
 - **Distance-based intensity**: `intensity = base * (1.0 / (1.0 + distance * decay))`
 - **Temporal smoothing**: Closer LEDs update faster, distant LEDs lag
 - **Directional bias**: Zone position influences which LEDs receive color
-- **Surface weighting**: Top screen zones → ceiling LEDs, bottom → floor, etc.
+- **Surface weighting**: Top screen zones  ceiling LEDs, bottom  floor, etc.
 
 ---
 
@@ -84,15 +84,15 @@ The goal is immersion through spatial depth:
 - [ ] **Screen Capture Manager**
   - Windows DXGI Desktop Duplication
   - Single monitor support
-  - Fixed 320×180 downscale
+  - Fixed 320180 downscale
   - Thread-safe buffer access
 
 - [ ] **Basic Edge Band Zones**
   - Hardcoded top/bottom/left/right edge strips (e.g., 10% screen height/width)
   - Average color extraction per band
 
-- [ ] **LED → Plane Projection Math**
-  - World position → plane UV mapping
+- [ ] **LED  Plane Projection Math**
+  - World position  plane UV mapping
   - Distance calculation from plane
   - Cache UVs, only recalculate on layout change
 
@@ -132,7 +132,7 @@ The goal is immersion through spatial depth:
   - Visual zone editor (draw rectangles on screen preview)
   - Zone types: edge, corner, center, custom
   - Per-zone extraction mode (average, peak, dominant, full)
-  - Zone → LED group manual assignment (optional)
+  - Zone  LED group manual assignment (optional)
 
 - [ ] **Auto LED Grouping**
   - Automatic classification by 3D position:
@@ -149,7 +149,7 @@ The goal is immersion through spatial depth:
 - [ ] **Effect: `ScreenReactive3D`**
   - Detects brightness/saturation spikes
   - Triggers burst effects in 3D space (radial expansion)
-  - Fast events (explosions) → tight pulse nearby, slow bloom far away
+  - Fast events (explosions)  tight pulse nearby, slow bloom far away
   - Parameters:
     - Threshold (brightness/saturation delta)
     - Burst speed, radius, decay
@@ -169,11 +169,11 @@ The goal is immersion through spatial depth:
     - Treble energy (high-frequency power)
     - Stereo balance (L/R bias)
 
-- [ ] **Audio → Spatial Mapping**
-  - Low bass → floor/subwoofer area LEDs pulse
-  - High treble → ceiling/upper LEDs sparkle
-  - Stereo wide → expand 3D gradient spread
-  - Transient peaks → trigger reactive bursts
+- [ ] **Audio  Spatial Mapping**
+  - Low bass  floor/subwoofer area LEDs pulse
+  - High treble  ceiling/upper LEDs sparkle
+  - Stereo wide  expand 3D gradient spread
+  - Transient peaks  trigger reactive bursts
 
 - [ ] **Effect: `ScreenAudioSync3D`**
   - Combines screen capture zones with audio bands
@@ -192,8 +192,8 @@ The goal is immersion through spatial depth:
 **Goal**: Heuristic "fake depth" to infer off-screen space
 
 - [ ] **Basic Scene Heuristics**
-  - **Sky detection**: Top 20% bright + blue/white → enhance ceiling
-  - **Ground detection**: Bottom dark + brown/green → floor wash
+  - **Sky detection**: Top 20% bright + blue/white  enhance ceiling
+  - **Ground detection**: Bottom dark + brown/green  floor wash
   - **Horizon line**: Detect where "sky meets ground", split ceiling/floor
   - **Letterbox removal**: Detect black bars, ignore in sampling
 
@@ -204,16 +204,16 @@ The goal is immersion through spatial depth:
   - Creates illusion of seeing beyond the screen
 
 - [ ] **Content Adaptive Behavior**
-  - Fast cuts + high motion → tighten falloff, increase speed
-  - Slow scenes → widen spatial spread, slow smoothing
-  - Bright fullscreen → assume daylight, cool temperature on distant LEDs
+  - Fast cuts + high motion  tighten falloff, increase speed
+  - Slow scenes  widen spatial spread, slow smoothing
+  - Bright fullscreen  assume daylight, cool temperature on distant LEDs
 
 - [ ] **Effect: `ScreenAdaptive3D`**
   - Blends mirror, mood, reactive modes based on content analysis
   - Auto-adjusts spatial spread and temporal parameters
   - Minimal user config, "just works"
 
-**Success Criteria**: System feels intelligent—outdoor scenes naturally light the ceiling, ground scenes the floor, without manual zone assignment.
+**Success Criteria**: System feels intelligentoutdoor scenes naturally light the ceiling, ground scenes the floor, without manual zone assignment.
 
 ---
 
@@ -223,7 +223,7 @@ The goal is immersion through spatial depth:
 - [ ] **Head Tracking Parallax**
   - Webcam-based head position
   - Shift LED weighting based on viewing angle
-  - Looking left → right LEDs dim (they're "behind" you)
+  - Looking left  right LEDs dim (they're "behind" you)
 
 - [ ] **Virtual Light Physics**
   - Treat screen as emissive surface
@@ -247,13 +247,13 @@ The goal is immersion through spatial depth:
 
 | Aspect | Traditional Ambilight | Our 3D Spatial System |
 |--------|----------------------|----------------------|
-| **Mapping** | Left screen edge → left LED strip (2D) | Left screen edge → all LEDs on left side of room, weighted by 3D distance/angle |
+| **Mapping** | Left screen edge  left LED strip (2D) | Left screen edge  all LEDs on left side of room, weighted by 3D distance/angle |
 | **Intensity** | Uniform across all LEDs | Graduated based on distance from screen + temporal smoothing |
 | **Spatial Awareness** | Flat ring around TV | Volumetric fill considering ceiling, floor, walls, furniture |
-| **Responsiveness** | Instant 1:1 color copy | Adaptive—near LEDs fast, far LEDs slow |
+| **Responsiveness** | Instant 1:1 color copy | Adaptivenear LEDs fast, far LEDs slow |
 | **Content Detection** | None | Heuristic scene analysis (sky/ground, motion, audio) |
 | **Multi-Display** | Complex, manual config | Geometric projection handles automatically |
-| **Audio Sync** | Rare, bolted-on | Native spatial mapping (bass→floor, treble→ceiling) |
+| **Audio Sync** | Rare, bolted-on | Native spatial mapping (bassfloor, trebleceiling) |
 | **Unique Selling Point** | "Extends the screen" | "Pulls you inside the screen" |
 
 ---
@@ -261,18 +261,18 @@ The goal is immersion through spatial depth:
 ## Technical Decisions & Open Questions
 
 ### Settled
-- **Display planes as first-class spatial objects** ✓
-- **Centralized ScreenCaptureManager** (separate from planes) ✓
-- **Start with Windows/DXGI** (Linux later) ✓
-- **30fps capture @ 320×180 downscale** ✓
-- **Distance-based falloff as core differentiator** ✓
+- **Display planes as first-class spatial objects** 
+- **Centralized ScreenCaptureManager** (separate from planes) 
+- **Start with Windows/DXGI** (Linux later) 
+- **30fps capture @ 320180 downscale** 
+- **Distance-based falloff as core differentiator** 
 
 ### To Decide
 - **Effect structure**: One mega "Ambilight3D" with modes, or separate effects (Mirror, Mood, Reactive, etc.)?
   - *Leaning toward separate effects for clarity and composability in stack*
 
 - **Zone storage**: Part of DisplayPlane3D, or separate ZoneConfig objects?
-  - *Leaning toward separate—zones are usage/effect-specific, planes are scene geometry*
+  - *Leaning toward separatezones are usage/effect-specific, planes are scene geometry*
 
 - **LED group assignment**: Auto-only, manual-override, or hybrid?
   - *Leaning toward auto with optional manual override per LED controller*
@@ -281,7 +281,7 @@ The goal is immersion through spatial depth:
   - *Start hardcoded, expose as advanced setting later*
 
 - **Threading model**: Dedicated capture thread per monitor, or one thread with multi-monitor polling?
-  - *One thread, round-robin or async per-monitor—simpler resource management*
+  - *One thread, round-robin or async per-monitorsimpler resource management*
 
 ---
 
@@ -349,17 +349,17 @@ This creates the immersive "pulled into the screen" feeling that traditional amb
 
 ## Implementation Status
 
-### ✅ Phase 1: Foundation (COMPLETE)
+###  Phase 1: Foundation (COMPLETE)
 
-- ✅ ScreenCaptureManager with multi-monitor DXGI support
-- ✅ DisplayPlane3D entity with Transform3D positioning
-- ✅ Geometry3DUtils for 3D projection math
-- ✅ ScreenMirror3D effect with edge band sampling
-- ✅ Distance-based falloff (3 curve types)
-- ✅ Effect auto-registration system
-- ✅ Thread-safe capture at 30fps
+-  ScreenCaptureManager with multi-monitor DXGI support
+-  DisplayPlane3D entity with Transform3D positioning
+-  Geometry3DUtils for 3D projection math
+-  ScreenMirror3D effect with edge band sampling
+-  Distance-based falloff (3 curve types)
+-  Effect auto-registration system
+-  Thread-safe capture at 30fps
 
-### 🔄 Next Steps (Phase 2)
+###  Next Steps (Phase 2)
 
 1. **Wire DisplayPlaneManager to UI** - Populate global manager when planes change
 2. **Tune falloff curves** - Find the "sweet spot" that feels immersive
@@ -367,9 +367,9 @@ This creates the immersive "pulled into the screen" feeling that traditional amb
 4. **Multi-monitor testing** - Verify 3-monitor setups work correctly
 5. **User testing** - Get feedback on "does it feel 3D?"
 
-### 📋 Future Phases
+###  Future Phases
 
-- **Phase 3**: Audio Integration (bass→floor, treble→ceiling)
+- **Phase 3**: Audio Integration (bassfloor, trebleceiling)
 - **Phase 4**: Content Detection (sky/ground heuristics, peripheral extrapolation)
 - **Phase 5**: Advanced Features (head tracking, light physics simulation)
 
@@ -392,3 +392,4 @@ The ambilight feature is the proof-of-concept that spatial awareness **matters**
 **Document Version**: 1.0
 **Last Updated**: 2025-10-23
 **Status**: Vision & Planning Phase
+

@@ -13,6 +13,69 @@
 #include <set>
 #include <algorithm>
 
+static float AverageAlongAxis(ControllerTransform* transform,
+                              EffectAxis sort_axis,
+                              const Vector3D& stack_ref_origin)
+{
+    if(!transform)
+    {
+        return 0.0f;
+    }
+
+    if(!transform->led_positions.empty())
+    {
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+
+        double accumulator = 0.0;
+        for(size_t led_index = 0; led_index < transform->led_positions.size(); led_index++)
+        {
+            switch(sort_axis)
+            {
+                case AXIS_X:
+                    accumulator += transform->led_positions[led_index].world_position.x;
+                    break;
+                case AXIS_Y:
+                    accumulator += transform->led_positions[led_index].world_position.y;
+                    break;
+                case AXIS_Z:
+                    accumulator += transform->led_positions[led_index].world_position.z;
+                    break;
+                case AXIS_RADIAL:
+                default:
+                {
+                    float dx = transform->led_positions[led_index].world_position.x - stack_ref_origin.x;
+                    float dy = transform->led_positions[led_index].world_position.y - stack_ref_origin.y;
+                    float dz = transform->led_positions[led_index].world_position.z - stack_ref_origin.z;
+                    accumulator += sqrtf(dx * dx + dy * dy + dz * dz);
+                    break;
+                }
+            }
+        }
+        return (float)(accumulator / (double)transform->led_positions.size());
+    }
+
+    switch(sort_axis)
+    {
+        case AXIS_X:
+            return transform->transform.position.x;
+        case AXIS_Y:
+            return transform->transform.position.y;
+        case AXIS_Z:
+            return transform->transform.position.z;
+        case AXIS_RADIAL:
+        default:
+        {
+            float dx = transform->transform.position.x - stack_ref_origin.x;
+            float dy = transform->transform.position.y - stack_ref_origin.y;
+            float dz = transform->transform.position.z - stack_ref_origin.z;
+            return sqrtf(dx * dx + dy * dy + dz * dz);
+        }
+    }
+}
+
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
     /*---------------------------------------------------------*\
@@ -443,60 +506,11 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
     std::vector<std::pair<float, unsigned int>> sorted_controllers;
     sorted_controllers.reserve(controller_transforms.size());
 
-    auto avg_along_axis = [&](ControllerTransform* t) -> float
-    {
-        if(!t) return 0.0f;
-        if(!t->led_positions.empty())
-        {
-            // Ensure world positions are current
-            if(t->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(t);
-            }
-
-            double acc = 0.0;
-            for(size_t k = 0; k < t->led_positions.size(); k++)
-            {
-                switch(sort_axis)
-                {
-                    case AXIS_X: acc += t->led_positions[k].world_position.x; break;
-                    case AXIS_Y: acc += t->led_positions[k].world_position.y; break;
-                    case AXIS_Z: acc += t->led_positions[k].world_position.z; break;
-                    case AXIS_RADIAL:
-                    default:
-                    {
-                        float dx = t->led_positions[k].world_position.x - stack_ref_origin.x;
-                        float dy = t->led_positions[k].world_position.y - stack_ref_origin.y;
-                        float dz = t->led_positions[k].world_position.z - stack_ref_origin.z;
-                        acc += sqrtf(dx*dx + dy*dy + dz*dz);
-                        break;
-                    }
-                }
-            }
-            return (float)(acc / (double)t->led_positions.size());
-        }
-        // Fallback to transform center if no LEDs present
-        switch(sort_axis)
-        {
-            case AXIS_X: return t->transform.position.x;
-            case AXIS_Y: return t->transform.position.y;
-            case AXIS_Z: return t->transform.position.z;
-            case AXIS_RADIAL:
-            default:
-            {
-                float dx = t->transform.position.x - stack_ref_origin.x;
-                float dy = t->transform.position.y - stack_ref_origin.y;
-                float dz = t->transform.position.z - stack_ref_origin.z;
-                return sqrtf(dx*dx + dy*dy + dz*dz);
-            }
-        }
-    };
-
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* transform = controller_transforms[i].get();
         if(!transform) continue;
-        float key = avg_along_axis(transform);
+        float key = AverageAlongAxis(transform, sort_axis, stack_ref_origin);
         sorted_controllers.emplace_back(key, i);
     }
 

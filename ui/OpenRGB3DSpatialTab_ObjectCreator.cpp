@@ -115,8 +115,9 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
     std::unordered_set<const VirtualController3D*> virtuals_in_scene;
-    for(const auto& transform_ptr : controller_transforms)
+    for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
     {
+        const std::unique_ptr<ControllerTransform>& transform_ptr = controller_transforms[transform_index];
         if(transform_ptr && transform_ptr->virtual_controller)
         {
             virtuals_in_scene.insert(transform_ptr->virtual_controller);
@@ -2744,8 +2745,9 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     // Sync display planes to global manager
     std::vector<DisplayPlane3D*> plane_ptrs;
-    for(auto& plane : display_planes)
+    for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
     {
+        std::unique_ptr<DisplayPlane3D>& plane = display_planes[plane_index];
         if(plane)
         {
             plane_ptrs.push_back(plane.get());
@@ -3336,8 +3338,9 @@ void OpenRGB3DSpatialTab::LoadMonitorPresets()
     std::set<QString> seen_ids;
     if(json_data.is_array())
     {
-        for(const auto& entry : json_data)
+        for(size_t entry_index = 0; entry_index < json_data.size(); entry_index++)
         {
+            const nlohmann::json& entry = json_data[entry_index];
             MonitorPreset preset;
             preset.brand = QString::fromStdString(entry.value("brand", std::string()));
             preset.model = QString::fromStdString(entry.value("model", std::string()));
@@ -3351,8 +3354,9 @@ void OpenRGB3DSpatialTab::LoadMonitorPresets()
                 QString sanitized;
                 sanitized.reserve(combined.length());
                 bool last_was_underscore = false;
-                for(const QChar& ch : combined)
+                for(int char_index = 0; char_index < combined.length(); char_index++)
                 {
+                    const QChar ch = combined[char_index];
                     if(ch.isLetterOrNumber())
                     {
                         sanitized.append(ch.toLower());
@@ -3416,8 +3420,9 @@ void OpenRGB3DSpatialTab::PopulateMonitorPresetCombo()
     display_plane_monitor_combo->setCurrentIndex(-1);
     display_plane_monitor_combo->setEditText(QString());
 
-    for(const MonitorPreset& preset : monitor_presets)
+    for(size_t preset_index = 0; preset_index < monitor_presets.size(); preset_index++)
     {
+        const MonitorPreset& preset = monitor_presets[preset_index];
         display_plane_monitor_combo->addItem(preset.DisplayLabel(), preset.id);
     }
 
@@ -3462,10 +3467,12 @@ void OpenRGB3DSpatialTab::ClearMonitorPresetSelectionIfManualEdit()
         return;
     }
 
-    auto it = std::find_if(monitor_presets.begin(), monitor_presets.end(),
-                           [&current_id](const MonitorPreset& preset) {
-                               return preset.id == current_id;
-                           });
+    std::vector<MonitorPreset>::iterator it = std::find_if(
+        monitor_presets.begin(),
+        monitor_presets.end(),
+        [&current_id](const MonitorPreset& preset) {
+            return preset.id == current_id;
+        });
     if(it == monitor_presets.end())
     {
         plane->SetMonitorPresetId(std::string());
@@ -3642,8 +3649,9 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         display_plane_visible_check
     };
 
-    for(QWidget* w : widgets)
+    for(int widget_index = 0; widget_index < widgets.size(); widget_index++)
     {
+        QWidget* w = widgets[widget_index];
         if(w) w->setEnabled(has_plane);
     }
 
@@ -3757,8 +3765,9 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
 
     // Sync display planes to global manager for effects to access
     std::vector<DisplayPlane3D*> plane_ptrs;
-    for(auto& plane : display_planes)
+    for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
     {
+        std::unique_ptr<DisplayPlane3D>& plane = display_planes[plane_index];
         if(plane)
         {
             plane_ptrs.push_back(plane.get());
@@ -3839,10 +3848,12 @@ void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
         return;
     }
 
-    auto it = std::find_if(monitor_presets.begin(), monitor_presets.end(),
-                           [&preset_id](const MonitorPreset& preset) {
-                               return preset.id == preset_id;
-                           });
+    std::vector<MonitorPreset>::iterator it = std::find_if(
+        monitor_presets.begin(),
+        monitor_presets.end(),
+        [&preset_id](const MonitorPreset& preset) {
+            return preset.id == preset_id;
+        });
     if(it == monitor_presets.end())
     {
         return;
@@ -3989,20 +4000,21 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneCaptureSourceList()
         current_selection = display_plane_capture_combo->currentData().toString();
     }
 
-    auto& capture_mgr = ScreenCaptureManager::Instance();
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
     if(!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();
     }
 
     capture_mgr.RefreshSources();
-    auto sources = capture_mgr.GetAvailableSources();
+    std::vector<CaptureSourceInfo> sources = capture_mgr.GetAvailableSources();
 
     display_plane_capture_combo->clear();
     display_plane_capture_combo->addItem("(None)", "");
 
-    for(const auto& source : sources)
+    for(size_t source_index = 0; source_index < sources.size(); source_index++)
     {
+        const CaptureSourceInfo& source = sources[source_index];
         QString label = QString::fromStdString(source.name);
         if(source.is_primary)
         {

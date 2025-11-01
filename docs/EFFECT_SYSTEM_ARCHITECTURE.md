@@ -54,7 +54,7 @@ Advanced scenarios with different effects on different parts of your setup:
 
 ### Location in UI
 
-**Right side tabs → "Effect Stack" tab**
+**Right side tabs  "Effect Stack" tab**
 
 ### Workflow Example
 
@@ -77,7 +77,23 @@ Creating a complex "Gaming Mode" stack:
 
 **Result:** Each zone has its own effect, all running simultaneously!
 
-**Save as "Gaming Mode" preset** → Can load this entire stack later with one click.
+**Save as "Gaming Mode" preset** -> Can load this entire stack later with one click.
+
+---
+
+## Coordinate System & Units
+
+All effects, layout tools, and SDK helpers share a single spatial convention:
+
+- Coordinates passed into `CalculateColor()` / `CalculateColorGrid()` are **grid units**, not millimetres. One unit equals the configured grid scale (default **10mm**).
+- Axes follow OpenGL Y-up:
+  - `X`: left -> right (0 at the left wall)
+  - `Y`: floor -> ceiling
+  - `Z`: front -> back (0 at the front wall)
+- Origin `(0,0,0)` is the front-left-floor corner of the room.
+- Device dimensions obtained in millimetres (controller widths, display plane size) must be divided by the grid scale before they are applied as positions.
+
+Keeping these rules consistent across effects and UI components ensures ScreenMirror3D, grid auto-sizing, and saved layouts all interpret positions the same way.
 
 ---
 
@@ -88,8 +104,8 @@ Creating a complex "Gaming Mode" stack:
 **Both the Effects tab AND the Effect Stack tab pull from the SAME list of effects.**
 
 When you register an effect with `EFFECT_REGISTERER_3D`, it becomes available in:
-- ✅ The Effects tab dropdown
-- ✅ The Effect Stack tab dropdown
+- The Effects tab dropdown
+- The Effect Stack tab dropdown
 
 **There is only ONE effect system.** The difference is:
 - **Effects Tab** = Simple interface for one effect on everything
@@ -368,11 +384,11 @@ SOURCES += \
 #### Registration Pattern
 
 ```cpp
-// ❌ WRONG - Registration before header
+//  WRONG - Registration before header
 REGISTER_EFFECT_3D(MyEffect3D);
 #include "MyEffect3D.h"
 
-// ✅ CORRECT - Registration after header
+//  CORRECT - Registration after header
 #include "MyEffect3D.h"
 REGISTER_EFFECT_3D(MyEffect3D);
 ```
@@ -534,13 +550,13 @@ float energy = AudioInputManager::instance()->getBandEnergyHz(low_hz, high_hz);
 
 The ScreenMirror3D effect demonstrates:
 
-- ✅ Auto-registration with category "Ambilight"
-- ✅ Accessing DisplayPlanes via DisplayPlaneManager
-- ✅ Accessing screen capture via ScreenCaptureManager
-- ✅ 3D spatial projection using Geometry3DUtils
-- ✅ Distance-based falloff for immersive feel
-- ✅ Custom UI with dropdowns, spinboxes, checkboxes
-- ✅ Settings persistence
+- Auto-registration with category "Ambilight"
+- Accessing DisplayPlanes via DisplayPlaneManager
+- Accessing screen capture via ScreenCaptureManager
+- 3D spatial projection using Geometry3DUtils
+- Distance-based falloff for immersive feel
+- Custom UI with dropdowns, spinboxes, checkboxes
+- Settings persistence
 
 **Location:** `Effects3D/ScreenMirror3D/`
 
@@ -558,3 +574,8 @@ The ScreenMirror3D effect demonstrates:
 
 **Last Updated:** 2025-10-24
 **Author:** OpenRGB 3D Spatial Plugin Team
+
+
+
+
+

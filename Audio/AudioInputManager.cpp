@@ -559,8 +559,18 @@ void AudioInputManager::computeSpectrum()
     }
     // Normalize rough range 0..1
     float maxv = 1e-6f;
-    for(float v : newBands) if(v > maxv) maxv = v;
-    for(float& v : newBands) v = std::min(1.0f, v / maxv);
+    for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
+    {
+        float value = newBands[band_index];
+        if(value > maxv)
+        {
+            maxv = value;
+        }
+    }
+    for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
+    {
+        newBands[band_index] = std::min(1.0f, newBands[band_index] / maxv);
+    }
 
     // Store with smoothing
     {
@@ -571,14 +581,16 @@ void AudioInputManager::computeSpectrum()
             bands16[b] = ema_smoothing * bands16[b] + (1.0f - ema_smoothing) * newBands[b];
         }
         // Aggregate bass/mid/treble using crossovers
-        auto bandIndexForHz = [&](float hz){
-            float t = std::log(hz / f_min) / std::log(f_max / f_min);
-            int idx = (int)std::floor(t * bands_count);
-            if(idx < 0) idx = 0; if(idx > bands_count) idx = bands_count;
-            return idx;
-        };
-        int b_end = bandIndexForHz(xover_bass_upper);
-        int m_end = bandIndexForHz(xover_mid_upper);
+        float bass_norm = std::log(xover_bass_upper / f_min) / std::log(f_max / f_min);
+        int b_end = (int)std::floor(bass_norm * bands_count);
+        if(b_end < 0) b_end = 0;
+        if(b_end > bands_count) b_end = bands_count;
+
+        float mid_norm = std::log(xover_mid_upper / f_min) / std::log(f_max / f_min);
+        int m_end = (int)std::floor(mid_norm * bands_count);
+        if(m_end < 0) m_end = 0;
+        if(m_end > bands_count) m_end = bands_count;
+
         if(b_end < 1) b_end = 1; if(m_end <= b_end) m_end = b_end + 1; if(m_end > bands_count) m_end = bands_count;
         float bsum=0, msum=0, tsum=0; int bc=0, mc=0, tc=0;
         for(int i=0;i<bands_count;i++)
@@ -594,9 +606,9 @@ void AudioInputManager::computeSpectrum()
         // Onset detection via spectral flux (half-wave rectified diff of magnitudes)
         if(prev_mags.size() != mags.size()) prev_mags.assign(mags.size(), 0.0f);
         double flux = 0.0;
-        for(size_t i=0;i<mags.size();i++)
+        for(size_t mag_index = 0; mag_index < mags.size(); mag_index++)
         {
-            double diff = mags[i] - prev_mags[i];
+            double diff = mags[mag_index] - prev_mags[mag_index];
             if(diff > 0) flux += diff;
         }
         prev_mags = mags;
@@ -645,16 +657,23 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
     float f_min = std::max(1.0f, bin_min);
     float f_max = fs * 0.5f;
     if(high_hz <= low_hz) high_hz = low_hz + 1.0f;
-    auto idxForHz = [&](float hz){
-        if(hz < f_min) hz = f_min;
-        if(hz > f_max) hz = f_max;
-        float t = std::log(hz / f_min) / std::log(f_max / f_min);
-        int idx = (int)std::floor(t * (int)bands16.size());
-        if(idx < 0) idx = 0; if(idx > (int)bands16.size()-1) idx = (int)bands16.size()-1;
-        return idx;
-    };
-    int i0 = idxForHz(low_hz);
-    int i1 = idxForHz(high_hz);
+
+    float clamped_low = low_hz;
+    if(clamped_low < f_min) clamped_low = f_min;
+    if(clamped_low > f_max) clamped_low = f_max;
+    float low_norm = std::log(clamped_low / f_min) / std::log(f_max / f_min);
+    int i0 = (int)std::floor(low_norm * (int)bands16.size());
+    if(i0 < 0) i0 = 0;
+    if(i0 > (int)bands16.size() - 1) i0 = (int)bands16.size() - 1;
+
+    float clamped_high = high_hz;
+    if(clamped_high < f_min) clamped_high = f_min;
+    if(clamped_high > f_max) clamped_high = f_max;
+    float high_norm = std::log(clamped_high / f_min) / std::log(f_max / f_min);
+    int i1 = (int)std::floor(high_norm * (int)bands16.size());
+    if(i1 < 0) i1 = 0;
+    if(i1 > (int)bands16.size() - 1) i1 = (int)bands16.size() - 1;
+
     if(i1 < i0) std::swap(i0, i1);
     if(i1 == i0) i1 = std::min(i0+1, (int)bands16.size()-1);
     float sum = 0.0f; int cnt = 0;
@@ -663,4 +682,3 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
 }
 
 // Removed duplicate WasapiLoopback class (now defined at top)
-
