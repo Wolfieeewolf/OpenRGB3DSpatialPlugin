@@ -11,6 +11,22 @@
 #include "AudioLevel3D.h"
 #include "Colors.h"
 #include <cmath>
+#include <algorithm>
+
+float AudioLevel3D::EvaluateIntensity(float amplitude, float time)
+{
+    float alpha = std::clamp(audio_settings.smoothing, 0.0f, 0.99f);
+    if(std::fabs(time - last_intensity_time) > 1e-4f)
+    {
+        smoothed = alpha * smoothed + (1.0f - alpha) * amplitude;
+        last_intensity_time = time;
+    }
+    else if(alpha <= 0.0f)
+    {
+        smoothed = amplitude;
+    }
+    return ApplyAudioIntensity(smoothed, audio_settings);
+}
 
 AudioLevel3D::AudioLevel3D(QWidget* parent)
     : SpatialEffect3D(parent)
@@ -73,56 +89,84 @@ void AudioLevel3D::UpdateParams(SpatialEffectParams& /*params*/)
     // No special param mapping required
 }
 
-RGBColor AudioLevel3D::CalculateColor(float /*x*/, float /*y*/, float /*z*/, float time)
+RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Get filtered band energy 0..1 and apply per-effect smoothing
-    float lvl_raw = AudioInputManager::instance()->getBandEnergyHz((float)low_hz, (float)high_hz);
-    smoothed = smoothing * smoothed + (1.0f - smoothing) * lvl_raw;
-    float lvl = smoothed;
+    AudioInputManager* audio = AudioInputManager::instance();
+    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float intensity = EvaluateIntensity(amplitude, time);
 
-    // If rainbow mode, cycle hue by speed; else use first color
-    RGBColor baseColor;
-    if(GetRainbowMode())
+    float height_norm = std::clamp(0.5f + y, 0.0f, 1.0f);
+    float radial_norm = std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);
+
+    float axis_pos = 0.5f;
+    switch(GetAxis())
     {
-        float hue = std::fmod(CalculateProgress(time) * 60.0f, 360.0f);
-        baseColor = GetRainbowColor(hue);
+        case AXIS_X: axis_pos = std::clamp(0.5f + x, 0.0f, 1.0f); break;
+        case AXIS_Y: axis_pos = height_norm; break;
+        case AXIS_Z: axis_pos = std::clamp(0.5f + z, 0.0f, 1.0f); break;
+        case AXIS_RADIAL:
+        default:     axis_pos = 1.0f - radial_norm; break;
     }
-    else
+    if(GetReverse())
     {
-        baseColor = GetColorAtPosition(0.0f);
+        axis_pos = 1.0f - axis_pos;
     }
 
-    // Multiply by brightness control (0..100)
-    float bright = GetBrightness() / 100.0f; // using inherited getter
+    float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
+    float spatial = 0.55f + 0.45f * (1.0f - radial_norm);
+    intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
 
-    // Apply audio level
-    float scaled = std::max(0.0f, std::min(1.0f, lvl)) * std::max(0.0f, std::min(1.0f, bright));
-    float factor = std::pow(scaled, std::max(0.2f, std::min(5.0f, falloff)));
+    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
+    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
+    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
 
-    unsigned char r = baseColor & 0xFF;
-    unsigned char g = (baseColor >> 8) & 0xFF;
-    unsigned char b = (baseColor >> 16) & 0xFF;
-
-    int rr = (int)(r * factor);
-    int gg = (int)(g * factor);
-    int bb = (int)(b * factor);
-    if(rr > 255) rr = 255; if(gg > 255) gg = 255; if(bb > 255) bb = 255;
-    return (bb << 16) | (gg << 8) | rr;
+    RGBColor user_color = GetRainbowMode()
+        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
+        : GetColorAtPosition(0.0f);
+    color = ModulateRGBColors(color, user_color);
+    return color;
 }
 
 RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    /*---------------------------------------------------------*\
-    | Audio effects are typically global (not spatially aware) |
-    | but we still need grid-aware implementation for          |
-    | consistency with the rendering pipeline                  |
-    \*---------------------------------------------------------*/
-    (void)grid;  // Unused parameter
+    AudioInputManager* audio = AudioInputManager::instance();
+    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float intensity = EvaluateIntensity(amplitude, time);
 
-    // Audio effects don't use spatial coordinates, so we can
-    // simply call the base CalculateColor implementation
-    // (coordinates are ignored in audio effects anyway)
-    return CalculateColor(x, y, z, time);
+    float height_norm = NormalizeRange(y, grid.min_y, grid.max_y);
+    float dx = x - grid.center_x;
+    float dy = y - grid.center_y;
+    float dz = z - grid.center_z;
+    float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
+    float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
+
+    float axis_pos = 0.5f;
+    switch(GetAxis())
+    {
+        case AXIS_X: axis_pos = NormalizeRange(x, grid.min_x, grid.max_x); break;
+        case AXIS_Y: axis_pos = height_norm; break;
+        case AXIS_Z: axis_pos = NormalizeRange(z, grid.min_z, grid.max_z); break;
+        case AXIS_RADIAL:
+        default:     axis_pos = 1.0f - radial_norm; break;
+    }
+    if(GetReverse())
+    {
+        axis_pos = 1.0f - axis_pos;
+    }
+
+    float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
+    float spatial = 0.55f + 0.45f * (1.0f - radial_norm);
+    intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
+
+    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
+    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
+    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
+
+    RGBColor user_color = GetRainbowMode()
+        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
+        : GetColorAtPosition(0.0f);
+    color = ModulateRGBColors(color, user_color);
+    return color;
 }
 
 // Register effect
@@ -131,30 +175,14 @@ REGISTER_EFFECT_3D(AudioLevel3D)
 nlohmann::json AudioLevel3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["low_hz"] = low_hz;
-    j["high_hz"] = high_hz;
-    j["smoothing"] = smoothing;
-    j["falloff"] = falloff;
+    AudioReactiveSaveToJson(j, audio_settings);
     return j;
 }
 
 void AudioLevel3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("low_hz"))
-    {
-        low_hz = settings["low_hz"].get<int>();
-    }
-    if(settings.contains("high_hz"))
-    {
-        high_hz = settings["high_hz"].get<int>();
-    }
-    if(settings.contains("smoothing"))
-    {
-        smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
-    }
-    if(settings.contains("falloff"))
-    {
-        falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
-    }
+    AudioReactiveLoadFromJson(audio_settings, settings);
+    smoothed = 0.0f;
+    last_intensity_time = std::numeric_limits<float>::lowest();
 }

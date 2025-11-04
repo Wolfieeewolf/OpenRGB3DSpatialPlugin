@@ -118,14 +118,27 @@ private:
             if(FAILED(hr)) break;
             std::vector<int16_t> mono;
             mono.resize(frames);
+            std::vector<double> channel_accum;
+            if(channels > 0)
+            {
+                channel_accum.assign(channels, 0.0);
+            }
             if(isFloat)
             {
                 const float* f = reinterpret_cast<const float*>(data);
                 for(UINT32 i=0;i<frames;i++)
                 {
-                    double acc = 0.0;
-                    for(int c=0;c<channels;c++) acc += f[i*channels + c];
-                    acc /= (double)channels;
+                    double sum = 0.0;
+                    for(int c=0;c<channels;c++)
+                    {
+                        double sample = f[i*channels + c];
+                        sum += sample;
+                        if(c < (int)channel_accum.size())
+                        {
+                            channel_accum[c] += sample * sample;
+                        }
+                    }
+                    double acc = (channels > 0) ? (sum / (double)channels) : sum;
                     if(acc > 1.0) acc = 1.0; if(acc < -1.0) acc = -1.0;
                     mono[i] = (int16_t)(acc * 32767.0);
                 }
@@ -135,9 +148,19 @@ private:
                 const int16_t* s = reinterpret_cast<const int16_t*>(data);
                 for(UINT32 i=0;i<frames;i++)
                 {
-                    int sum = 0;
-                    for(int c=0;c<channels;c++) sum += s[i*channels + c];
-                    int16_t v = (int16_t)(sum / std::max(1, channels));
+                    long long sum = 0;
+                    for(int c=0;c<channels;c++)
+                    {
+                        int16_t sample16 = s[i*channels + c];
+                        sum += sample16;
+                        if(c < (int)channel_accum.size())
+                        {
+                            double sample = sample16 / 32768.0;
+                            channel_accum[c] += sample * sample;
+                        }
+                    }
+                    int divisor = std::max(1, channels);
+                    int16_t v = (int16_t)(sum / divisor);
                     mono[i] = v;
                 }
             }
@@ -148,7 +171,16 @@ private:
                 for(UINT32 i=0;i<frames;i++)
                 {
                     long long sum = 0;
-                    for(int c=0;c<channels;c++) sum += s32[i*channels + c];
+                    for(int c=0;c<channels;c++)
+                    {
+                        int32_t sample32 = s32[i*channels + c];
+                        sum += sample32;
+                        if(c < (int)channel_accum.size())
+                        {
+                            double sample = (double)sample32 / 2147483648.0;
+                            channel_accum[c] += sample * sample;
+                        }
+                    }
                     double acc = (double)sum / (double)std::max(1, channels);
                     // scale from 32-bit to 16-bit
                     int v = (int)(acc / 2147483648.0 * 32767.0);
@@ -162,12 +194,40 @@ private:
                 const int16_t* s = reinterpret_cast<const int16_t*>(data);
                 for(UINT32 i=0;i<frames;i++)
                 {
-                    int sum = 0;
-                    for(int c=0;c<channels;c++) sum += s[i*channels + c];
-                    mono[i] = (int16_t)(sum / std::max(1, channels));
+                    long long sum = 0;
+                    for(int c=0;c<channels;c++)
+                    {
+                        int16_t sample16 = s[i*channels + c];
+                        sum += sample16;
+                        if(c < (int)channel_accum.size())
+                        {
+                            double sample = sample16 / 32768.0;
+                            channel_accum[c] += sample * sample;
+                        }
+                    }
+                    int divisor = std::max(1, channels);
+                    mono[i] = (int16_t)(sum / divisor);
+                }
+            }
+            std::vector<float> channel_levels_local;
+            if(!channel_accum.empty() && frames > 0)
+            {
+                channel_levels_local.resize(channel_accum.size());
+                for(size_t ci = 0; ci < channel_accum.size(); ++ci)
+                {
+                    double avg = channel_accum[ci] / (double)frames;
+                    if(avg < 0.0)
+                    {
+                        avg = 0.0;
+                    }
+                    channel_levels_local[ci] = (avg > 0.0) ? (float)std::sqrt(avg) : 0.0f;
                 }
             }
             manager->FeedPCM16(mono.data(), (int)mono.size());
+            if(!channel_levels_local.empty())
+            {
+                manager->updateChannelLevels(channel_levels_local);
+            }
             capture->ReleaseBuffer(frames);
         }
 
@@ -205,6 +265,7 @@ AudioInputManager::AudioInputManager(QObject* parent)
     connect(&level_timer, &QTimer::timeout, this, &AudioInputManager::onLevelTick);
     sample_buffer.reserve(fft_size * 4);
     bands16.assign(16, 0.0f);
+    resetAutoLevel();
 }
 
 QStringList AudioInputManager::listInputDevices()
@@ -326,11 +387,13 @@ void AudioInputManager::start()
     bool is_loop = (selected_index < (int)device_is_loopback.size()) ? device_is_loopback[selected_index] : true;
     capturer = new WasapiCapturer(this, devId, is_loop);
     running = true;
+    resetAutoLevel();
     level_timer.start();
     return;
 #else
     // Non-Windows not implemented
     running = true;
+    resetAutoLevel();
     level_timer.start();
 #endif
 }
@@ -351,6 +414,7 @@ void AudioInputManager::stop()
 #endif
     running = false;
     current_level.store(0.0f);
+    resetAutoLevel();
     {
         QMutexLocker bl(&bands_mutex);
         std::fill(bands16.begin(), bands16.end(), 0.0f);
@@ -360,9 +424,32 @@ void AudioInputManager::stop()
 
 void AudioInputManager::setGain(float g)
 {
-    if(g < 0.1f) g = 0.1f;
-    if(g > 10.0f) g = 10.0f;
+    if(g < 0.05f) g = 0.05f;
+    if(g > 40.0f) g = 40.0f;
     gain = g;
+}
+
+void AudioInputManager::setAutoLevelEnabled(bool enabled)
+{
+    auto_level_enabled = enabled;
+    if(auto_level_enabled)
+    {
+        resetAutoLevel();
+    }
+}
+
+void AudioInputManager::resetAutoLevel()
+{
+    auto_level_peak = auto_level_min_peak;
+    auto_level_floor = auto_level_min_peak * 0.25f;
+    if(auto_level_floor < 1e-6f)
+    {
+        auto_level_floor = 1e-6f;
+    }
+    if(auto_level_floor > auto_level_peak * 0.9f)
+    {
+        auto_level_floor = auto_level_peak * 0.9f;
+    }
 }
 
 void AudioInputManager::setSmoothing(float s)
@@ -436,6 +523,62 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
 
     // Apply simple soft clip and gain
     double val = rms * gain;
+
+    if(auto_level_enabled)
+    {
+        if(val > auto_level_peak)
+        {
+            auto_level_peak = static_cast<float>(val);
+        }
+        else
+        {
+            auto_level_peak *= auto_level_peak_decay;
+            if(auto_level_peak < auto_level_min_peak)
+            {
+                auto_level_peak = auto_level_min_peak;
+            }
+        }
+
+        if(auto_level_floor <= 0.0f || auto_level_floor > auto_level_peak)
+        {
+            auto_level_floor = auto_level_peak * 0.25f;
+        }
+
+        float target_floor = (float)val;
+        if(target_floor < auto_level_floor)
+        {
+            auto_level_floor = auto_level_floor * auto_level_floor_decay +
+                               target_floor * (1.0f - auto_level_floor_decay);
+        }
+        else
+        {
+            auto_level_floor = auto_level_floor +
+                               (target_floor - auto_level_floor) * auto_level_floor_rise;
+        }
+
+        if(auto_level_floor < 1e-6f)
+        {
+            auto_level_floor = 1e-6f;
+        }
+        if(auto_level_floor > auto_level_peak * 0.9f)
+        {
+            auto_level_floor = auto_level_peak * 0.9f;
+        }
+
+        float range = auto_level_peak - auto_level_floor;
+        if(range < auto_level_min_range)
+        {
+            range = auto_level_min_range;
+        }
+
+        double adjusted = (val - auto_level_floor) / (double)range;
+        if(adjusted < 0.0)
+        {
+            adjusted = 0.0;
+        }
+        val = adjusted;
+    }
+
     if(val > 1.0) val = 1.0;
 
     // EMA smoothing
@@ -456,6 +599,42 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
             sample_buffer.erase(sample_buffer.begin(), sample_buffer.end() - keep);
         }
     }
+}
+
+void AudioInputManager::updateChannelLevels(const std::vector<float>& levels)
+{
+#ifdef _WIN32
+    if(levels.empty())
+    {
+        return;
+    }
+    QMutexLocker lock(&mutex);
+    if(channel_levels.size() != levels.size())
+    {
+        channel_levels.assign(levels.size(), 0.0f);
+    }
+    float range = auto_level_peak - auto_level_floor;
+    if(range < auto_level_min_range)
+    {
+        range = auto_level_min_range;
+    }
+    for(size_t i = 0; i < levels.size(); ++i)
+    {
+        double value = (double)levels[i] * (double)gain;
+        double normalized = (value - auto_level_floor) / (double)range;
+        if(normalized < 0.0)
+        {
+            normalized = 0.0;
+        }
+        else if(normalized > 1.0)
+        {
+            normalized = 1.0;
+        }
+        channel_levels[i] = 0.7f * channel_levels[i] + 0.3f * (float)normalized;
+    }
+#else
+    (void)levels;
+#endif
 }
 
 void AudioInputManager::onLevelTick()
@@ -603,6 +782,8 @@ void AudioInputManager::computeSpectrum()
         mid_level  = (mc? msum/mc:0.0f);
         treble_level=(tc? tsum/tc:0.0f);
 
+        updateVisualizerBuckets(mags, f_min, f_max);
+
         // Onset detection via spectral flux (half-wave rectified diff of magnitudes)
         if(prev_mags.size() != mags.size()) prev_mags.assign(mags.size(), 0.0f);
         double flux = 0.0;
@@ -682,3 +863,135 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
 }
 
 // Removed duplicate WasapiLoopback class (now defined at top)
+
+AudioInputManager::SpectrumSnapshot AudioInputManager::getSpectrumSnapshot(int target_bins) const
+{
+    SpectrumSnapshot snapshot;
+    if(target_bins <= 0)
+    {
+        target_bins = 256;
+    }
+
+    QMutexLocker bl(&bands_mutex);
+    if(visualizer_bins.empty())
+    {
+        return snapshot;
+    }
+
+    auto resample = [target_bins](const std::vector<float>& src, std::vector<float>& dst)
+    {
+        if(src.empty())
+        {
+            dst.clear();
+            return;
+        }
+        if((int)src.size() == target_bins)
+        {
+            dst = src;
+            return;
+        }
+        dst.assign(target_bins, 0.0f);
+        int src_count = (int)src.size();
+        for(int i = 0; i < target_bins; ++i)
+        {
+            float pos = (i + 0.5f) / (float)target_bins;
+            int idx = (int)std::floor(pos * src_count);
+            if(idx < 0) idx = 0;
+            if(idx >= src_count) idx = src_count - 1;
+            dst[i] = src[idx];
+        }
+    };
+
+    snapshot.min_frequency_hz = visualizer_min_hz;
+    snapshot.max_frequency_hz = visualizer_max_hz;
+    resample(visualizer_bins, snapshot.bins);
+    resample(visualizer_peaks, snapshot.peaks);
+    return snapshot;
+}
+
+void AudioInputManager::updateVisualizerBuckets(const std::vector<float>& mags, float min_hz, float max_hz)
+{
+    const int viz_bins_count = 256;
+    if((int)visualizer_bins.size() != viz_bins_count)
+    {
+        visualizer_bins.assign(viz_bins_count, 0.0f);
+        visualizer_peaks.assign(viz_bins_count, 0.0f);
+    }
+
+    if(mags.empty())
+    {
+        std::fill(visualizer_bins.begin(), visualizer_bins.end(), 0.0f);
+        std::fill(visualizer_peaks.begin(), visualizer_peaks.end(), 0.0f);
+        visualizer_min_hz = min_hz;
+        visualizer_max_hz = max_hz;
+        return;
+    }
+
+    float fs = (float)sample_rate_hz;
+    if(fs <= 0.0f)
+    {
+        fs = 48000.0f;
+    }
+    float bin_hz = fs / (float)fft_size;
+    if(bin_hz <= 0.0f)
+    {
+        bin_hz = 1.0f;
+    }
+
+    float low = std::max(min_hz, bin_hz);
+    float high = std::max(max_hz, low + bin_hz);
+
+    float log_span = std::log(high / low);
+    if(std::abs(log_span) < 1e-6f)
+    {
+        log_span = 1.0f;
+    }
+
+    int fft_bins = (int)mags.size();
+    for(int i = 0; i < viz_bins_count; ++i)
+    {
+        float start_ratio = (float)i / (float)viz_bins_count;
+        float end_ratio = (float)(i + 1) / (float)viz_bins_count;
+        float start_hz = low * std::exp(log_span * start_ratio);
+        float end_hz = low * std::exp(log_span * end_ratio);
+        if(end_hz <= start_hz)
+        {
+            end_hz = start_hz + bin_hz;
+        }
+        int start_idx = (int)std::floor(start_hz / bin_hz);
+        int end_idx = (int)std::ceil(end_hz / bin_hz);
+        if(start_idx < 1) start_idx = 1;
+        if(end_idx <= start_idx) end_idx = start_idx + 1;
+        if(end_idx > fft_bins) end_idx = fft_bins;
+        if(start_idx >= end_idx) start_idx = std::max(1, end_idx - 1);
+
+        float accum = 0.0f;
+        int count = 0;
+        for(int k = start_idx; k < end_idx; ++k)
+        {
+            accum += mags[k];
+            count++;
+        }
+        float value = (count > 0) ? (accum / (float)count) : 0.0f;
+        value = std::log10(1.0f + 9.0f * value);
+        if(value < 0.0f) value = 0.0f;
+        if(value > 1.0f) value = 1.0f;
+
+        visualizer_bins[i] = value;
+        if(visualizer_peaks[i] < value)
+        {
+            visualizer_peaks[i] = value;
+        }
+        else
+        {
+            visualizer_peaks[i] *= visualizer_peak_decay;
+            if(visualizer_peaks[i] < visualizer_floor)
+            {
+                visualizer_peaks[i] = visualizer_floor;
+            }
+        }
+    }
+
+    visualizer_min_hz = low;
+    visualizer_max_hz = high;
+}

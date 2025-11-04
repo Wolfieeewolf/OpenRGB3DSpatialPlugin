@@ -386,6 +386,18 @@ static QPixmap GrabScreen(QScreen* screen)
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 {
+    std::atomic<bool>* active_flag = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
+        if(active_it == capture_active.end())
+        {
+            LOG_WARNING("[ScreenCapture] Active flag not found for '%s'", source_id.c_str());
+            return;
+        }
+        active_flag = &(active_it->second);
+    }
+
     // Extract screen index from source_id (format: "screen_N")
     size_t underscore_pos = source_id.find('_');
     if (underscore_pos == std::string::npos)
@@ -396,34 +408,38 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
     int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
 
-    // Get the QScreen object
-    QList<QScreen*> screens = QGuiApplication::screens();
-    if (screen_index < 0 || screen_index >= screens.size())
-    {
-        LOG_WARNING("[ScreenCapture] Invalid screen index %d", screen_index);
-        return;
-    }
-
-    QScreen* screen = screens[screen_index];
-    if (!screen)
-    {
-        LOG_WARNING("[ScreenCapture] Screen %d is null", screen_index);
-        return;
-    }
-
     // Capture loop
     uint64_t frame_counter = 0;
     const int target_frame_time_ms = 1000 / target_fps.load();
+    bool logged_screen_unavailable = false;
 
-    while (capture_active[source_id].load())
+    while (active_flag->load())
     {
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
+
+        QList<QScreen*> screens = QGuiApplication::screens();
+        QScreen* screen = nullptr;
+
+        if(screen_index >= 0 && screen_index < screens.size())
+        {
+            screen = screens[screen_index];
+        }
 
         // Check if screen is still valid
         if (!screen)
         {
+            if(!logged_screen_unavailable)
+            {
+                LOG_WARNING("[ScreenCapture] Screen %d unavailable, waiting for it to return", screen_index);
+                logged_screen_unavailable = true;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
+        }
+
+        if(logged_screen_unavailable)
+        {
+            logged_screen_unavailable = false;
         }
 
         // Capture the screen using GDI BitBlt

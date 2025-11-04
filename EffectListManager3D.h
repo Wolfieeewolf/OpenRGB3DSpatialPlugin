@@ -47,6 +47,13 @@ public:
         reg.category = category;
         reg.constructor = constructor;
 
+        auto existing = effects.find(class_name);
+        if(existing != effects.end())
+        {
+            existing->second = reg;
+            return;
+        }
+
         effects[class_name] = reg;
         effect_order.push_back(class_name);
     }

@@ -13,24 +13,28 @@
 #include "EffectListManager3D.h"
 #include "LogManager.h"
 #include <QMessageBox>
+#include <QFont>
+#include <QPalette>
 
 void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
 {
 
     QWidget* stack_tab = new QWidget();
     QVBoxLayout* stack_layout = new QVBoxLayout(stack_tab);
-    stack_layout->setSpacing(8);
-    stack_layout->setContentsMargins(8, 8, 8, 8);
+    stack_layout->setSpacing(6);
+    stack_layout->setContentsMargins(4, 4, 4, 4);
 
     /*---------------------------------------------------------*\
     | Active Effects List                                      |
     \*---------------------------------------------------------*/
     QLabel* list_label = new QLabel("Active Effect Stack:");
-    list_label->setStyleSheet("font-weight: bold;");
+    QFont list_font = list_label->font();
+    list_font.setBold(true);
+    list_label->setFont(list_font);
     stack_layout->addWidget(list_label);
 
-    QLabel* hint_label = new QLabel("☑ = enabled, ☐ = disabled. Double-click to toggle.");
-    hint_label->setStyleSheet("font-size: 9pt; color: gray;");
+    QLabel* hint_label = new QLabel("Checkmark = enabled, X = disabled. Double-click to toggle.");
+    hint_label->setForegroundRole(QPalette::PlaceholderText);
     stack_layout->addWidget(hint_label);
 
     effect_stack_list = new QListWidget();
@@ -152,7 +156,10 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
     | Stack Presets Section                                    |
     \*---------------------------------------------------------*/
     QLabel* presets_label = new QLabel("Saved Stack Presets:");
-    presets_label->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    QFont presets_font = presets_label->font();
+    presets_font.setBold(true);
+    presets_label->setFont(presets_font);
+    presets_label->setContentsMargins(0, 6, 0, 0);
     stack_layout->addWidget(presets_label);
 
     stack_presets_list = new QListWidget();
@@ -537,7 +544,7 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     {
         EffectInstance3D* instance = effect_stack[i].get();
 
-        QString enabled_marker = instance->enabled ? "☑ " : "☐ ";
+        QString enabled_marker = instance->enabled ? "[ON] " : "[OFF] ";
         QString display_name   = QString::fromStdString(instance->GetDisplayName());
 
         QListWidgetItem* item = new QListWidgetItem(enabled_marker + display_name);
@@ -557,82 +564,7 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
 
 void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 {
-    if(!stack_effect_zone_combo)
-    {
-        return;
-    }
-
-    /*---------------------------------------------------------*\
-    | Save current selection (zone_index value, not combo idx)|
-    \*---------------------------------------------------------*/
-    int saved_zone_index = -1;  // Default to "All Controllers"
-    if(stack_effect_zone_combo->currentIndex() >= 0)
-    {
-        saved_zone_index = stack_effect_zone_combo->currentData().toInt();
-    }
-
-    stack_effect_zone_combo->blockSignals(true);
-    stack_effect_zone_combo->clear();
-
-    /*---------------------------------------------------------*\
-    | Add "All Controllers" option                             |
-    \*---------------------------------------------------------*/
-    stack_effect_zone_combo->addItem("All Controllers", -1);
-
-    /*---------------------------------------------------------*\
-    | Add all zones                                            |
-    \*---------------------------------------------------------*/
-    if(zone_manager)
-    {
-        for(int i = 0; i < zone_manager->GetZoneCount(); i++)
-        {
-            Zone3D* zone = zone_manager->GetZone(i);
-            if(zone)
-            {
-                QString zone_name = QString("[Zone] ") + QString::fromStdString(zone->GetName());
-                stack_effect_zone_combo->addItem(zone_name, i);
-            }
-        }
-    }
-
-    /*---------------------------------------------------------*\
-    | Add individual controllers with special negative indices |
-    | Store as -(controller_index + 1000) to distinguish       |
-    | from zones (which use 0-999)                             |
-    \*---------------------------------------------------------*/
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        ControllerTransform* transform = controller_transforms[i].get();
-        if(transform && transform->controller)
-        {
-            QString ctrl_name = QString("[Controller] ") +
-                               QString::fromStdString(transform->controller->name);
-
-            /*---------------------------------------------------------*\
-            | Store as negative: -(index + 1000)                       |
-            | This allows us to distinguish:                           |
-            | -1 = All Controllers                                     |
-            | 0-999 = Zone indices                                     |
-            | -1000 and below = Individual controller indices          |
-            \*---------------------------------------------------------*/
-            stack_effect_zone_combo->addItem(ctrl_name, -(int)(i + 1000));
-        }
-    }
-
-    /*---------------------------------------------------------*\
-    | Restore previous selection by finding matching data      |
-    \*---------------------------------------------------------*/
-    int restore_index = stack_effect_zone_combo->findData(saved_zone_index);
-    if(restore_index >= 0)
-    {
-        stack_effect_zone_combo->setCurrentIndex(restore_index);
-    }
-    else
-    {
-        stack_effect_zone_combo->setCurrentIndex(0);  // Default to "All Controllers"
-    }
-
-    stack_effect_zone_combo->blockSignals(false);
+    PopulateZoneTargetCombo(stack_effect_zone_combo, ResolveZoneTargetSelection(stack_effect_zone_combo));
 }
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)

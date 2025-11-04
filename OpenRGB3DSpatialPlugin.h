@@ -37,7 +37,12 @@ class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
     Q_INTERFACES(OpenRGBPluginInterface)
 
 public:
-    ~OpenRGB3DSpatialPlugin()
+    OpenRGB3DSpatialPlugin()
+        : ui(nullptr)
+    {
+    }
+
+    ~OpenRGB3DSpatialPlugin() override
     {
     }
 

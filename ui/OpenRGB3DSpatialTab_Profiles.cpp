@@ -10,30 +10,33 @@
 \*---------------------------------------------------------*/
 
 #include "OpenRGB3DSpatialTab.h"
+#include <QPalette>
 
 void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 {
     QWidget* profiles_tab = new QWidget();
     QVBoxLayout* profiles_layout = new QVBoxLayout(profiles_tab);
-    profiles_layout->setSpacing(10);
-    profiles_layout->setContentsMargins(10, 10, 10, 10);
+    profiles_layout->setSpacing(4);
+    profiles_layout->setContentsMargins(4, 4, 4, 4);
 
     /*---------------------------------------------------------*\
     | Layout Profiles Section                                  |
     \*---------------------------------------------------------*/
     QGroupBox* layout_group = new QGroupBox("Layout Profile");
     QVBoxLayout* layout_layout = new QVBoxLayout(layout_group);
-    layout_layout->setSpacing(8);
+    layout_layout->setSpacing(4);
+    layout_layout->setContentsMargins(2, 4, 2, 4);
 
     QLabel* layout_label = new QLabel("Save/Load controller positions, zones, and reference points:");
     layout_label->setWordWrap(true);
-    layout_label->setStyleSheet("color: gray; font-size: 9pt;");
+    layout_label->setForegroundRole(QPalette::PlaceholderText);
     layout_layout->addWidget(layout_label);
 
     /*---------------------------------------------------------*\
     | Layout Profile Dropdown                                  |
     \*---------------------------------------------------------*/
     QHBoxLayout* layout_combo_layout = new QHBoxLayout();
+    layout_combo_layout->setSpacing(4);
     layout_combo_layout->addWidget(new QLabel("Profile:"));
 
     layout_profiles_combo = new QComboBox();
@@ -48,6 +51,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     | Layout Profile Buttons                                   |
     \*---------------------------------------------------------*/
     QHBoxLayout* layout_buttons = new QHBoxLayout();
+    layout_buttons->setSpacing(6);
     layout_buttons->addStretch();
 
     QPushButton* save_layout_btn = new QPushButton("Save As...");
@@ -86,17 +90,19 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     \*---------------------------------------------------------*/
     QGroupBox* effect_group = new QGroupBox("Effect Profile");
     QVBoxLayout* effect_layout = new QVBoxLayout(effect_group);
-    effect_layout->setSpacing(8);
+    effect_layout->setSpacing(4);
+    effect_layout->setContentsMargins(2, 4, 2, 4);
 
     QLabel* effect_label = new QLabel("Save/Load single effect configurations from Effects tab:");
     effect_label->setWordWrap(true);
-    effect_label->setStyleSheet("color: gray; font-size: 9pt;");
+    effect_label->setForegroundRole(QPalette::PlaceholderText);
     effect_layout->addWidget(effect_label);
 
     /*---------------------------------------------------------*\
     | Effect Profile Dropdown                                  |
     \*---------------------------------------------------------*/
     QHBoxLayout* effect_combo_layout = new QHBoxLayout();
+    effect_combo_layout->setSpacing(4);
     effect_combo_layout->addWidget(new QLabel("Profile:"));
 
     effect_profiles_combo = new QComboBox();
@@ -111,6 +117,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     | Effect Profile Buttons                                   |
     \*---------------------------------------------------------*/
     QHBoxLayout* effect_buttons = new QHBoxLayout();
+    effect_buttons->setSpacing(6);
     effect_buttons->addStretch();
 
     QPushButton* save_effect_btn = new QPushButton("Save As...");
@@ -147,8 +154,6 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     /*---------------------------------------------------------*\
     | Spacer                                                   |
     \*---------------------------------------------------------*/
-    profiles_layout->addStretch();
-
     /*---------------------------------------------------------*\
     | Populate dropdowns                                       |
     \*---------------------------------------------------------*/

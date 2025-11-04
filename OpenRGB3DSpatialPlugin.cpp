@@ -37,10 +37,16 @@ unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
 void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
+    ui        = nullptr;
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
 {
+    if(!RMPointer)
+    {
+        return nullptr;
+    }
+
     RMPointer->WaitForDeviceDetection();
 
     ui = new OpenRGB3DSpatialTab(RMPointer);
@@ -59,10 +65,20 @@ QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 
 void OpenRGB3DSpatialPlugin::Unload()
 {
-    RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+    if(RMPointer && ui != nullptr)
+    {
+        RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+    }
+
+    ui = nullptr;
 }
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
 {
+    if(!o)
+    {
+        return;
+    }
+
     QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
 }

@@ -14,6 +14,9 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
+#include "Effects3D/AudioReactiveCommon.h"
+#include <vector>
+#include <limits>
 
 class SpectrumBars3D : public SpatialEffect3D
 {
@@ -46,17 +49,24 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
+    void RefreshBandRange();
+    void EnsureSpectrumCache(float time);
+    void UpdateSmoothedBands(const std::vector<float>& spectrum, float delta_time);
+    float ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const;
+    float ResolveHeightNormalized(const GridContext3D* grid, float x, float y, float z) const;
+    float ResolveRadialNormalized(const GridContext3D* grid, float x, float y, float z) const;
+    RGBColor ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const;
+
     /*---------------------------------------------------------*\
     | Audio-specific parameters                                |
     | (Controlled by standard Audio Controls panel)           |
     \*---------------------------------------------------------*/
-    int low_hz = 20;
-    int high_hz = 20000;
+    AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
     int band_start = 0; // inclusive (auto-calculated from low_hz)
     int band_end = -1;  // inclusive (-1 = auto to last, auto-calculated from high_hz)
-    float smoothing = 0.6f;
-    float smoothed = 0.0f;
-    float falloff = 1.0f;
+
+    std::vector<float> smoothed_bands;
+    float last_sample_time = std::numeric_limits<float>::lowest();
 };
 
 #endif // SPECTRUMBARS3D_H

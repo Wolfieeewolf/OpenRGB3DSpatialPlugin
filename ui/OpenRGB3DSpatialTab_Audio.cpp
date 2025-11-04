@@ -134,11 +134,29 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
     fx_row1->addWidget(new QLabel("Effect:"));
     audio_effect_combo = new QComboBox();
     audio_effect_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    audio_effect_combo->addItem("None");              // index 0
-    audio_effect_combo->addItem("Audio Level 3D");    // index 1
-    audio_effect_combo->addItem("Spectrum Bars 3D");  // index 2
-    audio_effect_combo->addItem("Beat Pulse 3D");     // index 3
-    audio_effect_combo->addItem("Band Scan 3D");      // index 4
+    audio_effect_combo->addItem("None");
+    audio_effect_combo->setItemData(audio_effect_combo->count() - 1, QVariant(), kEffectRoleClassName);
+
+    std::vector<EffectRegistration3D> all_effects = EffectListManager3D::get()->GetAllEffects();
+    for(const EffectRegistration3D& reg : all_effects)
+    {
+        QString category = QString::fromStdString(reg.category);
+        if(category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) != 0)
+        {
+            continue;
+        }
+
+        QString label = QString::fromStdString(reg.ui_name);
+        audio_effect_combo->addItem(label);
+        int row = audio_effect_combo->count() - 1;
+        audio_effect_combo->setItemData(row, QString::fromStdString(reg.class_name), kEffectRoleClassName);
+        audio_effect_combo->setItemData(row, QString::fromStdString(reg.category), Qt::ToolTipRole);
+    }
+
+    if(audio_effect_combo->count() <= 1)
+    {
+        audio_effect_combo->setEnabled(false);
+    }
     fx_row1->addWidget(audio_effect_combo);
     audio_fx_layout->addLayout(fx_row1);
 
@@ -284,12 +302,11 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
     if(!audio_effect_combo) return;
     int eff_idx = audio_effect_combo->currentIndex();
 
-    // Index 0 is "None", actual effects start at index 1
-    if(eff_idx <= 0 || eff_idx > 4) return;
-
-    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    int actual_idx = eff_idx - 1;  // Adjust for "None" at index 0
-    std::string class_name = class_names[actual_idx];
+    // Index 0 is "None"
+    if(eff_idx <= 0) return;
+    QString class_name_q = audio_effect_combo->itemData(eff_idx, kEffectRoleClassName).toString();
+    if(class_name_q.isEmpty()) return;
+    std::string class_name = class_name_q.toStdString();
 
     // Build a single-effect stack from current audio effect UI settings
     effect_stack.clear();
@@ -423,6 +440,7 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
 void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
 {
     if(!audio_effect_controls_widget || !audio_effect_controls_layout) return;
+    if(!audio_effect_combo) return;
     // Clear previous controls
     while(QLayoutItem* it = audio_effect_controls_layout->takeAt(0))
     {
@@ -432,7 +450,7 @@ void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
     current_audio_effect_ui = nullptr;
 
     // Handle "None" option (index 0)
-    if(eff_index == 0)
+    if(eff_index <= 0)
     {
         // Hide effect controls and audio controls panel when "None" is selected
         if(audio_effect_controls_widget) audio_effect_controls_widget->hide();
@@ -444,11 +462,14 @@ void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
     if(audio_effect_controls_widget) audio_effect_controls_widget->show();
     if(audio_std_group) audio_std_group->show();
 
-    // Adjust for "None" being index 0 (subtract 1 from effect index)
-    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    int actual_index = eff_index - 1;  // Offset for "None" at index 0
-    if(actual_index < 0 || actual_index > 3) return;
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_names[actual_index]);
+    QString class_name_q = audio_effect_combo->itemData(eff_index, kEffectRoleClassName).toString();
+    if(class_name_q.isEmpty())
+    {
+        if(audio_effect_controls_widget) audio_effect_controls_widget->hide();
+        if(audio_std_group) audio_std_group->hide();
+        return;
+    }
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name_q.toStdString());
     if(!effect) return;
     effect->setParent(audio_effect_controls_widget);
     effect->CreateCommonEffectControls(audio_effect_controls_widget);
@@ -738,12 +759,12 @@ void OpenRGB3DSpatialTab::on_audio_custom_save_clicked()
 
     int eff_idx = audio_effect_combo->currentIndex();
 
-    // Index 0 is "None", actual effects start at index 1
-    if(eff_idx <= 0 || eff_idx > 4) return;
+    // Index 0 is "None"
+    if(eff_idx <= 0) return;
 
-    const char* class_names[] = { "AudioLevel3D", "SpectrumBars3D", "BeatPulse3D", "BandScan3D" };
-    int actual_idx = eff_idx - 1;  // Adjust for "None" at index 0
-    std::string class_name = class_names[actual_idx];
+    QString class_name_q = audio_effect_combo->itemData(eff_idx, kEffectRoleClassName).toString();
+    if(class_name_q.isEmpty()) return;
+    std::string class_name = class_name_q.toStdString();
 
     // Capture settings from the currently mounted audio effect UI
     if(!current_audio_effect_ui) { SetupAudioEffectUI(eff_idx); }
@@ -787,14 +808,19 @@ void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
     {
         nlohmann::json j = nlohmann::json::parse(json.toStdString());
         std::string cls = j.value("effect_class", "");
-        // Map class name to combo index (0="None", 1="AudioLevel3D", etc.)
         int idx = 0;
-        if(cls == "AudioLevel3D") idx = 1;
-        else if(cls == "SpectrumBars3D") idx = 2;
-        else if(cls == "BeatPulse3D") idx = 3;
-        else if(cls == "BandScan3D") idx = 4;
-
-        if(audio_effect_combo) audio_effect_combo->setCurrentIndex(idx);
+        if(audio_effect_combo)
+        {
+            for(int i = 1; i < audio_effect_combo->count(); ++i)
+            {
+                if(audio_effect_combo->itemData(i, kEffectRoleClassName).toString().toStdString() == cls)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            audio_effect_combo->setCurrentIndex(idx);
+        }
         int target = j.value("target", -1);
         if(audio_effect_zone_combo)
         {

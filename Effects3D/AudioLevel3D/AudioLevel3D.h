@@ -14,6 +14,8 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
+#include "Effects3D/AudioReactiveCommon.h"
+#include <limits>
 
 class AudioLevel3D : public SpatialEffect3D
 {
@@ -50,11 +52,10 @@ private:
     | Audio-specific parameters                                |
     | (Controlled by standard Audio Controls panel)           |
     \*---------------------------------------------------------*/
-    int low_hz = 20;
-    int high_hz = 20000;
-    float smoothing = 0.6f;   // 0..0.99 per-effect smoothing
+    AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
+    float EvaluateIntensity(float amplitude, float time);
     float smoothed = 0.0f;
-    float falloff = 1.0f;     // gamma-like shaping 0.2..5.0 (1.0 neutral)
+    float last_intensity_time = std::numeric_limits<float>::lowest();
 };
 
 #endif // AUDIOLEVEL3D_H

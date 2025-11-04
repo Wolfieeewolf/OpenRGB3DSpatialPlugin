@@ -529,8 +529,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                             zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
                         }
                         tooltip_text = QString("Assigned: %1\nZone: %2")
-                                       .arg(QString::fromStdString(mapping.controller->name))
-                                       .arg(zone_name);
+                                       .arg(QString::fromStdString(mapping.controller->name), zone_name);
                     }
                     else if(mapping.granularity == 2)
                     {
@@ -546,8 +545,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                             }
                         }
                         tooltip_text = QString("Assigned: %1\nLED: %2")
-                                       .arg(QString::fromStdString(mapping.controller->name))
-                                       .arg(led_name);
+                                       .arg(QString::fromStdString(mapping.controller->name), led_name);
                     }
                     else
                     {
@@ -586,8 +584,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                         }
 
                         tooltip_text += QString("â€¢ %1%2\n")
-                                       .arg(QString::fromStdString(mapping.controller->name))
-                                       .arg(assignment_type);
+                                       .arg(QString::fromStdString(mapping.controller->name), assignment_type);
                     }
                     if(cell_mappings.size() > 5)
                     {
@@ -720,8 +717,7 @@ void CustomControllerDialog::UpdateCellInfo()
                 zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
             }
             info += QString(" - Assigned: %1, Zone: %2")
-                    .arg(QString::fromStdString(mapping.controller->name))
-                    .arg(zone_name);
+                    .arg(QString::fromStdString(mapping.controller->name), zone_name);
         }
         else if(mapping.granularity == 2)
         {
@@ -737,8 +733,7 @@ void CustomControllerDialog::UpdateCellInfo()
                 }
             }
             info += QString(" - Assigned: %1, LED: %2")
-                    .arg(QString::fromStdString(mapping.controller->name))
-                    .arg(led_name);
+                    .arg(QString::fromStdString(mapping.controller->name), led_name);
         }
         else
         {

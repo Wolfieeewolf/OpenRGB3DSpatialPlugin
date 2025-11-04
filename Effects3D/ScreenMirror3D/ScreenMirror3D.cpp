@@ -1113,7 +1113,7 @@ void ScreenMirror3D::RefreshReferencePointDropdowns()
             {
                 QString name = QString::fromStdString(ref_point->GetName());
                 QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-                QString display = QString("%1 (%2)").arg(name).arg(type);
+                QString display = QString("%1 (%2)").arg(name, type);
                 settings.ref_point_combo->addItem(display, (int)i);
             }
         }

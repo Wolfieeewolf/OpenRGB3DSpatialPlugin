@@ -12,6 +12,25 @@
 #include <algorithm>
 #include <cmath>
 
+float BeatPulse3D::EvaluateIntensity(float amplitude, float time)
+{
+    amplitude = std::clamp(amplitude, 0.0f, 1.0f);
+    float alpha = std::clamp(audio_settings.smoothing, 0.0f, 0.99f);
+    if(std::fabs(time - last_intensity_time) > 1e-4f)
+    {
+        smoothed = alpha * smoothed + (1.0f - alpha) * amplitude;
+        last_intensity_time = time;
+        float decay = 0.65f + alpha * 0.25f;
+        envelope = std::max(envelope * decay, smoothed);
+    }
+    else if(alpha <= 0.0f)
+    {
+        smoothed = amplitude;
+        envelope = amplitude;
+    }
+    return ApplyAudioIntensity(envelope, audio_settings);
+}
+
 BeatPulse3D::BeatPulse3D(QWidget* parent)
     : SpatialEffect3D(parent)
 {
@@ -62,33 +81,80 @@ void BeatPulse3D::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor BeatPulse3D::CalculateColor(float /*x*/, float /*y*/, float /*z*/, float /*time*/)
+RGBColor BeatPulse3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Use band-filtered energy to drive pulse
-    float drive = AudioInputManager::instance()->getBandEnergyHz((float)low_hz, (float)high_hz);
-    // Attack fast, decay controlled by smoothing (0..0.99)
-    float decay = 0.5f + std::clamp(smoothing, 0.0f, 0.99f) * 0.49f; // 0.5..0.99
-    envelope = std::max(envelope * decay, drive);
-    float bright = GetBrightness() / 100.0f;
-    float scaled = std::clamp(envelope * bright, 0.0f, 1.0f);
-    float factor = std::pow(scaled, std::max(0.2f, std::min(5.0f, falloff)));
+    AudioInputManager* audio = AudioInputManager::instance();
+    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float intensity = EvaluateIntensity(amplitude, time);
 
-    RGBColor baseColor = GetColorAtPosition(0.0f);
-    int r = (int)((baseColor & 0xFF) * factor);
-    int g = (int)(((baseColor >> 8) & 0xFF) * factor);
-    int b = (int)(((baseColor >> 16) & 0xFF) * factor);
-    if(r>255) r=255; if(g>255) g=255; if(b>255) b=255;
-    return (b << 16) | (g << 8) | r;
+    float phase = CalculateProgress(time);
+    float wave_front = std::fmod(phase, 1.0f);
+    if(wave_front < 0.0f)
+    {
+        wave_front += 1.0f;
+    }
+    if(GetReverse())
+    {
+        wave_front = 1.0f - wave_front;
+    }
+
+    float radial_norm = std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);
+    float height_norm = std::clamp(0.5f + y, 0.0f, 1.0f);
+    float distance = std::fabs(radial_norm - wave_front);
+    float pulse = std::exp(-distance * distance * 36.0f);
+    float tail = std::exp(-std::max(distance - 0.2f, 0.0f) * 6.0f);
+
+    float energy = std::clamp(intensity * (0.55f + 0.45f * (1.0f - height_norm)) * (0.7f * pulse + 0.3f * tail), 0.0f, 1.0f);
+
+    float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
+    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
+    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
+    color = ScaleRGBColor(color, brightness * (0.25f + 0.75f * energy));
+
+    RGBColor user_color = GetRainbowMode()
+        ? GetRainbowColor(wave_front * 360.0f)
+        : GetColorAtPosition(0.0f);
+    return ModulateRGBColors(color, user_color);
 }
 
 RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    /*---------------------------------------------------------*\
-    | Audio effects are typically global (not spatially aware) |
-    | Simply delegate to CalculateColor                        |
-    \*---------------------------------------------------------*/
-    (void)grid;  // Unused parameter
-    return CalculateColor(x, y, z, time);
+    AudioInputManager* audio = AudioInputManager::instance();
+    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float intensity = EvaluateIntensity(amplitude, time);
+
+    float phase = CalculateProgress(time);
+    float wave_front = std::fmod(phase, 1.0f);
+    if(wave_front < 0.0f)
+    {
+        wave_front += 1.0f;
+    }
+    if(GetReverse())
+    {
+        wave_front = 1.0f - wave_front;
+    }
+
+    float dx = x - grid.center_x;
+    float dy = y - grid.center_y;
+    float dz = z - grid.center_z;
+    float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
+    float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
+    float height_norm = NormalizeRange(y, grid.min_y, grid.max_y);
+    float distance = std::fabs(radial_norm - wave_front);
+    float pulse = std::exp(-distance * distance * 36.0f);
+    float tail = std::exp(-std::max(distance - 0.2f, 0.0f) * 6.0f);
+
+    float energy = std::clamp(intensity * (0.55f + 0.45f * (1.0f - height_norm)) * (0.7f * pulse + 0.3f * tail), 0.0f, 1.0f);
+
+    float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
+    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
+    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
+    color = ScaleRGBColor(color, brightness * (0.25f + 0.75f * energy));
+
+    RGBColor user_color = GetRainbowMode()
+        ? GetRainbowColor(wave_front * 360.0f)
+        : GetColorAtPosition(0.0f);
+    return ModulateRGBColors(color, user_color);
 }
 
 REGISTER_EFFECT_3D(BeatPulse3D)
@@ -96,30 +162,15 @@ REGISTER_EFFECT_3D(BeatPulse3D)
 nlohmann::json BeatPulse3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["low_hz"] = low_hz;
-    j["high_hz"] = high_hz;
-    j["smoothing"] = smoothing;
-    j["falloff"] = falloff;
+    AudioReactiveSaveToJson(j, audio_settings);
     return j;
 }
 
 void BeatPulse3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("low_hz"))
-    {
-        low_hz = settings["low_hz"].get<int>();
-    }
-    if(settings.contains("high_hz"))
-    {
-        high_hz = settings["high_hz"].get<int>();
-    }
-    if(settings.contains("smoothing"))
-    {
-        smoothing = std::clamp(settings["smoothing"].get<float>(), 0.0f, 0.99f);
-    }
-    if(settings.contains("falloff"))
-    {
-        falloff = std::max(0.2f, std::min(5.0f, settings["falloff"].get<float>()));
-    }
+    AudioReactiveLoadFromJson(audio_settings, settings);
+    envelope = 0.0f;
+    smoothed = 0.0f;
+    last_intensity_time = std::numeric_limits<float>::lowest();
 }

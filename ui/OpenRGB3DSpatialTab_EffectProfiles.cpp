@@ -17,6 +17,8 @@
 #include <QFile>
 #include <QTextStream>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 
 std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile_name)
 {
@@ -41,6 +43,13 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
         return;
     }
 
+    int current_index = effect_combo->currentIndex();
+    if(effect_combo->itemData(current_index, kEffectRoleIsStack).toBool())
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot save effect profile for stack presets");
+        return;
+    }
+
     if(!current_effect_ui)
     {
         return;
@@ -50,16 +59,22 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     profile_json["version"] = 1;
 
     /*---------------------------------------------------------*\
-    | Save effect type (combo index - 1 to skip "None")       |
+    | Save effect identity                                     |
     \*---------------------------------------------------------*/
-    profile_json["effect_type"] = effect_combo->currentIndex() - 1;
+    QString class_name = effect_combo->itemData(current_index, kEffectRoleClassName).toString();
+    if(!class_name.isEmpty())
+    {
+        profile_json["effect_class"] = class_name.toStdString();
+    }
+    profile_json["effect_type"] = current_index > 0 ? current_index - 1 : -1; // legacy compatibility
 
     /*---------------------------------------------------------*\
     | Save selected zone                                       |
     \*---------------------------------------------------------*/
     if(effect_zone_combo)
     {
-        profile_json["zone_index"] = effect_zone_combo->currentIndex();
+        profile_json["zone_target"] = ResolveZoneTargetSelection(effect_zone_combo);
+        profile_json["zone_index"] = effect_zone_combo->currentIndex(); // Legacy compatibility
     }
 
     /*---------------------------------------------------------*\
@@ -86,7 +101,7 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
 #ifdef _WIN32
     
 #endif
-    audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 10);
+    audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 20);
     audio_json["bands_count"] = (audio_bands_combo ? audio_bands_combo->currentText().toInt() : 16);
     // Crossovers removed from UI; omit from saved profile to avoid confusion
     profile_json["audio_settings"] = audio_json;
@@ -98,8 +113,7 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QString error_msg = QString("Failed to save effect profile:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Save Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to save effect profile: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -119,8 +133,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         QString error_msg = QString("Failed to load effect profile:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Load Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load effect profile: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -137,31 +150,99 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
         /*---------------------------------------------------------*\
         | Validate profile has required fields                     |
         \*---------------------------------------------------------*/
-        if(!profile_json.contains("effect_type"))
+        if(!profile_json.contains("effect_class") && !profile_json.contains("effect_type"))
         {
-            QMessageBox::critical(this, "Invalid Profile", "Effect profile is missing effect type");
+            QMessageBox::critical(this, "Invalid Profile", "Effect profile is missing effect identifier");
             return;
         }
 
-        int effect_type = profile_json["effect_type"].get<int>();
+        QString class_name;
+        if(profile_json.contains("effect_class"))
+        {
+            class_name = QString::fromStdString(profile_json["effect_class"].get<std::string>());
+        }
+        int effect_type = profile_json.contains("effect_type") ? profile_json["effect_type"].get<int>() : -1;
 
         /*---------------------------------------------------------*\
-        | Set effect type in combo (add 1 to skip "None")         |
+        | Set effect type in combo                                |
         \*---------------------------------------------------------*/
         if(effect_combo)
         {
-            effect_combo->setCurrentIndex(effect_type + 1);
+            int target_index = -1;
+            if(!class_name.isEmpty())
+            {
+                for(int i = 1; i < effect_combo->count(); ++i) // skip "None"
+                {
+                    if(effect_combo->itemData(i, kEffectRoleIsStack).toBool())
+                    {
+                        continue;
+                    }
+                    if(effect_combo->itemData(i, kEffectRoleClassName).toString() == class_name)
+                    {
+                        target_index = i;
+                        break;
+                    }
+                }
+            }
+            if(target_index < 0 && effect_type >= 0)
+            {
+                int legacy_index = effect_type + 1;
+                if(legacy_index >= 0 && legacy_index < effect_combo->count())
+                {
+                    target_index = legacy_index;
+                }
+            }
+
+            if(target_index >= 0)
+            {
+                effect_combo->setCurrentIndex(target_index);
+            }
+            else
+            {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect profile references unknown effect '%s'; aborting load",
+                            class_name.isEmpty() ? "<legacy index>" : class_name.toStdString().c_str());
+                return;
+            }
         }
 
         /*---------------------------------------------------------*\
         | Restore zone selection                                   |
         \*---------------------------------------------------------*/
-        if(profile_json.contains("zone_index") && effect_zone_combo)
+        if(effect_zone_combo)
         {
-            int zone_idx = profile_json["zone_index"].get<int>();
-            if(zone_idx < effect_zone_combo->count())
+            int zone_value = -1;
+            if(profile_json.contains("zone_target"))
             {
-                effect_zone_combo->setCurrentIndex(zone_idx);
+                zone_value = profile_json["zone_target"].get<int>();
+            }
+            else if(profile_json.contains("zone_index"))
+            {
+                zone_value = DecodeLegacyZoneIndex(profile_json["zone_index"].get<int>());
+            }
+
+            if(profile_json.contains("zone_target") || profile_json.contains("zone_index"))
+            {
+                int zone_combo_index = effect_zone_combo->findData(zone_value);
+                if(zone_combo_index >= 0)
+                {
+                    effect_zone_combo->setCurrentIndex(zone_combo_index);
+                }
+                else if(profile_json.contains("zone_index"))
+                {
+                    int legacy_index = profile_json["zone_index"].get<int>();
+                    if(legacy_index >= 0 && legacy_index < effect_zone_combo->count())
+                    {
+                        effect_zone_combo->setCurrentIndex(legacy_index);
+                    }
+                    else
+                    {
+                        effect_zone_combo->setCurrentIndex(0);
+                    }
+                }
+                else
+                {
+                    effect_zone_combo->setCurrentIndex(0);
+                }
             }
         }
 
@@ -200,8 +281,10 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             }
             if(a.contains("gain_slider") && audio_gain_slider)
             {
-                int gv = a["gain_slider"].get<int>();
+                int gv = std::max(1, std::min(400, a["gain_slider"].get<int>()));
+                audio_gain_slider->blockSignals(true);
                 audio_gain_slider->setValue(gv);
+                audio_gain_slider->blockSignals(false);
                 on_audio_gain_changed(gv);
             }
             // input smoothing removed (now per-effect)
@@ -223,8 +306,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     catch(const std::exception& e)
     {
         QString error_msg = QString("Failed to parse effect profile:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(QString::fromStdString(e.what()));
+            .arg(QString::fromStdString(filename), QString::fromStdString(e.what()));
         QMessageBox::critical(this, "Parse Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to parse effect profile: %s - %s",
                   filename.c_str(), e.what());

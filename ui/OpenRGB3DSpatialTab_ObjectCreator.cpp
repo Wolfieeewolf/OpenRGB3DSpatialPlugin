@@ -25,6 +25,9 @@
 #include <QSignalBlocker>
 #include <QStringList>
 #include <QTextStream>
+#include <QApplication>
+#include <QPalette>
+#include <QFont>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -67,8 +70,13 @@ void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is
     }
 
     object_creator_status_label->setVisible(true);
-    QString color = is_error ? "#c0392b" : "#2d9cdb";
-    object_creator_status_label->setStyleSheet(QString("color: %1; font-size: 11px;").arg(color));
+    QPalette pal = object_creator_status_label->palette();
+    QPalette app_palette = QApplication::palette(object_creator_status_label);
+    pal.setColor(QPalette::WindowText, app_palette.color(is_error ? QPalette::BrightText : QPalette::Link));
+    object_creator_status_label->setPalette(pal);
+    QFont status_font = object_creator_status_label->font();
+    status_font.setBold(is_error);
+    object_creator_status_label->setFont(status_font);
     object_creator_status_label->setText(message);
 }
 
@@ -479,13 +487,14 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     \*---------------------------------------------------------*/
     if(effect_combo && effect_combo->currentIndex() > 0)
     {
-        QVariant data = effect_combo->itemData(effect_combo->currentIndex());
-        if(data.isValid() && data.toInt() < 0)
+        int combo_index = effect_combo->currentIndex();
+        bool is_stack = effect_combo->itemData(combo_index, kEffectRoleIsStack).toBool();
+        if(is_stack)
         {
             /*---------------------------------------------------------*\
             | This is a stack preset - load it and start rendering     |
             \*---------------------------------------------------------*/
-            int preset_index = -(data.toInt() + 1);
+            int preset_index = effect_combo->itemData(combo_index, kEffectRoleStackIdx).toInt();
             if(preset_index >= 0 && preset_index < (int)stack_presets.size())
             {
                 StackPreset3D* preset = stack_presets[preset_index].get();
@@ -963,82 +972,37 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     \*---------------------------------------------------------*/
     std::vector<int> allowed_controllers;
 
-    if(!effect_zone_combo || !zone_manager)
+    int zone_target = ResolveZoneTargetSelection(effect_zone_combo);
+
+    if(zone_target == -1)
     {
-        // Safety: If UI not ready, allow all controllers
         for(unsigned int i = 0; i < controller_transforms.size(); i++)
         {
             allowed_controllers.push_back(i);
         }
     }
-    else
+    else if(zone_target <= -1000)
     {
-        int combo_idx = effect_zone_combo->currentIndex();
-        int zone_count = zone_manager ? zone_manager->GetZoneCount() : 0;
+        int ctrl_idx = -(zone_target + 1000);
+        if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
+        {
+            allowed_controllers.push_back(ctrl_idx);
+        }
+    }
+    else if(zone_manager)
+    {
+        Zone3D* zone = zone_manager->GetZone(zone_target);
+        if(zone)
+        {
+            allowed_controllers = zone->GetControllers();
+        }
+    }
 
-        /*---------------------------------------------------------*\
-        | Safety: If index is invalid, default to all controllers |
-        \*---------------------------------------------------------*/
-        if(combo_idx < 0 || combo_idx >= effect_zone_combo->count())
+    if(allowed_controllers.empty())
+    {
+        for(unsigned int i = 0; i < controller_transforms.size(); i++)
         {
-            for(unsigned int i = 0; i < controller_transforms.size(); i++)
-            {
-                allowed_controllers.push_back(i);
-            }
-        }
-        else if(combo_idx == 0)
-        {
-            /*---------------------------------------------------------*\
-            | "All Controllers" selected - allow all                   |
-            \*---------------------------------------------------------*/
-            for(unsigned int i = 0; i < controller_transforms.size(); i++)
-            {
-                allowed_controllers.push_back(i);
-            }
-        }
-        else if(zone_count > 0 && combo_idx >= 1 && combo_idx <= zone_count)
-        {
-            /*---------------------------------------------------------*\
-            | Zone selected - get controllers from zone manager       |
-            | Zone indices: combo index 1 = zone 0, etc.              |
-            \*---------------------------------------------------------*/
-            Zone3D* zone = zone_manager->GetZone(combo_idx - 1);
-            if(zone)
-            {
-                allowed_controllers = zone->GetControllers();
-            }
-            else
-            {
-                /*---------------------------------------------------------*\
-                | Zone not found - allow all as fallback                  |
-                \*---------------------------------------------------------*/
-                for(unsigned int i = 0; i < controller_transforms.size(); i++)
-                {
-                    allowed_controllers.push_back(i);
-                }
-            }
-        }
-        else
-        {
-            /*---------------------------------------------------------*\
-            | Individual controller selected                           |
-            | Combo index = zone_count + 1 + controller_index          |
-            \*---------------------------------------------------------*/
-            int ctrl_idx = combo_idx - zone_count - 1;
-            if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
-            {
-                allowed_controllers.push_back(ctrl_idx);
-            }
-            else
-            {
-                /*---------------------------------------------------------*\
-                | Invalid controller index - allow all as fallback        |
-                \*---------------------------------------------------------*/
-                for(unsigned int i = 0; i < controller_transforms.size(); i++)
-                {
-                    allowed_controllers.push_back(i);
-                }
-            }
+            allowed_controllers.push_back(i);
         }
     }
 
@@ -1197,51 +1161,6 @@ color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
 void OpenRGB3DSpatialTab::on_granularity_changed(int)
 {
     UpdateAvailableItemCombo();
-}
-
-void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
-{
-    if(!led_spacing_x_spin || !led_spacing_y_spin || !led_spacing_z_spin)
-    {
-        return;
-    }
-
-    // Block signals to prevent triggering changes while updating
-    led_spacing_x_spin->blockSignals(true);
-    led_spacing_y_spin->blockSignals(true);
-    led_spacing_z_spin->blockSignals(true);
-
-    switch(index)
-    {
-        case 1: // Dense Strip (10mm)
-            led_spacing_x_spin->setValue(10.0);
-            led_spacing_y_spin->setValue(0.0);
-            led_spacing_z_spin->setValue(0.0);
-            break;
-        case 2: // Keyboard (19mm)
-            led_spacing_x_spin->setValue(19.0);
-            led_spacing_y_spin->setValue(0.0);
-            led_spacing_z_spin->setValue(19.0);
-            break;
-        case 3: // Sparse Strip (33mm)
-            led_spacing_x_spin->setValue(33.0);
-            led_spacing_y_spin->setValue(0.0);
-            led_spacing_z_spin->setValue(0.0);
-            break;
-        case 4: // LED Cube (50mm)
-            led_spacing_x_spin->setValue(50.0);
-            led_spacing_y_spin->setValue(50.0);
-            led_spacing_z_spin->setValue(50.0);
-            break;
-        case 0: // Custom
-        default:
-            // Do nothing - user controls manually
-            break;
-    }
-
-    led_spacing_x_spin->blockSignals(false);
-    led_spacing_y_spin->blockSignals(false);
-    led_spacing_z_spin->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
@@ -1879,7 +1798,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
         file.close();
         QMessageBox::information(this, "Export Successful",
                                 QString("Custom controller '%1' exported successfully to:\n%2")
-                                .arg(QString::fromStdString(ctrl->GetName())).arg(filename));
+                                .arg(QString::fromStdString(ctrl->GetName()), filename));
     }
     else
     {
@@ -2233,8 +2152,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QString error_msg = QString("Failed to save layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Save Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for writing: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -2248,8 +2166,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     if(file.error() != QFile::NoError)
     {
         QString error_msg = QString("Failed to write layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Write Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write file: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -2801,8 +2718,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         QString error_msg = QString("Failed to open layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Load Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for reading: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -2815,8 +2731,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
     if(file.error() != QFile::NoError)
     {
         QString error_msg = QString("Failed to read layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename))
-            .arg(file.errorString());
+            .arg(QString::fromStdString(filename), file.errorString());
         QMessageBox::critical(this, "Read Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to read file: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
@@ -2835,8 +2750,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to parse JSON: %s", e.what());
         QMessageBox::critical(this, "Invalid Layout File",
                             QString("Failed to parse layout file:\n%1\n\nThe file may be corrupted or in an invalid format.\n\nError: %2")
-                            .arg(QString::fromStdString(filename))
-                            .arg(e.what()));
+                            .arg(QString::fromStdString(filename), e.what()));
         return;
     }
 }
@@ -3606,7 +3520,7 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         QListWidgetItem* item = new QListWidgetItem(label, display_planes_list);
         if(!plane->IsVisible())
         {
-            item->setForeground(QColor("#888888"));
+            item->setForeground(QColor(0x888888));
         }
     }
     display_planes_list->blockSignals(false);
@@ -3885,7 +3799,7 @@ void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
         QString current_name = display_plane_name_edit->text().trimmed();
         if(current_name.isEmpty())
         {
-            QString suggested = QString("%1 %2").arg(it->brand).arg(it->model);
+            QString suggested = QString("%1 %2").arg(it->brand, it->model);
             {
                 QSignalBlocker name_block(display_plane_name_edit);
                 display_plane_name_edit->setText(suggested);
@@ -3899,8 +3813,7 @@ void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
     UpdateAvailableControllersList();
 
     SetObjectCreatorStatus(QString("Preset applied: %1 %2 (%3 x %4 mm)")
-                               .arg(it->brand)
-                               .arg(it->model)
+                               .arg(it->brand, it->model)
                                .arg(it->width_mm, 0, 'f', 0)
                                .arg(it->height_mm, 0, 'f', 0));
 }
@@ -4160,3 +4073,58 @@ void OpenRGB3DSpatialTab::on_display_plane_visible_toggled(Qt::CheckState state)
     emit GridLayoutChanged();
 }
 
+void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
+{
+    if(!led_spacing_x_spin || !led_spacing_y_spin || !led_spacing_z_spin)
+    {
+        return;
+    }
+
+    struct Preset
+    {
+        double x;
+        double y;
+        double z;
+    };
+
+    // Presets: 0 = custom (no change)
+    static const Preset presets[] = {
+        {0.0, 0.0, 0.0},      // Custom / unchanged
+        {10.0, 0.0, 0.0},     // Dense strip
+        {19.0, 0.0, 0.0},     // Keyboard
+        {33.0, 0.0, 0.0},     // Sparse strip
+        {50.0, 50.0, 50.0}    // LED cube
+    };
+
+    if(index <= 0 || index >= static_cast<int>(sizeof(presets) / sizeof(Preset)))
+    {
+        return; // Custom or unknown index – leave values as-is
+    }
+
+    const Preset& preset = presets[index];
+
+    auto set_spin_value = [](QDoubleSpinBox* spin, double value)
+    {
+        if(!spin)
+        {
+            return;
+        }
+        bool blocked = spin->blockSignals(true);
+        spin->setValue(value);
+        spin->blockSignals(blocked);
+    };
+
+    set_spin_value(led_spacing_x_spin, preset.x);
+    set_spin_value(led_spacing_y_spin, preset.y);
+    set_spin_value(led_spacing_z_spin, preset.z);
+
+    // Mirror presets to edit controls so the currently selected controller can adopt them quickly.
+    set_spin_value(edit_led_spacing_x_spin, preset.x);
+    set_spin_value(edit_led_spacing_y_spin, preset.y);
+    set_spin_value(edit_led_spacing_z_spin, preset.z);
+
+    if(apply_spacing_button && controller_list)
+    {
+        apply_spacing_button->setEnabled(controller_list->currentRow() >= 0);
+    }
+}

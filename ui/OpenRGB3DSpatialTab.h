@@ -165,6 +165,10 @@ private slots:
     void UpdateDeviceList();
 
 private:
+    static constexpr int kEffectRoleClassName = Qt::UserRole;
+    static constexpr int kEffectRoleIsStack   = Qt::UserRole + 1;
+    static constexpr int kEffectRoleStackIdx  = Qt::UserRole + 2;
+
     void SetupUI();
     void LoadDevices();
     void SaveLayout(const std::string& filename);
@@ -185,13 +189,16 @@ private:
     void LoadReferencePoints();
     void UpdateZonesList();
     void UpdateEffectZoneCombo();
+    void PopulateZoneTargetCombo(QComboBox* combo, int saved_value);
+    int ResolveZoneTargetSelection(const QComboBox* combo) const;
+    int DecodeLegacyZoneIndex(int combo_index) const;
     void UpdateEffectCombo();
     void SaveZones();
     void LoadZones();
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
-    void SetupCustomEffectUI(int effect_type);
+    void SetupCustomEffectUI(const QString& class_name);
     void SetupStackPresetUI();
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);

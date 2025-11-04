@@ -17,6 +17,7 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QVariant>
 
 /*---------------------------------------------------------*\
 | Zone Management                                          |
@@ -273,76 +274,115 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
     UpdateAudioEffectZoneCombo();
 }
 
-void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
+void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_value)
 {
-    if(!effect_zone_combo)
+    if(!combo)
     {
         return;
     }
 
-    if(!zone_manager)
+    combo->blockSignals(true);
+    combo->clear();
+
+    combo->addItem("All Controllers", QVariant(-1));
+
+    if(zone_manager)
     {
-        return;
-    }
-
-    /*---------------------------------------------------------*\
-    | Save current selection to restore after rebuild         |
-    \*---------------------------------------------------------*/
-    int saved_index = effect_zone_combo->currentIndex();
-    if(saved_index < 0)
-    {
-        saved_index = 0;  // Default to "All Controllers"
-    }
-
-    effect_zone_combo->blockSignals(true);
-    effect_zone_combo->clear();
-
-    /*---------------------------------------------------------*\
-    | Add "All Controllers" option                             |
-    \*---------------------------------------------------------*/
-    effect_zone_combo->addItem("All Controllers");
-
-    /*---------------------------------------------------------*\
-    | Add all zones with [Zone] prefix                         |
-    \*---------------------------------------------------------*/
-    for(int i = 0; i < zone_manager->GetZoneCount(); i++)
-    {
-        Zone3D* zone = zone_manager->GetZone(i);
-        if(zone)
+        for(int i = 0; i < zone_manager->GetZoneCount(); i++)
         {
-            QString zone_name = QString("[Zone] ") + QString::fromStdString(zone->GetName());
-            effect_zone_combo->addItem(zone_name);
+            Zone3D* zone = zone_manager->GetZone(i);
+            if(zone)
+            {
+                QString zone_name = QString("[Zone] ") + QString::fromStdString(zone->GetName());
+                combo->addItem(zone_name, QVariant(i));
+            }
         }
     }
 
-    /*---------------------------------------------------------*\
-    | Add individual controllers with [Controller] prefix      |
-    \*---------------------------------------------------------*/
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* transform = controller_transforms[i].get();
-        if(transform && transform->controller)
+        QString base_name;
+        QString prefix = "[Controller] ";
+
+        if(transform)
         {
-            QString ctrl_name = QString("[Controller] ") +
-                               QString::fromStdString(transform->controller->name);
-            effect_zone_combo->addItem(ctrl_name);
+            if(transform->controller)
+            {
+                base_name = QString::fromStdString(transform->controller->name);
+            }
+            if(transform->virtual_controller && base_name.isEmpty())
+            {
+                prefix = "[Virtual] ";
+                base_name = QString::fromStdString(transform->virtual_controller->GetName());
+            }
         }
+
+        if(base_name.isEmpty())
+        {
+            base_name = QString("Controller %1").arg((int)i);
+        }
+
+        combo->addItem(prefix + base_name, QVariant(-(int)(i + 1000)));
     }
 
-    /*---------------------------------------------------------*\
-    | Restore previous selection (or default to 0 if invalid) |
-    \*---------------------------------------------------------*/
-    if(saved_index < effect_zone_combo->count())
+    int restore_index = combo->findData(saved_value);
+    if(restore_index < 0)
     {
-        effect_zone_combo->setCurrentIndex(saved_index);
-    }
-    else
-    {
-        effect_zone_combo->setCurrentIndex(0);  // Default to "All Controllers"
+        restore_index = combo->findData(-1);
     }
 
-    effect_zone_combo->blockSignals(false);
-    
+    if(restore_index < 0)
+    {
+        restore_index = 0;
+    }
+
+    combo->setCurrentIndex(restore_index);
+    combo->blockSignals(false);
+}
+
+int OpenRGB3DSpatialTab::ResolveZoneTargetSelection(const QComboBox* combo) const
+{
+    if(!combo)
+    {
+        return -1;
+    }
+
+    QVariant data = combo->currentData();
+    if(data.isValid())
+    {
+        return data.toInt();
+    }
+
+    return DecodeLegacyZoneIndex(combo->currentIndex());
+}
+
+int OpenRGB3DSpatialTab::DecodeLegacyZoneIndex(int combo_index) const
+{
+    if(combo_index <= 0)
+    {
+        return -1;
+    }
+
+    int zone_count = zone_manager ? zone_manager->GetZoneCount() : 0;
+
+    if(combo_index <= zone_count)
+    {
+        return combo_index - 1;
+    }
+
+    int controller_index = combo_index - zone_count - 1;
+    if(controller_index >= 0 && controller_index < (int)controller_transforms.size())
+    {
+        return -(controller_index + 1000);
+    }
+
+    return -1;
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
+{
+    PopulateZoneTargetCombo(effect_zone_combo, ResolveZoneTargetSelection(effect_zone_combo));
 }
 
 void OpenRGB3DSpatialTab::SaveZones()

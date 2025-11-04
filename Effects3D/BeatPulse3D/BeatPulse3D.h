@@ -14,6 +14,8 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
+#include "Effects3D/AudioReactiveCommon.h"
+#include <limits>
 
 class BeatPulse3D : public SpatialEffect3D
 {
@@ -50,11 +52,11 @@ private:
     | Audio-specific parameters                                |
     | (Controlled by standard Audio Controls panel)           |
     \*---------------------------------------------------------*/
-    float envelope = 0.0f; // decay envelope
-    int low_hz = 20;
-    int high_hz = 200;
-    float smoothing = 0.6f; // controls decay rate
-    float falloff = 1.0f;
+    AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
+    float EvaluateIntensity(float amplitude, float time);
+    float envelope = 0.0f;
+    float smoothed = 0.0f;
+    float last_intensity_time = std::numeric_limits<float>::lowest();
 };
 
 #endif // BEATPULSE3D_H

@@ -17,6 +17,7 @@
 #include <QObject>
 #include <QByteArray>
 #include <QMutex>
+#include <QMutexLocker>
 #include <QTimer>
 #include <QString>
 #include <QStringList>
@@ -48,7 +49,7 @@ public:
     CaptureSource captureSource() const { return CaptureSource::InputDevice; }
 
     // Processing params
-    void setGain(float g);          // 0.1 .. 10.0
+    void setGain(float g);          // 0.05 .. 40.0
     void setSmoothing(float s);     // 0.0 .. 0.99 (EMA)
     void setBandsCount(int bands);  // 8, 16, 32
     void setCrossovers(float bass_upper_hz, float mid_upper_hz);
@@ -62,6 +63,11 @@ public:
 
     // Output
     float level() const { return current_level.load(); } // 0..1
+
+    // Automatic level normalization
+    void setAutoLevelEnabled(bool enabled);
+    bool isAutoLevelEnabled() const { return auto_level_enabled; }
+    void resetAutoLevel();
 
     // Feed external PCM16 samples (for WASAPI loopback)
     void FeedPCM16(const int16_t* samples, int count);
@@ -90,11 +96,22 @@ public:
     }
     std::vector<float> getChannelLevels() const {
 #ifdef _WIN32
+        QMutexLocker lock(&mutex);
         return channel_levels;
 #else
         return {};
 #endif
     }
+
+    struct SpectrumSnapshot
+    {
+        std::vector<float> bins;   // Current magnitude 0..1
+        std::vector<float> peaks;  // Peak hold 0..1
+        float min_frequency_hz = 0.0f;
+        float max_frequency_hz = 0.0f;
+    };
+
+    SpectrumSnapshot getSpectrumSnapshot(int target_bins = 256) const;
 
 signals:
     void LevelUpdated(float level);
@@ -106,6 +123,8 @@ private:
     explicit AudioInputManager(QObject* parent = nullptr);
 
     void processBuffer(const char* data, int bytes);
+    void updateChannelLevels(const std::vector<float>& levels);
+    void updateVisualizerBuckets(const std::vector<float>& mags, float min_hz, float max_hz);
 
 private:
     mutable QMutex mutex;
@@ -114,6 +133,15 @@ private:
     std::atomic<float> current_level{0.0f};
     float ema_smoothing = 0.8f;
     float gain = 1.0f;
+    bool auto_level_enabled = true;
+    float auto_level_peak = 0.0025f;
+    float auto_level_floor = 0.0006f;
+    float auto_level_min_peak = 0.0006f;
+    float auto_level_min_range = 0.01f;
+    float auto_level_peak_decay = 0.995f;
+    float auto_level_floor_decay = 0.9995f;
+    float auto_level_floor_rise = 0.05f;
+
     bool running = false;
 
     QTimer level_timer; // emits LevelUpdated at UI rate
@@ -133,6 +161,13 @@ private:
     int bands_count = 16;
     float xover_bass_upper = 200.0f;    // Hz
     float xover_mid_upper  = 2000.0f;   // Hz
+
+    std::vector<float> visualizer_bins;
+    std::vector<float> visualizer_peaks;
+    float visualizer_min_hz = 0.0f;
+    float visualizer_max_hz = 0.0f;
+    float visualizer_peak_decay = 0.92f;
+    float visualizer_floor = 1e-4f;
 
     void ensureWindow();
     void computeSpectrum();
