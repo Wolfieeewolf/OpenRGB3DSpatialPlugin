@@ -482,292 +482,110 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
 
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
-    /*---------------------------------------------------------*\
-    | Check if a stack preset is selected                      |
-    \*---------------------------------------------------------*/
-    if(effect_combo && effect_combo->currentIndex() > 0)
-    {
-        int combo_index = effect_combo->currentIndex();
-        bool is_stack = effect_combo->itemData(combo_index, kEffectRoleIsStack).toBool();
-        if(is_stack)
-        {
-            /*---------------------------------------------------------*\
-            | This is a stack preset - load it and start rendering     |
-            \*---------------------------------------------------------*/
-            int preset_index = effect_combo->itemData(combo_index, kEffectRoleStackIdx).toInt();
-            if(preset_index >= 0 && preset_index < (int)stack_presets.size())
-            {
-                StackPreset3D* preset = stack_presets[preset_index].get();
-
-                /*---------------------------------------------------------*\
-                | Clear current stack                                      |
-                \*---------------------------------------------------------*/
-                effect_stack.clear();
-
-                /*---------------------------------------------------------*\
-                | Load preset effects (deep copy)                          |
-                \*---------------------------------------------------------*/
-                
-
-                for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
-                {
-                    nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
-                    std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
-                    if(copied_instance)
-                    {
-                        // Connect ScreenMirror3D screen preview signal to viewport
-                        if (copied_instance->effect_class_name == "ScreenMirror3D" && copied_instance->effect)
-                        {
-                            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(copied_instance->effect.get());
-                            if (screen_mirror && viewport)
-                            {
-                                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
-                                        viewport, &LEDViewport3D::SetShowScreenPreview);
-                                screen_mirror->SetReferencePoints(&reference_points);
-                            }
-                        }
-
-                        effect_stack.push_back(std::move(copied_instance));
-                    }
-                    else
-                    {
-                    }
-                }
-
-                /*---------------------------------------------------------*\
-                | Update Effect Stack tab UI (if visible)                  |
-                \*---------------------------------------------------------*/
-                UpdateEffectStackList();
-                if(!effect_stack.empty())
-                {
-                    effect_stack_list->setCurrentRow(0);
-                }
-
-                /*---------------------------------------------------------*\
-                | Put all controllers in direct control mode               |
-                \*---------------------------------------------------------*/
-                bool has_valid_controller = false;
-                for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-                {
-                    ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-                    if(!transform)
-                    {
-                        continue;
-                    }
-
-                    // Handle virtual controllers - they map to physical controllers
-                    if(transform->virtual_controller)
-                    {
-                        VirtualController3D* virtual_ctrl = transform->virtual_controller;
-                        const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-
-                        // Set all physical controllers mapped to this virtual controller to direct mode
-                        std::set<RGBController*> controllers_to_set;
-                        for(unsigned int i = 0; i < mappings.size(); i++)
-                        {
-                            if(mappings[i].controller)
-                            {
-                                controllers_to_set.insert(mappings[i].controller);
-                            }
-                        }
-
-                        for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
-                        {
-                            (*it)->SetCustomMode();
-                            has_valid_controller = true;
-                        }
-                        continue;
-                    }
-
-                    // Handle regular controllers
-                    RGBController* controller = transform->controller;
-                    if(!controller)
-                    {
-                        continue;
-                    }
-
-                    controller->SetCustomMode();
-                    has_valid_controller = true;
-                }
-
-                
-
-                /*---------------------------------------------------------*\
-                | Start effect timer                                       |
-                \*---------------------------------------------------------*/
-                if(effect_timer && !effect_timer->isActive())
-                {
-                    effect_time = 0.0f;
-                    effect_elapsed.restart();
-                    // Compute timer interval from stack effects (use highest requested FPS)
-                    unsigned int target_fps = 30;
-                    for(size_t i = 0; i < effect_stack.size(); i++)
-                    {
-                        if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
-                        {
-                            unsigned int f = effect_stack[i]->effect->GetTargetFPSSetting();
-                            if(f > target_fps) target_fps = f;
-                        }
-                    }
-                    if(target_fps < 1) target_fps = 30;
-                    int interval_ms = (int)(1000 / target_fps);
-                    if(interval_ms < 1) interval_ms = 1;
-                    effect_timer->start(interval_ms);
-                    
-                }
-                else
-                {
-                    
-                }
-
-                /*---------------------------------------------------------*\
-                | Update button states                                     |
-                \*---------------------------------------------------------*/
-                start_effect_button->setEnabled(false);
-                stop_effect_button->setEnabled(true);
-
-                
-                return;
-            }
-        }
-    }
-
-    /*---------------------------------------------------------*\
-    | Regular effect handling                                  |
-    \*---------------------------------------------------------*/
-    if(!current_effect_ui)
-    {
-        QMessageBox::warning(this, "No Effect Selected", "Please select an effect before starting.");
-        return;
-    }
-
     if(controller_transforms.empty())
     {
         QMessageBox::warning(this, "No Controllers", "Please add controllers to the 3D scene before starting effects.");
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Put all controllers in direct control mode               |
-    \*---------------------------------------------------------*/
-    bool has_valid_controller = false;
-    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
+    bool stack_has_entries = false;
+    for(size_t i = 0; i < effect_stack.size(); i++)
     {
-        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-        if(!transform)
+        EffectInstance3D* instance = effect_stack[i].get();
+        if(instance && !instance->effect_class_name.empty())
         {
-            continue;
+            stack_has_entries = true;
+            break;
         }
-
-        // Handle virtual controllers - they map to physical controllers
-        if(transform->virtual_controller)
-        {
-            VirtualController3D* virtual_ctrl = transform->virtual_controller;
-            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-
-            // Set all physical controllers mapped to this virtual controller to direct mode
-            std::set<RGBController*> controllers_to_set;
-            for(unsigned int i = 0; i < mappings.size(); i++)
-            {
-                if(mappings[i].controller)
-                {
-                    controllers_to_set.insert(mappings[i].controller);
-                }
-            }
-
-            for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
-            {
-                (*it)->SetCustomMode();
-                has_valid_controller = true;
-            }
-            continue;
-        }
-
-        // Handle regular controllers
-        RGBController* controller = transform->controller;
-        if(!controller)
-        {
-            continue;
-        }
-
-        controller->SetCustomMode();
-        has_valid_controller = true;
     }
 
+    bool stack_ready = PrepareStackForPlayback();
+
+    if(stack_has_entries)
+    {
+        if(!stack_ready)
+        {
+            QMessageBox::warning(this, "No Enabled Effects", "Enable at least one effect in the stack before starting.");
+            return;
+        }
+
+        bool has_valid_controller = false;
+        SetControllersToCustomMode(has_valid_controller);
+        if(!has_valid_controller)
+        {
+            QMessageBox::warning(this, "No Valid Controllers", "No controllers are available for effects.");
+            return;
+        }
+
+        effect_running = true;
+        effect_time = 0.0f;
+        effect_elapsed.restart();
+
+        if(effect_timer)
+        {
+            unsigned int target_fps = 30;
+            for(size_t i = 0; i < effect_stack.size(); i++)
+            {
+                if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
+                {
+                    unsigned int fps = effect_stack[i]->effect->GetTargetFPSSetting();
+                    if(fps > target_fps)
+                    {
+                        target_fps = fps;
+                    }
+                }
+            }
+            if(target_fps < 1) target_fps = 30;
+            int interval_ms = (int)(1000 / target_fps);
+            if(interval_ms < 1) interval_ms = 1;
+            effect_timer->start(interval_ms);
+        }
+
+        if(start_effect_button) start_effect_button->setEnabled(false);
+        if(stop_effect_button) stop_effect_button->setEnabled(true);
+        return;
+    }
+
+    if(!current_effect_ui)
+    {
+        QMessageBox::warning(this, "No Effects", "Add an effect to the stack before starting.");
+        return;
+    }
+
+    bool has_valid_controller = false;
+    SetControllersToCustomMode(has_valid_controller);
     if(!has_valid_controller)
     {
         QMessageBox::warning(this, "No Valid Controllers", "No controllers are available for effects.");
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Start the effect                                         |
-    \*---------------------------------------------------------*/
     effect_running = true;
     effect_time = 0.0f;
     effect_elapsed.restart();
 
-    /*---------------------------------------------------------*\
-    | Set timer interval from effect FPS (default 30 FPS)      |
-    \*---------------------------------------------------------*/
+    if(effect_timer)
     {
-        unsigned int target_fps = current_effect_ui ? current_effect_ui->GetTargetFPSSetting() : 30;
+        unsigned int target_fps = current_effect_ui->GetTargetFPSSetting();
         if(target_fps < 1) target_fps = 30;
         int interval_ms = (int)(1000 / target_fps);
         if(interval_ms < 1) interval_ms = 1;
         effect_timer->start(interval_ms);
     }
 
-    /*---------------------------------------------------------*\
-    | Update UI                                                |
-    \*---------------------------------------------------------*/
-    start_effect_button->setEnabled(false);
-    stop_effect_button->setEnabled(true);
-
+    if(start_effect_button) start_effect_button->setEnabled(false);
+    if(stop_effect_button) stop_effect_button->setEnabled(true);
 }
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 {
-    /*---------------------------------------------------------*\
-    | Check if a stack preset is currently running             |
-    \*---------------------------------------------------------*/
-    if(effect_combo && effect_combo->currentIndex() > 0)
-    {
-        QVariant data = effect_combo->itemData(effect_combo->currentIndex());
-        if(data.isValid() && data.toInt() < 0)
-        {
-            /*---------------------------------------------------------*\
-            | This is a stack preset - stop and clear the stack        |
-            \*---------------------------------------------------------*/
-            effect_timer->stop();
-
-            /*---------------------------------------------------------*\
-            | Clear effect stack                                       |
-            \*---------------------------------------------------------*/
-            effect_stack.clear();
-            UpdateEffectStackList();
-
-            /*---------------------------------------------------------*\
-            | Update button states                                     |
-            \*---------------------------------------------------------*/
-            start_effect_button->setEnabled(true);
-            stop_effect_button->setEnabled(false);
-
-            return;
-        }
-    }
-
-    /*---------------------------------------------------------*\
-    | Regular effect stop handling                             |
-    \*---------------------------------------------------------*/
     effect_running = false;
-    effect_timer->stop();
-
-    /*---------------------------------------------------------*\
-    | Update UI                                                |
-    \*---------------------------------------------------------*/
-    start_effect_button->setEnabled(true);
-    stop_effect_button->setEnabled(false);
+    if(effect_timer && effect_timer->isActive())
+    {
+        effect_timer->stop();
+    }
+    if(start_effect_button) start_effect_button->setEnabled(true);
+    if(stop_effect_button) stop_effect_button->setEnabled(false);
 }
 
 void OpenRGB3DSpatialTab::on_effect_updated()

@@ -12,6 +12,7 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
 #include "SettingsManager.h"
+#include "LogManager.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <nlohmann/json.hpp>
 #include <QMessageBox>
@@ -19,6 +20,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QStringList>
+#include <QGroupBox>
 #include <filesystem>
 
 namespace filesystem = std::filesystem;
@@ -39,10 +41,11 @@ static int MapHzToBandIndex(float hz, int bands, float f_min, float f_max)
 }
 
 
-void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
+void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 {
-    audio_tab = new QWidget();
-    QVBoxLayout* layout = new QVBoxLayout(audio_tab);
+    QGroupBox* audio_group = new QGroupBox("Audio Input & Reactive Controls");
+    audio_panel_group = audio_group;
+    QVBoxLayout* layout = new QVBoxLayout(audio_group);
 
     QLabel* hdr = new QLabel("Audio Input (used by Audio effects)");
     hdr->setStyleSheet("font-weight: bold;");
@@ -294,7 +297,8 @@ void OpenRGB3DSpatialTab::SetupAudioTab(QTabWidget* tab_widget)
 
     layout->addStretch();
 
-    tab_widget->addTab(audio_tab, "Audio");
+    parent_layout->addWidget(audio_group);
+    audio_group->setVisible(false);
 }
 
 void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
@@ -783,6 +787,8 @@ void OpenRGB3DSpatialTab::on_audio_custom_save_clicked()
     j["effect_class"] = class_name;
     j["target"] = target;
     j["settings"] = settings;
+    j["blend_mode"] = (int)BlendMode::ADD;
+    j["enabled"] = true;
 
     std::string path = GetAudioCustomEffectPath(name.toStdString());
     QFile file(QString::fromStdString(path));
@@ -860,37 +866,39 @@ void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
     {
         nlohmann::json j = nlohmann::json::parse(json.toStdString());
         std::string cls = j.value("effect_class", "");
-        SpatialEffect3D* eff = EffectListManager3D::get()->CreateEffect(cls);
-        if(!eff) return;
-        std::unique_ptr<EffectInstance3D> inst = std::make_unique<EffectInstance3D>();
-        inst->name = j.value("name", name.toStdString());
-        inst->effect_class_name = cls;
-        inst->zone_index = j.value("target", -1);
-        inst->blend_mode = BlendMode::ADD;
-        inst->enabled = true;
-        inst->id = next_effect_instance_id++;
-        const nlohmann::json& s = j["settings"];
-        eff->LoadSettings(s);
-        inst->effect.reset(eff);
-        inst->saved_settings = std::make_unique<nlohmann::json>(s);
-
-        // Connect ScreenMirror3D screen preview signal to viewport
-        if (cls == "ScreenMirror3D")
+        if(cls.empty())
         {
-            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(eff);
-            if (screen_mirror && viewport)
-            {
-                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
-                        viewport, &LEDViewport3D::SetShowScreenPreview);
-                screen_mirror->SetReferencePoints(&reference_points);
-            }
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Audio custom preset \"%s\" missing effect_class", name.toStdString().c_str());
+            return;
         }
 
-        effect_stack.push_back(std::move(inst));
-        UpdateEffectStackList();
-        if(effect_stack_list) effect_stack_list->setCurrentRow((int)effect_stack.size()-1);
+        int target = j.value("target", -1);
+        bool enabled = j.value("enabled", true);
+        BlendMode blend = BlendMode::ADD;
+        if(j.contains("blend_mode") && j["blend_mode"].is_number_integer())
+        {
+            blend = (BlendMode)j["blend_mode"].get<int>();
+        }
+
+        const nlohmann::json* settings_ptr = nullptr;
+        if(j.contains("settings"))
+        {
+            settings_ptr = &j["settings"];
+        }
+
+        AddEffectInstanceToStack(QString::fromStdString(cls),
+                                 QString::fromStdString(j.value("name", name.toStdString())),
+                                 target,
+                                 blend,
+                                 settings_ptr,
+                                 enabled);
     }
-    catch(...){ }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to add audio custom preset \"%s\": %s",
+                  name.toStdString().c_str(),
+                  e.what());
+    }
 }
 
 
@@ -966,6 +974,27 @@ void OpenRGB3DSpatialTab::SetupStandardAudioControls(QVBoxLayout* parent_layout)
     connect(audio_smooth_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_std_smooth_changed);
     connect(audio_falloff_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_std_falloff_changed);
     connect(audio_fft_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_fft_changed);
+}
+
+void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility(EffectInstance3D* instance)
+{
+    if(!audio_panel_group)
+    {
+        return;
+    }
+
+    bool show_panel = false;
+    if(instance && !instance->effect_class_name.empty())
+    {
+        EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name);
+        if(!info.category.empty())
+        {
+            QString category = QString::fromStdString(info.category);
+            show_panel = (category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) == 0);
+        }
+    }
+
+    audio_panel_group->setVisible(show_panel);
 }
 
 static inline float mapFalloff(int slider) { return std::max(0.2f, std::min(5.0f, slider / 100.0f)); }

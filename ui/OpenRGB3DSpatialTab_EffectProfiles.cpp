@@ -16,6 +16,7 @@
 #include <QInputDialog>
 #include <QFile>
 #include <QTextStream>
+#include <QSignalBlocker>
 #include <fstream>
 #include <algorithm>
 #include <cmath>
@@ -35,80 +36,101 @@ std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile
 
 void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
 {
-    /*---------------------------------------------------------*\
-    | Validate we have an effect selected                      |
-    \*---------------------------------------------------------*/
-    if(!effect_combo || effect_combo->currentIndex() <= 0)
+    if(effect_stack.empty())
     {
-        return;
-    }
-
-    int current_index = effect_combo->currentIndex();
-    if(effect_combo->itemData(current_index, kEffectRoleIsStack).toBool())
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot save effect profile for stack presets");
-        return;
-    }
-
-    if(!current_effect_ui)
-    {
+        QMessageBox::warning(this, "Nothing to Save", "Add at least one effect to the stack before saving a profile.");
         return;
     }
 
     nlohmann::json profile_json;
-    profile_json["version"] = 1;
+    profile_json["version"] = 3;
 
-    /*---------------------------------------------------------*\
-    | Save effect identity                                     |
-    \*---------------------------------------------------------*/
-    QString class_name = effect_combo->itemData(current_index, kEffectRoleClassName).toString();
-    if(!class_name.isEmpty())
+    nlohmann::json stack_json = nlohmann::json::array();
+    for(size_t i = 0; i < effect_stack.size(); i++)
     {
-        profile_json["effect_class"] = class_name.toStdString();
+        if(effect_stack[i])
+        {
+            stack_json.push_back(effect_stack[i]->ToJson());
+        }
     }
-    profile_json["effect_type"] = current_index > 0 ? current_index - 1 : -1; // legacy compatibility
+    profile_json["stack"] = stack_json;
+    profile_json["selected_stack_index"] = effect_stack_list ? effect_stack_list->currentRow() : -1;
 
-    /*---------------------------------------------------------*\
-    | Save selected zone                                       |
-    \*---------------------------------------------------------*/
-    if(effect_zone_combo)
-    {
-        profile_json["zone_target"] = ResolveZoneTargetSelection(effect_zone_combo);
-        profile_json["zone_index"] = effect_zone_combo->currentIndex(); // Legacy compatibility
-    }
-
-    /*---------------------------------------------------------*\
-    | Save selected origin point                               |
-    \*---------------------------------------------------------*/
     if(effect_origin_combo)
     {
         profile_json["origin_index"] = effect_origin_combo->currentIndex();
     }
 
-    /*---------------------------------------------------------*\
-    | Save effect parameters from the effect UI                |
-    \*---------------------------------------------------------*/
-    profile_json["effect_params"] = current_effect_ui->SaveSettings();
+    // Legacy compatibility: keep the first stack entry serialized as a "primary" effect
+    if(!effect_stack.empty() && effect_stack[0])
+    {
+        EffectInstance3D* primary = effect_stack[0].get();
+        profile_json["effect_class"] = primary->effect_class_name;
+        profile_json["effect_type"] = -1;
+        profile_json["zone_target"] = primary->zone_index;
+        profile_json["zone_index"] = primary->zone_index;
 
-    // Save audio settings
+        if(primary->effect)
+        {
+            profile_json["effect_params"] = primary->effect->SaveSettings();
+        }
+        else if(primary->saved_settings && !primary->saved_settings->empty())
+        {
+            profile_json["effect_params"] = *primary->saved_settings;
+        }
+    }
+
+    // Save audio settings (input + currently configured audio effect UI)
     nlohmann::json audio_json;
-#ifdef _WIN32
-    
-#else
-    
-#endif
-    audio_json["device_index"] = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
-#ifdef _WIN32
-    
-#endif
-    audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 20);
+    int device_index = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
+    audio_json["device_index"] = device_index;
+    audio_json["device_name"] = (audio_device_combo && device_index >= 0)
+        ? audio_device_combo->currentText().toStdString()
+        : std::string();
+    audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 10);
     audio_json["bands_count"] = (audio_bands_combo ? audio_bands_combo->currentText().toInt() : 16);
-    // Crossovers removed from UI; omit from saved profile to avoid confusion
+    audio_json["low_hz"] = (audio_low_spin ? (int)audio_low_spin->value() : 60);
+    audio_json["high_hz"] = (audio_high_spin ? (int)audio_high_spin->value() : 200);
+    audio_json["smoothing_slider"] = (audio_smooth_slider ? audio_smooth_slider->value() : 60);
+    audio_json["falloff_slider"] = (audio_falloff_slider ? audio_falloff_slider->value() : 100);
+    audio_json["fft_index"] = (audio_fft_combo ? audio_fft_combo->currentIndex() : -1);
+    audio_json["fft_value"] = (audio_fft_combo && audio_fft_combo->currentIndex() >= 0)
+        ? audio_fft_combo->currentText().toInt()
+        : 1024;
+
+    if(audio_effect_combo && audio_effect_combo->currentIndex() > 0)
+    {
+        int idx = audio_effect_combo->currentIndex();
+        QString class_name = audio_effect_combo->itemData(idx, kEffectRoleClassName).toString();
+        if(!class_name.isEmpty())
+        {
+            audio_json["active_effect_class"] = class_name.toStdString();
+            audio_json["active_effect_index"] = idx;
+        }
+
+        if(audio_effect_zone_combo)
+        {
+            QVariant zone_data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
+            audio_json["active_effect_zone"] = zone_data.isValid() ? zone_data.toInt() : -1;
+        }
+
+        if(audio_effect_origin_combo)
+        {
+            audio_json["active_effect_origin"] = audio_effect_origin_combo->currentIndex();
+        }
+
+        if(current_audio_effect_ui)
+        {
+            nlohmann::json audio_effect_settings = current_audio_effect_ui->SaveSettings();
+            if(!audio_effect_settings.is_null())
+            {
+                audio_json["active_effect_settings"] = audio_effect_settings;
+            }
+        }
+    }
+
     profile_json["audio_settings"] = audio_json;
 
-    /*---------------------------------------------------------*\
-    | Write to file                                            |
-    \*---------------------------------------------------------*/
     QFile file(QString::fromStdString(filename));
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
@@ -123,8 +145,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     QTextStream out(&file);
     out << QString::fromStdString(profile_json.dump(4));
     file.close();
-
-    
 }
 
 void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
@@ -147,158 +167,245 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     {
         nlohmann::json profile_json = nlohmann::json::parse(json_str.toStdString());
 
-        /*---------------------------------------------------------*\
-        | Validate profile has required fields                     |
-        \*---------------------------------------------------------*/
-        if(!profile_json.contains("effect_class") && !profile_json.contains("effect_type"))
-        {
-            QMessageBox::critical(this, "Invalid Profile", "Effect profile is missing effect identifier");
-            return;
-        }
+        effect_stack.clear();
 
-        QString class_name;
-        if(profile_json.contains("effect_class"))
+        bool has_stack_array = profile_json.contains("stack") && profile_json["stack"].is_array();
+        if(has_stack_array)
         {
-            class_name = QString::fromStdString(profile_json["effect_class"].get<std::string>());
-        }
-        int effect_type = profile_json.contains("effect_type") ? profile_json["effect_type"].get<int>() : -1;
-
-        /*---------------------------------------------------------*\
-        | Set effect type in combo                                |
-        \*---------------------------------------------------------*/
-        if(effect_combo)
-        {
-            int target_index = -1;
-            if(!class_name.isEmpty())
+            const nlohmann::json& stack_json = profile_json["stack"];
+            for(size_t i = 0; i < stack_json.size(); i++)
             {
-                for(int i = 1; i < effect_combo->count(); ++i) // skip "None"
+                std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(stack_json[i]);
+                if(instance)
                 {
-                    if(effect_combo->itemData(i, kEffectRoleIsStack).toBool())
-                    {
-                        continue;
-                    }
-                    if(effect_combo->itemData(i, kEffectRoleClassName).toString() == class_name)
-                    {
-                        target_index = i;
-                        break;
-                    }
+                    effect_stack.push_back(std::move(instance));
                 }
             }
-            if(target_index < 0 && effect_type >= 0)
-            {
-                int legacy_index = effect_type + 1;
-                if(legacy_index >= 0 && legacy_index < effect_combo->count())
-                {
-                    target_index = legacy_index;
-                }
-            }
-
-            if(target_index >= 0)
-            {
-                effect_combo->setCurrentIndex(target_index);
-            }
-            else
-            {
-                LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect profile references unknown effect '%s'; aborting load",
-                            class_name.isEmpty() ? "<legacy index>" : class_name.toStdString().c_str());
-                return;
-            }
         }
-
-        /*---------------------------------------------------------*\
-        | Restore zone selection                                   |
-        \*---------------------------------------------------------*/
-        if(effect_zone_combo)
+        else if(profile_json.contains("effect_class"))
         {
-            int zone_value = -1;
+            std::unique_ptr<EffectInstance3D> legacy_instance = std::make_unique<EffectInstance3D>();
+            legacy_instance->effect_class_name = profile_json["effect_class"].get<std::string>();
+            legacy_instance->name = legacy_instance->effect_class_name;
+            legacy_instance->enabled = true;
+
             if(profile_json.contains("zone_target"))
             {
-                zone_value = profile_json["zone_target"].get<int>();
+                legacy_instance->zone_index = profile_json["zone_target"].get<int>();
             }
             else if(profile_json.contains("zone_index"))
             {
-                zone_value = DecodeLegacyZoneIndex(profile_json["zone_index"].get<int>());
+                legacy_instance->zone_index = DecodeLegacyZoneIndex(profile_json["zone_index"].get<int>());
             }
 
-            if(profile_json.contains("zone_target") || profile_json.contains("zone_index"))
+            if(profile_json.contains("effect_params"))
             {
-                int zone_combo_index = effect_zone_combo->findData(zone_value);
-                if(zone_combo_index >= 0)
-                {
-                    effect_zone_combo->setCurrentIndex(zone_combo_index);
-                }
-                else if(profile_json.contains("zone_index"))
-                {
-                    int legacy_index = profile_json["zone_index"].get<int>();
-                    if(legacy_index >= 0 && legacy_index < effect_zone_combo->count())
-                    {
-                        effect_zone_combo->setCurrentIndex(legacy_index);
-                    }
-                    else
-                    {
-                        effect_zone_combo->setCurrentIndex(0);
-                    }
-                }
-                else
-                {
-                    effect_zone_combo->setCurrentIndex(0);
-                }
+                legacy_instance->saved_settings = std::make_unique<nlohmann::json>(profile_json["effect_params"]);
+            }
+
+            effect_stack.push_back(std::move(legacy_instance));
+        }
+
+        UpdateEffectStackList();
+
+        int desired_index = -1;
+        if(profile_json.contains("selected_stack_index"))
+        {
+            desired_index = profile_json["selected_stack_index"].get<int>();
+        }
+
+        if(effect_stack_list)
+        {
+            if(desired_index >= 0 && desired_index < (int)effect_stack.size())
+            {
+                effect_stack_list->setCurrentRow(desired_index);
+            }
+            else if(!effect_stack.empty())
+            {
+                effect_stack_list->setCurrentRow(0);
+            }
+            else
+            {
+                effect_stack_list->setCurrentRow(-1);
             }
         }
 
-        /*---------------------------------------------------------*\
-        | Restore origin point selection                           |
-        \*---------------------------------------------------------*/
-        if(profile_json.contains("origin_index") && effect_origin_combo)
+        if(effect_origin_combo && profile_json.contains("origin_index"))
         {
             int origin_idx = profile_json["origin_index"].get<int>();
-            if(origin_idx < effect_origin_combo->count())
+            if(origin_idx >= 0 && origin_idx < effect_origin_combo->count())
             {
                 effect_origin_combo->setCurrentIndex(origin_idx);
             }
         }
 
-        /*---------------------------------------------------------*\
-        | Restore effect parameters                                |
-        \*---------------------------------------------------------*/
-        if(profile_json.contains("effect_params") && current_effect_ui)
+        if(!effect_stack.empty())
         {
-            current_effect_ui->LoadSettings(profile_json["effect_params"]);
+            int current_row = effect_stack_list ? effect_stack_list->currentRow() : 0;
+            if(current_row < 0 || current_row >= (int)effect_stack.size())
+            {
+                current_row = 0;
+                if(effect_stack_list)
+                {
+                    effect_stack_list->setCurrentRow(current_row);
+                }
+            }
+            LoadStackEffectControls(effect_stack[current_row].get());
+        }
+        else
+        {
+            ClearCustomEffectUI();
         }
 
         // Restore audio settings
         if(profile_json.contains("audio_settings"))
         {
             const nlohmann::json& a = profile_json["audio_settings"];
-            if(a.contains("device_index") && audio_device_combo && audio_device_combo->isEnabled())
+
+            if(audio_device_combo && audio_device_combo->count() > 0)
             {
-                int di = a["device_index"].get<int>();
-                if(di >= 0 && di < audio_device_combo->count())
+                bool applied = false;
+                if(a.contains("device_index"))
                 {
-                    audio_device_combo->setCurrentIndex(di);
-                    on_audio_device_changed(di);
+                    int di = a["device_index"].get<int>();
+                    if(di >= 0 && di < audio_device_combo->count())
+                    {
+                        audio_device_combo->setCurrentIndex(di);
+                        on_audio_device_changed(di);
+                        applied = true;
+                    }
+                }
+                if(!applied && a.contains("device_name"))
+                {
+                    QString device_name = QString::fromStdString(a["device_name"].get<std::string>());
+                    int idx = audio_device_combo->findText(device_name);
+                    if(idx >= 0)
+                    {
+                        audio_device_combo->setCurrentIndex(idx);
+                        on_audio_device_changed(idx);
+                    }
                 }
             }
+
             if(a.contains("gain_slider") && audio_gain_slider)
             {
-                int gv = std::max(1, std::min(400, a["gain_slider"].get<int>()));
-                audio_gain_slider->blockSignals(true);
-                audio_gain_slider->setValue(gv);
-                audio_gain_slider->blockSignals(false);
+                int gv = std::max(1, std::min(100, a["gain_slider"].get<int>()));
+                {
+                    QSignalBlocker blocker(audio_gain_slider);
+                    audio_gain_slider->setValue(gv);
+                }
                 on_audio_gain_changed(gv);
             }
-            // input smoothing removed (now per-effect)
+
             if(a.contains("bands_count") && audio_bands_combo)
             {
                 int bc = a["bands_count"].get<int>();
                 int idx = audio_bands_combo->findText(QString::number(bc));
                 if(idx >= 0)
                 {
+                    audio_bands_combo->blockSignals(true);
                     audio_bands_combo->setCurrentIndex(idx);
+                    audio_bands_combo->blockSignals(false);
                     on_audio_bands_changed(idx);
                 }
             }
-            // Crossovers UI removed; ignore bass_upper_hz/mid_upper_hz if present
+
+            if(a.contains("low_hz") && audio_low_spin)
+            {
+                QSignalBlocker blocker(audio_low_spin);
+                audio_low_spin->setValue(a["low_hz"].get<int>());
+            }
+            if(a.contains("high_hz") && audio_high_spin)
+            {
+                QSignalBlocker blocker(audio_high_spin);
+                audio_high_spin->setValue(a["high_hz"].get<int>());
+            }
+
+            if(a.contains("smoothing_slider") && audio_smooth_slider)
+            {
+                int sv = std::max(0, std::min(99, a["smoothing_slider"].get<int>()));
+                QSignalBlocker blocker(audio_smooth_slider);
+                audio_smooth_slider->setValue(sv);
+            }
+
+            if(a.contains("falloff_slider") && audio_falloff_slider)
+            {
+                int fv = std::max(20, std::min(500, a["falloff_slider"].get<int>()));
+                QSignalBlocker blocker(audio_falloff_slider);
+                audio_falloff_slider->setValue(fv);
+            }
+
+                if(a.contains("fft_index") && audio_fft_combo)
+                {
+                    int fi = a["fft_index"].get<int>();
+                    if(fi >= 0 && fi < audio_fft_combo->count())
+                    {
+                        {
+                            QSignalBlocker blocker(audio_fft_combo);
+                            audio_fft_combo->setCurrentIndex(fi);
+                        }
+                        on_audio_fft_changed(fi);
+                    }
+                    else if(a.contains("fft_value"))
+                    {
+                        QString value = QString::number(a["fft_value"].get<int>());
+                        int idx = audio_fft_combo->findText(value);
+                        if(idx >= 0)
+                        {
+                            {
+                                QSignalBlocker blocker(audio_fft_combo);
+                                audio_fft_combo->setCurrentIndex(idx);
+                            }
+                            on_audio_fft_changed(idx);
+                        }
+                    }
+            }
+
+            // Re-apply derived controls after silent updates
+            if(audio_low_spin) on_audio_std_low_changed(audio_low_spin->value());
+            if(audio_smooth_slider) on_audio_std_smooth_changed(audio_smooth_slider->value());
+            if(audio_falloff_slider) on_audio_std_falloff_changed(audio_falloff_slider->value());
+
+            if(audio_effect_combo && a.contains("active_effect_class"))
+            {
+                QString active_class = QString::fromStdString(a["active_effect_class"].get<std::string>());
+                int active_idx = audio_effect_combo->findData(active_class, kEffectRoleClassName);
+                if(active_idx > 0)
+                {
+                    audio_effect_combo->blockSignals(true);
+                    audio_effect_combo->setCurrentIndex(active_idx);
+                    audio_effect_combo->blockSignals(false);
+                    SetupAudioEffectUI(active_idx);
+                }
+
+                if(audio_effect_zone_combo && a.contains("active_effect_zone"))
+                {
+                    int zone_value = a["active_effect_zone"].get<int>();
+                    int zone_idx = audio_effect_zone_combo->findData(zone_value);
+                    if(zone_idx >= 0)
+                    {
+                        QSignalBlocker blocker(audio_effect_zone_combo);
+                        audio_effect_zone_combo->setCurrentIndex(zone_idx);
+                    }
+                    on_audio_effect_zone_changed(audio_effect_zone_combo->currentIndex());
+                }
+
+                if(audio_effect_origin_combo && a.contains("active_effect_origin"))
+                {
+                    int origin_idx = a["active_effect_origin"].get<int>();
+                    if(origin_idx >= 0 && origin_idx < audio_effect_origin_combo->count())
+                    {
+                        QSignalBlocker blocker(audio_effect_origin_combo);
+                        audio_effect_origin_combo->setCurrentIndex(origin_idx);
+                    }
+                    on_audio_effect_origin_changed(audio_effect_origin_combo->currentIndex());
+                }
+
+                if(a.contains("active_effect_settings") && current_audio_effect_ui)
+                {
+                    current_audio_effect_ui->LoadSettings(a["active_effect_settings"]);
+                }
+            }
         }
 
         
@@ -467,19 +574,12 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
 void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
 {
     /*---------------------------------------------------------*\
-    | Validate that an effect is selected in Effects tab       |
+    | Validate that the stack has at least one effect          |
     \*---------------------------------------------------------*/
-    if(!effect_combo || effect_combo->currentIndex() <= 0)
+    if(effect_stack.empty())
     {
         QMessageBox::information(this, "No Effect Selected",
-                                "Please select an effect in the Effects tab before saving a profile.");
-        return;
-    }
-
-    if(!current_effect_ui)
-    {
-        QMessageBox::information(this, "No Effect",
-                                "No effect configuration to save.");
+                                "Add at least one effect to the stack before saving a profile.");
         return;
     }
 

@@ -11,161 +11,78 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
+#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include "LogManager.h"
+#include <nlohmann/json.hpp>
 #include <QMessageBox>
 #include <QFont>
 #include <QPalette>
+#include <QGroupBox>
+#include <QLabel>
+#include <QSignalBlocker>
+#include <QTabWidget>
+#include <QAbstractItemView>
+#include <QHBoxLayout>
 
-void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
+void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 {
-
-    QWidget* stack_tab = new QWidget();
-    QVBoxLayout* stack_layout = new QVBoxLayout(stack_tab);
+    QGroupBox* stack_group = new QGroupBox("Effect Layers");
+    stack_group->setFlat(true);
+    QVBoxLayout* stack_layout = new QVBoxLayout(stack_group);
     stack_layout->setSpacing(6);
-    stack_layout->setContentsMargins(4, 4, 4, 4);
+    stack_layout->setContentsMargins(0, 0, 0, 0);
 
-    /*---------------------------------------------------------*\
-    | Active Effects List                                      |
-    \*---------------------------------------------------------*/
-    QLabel* list_label = new QLabel("Active Effect Stack:");
+    QTabWidget* stack_tabs = new QTabWidget();
+    stack_tabs->setTabPosition(QTabWidget::North);
+    stack_tabs->setDocumentMode(true);
+    stack_tabs->setStyleSheet("QTabWidget::pane { border: 0; top: -1px; }");
+
+    QWidget* active_tab = new QWidget();
+    QVBoxLayout* active_layout = new QVBoxLayout(active_tab);
+
+    QLabel* list_label = new QLabel("Active Effect Stack");
     QFont list_font = list_label->font();
     list_font.setBold(true);
     list_label->setFont(list_font);
-    stack_layout->addWidget(list_label);
+    active_layout->addWidget(list_label);
 
-    QLabel* hint_label = new QLabel("Checkmark = enabled, X = disabled. Double-click to toggle.");
+    QLabel* hint_label = new QLabel("Use the Effect Library to add layers. Checkmark = enabled, X = disabled. Double-click to toggle.");
     hint_label->setForegroundRole(QPalette::PlaceholderText);
-    stack_layout->addWidget(hint_label);
+    active_layout->addWidget(hint_label);
 
     effect_stack_list = new QListWidget();
     effect_stack_list->setSelectionMode(QAbstractItemView::SingleSelection);
-    effect_stack_list->setMinimumHeight(150);
+    effect_stack_list->setMinimumHeight(180);
     connect(effect_stack_list, &QListWidget::currentRowChanged,
             this, &OpenRGB3DSpatialTab::on_effect_stack_selection_changed);
     connect(effect_stack_list, &QListWidget::itemDoubleClicked,
             this, &OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked);
-    stack_layout->addWidget(effect_stack_list);
+    active_layout->addWidget(effect_stack_list);
 
-    /*---------------------------------------------------------*\
-    | Add/Remove Buttons                                       |
-    \*---------------------------------------------------------*/
     QHBoxLayout* button_layout = new QHBoxLayout();
     button_layout->addStretch();
-
-    QPushButton* add_effect_btn = new QPushButton("+ Add Effect");
-    connect(add_effect_btn, &QPushButton::clicked,
-            this, &OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked);
-    button_layout->addWidget(add_effect_btn);
 
     QPushButton* remove_effect_btn = new QPushButton("- Remove Effect");
     connect(remove_effect_btn, &QPushButton::clicked,
             this, &OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked);
     button_layout->addWidget(remove_effect_btn);
 
-    stack_layout->addLayout(button_layout);
+    active_layout->addLayout(button_layout);
+    active_layout->addStretch();
 
-    /*---------------------------------------------------------*\
-    | Selected Effect Settings                                 |
-    \*---------------------------------------------------------*/
-    QGroupBox* settings_group = new QGroupBox("Selected Effect Settings");
-    QVBoxLayout* settings_layout = new QVBoxLayout(settings_group);
+    QWidget* presets_tab = new QWidget();
+    QVBoxLayout* presets_layout = new QVBoxLayout(presets_tab);
 
-    // Effect Type
-    QHBoxLayout* type_layout = new QHBoxLayout();
-    type_layout->addWidget(new QLabel("Effect Type:"));
-    stack_effect_type_combo = new QComboBox();
-    stack_effect_type_combo->setToolTip("Select which effect to run on this layer");
-
-    /*---------------------------------------------------------*\
-    | Add "None" option first                                  |
-    \*---------------------------------------------------------*/
-    stack_effect_type_combo->addItem("None", "");
-
-    /*---------------------------------------------------------*\
-    | Populate with all available effects                      |
-    \*---------------------------------------------------------*/
-    std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
-    for(unsigned int i = 0; i < effects.size(); i++)
-    {
-        stack_effect_type_combo->addItem(QString::fromStdString(effects[i].ui_name),
-                                         QString::fromStdString(effects[i].class_name));
-    }
-
-    connect(stack_effect_type_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_type_changed(int)));
-    type_layout->addWidget(stack_effect_type_combo);
-    settings_layout->addLayout(type_layout);
-
-    // Target Zone
-    QHBoxLayout* zone_layout = new QHBoxLayout();
-    zone_layout->addWidget(new QLabel("Target Zone:"));
-    stack_effect_zone_combo = new QComboBox();
-    stack_effect_zone_combo->setToolTip("Choose which zone/controllers this effect applies to");
-    stack_effect_zone_combo->addItem("All Controllers", -1);
-    connect(stack_effect_zone_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_zone_changed(int)));
-    zone_layout->addWidget(stack_effect_zone_combo);
-    settings_layout->addLayout(zone_layout);
-
-    // Blend Mode
-    QHBoxLayout* blend_layout = new QHBoxLayout();
-    blend_layout->addWidget(new QLabel("Blend Mode:"));
-    stack_effect_blend_combo = new QComboBox();
-
-    // Add blend modes with tooltips
-    stack_effect_blend_combo->addItem("No Blend", (int)BlendMode::NO_BLEND);
-    stack_effect_blend_combo->setItemData(0, "Effect runs independently without combining with other effects", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Replace", (int)BlendMode::REPLACE);
-    stack_effect_blend_combo->setItemData(1, "Completely replaces colors from previous effects (last effect wins)", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Add", (int)BlendMode::ADD);
-    stack_effect_blend_combo->setItemData(2, "Adds colors together (brightens - good for combining lights)", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Multiply", (int)BlendMode::MULTIPLY);
-    stack_effect_blend_combo->setItemData(3, "Multiplies colors (darkens - good for shadows/filters)", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Screen", (int)BlendMode::SCREEN);
-    stack_effect_blend_combo->setItemData(4, "Screen blend (brightens without overexposure - softer than Add)", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Max", (int)BlendMode::MAX);
-    stack_effect_blend_combo->setItemData(5, "Takes the brightest color channel from each effect", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->addItem("Min", (int)BlendMode::MIN);
-    stack_effect_blend_combo->setItemData(6, "Takes the darkest color channel from each effect", Qt::ToolTipRole);
-
-    stack_effect_blend_combo->setCurrentIndex(0); // Default to No Blend
-
-    // Set tooltip for the combo box itself
-    stack_effect_blend_combo->setToolTip("How this effect combines with other effects in the stack");
-
-    connect(stack_effect_blend_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_blend_changed(int)));
-    blend_layout->addWidget(stack_effect_blend_combo);
-    settings_layout->addLayout(blend_layout);
-
-    // Effect-specific controls container
-    stack_effect_controls_container = new QWidget();
-    stack_effect_controls_layout = new QVBoxLayout(stack_effect_controls_container);
-    stack_effect_controls_layout->setContentsMargins(0, 0, 0, 0);
-    settings_layout->addWidget(stack_effect_controls_container);
-
-    stack_layout->addWidget(settings_group);
-
-    /*---------------------------------------------------------*\
-    | Stack Presets Section                                    |
-    \*---------------------------------------------------------*/
-    QLabel* presets_label = new QLabel("Saved Stack Presets:");
+    QLabel* presets_label = new QLabel("Saved Stack Presets");
     QFont presets_font = presets_label->font();
     presets_font.setBold(true);
     presets_label->setFont(presets_font);
-    presets_label->setContentsMargins(0, 6, 0, 0);
-    stack_layout->addWidget(presets_label);
+    presets_layout->addWidget(presets_label);
 
     stack_presets_list = new QListWidget();
     stack_presets_list->setSelectionMode(QAbstractItemView::SingleSelection);
-    stack_presets_list->setMinimumHeight(100);
-    stack_layout->addWidget(stack_presets_list);
+    stack_presets_list->setMinimumHeight(160);
+    presets_layout->addWidget(stack_presets_list);
 
     QHBoxLayout* presets_button_layout = new QHBoxLayout();
     presets_button_layout->addStretch();
@@ -185,105 +102,17 @@ void OpenRGB3DSpatialTab::SetupEffectStackTab(QTabWidget* tab_widget)
             this, &OpenRGB3DSpatialTab::on_delete_stack_preset_clicked);
     presets_button_layout->addWidget(delete_stack_btn);
 
-    stack_layout->addLayout(presets_button_layout);
-    stack_layout->addStretch();
+    presets_layout->addLayout(presets_button_layout);
+    presets_layout->addStretch();
 
-    /*---------------------------------------------------------*\
-    | Populate zone combo with current zones                   |
-    \*---------------------------------------------------------*/
+    stack_tabs->addTab(active_tab, "Active Stack");
+    stack_tabs->addTab(presets_tab, "Stack Presets");
+
+    stack_layout->addWidget(stack_tabs);
+    parent_layout->addWidget(stack_group);
+
     UpdateStackEffectZoneCombo();
-
-    /*---------------------------------------------------------*\
-    | Load saved presets                                       |
-    \*---------------------------------------------------------*/
     LoadStackPresets();
-
-    /*---------------------------------------------------------*\
-    | DISABLED: Auto-load effect stack from previous session   |
-    | This was interfering with the Effects tab because the    |
-    | timer prioritizes effect stack rendering over single     |
-    | effect rendering. Users can manually load stack presets  |
-    | if needed.                                               |
-    \*---------------------------------------------------------*/
-    // LoadEffectStack();
-
-    /*---------------------------------------------------------*\
-    | Add tab to specified tab widget                          |
-    \*---------------------------------------------------------*/
-    tab_widget->addTab(stack_tab, "Effect Stack");
-}
-
-void OpenRGB3DSpatialTab::on_add_effect_to_stack_clicked()
-{
-
-    if(!stack_effect_type_combo || stack_effect_type_combo->count() <= 1)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - no effects available");
-        return;
-    }
-
-    // Check what's currently selected
-    int current_index = stack_effect_type_combo->currentIndex();
-
-    // If "None" is selected (index 0), refuse to add
-    if(current_index == 0)
-    {
-        QMessageBox::information(this, "No Effect Selected",
-                                "Please select an effect type before adding to the stack.");
-        return;
-    }
-
-    QString class_name = stack_effect_type_combo->itemData(current_index).toString();
-    QString ui_name = stack_effect_type_combo->itemText(current_index);
-
-    if(class_name.isEmpty())
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Cannot add effect - effect class name is empty");
-        return;
-    }
-
-    /*---------------------------------------------------------*\
-    | Create new effect instance                               |
-    \*---------------------------------------------------------*/
-    std::unique_ptr<EffectInstance3D> instance = std::make_unique<EffectInstance3D>();
-    instance->id            = next_effect_instance_id++;
-    instance->name          = ui_name.toStdString();
-    instance->zone_index    = -1;
-    instance->blend_mode    = BlendMode::NO_BLEND;
-    instance->enabled       = true;
-
-    /*---------------------------------------------------------*\
-    | Store effect class name (created lazily when selected)   |
-    \*---------------------------------------------------------*/
-    instance->effect_class_name = class_name.toStdString();
-
-    /*---------------------------------------------------------*\
-    | Add to list                                              |
-    \*---------------------------------------------------------*/
-    effect_stack.push_back(std::move(instance));
-
-    /*---------------------------------------------------------*\
-    | Update UI                                                |
-    \*---------------------------------------------------------*/
-    UpdateEffectStackList();
-
-    /*---------------------------------------------------------*\
-    | Select the new effect                                    |
-    \*---------------------------------------------------------*/
-    effect_stack_list->setCurrentRow((int)effect_stack.size() - 1);
-
-    /*---------------------------------------------------------*\
-    | Start effect timer if not already running                |
-    \*---------------------------------------------------------*/
-    if(effect_timer && !effect_timer->isActive())
-    {
-        effect_timer->start(33);
-    }
-
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
-    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
@@ -357,27 +186,54 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 {
     if(index < 0 || index >= (int)effect_stack.size())
     {
-        // No selection - disable controls
-        stack_effect_type_combo->setEnabled(false);
-        stack_effect_zone_combo->setEnabled(false);
-        stack_effect_blend_combo->setEnabled(false);
+        if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(false);
+        if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(false);
+        if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(false);
+        if(effect_zone_combo) effect_zone_combo->setEnabled(false);
+        LoadStackEffectControls(nullptr);
+
+        if(effect_combo)
+        {
+            QSignalBlocker combo_blocker(effect_combo);
+            if(effect_combo->count() > 0)
+            {
+                effect_combo->setCurrentIndex(-1);
+            }
+        }
+
+        UpdateAudioPanelVisibility(nullptr);
+
+        if(start_effect_button)
+        {
+            disconnect(start_effect_button, nullptr, this, nullptr);
+            start_effect_button = nullptr;
+        }
+        if(stop_effect_button)
+        {
+            disconnect(stop_effect_button, nullptr, this, nullptr);
+            stop_effect_button = nullptr;
+        }
+        current_effect_ui = nullptr;
+        UpdateEffectCombo();
+        if(effect_zone_combo)
+        {
+            QSignalBlocker blocker(effect_zone_combo);
+            effect_zone_combo->setCurrentIndex(0);
+        }
         return;
     }
 
-    // Enable controls
-    stack_effect_type_combo->setEnabled(true);
-    stack_effect_zone_combo->setEnabled(true);
-    stack_effect_blend_combo->setEnabled(true);
+    if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(true);
+    if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(true);
+    if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(true);
+    if(effect_zone_combo) effect_zone_combo->setEnabled(true);
 
-    // Load effect instance settings
     EffectInstance3D* instance = effect_stack[index].get();
 
-    // Block signals while updating UI to prevent infinite recursion
-    stack_effect_type_combo->blockSignals(true);
-    stack_effect_zone_combo->blockSignals(true);
-    stack_effect_blend_combo->blockSignals(true);
+    QSignalBlocker type_blocker(stack_effect_type_combo ? stack_effect_type_combo : nullptr);
+    QSignalBlocker zone_blocker(stack_effect_zone_combo ? stack_effect_zone_combo : nullptr);
+    QSignalBlocker blend_blocker(stack_effect_blend_combo ? stack_effect_blend_combo : nullptr);
 
-    // Set effect type
     if(!instance->effect_class_name.empty())
     {
         QString class_name = QString::fromStdString(instance->effect_class_name);
@@ -386,35 +242,60 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
         {
             stack_effect_type_combo->setCurrentIndex(type_index);
         }
+        else
+        {
+            stack_effect_type_combo->setCurrentIndex(0);
+        }
     }
     else
     {
-        // No effect - select "None"
         stack_effect_type_combo->setCurrentIndex(0);
     }
 
-    // Set zone
     UpdateStackEffectZoneCombo();
     int zone_index = stack_effect_zone_combo->findData(instance->zone_index);
     if(zone_index >= 0)
     {
         stack_effect_zone_combo->setCurrentIndex(zone_index);
     }
+    else
+    {
+        stack_effect_zone_combo->setCurrentIndex(0);
+    }
 
-    // Set blend mode
     int blend_index = stack_effect_blend_combo->findData((int)instance->blend_mode);
     if(blend_index >= 0)
     {
         stack_effect_blend_combo->setCurrentIndex(blend_index);
     }
+    else
+    {
+        stack_effect_blend_combo->setCurrentIndex(0);
+    }
 
-    // Re-enable signals
-    stack_effect_type_combo->blockSignals(false);
-    stack_effect_zone_combo->blockSignals(false);
-    stack_effect_blend_combo->blockSignals(false);
-
-    // Load effect-specific controls
     LoadStackEffectControls(instance);
+    UpdateAudioPanelVisibility(instance);
+
+    if(effect_zone_combo)
+    {
+        QSignalBlocker blocker(effect_zone_combo);
+        int zone_combo_index = effect_zone_combo->findData(instance->zone_index);
+        if(zone_combo_index >= 0)
+        {
+            effect_zone_combo->setCurrentIndex(zone_combo_index);
+        }
+    }
+
+    if(effect_combo)
+    {
+        QSignalBlocker combo_blocker(effect_combo);
+        if(index >= 0 && index < effect_combo->count())
+        {
+            effect_combo->setCurrentIndex(index);
+        }
+    }
+
+    UpdateEffectCombo();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
@@ -507,6 +388,11 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
 
 void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 {
+    if(!stack_effect_blend_combo)
+    {
+        return;
+    }
+
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
     {
@@ -560,6 +446,8 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     }
 
     effect_stack_list->blockSignals(false);
+
+    UpdateEffectCombo();
 }
 
 void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
@@ -569,73 +457,218 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
-    
-
-    // Clear existing controls
-    QLayoutItem* item;
-    while((item = stack_effect_controls_layout->takeAt(0)) != nullptr)
+    if(current_effect_ui)
     {
-        if(item->widget())
-        {
-            // Don't delete the widget - just remove it from layout
-            // The effect is owned by the EffectInstance3D
-            item->widget()->setParent(nullptr);
-            item->widget()->hide();
-        }
-        delete item;
+        disconnect(current_effect_ui, nullptr, this, nullptr);
+        current_effect_ui = nullptr;
     }
+    if(start_effect_button)
+    {
+        disconnect(start_effect_button, nullptr, this, nullptr);
+        start_effect_button = nullptr;
+    }
+    if(stop_effect_button)
+    {
+        disconnect(stop_effect_button, nullptr, this, nullptr);
+        stop_effect_button = nullptr;
+    }
+    QLayoutItem* layout_item;
+    while(effect_controls_layout && (layout_item = effect_controls_layout->takeAt(0)) != nullptr)
+    {
+        if(layout_item->widget())
+        {
+            layout_item->widget()->deleteLater();
+        }
+        delete layout_item;
+    }
+    stack_effect_blend_combo = nullptr;
+    stack_blend_container = nullptr;
 
     if(!instance)
     {
         return;
     }
 
-    
-
-    // Create effect if it doesn't exist yet
-    if(!instance->effect && !instance->effect_class_name.empty())
-    {
-        
-        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
-        if(!effect)
-        {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", instance->effect_class_name.c_str());
-            return;
-        }
-        instance->effect.reset(effect);
-        
-
-        /*---------------------------------------------------------*\
-        | Load saved settings if they exist (from ToJson/FromJson) |
-        \*---------------------------------------------------------*/
-        if(instance->saved_settings && !instance->saved_settings->empty())
-        {
-            
-            effect->LoadSettings(*instance->saved_settings);
-        }
-    }
-
-    // If no effect (None selected), just return - controls are already cleared
-    if(!instance->effect)
+    if(instance->effect_class_name.empty())
     {
         return;
     }
 
-    // The effect itself is a QWidget
-    SpatialEffect3D* effect = instance->effect.get();
-    
-
-    // If the effect hasn't been initialized yet, set it up
-    if(!effect->parent())
+    if(!instance->effect)
     {
-        
-        effect->setParent(stack_effect_controls_container);
-        effect->CreateCommonEffectControls(stack_effect_controls_container);
-        effect->SetupCustomUI(stack_effect_controls_container);
+        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
+        if(!effect)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", instance->effect_class_name.c_str());
+            ClearCustomEffectUI();
+            return;
+        }
+        instance->effect.reset(effect);
+
+        if(instance->effect_class_name == "ScreenMirror3D")
+        {
+            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
+            if(screen_mirror)
+            {
+                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
+                        viewport, &LEDViewport3D::SetShowScreenPreview);
+                screen_mirror->SetReferencePoints(&reference_points);
+            }
+        }
+
+        if(instance->saved_settings && !instance->saved_settings->empty())
+        {
+            effect->LoadSettings(*instance->saved_settings);
+        }
     }
 
-    // Show the effect and add to layout
-    effect->show();
-    stack_effect_controls_layout->addWidget(effect);
-    
+    if(instance->effect)
+    {
+        if(!instance->saved_settings || instance->saved_settings->empty())
+        {
+            nlohmann::json current_settings = instance->effect->SaveSettings();
+            instance->saved_settings = std::make_unique<nlohmann::json>(current_settings);
+        }
+    }
+
+    DisplayEffectInstanceDetails(instance);
+}
+
+void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instance)
+{
+    ClearCustomEffectUI();
+
+    if(!instance || !effect_controls_widget || !effect_controls_layout)
+    {
+        return;
+    }
+
+    if(instance->effect_class_name.empty())
+    {
+        return;
+    }
+
+    SpatialEffect3D* ui_effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
+    if(!ui_effect)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create UI effect for class: %s", instance->effect_class_name.c_str());
+        return;
+    }
+
+    ui_effect->setParent(effect_controls_widget);
+    ui_effect->CreateCommonEffectControls(effect_controls_widget);
+    ui_effect->SetupCustomUI(effect_controls_widget);
+    current_effect_ui = ui_effect;
+
+    nlohmann::json settings;
+    if(instance->saved_settings && !instance->saved_settings->empty())
+    {
+        settings = *instance->saved_settings;
+    }
+    else if(instance->effect)
+    {
+        settings = instance->effect->SaveSettings();
+    }
+
+    if(!settings.is_null())
+    {
+        ui_effect->LoadSettings(settings);
+    }
+
+    QPushButton* ui_start = ui_effect->GetStartButton();
+    QPushButton* ui_stop  = ui_effect->GetStopButton();
+
+    if(ui_start)
+    {
+        connect(ui_start, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+    }
+    if(ui_stop)
+    {
+        connect(ui_stop, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+    }
+
+    start_effect_button = ui_start;
+    stop_effect_button  = ui_stop;
+
+    if(start_effect_button)
+    {
+        start_effect_button->setEnabled(!effect_running);
+    }
+    if(stop_effect_button)
+    {
+        stop_effect_button->setEnabled(effect_running);
+    }
+
+    SpatialEffect3D* captured_ui = ui_effect;
+    connect(ui_effect, &SpatialEffect3D::ParametersChanged, this,
+            [this, instance, captured_ui]()
+            {
+                if(!instance || !captured_ui)
+                {
+                    return;
+                }
+
+                if(stack_settings_updating)
+                {
+                    return;
+                }
+
+                stack_settings_updating = true;
+
+                nlohmann::json updated = captured_ui->SaveSettings();
+                instance->saved_settings = std::make_unique<nlohmann::json>(updated);
+                if(instance->effect)
+                {
+                    instance->effect->LoadSettings(updated);
+                }
+                SaveEffectStack();
+                if(viewport)
+                {
+                    viewport->UpdateColors();
+                }
+
+                stack_settings_updating = false;
+            });
+
+    effect_controls_layout->addWidget(ui_effect);
+
+    stack_blend_container = new QWidget(effect_controls_widget);
+    QHBoxLayout* blend_layout = new QHBoxLayout(stack_blend_container);
+    blend_layout->setContentsMargins(0, 6, 0, 0);
+    QLabel* blend_label = new QLabel("Stack Blend Mode:", stack_blend_container);
+    blend_layout->addWidget(blend_label);
+
+    stack_effect_blend_combo = new QComboBox(stack_blend_container);
+    stack_effect_blend_combo->setToolTip("How this effect combines with other layers.");
+    stack_effect_blend_combo->addItem("No Blend", (int)BlendMode::NO_BLEND);
+    stack_effect_blend_combo->setItemData(0, "Effect runs independently without combining with other effects", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Replace", (int)BlendMode::REPLACE);
+    stack_effect_blend_combo->setItemData(1, "Completely replaces colors from previous effects (last effect wins)", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Add", (int)BlendMode::ADD);
+    stack_effect_blend_combo->setItemData(2, "Adds colors together (brightens)", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Multiply", (int)BlendMode::MULTIPLY);
+    stack_effect_blend_combo->setItemData(3, "Multiplies colors (darkens)", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Screen", (int)BlendMode::SCREEN);
+    stack_effect_blend_combo->setItemData(4, "Screen blend (brightens without overexposure)", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Max", (int)BlendMode::MAX);
+    stack_effect_blend_combo->setItemData(5, "Takes the brightest channel from previous effects", Qt::ToolTipRole);
+    stack_effect_blend_combo->addItem("Min", (int)BlendMode::MIN);
+    stack_effect_blend_combo->setItemData(6, "Takes the darkest channel from previous effects", Qt::ToolTipRole);
+    connect(stack_effect_blend_combo, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(on_stack_effect_blend_changed(int)));
+    blend_layout->addWidget(stack_effect_blend_combo);
+
+    effect_controls_layout->addWidget(stack_blend_container);
+
+    effect_controls_widget->updateGeometry();
+    effect_controls_widget->update();
+
+    int current_blend_index = stack_effect_blend_combo->findData((int)instance->blend_mode);
+    if(current_blend_index < 0)
+    {
+        current_blend_index = 0;
+    }
+    stack_effect_blend_combo->blockSignals(true);
+    stack_effect_blend_combo->setCurrentIndex(current_blend_index);
+    stack_effect_blend_combo->blockSignals(false);
 }

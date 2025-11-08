@@ -39,6 +39,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <nlohmann/json.hpp>
 
 class QStackedWidget;
 
@@ -143,12 +144,18 @@ private slots:
     void on_grid_snap_toggled(bool enabled);
     void on_effect_changed(int index);
     void on_effect_origin_changed(int index);
+    void on_effect_zone_changed(int index);
     void UpdateSelectionInfo();
     void on_apply_spacing_clicked();
     void UpdateEffectOriginCombo();
 
+    // Effect library slots
+    void on_effect_library_category_changed(int index);
+    void on_effect_library_add_clicked();
+    void on_effect_library_item_double_clicked(QListWidgetItem* item);
+    void on_effect_library_selection_changed(int row);
+
     // Effect Stack slots
-    void on_add_effect_to_stack_clicked();
     void on_remove_effect_from_stack_clicked();
     void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
@@ -166,8 +173,7 @@ private slots:
 
 private:
     static constexpr int kEffectRoleClassName = Qt::UserRole;
-    static constexpr int kEffectRoleIsStack   = Qt::UserRole + 1;
-    static constexpr int kEffectRoleStackIdx  = Qt::UserRole + 2;
+    static constexpr int kEffectRoleInstanceId = Qt::UserRole + 1;
 
     void SetupUI();
     void LoadDevices();
@@ -204,10 +210,13 @@ private:
     void RegenerateLEDPositions(ControllerTransform* transform);
 
     // Effect Stack helpers
-    void SetupEffectStackTab(QTabWidget* tab_widget);
+    void SetupEffectStackPanel(QVBoxLayout* parent_layout);
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
     void LoadStackEffectControls(EffectInstance3D* instance);
+    void DisplayEffectInstanceDetails(EffectInstance3D* instance);
+    bool PrepareStackForPlayback();
+    void SetControllersToCustomMode(bool& has_valid_controller);
 
     // Stack Preset helpers
     void LoadStackPresets();
@@ -230,7 +239,17 @@ private:
 
     // Profiles tab setup
     void SetupProfilesTab(QTabWidget* tab_widget);
-    void SetupAudioTab(QTabWidget* tab_widget);
+    void SetupAudioPanel(QVBoxLayout* parent_layout);
+    void SetupZonesPanel(QVBoxLayout* parent_layout);
+    void SetupEffectLibraryPanel(QVBoxLayout* parent_layout);
+    void PopulateEffectLibraryCategories();
+    void PopulateEffectLibrary();
+    void AddEffectInstanceToStack(const QString& class_name,
+                                  const QString& ui_name,
+                                  int zone_index = -1,
+                                  BlendMode blend_mode = BlendMode::NO_BLEND,
+                                  const nlohmann::json* preset_settings = nullptr,
+                                  bool enabled = true);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
@@ -259,6 +278,13 @@ private:
     QSlider*                    rot_y_slider;
     QSlider*                    rot_z_slider;
 
+    /*---------------------------------------------------------*\
+    | Effect Library Controls                                  |
+    \*---------------------------------------------------------*/
+    QComboBox*                  effect_category_combo;
+    QListWidget*                effect_library_list;
+    QPushButton*                effect_library_add_button;
+
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
     QPushButton*                stop_effect_button;
@@ -276,6 +302,7 @@ private:
     bool                        effect_running;
     float                       effect_time;
     QElapsedTimer               effect_elapsed;
+    bool                        stack_settings_updating;
 
     /*---------------------------------------------------------*\
     | Custom grid dimensions (always 1:1 LED mapping)         |
@@ -364,8 +391,7 @@ private:
     QComboBox*                  stack_effect_type_combo;
     QComboBox*                  stack_effect_zone_combo;
     QComboBox*                  stack_effect_blend_combo;
-    QWidget*                    stack_effect_controls_container;
-    QVBoxLayout*                stack_effect_controls_layout;
+    QWidget*                    stack_blend_container;
 
     /*---------------------------------------------------------*\
     | Effect Stack Data                                        |
@@ -390,7 +416,7 @@ private:
     /*---------------------------------------------------------*\
     | Audio Tab Controls                                      |
     \*---------------------------------------------------------*/
-    QWidget*        audio_tab = nullptr;
+    QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
     QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
     // Removed input smoothing; smoothing is per-effect now
@@ -448,6 +474,7 @@ private slots:
 
     // Standard Audio Controls (Hz, smoothing, falloff)
     void SetupStandardAudioControls(QVBoxLayout* parent_layout);
+    void UpdateAudioPanelVisibility(EffectInstance3D* instance);
     void on_audio_std_low_changed(double v);
     void on_audio_std_high_changed(double v);
     void on_audio_std_smooth_changed(int v);
