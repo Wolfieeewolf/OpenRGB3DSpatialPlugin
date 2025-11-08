@@ -97,21 +97,21 @@ void CustomControllerDialog::SetupUI()
     QGridLayout* dim_layout = new QGridLayout();
     dim_layout->addWidget(new QLabel("Width:"), 0, 0);
     width_spin = new QSpinBox();
-    width_spin->setRange(1, 50);
+    width_spin->setRange(1, 100);
     width_spin->setValue(10);
     connect(width_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
     dim_layout->addWidget(width_spin, 0, 1);
 
     dim_layout->addWidget(new QLabel("Height:"), 0, 2);
     height_spin = new QSpinBox();
-    height_spin->setRange(1, 50);
+    height_spin->setRange(1, 100);
     height_spin->setValue(10);
     connect(height_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
     dim_layout->addWidget(height_spin, 0, 3);
 
     dim_layout->addWidget(new QLabel("Depth:"), 0, 4);
     depth_spin = new QSpinBox();
-    depth_spin->setRange(1, 20);
+    depth_spin->setRange(1, 100);
     depth_spin->setValue(1);
     connect(depth_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
     dim_layout->addWidget(depth_spin, 0, 5);
