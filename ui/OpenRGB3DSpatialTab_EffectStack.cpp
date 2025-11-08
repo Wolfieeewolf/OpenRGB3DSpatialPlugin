@@ -263,14 +263,17 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
         stack_effect_zone_combo->setCurrentIndex(0);
     }
 
-    int blend_index = stack_effect_blend_combo->findData((int)instance->blend_mode);
-    if(blend_index >= 0)
+    if(stack_effect_blend_combo)
     {
-        stack_effect_blend_combo->setCurrentIndex(blend_index);
-    }
-    else
-    {
-        stack_effect_blend_combo->setCurrentIndex(0);
+        int blend_index = stack_effect_blend_combo->findData((int)instance->blend_mode);
+        if(blend_index >= 0)
+        {
+            stack_effect_blend_combo->setCurrentIndex(blend_index);
+        }
+        else
+        {
+            stack_effect_blend_combo->setCurrentIndex(0);
+        }
     }
 
     LoadStackEffectControls(instance);
