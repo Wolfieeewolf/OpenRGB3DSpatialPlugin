@@ -1463,11 +1463,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     object_type_combo->addItem("Custom Controller", 0);
     object_type_combo->addItem("Reference Point", 1);
     object_type_combo->addItem("Display Plane", 2);
+    object_type_combo->setMinimumWidth(240);
     creator_layout->addWidget(object_type_combo);
 
     object_creator_status_label = new QLabel();
     object_creator_status_label->setWordWrap(true);
     object_creator_status_label->setVisible(false);
+    object_creator_status_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     creator_layout->addWidget(object_creator_status_label);
 
     // Stacked widget for dynamic UI
@@ -1742,6 +1744,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     effects_tab_layout->setContentsMargins(4, 4, 4, 4);
     effects_tab_layout->setSpacing(6);
 
+    const int kLeftPaneMinWidth = 320;
     QSplitter* effects_splitter = new QSplitter(Qt::Horizontal);
     effects_splitter->setChildrenCollapsible(false);
     effects_splitter->setHandleWidth(6);
@@ -1751,9 +1754,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     browser_scroll->setWidgetResizable(true);
     browser_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     browser_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    browser_scroll->setMinimumWidth(360);
+    browser_scroll->setMinimumWidth(kLeftPaneMinWidth);
 
     QWidget* browser_content = new QWidget();
+    browser_content->setMinimumWidth(kLeftPaneMinWidth);
     QVBoxLayout* browser_layout = new QVBoxLayout(browser_content);
     browser_layout->setContentsMargins(4, 4, 12, 4);
     browser_layout->setSpacing(6);
@@ -1845,8 +1849,26 @@ void OpenRGB3DSpatialTab::SetupUI()
     effects_splitter->setStretchFactor(0, 1);
     effects_splitter->setStretchFactor(1, 3);
     QList<int> initial_sizes;
-    initial_sizes << 400 << 1200;
+    initial_sizes << kLeftPaneMinWidth << kLeftPaneMinWidth * 3;
     effects_splitter->setSizes(initial_sizes);
+
+    connect(effects_splitter, &QSplitter::splitterMoved, this,
+            [effects_splitter, kLeftPaneMinWidth](int, int)
+            {
+                QList<int> sizes = effects_splitter->sizes();
+                if(sizes.size() < 2)
+                {
+                    return;
+                }
+
+                if(sizes[0] < kLeftPaneMinWidth)
+                {
+                    int total = sizes[0] + sizes[1];
+                    sizes[0] = kLeftPaneMinWidth;
+                    sizes[1] = std::max(1, total - kLeftPaneMinWidth);
+                    effects_splitter->setSizes(sizes);
+                }
+            });
 
     /*---------------------------------------------------------*\
     | Add tabs to main tab widget (Effects first as default)  |
