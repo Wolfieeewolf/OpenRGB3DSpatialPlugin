@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| AudioLevel3D.cpp                                          |
-|                                                           |
-|   Basic audio-reactive effect                             |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioLevel3D.h"
 #include "Colors.h"
@@ -30,10 +22,6 @@ float AudioLevel3D::EvaluateIntensity(float amplitude, float time)
 
 AudioLevel3D::AudioLevel3D(QWidget* parent)
     : SpatialEffect3D(parent)
-{
-}
-
-AudioLevel3D::~AudioLevel3D()
 {
 }
 

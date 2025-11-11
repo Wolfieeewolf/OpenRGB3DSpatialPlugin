@@ -1,15 +1,8 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_ObjectCreator.cpp                   |
-|                                                         |
-|   Controller/object creator and display management      |
-|                                                         |
-|   Date: 2025-10-07                                      |
-|                                                         |
-|   This file is part of the OpenRGB project              |
-|   SPDX-License-Identifier: GPL-2.0-only                 |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #include "OpenRGB3DSpatialTab.h"
+#include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "VirtualController3D.h"
 #include "DisplayPlaneManager.h"
@@ -91,6 +84,7 @@ void OpenRGB3DSpatialTab::LoadDevices()
     UpdateAvailableControllersList();
 
     viewport->SetControllerTransforms(&controller_transforms);
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
@@ -180,7 +174,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
         if(display_planes[i] && !display_planes[i]->IsVisible())
         {
             QListWidgetItem* item = new QListWidgetItem(QString("[Display] ") + QString::fromStdString(display_planes[i]->GetName()));
-            item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, static_cast<int>(i))));
+            item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, display_planes[i]->GetId())));
             available_controllers_list->addItem(item);
         }
     }
@@ -294,6 +288,59 @@ void OpenRGB3DSpatialTab::UpdateDeviceList()
 
 void OpenRGB3DSpatialTab::on_controller_selected(int index)
 {
+    if(controller_list && index >= 0 && index < controller_list->count())
+    {
+        QListWidgetItem* selected_item = controller_list->item(index);
+        if(selected_item && selected_item->data(Qt::UserRole).isValid())
+        {
+            QPair<int, int> metadata = selected_item->data(Qt::UserRole).value<QPair<int, int>>();
+            if(metadata.first == -2)
+            {
+                if(reference_points_list)
+                {
+                    QSignalBlocker block(reference_points_list);
+                    if(metadata.second >= 0 && metadata.second < reference_points_list->count())
+                    {
+                        reference_points_list->setCurrentRow(metadata.second);
+                    }
+                }
+                on_ref_point_selected(metadata.second);
+
+                if(display_planes_list)
+                {
+                    QSignalBlocker block(display_planes_list);
+                    display_planes_list->clearSelection();
+                }
+                current_display_plane_index = -1;
+                if(viewport) viewport->SelectDisplayPlane(-1);
+                return;
+            }
+            else if(metadata.first == -3)
+            {
+                int plane_index = FindDisplayPlaneIndexById(metadata.second);
+                if(plane_index >= 0 && plane_index < (int)display_planes.size())
+                {
+                    current_display_plane_index = plane_index;
+                    if(display_planes_list)
+                    {
+                        QSignalBlocker block(display_planes_list);
+                        display_planes_list->setCurrentRow(plane_index);
+                    }
+                    if(reference_points_list)
+                    {
+                        QSignalBlocker block(reference_points_list);
+                        reference_points_list->clearSelection();
+                    }
+                    DisplayPlane3D* plane = display_planes[plane_index].get();
+                    SyncDisplayPlaneControls(plane);
+                    RefreshDisplayPlaneDetails();
+                    if(viewport) viewport->SelectDisplayPlane(plane_index);
+                }
+                return;
+            }
+        }
+    }
+
     if(display_planes_list)
     {
         QSignalBlocker block(display_planes_list);
@@ -414,7 +461,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.x = x;
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
-        ctrl->world_positions_dirty = true;
+        ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
 
         // Block signals to prevent feedback loops
         pos_x_spin->blockSignals(true);
@@ -451,7 +498,7 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ctrl->transform.rotation.x = x;
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
-        ctrl->world_positions_dirty = true;
+        ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
 
         // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);
@@ -595,385 +642,18 @@ void OpenRGB3DSpatialTab::on_effect_updated()
 
 void OpenRGB3DSpatialTab::on_effect_timer_timeout()
 {
-    // Advance time based on real elapsed time for smooth animation
+    if(!effect_running)
+    {
+        return;
+    }
+
     qint64 ms = effect_elapsed.isValid() ? effect_elapsed.restart() : 33;
     if(ms <= 0) { ms = 33; }
     float dt = static_cast<float>(ms) / 1000.0f;
-    if(dt > 0.1f) dt = 0.1f; // clamp spikes
+    if(dt > 0.1f) dt = 0.1f;
     effect_time += dt;
-    /*---------------------------------------------------------*\
-    | Check if we should render effect stack instead of       |
-    | single effect                                            |
-    \*---------------------------------------------------------*/
-    bool has_stack_effects = false;
-    for(size_t i = 0; i < effect_stack.size(); i++)
-    {
-        if(effect_stack[i]->enabled && effect_stack[i]->effect)
-        {
-            has_stack_effects = true;
-            break;
-        }
-    }
 
-    if(has_stack_effects)
-    {
-        /*---------------------------------------------------------*\
-        | Render effect stack (multi-effect mode)                 |
-        \*---------------------------------------------------------*/
-        
-        RenderEffectStack();
-        return;
-    }
-    else
-    {
-        
-    }
-
-    /*---------------------------------------------------------*\
-    | Fall back to single effect rendering (Effects tab)       |
-    \*---------------------------------------------------------*/
-    
-
-    if(!effect_running || !current_effect_ui)
-    {
-        return;
-    }
-
-    
-
-    /*---------------------------------------------------------*\
-    | Safety: Check if we have any controllers                |
-    \*---------------------------------------------------------*/
-    if(controller_transforms.empty())
-    {
-        return; // No controllers to update
-    }
-
-    /*---------------------------------------------------------*\
-    | Safety: Verify effect timer and viewport are valid      |
-    \*---------------------------------------------------------*/
-    if(!effect_timer || !viewport)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect timer or viewport is null, stopping effect");
-        on_stop_effect_clicked();
-        return;
-    }
-
-    // effect_time already advanced at timer start
-
-    /*---------------------------------------------------------*\
-    | Calculate room bounds for effects                        |
-    | Uses same corner-origin system as Effect Stack          |
-    \*---------------------------------------------------------*/
-    float grid_min_x = 0.0f, grid_max_x = 0.0f;
-    float grid_min_y = 0.0f, grid_max_y = 0.0f;
-    float grid_min_z = 0.0f, grid_max_z = 0.0f;
-
-    if(use_manual_room_size)
-    {
-        /*---------------------------------------------------------*\
-        | Use manually configured room dimensions                  |
-        | Origin at front-left-floor corner (0,0,0)               |
-        | IMPORTANT: Convert millimeters to grid units (/ 10.0f)  |
-        | LED world_position uses grid units, not millimeters!    |
-        \*---------------------------------------------------------*/
-        grid_min_x = 0.0f;
-        grid_max_x = manual_room_width / grid_scale_mm;  // Convert mm to grid units
-        grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth / grid_scale_mm;  // Convert mm to grid units
-        grid_min_z = 0.0f;
-        grid_max_z = manual_room_height / grid_scale_mm; // Convert mm to grid units
-
-        
-    }
-    else
-    {
-        /*---------------------------------------------------------*\
-        | Auto-detect from LED positions                           |
-        \*---------------------------------------------------------*/
-        bool has_leds = false;
-
-        // Update world positions first
-        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-        {
-            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-            if(transform && transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-        }
-
-        // Find min/max positions from ALL LEDs
-        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-        {
-            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-            if(!transform) continue;
-
-            for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
-            {
-                float x = transform->led_positions[led_idx].world_position.x;
-                float y = transform->led_positions[led_idx].world_position.y;
-                float z = transform->led_positions[led_idx].world_position.z;
-
-                if(!has_leds)
-                {
-                    grid_min_x = grid_max_x = x;
-                    grid_min_y = grid_max_y = y;
-                    grid_min_z = grid_max_z = z;
-                    has_leds = true;
-                }
-                else
-                {
-                    if(x < grid_min_x) grid_min_x = x;
-                    if(x > grid_max_x) grid_max_x = x;
-                    if(y < grid_min_y) grid_min_y = y;
-                    if(y > grid_max_y) grid_max_y = y;
-                    if(z < grid_min_z) grid_min_z = z;
-                    if(z > grid_max_z) grid_max_z = z;
-                }
-            }
-        }
-
-        if(!has_leds)
-        {
-            // Fallback if no LEDs found (convert default mm to grid units)
-            grid_min_x = 0.0f;
-            grid_max_x = 1000.0f / grid_scale_mm;
-            grid_min_y = 0.0f;
-            grid_max_y = 1000.0f / grid_scale_mm;
-            grid_min_z = 0.0f;
-            grid_max_z = 1000.0f / grid_scale_mm;
-        }
-
-        
-    }
-
-    // Create grid context for effects
-    GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
-
-    
-
-    /*---------------------------------------------------------*\
-    | Configure effect origin mode                             |
-    | Pass absolute world coords to CalculateColorGrid         |
-    \*---------------------------------------------------------*/
-    if(current_effect_ui)
-    {
-        ReferenceMode mode = REF_MODE_ROOM_CENTER;
-        Vector3D ref_origin = {0.0f, 0.0f, 0.0f};
-
-        if(effect_origin_combo)
-        {
-            int index = effect_origin_combo->currentIndex();
-            int ref_point_idx = effect_origin_combo->itemData(index).toInt();
-            if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
-            {
-                VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
-                ref_origin = ref_point->GetPosition();
-                mode = REF_MODE_USER_POSITION;
-                
-            }
-            else
-            {
-                mode = REF_MODE_ROOM_CENTER;
-                
-            }
-        }
-
-        current_effect_ui->SetGlobalReferencePoint(ref_origin);
-        current_effect_ui->SetReferenceMode(mode);
-    }
-
-    /*---------------------------------------------------------*\
-    | Determine which controllers to apply effects to based   |
-    | on the selected zone                                     |
-    \*---------------------------------------------------------*/
-    std::vector<int> allowed_controllers;
-
-    int zone_target = ResolveZoneTargetSelection(effect_zone_combo);
-
-    if(zone_target == -1)
-    {
-        for(unsigned int i = 0; i < controller_transforms.size(); i++)
-        {
-            allowed_controllers.push_back(i);
-        }
-    }
-    else if(zone_target <= -1000)
-    {
-        int ctrl_idx = -(zone_target + 1000);
-        if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
-        {
-            allowed_controllers.push_back(ctrl_idx);
-        }
-    }
-    else if(zone_manager)
-    {
-        Zone3D* zone = zone_manager->GetZone(zone_target);
-        if(zone)
-        {
-            allowed_controllers = zone->GetControllers();
-        }
-    }
-
-    if(allowed_controllers.empty())
-    {
-        for(unsigned int i = 0; i < controller_transforms.size(); i++)
-        {
-            allowed_controllers.push_back(i);
-        }
-    }
-
-    // Now map each controller's LEDs to the unified grid and apply effects
-    for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-    {
-        // Skip controllers not in the selected zone
-        if(std::find(allowed_controllers.begin(), allowed_controllers.end(), (int)ctrl_idx) == allowed_controllers.end())
-        {
-            continue; // Controller not in selected zone
-        }
-
-        ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-        if(!transform)
-        {
-            continue;
-        }
-
-        // Handle virtual controllers
-        if(transform->virtual_controller && !transform->controller)
-        {
-            VirtualController3D* virtual_ctrl = transform->virtual_controller;
-            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-
-            // Update cached world positions if dirty
-            if(transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-
-            // Apply effects to each virtual LED
-            for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
-            {
-                const GridLEDMapping& mapping = mappings[mapping_idx];
-                if(!mapping.controller) continue;
-
-                // Use pre-computed world position from cached LED positions
-                if(mapping_idx < transform->led_positions.size())
-                {
-                    float x = transform->led_positions[mapping_idx].world_position.x;
-                    float y = transform->led_positions[mapping_idx].world_position.y;
-                    float z = transform->led_positions[mapping_idx].world_position.z;
-
-                    // Only apply effects to LEDs within the room-centered grid bounds
-                    if(x >= grid_min_x && x <= grid_max_x &&
-                       y >= grid_min_y && y <= grid_max_y &&
-                       z >= grid_min_z && z <= grid_max_z)
-                    {
-                        // Safety: Ensure controller is still valid
-                        if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
-                        {
-                            continue;
-                        }
-
-                        // Calculate effect color using grid-aware method (world coords)
-                        RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);;
-color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
-
-                        // Apply color to the mapped physical LED (with bounds checking)
-                        if(mapping.zone_idx < mapping.controller->zones.size())
-                        {
-                            unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                            if(led_global_idx < mapping.controller->colors.size())
-                            {
-                                mapping.controller->colors[led_global_idx] = color;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Update the physical controllers that this virtual controller maps to
-            std::set<RGBController*> updated_controllers;
-            for(unsigned int i = 0; i < mappings.size(); i++)
-            {
-                if(mappings[i].controller && updated_controllers.find(mappings[i].controller) == updated_controllers.end())
-                {
-                    mappings[i].controller->UpdateLEDs();
-                    updated_controllers.insert(mappings[i].controller);
-                }
-            }
-
-            continue;
-        }
-
-        // Handle regular controllers
-        RGBController* controller = transform->controller;
-        if(!controller || controller->zones.empty() || controller->colors.empty())
-        {
-            continue;
-        }
-
-        /*---------------------------------------------------------*\
-        | Update cached world positions if dirty                  |
-        \*---------------------------------------------------------*/
-        if(transform->world_positions_dirty)
-        {
-            ControllerLayout3D::UpdateWorldPositions(transform);
-        }
-
-        /*---------------------------------------------------------*\
-        | Calculate colors for each LED using cached positions    |
-        \*---------------------------------------------------------*/
-        for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
-        {
-            LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
-
-            /*---------------------------------------------------------*\
-            | Use pre-computed world position (no calculation!)      |
-            \*---------------------------------------------------------*/
-            float x = led_position.world_position.x;
-            float y = led_position.world_position.y;
-            float z = led_position.world_position.z;
-
-            // Validate zone index before accessing
-            if(led_position.zone_idx >= controller->zones.size())
-            {
-                continue; // Skip invalid zone
-            }
-
-            // Get the actual LED index for color updates
-            unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
-
-            // Only apply effects to LEDs within the room-centered grid bounds
-            if(x >= grid_min_x && x <= grid_max_x &&
-               y >= grid_min_y && y <= grid_max_y &&
-               z >= grid_min_z && z <= grid_max_z)
-            {
-                /*---------------------------------------------------------*\
-                | Calculate effect color using grid-aware method          |
-                \*---------------------------------------------------------*/
-                RGBColor color = current_effect_ui->CalculateColorGrid(x, y, z, effect_time, grid_context);
-                color = current_effect_ui->PostProcessColorGrid(x, y, z, color, grid_context);
-
-                // Apply color to the correct LED using the global LED index
-                if(led_global_idx < controller->colors.size())
-                {
-                    controller->colors[led_global_idx] = color;
-                }
-            }
-            // LEDs outside the grid remain unlit (keep their current color)
-        }
-
-        /*---------------------------------------------------------*\
-        | Update the controller                                    |
-        \*---------------------------------------------------------*/
-        controller->UpdateLEDs();
-    }
-
-    /*---------------------------------------------------------*\
-    | Update the 3D viewport                                   |
-    \*---------------------------------------------------------*/
-    viewport->UpdateColors();
+    RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_granularity_changed(int)
@@ -1008,7 +688,11 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         }
         else if(type_code == -3) // Display Plane
         {
-            item_combo->addItem("Whole Object", QVariant::fromValue(qMakePair(-3, object_index)));
+            int plane_index = FindDisplayPlaneIndexById(object_index);
+            if(plane_index >= 0)
+            {
+                item_combo->addItem("Whole Object", QVariant::fromValue(qMakePair(-3, display_planes[plane_index]->GetId())));
+            }
             return;
         }
         else if(type_code == -1) // Custom Controller
@@ -1126,21 +810,22 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     // Handle Display Planes (-3)
     if(ctrl_idx == -3)
     {
-        if(item_row < 0 || item_row >= (int)display_planes.size())
+        int plane_index = FindDisplayPlaneIndexById(item_row);
+        if(plane_index < 0 || plane_index >= (int)display_planes.size())
         {
             return;
         }
 
-        DisplayPlane3D* plane = display_planes[item_row].get();
+        DisplayPlane3D* plane = display_planes[plane_index].get();
         plane->SetVisible(true);
 
         // Add to Controllers in 3D Scene list
         QString name = QString("[Display] ") + QString::fromStdString(plane->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(name);
-        list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, item_row)));
+        list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane->GetId())));
         controller_list->addItem(list_item);
 
-        viewport->SelectDisplayPlane(item_row);
+        viewport->SelectDisplayPlane(plane_index);
         viewport->update();
         NotifyDisplayPlaneChanged();
         emit GridLayoutChanged();
@@ -1150,6 +835,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         QMessageBox::information(this, "Display Plane Added",
                                 QString("Display plane '%1' added to 3D view!\n\nYou can now position and configure it.")
                                 .arg(QString::fromStdString(plane->GetName())));
+        RefreshHiddenControllerStates();
         return;
     }
 
@@ -1169,6 +855,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
         ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
         ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+        ctrl_transform->hidden_by_virtual = false;
 
         // Set LED spacing from UI
         ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
@@ -1180,7 +867,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         ctrl_transform->item_idx = -1;
 
         ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
-        ctrl_transform->world_positions_dirty = true;
+        ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
 
         int hue = (controller_transforms.size() * 137) % 360;
         QColor color = QColor::fromHsv(hue, 200, 255);
@@ -1194,11 +881,18 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(name);
         controller_list->addItem(list_item);
+        int new_row = controller_list->count() - 1;
+        controller_list->setCurrentRow(new_row);
+        if(viewport)
+        {
+            viewport->SelectController(new_row);
+        }
 
             viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
+        RefreshHiddenControllerStates();
         return;
     }
 
@@ -1215,6 +909,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+    ctrl_transform->hidden_by_virtual = false;
 
     // Set LED spacing from UI
     ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
@@ -1288,7 +983,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     QColor color = QColor::fromHsv(hue, 200, 255);
     ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
 
-    ctrl_transform->world_positions_dirty = true;
+    ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
     ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
     controller_transforms.push_back(std::move(ctrl_transform));
@@ -1300,6 +995,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
 
 }
 
@@ -1322,29 +1018,32 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         if(type_code == -2) // Reference Point
         {
             if(object_index >= 0 && object_index < (int)reference_points.size())
-            {
-                reference_points[object_index]->SetVisible(false);
-            }
-            controller_list->takeItem(selected_row);
-            viewport->update();
-            UpdateAvailableControllersList();
-            UpdateAvailableItemCombo();
-            return;
+        {
+            reference_points[object_index]->SetVisible(false);
         }
+        controller_list->takeItem(selected_row);
+        viewport->update();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+        RefreshHiddenControllerStates();
+        return;
+    }
         else if(type_code == -3) // Display Plane
         {
-            if(object_index >= 0 && object_index < (int)display_planes.size())
+            int plane_index = FindDisplayPlaneIndexById(object_index);
+            if(plane_index >= 0 && plane_index < (int)display_planes.size())
             {
-                display_planes[object_index]->SetVisible(false);
+                display_planes[plane_index]->SetVisible(false);
             }
-            controller_list->takeItem(selected_row);
-            viewport->update();
-            NotifyDisplayPlaneChanged();
-            emit GridLayoutChanged();
-            UpdateAvailableControllersList();
-            UpdateAvailableItemCombo();
-            return;
-        }
+        controller_list->takeItem(selected_row);
+        viewport->update();
+        NotifyDisplayPlaneChanged();
+        emit GridLayoutChanged();
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+        RefreshHiddenControllerStates();
+        return;
+    }
     }
 
     // Handle regular controllers (in controller_transforms)
@@ -1361,6 +1060,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
@@ -1378,6 +1078,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::on_clear_all_clicked()
@@ -1401,6 +1102,7 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     UpdateAvailableItemCombo();
     NotifyDisplayPlaneChanged();
     emit GridLayoutChanged();
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
@@ -1422,7 +1124,7 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     RegenerateLEDPositions(ctrl);
 
     // Mark world positions dirty so effects and viewport can recompute
-    ctrl->world_positions_dirty = true;
+    ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
 
     // Update viewport
     viewport->SetControllerTransforms(&controller_transforms);
@@ -1737,7 +1439,10 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                                   virtual_ctrl->GetWidth(),
                                   virtual_ctrl->GetHeight(),
                                   virtual_ctrl->GetDepth(),
-                                  virtual_ctrl->GetMappings());
+                                  virtual_ctrl->GetMappings(),
+                                  virtual_ctrl->GetSpacingX(),
+                                  virtual_ctrl->GetSpacingY(),
+                                  virtual_ctrl->GetSpacingZ());
 
     if(dialog.exec() == QDialog::Accepted)
     {
@@ -1789,7 +1494,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                 t->virtual_controller = new_ptr;
                 // Regenerate LED positions from the updated mapping and spacing
                 t->led_positions = new_ptr->GenerateLEDPositions(grid_scale_mm);
-                t->world_positions_dirty = true;
+                ControllerLayout3D::MarkWorldPositionsDirty(t);
 
                 // Update controller list item text to reflect the new name
                 if(i < (size_t)controller_list->count())
@@ -1922,6 +1627,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
         controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
         controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
+
 
         /*---------------------------------------------------------*\
         | Granularity (-1=virtual, 0=device, 1=zone, 2=LED)       |
@@ -2184,20 +1890,21 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
             ctrl_transform->controller = controller;
             ctrl_transform->virtual_controller = nullptr;
+            ctrl_transform->hidden_by_virtual = false;
 
             // Load LED spacing first (needed for position generation)
             if(controller_json.contains("led_spacing_mm"))
             {
                 ctrl_transform->led_spacing_mm_x = controller_json["led_spacing_mm"]["x"].get<float>();
                 ctrl_transform->led_spacing_mm_y = controller_json["led_spacing_mm"]["y"].get<float>();
-                ctrl_transform->led_spacing_mm_z = controller_json["led_spacing_mm"]["z"].get<float>();
-            }
-            else
-            {
-                ctrl_transform->led_spacing_mm_x = 10.0f;
-                ctrl_transform->led_spacing_mm_y = 0.0f;
-                ctrl_transform->led_spacing_mm_z = 0.0f;
-            }
+            ctrl_transform->led_spacing_mm_z = controller_json["led_spacing_mm"]["z"].get<float>();
+        }
+        else
+        {
+            ctrl_transform->led_spacing_mm_x = 10.0f;
+            ctrl_transform->led_spacing_mm_y = 0.0f;
+            ctrl_transform->led_spacing_mm_z = 0.0f;
+        }
 
             // Load granularity
             if(controller_json.contains("granularity"))
@@ -2371,7 +2078,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             unsigned int first_led_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].led_idx : 0;
 
             // Pre-compute world positions
-            ctrl_transform->world_positions_dirty = true;
+            ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
             ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
             controller_transforms.push_back(std::move(ctrl_transform));
@@ -2526,6 +2233,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     viewport->update();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
@@ -3234,6 +2942,106 @@ DisplayPlane3D* OpenRGB3DSpatialTab::GetSelectedDisplayPlane()
     return nullptr;
 }
 
+void OpenRGB3DSpatialTab::RefreshHiddenControllerStates()
+{
+    int list_count = controller_list ? controller_list->count() : 0;
+
+    for(size_t i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* transform = controller_transforms[i].get();
+        if(!transform)
+        {
+            continue;
+        }
+
+        transform->hidden_by_virtual = false;
+        if(controller_list && (int)i < list_count)
+        {
+            QListWidgetItem* item = controller_list->item((int)i);
+            if(item)
+            {
+                item->setHidden(false);
+            }
+        }
+    }
+
+    for(size_t i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* transform = controller_transforms[i].get();
+        if(!transform || !transform->virtual_controller)
+        {
+            continue;
+        }
+
+        const std::vector<GridLEDMapping>& mappings = transform->virtual_controller->GetMappings();
+        for(const GridLEDMapping& mapping : mappings)
+        {
+            if(!mapping.controller)
+            {
+                continue;
+            }
+
+            for(size_t j = 0; j < controller_transforms.size(); j++)
+            {
+                ControllerTransform* candidate = controller_transforms[j].get();
+                if(!candidate || candidate->controller != mapping.controller)
+                {
+                    continue;
+                }
+
+                candidate->hidden_by_virtual = true;
+                if(controller_list && (int)j < list_count)
+                {
+                    QListWidgetItem* item = controller_list->item((int)j);
+                    if(item)
+                    {
+                        item->setHidden(true);
+                    }
+                }
+            }
+        }
+    }
+}
+
+int OpenRGB3DSpatialTab::FindDisplayPlaneIndexById(int plane_id) const
+{
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        if(display_planes[i] && display_planes[i]->GetId() == plane_id)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void OpenRGB3DSpatialTab::RemoveDisplayPlaneControllerEntries(int plane_id)
+{
+    if(!controller_list)
+    {
+        return;
+    }
+
+    for(int row = controller_list->count() - 1; row >= 0; row--)
+    {
+        QListWidgetItem* item = controller_list->item(row);
+        if(!item)
+        {
+            continue;
+        }
+        QVariant data = item->data(Qt::UserRole);
+        if(!data.isValid())
+        {
+            continue;
+        }
+        QPair<int, int> metadata = data.value<QPair<int, int>>();
+        if(metadata.first == -3 && metadata.second == plane_id)
+        {
+            delete controller_list->takeItem(row);
+        }
+    }
+}
+
 void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
 {
     if(!plane)
@@ -3336,6 +3144,7 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
                             .arg(plane->GetWidthMM(), 0, 'f', 0)
                             .arg(plane->GetHeightMM(), 0, 'f', 0);
         QListWidgetItem* item = new QListWidgetItem(label, display_planes_list);
+        item->setData(Qt::UserRole, plane->GetId());
         if(!plane->IsVisible())
         {
             item->setForeground(QColor(0x888888));
@@ -3343,23 +3152,43 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
     }
     display_planes_list->blockSignals(false);
 
+    if(remove_display_plane_button)
+    {
+        remove_display_plane_button->setEnabled(!display_planes.empty());
+    }
+
     if(display_planes.empty())
     {
         current_display_plane_index = -1;
-        if(remove_display_plane_button) remove_display_plane_button->setEnabled(false);
         if(viewport) viewport->SelectDisplayPlane(-1);
         RefreshDisplayPlaneDetails();
         return;
     }
 
-    if(desired_index < 0 || desired_index >= (int)display_planes.size())
+    if(desired_index >= 0 && desired_index < (int)display_planes.size())
     {
-        desired_index = 0;
+        current_display_plane_index = desired_index;
+        display_planes_list->setCurrentRow(desired_index);
+    }
+    else
+    {
+        current_display_plane_index = -1;
+        display_planes_list->setCurrentRow(-1);
     }
 
-    current_display_plane_index = desired_index;
-    display_planes_list->setCurrentRow(desired_index);
-    if(viewport) viewport->SelectDisplayPlane(desired_index);
+    DisplayPlane3D* plane = GetSelectedDisplayPlane();
+    if(viewport)
+    {
+        if(plane && plane->IsVisible())
+        {
+            viewport->SelectDisplayPlane(current_display_plane_index);
+        }
+        else
+        {
+            viewport->SelectDisplayPlane(-1);
+        }
+    }
+
     RefreshDisplayPlaneDetails();
 }
 
@@ -3528,7 +3357,17 @@ void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     SyncDisplayPlaneControls(plane);
     RefreshDisplayPlaneDetails();
-    if(viewport) viewport->SelectDisplayPlane(index);
+    if(viewport)
+    {
+        if(plane && plane->IsVisible())
+        {
+            viewport->SelectDisplayPlane(index);
+        }
+        else
+        {
+            viewport->SelectDisplayPlane(-1);
+        }
+    }
 }
 
 void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
@@ -3538,20 +3377,20 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     std::string full_name = base_name + " " + std::to_string(suffix);
     std::unique_ptr<DisplayPlane3D> plane = std::make_unique<DisplayPlane3D>(full_name);
 
-    float room_depth_units = room_depth_spin ? ((float)room_depth_spin->value() / grid_scale_mm) : 100.0f;
-    float room_height_units = room_height_spin ? ((float)room_height_spin->value() / grid_scale_mm) : 100.0f;
+    float room_height_units = room_height_spin ? MMToGridUnits((float)room_height_spin->value(), grid_scale_mm) : 100.0f;
+    float room_depth_units = room_depth_spin ? MMToGridUnits((float)room_depth_spin->value(), grid_scale_mm) : 100.0f;
 
     plane->GetTransform().position.x = 0.0f;
-    plane->GetTransform().position.y = -room_depth_units * 0.25f;
-    plane->GetTransform().position.z = room_height_units * 0.5f;
+    plane->GetTransform().position.y = -room_height_units * 0.25f;
+    plane->GetTransform().position.z = room_depth_units * 0.5f;
     plane->SetVisible(false);  // Not visible until added to viewport
 
     display_planes.push_back(std::move(plane));
 
     // Add to available controllers list with metadata
-    int display_index = (int)display_planes.size() - 1;
+    int new_plane_id = display_planes.back() ? display_planes.back()->GetId() : -1;
     QListWidgetItem* item = new QListWidgetItem(QString("[Display] ") + QString::fromStdString(full_name));
-    item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, display_index))); // -3 = display plane
+    item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, new_plane_id))); // -3 = display plane id
     available_controllers_list->addItem(item);
     current_display_plane_index = (int)display_planes.size() - 1;
     UpdateDisplayPlanesList();
@@ -3564,7 +3403,10 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
                             .arg(QString::fromStdString(full_name)));
 
     UpdateAvailableControllersList();
-    SelectAvailableControllerEntry(-3, display_index);
+    if(new_plane_id >= 0)
+    {
+        SelectAvailableControllerEntry(-3, new_plane_id);
+    }
 }
 
 void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
@@ -3656,11 +3498,14 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
         return;
     }
 
+    int removed_plane_id = display_planes[current_display_plane_index]->GetId();
+
     display_planes.erase(display_planes.begin() + current_display_plane_index);
     if(current_display_plane_index >= (int)display_planes.size())
     {
         current_display_plane_index = (int)display_planes.size() - 1;
     }
+    RemoveDisplayPlaneControllerEntries(removed_plane_id);
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
     NotifyDisplayPlaneChanged();

@@ -1,19 +1,8 @@
-/*---------------------------------------------------------*\
-| Wipe3D.cpp                                                |
-|                                                           |
-|   3D Wipe effect with enhanced controls                  |
-|                                                           |
-|   Date: 2025-09-28                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wipe3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(Wipe3D);
 #include <QGridLayout>
 #include <cmath>
@@ -36,10 +25,6 @@ Wipe3D::Wipe3D(QWidget* parent) : SpatialEffect3D(parent)
         SetColors(wipe_colors);
     }
     SetRainbowMode(false);   // Default to custom colors
-}
-
-Wipe3D::~Wipe3D()
-{
 }
 
 EffectInfo3D Wipe3D::GetEffectInfo()

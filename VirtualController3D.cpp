@@ -10,6 +10,7 @@
 \*---------------------------------------------------------*/
 
 #include "VirtualController3D.h"
+#include "GridSpaceUtils.h"
 
 VirtualController3D::VirtualController3D(const std::string& name,
                                          int width, int height, int depth,
@@ -35,32 +36,30 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
     std::vector<LEDPosition3D> positions;
 
     // Calculate scale factors based on LED spacing and grid scale
-    float scale_x = (spacing_mm_x > 0.001f) ? (spacing_mm_x / grid_scale_mm) : 1.0f;
-    float scale_y = (spacing_mm_y > 0.001f) ? (spacing_mm_y / grid_scale_mm) : 1.0f;
-    float scale_z = (spacing_mm_z > 0.001f) ? (spacing_mm_z / grid_scale_mm) : 1.0f;
+    float scale_x = (spacing_mm_x > 0.001f) ? MMToGridUnits(spacing_mm_x, grid_scale_mm) : 1.0f;
+    float scale_y = (spacing_mm_y > 0.001f) ? MMToGridUnits(spacing_mm_y, grid_scale_mm) : 1.0f;
+    float scale_z = (spacing_mm_z > 0.001f) ? MMToGridUnits(spacing_mm_z, grid_scale_mm) : 1.0f;
 
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
-        if(led_mappings[i].controller == nullptr)
-        {
-            continue;
-        }
-
-        if(led_mappings[i].zone_idx >= led_mappings[i].controller->zones.size())
-        {
-            continue;
-        }
-
-        LEDPosition3D pos;
+        LEDPosition3D pos{};
         pos.controller = led_mappings[i].controller;
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
 
-        // Apply spacing scaling to grid coordinates
+        if(pos.controller && pos.zone_idx >= pos.controller->zones.size())
+        {
+            continue;
+        }
+
+        // Builder axes: X = horizontal, Y = vertical (height), Z = layers (depth)
+        // World axes in viewport: X = width (left-right), Y = height (floor-to-ceiling), Z = depth (front-to-back)
         pos.local_position.x = (float)led_mappings[i].x * scale_x;
-        pos.local_position.y = (float)led_mappings[i].y * scale_y;
-        pos.local_position.z = (float)led_mappings[i].z * scale_z;
+        pos.local_position.y = (float)led_mappings[i].y * scale_y; // height/up/down
+        pos.local_position.z = (float)led_mappings[i].z * scale_z; // depth/front/back
         pos.world_position = pos.local_position;
+        pos.effect_world_position = pos.local_position;
+        pos.preview_color = 0x00FFFFFF;
         positions.push_back(pos);
     }
 

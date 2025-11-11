@@ -1,12 +1,5 @@
-/*---------------------------------------------------------*\
-| BeatPulse3D.cpp                                           |
-|                                                           |
-|   Bass-driven global pulse                                |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "BeatPulse3D.h"
 #include <algorithm>
@@ -35,8 +28,6 @@ BeatPulse3D::BeatPulse3D(QWidget* parent)
     : SpatialEffect3D(parent)
 {
 }
-
-BeatPulse3D::~BeatPulse3D() {}
 
 EffectInfo3D BeatPulse3D::GetEffectInfo()
 {

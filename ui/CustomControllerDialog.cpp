@@ -1,13 +1,4 @@
-﻿/*---------------------------------------------------------*\
-| CustomControllerDialog.cpp                                |
-|                                                           |
-|   Dialog for creating custom 3D LED controllers          |
-|                                                           |
-|   Date: 2025-09-24                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "CustomControllerDialog.h"
 #include "ControllerLayout3D.h"
@@ -36,10 +27,6 @@ CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWi
     setWindowTitle("Create Custom 3D Controller");
     resize(1000, 600);
     SetupUI();
-}
-
-CustomControllerDialog::~CustomControllerDialog()
-{
 }
 
 void CustomControllerDialog::SetupUI()
@@ -167,10 +154,7 @@ void CustomControllerDialog::SetupUI()
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
 
-    /*---------------------------------------------------------*\
-    | LED Layout Transform Controls                            |
-    \*---------------------------------------------------------*/
-    QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
+        QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
     QGridLayout* transform_grid = new QGridLayout();
 
     // Lock transform checkbox
@@ -1074,8 +1058,14 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     return false;
 }
 
-void CustomControllerDialog::LoadExistingController(const std::string& name, int width, int height, int depth,
-                                                    const std::vector<GridLEDMapping>& mappings)
+void CustomControllerDialog::LoadExistingController(const std::string& name,
+                                                    int width,
+                                                    int height,
+                                                    int depth,
+                                                    const std::vector<GridLEDMapping>& mappings,
+                                                    float spacing_x_mm,
+                                                    float spacing_y_mm,
+                                                    float spacing_z_mm)
 {
     name_edit->setText(QString::fromStdString(name));
     width_spin->setValue(width);
@@ -1083,9 +1073,34 @@ void CustomControllerDialog::LoadExistingController(const std::string& name, int
     depth_spin->setValue(depth);
     led_mappings = mappings;
 
+    auto clamp_spacing = [](double value, double min_value, double max_value)
+    {
+        if(value < min_value) return min_value;
+        if(value > max_value) return max_value;
+        return value;
+    };
+
+    if(spacing_x_spin)
+    {
+        spacing_x_spin->setValue(clamp_spacing(spacing_x_mm,
+                                               spacing_x_spin->minimum(),
+                                               spacing_x_spin->maximum()));
+    }
+    if(spacing_y_spin)
+    {
+        spacing_y_spin->setValue(clamp_spacing(spacing_y_mm,
+                                               spacing_y_spin->minimum(),
+                                               spacing_y_spin->maximum()));
+    }
+    if(spacing_z_spin)
+    {
+        spacing_z_spin->setValue(clamp_spacing(spacing_z_mm,
+                                               spacing_z_spin->minimum(),
+                                               spacing_z_spin->maximum()));
+    }
+
     // Infer granularity for existing mappings that might not have it set
     InferMappingGranularity();
-
     UpdateGridDisplay();
 }
 
@@ -1324,10 +1339,6 @@ void CustomControllerDialog::refresh_colors()
     UpdateGridColors();
 }
 
-/*---------------------------------------------------------*\
-| LED Layout Transform Functions                           |
-| Transform the grid coordinates of LED mappings           |
-\*---------------------------------------------------------*/
 
 void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 {

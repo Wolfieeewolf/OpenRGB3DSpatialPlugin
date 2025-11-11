@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| BeatPulse3D.h                                             |
-|                                                           |
-|   Bass-driven global pulse                                |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef BEATPULSE3D_H
 #define BEATPULSE3D_H
@@ -22,28 +14,22 @@ class BeatPulse3D : public SpatialEffect3D
     Q_OBJECT
 public:
     explicit BeatPulse3D(QWidget* parent = nullptr);
-    ~BeatPulse3D() override;
+    ~BeatPulse3D() override = default;
 
-    /*---------------------------------------------------------*\
-    | Auto-registration system                                 |
-    \*---------------------------------------------------------*/
+    // Auto-registration hook
     EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse 3D", "Audio", [](){ return new BeatPulse3D; })
 
     static std::string const ClassName() { return "BeatPulse3D"; }
     static std::string const UIName() { return "Beat Pulse 3D"; }
 
-    /*---------------------------------------------------------*\
-    | Pure virtual implementations                             |
-    \*---------------------------------------------------------*/
+    // SpatialEffect3D overrides
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    /*---------------------------------------------------------*\
-    | Settings persistence                                     |
-    \*---------------------------------------------------------*/
+    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 

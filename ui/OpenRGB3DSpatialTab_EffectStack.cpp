@@ -1,13 +1,5 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_EffectStack.cpp                       |
-|                                                           |
-|   Effect Stack tab implementation                        |
-|                                                           |
-|   Date: 2025-10-05                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"

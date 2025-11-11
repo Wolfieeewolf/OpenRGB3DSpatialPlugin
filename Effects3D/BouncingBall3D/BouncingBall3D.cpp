@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| BouncingBall3D.cpp                                       |
-|                                                          |
-|   Single bouncing ball with glow                         |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "BouncingBall3D.h"
 #include <QGridLayout>

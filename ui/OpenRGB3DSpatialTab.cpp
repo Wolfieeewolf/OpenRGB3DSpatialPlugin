@@ -1,17 +1,4 @@
-/*---------------------------------------------------------*\
-
-    // Custom Audio Effects (save/load)
-    SetupAudioCustomEffectsUI(layout);
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab.cpp                                   |
-|                                                           |
-|   Main UI tab for 3D spatial control                     |
-|                                                           |
-|   Date: 2025-09-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerLayout3D.h"
@@ -21,6 +8,7 @@
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
+#include "GridSpaceUtils.h"
 #include <QStackedWidget>
 #include <QFile>
 #include <QTextStream>
@@ -216,8 +204,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stack_presets_list = nullptr;
     next_effect_instance_id = 1;
 
-    worker_thread = nullptr;
-
     SetupUI();
     LoadDevices();
     LoadCustomControllers();
@@ -240,9 +226,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::PreciseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
-
-    worker_thread = new EffectWorkerThread3D(this);
-    connect(worker_thread, &EffectWorkerThread3D::ColorsReady, this, &OpenRGB3DSpatialTab::ApplyColorsFromWorker);
 
     // Connect GridLayoutChanged signal to invoke SDK callbacks
     connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, [this]() {
@@ -327,14 +310,6 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
             resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
         }
         catch(const std::exception&){ /* ignore settings errors */ }
-    }
-
-    if(worker_thread)
-    {
-        worker_thread->StopEffect();
-        worker_thread->quit();
-        worker_thread->wait();
-        delete worker_thread;
     }
 
     if(auto_load_timer)
@@ -716,25 +691,25 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     // Room Height (Y-axis: Floor to Ceiling, Y-up)
     layout_layout->addWidget(new QLabel("Height (Y):"), 4, 2);
-    room_depth_spin = new QDoubleSpinBox();  // NOTE: Variable name is legacy, actually controls HEIGHT
-    room_depth_spin->setRange(100.0, 50000.0);
-    room_depth_spin->setSingleStep(10.0);
-    room_depth_spin->setValue(manual_room_depth);  // NOTE: Variable name is legacy, stores height
-    room_depth_spin->setSuffix(" mm");
-    room_depth_spin->setToolTip("Room height (floor to ceiling, Y-axis in standard OpenGL Y-up)");
-    room_depth_spin->setEnabled(use_manual_room_size);
-    layout_layout->addWidget(room_depth_spin, 4, 3);
+    room_height_spin = new QDoubleSpinBox();
+    room_height_spin->setRange(100.0, 50000.0);
+    room_height_spin->setSingleStep(10.0);
+    room_height_spin->setValue(manual_room_height);
+    room_height_spin->setSuffix(" mm");
+    room_height_spin->setToolTip("Room height (floor to ceiling, Y-axis in standard OpenGL Y-up)");
+    room_height_spin->setEnabled(use_manual_room_size);
+    layout_layout->addWidget(room_height_spin, 4, 3);
 
     // Room Depth (Z-axis: Front to Back)
     layout_layout->addWidget(new QLabel("Depth (Z):"), 4, 4);
-    room_height_spin = new QDoubleSpinBox();  // NOTE: Variable name is legacy, actually controls DEPTH
-    room_height_spin->setRange(100.0, 50000.0);
-    room_height_spin->setSingleStep(10.0);
-    room_height_spin->setValue(manual_room_height);  // NOTE: Variable name is legacy, stores depth
-    room_height_spin->setSuffix(" mm");
-    room_height_spin->setToolTip("Room depth (front to back, Z-axis in standard OpenGL Y-up)");
-    room_height_spin->setEnabled(use_manual_room_size);
-    layout_layout->addWidget(room_height_spin, 4, 5);
+    room_depth_spin = new QDoubleSpinBox();
+    room_depth_spin->setRange(100.0, 50000.0);
+    room_depth_spin->setSingleStep(10.0);
+    room_depth_spin->setValue(manual_room_depth);
+    room_depth_spin->setSuffix(" mm");
+    room_depth_spin->setToolTip("Room depth (front to back, Z-axis in standard OpenGL Y-up)");
+    room_depth_spin->setEnabled(use_manual_room_size);
+    layout_layout->addWidget(room_depth_spin, 4, 5);
 
     // Selection Info Label
     selection_info_label = new QLabel("No selection");
@@ -767,8 +742,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(use_manual_room_size_checkbox, &QCheckBox::toggled, [this](bool checked) {
         use_manual_room_size = checked;
         if(room_width_spin) room_width_spin->setEnabled(checked);
-        if(room_depth_spin) room_depth_spin->setEnabled(checked);
         if(room_height_spin) room_height_spin->setEnabled(checked);
+        if(room_depth_spin) room_depth_spin->setEnabled(checked);
 
         // Update viewport with new settings
         if(viewport)
@@ -789,8 +764,8 @@ void OpenRGB3DSpatialTab::SetupUI()
         emit GridLayoutChanged();
     });
 
-    connect(room_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        manual_room_depth = value;
+    connect(room_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        manual_room_height = value;
 
         // Update viewport with new depth
         if(viewport)
@@ -800,8 +775,8 @@ void OpenRGB3DSpatialTab::SetupUI()
         emit GridLayoutChanged();
     });
 
-    connect(room_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        manual_room_height = value;
+    connect(room_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
+        manual_room_depth = value;
 
         // Update viewport with new height
         if(viewport)
@@ -840,7 +815,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.position.x = pos_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.x = pos_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -889,7 +869,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.position.x = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.x = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -950,7 +935,12 @@ void OpenRGB3DSpatialTab::SetupUI()
                 QSignalBlocker block_slider(pos_y_slider);
                 pos_y_slider->setValue((int)std::lround(pos_value * 10.0));
             }
-            controller_transforms[ctrl_row]->transform.position.y = pos_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.y = pos_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1011,7 +1001,12 @@ void OpenRGB3DSpatialTab::SetupUI()
                     pos_y_slider->setValue((int)std::lround(value * 10.0));
                 }
             }
-            controller_transforms[ctrl_row]->transform.position.y = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.y = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1060,7 +1055,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.position.z = pos_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.z = pos_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1107,7 +1107,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.position.z = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.position.z = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1162,7 +1167,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.x = rot_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.x = rot_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1209,7 +1219,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.x = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.x = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1258,7 +1273,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.y = rot_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.y = rot_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1305,7 +1325,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.y = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.y = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1354,7 +1379,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.z = rot_value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.z = rot_value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1401,7 +1431,12 @@ void OpenRGB3DSpatialTab::SetupUI()
         int ctrl_row = controller_list->currentRow();
         if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
         {
-            controller_transforms[ctrl_row]->transform.rotation.z = value;
+            ControllerTransform* transform = controller_transforms[ctrl_row].get();
+            if(transform)
+            {
+                transform->transform.rotation.z = value;
+                ControllerLayout3D::MarkWorldPositionsDirty(transform);
+            }
             viewport->NotifyControllerTransformChanged();
             emit GridLayoutChanged();
             return;
@@ -1607,10 +1642,12 @@ void OpenRGB3DSpatialTab::SetupUI()
     \*---------------------------------------------------------*/
     QWidget* display_plane_page = new QWidget();
     QVBoxLayout* display_layout = new QVBoxLayout(display_plane_page);
-    display_layout->setSpacing(4);
+    display_layout->setSpacing(6);
 
     display_planes_list = new QListWidget();
-    display_planes_list->setMinimumHeight(150);
+    display_planes_list->setMinimumHeight(200);
+    display_planes_list->setUniformItemSizes(true);
+    display_planes_list->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     connect(display_planes_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_display_plane_selected);
     display_layout->addWidget(display_planes_list);
 
@@ -1627,7 +1664,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     display_layout->addLayout(display_buttons);
 
     QGridLayout* plane_form = new QGridLayout();
+    plane_form->setHorizontalSpacing(8);
+    plane_form->setVerticalSpacing(6);
     plane_form->setColumnStretch(1, 1);
+    plane_form->setColumnStretch(3, 1);
 
     int plane_row = 0;
     plane_form->addWidget(new QLabel("Name:"), plane_row, 0);
@@ -1638,10 +1678,12 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     plane_form->addWidget(new QLabel("Monitor Preset:"), plane_row, 0);
     display_plane_monitor_combo = new QComboBox();
+    display_plane_monitor_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     display_plane_monitor_combo->setEditable(true);
     display_plane_monitor_combo->setInsertPolicy(QComboBox::NoInsert);
     display_plane_monitor_combo->setPlaceholderText("Search brand or model...");
-    display_plane_monitor_combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    display_plane_monitor_combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    display_plane_monitor_combo->setMinimumContentsLength(20);
     if(QLineEdit* monitor_edit = display_plane_monitor_combo->lineEdit())
     {
         monitor_edit->setClearButtonEnabled(true);
@@ -1703,6 +1745,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     display_layout->addStretch();
 
     creator_stack->addWidget(display_plane_page);
+    RefreshDisplayPlaneCaptureSourceList();
 
     creator_layout->addWidget(creator_stack);
     creator_layout->addStretch();
@@ -2511,9 +2554,6 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
     selection_info_label->setFont(info_font);
 }
 
-/*---------------------------------------------------------*\
-| User Position Control Functions                          |
-\*---------------------------------------------------------*/
 /* Legacy user position control functions - REMOVED
  * User position is now handled through the reference points system
  * as a REF_POINT_USER type reference point.
@@ -2683,234 +2723,6 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
     if(viewport) viewport->UpdateColors();
 }
 
-/*---------------------------------------------------------*\
-| Background Effect Worker Thread Implementation           |
-\*---------------------------------------------------------*/
-
-EffectWorkerThread3D::EffectWorkerThread3D(QObject* parent)
-    : QThread(parent), effect(nullptr), active_zone(-1)
-{
-}
-
-EffectWorkerThread3D::~EffectWorkerThread3D()
-{
-    StopEffect();
-    quit();
-    wait();
-}
-
-void EffectWorkerThread3D::StartEffect(
-    SpatialEffect3D* eff,
-    const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-    const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
-    ZoneManager3D* zone_mgr,
-    int active_zone_idx)
-{
-    QMutexLocker locker(&state_mutex);
-
-    effect = eff;
-    active_zone = active_zone_idx;
-
-    // Create snapshots of transforms
-    transform_snapshots.clear();
-    for(size_t i = 0; i < transforms.size(); i++)
-    {
-        std::unique_ptr<ControllerTransform> snapshot = std::make_unique<ControllerTransform>();
-        snapshot->controller = transforms[i]->controller;
-        snapshot->virtual_controller = transforms[i]->virtual_controller;
-        snapshot->transform = transforms[i]->transform;
-        snapshot->led_positions = transforms[i]->led_positions;
-        snapshot->world_positions_dirty = false;
-        transform_snapshots.push_back(std::move(snapshot));
-    }
-
-    // Create snapshots of reference points
-    ref_point_snapshots.clear();
-    for(size_t i = 0; i < ref_points.size(); i++)
-    {
-        const std::unique_ptr<VirtualReferencePoint3D>& ref_point = ref_points[i];
-        std::unique_ptr<VirtualReferencePoint3D> snapshot = std::make_unique<VirtualReferencePoint3D>(
-            ref_point->GetName(),
-            ref_point->GetType(),
-            ref_point->GetPosition().x,
-            ref_point->GetPosition().y,
-            ref_point->GetPosition().z
-        );
-        snapshot->SetDisplayColor(ref_point->GetDisplayColor());
-        ref_point_snapshots.push_back(std::move(snapshot));
-    }
-
-    // Create zone manager snapshot
-    if(zone_mgr)
-    {
-        zone_snapshot = std::make_unique<ZoneManager3D>();
-        // Copy zones from zone_mgr to zone_snapshot
-        for(int i = 0; i < zone_mgr->GetZoneCount(); i++)
-        {
-            Zone3D* zone = zone_mgr->GetZone(i);
-            if(zone)
-            {
-                Zone3D* new_zone = zone_snapshot->CreateZone(zone->GetName());
-                if(new_zone)
-                {
-                    // Copy all controllers from the original zone
-                    const std::vector<int>& controllers = zone->GetControllers();
-                    for(size_t j = 0; j < controllers.size(); j++)
-                    {
-                        new_zone->AddController(controllers[j]);
-                    }
-                }
-            }
-        }
-    }
-
-    should_stop = false;
-    running = true;
-
-    if(!isRunning())
-    {
-        start();
-    }
-
-    start_condition.wakeOne();
-}
-
-void EffectWorkerThread3D::StopEffect()
-{
-    should_stop = true;
-    running = false;
-    start_condition.wakeOne();
-}
-
-void EffectWorkerThread3D::UpdateTime(float time)
-{
-    current_time = time;
-}
-
-bool EffectWorkerThread3D::GetColors(
-    std::vector<RGBColor>& out_colors,
-    std::vector<LEDPosition3D*>& out_leds)
-{
-    QMutexLocker locker(&buffer_mutex);
-
-    if(front_buffer.colors.empty())
-    {
-        return false;
-    }
-
-    out_colors = front_buffer.colors;
-    out_leds = front_buffer.leds;
-
-    return true;
-}
-
-void EffectWorkerThread3D::run()
-{
-    while(!should_stop)
-    {
-        QMutexLocker locker(&state_mutex);
-
-        if(!running)
-        {
-            start_condition.wait(&state_mutex);
-            continue;
-        }
-
-        if(!effect || transform_snapshots.empty())
-        {
-            msleep(16); // ~60 FPS
-            continue;
-        }
-
-        locker.unlock();
-
-        // Calculate colors on background thread
-        std::vector<RGBColor> colors;
-        std::vector<LEDPosition3D*> leds;
-
-        float time = current_time.load();
-
-        // Calculate colors for all LEDs
-        for(size_t i = 0; i < transform_snapshots.size(); i++)
-        {
-            ControllerTransform* transform = transform_snapshots[i].get();
-            for(size_t j = 0; j < transform->led_positions.size(); j++)
-            {
-                LEDPosition3D* led_pos = &transform->led_positions[j];
-                RGBColor color = effect->CalculateColor(
-                    led_pos->world_position.x,
-                    led_pos->world_position.y,
-                    led_pos->world_position.z,
-                    time
-                );
-
-                colors.push_back(color);
-                leds.push_back(led_pos);
-            }
-        }
-
-        // Swap buffers
-        {
-            QMutexLocker buffer_locker(&buffer_mutex);
-            back_buffer.colors = std::move(colors);
-            back_buffer.leds = std::move(leds);
-            std::swap(front_buffer, back_buffer);
-        }
-
-        emit ColorsReady();
-
-        msleep(33); // ~30 FPS
-    }
-}
-
-void OpenRGB3DSpatialTab::ApplyColorsFromWorker()
-{
-    if(!worker_thread) return;
-
-    std::vector<RGBColor> colors;
-    std::vector<LEDPosition3D*> leds;
-
-    if(!worker_thread->GetColors(colors, leds))
-    {
-        return;
-    }
-
-    // Apply colors to controllers
-    for(size_t i = 0; i < leds.size() && i < colors.size(); i++)
-    {
-        LEDPosition3D* led = leds[i];
-        if(!led || !led->controller) continue;
-
-        if(led->zone_idx >= led->controller->zones.size()) continue;
-
-        unsigned int led_global_idx = led->controller->zones[led->zone_idx].start_idx + led->led_idx;
-
-        if(led_global_idx < led->controller->colors.size())
-        {
-            led->controller->colors[led_global_idx] = colors[i];
-        }
-    }
-
-    // Update all controllers
-    std::set<RGBController*> updated_controllers;
-    for(size_t i = 0; i < leds.size(); i++)
-    {
-        if(leds[i] && leds[i]->controller)
-        {
-            if(updated_controllers.find(leds[i]->controller) == updated_controllers.end())
-            {
-                leds[i]->controller->UpdateLEDs();
-                updated_controllers.insert(leds[i]->controller);
-            }
-        }
-    }
-
-    if(viewport)
-    {
-        viewport->UpdateColors();
-    }
-}
-
 Vector3D OpenRGB3DSpatialTab::ComputeWorldPositionForSDK(const ControllerTransform* transform, size_t led_idx) const
 {
     Vector3D zero{0.0f, 0.0f, 0.0f};
@@ -2924,58 +2736,21 @@ Vector3D OpenRGB3DSpatialTab::ComputeWorldPositionForSDK(const ControllerTransfo
         ControllerLayout3D::CalculateWorldPosition(led.local_position, transform->transform) :
         led.world_position;
 
-    world.x *= grid_scale_mm;
-    world.y *= grid_scale_mm;
-    world.z *= grid_scale_mm;
+    world.x = GridUnitsToMM(world.x, grid_scale_mm);
+    world.y = GridUnitsToMM(world.y, grid_scale_mm);
+    world.z = GridUnitsToMM(world.z, grid_scale_mm);
     return world;
 }
 
 void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const
 {
-    bool has_leds = false;
-    float min_x = 0.0f, max_x = 0.0f;
-    float min_y = 0.0f, max_y = 0.0f;
-    float min_z = 0.0f, max_z = 0.0f;
+    ManualRoomSettings auto_room = MakeManualRoomSettings(false, 0.0f, 0.0f, 0.0f);
+    GridBounds bounds = ComputeGridBounds(auto_room, grid_scale_mm, controller_transforms);
+    GridExtents extents = BoundsToExtents(bounds);
 
-    for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
-    {
-        const std::unique_ptr<ControllerTransform>& transform_ptr = controller_transforms[transform_index];
-        const ControllerTransform* transform = transform_ptr.get();
-        if(!transform) continue;
-
-        for(size_t i = 0; i < transform->led_positions.size(); ++i)
-        {
-            Vector3D world = ComputeWorldPositionForSDK(transform, i);
-            if(!has_leds)
-            {
-                min_x = max_x = world.x;
-                min_y = max_y = world.y;
-                min_z = max_z = world.z;
-                has_leds = true;
-            }
-            else
-            {
-                if(world.x < min_x) min_x = world.x;
-                if(world.x > max_x) max_x = world.x;
-                if(world.y < min_y) min_y = world.y;
-                if(world.y > max_y) max_y = world.y;
-                if(world.z < min_z) min_z = world.z;
-                if(world.z > max_z) max_z = world.z;
-            }
-        }
-    }
-
-    if(!has_leds)
-    {
-        width_mm = manual_room_width;
-        depth_mm = manual_room_depth;
-        height_mm = manual_room_height;
-        return;
-    }
-
-    width_mm  = std::max(0.0f, max_x - min_x);
-    depth_mm  = std::max(0.0f, max_y - min_y);
-    height_mm = std::max(0.0f, max_z - min_z);
+    width_mm  = GridUnitsToMM(extents.width_units, grid_scale_mm);
+    depth_mm  = GridUnitsToMM(extents.height_units, grid_scale_mm);
+    height_mm = GridUnitsToMM(extents.depth_units, grid_scale_mm);
 }
 
 /*---------------------------------------------------------*

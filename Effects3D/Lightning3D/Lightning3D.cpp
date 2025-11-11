@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Lightning3D.cpp                                          |
-|                                                          |
-|   Room-scale lightning strike effect                     |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Lightning3D.h"
 #include <QGridLayout>

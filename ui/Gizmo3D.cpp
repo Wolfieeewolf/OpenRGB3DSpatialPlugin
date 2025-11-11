@@ -1,13 +1,5 @@
-/*---------------------------------------------------------*\
-| Gizmo3D.cpp                                               |
-|                                                           |
-|   3D manipulation gizmo with ray casting interaction     |
-|                                                           |
-|   Date: 2025-09-29                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 /*---------------------------------------------------------*\
 | Local Includes                                           |

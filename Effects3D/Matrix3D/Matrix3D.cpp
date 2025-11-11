@@ -1,10 +1,5 @@
-/*---------------------------------------------------------*\
-| Matrix3D.cpp                                             |
-|                                                          |
-|   3D Matrix code rain effect                             |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Matrix3D.h"
 #include <QGridLayout>
@@ -20,8 +15,6 @@ Matrix3D::Matrix3D(QWidget* parent) : SpatialEffect3D(parent)
     trail = 50;
     SetRainbowMode(false);
 }
-
-Matrix3D::~Matrix3D() {}
 
 EffectInfo3D Matrix3D::GetEffectInfo()
 {

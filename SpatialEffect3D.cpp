@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| SpatialEffect3D.cpp                                       |
-|                                                           |
-|   Base class for 3D spatial effects with custom UI      |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
 #include "Colors.h"
@@ -93,9 +84,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     effect_controls_group = new QGroupBox("Effect Controls");
     QVBoxLayout* main_layout = new QVBoxLayout();
 
-    /*---------------------------------------------------------*\
-    | Effect Control Buttons                                   |
-    \*---------------------------------------------------------*/
+    // Effect control buttons
     QHBoxLayout* button_layout = new QHBoxLayout();
     start_effect_button = new QPushButton("Start Effect");
     start_effect_button->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
@@ -108,9 +97,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     button_layout->addStretch();
     main_layout->addLayout(button_layout);
 
-    /*---------------------------------------------------------*\
-    | Speed control (with logarithmic curve)                   |
-    \*---------------------------------------------------------*/
+    // Speed control (logarithmic curve)
     QHBoxLayout* speed_layout = new QHBoxLayout();
     speed_layout->addWidget(new QLabel("Speed:"));
     speed_slider = new QSlider(Qt::Horizontal);
@@ -123,9 +110,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     speed_layout->addWidget(speed_label);
     main_layout->addLayout(speed_layout);
 
-    /*---------------------------------------------------------*\
-    | Brightness control                                       |
-    \*---------------------------------------------------------*/
+    // Brightness control
     QHBoxLayout* brightness_layout = new QHBoxLayout();
     brightness_layout->addWidget(new QLabel("Brightness:"));
     brightness_slider = new QSlider(Qt::Horizontal);
@@ -139,9 +124,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     brightness_layout->addWidget(brightness_label);
     main_layout->addLayout(brightness_layout);
 
-    /*---------------------------------------------------------*\
-    | Frequency control                                        |
-    \*---------------------------------------------------------*/
+    // Frequency control
     QHBoxLayout* frequency_layout = new QHBoxLayout();
     frequency_layout->addWidget(new QLabel("Frequency:"));
     frequency_slider = new QSlider(Qt::Horizontal);
@@ -154,9 +137,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     frequency_layout->addWidget(frequency_label);
     main_layout->addLayout(frequency_layout);
 
-    /*---------------------------------------------------------*\
-    | Size control (pattern density)                          |
-    \*---------------------------------------------------------*/
+    // Size control (pattern density)
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
     size_slider = new QSlider(Qt::Horizontal);
@@ -170,9 +151,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     size_layout->addWidget(size_label);
     main_layout->addLayout(size_layout);
 
-    /*---------------------------------------------------------*\
-    | Scale control (area coverage)                            |
-    \*---------------------------------------------------------*/
+    // Scale control (area coverage)
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
@@ -190,9 +169,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     scale_layout->addWidget(scale_invert_check);
     main_layout->addLayout(scale_layout);
 
-    /*---------------------------------------------------------*\
-    | FPS Limiter control                                      |
-    \*---------------------------------------------------------*/
+    // FPS limiter
     QHBoxLayout* fps_layout = new QHBoxLayout();
     fps_layout->addWidget(new QLabel("FPS:"));
     fps_slider = new QSlider(Qt::Horizontal);
@@ -205,9 +182,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     fps_layout->addWidget(fps_label);
     main_layout->addLayout(fps_layout);
 
-    /*---------------------------------------------------------*\
-    | Intensity (global multiplier)                            |
-    \*---------------------------------------------------------*/
+    // Intensity (global multiplier)
     QHBoxLayout* intensity_layout = new QHBoxLayout();
     intensity_layout->addWidget(new QLabel("Intensity:"));
     intensity_slider = new QSlider(Qt::Horizontal);
@@ -217,9 +192,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     intensity_layout->addWidget(intensity_slider);
     main_layout->addLayout(intensity_layout);
 
-    /*---------------------------------------------------------*\
-    | Sharpness (gamma-like shaping)                           |
-    \*---------------------------------------------------------*/
+    // Sharpness (gamma-like shaping)
     QHBoxLayout* sharpness_layout = new QHBoxLayout();
     sharpness_layout->addWidget(new QLabel("Sharpness:"));
     sharpness_slider = new QSlider(Qt::Horizontal);
@@ -229,9 +202,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     sharpness_layout->addWidget(sharpness_slider);
     main_layout->addLayout(sharpness_layout);
 
-    /*---------------------------------------------------------*\
-    | Axis control                                             |
-    \*---------------------------------------------------------*/
+    // Axis control
     QHBoxLayout* axis_layout = new QHBoxLayout();
     axis_layout->addWidget(new QLabel("Axis:"));
     axis_combo = new QComboBox();
@@ -256,9 +227,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     axis_layout->addStretch();
     main_layout->addLayout(axis_layout);
 
-    /*---------------------------------------------------------*\
-    | Coverage selection (room targeting)                      |
-    \*---------------------------------------------------------*/
+    // Coverage selection (room targeting)
     QHBoxLayout* coverage_layout = new QHBoxLayout();
     coverage_layout->addWidget(new QLabel("Coverage:"));
     coverage_combo = new QComboBox();
@@ -279,17 +248,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     coverage_layout->addWidget(coverage_combo);
     main_layout->addLayout(coverage_layout);
 
-    /*---------------------------------------------------------*\
-    | Create and add color controls                            |
-    \*---------------------------------------------------------*/
+    // Color controls
     CreateColorControls();
     main_layout->addWidget(color_controls_group);
 
     effect_controls_group->setLayout(main_layout);
 
-    /*---------------------------------------------------------*\
-    | Connect signals                                          |
-    \*---------------------------------------------------------*/
+    // Connect signals
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -310,14 +275,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     // The parent tab needs to connect these to its on_start_effect_clicked/on_stop_effect_clicked handlers
     // to actually start the effect timer
 
-    /*---------------------------------------------------------*\
-    | Apply control visibility based on effect info            |
-    \*---------------------------------------------------------*/
     ApplyControlVisibility();
 
-    /*---------------------------------------------------------*\
-    | Update labels when sliders change                        |
-    \*---------------------------------------------------------*/
     connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
         speed_label->setText(QString::number(value));
         effect_speed = value;
@@ -343,34 +302,22 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
         effect_fps = value;
     });
 
-    /*---------------------------------------------------------*\
-    | Add to parent layout                                     |
-    \*---------------------------------------------------------*/
     if(parent && parent->layout())
     {
         parent->layout()->addWidget(effect_controls_group);
     }
 }
 
-/*---------------------------------------------------------*\
-| Create Color Controls                                    |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::CreateColorControls()
 {
     color_controls_group = new QGroupBox("Colors");
     QVBoxLayout* color_layout = new QVBoxLayout();
 
-    /*---------------------------------------------------------*\
-    | Rainbow Mode Toggle                                      |
-    \*---------------------------------------------------------*/
     rainbow_mode_check = new QCheckBox("Rainbow Mode");
     rainbow_mode_check->setChecked(rainbow_mode);
     rainbow_mode_check->setToolTip("Use rainbow gradient instead of custom colors");
     color_layout->addWidget(rainbow_mode_check);
 
-    /*---------------------------------------------------------*\
-    | Color Buttons Container                                  |
-    \*---------------------------------------------------------*/
     color_buttons_widget = new QWidget();
     color_buttons_layout = new QHBoxLayout();
     color_buttons_widget->setLayout(color_buttons_layout);
@@ -381,9 +328,6 @@ void SpatialEffect3D::CreateColorControls()
         CreateColorButton(colors[i]);
     }
 
-    /*---------------------------------------------------------*\
-    | Add/Remove Color Buttons                                 |
-    \*---------------------------------------------------------*/
     add_color_button = new QPushButton("+");
     add_color_button->setMaximumSize(30, 30);
     add_color_button->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
@@ -405,9 +349,6 @@ void SpatialEffect3D::CreateColorControls()
     // Hide color buttons when rainbow mode is enabled
     color_buttons_widget->setVisible(!rainbow_mode);
 
-    /*---------------------------------------------------------*\
-    | Connect signals                                          |
-    \*---------------------------------------------------------*/
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnRainbowModeChanged);
     connect(add_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAddColorClicked);
     connect(remove_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRemoveColorClicked);
@@ -513,9 +454,6 @@ RGBColor SpatialEffect3D::GetColorAtPosition(float position)
     return (b << 16) | (g << 8) | r;
 }
 
-/*---------------------------------------------------------*\
-| New Color Control Slots                                  |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::OnRainbowModeChanged()
 {
     rainbow_mode = rainbow_mode_check->isChecked();
@@ -595,9 +533,6 @@ void SpatialEffect3D::OnStopEffectClicked()
     emit ParametersChanged();
 }
 
-/*---------------------------------------------------------*\
-| New getter/setter methods                                |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::SetColors(const std::vector<RGBColor>& new_colors)
 {
     colors = new_colors;
@@ -640,9 +575,6 @@ unsigned int SpatialEffect3D::GetFrequency() const
     return effect_frequency;
 }
 
-/*---------------------------------------------------------*\
-| Reference Point Methods                                  |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::SetReferenceMode(ReferenceMode mode)
 {
     reference_mode = mode;
@@ -715,14 +647,6 @@ Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
     }
 }
 
-/*---------------------------------------------------------*\
-| Standardized Parameter Calculation Helpers               |
-| These provide consistent behavior across all effects     |
-\*---------------------------------------------------------*/
-/*---------------------------------------------------------*\
-| Base normalized parameter getters                        |
-| These return 0.0-1.0 or similar ranges, no effect bias   |
-\*---------------------------------------------------------*/
 float SpatialEffect3D::GetNormalizedSpeed() const
 {
     // Expanded slider range 0..200 -> map to 0..1 and square for smooth curve
@@ -781,9 +705,6 @@ unsigned int SpatialEffect3D::GetTargetFPS() const
     return effect_fps;
 }
 
-/*---------------------------------------------------------*\
-| Scaled parameter getters - use effect-specific info      |
-\*---------------------------------------------------------*/
 float SpatialEffect3D::GetScaledSpeed() const
 {
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
@@ -798,19 +719,12 @@ float SpatialEffect3D::GetScaledFrequency() const
     return GetNormalizedFrequency() * freq_scale;
 }
 
-/*---------------------------------------------------------*\
-| Universal progress calculator                            |
-| Use this in CalculateColor() for time-based animation    |
-\*---------------------------------------------------------*/
 float SpatialEffect3D::CalculateProgress(float time) const
 {
     float progress = time * GetScaledSpeed();
     return effect_reverse ? -progress : progress;
 }
 
-/*---------------------------------------------------------*\
-| Global coverage/intensity post-processing               |
-\*---------------------------------------------------------*/
 RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const
 {
     // Compute coverage weight based on selection
@@ -885,11 +799,6 @@ float SpatialEffect3D::ComputeCoverageWeight(float x, float y, float z, const Gr
     }
 }
 
-/*---------------------------------------------------------*\
-| Boundary checking helper - LEGACY VERSION                |
-| Returns false if LED is outside the effect radius        |
-| Uses fixed radius - kept for backward compatibility      |
-\*---------------------------------------------------------*/
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
 {
     // If grid-aware boundary has already been validated upstream, skip legacy check
@@ -906,12 +815,6 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     return distance_from_origin <= scale_radius;
 }
 
-/*---------------------------------------------------------*\
-| Boundary checking helper - ROOM-AWARE VERSION            |
-| Returns false if LED is outside the effect radius        |
-| Scale is relative to room size for universal compatibility|
-| RECOMMENDED: Use this version in CalculateColorGrid()    |
-\*---------------------------------------------------------*/
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
     // Calculate room's half-diagonal (center to corner distance)
@@ -930,17 +833,11 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     return distance_from_origin <= scale_radius;
 }
 
-/*---------------------------------------------------------*\
-| Parameter Update Methods                                 |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
 {
     // Empty implementation - old 3D controls removed
 }
 
-/*---------------------------------------------------------*\
-| Helper function to set visibility of a control group     |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
 {
     if(slider && value_label)
@@ -970,10 +867,6 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
     }
 }
 
-/*---------------------------------------------------------*\
-| Apply Control Visibility                                 |
-| Hides base controls if effect provides custom versions   |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::ApplyControlVisibility()
 {
     EffectInfo3D info = GetEffectInfo();
@@ -1089,9 +982,6 @@ void SpatialEffect3D::OnParameterChanged()
     emit ParametersChanged();
 }
 
-/*---------------------------------------------------------*\
-| Axis Control Slots                                       |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::OnAxisChanged()
 {
     if(axis_combo)
@@ -1119,9 +1009,6 @@ void SpatialEffect3D::OnReverseChanged()
     emit ParametersChanged();
 }
 
-/*---------------------------------------------------------*\
-| Serialization - save effect parameters to JSON           |
-\*---------------------------------------------------------*/
 nlohmann::json SpatialEffect3D::SaveSettings() const
 {
     nlohmann::json j;
@@ -1165,9 +1052,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     return j;
 }
 
-/*---------------------------------------------------------*\
-| Serialization - load effect parameters from JSON         |
-\*---------------------------------------------------------*/
 void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 {
     // Load common parameters

@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| CustomControllerDialog.h                                  |
-|                                                           |
-|   Dialog for creating custom 3D LED controllers          |
-|                                                           |
-|   Date: 2025-09-24                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef CUSTOMCONTROLLERDIALOG_H
 #define CUSTOMCONTROLLERDIALOG_H
@@ -61,10 +52,13 @@ class CustomControllerDialog : public QDialog
 
 public:
     explicit CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent = nullptr);
-    ~CustomControllerDialog();
+    ~CustomControllerDialog() override = default;
 
     void LoadExistingController(const std::string& name, int width, int height, int depth,
-                                const std::vector<GridLEDMapping>& mappings);
+                                const std::vector<GridLEDMapping>& mappings,
+                                float spacing_x_mm = 10.0f,
+                                float spacing_y_mm = 10.0f,
+                                float spacing_z_mm = 10.0f);
 
     std::vector<GridLEDMapping> GetLEDMappings() const { return led_mappings; }
     QString GetControllerName() const;

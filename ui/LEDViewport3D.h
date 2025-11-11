@@ -1,36 +1,19 @@
-/*---------------------------------------------------------*\
-| LEDViewport3D.h                                           |
-|                                                           |
-|   OpenGL 3D viewport for LED visualization and control   |
-|                                                           |
-|   Date: 2025-09-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef LEDVIEWPORT3D_H
 #define LEDVIEWPORT3D_H
 
-/*---------------------------------------------------------*\
-| Qt Includes                                              |
-\*---------------------------------------------------------*/
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
 #include <QMouseEvent>
 #include <QWheelEvent>
 
-/*---------------------------------------------------------*\
-| System Includes                                          |
-\*---------------------------------------------------------*/
 #include <vector>
 #include <memory>
 #include <map>
 
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
 #include "LEDPosition3D.h"
+#include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "Gizmo3D.h"
 #include "SpatialEffectTypes.h"
@@ -117,6 +100,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    GridExtents GetRoomExtents() const;
     void DrawGrid();
     void DrawReferencePoints();
     void DrawAxes();
@@ -157,23 +141,13 @@ private:
     // Millimeters per grid unit used for converting manual room dimensions to grid units
     float   grid_scale_mm;
 
-    /*---------------------------------------------------------*\
-    | Room Dimensions (Corner-Origin System)                   |
-    | Standard OpenGL Y-up coordinate system                   |
-    \*---------------------------------------------------------*/
-    float   room_width;          // X-axis: 0 (left wall) to width (right wall)
-    float   room_height;         // Y-axis: 0 (floor) to height (ceiling)
-    float   room_depth;          // Z-axis: 0 (front wall) to depth (back wall)
+    float   room_width;
+    float   room_height;
+    float   room_depth;
     bool    use_manual_room_dimensions;
 
-    /*---------------------------------------------------------*\
-    | User Position Reference Point                            |
-    \*---------------------------------------------------------*/
     UserPosition3D  user_position;
 
-    /*---------------------------------------------------------*\
-    | Reference Points                                         |
-    \*---------------------------------------------------------*/
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
     std::vector<std::unique_ptr<DisplayPlane3D>>* display_planes;
     int                                     selected_display_plane_idx;
@@ -181,9 +155,6 @@ private:
     bool                                    show_screen_preview;
     std::map<std::string, GLuint>           display_plane_textures;  // Texture IDs per capture source
 
-    /*---------------------------------------------------------*\
-    | Camera Controls                                          |
-    \*---------------------------------------------------------*/
     float   camera_distance;
     float   camera_yaw;
     float   camera_pitch;
@@ -191,18 +162,12 @@ private:
     float   camera_target_y;
     float   camera_target_z;
 
-    /*---------------------------------------------------------*\
-    | Mouse Interaction                                        |
-    \*---------------------------------------------------------*/
     bool    dragging_rotate;
     bool    dragging_pan;
     bool    dragging_grab;
     QPoint  last_mouse_pos;
     QPoint  click_start_pos;
 
-    /*---------------------------------------------------------*\
-    | 3D Manipulation Gizmo                                   |
-    \*---------------------------------------------------------*/
     Gizmo3D gizmo;
 };
 

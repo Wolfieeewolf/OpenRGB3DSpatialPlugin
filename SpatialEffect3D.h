@@ -1,20 +1,8 @@
-/*---------------------------------------------------------*\
-| SpatialEffect3D.h                                         |
-|                                                           |
-|   Base class for 3D spatial effects with custom UI      |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPATIALEFFECT3D_H
 #define SPATIALEFFECT3D_H
 
-/*---------------------------------------------------------*\
-| Qt Includes                                              |
-\*---------------------------------------------------------*/
 #include <QWidget>
 #include <QLayout>
 #include <QLabel>
@@ -30,43 +18,40 @@
 #include <QPushButton>
 #include <QColorDialog>
 
-/*---------------------------------------------------------*\
-| OpenRGB Includes                                         |
-\*---------------------------------------------------------*/
 #include "RGBController.h"
 
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
+#include <vector>
+
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
 #include <nlohmann/json.hpp>
 
-/*---------------------------------------------------------*\
-| Grid context for dynamic effect scaling                 |
-| IMPORTANT: All values are in GRID UNITS                 |
-| One grid unit equals the configured viewport grid scale |
-| (default 10mm). LED world_position and GridContext3D    |
-| use the same units!                                     |
-\*---------------------------------------------------------*/
+// Grid context describes the current room bounds in grid units.
 struct GridContext3D
 {
     float min_x, max_x;
     float min_y, max_y;
     float min_z, max_z;
     float width, height, depth;
-    float center_x, center_y, center_z;  // Room center point for effect calculations
+    float center_x, center_y, center_z;
+    float grid_scale_mm;
 
-    GridContext3D(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
-        : min_x(minX), max_x(maxX), min_y(minY), max_y(maxY), min_z(minZ), max_z(maxZ)
+    GridContext3D(float minX,
+                  float maxX,
+                  float minY,
+                  float maxY,
+                  float minZ,
+                  float maxZ,
+                  float scale_mm = 10.0f)
+        : min_x(minX), max_x(maxX),
+          min_y(minY), max_y(maxY),
+          min_z(minZ), max_z(maxZ),
+          grid_scale_mm(scale_mm)
     {
-        // Calculate room dimensions (no +1 needed - we're using actual coordinates)
-        // Standard OpenGL Y-up coordinate system
-        width = max_x - min_x;    // X-axis is width (left to right)
-        height = max_y - min_y;   // Y-axis is height (floor to ceiling)
-        depth = max_z - min_z;    // Z-axis is depth (front to back)
+        width = max_x - min_x;
+        height = max_y - min_y;
+        depth = max_z - min_z;
 
-        // Calculate room center (for corner-origin coordinate system)
         center_x = (min_x + max_x) / 2.0f;
         center_y = (min_y + max_y) / 2.0f;
         center_z = (min_z + max_z) / 2.0f;
@@ -121,18 +106,13 @@ public:
     // Public accessor for target FPS so UI can query without needing protected access
     unsigned int GetTargetFPSSetting() const { return GetTargetFPS(); }
 
-    /*---------------------------------------------------------*\
-    | Pure virtual methods each effect must implement         |
-    \*---------------------------------------------------------*/
+    // Pure virtual methods each effect must implement
     virtual EffectInfo3D GetEffectInfo() = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
 
-    /*---------------------------------------------------------*\
-    | Optional grid calculation (for backward compatibility)   |
-    | Default implementation just calls CalculateColor()       |
-    \*---------------------------------------------------------*/
+    // Optional grid calculation hook (defaults to CalculateColor for legacy effects)
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
     {
         // Default grid-aware behavior: compute origin with grid context and apply room-relative boundary.
@@ -160,17 +140,13 @@ public:
         return result;
     }
 
-    /*---------------------------------------------------------*\
-    | Common effect controls (all effects need these)        |
-    \*---------------------------------------------------------*/
+    // Common effect controls shared by all effects
     virtual void CreateCommonEffectControls(QWidget* parent);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
     virtual void ApplyControlVisibility();      // Apply visibility flags from EffectInfo
 
 
-    /*---------------------------------------------------------*\
-    | Effect state management                                  |
-    \*---------------------------------------------------------*/
+    // Effect state management
     virtual void SetEffectEnabled(bool enabled) { effect_enabled = enabled; }
     virtual bool IsEffectEnabled() { return effect_enabled; }
 
@@ -187,9 +163,7 @@ public:
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
 
-    /*---------------------------------------------------------*\
-    | Reference point system                                   |
-    \*---------------------------------------------------------*/
+    // Reference point system
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual ReferenceMode GetReferenceMode() const;
     virtual void SetGlobalReferencePoint(const Vector3D& point);
@@ -197,9 +171,7 @@ public:
     virtual void SetCustomReferencePoint(const Vector3D& point);
     virtual void SetUseCustomReference(bool use_custom);
 
-    /*---------------------------------------------------------*\
-    | Button accessors for parent tab to connect              |
-    \*---------------------------------------------------------*/
+    // Button accessors for parent tab to connect
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
 
@@ -207,15 +179,10 @@ public:
     EffectAxis GetAxis() const { return effect_axis; }
     bool GetReverse() const { return effect_reverse; }
 
-    /*---------------------------------------------------------*\
-    | Global post-processing helpers                          |
-    | Apply coverage/intensity/sharpness shaping consistently |
-    \*---------------------------------------------------------*/
+    // Global post-processing helpers apply coverage/intensity shaping consistently
     RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
 
-    /*---------------------------------------------------------*\
-    | Serialization - save/load effect parameters             |
-    \*---------------------------------------------------------*/
+    // Serialization helpers
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
 
@@ -223,9 +190,7 @@ signals:
     void ParametersChanged();
 
 protected:
-    /*---------------------------------------------------------*\
-    | Common effect controls                                   |
-    \*---------------------------------------------------------*/
+    // Common effect controls
     QGroupBox*          effect_controls_group;
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
@@ -246,16 +211,12 @@ protected:
     QSlider*            sharpness_slider;     // 0..200 (100 = neutral)
     QComboBox*          coverage_combo;       // coverage selection
 
-    /*---------------------------------------------------------*\
-    | Axis selection controls                                  |
-    \*---------------------------------------------------------*/
+    // Axis selection controls
     QComboBox*          axis_combo;
     QCheckBox*          reverse_check;
     bool                axis_none;            // When true, use effect's default axis behavior
 
-    /*---------------------------------------------------------*\
-    | Color management controls                                |
-    \*---------------------------------------------------------*/
+    // Color management controls
     QGroupBox*          color_controls_group;
     QCheckBox*          rainbow_mode_check;
     QWidget*            color_buttons_widget;
@@ -265,16 +226,11 @@ protected:
     std::vector<QPushButton*> color_buttons;
     std::vector<RGBColor> colors;
 
-
-    /*---------------------------------------------------------*\
-    | Effect control buttons                                   |
-    \*---------------------------------------------------------*/
+    // Effect control buttons
     QPushButton*        start_effect_button;
     QPushButton*        stop_effect_button;
 
-    /*---------------------------------------------------------*\
-    | Effect parameters                                        |
-    \*---------------------------------------------------------*/
+    // Effect parameters
     bool                effect_enabled;
     bool                effect_running;
     unsigned int        effect_speed;
@@ -294,32 +250,23 @@ protected:
     unsigned int        effect_sharpness;     // 0..200 (100 neutral)
     unsigned int        effect_coverage;      // Index into coverage_combo
 
-    /*---------------------------------------------------------*\
-    | Axis parameters                                          |
-    \*---------------------------------------------------------*/
+    // Axis parameters
     EffectAxis          effect_axis;
     bool                effect_reverse;
 
-    /*---------------------------------------------------------*\
-    | Reference Point System (for effect origin)              |
-    \*---------------------------------------------------------*/
+    // Reference Point System (for effect origin)
     ReferenceMode       reference_mode;         // Room center / User position / Custom
     Vector3D            global_reference_point; // Set by parent tab (user position or 0,0,0)
     Vector3D            custom_reference_point; // Effect-specific override (future)
     bool                use_custom_reference;   // Override global setting
 
-    /*---------------------------------------------------------*\
-    | Helper methods for derived classes                       |
-    \*---------------------------------------------------------*/
+    // Helper methods for derived classes
     Vector3D GetEffectOrigin() const;           // Returns correct origin based on reference mode (legacy - returns 0,0,0 for room center)
     Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;  // Grid-aware origin (uses grid.center for room center)
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
 
-    /*---------------------------------------------------------*\
-    | Standardized parameter calculation helpers               |
-    | These work for ANY effect - past, present, or future!    |
-    \*---------------------------------------------------------*/
+    // Standardized parameter calculation helpers
     float GetNormalizedSpeed() const;           // Returns 0.0-1.0 speed with consistent curve
     float GetNormalizedFrequency() const;       // Returns 0.0-1.0 frequency with consistent curve
     float GetNormalizedSize() const;            // Returns 0.1-2.0 size multiplier (linear)

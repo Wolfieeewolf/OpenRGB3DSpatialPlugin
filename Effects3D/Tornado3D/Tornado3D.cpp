@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Tornado3D.cpp                                            |
-|                                                          |
-|   Room-scale vortex/tornado effect                       |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Tornado3D.h"
 #include <QGridLayout>

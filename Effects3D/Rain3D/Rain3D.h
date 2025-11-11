@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Rain3D.h                                                 |
-|                                                          |
-|   Room-scale volumetric rain effect                      |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef RAIN3D_H
 #define RAIN3D_H

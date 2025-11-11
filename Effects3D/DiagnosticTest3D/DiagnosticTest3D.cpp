@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| DiagnosticTest3D.cpp                                      |
-|                                                           |
-|   Diagnostic effect to test 3D grid system               |
-|                                                           |
-|   Date: 2025-10-10                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "DiagnosticTest3D.h"
 

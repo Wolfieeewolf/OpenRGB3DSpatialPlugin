@@ -1,19 +1,8 @@
-/*---------------------------------------------------------*\
-| Explosion3D.cpp                                           |
-|                                                           |
-|   3D Explosion effect with shockwave animation           |
-|                                                           |
-|   Date: 2025-09-28                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Explosion3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
 REGISTER_EFFECT_3D(Explosion3D);
 
 #include <QGridLayout>
@@ -35,10 +24,6 @@ Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
     default_colors.push_back(0x0000FFFF);  // Yellow
     default_colors.push_back(0x00FF0000);  // Blue
     SetColors(default_colors);
-}
-
-Explosion3D::~Explosion3D()
-{
 }
 
 EffectInfo3D Explosion3D::GetEffectInfo()

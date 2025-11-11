@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Spin3D.h                                                  |
-|                                                           |
-|   3D Spin effect with rotating patterns on room surfaces |
-|                                                           |
-|   Date: 2025-10-02                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPIN3D_H
 #define SPIN3D_H

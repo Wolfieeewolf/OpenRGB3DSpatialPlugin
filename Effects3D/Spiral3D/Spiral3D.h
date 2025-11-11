@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Spiral3D.h                                                |
-|                                                           |
-|   3D Spiral effect with arm count control               |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPIRAL3D_H
 #define SPIRAL3D_H

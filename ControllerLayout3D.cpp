@@ -11,6 +11,7 @@
 
 #include "ControllerLayout3D.h"
 #include "RGBController.h"
+#include "GridSpaceUtils.h"
 #include <cmath>
 #include <limits>
 
@@ -77,6 +78,8 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
             led_pos.local_position.z = (float)z_pos;
 
             led_pos.world_position = led_pos.local_position;
+            led_pos.effect_world_position = led_pos.local_position;
+            led_pos.preview_color = 0x00FFFFFF;
 
             positions.push_back(led_pos);
             global_led_idx++;
@@ -126,9 +129,9 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
 
     // Now scale positions based on LED spacing and grid scale
     // Formula: grid_position = led_spacing_mm / grid_scale_mm
-    float scale_x = (spacing_mm_x > 0.001f) ? (spacing_mm_x / grid_scale_mm) : 1.0f;
-    float scale_y = (spacing_mm_y > 0.001f) ? (spacing_mm_y / grid_scale_mm) : 1.0f;
-    float scale_z = (spacing_mm_z > 0.001f) ? (spacing_mm_z / grid_scale_mm) : 1.0f;
+    float scale_x = (spacing_mm_x > 0.001f) ? MMToGridUnits(spacing_mm_x, grid_scale_mm) : 1.0f;
+    float scale_y = (spacing_mm_y > 0.001f) ? MMToGridUnits(spacing_mm_y, grid_scale_mm) : 1.0f;
+    float scale_z = (spacing_mm_z > 0.001f) ? MMToGridUnits(spacing_mm_z, grid_scale_mm) : 1.0f;
 
     for(unsigned int i = 0; i < positions.size(); i++)
     {
@@ -136,6 +139,8 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
         positions[i].local_position.y *= scale_y;
         positions[i].local_position.z *= scale_z;
         positions[i].world_position = positions[i].local_position;
+        positions[i].effect_world_position = positions[i].local_position;
+        positions[i].preview_color = 0x00FFFFFF;
     }
 
     return positions;
@@ -264,13 +269,27 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         rotated.x = x;
         rotated.y = y;
 
-        // Apply translation
+        // Apply translation for display/world coordinates
         led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
+
+        led_pos->effect_world_position.x = local.x + ctrl_transform->transform.position.x;
+        led_pos->effect_world_position.y = local.y + ctrl_transform->transform.position.y;
+        led_pos->effect_world_position.z = local.z + ctrl_transform->transform.position.z;
     }
 
     ctrl_transform->world_positions_dirty = false;
+}
+
+void ControllerLayout3D::MarkWorldPositionsDirty(ControllerTransform* ctrl_transform)
+{
+    if(!ctrl_transform)
+    {
+        return;
+    }
+
+    ctrl_transform->world_positions_dirty = true;
 }
 
 /*---------------------------------------------------------*\

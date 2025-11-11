@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Wave3D.cpp                                                |
-|                                                           |
-|   3D Wave effect with custom UI controls                 |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wave3D.h"
 

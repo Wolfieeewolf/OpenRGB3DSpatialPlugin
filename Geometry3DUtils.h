@@ -14,6 +14,7 @@
 
 #include "LEDPosition3D.h"
 #include "DisplayPlane3D.h"
+#include "GridSpaceUtils.h"
 #include <algorithm>
 #include <cmath>
 
@@ -434,7 +435,7 @@ namespace Geometry3D
         }
 
         // Convert distance from grid units to millimeters for falloff calculation
-        result.distance *= grid_scale_mm;
+        result.distance = GridUnitsToMM(result.distance, grid_scale_mm);
 
         // ===== ROTATION-AWARE UV MAPPING =====
         // Transform LED from world space to screen's local coordinate system
@@ -466,8 +467,8 @@ namespace Geometry3D
         result.is_in_front = (local_offset.y < 0.0f);
 
         // Convert screen dimensions from millimeters to grid units
-        float screen_width_units = plane.GetWidthMM() / grid_scale_mm;
-        float screen_height_units = plane.GetHeightMM() / grid_scale_mm;
+        float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
+        float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
 
         // Map local offset to UV coordinates [0, 1]
         // LED at screen center (local 0,0,0) → UV (0.5, 0.5)

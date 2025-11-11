@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| DNAHelix3D.h                                              |
-|                                                           |
-|   3D DNA Helix effect with enhanced controls             |
-|                                                           |
-|   Date: 2025-09-28                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef DNAHELIX3D_H
 #define DNAHELIX3D_H

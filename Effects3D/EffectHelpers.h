@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| EffectHelpers.h                                           |
-|                                                           |
-|   Shared utility functions for 3D spatial effects        |
-|                                                           |
-|   Date: 2025-10-04                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef EFFECTHELPERS_H
 #define EFFECTHELPERS_H

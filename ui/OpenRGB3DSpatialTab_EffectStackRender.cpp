@@ -1,16 +1,10 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_EffectStackRender.cpp                 |
-|                                                           |
-|   Effect Stack rendering implementation                  |
-|                                                           |
-|   Date: 2025-10-05                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #include "OpenRGB3DSpatialTab.h"
+#include "GridSpaceUtils.h"
 #include <set>
+#include <unordered_set>
 #include <algorithm>
 
 static float AverageAlongAxis(ControllerTransform* transform,
@@ -99,90 +93,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     | Uses manual room dimensions if enabled, otherwise        |
     | auto-detects from LED positions                          |
     \*---------------------------------------------------------*/
-    float grid_min_x = 0.0f, grid_max_x = 0.0f;
-    float grid_min_y = 0.0f, grid_max_y = 0.0f;
-    float grid_min_z = 0.0f, grid_max_z = 0.0f;
-
-    if(use_manual_room_size)
-    {
-        /*---------------------------------------------------------*\
-        | Use manually configured room dimensions                  |
-        | Origin at front-left-floor corner                        |
-        | IMPORTANT: Convert millimeters to grid units (/ 10.0f)   |
-        \*---------------------------------------------------------*/
-        grid_min_x = 0.0f;
-        grid_max_x = manual_room_width / grid_scale_mm;
-        grid_min_y = 0.0f;
-        grid_max_y = manual_room_depth / grid_scale_mm;
-        grid_min_z = 0.0f;
-        grid_max_z = manual_room_height / grid_scale_mm;
-    }
-    else
-    {
-        /*---------------------------------------------------------*\
-        | Auto-detect from LED positions                           |
-        \*---------------------------------------------------------*/
-        bool has_leds = false;
-
-        // Update world positions first
-        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-        {
-            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-            if(transform && transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-        }
-
-        // Find min/max positions from ALL LEDs
-        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
-        {
-            ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-            if(!transform) continue;
-
-            // Check all LED positions
-            for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
-            {
-                float x = transform->led_positions[led_idx].world_position.x;
-                float y = transform->led_positions[led_idx].world_position.y;
-                float z = transform->led_positions[led_idx].world_position.z;
-
-                if(!has_leds)
-                {
-                    // Initialize bounds with first LED
-                    grid_min_x = grid_max_x = x;
-                    grid_min_y = grid_max_y = y;
-                    grid_min_z = grid_max_z = z;
-                    has_leds = true;
-                }
-                else
-                {
-                    // Expand bounds to include this LED
-                    if(x < grid_min_x) grid_min_x = x;
-                    if(x > grid_max_x) grid_max_x = x;
-                    if(y < grid_min_y) grid_min_y = y;
-                    if(y > grid_max_y) grid_max_y = y;
-                    if(z < grid_min_z) grid_min_z = z;
-                    if(z > grid_max_z) grid_max_z = z;
-                }
-            }
-        }
-
-        // Fallback if no LEDs found
-        if(!has_leds)
-        {
-            // Convert default mm to grid units using current scale
-            grid_min_x = 0.0f;
-            grid_max_x = 1000.0f / grid_scale_mm;  // Default room width
-            grid_min_y = 0.0f;
-            grid_max_y = 1000.0f / grid_scale_mm;  // Default room depth
-            grid_min_z = 0.0f;
-            grid_max_z = 1000.0f / grid_scale_mm;  // Default room height
-        }
-    }
+    ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
+                                                              manual_room_width,
+                                                              manual_room_height,
+                                                              manual_room_depth);
+    GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
 
     // Create grid context with room bounds
-    GridContext3D grid_context(grid_min_x, grid_max_x, grid_min_y, grid_max_y, grid_min_z, grid_max_z);
+    GridContext3D grid_context(bounds.min_x, bounds.max_x,
+                               bounds.min_y, bounds.max_y,
+                               bounds.min_z, bounds.max_z,
+                               grid_scale_mm);
 
     /*---------------------------------------------------------*\
     | Configure effect origin for all stack effects            |
@@ -201,6 +122,73 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
+    struct RenderEffectSlot
+    {
+        SpatialEffect3D* effect;
+        int zone_index;
+        BlendMode blend_mode;
+    };
+
+    std::vector<RenderEffectSlot> active_effects;
+    active_effects.reserve(effect_stack.size());
+
+    for(const std::unique_ptr<EffectInstance3D>& instance_ptr : effect_stack)
+    {
+        EffectInstance3D* instance = instance_ptr.get();
+        if(!instance || !instance->enabled || !instance->effect)
+        {
+            continue;
+        }
+
+        RenderEffectSlot slot;
+        slot.effect = instance->effect.get();
+        slot.zone_index = instance->zone_index;
+        slot.blend_mode = instance->blend_mode;
+        active_effects.push_back(slot);
+    }
+
+    if(active_effects.empty() && current_effect_ui)
+    {
+        RenderEffectSlot slot;
+        slot.effect = current_effect_ui;
+        slot.zone_index = ResolveZoneTargetSelection(effect_zone_combo);
+        slot.blend_mode = BlendMode::REPLACE;
+        active_effects.push_back(slot);
+    }
+
+    if(active_effects.empty())
+    {
+        return;
+    }
+
+    for(size_t idx = 0; idx < active_effects.size(); idx++)
+    {
+        if(active_effects[idx].effect)
+        {
+            active_effects[idx].effect->SetGlobalReferencePoint(stack_ref_origin);
+            active_effects[idx].effect->SetReferenceMode(stack_origin_mode);
+        }
+    }
+
+    std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+    {
+        ControllerTransform* transform = transform_ptr.get();
+        if(!transform || transform->virtual_controller == nullptr)
+        {
+            continue;
+        }
+
+        const std::vector<GridLEDMapping>& mappings = transform->virtual_controller->GetMappings();
+        for(const GridLEDMapping& mapping : mappings)
+        {
+            if(mapping.controller)
+            {
+                controllers_managed_by_virtuals.insert(mapping.controller);
+            }
+        }
+    }
+
     
 
     /*---------------------------------------------------------*\
@@ -210,12 +198,18 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
-        if(!transform)
+        if(!transform || transform->hidden_by_virtual)
         {
             continue;
         }
 
-        // removed controller 0 diagnostic logging
+        if(transform->controller &&
+           controllers_managed_by_virtuals.find(transform->controller) != controllers_managed_by_virtuals.end())
+        {
+            continue;
+        }
+
+        ControllerLayout3D::UpdateWorldPositions(transform);
 
         // Handle virtual controllers
         if(transform->virtual_controller && !transform->controller)
@@ -223,32 +217,19 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             VirtualController3D* virtual_ctrl = transform->virtual_controller;
             const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
 
-            // Update cached world positions if dirty
-            if(transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-
             // Apply effects to each virtual LED
             for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
             {
                 const GridLEDMapping& mapping = mappings[mapping_idx];
-                if(!mapping.controller) continue;
-
-                // Get world position
-                if(mapping_idx < transform->led_positions.size())
+                if(mapping_idx >= transform->led_positions.size())
                 {
-                    float x = transform->led_positions[mapping_idx].world_position.x;
-                    float y = transform->led_positions[mapping_idx].world_position.y;
-                    float z = transform->led_positions[mapping_idx].world_position.z;
+                    continue;
+                }
 
-                    
-
-                    // Safety: Ensure controller is still valid
-                    if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
-                    {
-                        continue;
-                    }
+                const Vector3D& world_pos = transform->led_positions[mapping_idx].effect_world_position;
+                float x = world_pos.x;
+                float y = world_pos.y;
+                float z = world_pos.z;
 
                     /*---------------------------------------------------------*\
                     | Initialize with black (no color)                         |
@@ -258,55 +239,32 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     /*---------------------------------------------------------*\
                     | Iterate through effect stack and blend colors            |
                     \*---------------------------------------------------------*/
-                    for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
+                    for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                     {
-                        EffectInstance3D* instance = effect_stack[effect_idx].get();
-
-                        /*---------------------------------------------------------*\
-                        | Skip disabled effects or effects without object          |
-                        \*---------------------------------------------------------*/
-                        if(!instance->enabled || !instance->effect)
+                        const RenderEffectSlot& slot = active_effects[effect_idx];
+                        SpatialEffect3D* effect = slot.effect;
+                        if(!effect)
                         {
                             continue;
                         }
-                        // Set origin for this effect instance (world coords provided below)
-                        instance->effect->SetGlobalReferencePoint(stack_ref_origin);
-                        instance->effect->SetReferenceMode(stack_origin_mode);
 
-                        
-
-                        /*---------------------------------------------------------*\
-                        | Check if this effect targets this controller            |
-                        | -1 = All Controllers                                     |
-                        | 0-999 = Zone index                                       |
-                        | -1000 and below = Individual controller (-idx - 1000)   |
-                        \*---------------------------------------------------------*/
                         bool apply_to_this_controller = false;
 
-                        if(instance->zone_index == -1)
+                        if(slot.zone_index == -1)
                         {
-                            /*---------------------------------------------------------*\
-                            | Apply to all controllers                                 |
-                            \*---------------------------------------------------------*/
                             apply_to_this_controller = true;
                         }
-                        else if(instance->zone_index <= -1000)
+                        else if(slot.zone_index <= -1000)
                         {
-                            /*---------------------------------------------------------*\
-                            | Individual controller targeting                          |
-                            \*---------------------------------------------------------*/
-                            int target_ctrl_idx = -(instance->zone_index + 1000);
+                            int target_ctrl_idx = -(slot.zone_index + 1000);
                             if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
                             {
                                 apply_to_this_controller = true;
                             }
                         }
-                        else if(zone_manager && instance->zone_index >= 0)
+                        else if(zone_manager && slot.zone_index >= 0)
                         {
-                            /*---------------------------------------------------------*\
-                            | Zone targeting                                           |
-                            \*---------------------------------------------------------*/
-                            Zone3D* zone = zone_manager->GetZone(instance->zone_index);
+                            Zone3D* zone = zone_manager->GetZone(slot.zone_index);
                             if(zone)
                             {
                                 std::vector<int> zone_controllers = zone->GetControllers();
@@ -327,26 +285,28 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         /*---------------------------------------------------------*\
                         | Calculate effect color                                   |
                         \*---------------------------------------------------------*/
-                        RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);;
-effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
+                        RGBColor effect_color = effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                        effect_color = effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
 
                         /*---------------------------------------------------------*\
                         | Blend with accumulated color                             |
                         \*---------------------------------------------------------*/
-                        final_color = BlendColors(final_color, effect_color, instance->blend_mode);
+                        final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
                     
+                transform->led_positions[mapping_idx].preview_color = final_color;
 
-                    /*---------------------------------------------------------*\
-                    | Apply final blended color to LED                        |
-                    \*---------------------------------------------------------*/
-                    if(mapping.zone_idx < mapping.controller->zones.size())
+                if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
+                {
+                    continue;
+                }
+
+                if(mapping.zone_idx < mapping.controller->zones.size())
+                {
+                    unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                    if(led_global_idx < mapping.controller->colors.size())
                     {
-                        unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                        if(led_global_idx < mapping.controller->colors.size())
-                        {
-                            mapping.controller->colors[led_global_idx] = final_color;
-                        }
+                        mapping.controller->colors[led_global_idx] = final_color;
                     }
                 }
             }
@@ -362,21 +322,16 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
                 continue;
             }
 
-            // Update cached world positions if dirty
-            if(transform->world_positions_dirty)
-            {
-                ControllerLayout3D::UpdateWorldPositions(transform);
-            }
-
             // Calculate colors for each LED using cached positions
             for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
             {
                 LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
 
                 // Use pre-computed world position
-                float x = led_position.world_position.x;
-                float y = led_position.world_position.y;
-                float z = led_position.world_position.z;
+                const Vector3D& world_pos = led_position.effect_world_position;
+                float x = world_pos.x;
+                float y = world_pos.y;
+                float z = world_pos.z;
 
                 // Validate zone index before accessing
                 if(led_position.zone_idx >= controller->zones.size())
@@ -395,53 +350,32 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
                 /*---------------------------------------------------------*\
                 | Iterate through effect stack and blend colors            |
                 \*---------------------------------------------------------*/
-                for(unsigned int effect_idx = 0; effect_idx < effect_stack.size(); effect_idx++)
+                for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                 {
-                    EffectInstance3D* instance = effect_stack[effect_idx].get();
-
-                    /*---------------------------------------------------------*\
-                    | Skip disabled effects or effects without object          |
-                    \*---------------------------------------------------------*/
-                    if(!instance->enabled || !instance->effect)
+                    const RenderEffectSlot& slot = active_effects[effect_idx];
+                    SpatialEffect3D* effect = slot.effect;
+                    if(!effect)
                     {
                         continue;
                     }
-                    // Set origin for this effect instance (world coords provided below)
-                    instance->effect->SetGlobalReferencePoint(stack_ref_origin);
-                    instance->effect->SetReferenceMode(stack_origin_mode);
 
-                    /*---------------------------------------------------------*\
-                    | Check if this effect targets this controller            |
-                    | -1 = All Controllers                                     |
-                    | 0-999 = Zone index                                       |
-                    | -1000 and below = Individual controller (-idx - 1000)   |
-                    \*---------------------------------------------------------*/
                     bool apply_to_this_controller = false;
 
-                    if(instance->zone_index == -1)
+                    if(slot.zone_index == -1)
                     {
-                        /*---------------------------------------------------------*\
-                        | Apply to all controllers                                 |
-                        \*---------------------------------------------------------*/
                         apply_to_this_controller = true;
                     }
-                    else if(instance->zone_index <= -1000)
+                    else if(slot.zone_index <= -1000)
                     {
-                        /*---------------------------------------------------------*\
-                        | Individual controller targeting                          |
-                        \*---------------------------------------------------------*/
-                        int target_ctrl_idx = -(instance->zone_index + 1000);
+                        int target_ctrl_idx = -(slot.zone_index + 1000);
                         if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
                         {
                             apply_to_this_controller = true;
                         }
                     }
-                    else if(zone_manager && instance->zone_index >= 0)
+                    else if(zone_manager && slot.zone_index >= 0)
                     {
-                        /*---------------------------------------------------------*\
-                        | Zone targeting                                           |
-                        \*---------------------------------------------------------*/
-                        Zone3D* zone = zone_manager->GetZone(instance->zone_index);
+                        Zone3D* zone = zone_manager->GetZone(slot.zone_index);
                         if(zone)
                         {
                             std::vector<int> zone_controllers = zone->GetControllers();
@@ -457,21 +391,14 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
                         continue;
                     }
 
-                    /*---------------------------------------------------------*\
-                    | Calculate effect color                                   |
-                    \*---------------------------------------------------------*/
-                    RGBColor effect_color = instance->effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
-                    effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
+                    RGBColor effect_color = effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
+                    effect_color = effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
 
-                    /*---------------------------------------------------------*\
-                    | Blend with accumulated color                             |
-                    \*---------------------------------------------------------*/
-                    final_color = BlendColors(final_color, effect_color, instance->blend_mode);
+                    final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                 }
 
-                /*---------------------------------------------------------*\
-                | Apply final blended color to LED                        |
-                \*---------------------------------------------------------*/
+                transform->led_positions[led_pos_idx].preview_color = final_color;
+
                 if(led_global_idx < controller->colors.size())
                 {
                     controller->colors[led_global_idx] = final_color;
@@ -488,18 +415,13 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
     | perceived temporal skew between devices.                |
     \*---------------------------------------------------------*/
 
-    // Select an axis and reverse flag from the first enabled stack effect
+    // Select an axis and reverse flag from the first active effect
     EffectAxis sort_axis = AXIS_Y; // default: floor->ceiling (Y-up)
     bool sort_reverse = false;
-    for(unsigned int ei = 0; ei < effect_stack.size(); ei++)
+    if(!active_effects.empty() && active_effects[0].effect)
     {
-        EffectInstance3D* inst = effect_stack[ei].get();
-        if(inst && inst->enabled && inst->effect)
-        {
-            sort_axis = inst->effect->GetAxis();
-            sort_reverse = inst->effect->GetReverse();
-            break;
-        }
+        sort_axis = active_effects[0].effect->GetAxis();
+        sort_reverse = active_effects[0].effect->GetReverse();
     }
 
     // Build sortable keys per controller
@@ -565,3 +487,4 @@ effect_color = instance->effect->PostProcessColorGrid(x, y, z, effect_color, gri
         viewport->UpdateColors();
     }
 }
+#include <algorithm>

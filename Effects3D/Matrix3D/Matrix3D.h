@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Matrix3D.h                                               |
-|                                                          |
-|   3D Matrix code rain effect                             |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef MATRIX3D_H
 #define MATRIX3D_H
@@ -18,9 +12,10 @@ class Matrix3D : public SpatialEffect3D
 
 public:
     explicit Matrix3D(QWidget* parent = nullptr);
-    ~Matrix3D();
+    ~Matrix3D() override = default;
 
-    EFFECT_REGISTERER_3D("Matrix3D", "3D Matrix", "3D Spatial", [](){return new Matrix3D;});
+    // Auto-registration hook
+    EFFECT_REGISTERER_3D("Matrix3D", "3D Matrix", "3D Spatial", [](){ return new Matrix3D; });
 
     static std::string const ClassName() { return "Matrix3D"; }
     static std::string const UIName() { return "3D Matrix"; }

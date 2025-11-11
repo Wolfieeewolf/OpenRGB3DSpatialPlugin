@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| ScreenMirror3D.h                                          |
-|                                                           |
-|   3D Spatial screen mirroring effect with ambilight      |
-|                                                           |
-|   Date: 2025-10-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SCREENMIRROR3D_H
 #define SCREENMIRROR3D_H

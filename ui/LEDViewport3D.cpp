@@ -1,17 +1,5 @@
-/*---------------------------------------------------------*\
-| LEDViewport3D.cpp                                        |
-|                                                           |
-|   OpenGL 3D viewport for LED visualization and control  |
-|                                                           |
-|   Date: 2025-09-29                                        |
-|                                                           |
-|   This file is part of the OpenRGB project               |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
-/*---------------------------------------------------------*\
-| Qt Includes                                              |
-\*---------------------------------------------------------*/
 #include <QOpenGLWidget>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -20,33 +8,18 @@
 #include <QPainter>
 #include <QFont>
 
-/*---------------------------------------------------------*\
-| System Includes                                          |
-\*---------------------------------------------------------*/
 #include <cmath>
 #include <cfloat>
 #include <algorithm>
 
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
 #include "QtCompat.h"
 
-/*---------------------------------------------------------*\
-| OpenRGB Includes                                         |
-\*---------------------------------------------------------*/
 #include "Colors.h"
 
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
 #include "LEDViewport3D.h"
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
 
-/*---------------------------------------------------------*\
-| OpenGL Platform Includes                                 |
-\*---------------------------------------------------------*/
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -174,6 +147,10 @@ void LEDViewport3D::SelectController(int index)
         selected_display_plane_idx = -1;
         selected_controller_idx = index;
         ControllerTransform* ctrl = (*controller_transforms)[index].get();
+        if(ctrl && ctrl->hidden_by_virtual)
+        {
+            return;
+        }
 
         EnforceFloorConstraint(ctrl);
 
@@ -269,7 +246,7 @@ void LEDViewport3D::UpdateGizmoPosition()
        selected_controller_idx < (int)controller_transforms->size())
     {
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
-        if(ctrl)
+        if(ctrl && !ctrl->hidden_by_virtual)
         {
             gizmo.SetTarget(ctrl);
             gizmo.SetPosition(ctrl->transform.position.x,
@@ -287,7 +264,11 @@ void LEDViewport3D::NotifyControllerTransformChanged()
     // Mark world positions as dirty for the selected controller
     if(selected_controller_idx >= 0 && selected_controller_idx < (int)controller_transforms->size())
     {
-        (*controller_transforms)[selected_controller_idx]->world_positions_dirty = true;
+        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+        if(ctrl && !ctrl->hidden_by_virtual)
+        {
+            ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        }
     }
 
     UpdateGizmoPosition();
@@ -520,6 +501,10 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         {
             ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
             EnforceFloorConstraint(ctrl);
+            if(ctrl)
+            {
+                ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+            }
             UpdateGizmoPosition();
 
             emit ControllerPositionChanged(selected_controller_idx,
@@ -772,74 +757,76 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
     }
 }
 
+GridExtents LEDViewport3D::GetRoomExtents() const
+{
+    ManualRoomSettings settings = MakeManualRoomSettings(use_manual_room_dimensions,
+                                                         room_width,
+                                                         room_height,
+                                                         room_depth);
+    GridDimensionDefaults defaults = MakeGridDefaults(grid_x, grid_y, grid_z);
+    return ResolveGridExtents(settings, grid_scale_mm, defaults);
+}
+
 void LEDViewport3D::DrawGrid()
 {
-    /*---------------------------------------------------------*\
-    | Draw floor grid from origin (0,0,0) at front-left corner |
-    | Grid extends to room dimensions in positive directions   |
-    \*---------------------------------------------------------*/
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
     glDepthMask(GL_TRUE);
     glLineWidth(1.0f);
 
-    // Calculate grid range based on room dimensions or grid size
-    // Note: For floor grid, we use X (width) and Z (depth), not Y (height)
-    float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
-    float max_z = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_z;
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_z = extents.depth_units;
 
     glBegin(GL_LINES);
 
-    // Draw grid lines parallel to Z-axis (extending front-to-back along floor)
     for(int i = 0; i <= (int)max_x; i++)
     {
         if(i == 0)
         {
-            glColor3f(0.8f, 0.4f, 0.4f); // Red origin line (left wall, X=0)
+            glColor3f(0.8f, 0.4f, 0.4f);
         }
         else if(i % 5 == 0)
         {
-            glColor3f(0.5f, 0.5f, 0.5f); // Brighter every 5th line
+            glColor3f(0.5f, 0.5f, 0.5f);
         }
         else
         {
-            glColor3f(0.3f, 0.3f, 0.3f); // Regular floor grid
+            glColor3f(0.3f, 0.3f, 0.3f);
         }
 
-        glVertex3f((float)i, 0.0f, 0.0f);        // Front edge
-        glVertex3f((float)i, 0.0f, max_z);       // Back edge
+        glVertex3f((float)i, 0.0f, 0.0f);
+        glVertex3f((float)i, 0.0f, max_z);
     }
 
-    // Draw horizontal grid lines (parallel to X-axis, extending left-to-right)
     for(int i = 0; i <= (int)max_z; i++)
     {
         if(i == 0)
         {
-            glColor3f(0.4f, 0.4f, 0.8f); // Blue origin line (front wall, Z=0)
+            glColor3f(0.4f, 0.4f, 0.8f);
         }
         else if(i % 5 == 0)
         {
-            glColor3f(0.5f, 0.5f, 0.5f); // Brighter every 5th line
+            glColor3f(0.5f, 0.5f, 0.5f);
         }
         else
         {
-            glColor3f(0.3f, 0.3f, 0.3f); // Regular floor grid
+            glColor3f(0.3f, 0.3f, 0.3f);
         }
 
-        glVertex3f(0.0f, 0.0f, (float)i);        // Left edge
-        glVertex3f(max_x, 0.0f, (float)i);       // Right edge
+        glVertex3f(0.0f, 0.0f, (float)i);
+        glVertex3f(max_x, 0.0f, (float)i);
     }
 
     glEnd();
 
-    // Draw floor boundary rectangle at origin corner
     glLineWidth(2.0f);
-    glColor3f(0.6f, 0.8f, 0.6f); // Green floor boundary
+    glColor3f(0.6f, 0.8f, 0.6f);
     glBegin(GL_LINE_LOOP);
-    glVertex3f(0.0f, 0.0f, 0.0f);           // Front-left corner (origin)
-    glVertex3f(max_x, 0.0f, 0.0f);          // Front-right corner
-    glVertex3f(max_x, 0.0f, max_z);         // Back-right corner
-    glVertex3f(0.0f, 0.0f, max_z);          // Back-left corner
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);
     glEnd();
 
     glLineWidth(1.0f);
@@ -848,43 +835,28 @@ void LEDViewport3D::DrawGrid()
 
 void LEDViewport3D::DrawAxes()
 {
-    /*---------------------------------------------------------*\
-    | Draw coordinate axes from origin (0,0,0)                 |
-    | Corner-Origin System: All axes point in positive         |
-    | directions from front-left-floor corner                  |
-    \*---------------------------------------------------------*/
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
     glLineWidth(3.0f);
 
-    /*---------------------------------------------------------*\
-    | Draw main axis lines from origin (positive directions)   |
-    \*---------------------------------------------------------*/
     glBegin(GL_LINES);
 
-    // X Axis (Red) - Left to Right
     glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(3.0f, 0.0f, 0.0f);
 
-    // Y Axis (Green) - Floor to Ceiling (vertical up, standard OpenGL Y-up)
     glColor3f(0.0f, 1.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 3.0f, 0.0f);
 
-    // Z Axis (Blue) - Front to Back (depth)
     glColor3f(0.0f, 0.0f, 1.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 3.0f);
 
     glEnd();
 
-    /*---------------------------------------------------------*\
-    | Draw arrow indicators at axis endpoints                  |
-    \*---------------------------------------------------------*/
     glLineWidth(2.0f);
 
-    // X Axis arrow (Red - Right Wall direction)
     glColor3f(1.0f, 0.0f, 0.0f);
     glBegin(GL_TRIANGLES);
     glVertex3f(3.0f, 0.0f, 0.0f);
@@ -892,7 +864,6 @@ void LEDViewport3D::DrawAxes()
     glVertex3f(2.7f, -0.15f, 0.0f);
     glEnd();
 
-    // Y Axis arrow (Green - Ceiling direction)
     glColor3f(0.0f, 1.0f, 0.0f);
     glBegin(GL_TRIANGLES);
     glVertex3f(0.0f, 3.0f, 0.0f);
@@ -913,10 +884,6 @@ void LEDViewport3D::DrawAxes()
 
 void LEDViewport3D::DrawAxisLabels()
 {
-    /*---------------------------------------------------------*\
-    | Draw 2D text overlay for axis labels                     |
-    | Corner-Origin System: Labels at (0,0,0) and positive ends|
-    \*---------------------------------------------------------*/
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::TextAntialiasing);
@@ -931,35 +898,31 @@ void LEDViewport3D::DrawAxisLabels()
     glGetDoublev(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    // Calculate max positions based on room dimensions or grid
-    float max_x = use_manual_room_dimensions ? (room_width / grid_scale_mm) : (float)grid_x;
-    float max_y = use_manual_room_dimensions ? (room_depth / grid_scale_mm) : (float)grid_y;
-    float max_z = use_manual_room_dimensions ? (room_height / grid_scale_mm) : (float)grid_z;
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_depth = extents.depth_units;
+    const float max_z = extents.height_units;
 
     double screen_x, screen_y;
 
-    // Draw X axis labels (Red - Left/Right)
     painter.setPen(QColor(255, 100, 100));
     ProjectPointToScreen(max_x, 0.5f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), QString("Right Wall (X=%1)").arg((int)max_x));
     ProjectPointToScreen(0.3f, 0.5f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Left Wall (X=0)");
 
-    // Draw Z axis labels (Green - Front/Back)
     painter.setPen(QColor(100, 255, 100));
-    ProjectPointToScreen(0.5f, 0.0f, max_y, modelview, projection, viewport, screen_x, screen_y);
-    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Back Wall (Y=%1)").arg((int)max_y));
+    ProjectPointToScreen(0.5f, 0.0f, max_depth, modelview, projection, viewport, screen_x, screen_y);
+    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Back Wall (Y=%1)").arg((int)max_depth));
     ProjectPointToScreen(0.5f, 0.0f, 0.3f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Front Wall (Y=0)");
 
-    // Draw Y axis labels (Blue - Floor/Ceiling)
     painter.setPen(QColor(100, 100, 255));
     ProjectPointToScreen(0.5f, max_z, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), QString("Ceiling (Z=%1)").arg((int)max_z));
     ProjectPointToScreen(0.5f, 0.2f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x + 10, screen_y), "Floor (Z=0)");
 
-    // Draw origin label (Front-Left-Floor Corner)
     painter.setPen(QColor(255, 255, 255));
     ProjectPointToScreen(0.5f, 0.5f, 0.5f, modelview, projection, viewport, screen_x, screen_y);
     painter.drawText(QPointF(screen_x, screen_y), "Origin (0,0,0)\nFront-Left-Floor");
@@ -969,13 +932,9 @@ void LEDViewport3D::DrawAxisLabels()
 
 void LEDViewport3D::DrawRoomBoundary()
 {
-    /*---------------------------------------------------------*\
-    | Draw 3D wireframe box showing room boundaries            |
-    | Only drawn when manual room dimensions are enabled       |
-    \*---------------------------------------------------------*/
     if(!use_manual_room_dimensions)
     {
-        return; // Don't draw boundary when auto-detecting
+        return;
     }
 
     glDisable(GL_LIGHTING);
@@ -983,43 +942,32 @@ void LEDViewport3D::DrawRoomBoundary()
     glEnable(GL_DEPTH_TEST);
     glLineWidth(2.0f);
 
-    // Calculate room boundary in grid units
-    float max_x = room_width / grid_scale_mm;
-    float max_y = room_height / grid_scale_mm;
-    float max_z = room_depth / grid_scale_mm;
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
 
-    // Use cyan color for room boundary (distinct from other elements)
-    glColor3f(0.0f, 0.8f, 0.8f); // Bright cyan
+    glColor3f(0.0f, 0.8f, 0.8f);
 
     glBegin(GL_LINES);
 
-    /*---------------------------------------------------------*\
-    | Draw bottom rectangle (floor level, Y=0)                 |
-    \*---------------------------------------------------------*/
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);     // Front edge
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);    // Right edge
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);     // Back edge
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);      // Left edge
+    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);
 
-    /*---------------------------------------------------------*\
-    | Draw top rectangle (ceiling level, Y=max_y)             |
-    \*---------------------------------------------------------*/
-    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);    // Front edge
-    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);   // Right edge
-    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);    // Back edge
-    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);     // Left edge
+    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
+    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);
+    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);
+    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);
 
-    /*---------------------------------------------------------*\
-    | Draw vertical edges connecting floor to ceiling         |
-    \*---------------------------------------------------------*/
-    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);     // Front-left corner
-    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);    // Front-right corner
-    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);   // Back-right corner
-    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);    // Back-left corner
+    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);
 
     glEnd();
 
-    // Reset line width and color
     glLineWidth(1.0f);
     glColor3f(1.0f, 1.0f, 1.0f);
 }
@@ -1039,8 +987,8 @@ void LEDViewport3D::DrawDisplayPlanes()
         DisplayPlane3D* plane_ptr = (*display_planes)[plane_index].get();
         if(!plane_ptr || !plane_ptr->IsVisible()) continue;
 
-        float width_units = plane_ptr->GetWidthMM() / grid_scale_mm;
-        float height_units = plane_ptr->GetHeightMM() / grid_scale_mm;
+        float width_units = MMToGridUnits(plane_ptr->GetWidthMM(), grid_scale_mm);
+        float height_units = MMToGridUnits(plane_ptr->GetHeightMM(), grid_scale_mm);
 
         if(width_units <= 0.0f || height_units <= 0.0f) continue;
 
@@ -1252,7 +1200,7 @@ void LEDViewport3D::DrawControllers()
     for(size_t i = 0; i < controller_transforms->size(); i++)
     {
         ControllerTransform* ctrl = (*controller_transforms)[i].get();
-        if(!ctrl) continue;
+        if(!ctrl || ctrl->hidden_by_virtual) continue;
 
         glPushMatrix();
 
@@ -1387,6 +1335,7 @@ void LEDViewport3D::DrawControllers()
 
 void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 {
+    if(!ctrl || ctrl->hidden_by_virtual) return;
     if(!ctrl->controller && !ctrl->virtual_controller) return;
 
     glDisable(GL_LIGHTING);
@@ -1395,25 +1344,23 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 
     if(ctrl->virtual_controller)
     {
+        const std::vector<GridLEDMapping>& mappings = ctrl->virtual_controller->GetMappings();
         for(size_t i = 0; i < ctrl->led_positions.size(); i++)
         {
             const LEDPosition3D& pos = ctrl->led_positions[i];
+            RGBColor color = pos.preview_color;
 
-            RGBColor color = 0xFFFFFF; // Default white
-            if(ctrl->virtual_controller)
+            if(i < mappings.size() && mappings[i].controller)
             {
-                const std::vector<GridLEDMapping>& mappings = ctrl->virtual_controller->GetMappings();
-                if(i < mappings.size() && mappings[i].controller)
+                unsigned int zone_idx = mappings[i].zone_idx;
+                unsigned int led_idx = mappings[i].led_idx;
+                RGBController* mapping_ctrl = mappings[i].controller;
+                if(mapping_ctrl && zone_idx < mapping_ctrl->zones.size())
                 {
-                    unsigned int zone_idx = mappings[i].zone_idx;
-                    unsigned int led_idx = mappings[i].led_idx;
-                    if(zone_idx < mappings[i].controller->zones.size())
+                    unsigned int global_led_idx = mapping_ctrl->zones[zone_idx].start_idx + led_idx;
+                    if(global_led_idx < mapping_ctrl->colors.size())
                     {
-                        unsigned int global_led_idx = mappings[i].controller->zones[zone_idx].start_idx + led_idx;
-                        if(global_led_idx < mappings[i].controller->colors.size())
-                        {
-                            color = mappings[i].controller->colors[global_led_idx];
-                        }
+                        color = mapping_ctrl->colors[global_led_idx];
                     }
                 }
             }
@@ -1432,15 +1379,16 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
         for(size_t i = 0; i < ctrl->led_positions.size(); i++)
         {
             const LEDPosition3D& pos = ctrl->led_positions[i];
-            // Bounds safety for zone index
-            if(pos.zone_idx >= ctrl->controller->zones.size())
-                continue;
+            RGBColor color = pos.preview_color;
 
-            unsigned int global_led_idx = ctrl->controller->zones[pos.zone_idx].start_idx + pos.led_idx;
-            if(global_led_idx >= ctrl->controller->colors.size())
-                continue;
-
-            const RGBColor& color = ctrl->controller->colors[global_led_idx];
+            if(ctrl->controller && pos.zone_idx < ctrl->controller->zones.size())
+            {
+                unsigned int global_led_idx = ctrl->controller->zones[pos.zone_idx].start_idx + pos.led_idx;
+                if(global_led_idx < ctrl->controller->colors.size())
+                {
+                    color = ctrl->controller->colors[global_led_idx];
+                }
+            }
 
             float r = (float)RGBGetRValue(color) / 255.0f;
             float g = (float)RGBGetGValue(color) / 255.0f;
@@ -1926,8 +1874,8 @@ int LEDViewport3D::PickDisplayPlane(int mouse_x, int mouse_y)
         DisplayPlane3D* plane = (*display_planes)[i].get();
         if(!plane || !plane->IsVisible()) continue;
 
-        float width_units = plane->GetWidthMM() / grid_scale_mm;
-        float height_units = plane->GetHeightMM() / grid_scale_mm;
+        float width_units = MMToGridUnits(plane->GetWidthMM(), grid_scale_mm);
+        float height_units = MMToGridUnits(plane->GetHeightMM(), grid_scale_mm);
         if(width_units <= 0.0f || height_units <= 0.0f) continue;
 
         float half_w = width_units * 0.5f;

@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab.h                                     |
-|                                                           |
-|   Main UI tab for 3D spatial control                     |
-|                                                           |
-|   Date: 2025-09-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef OPENRGB3DSPATIALTAB_H
 #define OPENRGB3DSPATIALTAB_H
@@ -30,15 +21,11 @@
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QLineEdit>
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
 #include <QProgressBar>
 #include <QCompleter>
 #include <vector>
 #include <string>
 #include <memory>
-#include <atomic>
 #include <nlohmann/json.hpp>
 
 class QStackedWidget;
@@ -61,9 +48,6 @@ namespace Ui
 {
     class OpenRGB3DSpatialTab;
 }
-
-// Forward declaration for worker thread
-class EffectWorkerThread3D;
 
 class OpenRGB3DSpatialTab : public QWidget
 {
@@ -189,6 +173,8 @@ private:
     void UpdateAvailableItemCombo();
     void UpdateAvailableControllersList();
     void UpdateCustomControllersList();
+    int  FindDisplayPlaneIndexById(int plane_id) const;
+    void RemoveDisplayPlaneControllerEntries(int plane_id);
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
     void SaveReferencePoints();
@@ -196,6 +182,7 @@ private:
     void UpdateZonesList();
     void UpdateEffectZoneCombo();
     void PopulateZoneTargetCombo(QComboBox* combo, int saved_value);
+    void RefreshHiddenControllerStates();
     int ResolveZoneTargetSelection(const QComboBox* combo) const;
     int DecodeLegacyZoneIndex(int combo_index) const;
     void UpdateEffectCombo();
@@ -405,11 +392,6 @@ private:
     QListWidget*                stack_presets_list;
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
-    /*---------------------------------------------------------*\
-    | Background Threading for Effect Calculation              |
-    \*---------------------------------------------------------*/
-    EffectWorkerThread3D* worker_thread;
-    void ApplyColorsFromWorker();
     Vector3D ComputeWorldPositionForSDK(const ControllerTransform* transform, size_t led_idx) const;
     void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
@@ -570,59 +552,6 @@ private:
     std::vector<MonitorPreset> monitor_presets;
     QComboBox*      display_plane_monitor_combo = nullptr;
     QCompleter*     monitor_preset_completer = nullptr;
-};
-
-/*---------------------------------------------------------*\
-| Background Effect Worker Thread (outside main class)     |
-\*---------------------------------------------------------*/
-class EffectWorkerThread3D : public QThread
-{
-    Q_OBJECT
-public:
-    EffectWorkerThread3D(QObject* parent = nullptr);
-    ~EffectWorkerThread3D();
-
-    void StartEffect(SpatialEffect3D* effect,
-                    const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                    const std::vector<std::unique_ptr<VirtualReferencePoint3D>>& ref_points,
-                    ZoneManager3D* zone_mgr,
-                    int active_zone_idx);
-    void StopEffect();
-    void UpdateTime(float time);
-
-    // Get calculated colors (thread-safe)
-    bool GetColors(std::vector<RGBColor>& out_colors, std::vector<LEDPosition3D*>& out_leds);
-
-signals:
-    void GridLayoutChanged();
-    void ColorsReady();
-
-protected:
-    void run() override;
-
-private:
-    struct ColorBuffer
-    {
-        std::vector<RGBColor> colors;
-        std::vector<LEDPosition3D*> leds;
-    };
-
-    std::atomic<bool> running{false};
-    std::atomic<bool> should_stop{false};
-    std::atomic<float> current_time{0.0f};
-
-    QMutex state_mutex;
-    QMutex buffer_mutex;
-    QWaitCondition start_condition;
-
-    SpatialEffect3D* effect;
-    std::vector<std::unique_ptr<ControllerTransform>> transform_snapshots;
-    std::vector<std::unique_ptr<VirtualReferencePoint3D>> ref_point_snapshots;
-    std::unique_ptr<ZoneManager3D> zone_snapshot;
-    int active_zone;
-
-    ColorBuffer front_buffer;
-    ColorBuffer back_buffer;
 };
 
 #endif

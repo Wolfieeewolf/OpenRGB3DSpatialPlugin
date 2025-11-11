@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| BandScan3D.cpp                                            |
-|                                                           |
-|   Scans through spectrum bands across space               |
-|                                                           |
-|   Date: 2025-11-03                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "BandScan3D.h"
 #include <algorithm>
@@ -34,8 +26,6 @@ BandScan3D::BandScan3D(QWidget* parent)
 {
     RefreshBandRange();
 }
-
-BandScan3D::~BandScan3D() {}
 
 EffectInfo3D BandScan3D::GetEffectInfo()
 {

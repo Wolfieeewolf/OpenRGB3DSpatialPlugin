@@ -1,13 +1,5 @@
-/*---------------------------------------------------------*\
-| Gizmo3D.h                                                 |
-|                                                           |
-|   3D manipulation gizmo with ray casting interaction     |
-|                                                           |
-|   Date: 2025-09-29                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #ifndef GIZMO3D_H
 #define GIZMO3D_H

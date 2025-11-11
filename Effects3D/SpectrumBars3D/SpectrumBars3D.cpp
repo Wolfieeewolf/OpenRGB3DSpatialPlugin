@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| SpectrumBars3D.cpp                                        |
-|                                                           |
-|   Audio spectrum -> bars mapped across axis               |
-|                                                           |
-|   Date: 2025-11-03                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpectrumBars3D.h"
 #include <algorithm>

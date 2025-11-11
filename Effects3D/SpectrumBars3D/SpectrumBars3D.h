@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| SpectrumBars3D.h                                          |
-|                                                           |
-|   Audio spectrum -> vertical bars along axis              |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPECTRUMBARS3D_H
 #define SPECTRUMBARS3D_H

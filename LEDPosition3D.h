@@ -42,6 +42,8 @@ struct LEDPosition3D
     unsigned int    led_idx;
     Vector3D        local_position;
     Vector3D        world_position;
+    Vector3D        effect_world_position;
+    RGBColor        preview_color;  // Used for viewport preview rendering
 };
 
 // Forward declaration
@@ -54,6 +56,7 @@ struct ControllerTransform
     Transform3D         transform;
     std::vector<LEDPosition3D> led_positions;
     RGBColor            display_color;
+    bool                hidden_by_virtual;
 
     /*---------------------------------------------------------*\
     | LED Physical Spacing (in millimeters)                    |

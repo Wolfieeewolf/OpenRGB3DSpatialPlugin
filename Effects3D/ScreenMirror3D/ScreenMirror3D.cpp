@@ -1,19 +1,11 @@
-/*---------------------------------------------------------*\
-| ScreenMirror3D.cpp                                        |
-|                                                           |
-|   3D Spatial screen mirroring effect with ambilight      |
-|                                                           |
-|   Date: 2025-10-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "ScreenMirror3D.h"
 #include "ScreenCaptureManager.h"
 #include "DisplayPlane3D.h"
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
+#include "GridSpaceUtils.h"
 #include "LogManager.h"
 #include "VirtualReferencePoint3D.h"
 
@@ -382,9 +374,9 @@ namespace
                 for(size_t z_index = 0; z_index < zs.size(); z_index++)
                 {
                     float cz = zs[z_index];
-                    float dx = (cx - reference.x) * grid_scale_mm;
-                    float dy = (cy - reference.y) * grid_scale_mm;
-                    float dz = (cz - reference.z) * grid_scale_mm;
+                    float dx = GridUnitsToMM(cx - reference.x, grid_scale_mm);
+                    float dy = GridUnitsToMM(cy - reference.y, grid_scale_mm);
+                    float dz = GridUnitsToMM(cz - reference.z, grid_scale_mm);
                     float dist_sq = dx * dx + dy * dy + dz * dz;
                     if(dist_sq > max_distance_sq)
                     {
@@ -469,8 +461,8 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     bool has_effect_reference = GetEffectReferencePoint(effect_reference_point);
     const Vector3D* base_falloff_ref = has_effect_reference ? &effect_reference_point : &global_reference_point;
 
-    const float grid_scale_mm = 10.0f;
-    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *base_falloff_ref, grid_scale_mm);
+    const float scale_mm = (grid.grid_scale_mm > 0.001f) ? grid.grid_scale_mm : 10.0f;
+    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *base_falloff_ref, scale_mm);
     if(base_max_distance_mm <= 0.0f)
     {
         // Fallback to 3m radius if room bounds are unavailable
@@ -548,14 +540,14 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         float reference_max_distance_mm = base_max_distance_mm;
         if(falloff_ref != base_falloff_ref)
         {
-            reference_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *falloff_ref, grid_scale_mm);
+            reference_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *falloff_ref, scale_mm);
             if(reference_max_distance_mm <= 0.0f)
             {
                 reference_max_distance_mm = base_max_distance_mm;
             }
         }
 
-        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, mon_settings.edge_zone_depth, falloff_ref, grid_scale_mm);
+        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, mon_settings.edge_zone_depth, falloff_ref, scale_mm);
 
         if (!proj.is_valid) continue;
 

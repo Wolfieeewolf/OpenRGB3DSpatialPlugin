@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| AudioReactiveCommon.h                                    |
-|                                                          |
-|   Shared helpers for audio-reactive 3D effects          |
-|                                                          |
-|   Date: 2025-11-04                                       |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef AUDIOREACTIVECOMMON_H
 #define AUDIOREACTIVECOMMON_H

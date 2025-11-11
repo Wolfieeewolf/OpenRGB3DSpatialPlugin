@@ -1,13 +1,5 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_Audio.cpp                           |
-|                                                         |
-|   Audio tab UI and handlers                            |
-|                                                         |
-|   Date: 2025-10-07                                      |
-|                                                         |
-|   This file is part of the OpenRGB project              |
-|   SPDX-License-Identifier: GPL-2.0-only                 |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"

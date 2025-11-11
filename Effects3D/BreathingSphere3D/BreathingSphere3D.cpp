@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| BreathingSphere3D.cpp                                     |
-|                                                           |
-|   3D Breathing Sphere effect - pulsing sphere from origin |
-|                                                           |
-|   Date: 2025-09-28                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "BreathingSphere3D.h"
 

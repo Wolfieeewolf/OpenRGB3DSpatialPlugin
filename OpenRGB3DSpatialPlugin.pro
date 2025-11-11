@@ -126,6 +126,7 @@ HEADERS +=                                                                      
     OpenRGB3DSpatialPlugin.h                                                                    \
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
+    GridSpaceUtils.h                                                                            \
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
     EffectListManager3D.h                                                                       \
@@ -170,6 +171,7 @@ HEADERS +=                                                                      
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
+    GridSpaceUtils.cpp                                                                          \
     SpatialEffect3D.cpp                                                                         \
     EffectInstance3D.cpp                                                                        \
     StackPreset3D.cpp                                                                           \

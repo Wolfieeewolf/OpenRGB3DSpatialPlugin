@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Plasma3D.h                                                |
-|                                                           |
-|   3D Plasma effect with custom UI controls               |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef PLASMA3D_H
 #define PLASMA3D_H

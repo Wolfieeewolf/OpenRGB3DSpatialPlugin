@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| BouncingBall3D.h                                         |
-|                                                          |
-|   Single bouncing ball with glow                         |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef BOUNCINGBALL3D_H
 #define BOUNCINGBALL3D_H

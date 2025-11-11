@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Rain3D.cpp                                               |
-|                                                          |
-|   Room-scale volumetric rain effect                      |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Rain3D.h"
 #include <QGridLayout>

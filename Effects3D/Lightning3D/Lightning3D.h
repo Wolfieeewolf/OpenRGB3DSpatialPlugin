@@ -1,10 +1,4 @@
-/*---------------------------------------------------------*\
-| Lightning3D.h                                            |
-|                                                          |
-|   Room-scale lightning strike effect                     |
-|                                                          |
-|   SPDX-License-Identifier: GPL-2.0-only                  |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef LIGHTNING3D_H
 #define LIGHTNING3D_H

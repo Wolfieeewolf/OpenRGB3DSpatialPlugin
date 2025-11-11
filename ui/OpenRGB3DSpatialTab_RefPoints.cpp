@@ -1,13 +1,5 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_RefPoints.cpp                        |
-|                                                           |
-|   Reference Points management functions                  |
-|                                                           |
-|   Date: 2025-10-03                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-or-later               |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+
 
 #include "OpenRGB3DSpatialTab.h"
 #include "VirtualReferencePoint3D.h"
