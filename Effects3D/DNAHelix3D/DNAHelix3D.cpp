@@ -107,88 +107,83 @@ void DNAHelix3D::OnDNAParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
+RGBColor DNAHelix3D::CalculateColor(float, float, float, float)
 {
-    /*---------------------------------------------------------*\
-    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | One grid unit equals the configured grid scale          |
-    | (default 10mm). LED positions use grid units.           |
-    \*---------------------------------------------------------*/
+    return 0x00000000;
+}
 
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
-    Vector3D origin = GetEffectOrigin();
-
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+RGBColor DNAHelix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    \*---------------------------------------------------------*/
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
     {
-        return 0x00000000;  // Black - outside effect boundary
+        return 0x00000000;
     }
 
     float actual_frequency = GetScaledFrequency();
     progress = CalculateProgress(time);
 
-    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    // Room-scale: lower spatial frequency, larger radius scale
-    float freq_scale = actual_frequency * 0.004f / size_multiplier;
-    float radius_scale = helix_radius * 0.08f * size_multiplier;  // Bigger helix coils across the room
+    float size_multiplier = GetNormalizedSize();
+    // Normalize frequency consistently - use normalized coordinates, not room-size multipliers
+    float freq_scale = actual_frequency * 4.0f / fmax(0.1f, size_multiplier);
+    
+    // Normalize radius against room diagonal for consistent sizing
+    float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+    float radius_scale_normalized = (helix_radius / 200.0f) * size_multiplier; // 0-1 range
+    float radius_scale = max_distance * radius_scale_normalized * 0.3f; // Scale to room size
 
-    /*---------------------------------------------------------*\
-    | Calculate helix based on selected axis                  |
-    \*---------------------------------------------------------*/
     float radial_distance, angle, helix_height;
     float coord1, coord2, coord_along_helix;
 
     switch(effect_axis)
     {
-        case AXIS_X:  // Helix along X-axis (Left to Right)
+        case AXIS_X:
             radial_distance = sqrt(rel_y*rel_y + rel_z*rel_z);
             angle = atan2(rel_z, rel_y);
-            helix_height = rel_x * freq_scale + progress;
+            // Normalize coord_along_helix to 0-1 for consistent helix density
+            coord_along_helix = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
+            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
+            helix_height = coord_along_helix * freq_scale + progress;
             coord1 = rel_y;
             coord2 = rel_z;
-            coord_along_helix = rel_x;
             break;
-        case AXIS_Y:  // Helix along Y-axis (Bottom to Top, Y-up)
+        case AXIS_Y:
             radial_distance = sqrt(rel_x*rel_x + rel_z*rel_z);
             angle = atan2(rel_z, rel_x);
-            helix_height = rel_y * freq_scale + progress;
+            coord_along_helix = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
+            helix_height = coord_along_helix * freq_scale + progress;
             coord1 = rel_x;
             coord2 = rel_z;
-            coord_along_helix = rel_y;
             break;
-        case AXIS_Z:  // Helix along Z-axis (Front to Back)
+        case AXIS_Z:
         default:
             radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y);
             angle = atan2(rel_y, rel_x);
-            helix_height = rel_z * freq_scale + progress;
+            coord_along_helix = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
+            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
+            helix_height = coord_along_helix * freq_scale + progress;
             coord1 = rel_x;
             coord2 = rel_y;
-            coord_along_helix = rel_z;
             break;
-        case AXIS_RADIAL:  // Radial helix from center
+        case AXIS_RADIAL:
             radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             angle = atan2(rel_y, rel_x);
-            helix_height = radial_distance * freq_scale + progress;
+            // Normalize radial distance to 0-1
+            float norm_radial = (max_distance > 0.001f) ? (radial_distance / max_distance) : 0.0f;
+            norm_radial = fmaxf(0.0f, fminf(1.0f, norm_radial));
+            helix_height = norm_radial * freq_scale + progress;
             coord1 = rel_x;
             coord2 = rel_y;
             coord_along_helix = rel_z;
             break;
     }
 
-    /*---------------------------------------------------------*\
-    | Calculate the two DNA strands (double helix)            |
-    \*---------------------------------------------------------*/
+    // Calculate the two DNA strands (double helix)
     float helix1_angle = angle + helix_height;
     float helix1_c1 = radius_scale * cos(helix1_angle);
     float helix1_c2 = radius_scale * sin(helix1_angle);
@@ -199,120 +194,76 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
     float helix2_c2 = radius_scale * sin(helix2_angle);
     float helix2_distance = sqrt((coord1 - helix2_c1)*(coord1 - helix2_c1) + (coord2 - helix2_c2)*(coord2 - helix2_c2));
 
-    /*---------------------------------------------------------*\
-    | Create thicker, glowing strands with outer glow         |
-    \*---------------------------------------------------------*/
+    // Create thicker, glowing strands with outer glow
     float strand_core_thickness = 6.0f + radius_scale * 0.25f;
     float strand_glow_thickness = 16.0f + radius_scale * 0.5f;
 
-    // Core brightness (solid strand)
     float helix1_core = 1.0f - smoothstep(0.0f, strand_core_thickness, helix1_distance);
     float helix2_core = 1.0f - smoothstep(0.0f, strand_core_thickness, helix2_distance);
-
-    // Outer glow (softer falloff)
     float helix1_glow = (1.0f - smoothstep(strand_core_thickness, strand_glow_thickness, helix1_distance)) * 0.5f;
     float helix2_glow = (1.0f - smoothstep(strand_core_thickness, strand_glow_thickness, helix2_distance)) * 0.5f;
 
     float helix1_intensity = helix1_core + helix1_glow;
     float helix2_intensity = helix2_core + helix2_glow;
 
-    /*---------------------------------------------------------*\
-    | Add base pairs (rungs) with better spacing and glow     |
-    \*---------------------------------------------------------*/
-    float base_pair_frequency = freq_scale * 1.2f;  // Fewer, larger base pairs in room-scale
+    // Add base pairs (rungs)
+    float base_pair_frequency = freq_scale * 1.2f;
     float base_pair_phase = fmod(coord_along_helix * base_pair_frequency + progress * 0.5f, 6.28318f);
-
-    // Create discrete base pairs at regular intervals
-    float base_pair_active = exp(-fmod(base_pair_phase, 6.28318f / 3.0f) * 8.0f);  // Sharper pulses
+    float base_pair_active = exp(-fmod(base_pair_phase, 6.28318f / 3.0f) * 8.0f);
     float base_pair_connection = 0.0f;
 
     if(base_pair_active > 0.1f && radial_distance < radius_scale * 1.8f)
     {
-        // Create horizontal rung connecting the two strands
         float rung_distance = fabs(radial_distance - radius_scale);
         float rung_thickness = 1.5f + radius_scale * 0.2f;
-
         float rung_intensity = 1.0f - smoothstep(0.0f, rung_thickness, rung_distance);
         float rung_glow = (1.0f - smoothstep(rung_thickness, rung_thickness * 2.0f, rung_distance)) * 0.4f;
-
         base_pair_connection = (rung_intensity + rung_glow) * base_pair_active;
     }
 
-    /*---------------------------------------------------------*\
-    | Add major and minor grooves (realistic DNA feature)     |
-    \*---------------------------------------------------------*/
+    // Add major and minor grooves
     float groove_angle = fmod(angle - helix_height * 0.5f, 6.28318f);
-    float major_groove = exp(-fabs(groove_angle - 3.14159f) * 2.0f) * 0.15f;  // Darker region
-    float minor_groove = exp(-fabs(groove_angle) * 3.0f) * 0.1f;  // Slightly darker region
-
+    float major_groove = exp(-fabs(groove_angle - 3.14159f) * 2.0f) * 0.15f;
+    float minor_groove = exp(-fabs(groove_angle) * 3.0f) * 0.1f;
     float groove_effect = 1.0f - (major_groove + minor_groove);
 
-    /*---------------------------------------------------------*\
-    | Combine all DNA elements                                 |
-    \*---------------------------------------------------------*/
     float strand_intensity = fmax(helix1_intensity, helix2_intensity);
     float total_intensity = (strand_intensity + base_pair_connection) * groove_effect;
-
-    // Add subtle pulsing energy effect along strands
     float energy_pulse = 0.15f * sin(helix_height * 4.0f - progress * 3.0f) * strand_intensity;
     total_intensity += energy_pulse;
-
     total_intensity = fmax(0.0f, fmin(1.0f, total_intensity * 1.3f));
 
-    /*---------------------------------------------------------*\
-    | Color the different DNA components                       |
-    \*---------------------------------------------------------*/
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        // Rainbow colors spiral along the helix with base pairs in complementary colors
         float hue = helix_height * 50.0f;
-
-        // Base pairs get offset hue for contrast
         if(base_pair_connection > 0.3f)
         {
-            hue += 180.0f;  // Complementary color for base pairs
+            hue += 180.0f;
         }
-
         final_color = GetRainbowColor(hue);
     }
     else
     {
-        // Color strands vs base pairs differently for better visibility
         if(base_pair_connection > strand_intensity * 0.5f)
         {
-            // Base pairs use second color
             float position = (GetColors().size() > 1) ? 0.7f : 0.5f;
             final_color = GetColorAtPosition(position);
         }
         else
         {
-            // Strands use gradient based on position along helix
             float position = fmod(helix_height * 0.3f, 1.0f);
             final_color = GetColorAtPosition(position);
         }
     }
 
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-
     r = (unsigned char)(r * total_intensity);
     g = (unsigned char)(g * total_intensity);
     b = (unsigned char)(b * total_intensity);
-
     return (b << 16) | (g << 8) | r;
-}
-
-RGBColor DNAHelix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-{
-    /*---------------------------------------------------------*\
-    | DNA Helix is a 3D spatial effect - simply delegate to    |
-    | the standard CalculateColor implementation               |
-    \*---------------------------------------------------------*/
-    (void)grid;  // Unused parameter
-    return CalculateColor(x, y, z, time);
 }
 
 nlohmann::json DNAHelix3D::SaveSettings() const

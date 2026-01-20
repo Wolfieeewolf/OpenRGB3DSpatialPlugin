@@ -331,8 +331,7 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     progress = CalculateProgress(time);
 
     float size_multiplier = GetNormalizedSize();
-    float spatial_scale = (grid.width + grid.depth + grid.height) / 3.0f;
-    float freq_scale = (actual_frequency * 0.15f) / (spatial_scale + 0.001f) / fmax(0.1f, size_multiplier);
+    float freq_scale = actual_frequency * 0.15f / fmax(0.1f, size_multiplier);
 
     float radius, angle, twist_coord;
     switch(effect_axis)
@@ -345,10 +344,25 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
 
     if(effect_reverse) angle = -angle;
 
-    // Normalize radius to room size so arms span entire room roughly
-    float norm_radius = radius / (spatial_scale * 0.5f + 0.001f);
-    float z_twist = twist_coord * freq_scale * spatial_scale * 0.3f;
-    float spiral_angle = angle * num_arms + norm_radius * (actual_frequency * 0.6f) + z_twist - progress;
+    // Normalize radius and twist_coord consistently against room bounds
+    // This ensures ALL controllers see the same spiral pattern at the same absolute room position
+    float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+    float norm_radius = (max_distance > 0.001f) ? (radius / max_distance) : 0.0f;
+    norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
+    
+    // Normalize twist_coord based on axis
+    float norm_twist = 0.0f;
+    switch(effect_axis)
+    {
+        case AXIS_X: norm_twist = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f; break;
+        case AXIS_Y: norm_twist = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f; break;
+        case AXIS_Z: default: norm_twist = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f; break;
+        case AXIS_RADIAL: norm_twist = norm_radius; break;
+    }
+    norm_twist = fmaxf(0.0f, fminf(1.0f, norm_twist));
+    
+    float z_twist = norm_twist * freq_scale * 3.0f;
+    float spiral_angle = angle * num_arms + norm_radius * (actual_frequency * 6.0f) + z_twist - progress;
 
     float spiral_value;
     float gap_factor = gap_size / 100.0f;
@@ -356,8 +370,8 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     switch(pattern_type)
     {
         case 0: // Smooth
-            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(twist_coord * freq_scale * spatial_scale + progress * 0.7f));
-            spiral_value += 0.3f * cos(spiral_angle * 0.5f + twist_coord * freq_scale * spatial_scale * 1.5f + progress * 1.2f);
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale * 3.0f + progress * 0.7f));
+            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale * 4.5f + progress * 1.2f);
             spiral_value = (spiral_value + 1.5f) / 3.0f;
             spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             break;

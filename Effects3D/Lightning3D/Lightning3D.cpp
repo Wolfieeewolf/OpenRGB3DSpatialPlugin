@@ -92,13 +92,6 @@ void Lightning3D::OnLightningParameterChanged()
     emit ParametersChanged();
 }
 
-static inline float prand3(int x, int y, int z)
-{
-    int n = x * 15731 ^ y * 789221 ^ z * 1376312589;
-    n = (n << 13) ^ n;
-    return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f) * 0.5f + 0.5f;
-}
-
 RGBColor Lightning3D::CalculateColor(float, float, float, float)
 {
     return 0x00000000;
@@ -119,19 +112,33 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float rel_z = z - origin.z;
 
     // Choose vertical axis for strike and lateral plane
-    float along, p1, p2, span1, span2, height;
+    // Use absolute world coordinates for normalization to ensure synchronization
+    float along_normalized, p1, p2, span1, span2, height;
     EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
     switch(use_axis)
     {
-        case AXIS_X: along = rel_x; p1 = rel_y; p2 = rel_z; span1 = grid.height; span2 = grid.depth; height = grid.width; break;
-        case AXIS_Y: along = rel_y; p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; break;
-        case AXIS_Z: along = rel_z; p1 = rel_x; p2 = rel_y; span1 = grid.width; span2 = grid.height; height = grid.depth; break;
+        case AXIS_X: 
+            along_normalized = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
+            p1 = rel_y; p2 = rel_z; span1 = grid.height; span2 = grid.depth; height = grid.width; 
+            break;
+        case AXIS_Y: 
+            along_normalized = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+            p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; 
+            break;
+        case AXIS_Z: 
+            along_normalized = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
+            p1 = rel_x; p2 = rel_y; span1 = grid.width; span2 = grid.height; height = grid.depth; 
+            break;
         case AXIS_RADIAL:
         default:
-            along = rel_y; p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; break;
+            along_normalized = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+            p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; 
+            break;
     }
-
-    float norm = (along + height * 0.5f) / (height + 0.001f);
+    along_normalized = fmaxf(0.0f, fminf(1.0f, along_normalized));
+    
+    // Use normalized position for wobble calculation (0-1 range)
+    float norm = along_normalized;
     float wobble = sinf(norm * 40.0f + time * 10.0f) * (0.2f + 0.1f * branches);
     float c1 = wobble * (span1 * 0.1f);
     float c2 = cosf(norm * 37.0f + time * 9.0f) * (0.2f + 0.1f * branches) * (span2 * 0.1f);

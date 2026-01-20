@@ -108,10 +108,8 @@ static inline float hash31(int x, int y, int z)
     return 0.5f * (1.0f + (float)((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
 }
 
-RGBColor Rain3D::CalculateColor(float x, float y, float z, float time)
+RGBColor Rain3D::CalculateColor(float, float, float, float)
 {
-    // Legacy path not used - grid-aware version preferred
-    (void)x; (void)y; (void)z; (void)time;
     return 0x00000000;
 }
 

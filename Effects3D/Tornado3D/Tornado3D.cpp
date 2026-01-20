@@ -114,18 +114,35 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float size_m = GetNormalizedSize();
 
     // Room-aware height and radius scaling
-    float half_height = grid.height * 0.5f * (0.5f + 0.5f * (tornado_height / 500.0f)); // slider expands to full height
+    // Use absolute world coordinates for normalization to ensure synchronization across controllers
     float axial = 0.0f;
     EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
 
+    // Normalize using absolute world coordinates, not relative coordinates
+    // This ensures ALL controllers see the same tornado pattern at the same absolute room position
     switch(use_axis)
     {
-        case AXIS_X: axial = rel_x; break;
-        case AXIS_Y: axial = rel_y; break;
-        case AXIS_Z: axial = rel_z; break;
-        case AXIS_RADIAL: default: axial = rel_y; break;
+        case AXIS_X: 
+            axial = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
+            break;
+        case AXIS_Y: 
+            axial = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+            break;
+        case AXIS_Z: 
+            axial = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
+            break;
+        case AXIS_RADIAL: 
+        default: 
+            // For radial, normalize height position
+            axial = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+            break;
     }
-    float h_norm = fmax(0.0f, fmin(1.0f, (axial + half_height) / (2.0f * half_height + 0.0001f)));
+    axial = fmaxf(0.0f, fminf(1.0f, axial));
+    
+    // Map normalized axial position to tornado height range
+    float height_center = 0.5f;
+    float height_range = (tornado_height / 500.0f) * 0.5f; // 0 to 0.5 range
+    float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range)) / (2.0f * height_range + 0.0001f)));
     float base_radius = 0.5f * fmin(grid.width, grid.depth); // half of min horizontal span
     // core_radius (20..300) maps to ~4%..60% of base, grows with height
     float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
@@ -157,8 +174,9 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float arms = 4.0f + 4.0f * size_m;
     float band = 0.5f * (1.0f + cosf(swirl * arms));
 
-    // Vertical fade outside active height
-    float y_fade = fmax(0.0f, 1.0f - fabsf(axial) / (half_height + 0.001f));
+    // Vertical fade outside active height (using normalized axial position)
+    // Reuse height_range calculated above
+    float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range + 0.001f));
 
     float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade;
     intensity = fmax(0.0f, fmin(1.0f, intensity));

@@ -22,7 +22,9 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     boundary_prevalidated = false;
 
     // Initialize axis parameters
-    effect_axis = AXIS_RADIAL;
+    // Default to a directional axis so rotation/translation produces visible motion by default.
+    // Radial fields are often rotation-invariant for rigid bodies, which can feel "stuck".
+    effect_axis = AXIS_Z;
     effect_reverse = false;
 
     // Initialize reference point parameters

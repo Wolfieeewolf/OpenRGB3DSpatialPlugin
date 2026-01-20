@@ -285,7 +285,6 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float wave_value = 0.0f;
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.1f / size_multiplier;
-    float position = 0.0f;
     float normalized_position = 0.0f;
 
     /*---------------------------------------------------------*\
@@ -294,34 +293,65 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     switch(effect_axis)
     {
         case AXIS_X:  // Left to Right
-            position = rel_x;
-            normalized_position = (x - grid.min_x) / grid.width;
+            if(grid.width > 0.001f)
+            {
+                normalized_position = (x - grid.min_x) / grid.width;
+            }
+            else
+            {
+                normalized_position = 0.0f;
+            }
             break;
         case AXIS_Y:  // Floor to Ceiling (Y-up, height)
-            position = rel_y;
-            normalized_position = (y - grid.min_y) / grid.height;
+            if(grid.height > 0.001f)
+            {
+                normalized_position = (y - grid.min_y) / grid.height;
+            }
+            else
+            {
+                normalized_position = 0.0f;
+            }
             break;
         case AXIS_Z:  // Front to Back (depth)
-            position = rel_z;
-            normalized_position = (z - grid.min_z) / grid.depth;
+            if(grid.depth > 0.001f)
+            {
+                normalized_position = (z - grid.min_z) / grid.depth;
+            }
+            else
+            {
+                normalized_position = 0.0f;
+            }
             break;
         case AXIS_RADIAL:  // Radial from center
         default:
+        {
+            float radial_distance = 0.0f;
             if(shape_type == 0)  // Sphere
             {
-                position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+                radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             }
             else  // Cube
             {
-                position = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
+                radial_distance = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
             }
             // Normalize radial distance
             float max_distance = sqrt(grid.width*grid.width +
                                     grid.height*grid.height +
                                     grid.depth*grid.depth) / 2.0f;
-            normalized_position = position / max_distance;
+            if(max_distance > 0.001f)
+            {
+                normalized_position = radial_distance / max_distance;
+            }
+            else
+            {
+                normalized_position = 0.0f;
+            }
             break;
+        }
     }
+
+    // Clamp to valid range [0, 1] to avoid NaNs/inf propagating into sin()
+    normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
 
     /*---------------------------------------------------------*\
     | Apply reverse if enabled                                 |
@@ -331,10 +361,10 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
         normalized_position = 1.0f - normalized_position;
     }
 
-    // Use normalized position (0-1) scaled by room size
-    // This ensures consistent wave density across different room sizes
-    float spatial_scale = (grid.width + grid.height + grid.depth) / 3.0f;  // Average room dimension
-    wave_value = sin(normalized_position * freq_scale * spatial_scale * 0.01f - progress);
+    // Use normalized position (0-1) directly - it's already normalized across the entire room
+    // This ensures ALL controllers see the same wave pattern at the same absolute room position
+    // freq_scale already accounts for frequency, so we don't need room-size scaling
+    wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
 
     /*---------------------------------------------------------*\
     | Convert wave to hue (0-360 degrees)                     |

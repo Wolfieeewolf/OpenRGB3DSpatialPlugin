@@ -291,68 +291,86 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     float actual_frequency = GetScaledFrequency();
     progress = CalculateProgress(time);
 
-    // Normalize spatial scale so features remain readable across any room size
     float size_multiplier = GetNormalizedSize();
-    float spatial_scale = (grid.width + grid.depth + grid.height) / 3.0f;
+    float freq_scale = actual_frequency * 0.8f / fmax(0.1f, size_multiplier);
+
+    // Normalize coordinates to 0-1 range based on room bounds
+    // This ensures ALL controllers see the same plasma pattern at the same absolute room position
+    float norm_x = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
+    float norm_y = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
+    float norm_z = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
+    norm_x = fmaxf(0.0f, fminf(1.0f, norm_x));
+    norm_y = fmaxf(0.0f, fminf(1.0f, norm_y));
+    norm_z = fmaxf(0.0f, fminf(1.0f, norm_z));
 
     float coord1, coord2, coord3;
     switch(effect_axis)
     {
-        case AXIS_X:  coord1 = rel_y; coord2 = rel_z; coord3 = rel_x; break;
-        case AXIS_Y:  coord1 = rel_x; coord2 = rel_z; coord3 = rel_y; break;
-        case AXIS_Z:  coord1 = rel_x; coord2 = rel_y; coord3 = rel_z; break;
-        case AXIS_RADIAL: default: coord1 = rel_x; coord2 = rel_y; coord3 = rel_z; break;
+        case AXIS_X:  coord1 = norm_y; coord2 = norm_z; coord3 = norm_x; break;
+        case AXIS_Y:  coord1 = norm_x; coord2 = norm_z; coord3 = norm_y; break;
+        case AXIS_Z:  coord1 = norm_x; coord2 = norm_y; coord3 = norm_z; break;
+        case AXIS_RADIAL: default: 
+        {
+            // For radial, use normalized distance from origin
+            float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+            float radial_dist = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            float norm_radial = (max_distance > 0.001f) ? (radial_dist / max_distance) : 0.0f;
+            norm_radial = fmaxf(0.0f, fminf(1.0f, norm_radial));
+            // Use angle for coord1/coord2, radial distance for coord3
+            float angle = atan2(rel_y, rel_x);
+            coord1 = (angle + 3.14159f) / (2.0f * 3.14159f); // Normalize angle to 0-1
+            coord2 = norm_radial;
+            coord3 = norm_radial;
+            break;
+        }
     }
-    if(effect_reverse) coord3 = -coord3;
-
-    // Larger rooms -> smaller scale factor so wavelengths are larger
-    float scale = (actual_frequency * 0.8f) / (spatial_scale + 0.001f) / fmax(0.1f, size_multiplier);
+    if(effect_reverse) coord3 = 1.0f - coord3;
 
     float plasma_value;
     switch(pattern_type)
     {
         case 0: // Classic
             plasma_value =
-                sin((coord1 + progress * 2.0f) * scale * spatial_scale) +
-                sin((coord2 + progress * 1.7f) * scale * spatial_scale * 0.8f) +
-                sin((coord1 + coord2 + progress * 1.3f) * scale * spatial_scale * 0.6f) +
-                cos((coord1 - coord2 + progress * 2.2f) * scale * spatial_scale * 0.7f) +
-                sin(sqrt(coord1*coord1 + coord2*coord2) * scale * spatial_scale * 0.5f + progress * 1.5f) +
-                cos(coord3 * scale * spatial_scale * 0.4f + progress * 0.9f);
+                sin((coord1 + progress * 2.0f) * freq_scale * 10.0f) +
+                sin((coord2 + progress * 1.7f) * freq_scale * 8.0f) +
+                sin((coord1 + coord2 + progress * 1.3f) * freq_scale * 6.0f) +
+                cos((coord1 - coord2 + progress * 2.2f) * freq_scale * 7.0f) +
+                sin(sqrt(coord1*coord1 + coord2*coord2) * freq_scale * 5.0f + progress * 1.5f) +
+                cos(coord3 * freq_scale * 4.0f + progress * 0.9f);
             break;
         case 1: // Swirl
             {
-                float angle = atan2(coord2, coord1);
-                float radius = sqrt(coord1*coord1 + coord2*coord2);
+                float angle = atan2(coord2 - 0.5f, coord1 - 0.5f); // Center at 0.5, 0.5
+                float radius = sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
-                    sin(angle * 4.0f + radius * scale * spatial_scale * 0.8f + progress * 2.0f) +
-                    sin(angle * 3.0f - radius * scale * spatial_scale * 0.6f + progress * 1.5f) +
-                    cos(angle * 5.0f + radius * scale * spatial_scale * 0.4f - progress * 1.8f) +
-                    sin(coord3 * scale * spatial_scale * 0.5f + progress) +
-                    cos((angle * 2.0f + coord3 * scale * spatial_scale * 0.3f) + progress * 1.2f);
+                    sin(angle * 4.0f + radius * freq_scale * 8.0f + progress * 2.0f) +
+                    sin(angle * 3.0f - radius * freq_scale * 6.0f + progress * 1.5f) +
+                    cos(angle * 5.0f + radius * freq_scale * 4.0f - progress * 1.8f) +
+                    sin(coord3 * freq_scale * 5.0f + progress) +
+                    cos((angle * 2.0f + coord3 * freq_scale * 3.0f) + progress * 1.2f);
             }
             break;
         case 2: // Ripple
             {
                 float dist_from_center = (effect_axis == AXIS_RADIAL)
-                    ? sqrt(coord1*coord1 + coord2*coord2 + coord3*coord3)
-                    : sqrt(coord1*coord1 + coord2*coord2);
+                    ? sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f))
+                    : sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
-                    sin(dist_from_center * scale * spatial_scale - progress * 3.0f) +
-                    sin(dist_from_center * scale * spatial_scale * 1.5f - progress * 2.3f) +
-                    cos(dist_from_center * scale * spatial_scale * 0.8f + progress * 1.8f) +
-                    sin((coord1 + coord2) * scale * spatial_scale * 0.6f + progress * 1.2f) +
-                    cos(coord3 * scale * spatial_scale * 0.5f - progress * 0.7f);
+                    sin(dist_from_center * freq_scale * 10.0f - progress * 3.0f) +
+                    sin(dist_from_center * freq_scale * 15.0f - progress * 2.3f) +
+                    cos(dist_from_center * freq_scale * 8.0f + progress * 1.8f) +
+                    sin((coord1 + coord2) * freq_scale * 6.0f + progress * 1.2f) +
+                    cos(coord3 * freq_scale * 5.0f - progress * 0.7f);
             }
             break;
         case 3: // Organic
         default:
             {
-                float flow1 = sin(coord1 * scale * spatial_scale * 0.8f + sin(coord2 * scale * spatial_scale * 1.2f + progress) + progress * 0.5f);
-                float flow2 = cos(coord2 * scale * spatial_scale * 0.9f + cos(coord3 * scale * spatial_scale * 1.1f + progress * 1.3f));
-                float flow3 = sin(coord3 * scale * spatial_scale * 0.7f + sin(coord1 * scale * spatial_scale * 1.3f + progress * 0.7f));
-                float flow4 = cos((coord1 + coord2) * scale * spatial_scale * 0.6f + sin(progress * 1.5f));
-                float flow5 = sin((coord2 + coord3) * scale * spatial_scale * 0.5f + cos(progress * 1.8f));
+                float flow1 = sin(coord1 * freq_scale * 8.0f + sin(coord2 * freq_scale * 12.0f + progress) + progress * 0.5f);
+                float flow2 = cos(coord2 * freq_scale * 9.0f + cos(coord3 * freq_scale * 11.0f + progress * 1.3f));
+                float flow3 = sin(coord3 * freq_scale * 7.0f + sin(coord1 * freq_scale * 13.0f + progress * 0.7f));
+                float flow4 = cos((coord1 + coord2) * freq_scale * 6.0f + sin(progress * 1.5f));
+                float flow5 = sin((coord2 + coord3) * freq_scale * 5.0f + cos(progress * 1.8f));
                 plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
             }
             break;

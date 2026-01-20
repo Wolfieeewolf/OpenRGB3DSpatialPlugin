@@ -106,36 +106,8 @@ void BreathingSphere3D::OnBreathingParameterChanged()
 }
 
 
-RGBColor BreathingSphere3D::CalculateColor(float x, float y, float z, float time)
+RGBColor BreathingSphere3D::CalculateColor(float, float, float, float)
 {
-    /*---------------------------------------------------------*\
-    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | One grid unit equals the configured grid scale          |
-    | (default 10mm). LED positions use grid units.           |
-    \*---------------------------------------------------------*/
-
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
-    Vector3D origin = GetEffectOrigin();
-
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    \*---------------------------------------------------------*/
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
-    {
-        return 0x00000000;  // Black - outside effect boundary
-    }
-
-    // Legacy fallback: return black when inside; grid-aware version handles actual rendering.
-    (void)x; (void)y; (void)z; (void)time; // suppress unused warnings when compiled without grid path
     return 0x00000000;
 }
 
