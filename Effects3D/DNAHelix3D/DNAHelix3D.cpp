@@ -293,15 +293,14 @@ RGBColor DNAHelix3D::CalculateColor(float x, float y, float z, float time)
         }
     }
 
-    // Apply intensity and brightness
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = (effect_brightness / 100.0f) * total_intensity;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    r = (unsigned char)(r * total_intensity);
+    g = (unsigned char)(g * total_intensity);
+    b = (unsigned char)(b * total_intensity);
 
     return (b << 16) | (g << 8) | r;
 }

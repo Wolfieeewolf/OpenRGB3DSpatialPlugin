@@ -442,23 +442,31 @@ namespace Geometry3D
         // This handles screens at ANY orientation (tilted, rotated, angled, etc.)
 
         // Calculate LED's offset from screen center in world space (grid units)
-        // World space uses Y-up: X=width, Y=height(vertical), Z=depth
+        // World space uses Y-up: X = left->right, Y = floor->ceiling, Z = front->back
         Vector3D world_offset;
         world_offset.x = led_position.x - transform.position.x;
         world_offset.y = led_position.y - transform.position.y;
         world_offset.z = led_position.z - transform.position.z;
 
-        // Calculate rotation matrix for the screen
+        // Calculate rotation matrix for the screen (columns are the rotated basis vectors)
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
 
-        // Transform world offset to screen's local coordinate system
-        // Use INVERSE rotation (transpose of rotation matrix for orthonormal matrix)
-        // NOTE: Screen local space is Z-up, so we need to swap Y/Z from world Y-up to local Z-up
+        Vector3D plane_right  = { rotation_matrix[0], rotation_matrix[3], rotation_matrix[6] }; // local +X
+        Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] }; // local +Y (historic Y-up)
+        Vector3D plane_normal = { rotation_matrix[2], rotation_matrix[5], rotation_matrix[8] }; // local +Z (screen normal)
+
+        // Transform world offset to screen local axes via dot products (inverse rotation)
         Vector3D local_offset;
-        local_offset.x = rotation_matrix[0] * world_offset.x + rotation_matrix[3] * world_offset.z + rotation_matrix[6] * world_offset.y;
-        local_offset.y = rotation_matrix[1] * world_offset.x + rotation_matrix[4] * world_offset.z + rotation_matrix[7] * world_offset.y;
-        local_offset.z = rotation_matrix[2] * world_offset.x + rotation_matrix[5] * world_offset.z + rotation_matrix[8] * world_offset.y;
+        local_offset.x = world_offset.x * plane_right.x  + world_offset.y * plane_right.y  + world_offset.z * plane_right.z;
+        local_offset.y = world_offset.x * plane_up.x     + world_offset.y * plane_up.y     + world_offset.z * plane_up.z;
+        local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
+
+        // Remap to screen-friendly axes:
+        //  - local_offset.x : horizontal (left -> right across panel)
+        //  - local_offset.z : vertical   (bottom -> top across panel)
+        //  - local_offset.y : depth w.r.t. panel normal (front/back)
+        std::swap(local_offset.y, local_offset.z);
 
         // In screen's local space:
         // local X = left(-) to right(+) across screen surface

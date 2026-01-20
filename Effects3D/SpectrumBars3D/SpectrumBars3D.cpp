@@ -79,11 +79,10 @@ RGBColor SpectrumBars3D::CalculateColor(float x, float y, float z, float time)
     float axis_pos = ResolveCoordinateNormalized(nullptr, x, y, z);
     float height_norm = ResolveHeightNormalized(nullptr, x, y, z);
     float radial_norm = ResolveRadialNormalized(nullptr, x, y, z);
-    float brightness = std::clamp(static_cast<float>(GetBrightness()) / 100.0f, 0.0f, 1.0f);
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(axis_pos * 360.0f)
         : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, brightness, user_color);
+    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, user_color);
 }
 
 RGBColor SpectrumBars3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -92,11 +91,10 @@ RGBColor SpectrumBars3D::CalculateColorGrid(float x, float y, float z, float tim
     float axis_pos = ResolveCoordinateNormalized(&grid, x, y, z);
     float height_norm = ResolveHeightNormalized(&grid, x, y, z);
     float radial_norm = ResolveRadialNormalized(&grid, x, y, z);
-    float brightness = std::clamp(static_cast<float>(GetBrightness()) / 100.0f, 0.0f, 1.0f);
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(axis_pos * 360.0f)
         : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, brightness, user_color);
+    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, user_color);
 }
 
 nlohmann::json SpectrumBars3D::SaveSettings() const
@@ -331,10 +329,11 @@ float SpectrumBars3D::ResolveRadialNormalized(const GridContext3D* grid, float x
 
 RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const
 {
+    // Global brightness is applied by PostProcessColorGrid
+    (void)brightness;
     if(smoothed_bands.empty())
     {
         RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
-        base = ScaleRGBColor(base, brightness);
         return ModulateRGBColors(base, user_color);
     }
 
@@ -354,7 +353,7 @@ RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float r
 
     float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
+    color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     color = ModulateRGBColors(color, user_color);
     return color;

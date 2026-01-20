@@ -99,8 +99,8 @@ RGBColor BeatPulse3D::CalculateColor(float x, float y, float z, float time)
 
     float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
-    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
-    color = ScaleRGBColor(color, brightness * (0.25f + 0.75f * energy));
+    // Global brightness is applied by PostProcessColorGrid
+    color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(wave_front * 360.0f)
@@ -139,8 +139,8 @@ RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, 
 
     float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
-    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
-    color = ScaleRGBColor(color, brightness * (0.25f + 0.75f * energy));
+    // Global brightness is applied by PostProcessColorGrid
+    color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(wave_front * 360.0f)

@@ -487,6 +487,12 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         pos_x_slider->blockSignals(false);
         pos_y_slider->blockSignals(false);
         pos_z_slider->blockSignals(false);
+
+        // Immediately update effect rendering when position changes
+        if(effect_running)
+        {
+            RenderEffectStack();
+        }
     }
 }
 
@@ -523,6 +529,12 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         rot_x_slider->blockSignals(false);
         rot_y_slider->blockSignals(false);
         rot_z_slider->blockSignals(false);
+
+        // Immediately update effect rendering when rotation changes
+        if(effect_running)
+        {
+            RenderEffectStack();
+        }
     }
 }
 

@@ -198,15 +198,14 @@ RGBColor Explosion3D::CalculateColor(float x, float y, float z, float time)
         final_color = GetColorAtPosition(explosion_intensity_final);
     }
 
-    // Apply intensity and brightness
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = (effect_brightness / 100.0f) * explosion_intensity_final;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    r = (unsigned char)(r * explosion_intensity_final);
+    g = (unsigned char)(g * explosion_intensity_final);
+    b = (unsigned char)(b * explosion_intensity_final);
 
     return (b << 16) | (g << 8) | r;
 }
@@ -330,10 +329,10 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = (GetBrightness() / 100.0f) * explosion_intensity_final;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
+    r = (unsigned char)(r * explosion_intensity_final);
+    g = (unsigned char)(g * explosion_intensity_final);
+    b = (unsigned char)(b * explosion_intensity_final);
 
     return (b << 16) | (g << 8) | r;
 }

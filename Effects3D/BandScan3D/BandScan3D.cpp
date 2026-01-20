@@ -73,12 +73,11 @@ RGBColor BandScan3D::CalculateColor(float x, float y, float z, float time)
     float axis_pos = ResolveCoordinateNormalized(nullptr, x, y, z);
     float height_norm = ResolveHeightNormalized(nullptr, x, y, z);
     float radial_norm = ResolveRadialNormalized(nullptr, x, y, z);
-    float brightness = std::clamp(static_cast<float>(GetBrightness()) / 100.0f, 0.0f, 1.0f);
     bool rainbow_mode = GetRainbowMode();
     RGBColor axis_color = rainbow_mode
         ? GetRainbowColor(axis_pos * 360.0f)
         : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, brightness, axis_color, rainbow_mode);
+    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, axis_color, rainbow_mode);
 }
 
 RGBColor BandScan3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -87,12 +86,11 @@ RGBColor BandScan3D::CalculateColorGrid(float x, float y, float z, float time, c
     float axis_pos = ResolveCoordinateNormalized(&grid, x, y, z);
     float height_norm = ResolveHeightNormalized(&grid, x, y, z);
     float radial_norm = ResolveRadialNormalized(&grid, x, y, z);
-    float brightness = std::clamp(static_cast<float>(GetBrightness()) / 100.0f, 0.0f, 1.0f);
     bool rainbow_mode = GetRainbowMode();
     RGBColor axis_color = rainbow_mode
         ? GetRainbowColor(axis_pos * 360.0f)
         : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, brightness, axis_color, rainbow_mode);
+    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, axis_color, rainbow_mode);
 }
 
 nlohmann::json BandScan3D::SaveSettings() const
@@ -335,7 +333,8 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
     if(smoothed_bands.empty())
     {
         RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
-        base = ScaleRGBColor(base, brightness);
+        // Global brightness is applied by PostProcessColorGrid
+        (void)brightness;
         return ModulateRGBColors(base, axis_color);
     }
 
@@ -371,7 +370,8 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
 
     float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
+    // Global brightness is applied by PostProcessColorGrid
+    color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor modulation = axis_color;
     if(rainbow_mode)

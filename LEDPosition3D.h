@@ -42,7 +42,7 @@ struct LEDPosition3D
     unsigned int    led_idx;
     Vector3D        local_position;
     Vector3D        world_position;
-    Vector3D        effect_world_position;
+    Vector3D        room_position;   // World position without controller rotation (used for room-aligned effects)
     RGBColor        preview_color;  // Used for viewport preview rendering
 };
 

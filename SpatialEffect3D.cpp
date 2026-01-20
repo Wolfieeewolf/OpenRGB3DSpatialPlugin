@@ -731,11 +731,12 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBCol
     float coverage = ComputeCoverageWeight(x, y, z, grid);
     if(coverage <= 0.0f) return 0x00000000;
 
-    // Apply sharpness (gamma-like) and intensity multiplier
+    // Apply sharpness (gamma-like), intensity multiplier, and global brightness
     float gamma = powf(2.0f, ((float)effect_sharpness - 100.0f) / 100.0f);
     coverage = (coverage < 1.0f) ? powf(coverage, gamma) : coverage;
     float intensity_mul = effect_intensity / 100.0f; // 0..2.0
-    float factor = coverage * intensity_mul;
+    float brightness_mul = effect_brightness / 100.0f; // 0.01..1.0 (slider min is 1)
+    float factor = coverage * intensity_mul * brightness_mul;
     if(factor <= 0.0f) return 0x00000000;
 
     // Apply to BGR color
