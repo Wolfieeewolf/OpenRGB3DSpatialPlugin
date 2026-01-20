@@ -27,17 +27,40 @@ CONFIG +=                                                                       
 #-----------------------------------------------------------------------------------------------#
 # Application Configuration                                                                     #
 #-----------------------------------------------------------------------------------------------#
-MAJOR       = 1
-MINOR       = 0
-SUFFIX      = git
-
+# Date-based versioning: YY.MM.DD.V (e.g., 26.01.20.1)
+# Tags should be in format: v26.01.20.1
+# For development builds, version is extracted from the latest tag or uses today's date
 SHORTHASH   = $$system("git rev-parse --short=7 HEAD")
-LASTTAG     = "v"$$MAJOR"."$$MINOR".0"
-COMMAND     = "git rev-list --count "$$LASTTAG"..HEAD"
-COMMITS     = $$system($$COMMAND)
 
-VERSION_NUM = $$MAJOR"."$$MINOR"."$$COMMITS
-VERSION_STR = $$MAJOR"."$$MINOR
+# Try to get version from git describe
+# Format: v26.01.20.1 or v26.01.20.1-5-gabc1234
+GIT_DESCRIBE = $$system("git describe --tags --always 2>nul || git describe --tags --always 2>/dev/null || echo ''")
+!isEmpty(GIT_DESCRIBE) {
+    # Remove 'v' prefix and any commit suffix (e.g., "-5-gabc1234")
+    VERSION_FROM_TAG = $$replace(GIT_DESCRIBE, "v", "")
+    # Remove everything after first dash (commit count and hash)
+    VERSION_FROM_TAG = $$section(VERSION_FROM_TAG, "-", 0, 0)
+    # Use it if it looks like a version (contains dots)
+    contains(VERSION_FROM_TAG, "\\.") {
+        VERSION_NUM = $$VERSION_FROM_TAG
+    }
+}
+
+# If no valid version from tag, use today's date with version 1 (2-digit year)
+isEmpty(VERSION_NUM) {
+    win32:DATE_YEAR_FULL = $$system(powershell -Command "(Get-Date).ToString('yyyy')")
+    win32:DATE_YEAR = $$system(powershell -Command "(Get-Date).ToString('yy')")
+    win32:DATE_MONTH = $$system(powershell -Command "(Get-Date).ToString('MM')")
+    win32:DATE_DAY = $$system(powershell -Command "(Get-Date).ToString('dd')")
+    unix:DATE_YEAR_FULL = $$system(date +%Y)
+    unix:DATE_YEAR = $$system(date +%y)
+    unix:DATE_MONTH = $$system(date +%m)
+    unix:DATE_DAY = $$system(date +%d)
+    VERSION_NUM = $$DATE_YEAR"."$$DATE_MONTH"."$$DATE_DAY".1"
+}
+
+VERSION_STR = $$VERSION_NUM
+SUFFIX = git
 
 VERSION_DEB = $$VERSION_NUM
 VERSION_WIX = $$VERSION_NUM
@@ -45,7 +68,7 @@ VERSION_AUR = $$VERSION_NUM
 VERSION_RPM = $$VERSION_NUM
 
 equals(SUFFIX, "git") {
-VERSION_STR = $$VERSION_STR"+ ("$$SUFFIX$$COMMITS")"
+VERSION_STR = $$VERSION_STR"+ ("$$SUFFIX$$SHORTHASH")"
 VERSION_DEB = $$VERSION_DEB"~git"$$SHORTHASH
 VERSION_AUR = $$VERSION_AUR".g"$$SHORTHASH
 VERSION_RPM = $$VERSION_RPM"^git"$$SHORTHASH
