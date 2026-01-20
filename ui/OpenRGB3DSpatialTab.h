@@ -129,6 +129,7 @@ private slots:
     void on_effect_changed(int index);
     void on_effect_origin_changed(int index);
     void on_effect_zone_changed(int index);
+    void on_spatial_debug_toggled(bool enabled);
     void UpdateSelectionInfo();
     void on_apply_spacing_clicked();
     void UpdateEffectOriginCombo();
@@ -275,6 +276,7 @@ private:
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
     QPushButton*                stop_effect_button;
+    QCheckBox*                  spatial_debug_checkbox;
 
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;
@@ -290,6 +292,8 @@ private:
     float                       effect_time;
     QElapsedTimer               effect_elapsed;
     bool                        stack_settings_updating;
+    bool                        spatial_debug_dump_pending;
+    bool                        spatial_debug_enabled;
 
     /*---------------------------------------------------------*\
     | Custom grid dimensions (always 1:1 LED mapping)         |

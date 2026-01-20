@@ -182,6 +182,9 @@ public:
     // Global post-processing helpers apply coverage/intensity shaping consistently
     RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
 
+    // Effects that need true world-space coordinates (e.g., ambilight) can opt in.
+    virtual bool RequiresWorldSpaceCoordinates() const { return false; }
+
     // Serialization helpers
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);

@@ -58,7 +58,7 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
         pos.local_position.y = (float)led_mappings[i].y * scale_y; // height/up/down
         pos.local_position.z = (float)led_mappings[i].z * scale_z; // depth/front/back
         pos.world_position = pos.local_position;
-        pos.effect_world_position = pos.local_position;
+        pos.room_position = pos.local_position;
         pos.preview_color = 0x00FFFFFF;
         positions.push_back(pos);
     }

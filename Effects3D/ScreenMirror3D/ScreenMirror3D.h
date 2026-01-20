@@ -50,6 +50,7 @@ public:
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    bool RequiresWorldSpaceCoordinates() const override { return true; }
 
     /*---------------------------------------------------------*\
     | Settings persistence                                     |

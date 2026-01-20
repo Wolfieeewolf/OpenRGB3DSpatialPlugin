@@ -1022,6 +1022,8 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["scale_inverted"] = scale_inverted;
     j["rainbow_mode"] = rainbow_mode;
     j["reverse"] = effect_reverse;
+    j["axis"] = (int)effect_axis;
+    j["axis_none"] = axis_none;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
     j["coverage"] = effect_coverage;
@@ -1069,6 +1071,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("reverse"))
         effect_reverse = settings["reverse"].get<bool>();
+    if(settings.contains("axis"))
+        effect_axis = (EffectAxis)settings["axis"].get<int>();
+    if(settings.contains("axis_none"))
+        axis_none = settings["axis_none"].get<bool>();
     if(settings.contains("intensity"))
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
@@ -1219,6 +1225,17 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         QSignalBlocker blocker(coverage_combo);
         coverage_combo->setCurrentIndex((int)effect_coverage);
+    }
+
+    if(axis_combo)
+    {
+        QSignalBlocker blocker(axis_combo);
+        axis_combo->setCurrentIndex(axis_none ? 0 : (int)effect_axis + 1);
+    }
+    if(reverse_check)
+    {
+        QSignalBlocker blocker(reverse_check);
+        reverse_check->setChecked(effect_reverse);
     }
 }
 

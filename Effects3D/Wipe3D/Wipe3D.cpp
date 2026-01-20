@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wipe3D.h"
+#include "LogManager.h"
 
 REGISTER_EFFECT_3D(Wipe3D);
 #include <QGridLayout>
@@ -225,25 +226,49 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
     | One grid unit equals the configured grid scale          |
     | (default 10mm). GridContext3D uses the same units.      |
+    |                                                          |
+    | Since RequiresWorldSpaceCoordinates() returns true,     |
+    | these are WORLD coordinates (world_position), which     |
+    | include controller rotation. This is CRITICAL for       |
+    | room-based effects:                                      |
+    |                                                          |
+    | - World coordinates position LEDs in room space after   |
+    |   rotation is applied                                    |
+    | - A keyboard rotated 90° will have its LEDs positioned  |
+    |   in world space according to that rotation             |
+    |                                                          |
+    | IMPORTANT: The 'grid' parameter passed here is world_grid|
+    | (based on world_bounds), but for room-based effects we  |
+    | need to normalize by room bounds. However, since we    |
+    | only receive one grid context, we'll use the grid       |
+    | bounds we receive, which should represent the actual    |
+    | extent of LEDs in world space (room space after        |
+    | rotation). This gives us room-absolute wipe direction.  |
     \*---------------------------------------------------------*/
 
     /*---------------------------------------------------------*\
-    | Get effect origin using grid-aware helper               |
-    | Automatically uses grid.center for room center mode     |
+    | For room-based effects, we use absolute world coordinates|
+    | and normalize directly by room bounds. This matches the   |
+    | old working version's approach.                           |
+    |                                                          |
+    | The old version:                                         |
+    | - Uses world_position directly (includes rotation)        |
+    | - Normalizes with fixed range: (position + 100) / 200    |
+    |                                                          |
+    | The new version should:                                  |
+    | - Use world_position directly (includes rotation)        |
+    | - Normalize by room bounds: (x - grid.min_x) / grid.width|
+    \*---------------------------------------------------------*/
+
+    /*---------------------------------------------------------*\
+    | Check if LED is within scaled effect radius             |
+    | Calculate relative position for boundary check           |
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
-
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    | Uses room-aware boundary checking                        |
-    \*---------------------------------------------------------*/
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
     {
         return 0x00000000;  // Black - outside effect boundary
@@ -256,32 +281,81 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     if(progress > 1.0f) progress = 2.0f - progress;
 
     /*---------------------------------------------------------*\
-    | Calculate position based on axis - NORMALIZED 0-1        |
+    | Calculate position based on axis                         |
+    |                                                          |
+    | ROOM-BASED EFFECT: Use absolute world coordinates and   |
+    | normalize by room bounds. This ensures the wipe goes    |
+    | left-to-right in room space regardless of controller     |
+    | rotation.                                                 |
+    |                                                          |
+    | World coordinates (x, y, z) already include rotation,   |
+    | so LEDs are positioned correctly in room space.          |
+    | Normalizing by room bounds gives us room-absolute       |
+    | position [0, 1] from left wall to right wall.            |
     \*---------------------------------------------------------*/
+    
     float position;
     switch(effect_axis)
     {
-        case AXIS_X:  // Left to Right wipe
+        case AXIS_X:  // Left wall to Right wall wipe
+            // Use absolute X coordinate, normalize by room width
+            // Maps from [grid.min_x, grid.max_x] to [0, 1]
+            if(grid.width > 0.001f)
+            {
             position = (x - grid.min_x) / grid.width;
+            }
+            else
+            {
+                position = 0.0f;
+            }
             break;
-        case AXIS_Y:  // Floor to Ceiling wipe (Y-up, height)
+        case AXIS_Y:  // Floor to Ceiling wipe
+            // Use absolute Y coordinate, normalize by room height
+            // Maps from [grid.min_y, grid.max_y] to [0, 1]
+            if(grid.height > 0.001f)
+            {
             position = (y - grid.min_y) / grid.height;
+            }
+            else
+            {
+                position = 0.0f;
+            }
             break;
-        case AXIS_Z:  // Front to Back wipe (depth)
+        case AXIS_Z:  // Front to Back wipe
+            // Use absolute Z coordinate, normalize by room depth
+            // Maps from [grid.min_z, grid.max_z] to [0, 1]
+            if(grid.depth > 0.001f)
+            {
             position = (z - grid.min_z) / grid.depth;
+            }
+            else
+            {
+                position = 0.0f;
+            }
             break;
-        case AXIS_RADIAL:  // Radial wipe from center (using origin)
+        case AXIS_RADIAL:  // Radial wipe from room center
         default:
             {
+                // Distance from room center (origin)
                 float distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-                // Normalize to room diagonal
+                // Normalize to room diagonal (maximum possible distance from center)
                 float max_distance = sqrt(grid.width*grid.width +
                                         grid.height*grid.height +
                                         grid.depth*grid.depth) / 2.0f;
+                if(max_distance > 0.001f)
+                {
                 position = distance / max_distance;
+                }
+                else
+                {
+                    position = 0.0f;
+                }
             }
             break;
     }
+    
+    // Clamp to valid range [0, 1]
+    position = fmaxf(0.0f, fminf(1.0f, position));
 
     /*---------------------------------------------------------*\
     | Apply reverse if enabled                                 |
@@ -309,6 +383,38 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         default:
             intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
             break;
+    }
+    
+    // Debug logging for wipe calculations
+    static int debug_sample_count = 0;
+    debug_sample_count++;
+    if(debug_sample_count >= 10000) debug_sample_count = 0;
+    const bool debug_logging = LogManager::get() && LogManager::get()->getVerbosity() >= 1;
+    const bool log_this_sample = debug_logging && (debug_sample_count <= 20 || (debug_sample_count % 100 == 0));
+    
+    if(log_this_sample)
+    {
+        // Log different grid info based on axis
+        if(effect_axis == AXIS_X)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_x=%.3f, max_x=%.3f, width=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
+                        x, y, z, (int)effect_axis, grid.min_x, grid.max_x, grid.width, position, progress, edge_distance, intensity);
+        }
+        else if(effect_axis == AXIS_Y)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_y=%.3f, max_y=%.3f, height=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
+                        x, y, z, (int)effect_axis, grid.min_y, grid.max_y, grid.height, position, progress, edge_distance, intensity);
+        }
+        else if(effect_axis == AXIS_Z)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_z=%.3f, max_z=%.3f, depth=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
+                        x, y, z, (int)effect_axis, grid.min_z, grid.max_z, grid.depth, position, progress, edge_distance, intensity);
+        }
+        else // AXIS_RADIAL
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d origin=(%.3f, %.3f, %.3f) rel=(%.3f, %.3f, %.3f) distance=%.3f normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
+                        x, y, z, (int)effect_axis, origin.x, origin.y, origin.z, rel_x, rel_y, rel_z, sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z), position, progress, edge_distance, intensity);
+        }
     }
 
     // Get color

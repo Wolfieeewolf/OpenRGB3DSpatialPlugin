@@ -66,4 +66,8 @@ GridBounds ComputeGridBounds(const ManualRoomSettings& settings,
                              float grid_scale_mm,
                              const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
 
+GridBounds ComputeRoomAlignedBounds(const ManualRoomSettings& settings,
+                                    float grid_scale_mm,
+                                    const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
+
 #endif // GRIDSPACEUTILS_H

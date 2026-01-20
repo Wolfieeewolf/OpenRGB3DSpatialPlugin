@@ -499,6 +499,7 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        spatial_debug_dump_pending = true;
 
         // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);

@@ -12,6 +12,7 @@
 #include "ControllerLayout3D.h"
 #include "RGBController.h"
 #include "GridSpaceUtils.h"
+#include "Geometry3DUtils.h"
 #include <cmath>
 #include <limits>
 
@@ -78,7 +79,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
             led_pos.local_position.z = (float)z_pos;
 
             led_pos.world_position = led_pos.local_position;
-            led_pos.effect_world_position = led_pos.local_position;
+            led_pos.room_position = led_pos.local_position;
             led_pos.preview_color = 0x00FFFFFF;
 
             positions.push_back(led_pos);
@@ -116,6 +117,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
             positions[i].local_position.y -= center_y;
             positions[i].local_position.z -= center_z;
             positions[i].world_position = positions[i].local_position;
+            positions[i].room_position = positions[i].local_position;
         }
     }
 
@@ -139,7 +141,6 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
         positions[i].local_position.y *= scale_y;
         positions[i].local_position.z *= scale_z;
         positions[i].world_position = positions[i].local_position;
-        positions[i].effect_world_position = positions[i].local_position;
         positions[i].preview_color = 0x00FFFFFF;
     }
 
@@ -148,37 +149,10 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
 
 Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transform3D transform)
 {
-    float rad_x = transform.rotation.x * (float)M_PI / 180.0f;
-    float rad_y = transform.rotation.y * (float)M_PI / 180.0f;
-    float rad_z = transform.rotation.z * (float)M_PI / 180.0f;
+    float rotation_matrix[9];
+    Geometry3D::ComputeRotationMatrix(transform.rotation, rotation_matrix);
+    Vector3D rotated = Geometry3D::RotateVector(local_pos, rotation_matrix);
 
-    Vector3D rotated = local_pos;
-
-    // Apply X rotation
-    float cos_x = cosf(rad_x);
-    float sin_x = sinf(rad_x);
-    float y = rotated.y * cos_x - rotated.z * sin_x;
-    float z = rotated.y * sin_x + rotated.z * cos_x;
-    rotated.y = y;
-    rotated.z = z;
-
-    // Apply Y rotation
-    float cos_y = cosf(rad_y);
-    float sin_y = sinf(rad_y);
-    float x = rotated.x * cos_y + rotated.z * sin_y;
-    z = -rotated.x * sin_y + rotated.z * cos_y;
-    rotated.x = x;
-    rotated.z = z;
-
-    // Apply Z rotation
-    float cos_z = cosf(rad_z);
-    float sin_z = sinf(rad_z);
-    x = rotated.x * cos_z - rotated.y * sin_z;
-    y = rotated.x * sin_z + rotated.y * cos_z;
-    rotated.x = x;
-    rotated.y = y;
-
-    // Apply translation
     Vector3D world_pos;
     world_pos.x = rotated.x + transform.position.x;
     world_pos.y = rotated.y + transform.position.y;
@@ -227,17 +201,9 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         local_center.z = (local_min.z + local_max.z) * 0.5f;
     }
 
-    // Pre-compute rotation matrices for efficiency
-    float rad_x = ctrl_transform->transform.rotation.x * (float)M_PI / 180.0f;
-    float rad_y = ctrl_transform->transform.rotation.y * (float)M_PI / 180.0f;
-    float rad_z = ctrl_transform->transform.rotation.z * (float)M_PI / 180.0f;
-
-    float cos_x = cosf(rad_x);
-    float sin_x = sinf(rad_x);
-    float cos_y = cosf(rad_y);
-    float sin_y = sinf(rad_y);
-    float cos_z = cosf(rad_z);
-    float sin_z = sinf(rad_z);
+    // Pre-compute rotation matrix once per controller
+    float rotation_matrix[9];
+    Geometry3D::ComputeRotationMatrix(ctrl_transform->transform.rotation, rotation_matrix);
 
     // Update world position for each LED
     for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
@@ -249,34 +215,19 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
             led_pos->local_position.y - local_center.y,
             led_pos->local_position.z - local_center.z
         };
-        Vector3D rotated = local;
 
-        // Apply X rotation
-        float y = rotated.y * cos_x - rotated.z * sin_x;
-        float z = rotated.y * sin_x + rotated.z * cos_x;
-        rotated.y = y;
-        rotated.z = z;
+        Vector3D rotated = Geometry3D::RotateVector(local, rotation_matrix);
 
-        // Apply Y rotation
-        float x = rotated.x * cos_y + rotated.z * sin_y;
-        z = -rotated.x * sin_y + rotated.z * cos_y;
-        rotated.x = x;
-        rotated.z = z;
-
-        // Apply Z rotation
-        x = rotated.x * cos_z - rotated.y * sin_z;
-        y = rotated.x * sin_z + rotated.y * cos_z;
-        rotated.x = x;
-        rotated.y = y;
-
-        // Apply translation for display/world coordinates
+        // Apply translation for display/world coordinates (used by viewport, ambilight, etc.)
         led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
 
-        led_pos->effect_world_position.x = local.x + ctrl_transform->transform.position.x;
-        led_pos->effect_world_position.y = local.y + ctrl_transform->transform.position.y;
-        led_pos->effect_world_position.z = local.z + ctrl_transform->transform.position.z;
+        // Store a room-aligned position that ignores controller rotation so
+        // global room effects (wipes, waves, etc.) remain axis-locked.
+        led_pos->room_position.x = local.x + ctrl_transform->transform.position.x;
+        led_pos->room_position.y = local.y + ctrl_transform->transform.position.y;
+        led_pos->room_position.z = local.z + ctrl_transform->transform.position.z;
     }
 
     ctrl_transform->world_positions_dirty = false;

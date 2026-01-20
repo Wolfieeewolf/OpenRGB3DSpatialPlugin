@@ -2,10 +2,18 @@
 
 
 #include "OpenRGB3DSpatialTab.h"
+#include "LogManager.h"
 #include "GridSpaceUtils.h"
 #include <set>
 #include <unordered_set>
 #include <algorithm>
+
+namespace
+{
+    bool g_spatial_logged_effect = false;
+    bool g_spatial_logged_virtual = false;
+    bool g_spatial_logged_physical = false;
+}
 
 static float AverageAlongAxis(ControllerTransform* transform,
                               EffectAxis sort_axis,
@@ -97,13 +105,18 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);
-    GridBounds bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
+    GridBounds room_bounds  = ComputeRoomAlignedBounds(room_settings, grid_scale_mm, controller_transforms);
 
-    // Create grid context with room bounds
-    GridContext3D grid_context(bounds.min_x, bounds.max_x,
-                               bounds.min_y, bounds.max_y,
-                               bounds.min_z, bounds.max_z,
-                               grid_scale_mm);
+    // Create grid contexts
+    GridContext3D world_grid(world_bounds.min_x, world_bounds.max_x,
+                             world_bounds.min_y, world_bounds.max_y,
+                             world_bounds.min_z, world_bounds.max_z,
+                             grid_scale_mm);
+    GridContext3D room_grid(room_bounds.min_x, room_bounds.max_x,
+                            room_bounds.min_y, room_bounds.max_y,
+                            room_bounds.min_z, room_bounds.max_z,
+                            grid_scale_mm);
 
     /*---------------------------------------------------------*\
     | Configure effect origin for all stack effects            |
@@ -132,6 +145,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     std::vector<RenderEffectSlot> active_effects;
     active_effects.reserve(effect_stack.size());
 
+    const bool debug_this_frame = spatial_debug_enabled && spatial_debug_dump_pending;
+
+    if(debug_this_frame)
+    {
+        g_spatial_logged_effect = false;
+        g_spatial_logged_virtual = false;
+        g_spatial_logged_physical = false;
+    }
+
     for(const std::unique_ptr<EffectInstance3D>& instance_ptr : effect_stack)
     {
         EffectInstance3D* instance = instance_ptr.get();
@@ -145,6 +167,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         slot.zone_index = instance->zone_index;
         slot.blend_mode = instance->blend_mode;
         active_effects.push_back(slot);
+
+        if(debug_this_frame && !g_spatial_logged_effect && slot.effect)
+        {
+            const EffectInfo3D info = slot.effect->GetEffectInfo();
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Effect '%s' RequiresWorldSpace=%d axis=%d reverse=%d",
+                        info.effect_name ? info.effect_name : "(unknown)",
+                        slot.effect->RequiresWorldSpaceCoordinates() ? 1 : 0,
+                        (int)slot.effect->GetAxis(),
+                        slot.effect->GetReverse() ? 1 : 0);
+            g_spatial_logged_effect = true;
+        }
     }
 
     if(active_effects.empty() && current_effect_ui)
@@ -226,10 +259,24 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     continue;
                 }
 
-                const Vector3D& world_pos = transform->led_positions[mapping_idx].effect_world_position;
-                float x = world_pos.x;
-                float y = world_pos.y;
-                float z = world_pos.z;
+                const LEDPosition3D& led_position = transform->led_positions[mapping_idx];
+                const Vector3D& world_pos = led_position.world_position;
+                float room_x = led_position.room_position.x;
+                float room_y = led_position.room_position.y;
+                float room_z = led_position.room_position.z;
+                float world_x = world_pos.x;
+                float world_y = world_pos.y;
+                float world_z = world_pos.z;
+
+                if(debug_this_frame && !g_spatial_logged_virtual)
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Sample (virtual) ctrl=%s led=%u room=(%.3f, %.3f, %.3f) world=(%.3f, %.3f, %.3f)",
+                                transform->virtual_controller->GetName().c_str(),
+                                mapping_idx,
+                                room_x, room_y, room_z,
+                                world_x, world_y, world_z);
+                    g_spatial_logged_virtual = true;
+                }
 
                     /*---------------------------------------------------------*\
                     | Initialize with black (no color)                         |
@@ -285,8 +332,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         /*---------------------------------------------------------*\
                         | Calculate effect color                                   |
                         \*---------------------------------------------------------*/
-                        RGBColor effect_color = effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
-                        effect_color = effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
+                        const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                        float sample_x = requires_world ? world_x : room_x;
+                        float sample_y = requires_world ? world_y : room_y;
+                        float sample_z = requires_world ? world_z : room_z;
+                        // Use world_grid when using world coordinates, room_grid when using room coordinates
+                        // This ensures proper normalization: world coords normalized by world bounds,
+                        // room coords normalized by room bounds
+                        const GridContext3D& active_grid = requires_world ? world_grid : room_grid;
+
+                        RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                        effect_color = effect->PostProcessColorGrid(sample_x, sample_y, sample_z, effect_color, active_grid);
 
                         /*---------------------------------------------------------*\
                         | Blend with accumulated color                             |
@@ -327,11 +383,26 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             {
                 LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
 
-                // Use pre-computed world position
-                const Vector3D& world_pos = led_position.effect_world_position;
-                float x = world_pos.x;
-                float y = world_pos.y;
-                float z = world_pos.z;
+                // Use pre-computed positions
+                const Vector3D& world_pos = led_position.world_position;
+                const Vector3D& room_pos = led_position.room_position;
+                float room_x = room_pos.x;
+                float room_y = room_pos.y;
+                float room_z = room_pos.z;
+                float world_x = world_pos.x;
+                float world_y = world_pos.y;
+                float world_z = world_pos.z;
+
+                if(debug_this_frame && !g_spatial_logged_physical)
+                {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Sample ctrl=%s zone=%u led=%u room=(%.3f, %.3f, %.3f) world=(%.3f, %.3f, %.3f)",
+                                transform->controller ? transform->controller->name.c_str() : "virtual",
+                                led_position.zone_idx,
+                                led_position.led_idx,
+                                room_x, room_y, room_z,
+                                world_x, world_y, world_z);
+                    g_spatial_logged_physical = true;
+                }
 
                 // Validate zone index before accessing
                 if(led_position.zone_idx >= controller->zones.size())
@@ -391,8 +462,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         continue;
                     }
 
-                    RGBColor effect_color = effect->CalculateColorGrid(x, y, z, effect_time, grid_context);
-                    effect_color = effect->PostProcessColorGrid(x, y, z, effect_color, grid_context);
+                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                    float sample_x = requires_world ? world_x : room_x;
+                    float sample_y = requires_world ? world_y : room_y;
+                    float sample_z = requires_world ? world_z : room_z;
+                    // Use world_grid when using world coordinates, room_grid when using room coordinates
+                    // This ensures proper normalization: world coords normalized by world bounds,
+                    // room coords normalized by room bounds
+                    const GridContext3D& active_grid = requires_world ? world_grid : room_grid;
+
+                    RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                    effect_color = effect->PostProcessColorGrid(sample_x, sample_y, sample_z, effect_color, active_grid);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                 }
@@ -485,6 +565,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(viewport)
     {
         viewport->UpdateColors();
+    }
+
+    if(debug_this_frame)
+    {
+        spatial_debug_dump_pending = false;
     }
 }
 #include <algorithm>
