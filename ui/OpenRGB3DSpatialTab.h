@@ -57,28 +57,6 @@ public:
     explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
-    // Minimal getters for SDK surface
-    float SDK_GetGridScaleMM() const { return grid_scale_mm; }
-    void  SDK_GetRoomDimensions(float& w, float& d, float& h, bool& use_manual);
-    size_t SDK_GetControllerCount() const { return controller_transforms.size(); }
-    bool  SDK_GetControllerName(size_t idx, std::string& out) const;
-    bool  SDK_IsControllerVirtual(size_t idx) const;
-    int   SDK_GetControllerGranularity(size_t idx) const;
-    int   SDK_GetControllerItemIndex(size_t idx) const;
-    size_t SDK_GetLEDCount(size_t ctrl_idx) const;
-    bool  SDK_GetLEDWorldPosition(size_t ctrl_idx, size_t led_idx, float& x, float& y, float& z) const;
-    // Bulk + order helpers
-    bool  SDK_GetLEDWorldPositions(size_t ctrl_idx, float* xyz_interleaved, size_t max_triplets, size_t& out_count) const;
-    size_t SDK_GetTotalLEDCount() const;
-    bool  SDK_GetAllLEDWorldPositions(float* xyz_interleaved, size_t max_triplets, size_t& out_count) const;
-    bool  SDK_GetAllLEDWorldPositionsWithOffsets(float* xyz_interleaved, size_t max_triplets, size_t& out_triplets, size_t* ctrl_offsets, size_t offsets_capacity, size_t& out_controllers) const;
-    bool  SDK_RegisterGridLayoutCallback(void (*cb)(void*), void* user);
-    bool  SDK_UnregisterGridLayoutCallback(void (*cb)(void*), void* user);
-    bool  SDK_SetControllerColors(size_t ctrl_idx, const unsigned int* bgr_colors, size_t count);
-    bool  SDK_SetSingleLEDColor(size_t ctrl_idx, size_t led_idx, unsigned int bgr_color);
-    bool  SDK_SetGridOrderColors(const unsigned int* bgr_colors_by_grid, size_t count);
-    bool  SDK_SetGridOrderColorsWithOrder(int order, const unsigned int* bgr_colors_by_grid, size_t count);
-
 signals:
     void GridLayoutChanged();
 
@@ -396,7 +374,6 @@ private:
     QListWidget*                stack_presets_list;
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
-    Vector3D ComputeWorldPositionForSDK(const ControllerTransform* transform, size_t led_idx) const;
     void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
     /*---------------------------------------------------------*\
