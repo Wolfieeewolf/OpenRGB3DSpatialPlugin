@@ -183,10 +183,10 @@ RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float 
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    float bf = (effect_brightness / 100.0f) * sphere_intensity;
-    r = (unsigned char)(r * bf);
-    g = (unsigned char)(g * bf);
-    b = (unsigned char)(b * bf);
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
+    r = (unsigned char)(r * sphere_intensity);
+    g = (unsigned char)(g * sphere_intensity);
+    b = (unsigned char)(b * sphere_intensity);
     return (b << 16) | (g << 8) | r;
 }
 

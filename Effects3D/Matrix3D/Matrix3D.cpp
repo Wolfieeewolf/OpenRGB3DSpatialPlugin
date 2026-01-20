@@ -269,7 +269,8 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
 
     // Matrix-green color
     unsigned char r = 0;
-    unsigned char g = (unsigned char)(255 * intensity * (GetBrightness() / 100.0f));
+    // Global brightness is applied by PostProcessColorGrid
+    unsigned char g = (unsigned char)(255 * intensity);
     unsigned char b = 0;
     return (b << 16) | (g << 8) | r;
 }

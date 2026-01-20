@@ -100,8 +100,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stop_effect_button = nullptr;
     stack_blend_container = nullptr;
     stack_effect_blend_combo = nullptr;
-    stack_effect_blend_combo = nullptr;
-    stack_blend_container = nullptr;
     effect_origin_combo = nullptr;
     effect_zone_combo = nullptr;
     effect_category_combo = nullptr;
@@ -199,8 +197,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_stack_list = nullptr;
     stack_effect_type_combo = nullptr;
     stack_effect_zone_combo = nullptr;
-    stack_effect_blend_combo = nullptr;
-    stack_blend_container = nullptr;
     stack_presets_list = nullptr;
     next_effect_instance_id = 1;
 
@@ -2274,7 +2270,19 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
     stop_effect_button = effect->GetStopButton();
     connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
     connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
-    connect(effect, &SpatialEffect3D::ParametersChanged, [this]() {});
+    connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]()
+    {
+        // Live-update preview + hardware when adjusting parameters.
+        // This keeps the viewport and real LEDs synced instead of waiting for timer tick.
+        if(effect_running)
+        {
+            RenderEffectStack();
+        }
+        else if(viewport)
+        {
+            viewport->UpdateColors();
+        }
+    });
 
     /*---------------------------------------------------------*\
     | Add effect to layout                                     |

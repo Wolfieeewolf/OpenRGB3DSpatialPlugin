@@ -200,7 +200,6 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
     }
 
     float progress = CalculateProgress(time);
-    float brightness_factor = effect_brightness / 100.0f;
 
     /*---------------------------------------------------------*\
     | Test Mode 0: X-Axis Gradient (Left to Right)           |
@@ -214,8 +213,8 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         float normalized = (x - min_x) / range_x;  // Use world X
         normalized = fmod(normalized + progress * 0.01f, 1.0f);
 
-        unsigned char r = (unsigned char)((1.0f - normalized) * 255 * brightness_factor);
-        unsigned char g = (unsigned char)(normalized * 255 * brightness_factor);
+        unsigned char r = (unsigned char)((1.0f - normalized) * 255);
+        unsigned char g = (unsigned char)(normalized * 255);
         unsigned char b = 0;
         return (b << 16) | (g << 8) | r;
     }
@@ -232,8 +231,8 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         float normalized = (y - min_y) / range_y;  // Use world Y
         normalized = fmod(normalized + progress * 0.01f, 1.0f);
 
-        unsigned char r = (unsigned char)((1.0f - normalized) * 255 * brightness_factor);
-        unsigned char g = (unsigned char)(normalized * 255 * brightness_factor);
+        unsigned char r = (unsigned char)((1.0f - normalized) * 255);
+        unsigned char g = (unsigned char)(normalized * 255);
         unsigned char b = 0;
         return (b << 16) | (g << 8) | r;
     }
@@ -250,8 +249,8 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         float normalized = (z - min_z) / range_z;  // Use world Z
         normalized = fmod(normalized + progress * 0.01f, 1.0f);
 
-        unsigned char r = (unsigned char)((1.0f - normalized) * 255 * brightness_factor);
-        unsigned char g = (unsigned char)(normalized * 255 * brightness_factor);
+        unsigned char r = (unsigned char)((1.0f - normalized) * 255);
+        unsigned char g = (unsigned char)(normalized * 255);
         unsigned char b = 0;
         return (b << 16) | (g << 8) | r;
     }
@@ -268,9 +267,9 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         float hue = normalized * 360.0f + progress * 10.0f;
         RGBColor color = GetRainbowColor(hue);
 
-        unsigned char r = (unsigned char)((color & 0xFF) * brightness_factor);
-        unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * brightness_factor);
-        unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * brightness_factor);
+        unsigned char r = (unsigned char)((color & 0xFF));
+        unsigned char g = (unsigned char)(((color >> 8) & 0xFF));
+        unsigned char b = (unsigned char)(((color >> 16) & 0xFF));
         return (b << 16) | (g << 8) | r;
     }
 
@@ -295,13 +294,13 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         {
             // Pulsing white at corners
             float pulse = (sin(progress * 0.1f) + 1.0f) * 0.5f;
-            unsigned char intensity = (unsigned char)(pulse * 255 * brightness_factor);
+            unsigned char intensity = (unsigned char)(pulse * 255);
             return (intensity << 16) | (intensity << 8) | intensity;
         }
         else
         {
             // Dim blue everywhere else
-            unsigned char b = (unsigned char)(50 * brightness_factor);
+            unsigned char b = (unsigned char)(50);
             return (b << 16);
         }
     }
@@ -319,9 +318,9 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         float hue = (distance / max_dist) * 360.0f;
         RGBColor color = GetRainbowColor(hue);
 
-        unsigned char r = (unsigned char)((color & 0xFF) * brightness_factor * ring_intensity);
-        unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * brightness_factor * ring_intensity);
-        unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * brightness_factor * ring_intensity);
+        unsigned char r = (unsigned char)((color & 0xFF) * ring_intensity);
+        unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * ring_intensity);
+        unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * ring_intensity);
         return (b << 16) | (g << 8) | r;
     }
 
@@ -333,9 +332,9 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
     {
         unsigned char r = 0, g = 0, b = 0;
 
-        if(rel_x < 0) r = (unsigned char)(fabs(rel_x / min_x) * 255 * brightness_factor);
-        if(rel_y > 0) g = (unsigned char)((rel_y / max_y) * 255 * brightness_factor);
-        if(rel_z > 0) b = (unsigned char)((rel_z / max_z) * 255 * brightness_factor);
+        if(rel_x < 0) r = (unsigned char)(fabs(rel_x / min_x) * 255);
+        if(rel_y > 0) g = (unsigned char)((rel_y / max_y) * 255);
+        if(rel_z > 0) b = (unsigned char)((rel_z / max_z) * 255);
 
         return (b << 16) | (g << 8) | r;
     }
@@ -360,14 +359,14 @@ RGBColor DiagnosticTest3D::CalculateColor(float x, float y, float z, float time)
         if(distance_from_wave < flash_width)
         {
             float intensity = 1.0f - (distance_from_wave / flash_width);
-            unsigned char white = (unsigned char)(intensity * 255 * brightness_factor);
+            unsigned char white = (unsigned char)(intensity * 255);
 
             return (white << 16) | (white << 8) | white;
         }
         else
         {
             // Dim blue background
-            unsigned char b = (unsigned char)(30 * brightness_factor);
+            unsigned char b = (unsigned char)(30);
             return (b << 16);
         }
     }

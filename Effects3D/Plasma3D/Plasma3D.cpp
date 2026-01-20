@@ -271,17 +271,8 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
         final_color = GetColorAtPosition(plasma_value);
     }
 
-    // Apply brightness
-    unsigned char r = final_color & 0xFF;
-    unsigned char g = (final_color >> 8) & 0xFF;
-    unsigned char b = (final_color >> 16) & 0xFF;
-
-    float brightness_factor = (effect_brightness / 100.0f);
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
-
-    return (b << 16) | (g << 8) | r;
+    // Global brightness is applied by PostProcessColorGrid
+    return final_color;
 }
 
 // Grid-aware version with room-scale feature sizing
@@ -372,14 +363,8 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
 
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(plasma_value * 360.0f + progress * 60.0f)
                                             : GetColorAtPosition(plasma_value);
-    unsigned char r = final_color & 0xFF;
-    unsigned char g = (final_color >> 8) & 0xFF;
-    unsigned char b = (final_color >> 16) & 0xFF;
-    float brightness_factor = (effect_brightness / 100.0f);
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
-    return (b << 16) | (g << 8) | r;
+    // Global brightness is applied by PostProcessColorGrid
+    return final_color;
 }
 
 nlohmann::json Plasma3D::SaveSettings() const

@@ -182,6 +182,15 @@ public:
     // Global post-processing helpers apply coverage/intensity shaping consistently
     RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
 
+    // Most spatial effects should operate in true world space so controller rotation/translation
+    // changes their position in the room. Effects that must be controller-local can override.
+    virtual bool RequiresWorldSpaceCoordinates() const { return true; }
+
+    // When using world-space coordinates, most "room-locked" effects should still normalize against
+    // ROOM-ALIGNED bounds (stable) rather than WORLD bounds (which can move with a single controller).
+    // Effects like screen/ambilight mapping may prefer WORLD bounds.
+    virtual bool RequiresWorldSpaceGridBounds() const { return false; }
+
     // Serialization helpers
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);

@@ -242,8 +242,8 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     global_group->setLayout(global_form);
     main_layout->addWidget(global_group);
 
-    // Capture Settings
-    QGroupBox* capture_group_box = new QGroupBox("Debug Tools");
+    // Capture Settings / Calibration
+    QGroupBox* capture_group_box = new QGroupBox("Calibration");
     QFormLayout* capture_form = new QFormLayout();
 
     test_pattern_check = new QCheckBox();
