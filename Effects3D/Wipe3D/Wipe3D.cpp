@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wipe3D.h"
-#include "LogManager.h"
 
 REGISTER_EFFECT_3D(Wipe3D);
 #include <QGridLayout>
@@ -207,15 +205,14 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         final_color = GetColorAtPosition(progress);
     }
 
-    // Apply intensity and brightness
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = (effect_brightness / 100.0f) * intensity;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    r = (unsigned char)(r * intensity);
+    g = (unsigned char)(g * intensity);
+    b = (unsigned char)(b * intensity);
 
     return (b << 16) | (g << 8) | r;
 }
@@ -237,13 +234,10 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     | - A keyboard rotated 90° will have its LEDs positioned  |
     |   in world space according to that rotation             |
     |                                                          |
-    | IMPORTANT: The 'grid' parameter passed here is world_grid|
-    | (based on world_bounds), but for room-based effects we  |
-    | need to normalize by room bounds. However, since we    |
-    | only receive one grid context, we'll use the grid       |
-    | bounds we receive, which should represent the actual    |
-    | extent of LEDs in world space (room space after        |
-    | rotation). This gives us room-absolute wipe direction.  |
+    | IMPORTANT: The 'grid' parameter passed here is selected |
+    | by the renderer based on effect requirements. For most  |
+    | room-locked effects we normalize against room-aligned   |
+    | bounds (stable) even when sampling world coordinates.   |
     \*---------------------------------------------------------*/
 
     /*---------------------------------------------------------*\
@@ -268,7 +262,6 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
-
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
     {
         return 0x00000000;  // Black - outside effect boundary
@@ -302,7 +295,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
             // Maps from [grid.min_x, grid.max_x] to [0, 1]
             if(grid.width > 0.001f)
             {
-            position = (x - grid.min_x) / grid.width;
+                position = (x - grid.min_x) / grid.width;
             }
             else
             {
@@ -314,7 +307,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
             // Maps from [grid.min_y, grid.max_y] to [0, 1]
             if(grid.height > 0.001f)
             {
-            position = (y - grid.min_y) / grid.height;
+                position = (y - grid.min_y) / grid.height;
             }
             else
             {
@@ -326,7 +319,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
             // Maps from [grid.min_z, grid.max_z] to [0, 1]
             if(grid.depth > 0.001f)
             {
-            position = (z - grid.min_z) / grid.depth;
+                position = (z - grid.min_z) / grid.depth;
             }
             else
             {
@@ -344,7 +337,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
                                         grid.depth*grid.depth) / 2.0f;
                 if(max_distance > 0.001f)
                 {
-                position = distance / max_distance;
+                    position = distance / max_distance;
                 }
                 else
                 {
@@ -384,38 +377,6 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
             intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
             break;
     }
-    
-    // Debug logging for wipe calculations
-    static int debug_sample_count = 0;
-    debug_sample_count++;
-    if(debug_sample_count >= 10000) debug_sample_count = 0;
-    const bool debug_logging = LogManager::get() && LogManager::get()->getVerbosity() >= 1;
-    const bool log_this_sample = debug_logging && (debug_sample_count <= 20 || (debug_sample_count % 100 == 0));
-    
-    if(log_this_sample)
-    {
-        // Log different grid info based on axis
-        if(effect_axis == AXIS_X)
-        {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_x=%.3f, max_x=%.3f, width=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
-                        x, y, z, (int)effect_axis, grid.min_x, grid.max_x, grid.width, position, progress, edge_distance, intensity);
-        }
-        else if(effect_axis == AXIS_Y)
-        {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_y=%.3f, max_y=%.3f, height=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
-                        x, y, z, (int)effect_axis, grid.min_y, grid.max_y, grid.height, position, progress, edge_distance, intensity);
-        }
-        else if(effect_axis == AXIS_Z)
-        {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d grid(min_z=%.3f, max_z=%.3f, depth=%.3f) normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
-                        x, y, z, (int)effect_axis, grid.min_z, grid.max_z, grid.depth, position, progress, edge_distance, intensity);
-        }
-        else // AXIS_RADIAL
-        {
-            LOG_WARNING("[OpenRGB3DSpatialPlugin] *** Wipe3D calc: input=(%.3f, %.3f, %.3f) axis=%d origin=(%.3f, %.3f, %.3f) rel=(%.3f, %.3f, %.3f) distance=%.3f normalized_pos=%.3f progress=%.3f edge_dist=%.3f intensity=%.3f ***",
-                        x, y, z, (int)effect_axis, origin.x, origin.y, origin.z, rel_x, rel_y, rel_z, sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z), position, progress, edge_distance, intensity);
-        }
-    }
 
     // Get color
     RGBColor final_color;
@@ -429,15 +390,14 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         final_color = GetColorAtPosition(progress);
     }
 
-    // Apply intensity and brightness
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = (effect_brightness / 100.0f) * intensity;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    r = (unsigned char)(r * intensity);
+    g = (unsigned char)(g * intensity);
+    b = (unsigned char)(b * intensity);
 
     return (b << 16) | (g << 8) | r;
 }

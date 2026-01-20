@@ -105,8 +105,8 @@ RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
     intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
 
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
-    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
+    // Global brightness is applied by PostProcessColorGrid
+    color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(CalculateProgress(time) * 360.0f)
@@ -147,8 +147,8 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
 
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    float brightness = std::clamp((float)GetBrightness() / 100.0f, 0.0f, 1.0f);
-    color = ScaleRGBColor(color, brightness * (0.35f + 0.65f * intensity));
+    // Global brightness is applied by PostProcessColorGrid
+    color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(CalculateProgress(time) * 360.0f)

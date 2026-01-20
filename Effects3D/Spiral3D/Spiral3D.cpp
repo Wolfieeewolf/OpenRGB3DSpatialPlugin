@@ -311,11 +311,6 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    float brightness_factor = effect_brightness / 100.0f;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
-
     return (b << 16) | (g << 8) | r;
 }
 
@@ -425,10 +420,6 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    float brightness_factor = effect_brightness / 100.0f;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
     return (b << 16) | (g << 8) | r;
 }
 

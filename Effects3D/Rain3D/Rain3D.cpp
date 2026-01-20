@@ -196,10 +196,10 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    float brightness_factor = (GetBrightness() / 100.0f) * intensity;
-    r = (unsigned char)(r * brightness_factor);
-    g = (unsigned char)(g * brightness_factor);
-    b = (unsigned char)(b * brightness_factor);
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
+    r = (unsigned char)(r * intensity);
+    g = (unsigned char)(g * intensity);
+    b = (unsigned char)(b * intensity);
     return (b << 16) | (g << 8) | r;
 }
 

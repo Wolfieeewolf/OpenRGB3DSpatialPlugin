@@ -206,10 +206,10 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    float bf = (GetBrightness() / 100.0f) * max_intensity;
-    r = (unsigned char)(r * bf);
-    g = (unsigned char)(g * bf);
-    b = (unsigned char)(b * bf);
+    // Apply intensity (global brightness is applied by PostProcessColorGrid)
+    r = (unsigned char)(r * max_intensity);
+    g = (unsigned char)(g * max_intensity);
+    b = (unsigned char)(b * max_intensity);
     return (b << 16) | (g << 8) | r;
 }
 
