@@ -69,23 +69,31 @@ jobs:
 
   create-release:
     needs: build-and-release
-    if: always()
+    if: success()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+          if-no-files-found: warn
 
-      - name: List downloaded files
+      - name: Verify artifacts exist
         run: |
           echo "Files in current directory:"
           ls -la
           echo "Current directory:"
           pwd
           echo "GitHub ref: $GITHUB_REF"
+          if [ ! -f *.dll ] && [ ! -f *.so ]; then
+            echo "ERROR: No artifacts found! Build may have failed."
+            exit 1
+          fi
+          echo "Artifacts found successfully!"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -96,43 +104,61 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitLab Release
+        if: ${{ secrets.GITLAB_TOKEN != '' }}
         continue-on-error: true
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+          echo "Creating GitLab release for version: $VERSION"
 
           # Create release on GitLab
-          RELEASE_RESPONSE=$(curl --request POST \
+          RELEASE_RESPONSE=$(curl -s --request POST \
             --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
             --data "tag_name=$VERSION" \
             --data "name=$VERSION" \
             --data "description=Release $VERSION - Built on GitHub Actions" \
             "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases")
+          
+          echo "GitLab release response: $RELEASE_RESPONSE"
 
-          # Upload Windows DLL
-          curl --request POST \
-            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
-            --form "file=@OpenRGB3DSpatialPlugin.dll" \
-            --form "name=OpenRGB3DSpatialPlugin.dll" \
-            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" | \
-            jq -r '.url' | xargs -I {} curl --request POST \
-            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
-            --data "name=Windows DLL" \
-            --data "url=https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin{}" \
-            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links"
+          # Upload Windows DLL if it exists
+          if [ -f "OpenRGB3DSpatialPlugin.dll" ]; then
+            echo "Uploading Windows DLL..."
+            UPLOAD_URL=$(curl -s --request POST \
+              --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              --form "file=@OpenRGB3DSpatialPlugin.dll" \
+              --form "name=OpenRGB3DSpatialPlugin.dll" \
+              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" | jq -r '.url')
+            
+            if [ "$UPLOAD_URL" != "null" ] && [ ! -z "$UPLOAD_URL" ]; then
+              curl -s --request POST \
+                --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+                --data "name=Windows DLL" \
+                --data "url=https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL" \
+                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links"
+            fi
+          fi
 
-          # Upload Linux SO
-          curl --request POST \
-            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
-            --form "file=@libOpenRGB3DSpatialPlugin.so" \
-            --form "name=libOpenRGB3DSpatialPlugin.so" \
-            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" | \
-            jq -r '.url' | xargs -I {} curl --request POST \
-            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
-            --data "name=Linux SO" \
-            --data "url=https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin{}" \
-            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links"
+          # Upload Linux SO if it exists
+          if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
+            echo "Uploading Linux SO..."
+            UPLOAD_URL=$(curl -s --request POST \
+              --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              --form "file=@libOpenRGB3DSpatialPlugin.so" \
+              --form "name=libOpenRGB3DSpatialPlugin.so" \
+              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" | jq -r '.url')
+            
+            if [ "$UPLOAD_URL" != "null" ] && [ ! -z "$UPLOAD_URL" ]; then
+              curl -s --request POST \
+                --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+                --data "name=Linux SO" \
+                --data "url=https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL" \
+                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links"
+            fi
+          fi
+          
+          echo "GitLab release created successfully!"
