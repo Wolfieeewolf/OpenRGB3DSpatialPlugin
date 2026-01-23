@@ -107,3 +107,65 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitLab Release
+        continue-on-error: true
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          
+          # Skip if GITLAB_TOKEN is not set
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "GITLAB_TOKEN not set, skipping GitLab release"
+            exit 0
+          fi
+          
+          echo "Creating GitLab release for version: $VERSION"
+
+          # Create release on GitLab using API
+          RELEASE_RESPONSE=$(curl -s --request POST \
+            --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"description\":\"Release $VERSION - Built on GitHub Actions\"}" \
+            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases" || echo "{}")
+          
+          echo "GitLab release response: $RELEASE_RESPONSE"
+
+          # Upload Windows DLL if it exists
+          if [ -f "OpenRGB3DSpatialPlugin.dll" ]; then
+            echo "Uploading Windows DLL..."
+            UPLOAD_RESPONSE=$(curl -s --request POST \
+              --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+              --form "file=@OpenRGB3DSpatialPlugin.dll" \
+              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
+            
+            UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
+            if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+              curl -s --request POST \
+                --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "{\"name\":\"Windows DLL\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\"}" \
+                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Windows DLL"
+            fi
+          fi
+
+          # Upload Linux SO if it exists
+          if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
+            echo "Uploading Linux SO..."
+            UPLOAD_RESPONSE=$(curl -s --request POST \
+              --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+              --form "file=@libOpenRGB3DSpatialPlugin.so" \
+              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
+            
+            UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
+            if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+              curl -s --request POST \
+                --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "{\"name\":\"Linux SO\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\"}" \
+                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Linux SO"
+            fi
+          fi
+          
+          echo "GitLab release process completed"
