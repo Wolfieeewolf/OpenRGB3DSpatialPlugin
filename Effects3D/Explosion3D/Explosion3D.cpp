@@ -192,30 +192,41 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
         explosion_radius = (t <= period) ? t : (2.0f * period - t);
     }
 
+    // Enhanced primary wave with better falloff
     float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
-    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.1f);
+    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.08f); // Softer falloff
 
     float secondary_radius = explosion_radius * 0.7f;
     float secondary_wave = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
-    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.15f) * 0.6f;
+    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.12f) * 0.7f; // Enhanced secondary
 
-    float shock_detail = 0.2f * sinf(distance * freq_scale * 8.0f - progress * 4.0f);
+    // Enhanced shock detail with multiple harmonics
+    float shock_detail = 0.25f * sinf(distance * freq_scale * 8.0f - progress * 4.0f);
+    float shock_detail2 = 0.15f * sinf(distance * freq_scale * 12.0f - progress * 6.0f);
     // Bomb: add directional lobes
     if(explosion_type == 3)
     {
-        float ang = atan2f(rel_y, rel_x);
-        shock_detail *= (0.6f + 0.4f * fabsf(cosf(ang * 4.0f)));
+        float ang = atan2f(rot_rel_y, rot_rel_x);
+        float lobe_factor = 0.6f + 0.4f * fabsf(cosf(ang * 4.0f));
+        shock_detail *= lobe_factor;
+        shock_detail2 *= lobe_factor;
     }
-    shock_detail *= expf(-distance * 0.1f);
+    shock_detail = (shock_detail + shock_detail2) * expf(-distance * 0.08f); // Softer falloff
 
     float explosion_intensity_final = primary_wave + secondary_wave + shock_detail;
     explosion_intensity_final = fmax(0.0f, fmin(1.0f, explosion_intensity_final));
 
+    // Enhanced core with glow
     if(distance < explosion_radius * 0.3f)
     {
         float core_intensity = 1.0f - (distance / (explosion_radius * 0.3f));
-        explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.8f);
+        float core_glow = 0.4f * core_intensity;
+        explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.85f + core_glow);
     }
+    
+    // Add subtle ambient for whole-room presence
+    float ambient = 0.1f * (1.0f - fmin(1.0f, distance / (explosion_radius * 2.0f)));
+    explosion_intensity_final = fmin(1.0f, explosion_intensity_final + ambient);
 
     float hue_base = (explosion_type == 1 ? 30.0f : 60.0f);
     RGBColor final_color = GetRainbowMode()

@@ -316,10 +316,25 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     // freq_scale already accounts for frequency, so we don't need room-size scaling
     wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
 
+    // Add depth-based enhancement for 3D immersion
+    float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
+    float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float depth_factor = 1.0f;
+    if(max_radius > 0.001f)
+    {
+        // Soft distance fade - keeps effect visible across whole room
+        float normalized_dist = fmin(1.0f, radial_distance / max_radius);
+        depth_factor = 0.4f + 0.6f * (1.0f - normalized_dist * 0.7f); // Gentle fade, never fully black
+    }
+
+    // Enhance wave with secondary harmonics for richer visuals
+    float wave_enhanced = wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale * 20.0f - progress * 1.5f);
+    wave_enhanced = fmax(-1.0f, fmin(1.0f, wave_enhanced));
+
     /*---------------------------------------------------------*\
     | Convert wave to hue (0-360 degrees)                     |
     \*---------------------------------------------------------*/
-    float hue = (wave_value + 1.0f) * 180.0f;
+    float hue = (wave_enhanced + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
 
@@ -338,8 +353,14 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
         final_color = GetColorAtPosition(color_position);
     }
 
-    // Global brightness is applied by PostProcessColorGrid
-    return final_color;
+    // Apply depth factor for immersive 3D feel
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    r = (unsigned char)(r * depth_factor);
+    g = (unsigned char)(g * depth_factor);
+    b = (unsigned char)(b * depth_factor);
+    return (b << 16) | (g << 8) | r;
 }
 
 nlohmann::json Wave3D::SaveSettings() const

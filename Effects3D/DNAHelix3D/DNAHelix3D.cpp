@@ -204,9 +204,13 @@ RGBColor DNAHelix3D::CalculateColorGrid(float x, float y, float z, float time, c
     float groove_effect = 1.0f - (major_groove + minor_groove);
 
     float strand_intensity = fmax(helix1_intensity, helix2_intensity);
+    
+    // Add subtle ambient glow for whole-room presence
+    float ambient_glow = 0.08f * (1.0f - fmin(1.0f, radial_distance / (radius_scale * 4.0f)));
+    
     float total_intensity = (strand_intensity + base_pair_connection) * groove_effect;
     float energy_pulse = 0.15f * sin(helix_height * 4.0f - progress * 3.0f) * strand_intensity;
-    total_intensity += energy_pulse;
+    total_intensity = total_intensity + energy_pulse + ambient_glow;
     total_intensity = fmax(0.0f, fmin(1.0f, total_intensity * 1.3f));
 
     RGBColor final_color;

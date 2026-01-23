@@ -370,8 +370,9 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
                 {
                     spiral_value = 0.0f;
                 }
-                float radial_fade = 1.0f - exp(-norm_radius * (actual_frequency * 0.8f));
-                spiral_value *= radial_fade;
+                // Enhanced radial fade with softer falloff for whole-room feel
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (actual_frequency * 0.8f)));
+                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade; // Add subtle ambient
             }
             break;
         case 2: // Sharp Blades
@@ -391,6 +392,10 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
                 }
                 float energy_pulse = 0.2f * sin(norm_radius * (actual_frequency * 1.2f) - progress * 2.0f);
                 spiral_value = fmax(0.0f, spiral_value + energy_pulse);
+                
+                // Enhanced radial fade for whole-room presence
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (actual_frequency * 0.8f)));
+                spiral_value *= radial_fade;
             }
             break;
     }

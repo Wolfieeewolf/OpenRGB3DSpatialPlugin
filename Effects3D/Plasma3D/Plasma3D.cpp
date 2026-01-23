@@ -345,10 +345,29 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     plasma_value = (plasma_value + 6.0f) / 12.0f;
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
+    // Add depth-based enhancement for immersive 3D feel
+    float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
+    float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float depth_factor = 1.0f;
+    if(max_radius > 0.001f)
+    {
+        float normalized_dist = fmin(1.0f, radial_distance / max_radius);
+        // Soft distance fade - keeps plasma visible across whole room
+        depth_factor = 0.45f + 0.55f * (1.0f - normalized_dist * 0.6f);
+    }
+
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(plasma_value * 360.0f + progress * 60.0f)
                                             : GetColorAtPosition(plasma_value);
+    
+    // Apply depth factor for immersive 3D feel
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    r = (unsigned char)(r * depth_factor);
+    g = (unsigned char)(g * depth_factor);
+    b = (unsigned char)(b * depth_factor);
     // Global brightness is applied by PostProcessColorGrid
-    return final_color;
+    return (b << 16) | (g << 8) | r;
 }
 
 nlohmann::json Plasma3D::SaveSettings() const

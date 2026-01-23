@@ -178,9 +178,13 @@ float Matrix3D::ComputeFaceIntensity(int face,
     float gap = fmodf((float)((column_id >> 8) & 1023), 10.0f) / 10.0f;
     float gap_factor = 0.7f + 0.3f * (gap > 0.2f ? 1.0f : gap * 5.0f);
 
-    float face_falloff = expf(-face_distance * 3.0f);
+    // Enhanced face falloff - softer for better whole-room presence
+    float face_falloff = 0.3f + 0.7f * expf(-face_distance * 2.5f);
+    
+    // Add subtle ambient glow for whole-room Matrix presence
+    float ambient = 0.08f * (1.0f - fmin(1.0f, face_distance * 0.1f));
 
-    float intensity = trail_intensity * gap_factor * face_falloff;
+    float intensity = trail_intensity * gap_factor * face_falloff + ambient;
     if(intensity < 0.0f)
     {
         return 0.0f;

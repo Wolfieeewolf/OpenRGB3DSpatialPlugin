@@ -320,8 +320,12 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     float intensity;
     switch(edge_shape)
     {
-        case 0: // Round
-            intensity = 1.0f - smoothstep(0.0f, thickness_factor, edge_distance);
+        case 0: // Round - enhanced with glow
+            {
+                float core = 1.0f - smoothstep(0.0f, thickness_factor * 0.6f, edge_distance);
+                float glow = 0.4f * (1.0f - smoothstep(thickness_factor * 0.6f, thickness_factor * 1.2f, edge_distance));
+                intensity = fmin(1.0f, core + glow);
+            }
             break;
         case 1: // Sharp
             intensity = edge_distance < thickness_factor * 0.5f ? 1.0f : 0.0f;
@@ -330,6 +334,17 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         default:
             intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
             break;
+    }
+
+    // Add depth-based enhancement for 3D immersion
+    float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
+    float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float depth_factor = 1.0f;
+    if(max_radius > 0.001f)
+    {
+        float normalized_dist = fmin(1.0f, radial_distance / max_radius);
+        // Soft distance fade - keeps wipe visible across whole room
+        depth_factor = 0.5f + 0.5f * (1.0f - normalized_dist * 0.5f);
     }
 
     // Get color
@@ -344,14 +359,14 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         final_color = GetColorAtPosition(progress);
     }
 
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
+    // Apply intensity with depth factor (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    r = (unsigned char)(r * intensity);
-    g = (unsigned char)(g * intensity);
-    b = (unsigned char)(b * intensity);
+    r = (unsigned char)(r * intensity * depth_factor);
+    g = (unsigned char)(g * intensity * depth_factor);
+    b = (unsigned char)(b * intensity * depth_factor);
 
     return (b << 16) | (g << 8) | r;
 }

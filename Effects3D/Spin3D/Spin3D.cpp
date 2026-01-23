@@ -153,9 +153,18 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     (void)radius;  // Unused - kept for potential future use
     float angle = atan2(rot_rel_z, rot_rel_x);
     
-    // Calculate radial distance for fade
+    // Calculate radial distance for enhanced 3D fade
+    float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
-    float radial_fade = (max_radius > 0.001f) ? fmax(0.3f, 1.0f - (sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z) / max_radius) * 0.8f) : 1.0f;
+    
+    // Enhanced radial fade - softer falloff for whole-room feel
+    float radial_fade = 1.0f;
+    if(max_radius > 0.001f)
+    {
+        float normalized_dist = fmin(1.0f, radial_distance / max_radius);
+        // Gentle fade that never goes fully black - keeps effect visible across room
+        radial_fade = 0.35f + 0.65f * (1.0f - normalized_dist * 0.6f);
+    }
     
     // Calculate spin pattern with arms
     unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
@@ -166,11 +175,23 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     {
         arm_position += period;
     }
-    float blade_width = 0.4f * period;
-    float blade = (arm_position < blade_width) ? (1.0f - (arm_position / blade_width)) : 0.0f;
     
-    float intensity = blade * radial_fade;
-
+    // Enhanced blade with smoother gradient and glow
+    float blade_width = 0.4f * period;
+    float blade_core = (arm_position < blade_width) ? (1.0f - (arm_position / blade_width)) : 0.0f;
+    // Add glow effect for smoother, more immersive look
+    float blade_glow = 0.0f;
+    if(arm_position < blade_width * 1.5f)
+    {
+        float glow_dist = fabs(arm_position - blade_width * 0.5f) / (blade_width * 0.5f);
+        blade_glow = 0.3f * (1.0f - glow_dist);
+    }
+    float blade = fmin(1.0f, blade_core + blade_glow);
+    
+    // Add subtle ambient glow for whole-room presence
+    float ambient = 0.08f * radial_fade;
+    
+    float intensity = blade * radial_fade + ambient;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
 
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(progress * 57.2958f + intensity * 120.0f)

@@ -149,19 +149,24 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float d2 = p2 - c2;
     float radial = sqrtf(d1*d1 + d2*d2);
 
-    // Core and glow falloff scaled to room size and size parameter
+    // Enhanced core and glow falloff scaled to room size and size parameter
     float size_m = GetNormalizedSize();
     float base_span = (span1 + span2) * 0.5f;
     float core_width = base_span * (0.02f + 0.02f * size_m);   // thicker with size
-    float glow_width = base_span * (0.06f + 0.04f * size_m);
+    float glow_width = base_span * (0.08f + 0.06f * size_m);  // Enhanced glow
+    float outer_glow_width = base_span * (0.15f + 0.1f * size_m); // Outer glow for whole-room presence
+    
     float core = fmax(0.0f, 1.0f - radial / (core_width + 0.001f));
-    float glow = fmax(0.0f, 1.0f - radial / (glow_width + 0.001f)) * 0.5f;
-    float intensity = (core + glow) * flash;
+    float glow = fmax(0.0f, 1.0f - radial / (glow_width + 0.001f)) * 0.6f;
+    float outer_glow = fmax(0.0f, 1.0f - radial / (outer_glow_width + 0.001f)) * 0.2f;
+    float intensity = (core + glow + outer_glow) * flash;
 
-    // Branching: modulate with angle bands to simulate branches
+    // Enhanced branching: modulate with angle bands to simulate branches
     float angle = atan2f(d2, d1);
     float bands = fabsf(cosf(angle * branches * 2.0f + time * 5.0f));
-    intensity *= 0.7f + 0.3f * bands;
+    // Add secondary harmonic for richer branching pattern
+    float bands2 = 0.3f * fabsf(cosf(angle * branches * 4.0f + time * 7.0f));
+    intensity *= 0.65f + 0.25f * bands + 0.1f * bands2;
 
     intensity = fmax(0.0f, fmin(1.0f, intensity));
 

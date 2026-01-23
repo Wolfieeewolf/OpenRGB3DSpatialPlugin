@@ -165,16 +165,26 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     float lateral_center = base_spacing * 0.15f;
     float lateral_dist = fabsf(lateral - lateral_center);
 
-    // Combine to get intensity; sharper near drops
-    // Broaden bands so corners light up as well
-    float band_intensity = fmax(0.0f, 1.0f - (band_dist / (0.3f * size_m + 0.15f)));
-    float lateral_intensity = fmax(0.0f, 1.0f - (lateral_dist / (0.35f * size_m + 0.15f)));
+    // Enhanced drop intensity with glow for more immersive rain
+    float band_core = fmax(0.0f, 1.0f - (band_dist / (0.25f * size_m + 0.12f)));
+    float band_glow = 0.4f * fmax(0.0f, 1.0f - (band_dist / (0.5f * size_m + 0.25f)));
+    float band_intensity = fmin(1.0f, band_core + band_glow);
+    
+    float lateral_core = fmax(0.0f, 1.0f - (lateral_dist / (0.3f * size_m + 0.15f)));
+    float lateral_glow = 0.3f * fmax(0.0f, 1.0f - (lateral_dist / (0.6f * size_m + 0.3f)));
+    float lateral_intensity = fmin(1.0f, lateral_core + lateral_glow);
+    
     float intensity = band_intensity * lateral_intensity;
+    
+    // Add subtle ambient rain for whole-room presence
+    float ambient_rain = 0.12f * (1.0f - fabs(band - band_center) / base_spacing);
+    ambient_rain = fmax(0.0f, ambient_rain);
+    intensity = fmin(1.0f, intensity + ambient_rain);
 
-    // Slight depth fade with distance from origin to reduce wall saturation
+    // Enhanced depth fade - softer for better whole-room feel
     float room_radius = sqrt((grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height)) * 0.5f;
     float dist_from_center = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    float depth_fade = fmax(0.4f, 1.0f - dist_from_center / (room_radius + 0.001f));
+    float depth_fade = fmax(0.5f, 1.0f - dist_from_center / (room_radius * 1.2f + 0.001f));
     intensity *= depth_fade;
 
     intensity = fmax(0.0f, fmin(1.0f, intensity));

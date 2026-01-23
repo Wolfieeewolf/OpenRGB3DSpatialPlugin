@@ -146,8 +146,17 @@ RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float 
     float sphere_radius = half_diag * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * actual_frequency * 0.2f));
 
     float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    float sphere_intensity = 1.0f - smoothstep(0.0f, sphere_radius, distance);
-    sphere_intensity += 0.25f * sinf(distance * (actual_frequency / (half_diag + 0.001f)) * 1.5f - progress * 2.0f);
+    
+    // Enhanced sphere with core, glow, and ripple layers for immersive 3D effect
+    float core_intensity = 1.0f - smoothstep(0.0f, sphere_radius * 0.7f, distance);
+    float glow_intensity = 0.5f * (1.0f - smoothstep(sphere_radius * 0.7f, sphere_radius * 1.3f, distance));
+    float ripple = 0.3f * sinf(distance * (actual_frequency / (half_diag + 0.001f)) * 1.5f - progress * 2.0f);
+    ripple = (ripple + 1.0f) * 0.5f; // Normalize ripple to 0-1
+    
+    // Add subtle ambient glow for whole-room presence
+    float ambient = 0.1f * (1.0f - smoothstep(0.0f, sphere_radius * 2.0f, distance));
+    
+    float sphere_intensity = core_intensity + glow_intensity + ripple * 0.4f + ambient;
     sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
 
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(distance * 30.0f + progress * 30.0f)

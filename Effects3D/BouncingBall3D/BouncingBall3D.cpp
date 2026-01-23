@@ -189,9 +189,12 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
         float dz = (z - bz);
         float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-        float glow = fmax(0.0f, 1.0f - dist / (R + 0.001f));
-        float intensity = powf(glow, 1.2f);
-        if(intensity < 0.02f && dist <= R * 1.2f) intensity = 0.02f;
+        // Enhanced glow with core and outer glow layers for immersive effect
+        float core_glow = fmax(0.0f, 1.0f - dist / (R * 0.7f + 0.001f));
+        float outer_glow = 0.5f * fmax(0.0f, 1.0f - dist / (R * 1.5f + 0.001f));
+        float intensity = powf(core_glow, 1.1f) + outer_glow;
+        // Ensure minimum visibility for whole-room presence
+        if(intensity < 0.03f && dist <= R * 1.8f) intensity = 0.03f;
 
         if(intensity > max_intensity)
         {

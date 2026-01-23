@@ -115,6 +115,7 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float speed = GetScaledSpeed();
     float freq = GetScaledFrequency();
     float size_m = GetNormalizedSize();
+    float progress = CalculateProgress(time);
 
     // Apply rotation transformation to LED position
     // This rotates the effect pattern around the origin
@@ -157,14 +158,20 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float ring_thickness = thickness_base * (0.6f + 1.2f * size_m);
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 
-    // Add azimuthal banding to suggest rotation arms
+    // Enhanced azimuthal banding with multiple harmonics for richer visuals
     float arms = 4.0f + 4.0f * size_m;
     float band = 0.5f * (1.0f + cosf(swirl * arms));
+    // Add secondary harmonic for more complex pattern
+    float band2 = 0.2f * (1.0f + cosf(swirl * arms * 2.0f + progress));
+    band = fmin(1.0f, band + band2);
 
     // Vertical fade outside active height (using normalized axial position)
     float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range_val + 0.001f));
+    
+    // Add subtle radial glow for whole-room presence
+    float radial_glow = 0.15f * (1.0f - fmin(1.0f, rad / (funnel_radius * 3.0f)));
 
-    float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade;
+    float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade + radial_glow;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
 
     RGBColor final_color;
