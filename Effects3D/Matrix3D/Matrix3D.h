@@ -37,9 +37,23 @@ private slots:
 
 private:
     QSlider*        density_slider;
+    QLabel*         density_label;
     QSlider*        trail_slider;
+    QLabel*         trail_label;
+    QSlider*        char_height_slider;
+    QLabel*         char_height_label;
+    QSlider*        char_gap_slider;
+    QLabel*         char_gap_label;
+    QSlider*        char_variation_slider;
+    QLabel*         char_variation_label;
+    QSlider*        char_spacing_slider;
+    QLabel*         char_spacing_label;
     unsigned int    density;      // columns density
-    unsigned int    trail;        // trail length factor
+    unsigned int    trail;        // trail length factor (now controls visible trail length)
+    unsigned int    char_height;  // character height (5-50)
+    unsigned int    char_gap;     // gap between characters (0-50)
+    unsigned int    char_variation; // brightness variation (0-100)
+    unsigned int    char_spacing; // character spacing in stream (1-50, lower = denser)
 
     float ComputeFaceIntensity(int face,
                                float x,
