@@ -182,7 +182,6 @@ HEADERS +=                                                                      
     Effects3D/Explosion3D/Explosion3D.h                                                         \
     Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
     Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
-    Effects3D/DiagnosticTest3D/DiagnosticTest3D.h                                               \
     Effects3D/Rain3D/Rain3D.h                                                                   \
     Effects3D/Tornado3D/Tornado3D.h                                                             \
     Effects3D/Lightning3D/Lightning3D.h                                                         \
@@ -225,7 +224,6 @@ SOURCES +=                                                                      
     Effects3D/Explosion3D/Explosion3D.cpp                                                       \
     Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
     Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \
-    Effects3D/DiagnosticTest3D/DiagnosticTest3D.cpp                                             \
     Effects3D/Rain3D/Rain3D.cpp                                                                 \
     Effects3D/Tornado3D/Tornado3D.cpp                                                           \
     Effects3D/Lightning3D/Lightning3D.cpp                                                       \

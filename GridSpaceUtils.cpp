@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 #include "GridSpaceUtils.h"
 
 #include "ControllerLayout3D.h"
 #include <algorithm>
 
+#define DEFAULT_ROOM_SIZE_MM 1000.0f
+
 namespace
 {
-    constexpr float kDefaultRoomSizeMM = 1000.0f;
 
     enum class BoundsSpace
     {
@@ -33,9 +36,9 @@ namespace
 
         bool has_leds = false;
 
-        for(const std::unique_ptr<ControllerTransform>& transform_ptr : transforms)
+        for(unsigned int i = 0; i < transforms.size(); i++)
         {
-            ControllerTransform* transform = transform_ptr.get();
+            ControllerTransform* transform = transforms[i].get();
             if(!transform || transform->hidden_by_virtual)
             {
                 continue;
@@ -46,8 +49,9 @@ namespace
                 ControllerLayout3D::UpdateWorldPositions(transform);
             }
 
-            for(const LEDPosition3D& led : transform->led_positions)
+            for(unsigned int j = 0; j < transform->led_positions.size(); j++)
             {
+                const LEDPosition3D& led = transform->led_positions[j];
                 const Vector3D& pos = (space == BoundsSpace::RoomAligned) ? led.room_position
                                                                           : led.world_position;
 
@@ -72,7 +76,7 @@ namespace
 
         if(!has_leds)
         {
-            float default_units = MMToGridUnits(kDefaultRoomSizeMM, grid_scale_mm);
+            float default_units = MMToGridUnits(DEFAULT_ROOM_SIZE_MM, grid_scale_mm);
             bounds.min_x = 0.0f;
             bounds.max_x = default_units;
             bounds.min_y = 0.0f;

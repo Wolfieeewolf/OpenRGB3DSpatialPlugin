@@ -156,7 +156,7 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
             position = rel_z;
             break;
         case AXIS_RADIAL:  // Radial wipe from center
-            position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            position = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             break;
     }
 
@@ -330,11 +330,11 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         default:
             {
                 // Distance from room center (origin)
-                float distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+                float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
                 // Normalize to room diagonal (maximum possible distance from center)
-                float max_distance = sqrt(grid.width*grid.width +
-                                        grid.height*grid.height +
-                                        grid.depth*grid.depth) / 2.0f;
+                float max_distance = sqrtf(grid.width*grid.width +
+                                         grid.height*grid.height +
+                                         grid.depth*grid.depth) / 2.0f;
                 if(max_distance > 0.001f)
                 {
                     position = distance / max_distance;

@@ -185,7 +185,7 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
         default:
             if(shape_type == 0)  // Sphere
             {
-                position = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+                position = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             }
             else  // Cube
             {
@@ -239,15 +239,11 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     | (default 10mm). GridContext3D uses the same units.      |
     \*---------------------------------------------------------*/
 
-
-
     /*---------------------------------------------------------*\
     | Get effect origin using grid-aware helper               |
     | Automatically uses grid.center for room center mode     |
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
-
-
 
     /*---------------------------------------------------------*\
     | Calculate position relative to origin                    |
@@ -255,8 +251,6 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
-
-
 
     /*---------------------------------------------------------*\
     | Check if LED is within scaled effect radius             |
@@ -328,16 +322,16 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
             float radial_distance = 0.0f;
             if(shape_type == 0)  // Sphere
             {
-                radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+                radial_distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             }
             else  // Cube
             {
                 radial_distance = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
             }
             // Normalize radial distance
-            float max_distance = sqrt(grid.width*grid.width +
-                                    grid.height*grid.height +
-                                    grid.depth*grid.depth) / 2.0f;
+            float max_distance = sqrtf(grid.width*grid.width +
+                                     grid.height*grid.height +
+                                     grid.depth*grid.depth) / 2.0f;
             if(max_distance > 0.001f)
             {
                 normalized_position = radial_distance / max_distance;

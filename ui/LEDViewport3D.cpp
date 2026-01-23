@@ -83,9 +83,10 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , grid_y(10)
     , grid_z(10)
     , grid_snap_enabled(false)
+    , grid_scale_mm(10.0f)
     , room_width(1000.0f)          // Default: 1000 mm
-    , room_depth(1000.0f)          // Default: 1000 mm
     , room_height(1000.0f)         // Default: 1000 mm
+    , room_depth(1000.0f)          // Default: 1000 mm
     , use_manual_room_dimensions(false)
     , reference_points(nullptr)
     , display_planes(nullptr)
@@ -102,8 +103,6 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , dragging_pan(false)
     , dragging_grab(false)
 {
-    // Default grid scale: 10mm per unit
-    grid_scale_mm = 10.0f;
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
 }
@@ -982,7 +981,7 @@ void LEDViewport3D::DrawDisplayPlanes()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    for(size_t plane_index = 0; plane_index < display_planes->size(); ++plane_index)
+    for(size_t plane_index = 0; plane_index < display_planes->size(); plane_index++)
     {
         DisplayPlane3D* plane_ptr = (*display_planes)[plane_index].get();
         if(!plane_ptr || !plane_ptr->IsVisible()) continue;
@@ -1011,7 +1010,6 @@ void LEDViewport3D::DrawDisplayPlanes()
         bool selected = ((int)plane_index == selected_display_plane_idx);
         float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
-        float bezel_color[4]  = { selected ? 0.50f : 0.15f, selected ? 0.75f : 0.50f, 0.90f, selected ? 0.90f : 0.70f };
 
         if(show_screen_preview)
         {
@@ -1151,7 +1149,7 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
     if(!capture_mgr.IsInitialized()) return;
 
-    for(size_t i = 0; i < display_planes->size(); ++i)
+    for(size_t i = 0; i < display_planes->size(); i++)
     {
         DisplayPlane3D* plane = (*display_planes)[i].get();
         if(!plane || !plane->IsVisible()) continue;
@@ -1583,7 +1581,7 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
     }
 
     // Calculate the two possible intersection distances
-    float sqrt_discriminant = std::sqrt(discriminant);
+    float sqrt_discriminant = sqrtf(discriminant);
     float t1 = (-b - sqrt_discriminant) / (2.0f * a);
     float t2 = (-b + sqrt_discriminant) / (2.0f * a);
 
@@ -1869,7 +1867,7 @@ int LEDViewport3D::PickDisplayPlane(int mouse_x, int mouse_y)
     float closest_distance = FLT_MAX;
     int closest_plane = -1;
 
-    for(size_t i = 0; i < display_planes->size(); ++i)
+    for(size_t i = 0; i < display_planes->size(); i++)
     {
         DisplayPlane3D* plane = (*display_planes)[i].get();
         if(!plane || !plane->IsVisible()) continue;
@@ -2037,10 +2035,6 @@ bool LEDViewport3D::IsControllerSelected(int index) const
 /*---------------------------------------------------------*\
 | User Position Functions                                   |
 \*---------------------------------------------------------*/
-void LEDViewport3D::SetUserPosition(const UserPosition3D& position)
-{
-    user_position = position;
-}
 
 void LEDViewport3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
 {

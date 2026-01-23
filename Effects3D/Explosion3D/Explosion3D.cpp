@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Explosion3D.h"
 
@@ -159,17 +158,17 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     switch(effect_axis)
     {
         case AXIS_X:
-            distance = fabs(rel_x) + sqrt(rel_y*rel_y + rel_z*rel_z) * 0.3f;
+            distance = fabs(rel_x) + sqrtf(rel_y*rel_y + rel_z*rel_z) * 0.3f;
             break;
         case AXIS_Y:
-            distance = fabs(rel_y) + sqrt(rel_x*rel_x + rel_z*rel_z) * 0.3f;
+            distance = fabs(rel_y) + sqrtf(rel_x*rel_x + rel_z*rel_z) * 0.3f;
             break;
         case AXIS_Z:
-            distance = fabs(rel_z) + sqrt(rel_x*rel_x + rel_y*rel_y) * 0.3f;
+            distance = fabs(rel_z) + sqrtf(rel_x*rel_x + rel_y*rel_y) * 0.3f;
             break;
         case AXIS_RADIAL:
         default:
-            distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             break;
     }
 

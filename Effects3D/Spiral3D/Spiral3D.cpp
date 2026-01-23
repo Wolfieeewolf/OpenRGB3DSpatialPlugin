@@ -175,24 +175,24 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     switch(effect_axis)
     {
         case AXIS_X:  // Spiral along X-axis (Left to Right)
-            radius = sqrt(rel_y*rel_y + rel_z*rel_z);
+            radius = sqrtf(rel_y*rel_y + rel_z*rel_z);
             angle = atan2(rel_z, rel_y);
             twist_coord = rel_x;
             break;
         case AXIS_Y:  // Spiral along Y-axis (Bottom to Top, Y-up)
-            radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+            radius = sqrtf(rel_x*rel_x + rel_z*rel_z);
             angle = atan2(rel_z, rel_x);
             twist_coord = rel_y;
             break;
         case AXIS_Z:  // Spiral along Z-axis (Front to Back)
         default:
-            radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+            radius = sqrtf(rel_x*rel_x + rel_y*rel_y);
             angle = atan2(rel_y, rel_x);
             twist_coord = rel_z;
             break;
         case AXIS_RADIAL:  // Radial spiral from center
-            radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y));
+            radius = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrtf(rel_x*rel_x + rel_y*rel_y));
             twist_coord = radius;
             break;
     }
@@ -333,20 +333,20 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.15f / fmax(0.1f, size_multiplier);
 
-    float radius, angle, twist_coord;
+    float radius, angle;
     switch(effect_axis)
     {
-        case AXIS_X: radius = sqrt(rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_z, rel_y); twist_coord = rel_x; break;
-        case AXIS_Y: radius = sqrt(rel_x*rel_x + rel_z*rel_z); angle = atan2(rel_z, rel_x); twist_coord = rel_y; break;
-        case AXIS_Z: default: radius = sqrt(rel_x*rel_x + rel_y*rel_y); angle = atan2(rel_y, rel_x); twist_coord = rel_z; break;
-        case AXIS_RADIAL: radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y)); twist_coord = radius; break;
+        case AXIS_X: radius = sqrt(rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_z, rel_y); break;
+        case AXIS_Y: radius = sqrt(rel_x*rel_x + rel_z*rel_z); angle = atan2(rel_z, rel_x); break;
+        case AXIS_Z: default: radius = sqrt(rel_x*rel_x + rel_y*rel_y); angle = atan2(rel_y, rel_x); break;
+        case AXIS_RADIAL: radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y)); break;
     }
 
     if(effect_reverse) angle = -angle;
 
     // Normalize radius and twist_coord consistently against room bounds
     // This ensures ALL controllers see the same spiral pattern at the same absolute room position
-    float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+    float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
     float norm_radius = (max_distance > 0.001f) ? (radius / max_distance) : 0.0f;
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
     

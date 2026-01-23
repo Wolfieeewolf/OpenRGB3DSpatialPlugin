@@ -505,7 +505,6 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
-        spatial_debug_dump_pending = true;
 
         // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);
@@ -1559,14 +1558,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["room"]["height"] = manual_room_height;
 
     /*---------------------------------------------------------*\
-    | User Position                                            |
-    \*---------------------------------------------------------*/
-    layout_json["user_position"]["x"] = user_position.x;
-    layout_json["user_position"]["y"] = user_position.y;
-    layout_json["user_position"]["z"] = user_position.z;
-    layout_json["user_position"]["visible"] = user_position.visible;
-
-    /*---------------------------------------------------------*\
     | Camera                                                   |
     \*---------------------------------------------------------*/
     if(viewport)
@@ -1824,20 +1815,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
         emit GridLayoutChanged();
-    }
-
-    /*---------------------------------------------------------*\
-    | Load User Position                                       |
-    \*---------------------------------------------------------*/
-    if(layout_json.contains("user_position"))
-    {
-        user_position.x = layout_json["user_position"]["x"].get<float>();
-        user_position.y = layout_json["user_position"]["y"].get<float>();
-        user_position.z = layout_json["user_position"]["z"].get<float>();
-        user_position.visible = layout_json["user_position"]["visible"].get<bool>();
-
-        // User position UI controls have been removed - values stored for legacy compatibility
-        if(viewport) viewport->SetUserPosition(user_position);
     }
 
     /*---------------------------------------------------------*\

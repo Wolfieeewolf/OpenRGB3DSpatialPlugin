@@ -57,14 +57,11 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 {
 
     stack_settings_updating = false;
-    spatial_debug_dump_pending = false;
-    spatial_debug_enabled = false;
     effect_controls_widget = nullptr;
     effect_controls_layout = nullptr;
     current_effect_ui = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
-    spatial_debug_checkbox = nullptr;
     stack_blend_container = nullptr;
     stack_effect_blend_combo = nullptr;
     effect_origin_combo = nullptr;
@@ -462,7 +459,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetGridSnapEnabled(false);
     viewport->SetReferencePoints(&reference_points);
     viewport->SetDisplayPlanes(&display_planes);
-    viewport->SetDisplayPlanes(&display_planes);
     // Ensure viewport uses the current grid scale for mm->grid conversion
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
@@ -762,7 +758,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         if(pos_x_slider)
         {
             QSignalBlocker block_slider(pos_x_slider);
-            pos_x_slider->setValue((int)std::lround(value * 10.0));
+            pos_x_slider->setValue((int)(value * 10.0 + 0.5));
         }
 
         // Check if a controller is selected first (higher priority)
@@ -1753,12 +1749,6 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
     effect_layout->addWidget(effect_origin_combo);
 
-    spatial_debug_checkbox = new QCheckBox("Spatial debug logging");
-    spatial_debug_checkbox->setToolTip("When enabled, logging information about room/world coordinates will be printed the next time a controller is rotated.");
-    spatial_debug_checkbox->setChecked(false);
-    connect(spatial_debug_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::on_spatial_debug_toggled);
-    effect_layout->addWidget(spatial_debug_checkbox);
-
     stack_effect_type_combo = new QComboBox(effect_group);
     stack_effect_type_combo->addItem("None", "");
     std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
@@ -2641,20 +2631,6 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
     if(viewport) viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::on_spatial_debug_toggled(bool enabled)
-{
-    spatial_debug_enabled = enabled;
-    if(spatial_debug_enabled)
-    {
-        spatial_debug_dump_pending = true;
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Spatial debug logging enabled - rotate any controller to capture coordinates.");
-    }
-    else
-    {
-        LOG_INFO("[OpenRGB3DSpatialPlugin] Spatial debug logging disabled.");
-    }
-}
-
 void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const
 {
     ManualRoomSettings auto_room = MakeManualRoomSettings(false, 0.0f, 0.0f, 0.0f);
@@ -2665,63 +2641,3 @@ void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_m
     depth_mm  = GridUnitsToMM(extents.height_units, grid_scale_mm);
     height_mm = GridUnitsToMM(extents.depth_units, grid_scale_mm);
 }
-
-/*---------------------------------------------------------*
-| Custom Audio Effects (save/load)                         |
-*---------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-static inline float mapFalloff(int slider) { return std::max(0.2f, std::min(5.0f, slider / 100.0f)); }
-
-
-
-
-
-
-
-
-
-
-
-/*---------------------------------------------------------*\
-| Display Plane Management                                 |
-\*---------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// (SDK helper methods removed)
-
-
-/*---------------------------------------------------------*\
-| Refresh Display Plane Capture Source List                |
-\*---------------------------------------------------------*/
-

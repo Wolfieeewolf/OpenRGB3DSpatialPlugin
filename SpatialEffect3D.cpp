@@ -814,7 +814,7 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     // This assumes a "standard" room size for effects that don't have grid context
     // Scale slider: 10 (10%) = 1mm radius, 100 (100%) = 10mm, 200 (200%) = 20mm
     float scale_radius = GetNormalizedScale() * 10.0f;
-    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+    float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     return distance_from_origin <= scale_radius;
 }
 
@@ -832,7 +832,7 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     float scale_percentage = GetNormalizedScale();
     float scale_radius = max_distance_from_center * scale_percentage;
 
-    float distance_from_origin = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+    float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     return distance_from_origin <= scale_radius;
 }
 

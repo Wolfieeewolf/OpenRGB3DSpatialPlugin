@@ -192,14 +192,14 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
         final_color = GetColorAtPosition(0.5f + 0.5f * intensity);
     }
 
-    unsigned char rr = final_color & 0xFF;
+    unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
     // Apply intensity (global brightness is applied by PostProcessColorGrid)
-    rr = (unsigned char)(rr * intensity);
+    r = (unsigned char)(r * intensity);
     g = (unsigned char)(g * intensity);
     b = (unsigned char)(b * intensity);
-    return (b << 16) | (g << 8) | rr;
+    return (b << 16) | (g << 8) | r;
 }
 
 nlohmann::json Tornado3D::SaveSettings() const

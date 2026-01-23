@@ -12,9 +12,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static constexpr float TWO_PI = 6.28318530718f;
-static constexpr float RAD_TO_DEG = 57.2957795131f;
-static constexpr float DEG_TO_RAD = 0.01745329251f;
+#define TWO_PI 6.28318530718f
+#define RAD_TO_DEG 57.2957795131f
+#define DEG_TO_RAD 0.01745329251f
 
 /*---------------------------------------------------------*\
 | Smoothstep interpolation function                         |

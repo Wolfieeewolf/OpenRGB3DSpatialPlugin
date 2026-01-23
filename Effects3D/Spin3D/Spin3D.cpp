@@ -154,7 +154,7 @@ float Spin3D::ComputeSpinXZ(float rel_x,
 {
     unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
     float angle = atan2(rel_z, rel_x);
-    float radius = sqrt(rel_x*rel_x + rel_z*rel_z);
+    float radius = sqrtf(rel_x*rel_x + rel_z*rel_z);
     float spin_angle = angle * (float)arms - progress;
     float period = 6.28318f / (float)arms;
     float arm_position = fmod(spin_angle, period);
@@ -184,7 +184,7 @@ float Spin3D::ComputeSpinYZ(float rel_x,
 {
     unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
     float angle = atan2(rel_z, rel_y);
-    float radius = sqrt(rel_y*rel_y + rel_z*rel_z);
+    float radius = sqrtf(rel_y*rel_y + rel_z*rel_z);
     float spin_angle = angle * (float)arms - progress;
     float period = 6.28318f / (float)arms;
     float arm_position = fmod(spin_angle, period);
@@ -217,7 +217,7 @@ float Spin3D::ComputeSpinXY(float rel_x,
 {
     unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
     float angle = atan2(rel_y, rel_x);
-    float radius = sqrt(rel_x*rel_x + rel_y*rel_y);
+    float radius = sqrtf(rel_x*rel_x + rel_y*rel_y);
     float spin_angle = angle * (float)arms - progress;
     float period = 6.28318f / (float)arms;
     float arm_position = fmod(spin_angle, period);

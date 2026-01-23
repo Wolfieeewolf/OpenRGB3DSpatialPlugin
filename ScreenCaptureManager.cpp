@@ -26,14 +26,6 @@
 #endif
 
 /*---------------------------------------------------------*\
-| Helper to generate unique source IDs                     |
-\*---------------------------------------------------------*/
-static std::string GenerateSourceID(int screen_index)
-{
-    return "screen_" + std::to_string(screen_index);
-}
-
-/*---------------------------------------------------------*\
 | Singleton access                                         |
 \*---------------------------------------------------------*/
 ScreenCaptureManager& ScreenCaptureManager::Instance()
@@ -298,7 +290,7 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         if (!screen) continue;
 
         CaptureSourceInfo info;
-        info.id = GenerateSourceID(i);
+        info.id = "screen_" + std::to_string(i);
         info.name = screen->name().toStdString();
         info.device_name = screen->model().toStdString();
 
@@ -521,15 +513,18 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
 
 bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
+    (void)source_id;
     return false;
 }
 
 void ScreenCaptureManager::StopCapturePlatform(const std::string& source_id)
 {
+    (void)source_id;
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 {
+    (void)source_id;
 }
 
 #endif

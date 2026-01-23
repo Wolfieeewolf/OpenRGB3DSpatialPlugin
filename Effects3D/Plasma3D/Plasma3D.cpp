@@ -197,7 +197,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
                     sin((coord2 + progress * 1.7f) * scale * 0.8f) +
                     sin((coord1 + coord2 + progress * 1.3f) * scale * 0.6f) +
                     cos((coord1 - coord2 + progress * 2.2f) * scale * 0.7f) +
-                    sin(sqrt(coord1*coord1 + coord2*coord2) * scale * 0.5f + progress * 1.5f) +
+                    sin(sqrtf(coord1*coord1 + coord2*coord2) * scale * 0.5f + progress * 1.5f) +
                     cos(coord3 * scale * 0.4f + progress * 0.9f);
             }
             break;
@@ -205,7 +205,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
         case 1: // Swirl Plasma - Rotating spiral patterns
             {
                 float angle = atan2(coord2, coord1);
-                float radius = sqrt(coord1*coord1 + coord2*coord2);
+                float radius = sqrtf(coord1*coord1 + coord2*coord2);
 
                 plasma_value =
                     sin(angle * 4.0f + radius * scale * 0.8f + progress * 2.0f) +
@@ -221,11 +221,11 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
                 float dist_from_center;
                 if(effect_axis == AXIS_RADIAL)
                 {
-                    dist_from_center = sqrt(coord1*coord1 + coord2*coord2 + coord3*coord3);
+                    dist_from_center = sqrtf(coord1*coord1 + coord2*coord2 + coord3*coord3);
                 }
                 else
                 {
-                    dist_from_center = sqrt(coord1*coord1 + coord2*coord2);
+                    dist_from_center = sqrtf(coord1*coord1 + coord2*coord2);
                 }
 
                 plasma_value =
@@ -312,8 +312,8 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
         case AXIS_RADIAL: default: 
         {
             // For radial, use normalized distance from origin
-            float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
-            float radial_dist = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+            float radial_dist = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
             float norm_radial = (max_distance > 0.001f) ? (radial_dist / max_distance) : 0.0f;
             norm_radial = fmaxf(0.0f, fminf(1.0f, norm_radial));
             // Use angle for coord1/coord2, radial distance for coord3
@@ -335,13 +335,13 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
                 sin((coord2 + progress * 1.7f) * freq_scale * 8.0f) +
                 sin((coord1 + coord2 + progress * 1.3f) * freq_scale * 6.0f) +
                 cos((coord1 - coord2 + progress * 2.2f) * freq_scale * 7.0f) +
-                sin(sqrt(coord1*coord1 + coord2*coord2) * freq_scale * 5.0f + progress * 1.5f) +
+                sin(sqrtf(coord1*coord1 + coord2*coord2) * freq_scale * 5.0f + progress * 1.5f) +
                 cos(coord3 * freq_scale * 4.0f + progress * 0.9f);
             break;
         case 1: // Swirl
             {
                 float angle = atan2(coord2 - 0.5f, coord1 - 0.5f); // Center at 0.5, 0.5
-                float radius = sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
+                float radius = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
                     sin(angle * 4.0f + radius * freq_scale * 8.0f + progress * 2.0f) +
                     sin(angle * 3.0f - radius * freq_scale * 6.0f + progress * 1.5f) +
@@ -353,8 +353,8 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
         case 2: // Ripple
             {
                 float dist_from_center = (effect_axis == AXIS_RADIAL)
-                    ? sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f))
-                    : sqrt((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
+                    ? sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f))
+                    : sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
                     sin(dist_from_center * freq_scale * 10.0f - progress * 3.0f) +
                     sin(dist_from_center * freq_scale * 15.0f - progress * 2.3f) +

@@ -8,6 +8,7 @@
 #include "GridSpaceUtils.h"
 #include "LogManager.h"
 #include "VirtualReferencePoint3D.h"
+#include "../EffectHelpers.h"
 
 /*---------------------------------------------------------*\
 | Register this effect with the effect manager             |
@@ -1020,8 +1021,8 @@ void ScreenMirror3D::OnParameterChanged()
     // Update global settings (convert slider values to float)
     if (global_scale_slider)
     {
-        float slider_norm = std::clamp(global_scale_slider->value() / 100.0f, 0.0f, 1.0f);
-        global_scale = std::clamp(slider_norm * 2.0f, 0.0f, 2.0f);
+        float slider_norm = clamp(global_scale_slider->value() / 100.0f, 0.0f, 1.0f);
+        global_scale = clamp(slider_norm * 2.0f, 0.0f, 2.0f);
     }
     if (global_scale_invert_check && global_scale_invert_check->isChecked() != IsScaleInverted())
     {

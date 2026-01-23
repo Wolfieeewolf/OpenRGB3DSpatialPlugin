@@ -38,7 +38,6 @@ public:
     void SetRoomDimensions(float width, float depth, float height, bool use_manual);
     // Set physical millimeters represented by one grid unit (default 10mm)
     void SetGridScaleMM(float mm_per_unit) { grid_scale_mm = (mm_per_unit > 0.001f) ? mm_per_unit : 10.0f; }
-    void SetUserPosition(const UserPosition3D& position);
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
     void SelectDisplayPlane(int index);
@@ -145,8 +144,6 @@ private:
     float   room_height;
     float   room_depth;
     bool    use_manual_room_dimensions;
-
-    UserPosition3D  user_position;
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
     std::vector<std::unique_ptr<DisplayPlane3D>>* display_planes;
