@@ -42,13 +42,24 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
     std::ofstream file(stack_file);
     if(file.is_open())
     {
-        file << j.dump(4);
-        file.close();
-        
+        try
+        {
+            file << j.dump(4);
+            if(file.fail() || file.bad())
+            {
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write effect stack to file: %s", stack_file.c_str());
+            }
+            file.close();
+        }
+        catch(const std::exception& e)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Exception while saving effect stack: %s - %s", stack_file.c_str(), e.what());
+            file.close();
+        }
     }
     else
     {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to save effect stack: %s", stack_file.c_str());
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open effect stack file for writing: %s", stack_file.c_str());
     }
 }
 

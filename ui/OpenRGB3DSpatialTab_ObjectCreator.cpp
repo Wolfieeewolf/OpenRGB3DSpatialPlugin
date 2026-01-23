@@ -1326,16 +1326,33 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
     std::ofstream file(filename.toStdString());
     if(file.is_open())
     {
-        file << export_data.dump(4);
-        file.close();
-        QMessageBox::information(this, "Export Successful",
-                                QString("Custom controller '%1' exported successfully to:\n%2")
-                                .arg(QString::fromStdString(ctrl->GetName()), filename));
+        try
+        {
+            file << export_data.dump(4);
+            if(file.fail() || file.bad())
+            {
+                file.close();
+                QMessageBox::critical(this, "Export Failed",
+                                    QString("Failed to write custom controller to:\n%1").arg(filename));
+                return;
+            }
+            file.close();
+            QMessageBox::information(this, "Export Successful",
+                                    QString("Custom controller '%1' exported successfully to:\n%2")
+                                    .arg(QString::fromStdString(ctrl->GetName()), filename));
+        }
+        catch(const std::exception& e)
+        {
+            file.close();
+            QMessageBox::critical(this, "Export Failed",
+                                QString("Exception while exporting custom controller:\n%1\n\nError: %2")
+                                .arg(filename, e.what()));
+        }
     }
     else
     {
         QMessageBox::critical(this, "Export Failed",
-                            QString("Failed to export custom controller to:\n%1").arg(filename));
+                            QString("Failed to open file for writing:\n%1").arg(filename));
     }
 }
 
@@ -1354,6 +1371,14 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
     {
         QMessageBox::critical(this, "Import Failed",
                             QString("Failed to open file:\n%1").arg(filename));
+        return;
+    }
+    
+    if(file.bad() || file.fail())
+    {
+        QMessageBox::critical(this, "Import Failed",
+                            QString("File is not readable:\n%1").arg(filename));
+        file.close();
         return;
     }
 
@@ -2461,23 +2486,27 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
         std::ofstream file(filepath);
         if(file.is_open())
         {
-            nlohmann::json ctrl_json = virtual_controllers[i]->ToJson();
-            file << ctrl_json.dump(4);
-            file.close();
+            try
+            {
+                nlohmann::json ctrl_json = virtual_controllers[i]->ToJson();
+                file << ctrl_json.dump(4);
+                file.close();
 
-            if(file.fail())
-            {
-                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write custom controller: %s", filepath.c_str());
-                // Don't show error dialog here - too noisy during auto-save
+                if(file.fail() || file.bad())
+                {
+                    LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write custom controller: %s", filepath.c_str());
+                    // Don't show error dialog here - too noisy during auto-save
+                }
             }
-            else
+            catch(const std::exception& e)
             {
-                
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Exception while saving custom controller: %s - %s", filepath.c_str(), e.what());
+                file.close();
             }
         }
         else
         {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open custom controller file: %s", filepath.c_str());
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open custom controller file for writing: %s", filepath.c_str());
             // Don't show error dialog here - too noisy during auto-save
         }
     }

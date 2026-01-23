@@ -141,8 +141,8 @@ private:
     float   grid_scale_mm;
 
     float   room_width;
-    float   room_height;
     float   room_depth;
+    float   room_height;
     bool    use_manual_room_dimensions;
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;

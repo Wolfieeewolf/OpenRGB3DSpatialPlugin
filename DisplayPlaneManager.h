@@ -60,9 +60,10 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         for(unsigned int i = 0; i < display_planes.size(); i++)
         {
-            if(display_planes[i] && display_planes[i]->GetId() == id)
+            DisplayPlane3D* plane = display_planes[i];
+            if(plane != nullptr && plane->GetId() == id)
             {
-                return display_planes[i];
+                return plane;
             }
         }
         return nullptr;

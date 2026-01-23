@@ -135,8 +135,18 @@ void ZoneManager3D::FromJSON(const nlohmann::json& json)
         const nlohmann::json& zones_array = json["zones"];
         for(size_t i = 0; i < zones_array.size(); i++)
         {
-            Zone3D* zone = Zone3D::FromJSON(zones_array[i]);
-            zones.push_back(zone);
+            try
+            {
+                Zone3D* zone = Zone3D::FromJSON(zones_array[i]);
+                if(zone)
+                {
+                    zones.push_back(zone);
+                }
+            }
+            catch(const std::exception&)
+            {
+                // Skip invalid zone entries
+            }
         }
     }
 }

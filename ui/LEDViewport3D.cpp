@@ -85,8 +85,8 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , grid_snap_enabled(false)
     , grid_scale_mm(10.0f)
     , room_width(1000.0f)          // Default: 1000 mm
-    , room_height(1000.0f)         // Default: 1000 mm
     , room_depth(1000.0f)          // Default: 1000 mm
+    , room_height(1000.0f)         // Default: 1000 mm
     , use_manual_room_dimensions(false)
     , reference_points(nullptr)
     , display_planes(nullptr)
@@ -206,7 +206,7 @@ void LEDViewport3D::SetRoomDimensions(float width, float depth, float height, bo
 {
     room_width = width;
     room_depth = depth;
-    room_height = height;
+    room_height = height;  // Note: room_height declared after room_depth in header
     use_manual_room_dimensions = use_manual;
     update();
 }

@@ -25,7 +25,12 @@ static int MapHzToBandIndex(float hz, int bands, float f_min, float f_max)
     float clamped = hz;
     if(clamped < f_min) clamped = f_min;
     if(clamped > f_max) clamped = f_max;
-    float t = std::log(clamped / f_min) / std::log(f_max / f_min);
+    float log_ratio = std::log(f_max / f_min);
+    float t = 0.0f;
+    if(std::abs(log_ratio) > 1e-6f)
+    {
+        t = std::log(clamped / f_min) / log_ratio;
+    }
     int idx = (int)std::floor(t * bands);
     if(idx < 0) idx = 0;
     if(idx > bands - 1) idx = bands - 1;
@@ -1039,7 +1044,14 @@ void OpenRGB3DSpatialTab::on_audio_std_smooth_changed(int)
     if(!current_audio_effect_ui) return;
     nlohmann::json s = current_audio_effect_ui->SaveSettings();
     float smooth = audio_smooth_slider ? (audio_smooth_slider->value() / 100.0f) : 0.6f;
-    if(smooth < 0.0f) smooth = 0.0f; if(smooth > 0.99f) smooth = 0.99f;
+    if(smooth < 0.0f)
+    {
+        smooth = 0.0f;
+    }
+    if(smooth > 0.99f)
+    {
+        smooth = 0.99f;
+    }
     s["smoothing"] = smooth;
     if(audio_smooth_value_label && audio_smooth_slider)
     {

@@ -285,7 +285,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     granularity_combo->addItem("Whole Device");
     granularity_combo->addItem("Zone");
     granularity_combo->addItem("LED");
-    connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
+    connect(granularity_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_granularity_changed);
     granularity_layout->addWidget(granularity_combo);
     available_layout->addLayout(granularity_layout);
 
@@ -425,7 +425,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     apply_spacing_button = new QPushButton("Apply Spacing");
     apply_spacing_button->setEnabled(false);
-    connect(apply_spacing_button, SIGNAL(clicked()), this, SLOT(on_apply_spacing_clicked()));
+    connect(apply_spacing_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_apply_spacing_clicked);
     edit_spacing_layout->addWidget(apply_spacing_button);
 
     controller_layout->addLayout(edit_spacing_layout);
@@ -481,19 +481,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     }
     catch(const std::exception&){ /* ignore settings errors */ }
 
-    connect(viewport, SIGNAL(ControllerSelected(int)), this, SLOT(on_controller_selected(int)));
-    connect(viewport, SIGNAL(ControllerPositionChanged(int,float,float,float)),
-            this, SLOT(on_controller_position_changed(int,float,float,float)));
-    connect(viewport, SIGNAL(ControllerRotationChanged(int,float,float,float)),
-            this, SLOT(on_controller_rotation_changed(int,float,float,float)));
-    connect(viewport, SIGNAL(ControllerDeleteRequested(int)), this, SLOT(on_remove_controller_from_viewport(int)));
-    connect(viewport, SIGNAL(ReferencePointSelected(int)), this, SLOT(on_ref_point_selected(int)));
-    connect(viewport, SIGNAL(ReferencePointPositionChanged(int,float,float,float)),
-            this, SLOT(on_ref_point_position_changed(int,float,float,float)));
-    connect(viewport, SIGNAL(DisplayPlanePositionChanged(int,float,float,float)),
-            this, SLOT(on_display_plane_position_signal(int,float,float,float)));
-    connect(viewport, SIGNAL(DisplayPlaneRotationChanged(int,float,float,float)),
-            this, SLOT(on_display_plane_rotation_signal(int,float,float,float)));
+    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::on_controller_selected);
+    connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::on_controller_position_changed);
+    connect(viewport, &LEDViewport3D::ControllerRotationChanged, this, &OpenRGB3DSpatialTab::on_controller_rotation_changed);
+    connect(viewport, &LEDViewport3D::ControllerDeleteRequested, this, &OpenRGB3DSpatialTab::on_remove_controller_from_viewport);
+    connect(viewport, &LEDViewport3D::ReferencePointSelected, this, &OpenRGB3DSpatialTab::on_ref_point_selected);
+    connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::on_ref_point_position_changed);
+    connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::on_display_plane_position_signal);
+    connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
     middle_panel->addWidget(viewport, 1);
 
     /*---------------------------------------------------------*\
@@ -1613,8 +1608,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(new QLabel("Capture Source:"), plane_row, 0);
     display_plane_capture_combo = new QComboBox();
     display_plane_capture_combo->setToolTip("Select which monitor/capture source to use");
-    connect(display_plane_capture_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_display_plane_capture_changed(int)));
+    connect(display_plane_capture_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_display_plane_capture_changed);
     plane_form->addWidget(display_plane_capture_combo, plane_row, 1, 1, 2);
 
     display_plane_refresh_capture_btn = new QPushButton("Refresh");
@@ -1758,14 +1752,12 @@ void OpenRGB3DSpatialTab::SetupUI()
                                          QString::fromStdString(effect_list[i].class_name));
     }
     stack_effect_type_combo->setVisible(false);
-    connect(stack_effect_type_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_type_changed(int)));
+    connect(stack_effect_type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_stack_effect_type_changed);
 
     stack_effect_zone_combo = new QComboBox(effect_group);
     stack_effect_zone_combo->addItem("All Controllers", -1);
     stack_effect_zone_combo->setVisible(false);
-    connect(stack_effect_zone_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_zone_changed(int)));
+    connect(stack_effect_zone_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_stack_effect_zone_changed);
 
     UpdateStackEffectZoneCombo();
 
@@ -1832,17 +1824,14 @@ void OpenRGB3DSpatialTab::SetupEffectLibraryPanel(QVBoxLayout* parent_layout)
 
     effect_category_combo = new QComboBox();
     effect_category_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    connect(effect_category_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_effect_library_category_changed(int)));
+    connect(effect_category_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_library_category_changed);
     library_layout->addWidget(effect_category_combo);
 
     effect_library_list = new QListWidget();
     effect_library_list->setSelectionMode(QAbstractItemView::SingleSelection);
     effect_library_list->setMinimumHeight(160);
-    connect(effect_library_list, SIGNAL(currentRowChanged(int)),
-            this, SLOT(on_effect_library_selection_changed(int)));
-    connect(effect_library_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-            this, SLOT(on_effect_library_item_double_clicked(QListWidgetItem*)));
+    connect(effect_library_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_effect_library_selection_changed);
+    connect(effect_library_list, &QListWidget::itemDoubleClicked, this, &OpenRGB3DSpatialTab::on_effect_library_item_double_clicked);
     library_layout->addWidget(effect_library_list);
 
     QHBoxLayout* library_button_layout = new QHBoxLayout();
@@ -2387,6 +2376,10 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     /*---------------------------------------------------------*\
     | Remove all widgets from the container                    |
     \*---------------------------------------------------------*/
+    if(!effect_controls_layout)
+    {
+        return;
+    }
     QLayoutItem* item;
     while((item = effect_controls_layout->takeAt(0)) != nullptr)
     {
@@ -2608,6 +2601,10 @@ void OpenRGB3DSpatialTab::on_effect_zone_changed(int index)
 
 void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
 {
+    if(!effect_origin_combo)
+    {
+        return;
+    }
     // Get the selected reference point index (-1 means room center)
     int ref_point_idx = effect_origin_combo->itemData(index).toInt();
 

@@ -1167,6 +1167,10 @@ QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
     }
 
     size_t count = controller->colors.size();
+    if(count == 0)
+    {
+        return QColor(0, 0, 0);
+    }
     return QColor(static_cast<int>(total_r / count), static_cast<int>(total_g / count), static_cast<int>(total_b / count));
 }
 

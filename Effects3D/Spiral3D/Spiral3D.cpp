@@ -344,13 +344,13 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
 
     if(effect_reverse) angle = -angle;
 
-    // Normalize radius and twist_coord consistently against room bounds
+    // Normalize radius and twist coordinate consistently against room bounds
     // This ensures ALL controllers see the same spiral pattern at the same absolute room position
     float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
     float norm_radius = (max_distance > 0.001f) ? (radius / max_distance) : 0.0f;
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
     
-    // Normalize twist_coord based on axis
+    // Normalize twist coordinate based on axis
     float norm_twist = 0.0f;
     switch(effect_axis)
     {

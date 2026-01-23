@@ -656,8 +656,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     stack_effect_blend_combo->setItemData(5, "Takes the brightest channel from previous effects", Qt::ToolTipRole);
     stack_effect_blend_combo->addItem("Min", (int)BlendMode::MIN);
     stack_effect_blend_combo->setItemData(6, "Takes the darkest channel from previous effects", Qt::ToolTipRole);
-    connect(stack_effect_blend_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_stack_effect_blend_changed(int)));
+    connect(stack_effect_blend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_stack_effect_blend_changed);
     blend_layout->addWidget(stack_effect_blend_combo);
 
     effect_controls_layout->addWidget(stack_blend_container);

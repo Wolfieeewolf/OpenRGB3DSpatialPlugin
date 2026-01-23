@@ -77,7 +77,11 @@ public:
         std::vector<EffectRegistration3D> result;
         for(size_t i = 0; i < effect_order.size(); i++)
         {
-            result.push_back(effects.at(effect_order[i]));
+            auto it = effects.find(effect_order[i]);
+            if(it != effects.end())
+            {
+                result.push_back(it->second);
+            }
         }
         return result;
     }

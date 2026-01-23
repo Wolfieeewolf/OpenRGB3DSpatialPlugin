@@ -292,6 +292,43 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
             break;
         }
         case 10: // Entire room (max of all)
+        {
+            float xz_floor = ComputeSpinXZ(rel_x, rel_y, rel_z, 0.0f, half_w, half_d, half_h);
+            float xz_ceiling = ComputeSpinXZ(rel_x, rel_y, rel_z, half_h, half_w, half_d, half_h);
+            float yz_neg = ComputeSpinYZ(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float yz_pos = ComputeSpinYZ(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            float xy_neg = ComputeSpinXY(rel_x, rel_y, rel_z, -1.0f, half_w, half_d, half_h);
+            float xy_pos = ComputeSpinXY(rel_x, rel_y, rel_z, 1.0f, half_w, half_d, half_h);
+            intensity = fmax(xz_floor,
+                             fmax(xz_ceiling,
+                                  fmax(fmax(yz_neg, yz_pos), fmax(xy_neg, xy_pos))));
+            break;
+        }
+        case 11: // Origin (Room/User Center) - radial spin from center
+        {
+            // Calculate radial distance from origin
+            float radius = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
+            float max_radius = sqrtf(half_w*half_w + half_d*half_d + half_h*half_h);
+            
+            // Radial fade based on distance from center
+            float radial_fade = (max_radius > 0.001f) ? fmax(0.3f, 1.0f - (radius / max_radius) * 0.8f) : 1.0f;
+            
+            // Use XZ plane spin pattern (horizontal rotation) centered at origin
+            float angle = atan2(rel_z, rel_x);
+            unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
+            float spin_angle = angle * (float)arms - progress;
+            float period = 6.28318f / (float)arms;
+            float arm_position = fmod(spin_angle, period);
+            if(arm_position < 0.0f)
+            {
+                arm_position += period;
+            }
+            float blade_width = 0.4f * period;
+            float blade = (arm_position < blade_width) ? (1.0f - (arm_position / blade_width)) : 0.0f;
+            
+            intensity = blade * radial_fade;
+            break;
+        }
         default:
         {
             float xz_floor = ComputeSpinXZ(rel_x, rel_y, rel_z, 0.0f, half_w, half_d, half_h);

@@ -478,8 +478,24 @@ void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
     std::ofstream file(config_file.string());
     if(file.is_open())
     {
-        file << config.dump(4);
-        file.close();
+        try
+        {
+            file << config.dump(4);
+            if(file.fail() || file.bad())
+            {
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write effect profile config: %s", config_file.string().c_str());
+            }
+            file.close();
+        }
+        catch(const std::exception& e)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Exception while saving effect profile config: %s - %s", config_file.string().c_str(), e.what());
+            file.close();
+        }
+    }
+    else
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open effect profile config file for writing: %s", config_file.string().c_str());
     }
 }
 

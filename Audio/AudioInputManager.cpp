@@ -383,6 +383,10 @@ void AudioInputManager::start()
 #ifdef _WIN32
     if(selected_index < 0 || selected_index >= (int)device_ids.size()) return;
     if(capturer) { delete capturer; capturer = nullptr; }
+    if(selected_index < 0 || selected_index >= (int)device_ids.size())
+    {
+        return;
+    }
     QString devId = device_ids[selected_index];
     bool is_loop = (selected_index < (int)device_is_loopback.size()) ? device_is_loopback[selected_index] : true;
     capturer = new WasapiCapturer(this, devId, is_loop);
@@ -620,6 +624,10 @@ void AudioInputManager::updateChannelLevels(const std::vector<float>& levels)
     }
     for(size_t i = 0; i < levels.size(); ++i)
     {
+        if(i >= channel_levels.size())
+        {
+            break; // Safety check - should not happen due to resize above
+        }
         double value = (double)levels[i] * (double)gain;
         double normalized = (value - auto_level_floor) / (double)range;
         if(normalized < 0.0)
@@ -715,16 +723,22 @@ void AudioInputManager::computeSpectrum()
     // Map to N log bands between ~bin resolution and Nyquist
     float fs = (float)sample_rate_hz;
     // Smallest meaningful frequency is one FFT bin (skip DC at bin 0)
-    float bin_min = fs / (float)fft_size;
+    float bin_min = (fft_size > 0) ? (fs / (float)fft_size) : 1.0f;
     float f_min = std::max(1.0f, bin_min);
     float f_max = fs * 0.5f;
+    if(f_max <= f_min || f_max < 0.001f)
+    {
+        // Invalid frequency range, return early
+        return;
+    }
     std::vector<float> newBands(bands_count, 0.0f);
     for(int b = 0; b < bands_count; b++)
     {
         float t0 = (float)b / (float)bands_count;
         float t1 = (float)(b + 1) / (float)bands_count;
-        float fb0 = f_min * std::pow(f_max / f_min, t0);
-        float fb1 = f_min * std::pow(f_max / f_min, t1);
+        float ratio = f_max / f_min;
+        float fb0 = f_min * std::pow(ratio, t0);
+        float fb1 = f_min * std::pow(ratio, t1);
         int i0 = (int)std::floor(fb0 * n2 / f_max);
         int i1 = (int)std::ceil (fb1 * n2 / f_max);
         if(i0 < 1) i0 = 1; if(i1 <= i0) i1 = i0 + 1; if(i1 >= n2) i1 = n2 - 1;
@@ -760,12 +774,21 @@ void AudioInputManager::computeSpectrum()
             bands16[b] = ema_smoothing * bands16[b] + (1.0f - ema_smoothing) * newBands[b];
         }
         // Aggregate bass/mid/treble using crossovers
-        float bass_norm = std::log(xover_bass_upper / f_min) / std::log(f_max / f_min);
+        float log_ratio = std::log(f_max / f_min);
+        float bass_norm = 0.0f;
+        if(std::abs(log_ratio) > 1e-6f)
+        {
+            bass_norm = std::log(xover_bass_upper / f_min) / log_ratio;
+        }
         int b_end = (int)std::floor(bass_norm * bands_count);
         if(b_end < 0) b_end = 0;
         if(b_end > bands_count) b_end = bands_count;
 
-        float mid_norm = std::log(xover_mid_upper / f_min) / std::log(f_max / f_min);
+        float mid_norm = 0.0f;
+        if(std::abs(log_ratio) > 1e-6f)
+        {
+            mid_norm = std::log(xover_mid_upper / f_min) / log_ratio;
+        }
         int m_end = (int)std::floor(mid_norm * bands_count);
         if(m_end < 0) m_end = 0;
         if(m_end > bands_count) m_end = bands_count;
@@ -834,15 +857,28 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
     QMutexLocker bl(&bands_mutex);
     if(bands16.empty() || sample_rate_hz <= 0) return 0.0f;
     float fs = (float)sample_rate_hz;
+    if(fft_size <= 0 || fs <= 0.0f)
+    {
+        return 0.0f;
+    }
     float bin_min = fs / (float)fft_size;
     float f_min = std::max(1.0f, bin_min);
     float f_max = fs * 0.5f;
+    if(f_max <= f_min || f_max < 0.001f)
+    {
+        return 0.0f;
+    }
     if(high_hz <= low_hz) high_hz = low_hz + 1.0f;
 
     float clamped_low = low_hz;
     if(clamped_low < f_min) clamped_low = f_min;
     if(clamped_low > f_max) clamped_low = f_max;
-    float low_norm = std::log(clamped_low / f_min) / std::log(f_max / f_min);
+    float log_ratio = std::log(f_max / f_min);
+    float low_norm = 0.0f;
+    if(std::abs(log_ratio) > 1e-6f)
+    {
+        low_norm = std::log(clamped_low / f_min) / log_ratio;
+    }
     int i0 = (int)std::floor(low_norm * (int)bands16.size());
     if(i0 < 0) i0 = 0;
     if(i0 > (int)bands16.size() - 1) i0 = (int)bands16.size() - 1;
@@ -850,7 +886,11 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
     float clamped_high = high_hz;
     if(clamped_high < f_min) clamped_high = f_min;
     if(clamped_high > f_max) clamped_high = f_max;
-    float high_norm = std::log(clamped_high / f_min) / std::log(f_max / f_min);
+    float high_norm = 0.0f;
+    if(std::abs(log_ratio) > 1e-6f)
+    {
+        high_norm = std::log(clamped_high / f_min) / log_ratio;
+    }
     int i1 = (int)std::floor(high_norm * (int)bands16.size());
     if(i1 < 0) i1 = 0;
     if(i1 > (int)bands16.size() - 1) i1 = (int)bands16.size() - 1;

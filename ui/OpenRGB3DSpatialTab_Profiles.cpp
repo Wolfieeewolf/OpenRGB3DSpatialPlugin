@@ -33,8 +33,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     layout_profiles_combo = new QComboBox();
     layout_profiles_combo->setMinimumWidth(200);
-    connect(layout_profiles_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_layout_profile_changed(int)));
+    connect(layout_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_layout_profile_changed);
     layout_combo_layout->addWidget(layout_profiles_combo);
     layout_combo_layout->addStretch();
     layout_layout->addLayout(layout_combo_layout);
@@ -99,8 +98,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     effect_profiles_combo = new QComboBox();
     effect_profiles_combo->setMinimumWidth(200);
-    connect(effect_profiles_combo, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(on_effect_profile_changed(int)));
+    connect(effect_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_profile_changed);
     effect_combo_layout->addWidget(effect_profiles_combo);
     effect_combo_layout->addStretch();
     effect_layout->addLayout(effect_combo_layout);

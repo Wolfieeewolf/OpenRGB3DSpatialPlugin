@@ -91,13 +91,25 @@ void OpenRGB3DSpatialTab::SaveStackPresets()
         std::ofstream file(filename);
         if(file.is_open())
         {
-            nlohmann::json j = stack_presets[i]->ToJson();
-            file << j.dump(4);
-            file.close();
+            try
+            {
+                nlohmann::json j = stack_presets[i]->ToJson();
+                file << j.dump(4);
+                if(file.fail() || file.bad())
+                {
+                    LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write stack preset: %s", filename.c_str());
+                }
+                file.close();
+            }
+            catch(const std::exception& e)
+            {
+                LOG_ERROR("[OpenRGB3DSpatialPlugin] Exception while saving stack preset: %s - %s", filename.c_str(), e.what());
+                file.close();
+            }
         }
         else
         {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to save stack preset: %s", filename.c_str());
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open stack preset file for writing: %s", filename.c_str());
         }
     }
 }
