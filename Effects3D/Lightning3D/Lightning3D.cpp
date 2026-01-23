@@ -49,7 +49,7 @@ EffectInfo3D Lightning3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -106,36 +106,38 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float phase = time * strikes_per_sec;
     float flash = fmax(0.0f, 1.0f - fmodf(phase, 1.0f) * 15.0f); // brief flash at start of each period
 
-    // Relative coords
+    // Relative coords (unused - using rotated coordinates instead)
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
+    (void)rel_x;  // Unused - using rotated coordinates instead
+    (void)rel_y;  // Unused - using rotated coordinates instead
+    (void)rel_z;  // Unused - using rotated coordinates instead
 
     // Choose vertical axis for strike and lateral plane
-    // Use absolute world coordinates for normalization to ensure synchronization
-    float along_normalized, p1, p2, span1, span2, height;
-    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
-    switch(use_axis)
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    | Lightning travels along rotated Y-axis by default       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    // Lightning travels along rotated Y-axis (vertical after rotation)
+    float along_normalized = 0.0f;
+    if(grid.height > 0.001f)
     {
-        case AXIS_X: 
-            along_normalized = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
-            p1 = rel_y; p2 = rel_z; span1 = grid.height; span2 = grid.depth; height = grid.width; 
-            break;
-        case AXIS_Y: 
-            along_normalized = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-            p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; 
-            break;
-        case AXIS_Z: 
-            along_normalized = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
-            p1 = rel_x; p2 = rel_y; span1 = grid.width; span2 = grid.height; height = grid.depth; 
-            break;
-        case AXIS_RADIAL:
-        default:
-            along_normalized = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-            p1 = rel_x; p2 = rel_z; span1 = grid.width; span2 = grid.depth; height = grid.height; 
-            break;
+        along_normalized = (rot_rel_y + grid.height * 0.5f) / grid.height;
     }
     along_normalized = fmaxf(0.0f, fminf(1.0f, along_normalized));
+    float p1 = rot_rel_x;
+    float p2 = rot_rel_z;
+    float span1 = grid.width;
+    float span2 = grid.depth;
+    float height = grid.height;
+    (void)height;  // Unused - kept for potential future use
     
     // Use normalized position for wobble calculation (0-1 range)
     float norm = along_normalized;

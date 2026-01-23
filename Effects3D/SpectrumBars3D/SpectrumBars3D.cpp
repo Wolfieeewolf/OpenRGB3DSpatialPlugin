@@ -57,7 +57,7 @@ EffectInfo3D SpectrumBars3D::GetEffectInfo()
     info.show_size_control = false;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -88,9 +88,12 @@ RGBColor SpectrumBars3D::CalculateColor(float x, float y, float z, float time)
 RGBColor SpectrumBars3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     EnsureSpectrumCache(time);
-    float axis_pos = ResolveCoordinateNormalized(&grid, x, y, z);
-    float height_norm = ResolveHeightNormalized(&grid, x, y, z);
-    float radial_norm = ResolveRadialNormalized(&grid, x, y, z);
+    // Apply rotation transformation before resolving coordinates
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float axis_pos = ResolveCoordinateNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
+    float height_norm = ResolveHeightNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
+    float radial_norm = ResolveRadialNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(axis_pos * 360.0f)
         : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
@@ -211,8 +214,9 @@ void SpectrumBars3D::UpdateSmoothedBands(const std::vector<float>& spectrum, flo
 
 float SpectrumBars3D::ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    EffectAxis axis = GetAxis();
-    bool reverse = GetReverse();
+    (void)y;  // Unused - using rotated X coordinate
+    (void)z;  // Unused - using rotated X coordinate
+    // Use rotated X coordinate (rotation already applied in CalculateColorGrid)
     float normalized = 0.0f;
 
     auto normalize_linear = [](float value, float min, float max) -> float
@@ -227,90 +231,30 @@ float SpectrumBars3D::ResolveCoordinateNormalized(const GridContext3D* grid, flo
 
     if(grid)
     {
-        switch(axis)
-        {
-            case AXIS_X:
-                normalized = normalize_linear(x, grid->min_x, grid->max_x);
-                break;
-            case AXIS_Y:
-                normalized = normalize_linear(y, grid->min_y, grid->max_y);
-                break;
-            case AXIS_Z:
-                normalized = normalize_linear(z, grid->min_z, grid->max_z);
-                break;
-            case AXIS_RADIAL:
-            default:
-            {
-                float dx = x - grid->center_x;
-                float dy = y - grid->center_y;
-                float dz = z - grid->center_z;
-                float radius = std::sqrt(dx * dx + dy * dy + dz * dz);
-                float max_radius = 0.5f * std::max({grid->width, grid->height, grid->depth});
-                if(max_radius <= 1e-5f)
-                {
-                    normalized = 0.0f;
-                }
-                else
-                {
-                    normalized = radius / max_radius;
-                }
-            }
-                break;
-        }
+        // Use rotated X coordinate for axis position
+        normalized = normalize_linear(x, grid->min_x, grid->max_x);
     }
     else
     {
-        float value = 0.0f;
-        switch(axis)
-        {
-            case AXIS_X: value = x; break;
-            case AXIS_Y: value = y; break;
-            case AXIS_Z: value = z; break;
-            case AXIS_RADIAL:
-            default:
-                value = std::sqrt(x * x + y * y + z * z);
-                break;
-        }
-        normalized = std::fmod(std::fabs(value), 1.0f);
+        normalized = std::fmod(std::fabs(x), 1.0f);
     }
 
     normalized = std::clamp(normalized, 0.0f, 1.0f);
-    if(reverse)
-    {
-        normalized = 1.0f - normalized;
-    }
     return normalized;
 }
 
 float SpectrumBars3D::ResolveHeightNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    (void)x;
-    EffectAxis axis = GetAxis();
+    (void)x;  // Unused - using rotated Y coordinate
+    (void)z;  // Unused - using rotated Y coordinate
+    // Use rotated Y coordinate for height (rotation already applied in CalculateColorGrid)
     if(grid)
     {
-        switch(axis)
-        {
-            case AXIS_Y:
-                return NormalizeRange(z, grid->min_z, grid->max_z);
-            case AXIS_X:
-            case AXIS_Z:
-            case AXIS_RADIAL:
-            default:
-                return NormalizeRange(y, grid->min_y, grid->max_y);
-        }
+        return NormalizeRange(y, grid->min_y, grid->max_y);
     }
     else
     {
-        switch(axis)
-        {
-            case AXIS_Y:
-                return std::clamp(0.5f + z, 0.0f, 1.0f);
-            case AXIS_X:
-            case AXIS_Z:
-            case AXIS_RADIAL:
-            default:
-                return std::clamp(0.5f + y, 0.0f, 1.0f);
-        }
+        return std::clamp(0.5f + y, 0.0f, 1.0f);
     }
 }
 

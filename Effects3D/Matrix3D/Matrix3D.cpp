@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Matrix3D.h"
 #include <QGridLayout>
@@ -46,7 +45,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -203,68 +202,14 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
     // Column spacing: higher density -> smaller spacing
     float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
 
-    // Determine which faces to include based on coverage selection
-    // effect_coverage indices: 0=Effect Default,1=Entire Room,2=Floor,3=Ceiling,4=Left,5=Right,6=Front,7=Back,8=Floor&Ceil,9=Left&Right,10=Front&Back,11=Origin
-    int cov = (int)effect_coverage;
+    // Determine which faces to include
+    // Coverage removed - default to Entire Room for Matrix vibe
     float intensity = 0.0f;
-
-    switch(cov)
+    // Entire Room - check all faces
+    for(int face_index = 0; face_index < 6; ++face_index)
     {
-        case 0: // Effect Default -> treat as Entire Room for Matrix vibe
-        case 1:
-        {
-            for(int face_index = 0; face_index < 6; ++face_index)
-            {
-                float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
-                intensity = fmax(intensity, face_value);
-            }
-            break;
-        }
-        case 2: intensity = ComputeFaceIntensity(4, x, y, z, time, grid, col_spacing, size_m, speed); break; // Floor
-        case 3: intensity = ComputeFaceIntensity(5, x, y, z, time, grid, col_spacing, size_m, speed); break; // Ceiling
-        case 4: intensity = ComputeFaceIntensity(0, x, y, z, time, grid, col_spacing, size_m, speed); break; // Left
-        case 5: intensity = ComputeFaceIntensity(1, x, y, z, time, grid, col_spacing, size_m, speed); break; // Right
-        case 6: intensity = ComputeFaceIntensity(2, x, y, z, time, grid, col_spacing, size_m, speed); break; // Front
-        case 7: intensity = ComputeFaceIntensity(3, x, y, z, time, grid, col_spacing, size_m, speed); break; // Back
-        case 8:
-        {
-            float floor_intensity = ComputeFaceIntensity(4, x, y, z, time, grid, col_spacing, size_m, speed);
-            float ceiling_intensity = ComputeFaceIntensity(5, x, y, z, time, grid, col_spacing, size_m, speed);
-            intensity = fmax(floor_intensity, ceiling_intensity);
-            break;
-        }
-        case 9:
-        {
-            float left_intensity = ComputeFaceIntensity(0, x, y, z, time, grid, col_spacing, size_m, speed);
-            float right_intensity = ComputeFaceIntensity(1, x, y, z, time, grid, col_spacing, size_m, speed);
-            intensity = fmax(left_intensity, right_intensity);
-            break;
-        }
-        case 10:
-        {
-            float front_intensity = ComputeFaceIntensity(2, x, y, z, time, grid, col_spacing, size_m, speed);
-            float back_intensity = ComputeFaceIntensity(3, x, y, z, time, grid, col_spacing, size_m, speed);
-            intensity = fmax(front_intensity, back_intensity);
-            break;
-        }
-        case 11:
-        {
-            for(int face_index = 0; face_index < 6; ++face_index)
-            {
-                float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
-                intensity = fmax(intensity, face_value);
-            }
-            break;
-        }
-        default:
-        {
-            for(int face_index = 0; face_index < 6; ++face_index)
-            {
-                float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
-                intensity = fmax(intensity, face_value);
-            }
-            break;
-        }
+        float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
+        intensity = fmax(intensity, face_value);
     }
 
     // Matrix-green color

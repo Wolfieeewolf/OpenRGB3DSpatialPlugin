@@ -68,7 +68,7 @@ EffectInfo3D DNAHelix3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -136,52 +136,28 @@ RGBColor DNAHelix3D::CalculateColorGrid(float x, float y, float z, float time, c
     float radius_scale_normalized = (helix_radius / 200.0f) * size_multiplier; // 0-1 range
     float radius_scale = max_distance * radius_scale_normalized * 0.3f; // Scale to room size
 
-    float radial_distance, angle, helix_height;
-    float coord1, coord2, coord_along_helix;
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
 
-    switch(effect_axis)
+    // Helix rotates around rotated Y-axis by default
+    float radial_distance = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
+    float angle = atan2(rot_rel_z, rot_rel_x);
+    // Normalize coord_along_helix to 0-1 for consistent helix density
+    float coord_along_helix = 0.0f;
+    if(grid.height > 0.001f)
     {
-        case AXIS_X:
-            radial_distance = sqrt(rel_y*rel_y + rel_z*rel_z);
-            angle = atan2(rel_z, rel_y);
-            // Normalize coord_along_helix to 0-1 for consistent helix density
-            coord_along_helix = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
-            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
-            helix_height = coord_along_helix * freq_scale + progress;
-            coord1 = rel_y;
-            coord2 = rel_z;
-            break;
-        case AXIS_Y:
-            radial_distance = sqrt(rel_x*rel_x + rel_z*rel_z);
-            angle = atan2(rel_z, rel_x);
-            coord_along_helix = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
-            helix_height = coord_along_helix * freq_scale + progress;
-            coord1 = rel_x;
-            coord2 = rel_z;
-            break;
-        case AXIS_Z:
-        default:
-            radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y);
-            angle = atan2(rel_y, rel_x);
-            coord_along_helix = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
-            coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
-            helix_height = coord_along_helix * freq_scale + progress;
-            coord1 = rel_x;
-            coord2 = rel_y;
-            break;
-        case AXIS_RADIAL:
-            radial_distance = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            angle = atan2(rel_y, rel_x);
-            // Normalize radial distance to 0-1
-            float norm_radial = (max_distance > 0.001f) ? (radial_distance / max_distance) : 0.0f;
-            norm_radial = fmaxf(0.0f, fminf(1.0f, norm_radial));
-            helix_height = norm_radial * freq_scale + progress;
-            coord1 = rel_x;
-            coord2 = rel_y;
-            coord_along_helix = rel_z;
-            break;
+        coord_along_helix = (rot_rel_y + grid.height * 0.5f) / grid.height;
     }
+    coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
+    float helix_height = coord_along_helix * freq_scale + progress;
+    float coord1 = rot_rel_x;
+    float coord2 = rot_rel_z;
 
     // Calculate the two DNA strands (double helix)
     float helix1_angle = angle + helix_height;

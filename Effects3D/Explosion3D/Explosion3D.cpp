@@ -57,7 +57,7 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -154,29 +154,23 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.01f / size_multiplier;
 
-    float distance;
-    switch(effect_axis)
-    {
-        case AXIS_X:
-            distance = fabs(rel_x) + sqrtf(rel_y*rel_y + rel_z*rel_z) * 0.3f;
-            break;
-        case AXIS_Y:
-            distance = fabs(rel_y) + sqrtf(rel_x*rel_x + rel_z*rel_z) * 0.3f;
-            break;
-        case AXIS_Z:
-            distance = fabs(rel_z) + sqrtf(rel_x*rel_x + rel_y*rel_y) * 0.3f;
-            break;
-        case AXIS_RADIAL:
-        default:
-            distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            break;
-    }
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    // Use radial distance from origin in rotated space
+    float distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
 
     // Type-specific distance shaping (Land Mine flattens vertical component)
     if(explosion_type == 2)
     {
-        float vz = rel_z * 0.35f;
-        distance = sqrtf(rel_x*rel_x + rel_y*rel_y + vz*vz);
+        float vz = rot_rel_z * 0.35f;
+        distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + vz*vz);
     }
 
     // Room-scale expansion: base radius and wave thickness

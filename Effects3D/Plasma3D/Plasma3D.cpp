@@ -66,7 +66,7 @@ EffectInfo3D Plasma3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -147,41 +147,20 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
-    | Calculate primary and secondary coordinates based on axis|
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
     \*---------------------------------------------------------*/
-    float coord1, coord2, coord3;
-    switch(effect_axis)
-    {
-        case AXIS_X:  // Pattern primarily on YZ plane (perpendicular to X - Left/Right axis)
-            coord1 = rel_y;
-            coord2 = rel_z;
-            coord3 = rel_x;
-            break;
-        case AXIS_Y:  // Pattern primarily on XZ plane (perpendicular to Y - Bottom/Top axis, Y-up)
-            coord1 = rel_x;
-            coord2 = rel_z;
-            coord3 = rel_y;
-            break;
-        case AXIS_Z:  // Pattern primarily on XY plane (perpendicular to Z - Front/Back axis)
-            coord1 = rel_x;
-            coord2 = rel_y;
-            coord3 = rel_z;
-            break;
-        case AXIS_RADIAL:  // Full 3D pattern
-        default:
-            coord1 = rel_x;
-            coord2 = rel_y;
-            coord3 = rel_z;
-            break;
-    }
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
 
     /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
+    | Use rotated coordinates directly for plasma pattern     |
     \*---------------------------------------------------------*/
-    if(effect_reverse)
-    {
-        coord3 = -coord3;
-    }
+    float coord1 = rot_rel_x;
+    float coord2 = rot_rel_y;
+    float coord3 = rot_rel_z;
 
     float plasma_value;
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
@@ -218,15 +197,8 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 
         case 2: // Ripple Plasma - Concentric waves
             {
-                float dist_from_center;
-                if(effect_axis == AXIS_RADIAL)
-                {
-                    dist_from_center = sqrtf(coord1*coord1 + coord2*coord2 + coord3*coord3);
-                }
-                else
-                {
-                    dist_from_center = sqrtf(coord1*coord1 + coord2*coord2);
-                }
+                // Use 2D distance in rotated XY plane for ripple effect
+                float dist_from_center = sqrtf(coord1*coord1 + coord2*coord2);
 
                 plasma_value =
                     sin(dist_from_center * scale - progress * 3.0f) +
@@ -303,28 +275,23 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     norm_y = fmaxf(0.0f, fminf(1.0f, norm_y));
     norm_z = fmaxf(0.0f, fminf(1.0f, norm_z));
 
-    float coord1, coord2, coord3;
-    switch(effect_axis)
-    {
-        case AXIS_X:  coord1 = norm_y; coord2 = norm_z; coord3 = norm_x; break;
-        case AXIS_Y:  coord1 = norm_x; coord2 = norm_z; coord3 = norm_y; break;
-        case AXIS_Z:  coord1 = norm_x; coord2 = norm_y; coord3 = norm_z; break;
-        case AXIS_RADIAL: default: 
-        {
-            // For radial, use normalized distance from origin
-            float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
-            float radial_dist = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            float norm_radial = (max_distance > 0.001f) ? (radial_dist / max_distance) : 0.0f;
-            norm_radial = fmaxf(0.0f, fminf(1.0f, norm_radial));
-            // Use angle for coord1/coord2, radial distance for coord3
-            float angle = atan2(rel_y, rel_x);
-            coord1 = (angle + 3.14159f) / (2.0f * 3.14159f); // Normalize angle to 0-1
-            coord2 = norm_radial;
-            coord3 = norm_radial;
-            break;
-        }
-    }
-    if(effect_reverse) coord3 = 1.0f - coord3;
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    // Normalize rotated coordinates to 0-1 range based on room bounds
+    float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+    float coord1 = (max_distance > 0.001f) ? ((rot_rel_x + max_distance) / (2.0f * max_distance)) : 0.5f;
+    float coord2 = (max_distance > 0.001f) ? ((rot_rel_y + max_distance) / (2.0f * max_distance)) : 0.5f;
+    float coord3 = (max_distance > 0.001f) ? ((rot_rel_z + max_distance) / (2.0f * max_distance)) : 0.5f;
+    coord1 = fmaxf(0.0f, fminf(1.0f, coord1));
+    coord2 = fmaxf(0.0f, fminf(1.0f, coord2));
+    coord3 = fmaxf(0.0f, fminf(1.0f, coord3));
 
     float plasma_value;
     switch(pattern_type)
@@ -352,9 +319,8 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
             break;
         case 2: // Ripple
             {
-                float dist_from_center = (effect_axis == AXIS_RADIAL)
-                    ? sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f))
-                    : sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
+                // Use 2D distance in rotated XY plane for ripple effect
+                float dist_from_center = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
                     sin(dist_from_center * freq_scale * 10.0f - progress * 3.0f) +
                     sin(dist_from_center * freq_scale * 15.0f - progress * 2.3f) +

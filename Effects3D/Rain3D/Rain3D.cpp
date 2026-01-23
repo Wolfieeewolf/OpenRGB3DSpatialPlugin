@@ -53,7 +53,7 @@ EffectInfo3D Rain3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -132,21 +132,20 @@ RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Axis selection: choose fall axis and lateral plane
-    float fall_axis, lat1, lat2;
-    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
-    switch(use_axis)
-    {
-        case AXIS_X: fall_axis = rel_x; lat1 = rel_y; lat2 = rel_z; break;
-        case AXIS_Y: fall_axis = rel_y; lat1 = rel_x; lat2 = rel_z; break;
-        case AXIS_Z: fall_axis = rel_z; lat1 = rel_x; lat2 = rel_y; break;
-        case AXIS_RADIAL:
-        default:
-            // For radial, simulate concentric rainy waves expanding
-            fall_axis = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            lat1 = rel_x; lat2 = rel_z;
-            break;
-    }
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    | Rain falls along rotated Y-axis by default              |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    // Rain falls along rotated Y-axis (vertical after rotation)
+    float fall_axis = rot_rel_y;
+    float lat1 = rot_rel_x;
+    float lat2 = rot_rel_z;
 
     // Normalize world to grid spacing bands
     float fall = time * speed * 0.5f; // fall speed factor

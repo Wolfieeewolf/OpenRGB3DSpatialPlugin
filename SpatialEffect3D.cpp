@@ -21,11 +21,10 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     rainbow_progress = 0.0f;
     boundary_prevalidated = false;
 
-    // Initialize axis parameters
-    // Default to a directional axis so rotation/translation produces visible motion by default.
-    // Radial fields are often rotation-invariant for rigid bodies, which can feel "stuck".
-    effect_axis = AXIS_Z;
-    effect_reverse = false;
+    // Initialize rotation parameters (replaces axis/coverage)
+    effect_rotation_yaw = 0.0f;   // Default: no rotation
+    effect_rotation_pitch = 0.0f;
+    effect_rotation_roll = 0.0f;
 
     // Initialize reference point parameters
     reference_mode = REF_MODE_ROOM_CENTER;
@@ -52,9 +51,14 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     scale_label = nullptr;
     fps_label = nullptr;
 
-    // Axis controls
-    axis_combo = nullptr;
-    reverse_check = nullptr;
+    // Rotation controls
+    rotation_yaw_slider = nullptr;
+    rotation_pitch_slider = nullptr;
+    rotation_roll_slider = nullptr;
+    rotation_yaw_label = nullptr;
+    rotation_pitch_label = nullptr;
+    rotation_roll_label = nullptr;
+    rotation_reset_button = nullptr;
 
     // Color controls
     color_controls_group = nullptr;
@@ -71,10 +75,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     // Shaping defaults
     intensity_slider = nullptr;
     sharpness_slider = nullptr;
-    coverage_combo = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
-    effect_coverage = 0;
 }
 
 SpatialEffect3D::~SpatialEffect3D()
@@ -204,51 +206,56 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     sharpness_layout->addWidget(sharpness_slider);
     main_layout->addLayout(sharpness_layout);
 
-    // Axis control
-    QHBoxLayout* axis_layout = new QHBoxLayout();
-    axis_layout->addWidget(new QLabel("Axis:"));
-    axis_combo = new QComboBox();
-    axis_combo->addItem("None (Effect Default)");      // index 0 -> no override
-    axis_combo->addItem("X-Axis (Left to Right)");    // AXIS_X = 0 (grid X, width)
-    axis_combo->addItem("Y-Axis (Bottom to Top)");    // AXIS_Y = 1 (grid Y, height, Y-up)
-    axis_combo->addItem("Z-Axis (Front to Back)");    // AXIS_Z = 2 (grid Z, depth)
-    axis_combo->addItem("Radial (Outward from Center)"); // AXIS_RADIAL = 3
-    axis_combo->setToolTip(
-        "Axis mapping uses grid coordinates (standard OpenGL Y-up):\n"
-        "X: Left→Right, Y: Bottom→Top, Z: Front→Back.\n"
-        "Radial: distance from effect origin (room/user)."
-    );
-    axis_none = true; // default to no axis override
-    axis_combo->setCurrentIndex(axis_none ? 0 : (int)effect_axis + 1);
-    axis_layout->addWidget(axis_combo);
-
-    reverse_check = new QCheckBox("Reverse");
-    reverse_check->setToolTip("Reverse direction along the selected axis");
-    reverse_check->setChecked(effect_reverse);
-    axis_layout->addWidget(reverse_check);
-    axis_layout->addStretch();
-    main_layout->addLayout(axis_layout);
-
-    // Coverage selection (room targeting)
-    QHBoxLayout* coverage_layout = new QHBoxLayout();
-    coverage_layout->addWidget(new QLabel("Coverage:"));
-    coverage_combo = new QComboBox();
-    coverage_combo->addItem("Effect Default");      // 0 (no post coverage shaping)
-    coverage_combo->addItem("Entire Room");         // 1
-    coverage_combo->addItem("Floor");               // 2
-    coverage_combo->addItem("Ceiling");             // 3
-    coverage_combo->addItem("Left Wall");           // 4
-    coverage_combo->addItem("Right Wall");          // 5
-    coverage_combo->addItem("Front Wall");          // 6
-    coverage_combo->addItem("Back Wall");           // 7
-    coverage_combo->addItem("Floor & Ceiling");     // 8
-    coverage_combo->addItem("Left & Right Walls");  // 9
-    coverage_combo->addItem("Front & Back Walls");  // 10
-    coverage_combo->addItem("Origin Center");       // 11
-    coverage_combo->setCurrentIndex((int)effect_coverage);
-    coverage_combo->setToolTip("Room coverage shaping: choose areas to emphasize (Effect Default leaves coverage to the effect)");
-    coverage_layout->addWidget(coverage_combo);
-    main_layout->addLayout(coverage_layout);
+    // 3D Rotation controls (replaces axis/coverage)
+    QGroupBox* rotation_group = new QGroupBox("3D Rotation (around Origin)");
+    QVBoxLayout* rotation_layout = new QVBoxLayout();
+    
+    // Yaw (horizontal rotation around Y axis)
+    QHBoxLayout* yaw_layout = new QHBoxLayout();
+    yaw_layout->addWidget(new QLabel("Yaw (Horizontal):"));
+    rotation_yaw_slider = new QSlider(Qt::Horizontal);
+    rotation_yaw_slider->setRange(0, 360);
+    rotation_yaw_slider->setValue((int)effect_rotation_yaw);
+    rotation_yaw_slider->setToolTip("Horizontal rotation around Y axis (0-360°)");
+    rotation_yaw_label = new QLabel(QString::number((int)effect_rotation_yaw) + "°");
+    rotation_yaw_label->setMinimumWidth(50);
+    yaw_layout->addWidget(rotation_yaw_slider);
+    yaw_layout->addWidget(rotation_yaw_label);
+    rotation_layout->addLayout(yaw_layout);
+    
+    // Pitch (vertical rotation around X axis)
+    QHBoxLayout* pitch_layout = new QHBoxLayout();
+    pitch_layout->addWidget(new QLabel("Pitch (Vertical):"));
+    rotation_pitch_slider = new QSlider(Qt::Horizontal);
+    rotation_pitch_slider->setRange(0, 360);
+    rotation_pitch_slider->setValue((int)effect_rotation_pitch);
+    rotation_pitch_slider->setToolTip("Vertical rotation around X axis (0-360°)");
+    rotation_pitch_label = new QLabel(QString::number((int)effect_rotation_pitch) + "°");
+    rotation_pitch_label->setMinimumWidth(50);
+    pitch_layout->addWidget(rotation_pitch_slider);
+    pitch_layout->addWidget(rotation_pitch_label);
+    rotation_layout->addLayout(pitch_layout);
+    
+    // Roll (twist rotation around Z axis)
+    QHBoxLayout* roll_layout = new QHBoxLayout();
+    roll_layout->addWidget(new QLabel("Roll (Twist):"));
+    rotation_roll_slider = new QSlider(Qt::Horizontal);
+    rotation_roll_slider->setRange(0, 360);
+    rotation_roll_slider->setValue((int)effect_rotation_roll);
+    rotation_roll_slider->setToolTip("Twist rotation around Z axis (0-360°)");
+    rotation_roll_label = new QLabel(QString::number((int)effect_rotation_roll) + "°");
+    rotation_roll_label->setMinimumWidth(50);
+    roll_layout->addWidget(rotation_roll_slider);
+    roll_layout->addWidget(rotation_roll_label);
+    rotation_layout->addLayout(roll_layout);
+    
+    // Reset button
+    rotation_reset_button = new QPushButton("Reset Rotation");
+    rotation_reset_button->setToolTip("Reset all rotations to 0°");
+    rotation_layout->addWidget(rotation_reset_button);
+    
+    rotation_group->setLayout(rotation_layout);
+    main_layout->addWidget(rotation_group);
 
     // Color controls
     CreateColorControls();
@@ -267,11 +274,12 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     {
         connect(scale_invert_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
     }
-    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnAxisChanged);
-    connect(reverse_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnReverseChanged);
+    connect(rotation_yaw_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
+    connect(rotation_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
+    connect(rotation_roll_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
+    connect(rotation_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRotationResetClicked);
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
-    connect(coverage_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnParameterChanged);
 
     // Effect control buttons - NOT connected here!
     // The parent tab needs to connect these to its on_start_effect_clicked/on_stop_effect_clicked handlers
@@ -279,6 +287,20 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
 
     ApplyControlVisibility();
 
+    // Update rotation labels when sliders change
+    connect(rotation_yaw_slider, &QSlider::valueChanged, rotation_yaw_label, [this](int value) {
+        rotation_yaw_label->setText(QString::number(value) + "°");
+        effect_rotation_yaw = (float)value;
+    });
+    connect(rotation_pitch_slider, &QSlider::valueChanged, rotation_pitch_label, [this](int value) {
+        rotation_pitch_label->setText(QString::number(value) + "°");
+        effect_rotation_pitch = (float)value;
+    });
+    connect(rotation_roll_slider, &QSlider::valueChanged, rotation_roll_label, [this](int value) {
+        rotation_roll_label->setText(QString::number(value) + "°");
+        effect_rotation_roll = (float)value;
+    });
+    
     connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
         speed_label->setText(QString::number(value));
         effect_speed = value;
@@ -723,22 +745,20 @@ float SpatialEffect3D::GetScaledFrequency() const
 
 float SpatialEffect3D::CalculateProgress(float time) const
 {
-    float progress = time * GetScaledSpeed();
-    return effect_reverse ? -progress : progress;
+    return time * GetScaledSpeed();
 }
 
 RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const
 {
-    // Compute coverage weight based on selection
-    float coverage = ComputeCoverageWeight(x, y, z, grid);
-    if(coverage <= 0.0f) return 0x00000000;
-
+    (void)x;  // Unused - kept for API compatibility
+    (void)y;  // Unused - kept for API compatibility
+    (void)z;  // Unused - kept for API compatibility
+    (void)grid;  // Unused - kept for API compatibility
+    
     // Apply sharpness (gamma-like), intensity multiplier, and global brightness
-    float gamma = powf(2.0f, ((float)effect_sharpness - 100.0f) / 100.0f);
-    coverage = (coverage < 1.0f) ? powf(coverage, gamma) : coverage;
     float intensity_mul = effect_intensity / 100.0f; // 0..2.0
     float brightness_mul = effect_brightness / 100.0f; // 0.01..1.0 (slider min is 1)
-    float factor = coverage * intensity_mul * brightness_mul;
+    float factor = intensity_mul * brightness_mul;
     if(factor <= 0.0f) return 0x00000000;
 
     // Apply to BGR color
@@ -751,55 +771,40 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBCol
     return (bb << 16) | (gg << 8) | rr;
 }
 
-float SpatialEffect3D::ComputeCoverageWeight(float x, float y, float z, const GridContext3D& grid) const
+Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, const Vector3D& origin) const
 {
-    switch(effect_coverage)
-    {
-        case 0: // Effect Default (no shaping)
-            return 1.0f;
-        case 1: // Entire Room
-            return 1.0f;
-        case 2: // Floor (Z min)
-            return fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
-        case 3: // Ceiling (Z max)
-            return fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
-        case 4: // Left wall (X min)
-            return fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
-        case 5: // Right wall (X max)
-            return fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
-        case 6: // Front wall (Y min)
-            return fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
-        case 7: // Back wall (Y max)
-            return fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
-        case 8: // Floor & Ceiling
-        {
-            float floor_w = fmax(0.0f, 1.0f - (z - grid.min_z) / (grid.height + 0.001f));
-            float ceil_w  = fmax(0.0f, 1.0f - (grid.max_z - z) / (grid.height + 0.001f));
-            return fmax(floor_w, ceil_w);
-        }
-        case 9: // Left & Right
-        {
-            float left_w = fmax(0.0f, 1.0f - (x - grid.min_x) / (grid.width + 0.001f));
-            float right_w= fmax(0.0f, 1.0f - (grid.max_x - x) / (grid.width + 0.001f));
-            return fmax(left_w, right_w);
-        }
-        case 10: // Front & Back
-        {
-            float front_w= fmax(0.0f, 1.0f - (y - grid.min_y) / (grid.depth + 0.001f));
-            float back_w = fmax(0.0f, 1.0f - (grid.max_y - y) / (grid.depth + 0.001f));
-            return fmax(front_w, back_w);
-        }
-        case 11: // Origin center
-        {
-            float dx = x - grid.center_x;
-            float dy = y - grid.center_y;
-            float dz = z - grid.center_z;
-            float half_diag = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
-            float dist = sqrtf(dx*dx + dy*dy + dz*dz);
-            return fmax(0.0f, 1.0f - dist / (half_diag + 0.001f));
-        }
-        default: return 1.0f;
-    }
+    // Translate to origin
+    float tx = x - origin.x;
+    float ty = y - origin.y;
+    float tz = z - origin.z;
+    
+    // Apply rotations (order: Yaw -> Pitch -> Roll)
+    // Yaw (rotation around Y axis - horizontal)
+    float yaw_rad = effect_rotation_yaw * 3.14159265359f / 180.0f;
+    float cos_yaw = cosf(yaw_rad);
+    float sin_yaw = sinf(yaw_rad);
+    float nx = tx * cos_yaw - tz * sin_yaw;
+    float nz = tx * sin_yaw + tz * cos_yaw;
+    float ny = ty; // Y unchanged by yaw
+    
+    // Pitch (rotation around X axis - vertical)
+    float pitch_rad = effect_rotation_pitch * 3.14159265359f / 180.0f;
+    float cos_pitch = cosf(pitch_rad);
+    float sin_pitch = sinf(pitch_rad);
+    float py = ny * cos_pitch - nz * sin_pitch;
+    float pz = ny * sin_pitch + nz * cos_pitch;
+    float px = nx; // X unchanged by pitch
+    
+    // Roll (rotation around Z axis - twist)
+    float roll_rad = effect_rotation_roll * 3.14159265359f / 180.0f;
+    float cos_roll = cosf(roll_rad);
+    float sin_roll = sinf(roll_rad);
+    float fx = px * cos_roll - py * sin_roll;
+    float fy = px * sin_roll + py * cos_roll;
+    float fz = pz; // Z unchanged by roll
+    
+    // Translate back
+    return {fx + origin.x, fy + origin.y, fz + origin.z};
 }
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
@@ -885,7 +890,6 @@ void SpatialEffect3D::ApplyControlVisibility()
     bool show_size = is_versioned_effect ? info.show_size_control : true;
     bool show_scale = is_versioned_effect ? info.show_scale_control : true;
     bool show_fps = is_versioned_effect ? info.show_fps_control : true;
-    bool show_axis = is_versioned_effect ? info.show_axis_control : true;
     bool show_colors = is_versioned_effect ? info.show_color_controls : true;
 
     // Hide/show controls based on effect's declarations
@@ -896,26 +900,8 @@ void SpatialEffect3D::ApplyControlVisibility()
     SetControlGroupVisibility(scale_slider, scale_label, "Scale:", show_scale);
     SetControlGroupVisibility(fps_slider, fps_label, "FPS:", show_fps);
 
-    // Handle axis control separately as it uses combo box instead of slider
-    if(axis_combo && reverse_check)
-    {
-        axis_combo->setVisible(show_axis);
-        reverse_check->setVisible(show_axis);
-        QWidget* parent = axis_combo->parentWidget();
-        if(parent)
-        {
-            QList<QLabel*> labels = parent->findChildren<QLabel*>();
-            for(int i = 0; i < labels.size(); i++)
-            {
-                QLabel* label = labels[i];
-                if(label->text() == "Axis:")
-                {
-                    label->setVisible(show_axis);
-                    break;
-                }
-            }
-        }
-    }
+    // Rotation controls are always visible (replaces axis/coverage)
+    // Effects can override if they don't need rotation
 
     if(color_controls_group)
     {
@@ -977,38 +963,57 @@ void SpatialEffect3D::OnParameterChanged()
     {
         effect_sharpness = sharpness_slider->value();
     }
-    if(coverage_combo)
-    {
-        effect_coverage = coverage_combo->currentIndex();
-    }
-
     emit ParametersChanged();
 }
 
-void SpatialEffect3D::OnAxisChanged()
+void SpatialEffect3D::OnRotationChanged()
 {
-    if(axis_combo)
+    if(rotation_yaw_slider)
     {
-        int idx = axis_combo->currentIndex();
-        if(idx == 0)
+        effect_rotation_yaw = (float)rotation_yaw_slider->value();
+        if(rotation_yaw_label)
         {
-            axis_none = true;
+            rotation_yaw_label->setText(QString::number((int)effect_rotation_yaw) + "°");
         }
-        else
+    }
+    if(rotation_pitch_slider)
+    {
+        effect_rotation_pitch = (float)rotation_pitch_slider->value();
+        if(rotation_pitch_label)
         {
-            axis_none = false;
-            effect_axis = (EffectAxis)(idx - 1);
+            rotation_pitch_label->setText(QString::number((int)effect_rotation_pitch) + "°");
+        }
+    }
+    if(rotation_roll_slider)
+    {
+        effect_rotation_roll = (float)rotation_roll_slider->value();
+        if(rotation_roll_label)
+        {
+            rotation_roll_label->setText(QString::number((int)effect_rotation_roll) + "°");
         }
     }
     emit ParametersChanged();
 }
 
-void SpatialEffect3D::OnReverseChanged()
+void SpatialEffect3D::OnRotationResetClicked()
 {
-    if(reverse_check)
+    effect_rotation_yaw = 0.0f;
+    effect_rotation_pitch = 0.0f;
+    effect_rotation_roll = 0.0f;
+    
+    if(rotation_yaw_slider)
     {
-        effect_reverse = reverse_check->isChecked();
+        rotation_yaw_slider->setValue(0);
     }
+    if(rotation_pitch_slider)
+    {
+        rotation_pitch_slider->setValue(0);
+    }
+    if(rotation_roll_slider)
+    {
+        rotation_roll_slider->setValue(0);
+    }
+    
     emit ParametersChanged();
 }
 
@@ -1024,12 +1029,11 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["scale_value"] = effect_scale;
     j["scale_inverted"] = scale_inverted;
     j["rainbow_mode"] = rainbow_mode;
-    j["reverse"] = effect_reverse;
-    j["axis"] = (int)effect_axis;
-    j["axis_none"] = axis_none;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
-    j["coverage"] = effect_coverage;
+    j["rotation_yaw"] = effect_rotation_yaw;
+    j["rotation_pitch"] = effect_rotation_pitch;
+    j["rotation_roll"] = effect_rotation_roll;
 
     // Save colors
     nlohmann::json colors_array = nlohmann::json::array();
@@ -1072,18 +1076,82 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("rainbow_mode"))
         SetRainbowMode(settings["rainbow_mode"].get<bool>());
 
-    if(settings.contains("reverse"))
-        effect_reverse = settings["reverse"].get<bool>();
-    if(settings.contains("axis"))
-        effect_axis = (EffectAxis)settings["axis"].get<int>();
-    if(settings.contains("axis_none"))
-        axis_none = settings["axis_none"].get<bool>();
     if(settings.contains("intensity"))
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
         effect_sharpness = settings["sharpness"].get<unsigned int>();
-    if(settings.contains("coverage"))
-        effect_coverage = settings["coverage"].get<unsigned int>();
+    
+    // Load rotation (with migration from old axis/coverage if present)
+    if(settings.contains("rotation_yaw"))
+    {
+        effect_rotation_yaw = settings["rotation_yaw"].get<float>();
+    }
+    else if(settings.contains("axis"))
+    {
+        // Migration: Convert old axis to rotation
+        int old_axis_int = settings["axis"].get<int>();
+        // Map old axis enum values to rotation
+        if(old_axis_int == 0) // AXIS_X
+        {
+            effect_rotation_yaw = 90.0f;
+            effect_rotation_pitch = 0.0f;
+        }
+        else if(old_axis_int == 1) // AXIS_Y
+        {
+            effect_rotation_yaw = 0.0f;
+            effect_rotation_pitch = 90.0f;
+        }
+        else if(old_axis_int == 2) // AXIS_Z
+        {
+            effect_rotation_yaw = 0.0f;
+            effect_rotation_pitch = 0.0f;
+        }
+        else // AXIS_RADIAL or other
+        {
+            effect_rotation_yaw = 0.0f;
+            effect_rotation_pitch = 0.0f;
+        }
+        if(settings.contains("reverse") && settings["reverse"].get<bool>())
+        {
+            effect_rotation_yaw += 180.0f; // Reverse direction
+        }
+    }
+    else
+    {
+        effect_rotation_yaw = 0.0f;
+    }
+    
+    if(settings.contains("rotation_pitch"))
+    {
+        effect_rotation_pitch = settings["rotation_pitch"].get<float>();
+    }
+    else if(!settings.contains("axis"))
+    {
+        effect_rotation_pitch = 0.0f;
+    }
+    
+    if(settings.contains("rotation_roll"))
+    {
+        effect_rotation_roll = settings["rotation_roll"].get<float>();
+    }
+    else
+    {
+        effect_rotation_roll = 0.0f;
+    }
+    
+    // Update UI sliders if they exist
+    if(rotation_yaw_slider)
+    {
+        rotation_yaw_slider->setValue((int)effect_rotation_yaw);
+    }
+    if(rotation_pitch_slider)
+    {
+        rotation_pitch_slider->setValue((int)effect_rotation_pitch);
+    }
+    if(rotation_roll_slider)
+    {
+        rotation_roll_slider->setValue((int)effect_rotation_roll);
+    }
     if(settings.contains("size"))
         effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
     if(settings.contains("scale_value"))
@@ -1170,12 +1238,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         rainbow_mode_check->setChecked(rainbow_mode);
     }
 
-    if(reverse_check)
-    {
-        QSignalBlocker blocker(reverse_check);
-        reverse_check->setChecked(effect_reverse);
-    }
-
     if(intensity_slider)
     {
         QSignalBlocker blocker(intensity_slider);
@@ -1224,22 +1286,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         fps_label->setText(QString::number(effect_fps));
     }
 
-    if(coverage_combo)
-    {
-        QSignalBlocker blocker(coverage_combo);
-        coverage_combo->setCurrentIndex((int)effect_coverage);
-    }
-
-    if(axis_combo)
-    {
-        QSignalBlocker blocker(axis_combo);
-        axis_combo->setCurrentIndex(axis_none ? 0 : (int)effect_axis + 1);
-    }
-    if(reverse_check)
-    {
-        QSignalBlocker blocker(reverse_check);
-        reverse_check->setChecked(effect_reverse);
-    }
+    // Rotation sliders are updated in LoadSettings migration code
 }
 
 void SpatialEffect3D::SetScaleInverted(bool inverted)

@@ -70,7 +70,7 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -168,42 +168,21 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     float freq_scale = actual_frequency * 0.003f / size_multiplier;
 
     /*---------------------------------------------------------*\
-    | Calculate spiral based on selected axis                 |
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
     \*---------------------------------------------------------*/
-    float radius, angle, twist_coord;
-
-    switch(effect_axis)
-    {
-        case AXIS_X:  // Spiral along X-axis (Left to Right)
-            radius = sqrtf(rel_y*rel_y + rel_z*rel_z);
-            angle = atan2(rel_z, rel_y);
-            twist_coord = rel_x;
-            break;
-        case AXIS_Y:  // Spiral along Y-axis (Bottom to Top, Y-up)
-            radius = sqrtf(rel_x*rel_x + rel_z*rel_z);
-            angle = atan2(rel_z, rel_x);
-            twist_coord = rel_y;
-            break;
-        case AXIS_Z:  // Spiral along Z-axis (Front to Back)
-        default:
-            radius = sqrtf(rel_x*rel_x + rel_y*rel_y);
-            angle = atan2(rel_y, rel_x);
-            twist_coord = rel_z;
-            break;
-        case AXIS_RADIAL:  // Radial spiral from center
-            radius = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrtf(rel_x*rel_x + rel_y*rel_y));
-            twist_coord = radius;
-            break;
-    }
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
 
     /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
+    | Calculate spiral based on rotated coordinates            |
+    | Spiral rotates around rotated Y-axis by default         |
     \*---------------------------------------------------------*/
-    if(effect_reverse)
-    {
-        angle = -angle;
-    }
+    float radius = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
+    float angle = atan2(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
+    float twist_coord = rot_rel_y;  // Height along rotated Y-axis
 
     float z_twist = twist_coord * 0.3f;
     float spiral_angle = angle * num_arms + radius * freq_scale + z_twist - progress;
@@ -333,16 +312,21 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.15f / fmax(0.1f, size_multiplier);
 
-    float radius, angle;
-    switch(effect_axis)
-    {
-        case AXIS_X: radius = sqrt(rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_z, rel_y); break;
-        case AXIS_Y: radius = sqrt(rel_x*rel_x + rel_z*rel_z); angle = atan2(rel_z, rel_x); break;
-        case AXIS_Z: default: radius = sqrt(rel_x*rel_x + rel_y*rel_y); angle = atan2(rel_y, rel_x); break;
-        case AXIS_RADIAL: radius = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z); angle = atan2(rel_y, rel_x) + atan2(rel_z, sqrt(rel_x*rel_x + rel_y*rel_y)); break;
-    }
+    /*---------------------------------------------------------*\
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
 
-    if(effect_reverse) angle = -angle;
+    /*---------------------------------------------------------*\
+    | Calculate spiral based on rotated coordinates            |
+    | Spiral rotates around rotated Y-axis by default         |
+    \*---------------------------------------------------------*/
+    float radius = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
+    float angle = atan2(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
 
     // Normalize radius and twist coordinate consistently against room bounds
     // This ensures ALL controllers see the same spiral pattern at the same absolute room position
@@ -350,14 +334,11 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     float norm_radius = (max_distance > 0.001f) ? (radius / max_distance) : 0.0f;
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
     
-    // Normalize twist coordinate based on axis
+    // Normalize twist coordinate (height along rotated Y-axis)
     float norm_twist = 0.0f;
-    switch(effect_axis)
+    if(grid.height > 0.001f)
     {
-        case AXIS_X: norm_twist = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f; break;
-        case AXIS_Y: norm_twist = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f; break;
-        case AXIS_Z: default: norm_twist = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f; break;
-        case AXIS_RADIAL: norm_twist = norm_radius; break;
+        norm_twist = (rot_rel_y + grid.height * 0.5f) / grid.height;
     }
     norm_twist = fmaxf(0.0f, fminf(1.0f, norm_twist));
     

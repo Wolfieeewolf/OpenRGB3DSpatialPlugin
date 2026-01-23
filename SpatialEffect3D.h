@@ -175,9 +175,10 @@ public:
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
 
-    // Expose current axis and reverse for renderer ordering
-    EffectAxis GetAxis() const { return effect_axis; }
-    bool GetReverse() const { return effect_reverse; }
+    // Get rotation values
+    float GetRotationYaw() const { return effect_rotation_yaw; }
+    float GetRotationPitch() const { return effect_rotation_pitch; }
+    float GetRotationRoll() const { return effect_rotation_roll; }
 
     // Global post-processing helpers apply coverage/intensity shaping consistently
     RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
@@ -215,15 +216,18 @@ protected:
     QLabel*             scale_label;
     QLabel*             fps_label;
 
-    // Shaping and coverage controls
+    // Shaping controls
     QSlider*            intensity_slider;     // 0..200 (100 = neutral)
     QSlider*            sharpness_slider;     // 0..200 (100 = neutral)
-    QComboBox*          coverage_combo;       // coverage selection
 
-    // Axis selection controls
-    QComboBox*          axis_combo;
-    QCheckBox*          reverse_check;
-    bool                axis_none;            // When true, use effect's default axis behavior
+    // 3D Rotation controls (replaces axis/coverage)
+    QSlider*            rotation_yaw_slider;   // 0-360 degrees, horizontal rotation
+    QSlider*            rotation_pitch_slider; // 0-360 degrees, vertical rotation
+    QSlider*            rotation_roll_slider;  // 0-360 degrees, twist rotation
+    QLabel*             rotation_yaw_label;
+    QLabel*             rotation_pitch_label;
+    QLabel*             rotation_roll_label;
+    QPushButton*        rotation_reset_button;
 
     // Color management controls
     QGroupBox*          color_controls_group;
@@ -257,11 +261,11 @@ protected:
     // Global shaping params
     unsigned int        effect_intensity;     // 0..200 (100 neutral)
     unsigned int        effect_sharpness;     // 0..200 (100 neutral)
-    unsigned int        effect_coverage;      // Index into coverage_combo
 
-    // Axis parameters
-    EffectAxis          effect_axis;
-    bool                effect_reverse;
+    // 3D Rotation parameters (replaces axis/coverage)
+    float               effect_rotation_yaw;   // 0-360 degrees, horizontal rotation around Y axis
+    float               effect_rotation_pitch; // 0-360 degrees, vertical rotation around X axis
+    float               effect_rotation_roll;  // 0-360 degrees, twist rotation around Z axis
 
     // Reference Point System (for effect origin)
     ReferenceMode       reference_mode;         // Room center / User position / Custom
@@ -295,8 +299,9 @@ protected:
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;  // Legacy version (uses fixed radius)
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;  // Room-aware version (RECOMMENDED)
 
-    // Coverage/intensity helpers
-    float ComputeCoverageWeight(float x, float y, float z, const GridContext3D& grid) const;
+    // 3D Rotation transformation helper
+    Vector3D TransformPointByRotation(float x, float y, float z, 
+                                      const Vector3D& origin) const;
     float ApplySharpness(float value) const;    // gamma-like shaping around 1.0
 
 private slots:
@@ -307,8 +312,8 @@ private slots:
     void OnColorButtonClicked();
     void OnStartEffectClicked();
     void OnStopEffectClicked();
-    void OnAxisChanged();
-    void OnReverseChanged();
+    void OnRotationChanged();
+    void OnRotationResetClicked();
 
 private:
     void CreateColorControls();

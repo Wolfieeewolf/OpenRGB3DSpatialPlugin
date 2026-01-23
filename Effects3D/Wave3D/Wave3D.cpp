@@ -68,7 +68,7 @@ EffectInfo3D Wave3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -160,7 +160,17 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
-    | Calculate wave based on axis and shape type             |
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    /*---------------------------------------------------------*\
+    | Calculate wave based on rotated coordinates             |
+    | Wave propagates along rotated X-axis by default         |
     \*---------------------------------------------------------*/
     float wave_value = 0.0f;
     float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0 (affects spatial frequency)
@@ -168,38 +178,16 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     float position = 0.0f;
 
     /*---------------------------------------------------------*\
-    | Calculate position based on selected axis               |
+    | For radial waves, use distance from origin              |
+    | For directional waves, use rotated X coordinate         |
     \*---------------------------------------------------------*/
-    switch(effect_axis)
+    if(shape_type == 0)  // Radial (Sphere)
     {
-        case AXIS_X:  // Left to Right
-            position = rel_x;
-            break;
-        case AXIS_Y:  // Bottom to Top (Y-up)
-            position = rel_y;
-            break;
-        case AXIS_Z:  // Front to Back
-            position = rel_z;
-            break;
-        case AXIS_RADIAL:  // Radial from center
-        default:
-            if(shape_type == 0)  // Sphere
-            {
-                position = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            }
-            else  // Cube
-            {
-                position = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
-            }
-            break;
+        position = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     }
-
-    /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
-    \*---------------------------------------------------------*/
-    if(effect_reverse)
+    else  // Directional (use rotated X-axis)
     {
-        position = -position;
+        position = rot_rel_x;
     }
 
     wave_value = sin(position * freq_scale - progress);
@@ -272,7 +260,16 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
-    | Calculate wave based on axis and shape type             |
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
+    \*---------------------------------------------------------*/
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    /*---------------------------------------------------------*\
+    | Calculate wave based on rotated coordinates             |
     | IMPORTANT: Normalize position to 0-1 for consistent     |
     | wave density regardless of room size                     |
     \*---------------------------------------------------------*/
@@ -282,78 +279,37 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float normalized_position = 0.0f;
 
     /*---------------------------------------------------------*\
-    | Calculate position based on selected axis               |
+    | For radial waves, use distance from origin              |
+    | For directional waves, use rotated X coordinate         |
     \*---------------------------------------------------------*/
-    switch(effect_axis)
+    if(shape_type == 0)  // Radial (Sphere)
     {
-        case AXIS_X:  // Left to Right
-            if(grid.width > 0.001f)
-            {
-                normalized_position = (x - grid.min_x) / grid.width;
-            }
-            else
-            {
-                normalized_position = 0.0f;
-            }
-            break;
-        case AXIS_Y:  // Floor to Ceiling (Y-up, height)
-            if(grid.height > 0.001f)
-            {
-                normalized_position = (y - grid.min_y) / grid.height;
-            }
-            else
-            {
-                normalized_position = 0.0f;
-            }
-            break;
-        case AXIS_Z:  // Front to Back (depth)
-            if(grid.depth > 0.001f)
-            {
-                normalized_position = (z - grid.min_z) / grid.depth;
-            }
-            else
-            {
-                normalized_position = 0.0f;
-            }
-            break;
-        case AXIS_RADIAL:  // Radial from center
-        default:
+        float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
+        float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+        if(max_radius > 0.001f)
         {
-            float radial_distance = 0.0f;
-            if(shape_type == 0)  // Sphere
-            {
-                radial_distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            }
-            else  // Cube
-            {
-                radial_distance = std::max({fabs(rel_x), fabs(rel_y), fabs(rel_z)});
-            }
-            // Normalize radial distance
-            float max_distance = sqrtf(grid.width*grid.width +
-                                     grid.height*grid.height +
-                                     grid.depth*grid.depth) / 2.0f;
-            if(max_distance > 0.001f)
-            {
-                normalized_position = radial_distance / max_distance;
-            }
-            else
-            {
-                normalized_position = 0.0f;
-            }
-            break;
+            normalized_position = radial_distance / max_radius;
+        }
+        else
+        {
+            normalized_position = 0.0f;
+        }
+    }
+    else  // Directional (use rotated X-axis)
+    {
+        if(grid.width > 0.001f)
+        {
+            // Normalize rotated X position against room width
+            normalized_position = (rot_rel_x + grid.width * 0.5f) / grid.width;
+        }
+        else
+        {
+            normalized_position = 0.0f;
         }
     }
 
     // Clamp to valid range [0, 1] to avoid NaNs/inf propagating into sin()
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
-
-    /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
-    \*---------------------------------------------------------*/
-    if(effect_reverse)
-    {
-        normalized_position = 1.0f - normalized_position;
-    }
 
     // Use normalized position (0-1) directly - it's already normalized across the entire room
     // This ensures ALL controllers see the same wave pattern at the same absolute room position

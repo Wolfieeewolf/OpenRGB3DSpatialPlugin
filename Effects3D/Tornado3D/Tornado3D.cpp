@@ -50,7 +50,7 @@ EffectInfo3D Tornado3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -108,59 +108,46 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
+    (void)rel_x;  // Unused - using rotated coordinates instead
+    (void)rel_y;  // Unused - using rotated coordinates instead
+    (void)rel_z;  // Unused - using rotated coordinates instead
 
     float speed = GetScaledSpeed();
     float freq = GetScaledFrequency();
     float size_m = GetNormalizedSize();
 
-    // Room-aware height and radius scaling
-    // Use absolute world coordinates for normalization to ensure synchronization across controllers
-    float axial = 0.0f;
-    EffectAxis use_axis = axis_none ? AXIS_Y : effect_axis;
+    // Apply rotation transformation to LED position
+    // This rotates the effect pattern around the origin
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Normalize using absolute world coordinates, not relative coordinates
-    // This ensures ALL controllers see the same tornado pattern at the same absolute room position
-    switch(use_axis)
+    // Room-aware height and radius scaling
+    // Use rotated Y coordinate for tornado height (tornado rises along rotated Y-axis)
+    float axial = 0.0f;
+    if(grid.height > 0.001f)
     {
-        case AXIS_X: 
-            axial = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
-            break;
-        case AXIS_Y: 
-            axial = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-            break;
-        case AXIS_Z: 
-            axial = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
-            break;
-        case AXIS_RADIAL: 
-        default: 
-            // For radial, normalize height position
-            axial = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-            break;
+        // Normalize rotated Y position to room height
+        axial = (rot_rel_y + grid.height * 0.5f) / grid.height;
     }
     axial = fmaxf(0.0f, fminf(1.0f, axial));
     
     // Map normalized axial position to tornado height range
     float height_center = 0.5f;
-    float height_range = (tornado_height / 500.0f) * 0.5f; // 0 to 0.5 range
-    float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range)) / (2.0f * height_range + 0.0001f)));
+    float height_range_val = (tornado_height / 500.0f) * 0.5f; // 0 to 0.5 range
+    float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
     float base_radius = 0.5f * fmin(grid.width, grid.depth); // half of min horizontal span
     // core_radius (20..300) maps to ~4%..60% of base, grows with height
     float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
     float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m;
 
     // Swirl angle depends on height and time (twist)
-    // Axis selection for rotation: default Y
-    float a = 0.0f, rad = 0.0f, along = 0.0f;
-
-    switch(use_axis)
-    {
-        case AXIS_X: a = atan2f(rel_z, rel_y); rad = sqrtf(rel_y*rel_y + rel_z*rel_z); along = rel_x; break;
-        case AXIS_Y: a = atan2f(rel_z, rel_x); rad = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
-        case AXIS_Z: a = atan2f(rel_y, rel_x); rad = sqrtf(rel_x*rel_x + rel_y*rel_y); along = rel_z; break;
-        case AXIS_RADIAL:
-        default:
-            a = atan2f(rel_z, rel_x); rad = sqrtf(rel_x*rel_x + rel_z*rel_z); along = rel_y; break;
-    }
+    // Use rotated coordinates for tornado swirl
+    // Tornado rotates around rotated Y-axis (vertical after rotation)
+    float a = atan2f(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
+    float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
+    float along = rot_rel_y;  // Height along rotated Y-axis
     float swirl = a + along * (0.015f * freq) - time * speed * 0.25f;
 
     // Distance to the funnel wall (ring)
@@ -175,8 +162,7 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float band = 0.5f * (1.0f + cosf(swirl * arms));
 
     // Vertical fade outside active height (using normalized axial position)
-    // Reuse height_range calculated above
-    float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range + 0.001f));
+    float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range_val + 0.001f));
 
     float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade;
     intensity = fmax(0.0f, fmin(1.0f, intensity));

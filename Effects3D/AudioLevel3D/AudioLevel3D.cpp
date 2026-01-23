@@ -83,22 +83,14 @@ RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
     float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float intensity = EvaluateIntensity(amplitude, time);
 
-    float height_norm = std::clamp(0.5f + y, 0.0f, 1.0f);
-    float radial_norm = std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);
+    // Apply rotation transformation
+    Vector3D origin = GetEffectOrigin();
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    
+    float radial_norm = std::clamp(std::sqrt(rotated_pos.x * rotated_pos.x + rotated_pos.y * rotated_pos.y + rotated_pos.z * rotated_pos.z) / 0.75f, 0.0f, 1.0f);
 
-    float axis_pos = 0.5f;
-    switch(GetAxis())
-    {
-        case AXIS_X: axis_pos = std::clamp(0.5f + x, 0.0f, 1.0f); break;
-        case AXIS_Y: axis_pos = height_norm; break;
-        case AXIS_Z: axis_pos = std::clamp(0.5f + z, 0.0f, 1.0f); break;
-        case AXIS_RADIAL:
-        default:     axis_pos = 1.0f - radial_norm; break;
-    }
-    if(GetReverse())
-    {
-        axis_pos = 1.0f - axis_pos;
-    }
+    // Use rotated X coordinate for axis position
+    float axis_pos = std::clamp(0.5f + rotated_pos.x, 0.0f, 1.0f);
 
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
     float spatial = 0.55f + 0.45f * (1.0f - radial_norm);
@@ -121,26 +113,18 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float intensity = EvaluateIntensity(amplitude, time);
 
-    float height_norm = NormalizeRange(y, grid.min_y, grid.max_y);
-    float dx = x - grid.center_x;
-    float dy = y - grid.center_y;
-    float dz = z - grid.center_z;
+    // Apply rotation transformation before calculating positions
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    
+    float dx = rotated_pos.x - grid.center_x;
+    float dy = rotated_pos.y - grid.center_y;
+    float dz = rotated_pos.z - grid.center_z;
     float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
 
-    float axis_pos = 0.5f;
-    switch(GetAxis())
-    {
-        case AXIS_X: axis_pos = NormalizeRange(x, grid.min_x, grid.max_x); break;
-        case AXIS_Y: axis_pos = height_norm; break;
-        case AXIS_Z: axis_pos = NormalizeRange(z, grid.min_z, grid.max_z); break;
-        case AXIS_RADIAL:
-        default:     axis_pos = 1.0f - radial_norm; break;
-    }
-    if(GetReverse())
-    {
-        axis_pos = 1.0f - axis_pos;
-    }
+    // Use rotated X coordinate for axis position
+    float axis_pos = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
 
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
     float spatial = 0.55f + 0.45f * (1.0f - radial_norm);

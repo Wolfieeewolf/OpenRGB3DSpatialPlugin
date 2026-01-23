@@ -444,19 +444,16 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     /*---------------------------------------------------------*\
-    | Step 2: Axis-aware UpdateLEDs ordering                  |
-    | Sort controllers along the effect axis to reduce        |
-    | perceived temporal skew between devices.                |
+    | Step 2: Spatial UpdateLEDs ordering                      |
+    | Sort controllers along Y-axis (vertical) to reduce       |
+    | perceived temporal skew between devices.                 |
+    | Note: Effects now use rotation instead of axis selection  |
     \*---------------------------------------------------------*/
 
-    // Select an axis and reverse flag from the first active effect
+    // Use default Y-axis sorting (floor to ceiling)
+    // Effects now use rotation controls instead of axis selection
     EffectAxis sort_axis = AXIS_Y; // default: floor->ceiling (Y-up)
     bool sort_reverse = false;
-    if(!active_effects.empty() && active_effects[0].effect)
-    {
-        sort_axis = active_effects[0].effect->GetAxis();
-        sort_reverse = active_effects[0].effect->GetReverse();
-    }
 
     // Build sortable keys per controller
     std::vector<std::pair<float, unsigned int>> sorted_controllers;

@@ -58,7 +58,7 @@ EffectInfo3D Wipe3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    info.show_axis_control = true;
+    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -140,33 +140,21 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     if(progress > 1.0f) progress = 2.0f - progress;
 
     /*---------------------------------------------------------*\
-    | Calculate position based on selected axis               |
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
     \*---------------------------------------------------------*/
-    float position;
-    switch(effect_axis)
-    {
-        case AXIS_X:  // Left to Right wipe
-            position = rel_x;
-            break;
-        case AXIS_Y:  // Bottom to Top wipe (Y-up)
-            position = rel_y;
-            break;
-        case AXIS_Z:  // Front to Back wipe
-        default:
-            position = rel_z;
-            break;
-        case AXIS_RADIAL:  // Radial wipe from center
-            position = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-            break;
-    }
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+    (void)rot_rel_y;  // Unused - kept for potential future use
+    (void)rot_rel_z;  // Unused - kept for potential future use
 
     /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
+    | Calculate position based on rotated coordinates         |
+    | Wipe moves along rotated X-axis by default              |
     \*---------------------------------------------------------*/
-    if(effect_reverse)
-    {
-        position = -position;
-    }
+    float position = rot_rel_x;
 
     /*---------------------------------------------------------*\
     | Normalize position to 0-1 range                          |
@@ -274,68 +262,43 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     if(progress > 1.0f) progress = 2.0f - progress;
 
     /*---------------------------------------------------------*\
-    | Calculate position based on axis                         |
-    |                                                          |
-    | ROOM-BASED EFFECT: Use absolute world coordinates and   |
-    | normalize by room bounds. This ensures the wipe goes    |
-    | left-to-right in room space regardless of controller     |
-    | rotation.                                                 |
-    |                                                          |
-    | World coordinates (x, y, z) already include rotation,   |
-    | so LEDs are positioned correctly in room space.          |
-    | Normalizing by room bounds gives us room-absolute       |
-    | position [0, 1] from left wall to right wall.            |
+    | Apply rotation transformation to LED position            |
+    | This rotates the effect pattern around the origin       |
     \*---------------------------------------------------------*/
-    
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+    (void)rot_rel_y;  // Unused - kept for potential future use
+    (void)rot_rel_z;  // Unused - kept for potential future use
+
+    /*---------------------------------------------------------*\
+    | Calculate position based on rotated coordinates         |
+    | Wipe moves along rotated X-axis by default              |
+    \*---------------------------------------------------------*/
     float position;
-    switch(effect_axis)
+    // Use rotated X coordinate, normalize by room width
+    // Maps from [grid.min_x, grid.max_x] to [0, 1]
+    if(grid.width > 0.001f)
     {
-        case AXIS_X:  // Left wall to Right wall wipe
-            // Use absolute X coordinate, normalize by room width
-            // Maps from [grid.min_x, grid.max_x] to [0, 1]
-            if(grid.width > 0.001f)
-            {
-                position = (x - grid.min_x) / grid.width;
-            }
-            else
-            {
-                position = 0.0f;
-            }
-            break;
-        case AXIS_Y:  // Floor to Ceiling wipe
-            // Use absolute Y coordinate, normalize by room height
-            // Maps from [grid.min_y, grid.max_y] to [0, 1]
-            if(grid.height > 0.001f)
-            {
-                position = (y - grid.min_y) / grid.height;
-            }
-            else
-            {
-                position = 0.0f;
-            }
-            break;
-        case AXIS_Z:  // Front to Back wipe
-            // Use absolute Z coordinate, normalize by room depth
-            // Maps from [grid.min_z, grid.max_z] to [0, 1]
-            if(grid.depth > 0.001f)
-            {
-                position = (z - grid.min_z) / grid.depth;
-            }
-            else
-            {
-                position = 0.0f;
-            }
-            break;
-        case AXIS_RADIAL:  // Radial wipe from room center
-        default:
-            {
-                // Distance from room center (origin)
-                float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-                // Normalize to room diagonal (maximum possible distance from center)
-                float max_distance = sqrtf(grid.width*grid.width +
-                                         grid.height*grid.height +
-                                         grid.depth*grid.depth) / 2.0f;
-                if(max_distance > 0.001f)
+        position = (rot_rel_x + grid.width * 0.5f) / grid.width;
+    }
+    else
+    {
+        position = 0.0f;
+    }
+    
+    // For radial wipe, use distance from origin
+    // (Uncomment if you want radial option)
+    /*
+    {
+        // Distance from room center (origin)
+        float distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
+        // Normalize to room diagonal (maximum possible distance from center)
+        float max_distance = sqrtf(grid.width*grid.width +
+                                 grid.height*grid.height +
+                                 grid.depth*grid.depth) / 2.0f;
+        if(max_distance > 0.001f)
                 {
                     position = distance / max_distance;
                 }
@@ -344,19 +307,10 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
                     position = 0.0f;
                 }
             }
-            break;
-    }
+    */
     
     // Clamp to valid range [0, 1]
     position = fmaxf(0.0f, fminf(1.0f, position));
-
-    /*---------------------------------------------------------*\
-    | Apply reverse if enabled                                 |
-    \*---------------------------------------------------------*/
-    if(effect_reverse)
-    {
-        position = 1.0f - position;
-    }
 
     // Position is now 0.0-1.0, no need to clamp
     // Calculate wipe edge with thickness
