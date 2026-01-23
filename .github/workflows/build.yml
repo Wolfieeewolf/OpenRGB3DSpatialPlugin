@@ -57,26 +57,3 @@ jobs:
         with:
           name: OpenRGB3DSpatialPlugin-Linux
           path: libOpenRGB3DSpatialPlugin.so
-
-  mirror-to-gitlab:
-    runs-on: ubuntu-latest
-    needs: [build-windows, build-linux]
-    if: github.ref == 'refs/heads/master'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Mirror to GitLab
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-        run: |
-          # Skip if GITLAB_TOKEN is not set
-          if [ -z "$GITLAB_TOKEN" ]; then
-            echo "GITLAB_TOKEN not set, skipping GitLab mirror"
-            exit 0
-          fi
-          
-          git remote add gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
-          git remote set-url gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
-          git push gitlab HEAD:master
