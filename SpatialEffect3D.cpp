@@ -74,7 +74,9 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 
     // Shaping defaults
     intensity_slider = nullptr;
+    intensity_label = nullptr;
     sharpness_slider = nullptr;
+    sharpness_label = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
 }
@@ -194,6 +196,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     intensity_slider->setValue(effect_intensity);
     intensity_slider->setToolTip("Global intensity multiplier (0 = off, 100 = normal, 200 = 2x)");
     intensity_layout->addWidget(intensity_slider);
+    intensity_label = new QLabel(QString::number(effect_intensity));
+    intensity_label->setMinimumWidth(30);
+    intensity_layout->addWidget(intensity_label);
     main_layout->addLayout(intensity_layout);
 
     // Sharpness (gamma-like shaping)
@@ -204,6 +209,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     sharpness_slider->setValue(effect_sharpness);
     sharpness_slider->setToolTip("Edge contrast: lower = softer, higher = crisper (gamma-like)");
     sharpness_layout->addWidget(sharpness_slider);
+    sharpness_label = new QLabel(QString::number(effect_sharpness));
+    sharpness_label->setMinimumWidth(30);
+    sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
 
     // 3D Rotation controls (replaces axis/coverage)
@@ -324,6 +332,14 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
     connect(fps_slider, &QSlider::valueChanged, fps_label, [this](int value) {
         fps_label->setText(QString::number(value));
         effect_fps = value;
+    });
+    connect(intensity_slider, &QSlider::valueChanged, intensity_label, [this](int value) {
+        intensity_label->setText(QString::number(value));
+        effect_intensity = value;
+    });
+    connect(sharpness_slider, &QSlider::valueChanged, sharpness_label, [this](int value) {
+        sharpness_label->setText(QString::number(value));
+        effect_sharpness = value;
     });
 
     if(parent && parent->layout())
@@ -756,7 +772,13 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBCol
     (void)grid;  // Unused - kept for API compatibility
     
     // Apply sharpness (gamma-like), intensity multiplier, and global brightness
-    float intensity_mul = effect_intensity / 100.0f; // 0..2.0
+    // Non-linear intensity curve: 80-90% slider = bright, 90-100% = overkill
+    // Uses power curve: intensity^0.7 * 1.7 gives us:
+    // - 80% (160) = ~1.36x (bright)
+    // - 90% (180) = ~1.47x (bright)
+    // - 100% (200) = ~1.7x (overkill for dialing in)
+    float intensity_normalized = effect_intensity / 200.0f; // 0.0..1.0
+    float intensity_mul = std::pow(intensity_normalized, 0.7f) * 1.7f;
     float brightness_mul = effect_brightness / 100.0f; // 0.01..1.0 (slider min is 1)
     float factor = intensity_mul * brightness_mul;
     if(factor <= 0.0f) return 0x00000000;
@@ -958,10 +980,18 @@ void SpatialEffect3D::OnParameterChanged()
     if(intensity_slider)
     {
         effect_intensity = intensity_slider->value();
+        if(intensity_label)
+        {
+            intensity_label->setText(QString::number(effect_intensity));
+        }
     }
     if(sharpness_slider)
     {
         effect_sharpness = sharpness_slider->value();
+        if(sharpness_label)
+        {
+            sharpness_label->setText(QString::number(effect_sharpness));
+        }
     }
     emit ParametersChanged();
 }

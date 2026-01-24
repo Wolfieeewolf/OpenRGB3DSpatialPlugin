@@ -13,6 +13,7 @@ REGISTER_EFFECT_3D(BreathingSphere3D);
 BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
+    size_label = nullptr;
     sphere_size = 120;   // Larger default for room-scale
     progress = 0.0f;
 
@@ -82,6 +83,9 @@ void BreathingSphere3D::SetupCustomUI(QWidget* parent)
     size_slider->setRange(10, 200);
     size_slider->setValue(sphere_size);
     layout->addWidget(size_slider, 0, 1);
+    size_label = new QLabel(QString::number(sphere_size));
+    size_label->setMinimumWidth(30);
+    layout->addWidget(size_label, 0, 2);
 
     if(parent && parent->layout())
     {
@@ -101,7 +105,11 @@ void BreathingSphere3D::UpdateParams(SpatialEffectParams& params)
 
 void BreathingSphere3D::OnBreathingParameterChanged()
 {
-    if(size_slider) sphere_size = size_slider->value();
+    if(size_slider)
+    {
+        sphere_size = size_slider->value();
+        if(size_label) size_label->setText(QString::number(sphere_size));
+    }
     emit ParametersChanged();
 }
 

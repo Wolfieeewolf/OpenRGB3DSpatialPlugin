@@ -41,6 +41,7 @@ private slots:
 private:
     // UI controls
     QSlider*        intensity_slider;
+    QLabel*         intensity_label;
     QComboBox*      type_combo;           // Explosion type selector
 
     // Explosion-specific parameters (frequency, rainbow, colors handled by base)

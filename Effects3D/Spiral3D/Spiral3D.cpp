@@ -16,8 +16,10 @@ REGISTER_EFFECT_3D(Spiral3D);
 Spiral3D::Spiral3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     arms_slider = nullptr;
+    arms_label = nullptr;
     pattern_combo = nullptr;
     gap_slider = nullptr;
+    gap_label = nullptr;
     num_arms = 3;
     pattern_type = 0;   // Default to Smooth
     gap_size = 30;      // Default gap size
@@ -97,6 +99,9 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     arms_slider->setValue(num_arms);
     arms_slider->setToolTip("Number of spiral arms");
     layout->addWidget(arms_slider, 1, 1);
+    arms_label = new QLabel(QString::number(num_arms));
+    arms_label->setMinimumWidth(30);
+    layout->addWidget(arms_label, 1, 2);
 
     layout->addWidget(new QLabel("Gap Size:"), 2, 0);
     gap_slider = new QSlider(Qt::Horizontal);
@@ -104,6 +109,9 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     gap_slider->setValue(gap_size);
     gap_slider->setToolTip("Gap size between blades");
     layout->addWidget(gap_slider, 2, 1);
+    gap_label = new QLabel(QString::number(gap_size));
+    gap_label->setMinimumWidth(30);
+    layout->addWidget(gap_label, 2, 2);
 
     if(parent && parent->layout())
     {
@@ -112,7 +120,13 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral3D::OnSpiralParameterChanged);
     connect(arms_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
+    connect(arms_slider, &QSlider::valueChanged, arms_label, [this](int value) {
+        arms_label->setText(QString::number(value));
+    });
     connect(gap_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);
+    connect(gap_slider, &QSlider::valueChanged, gap_label, [this](int value) {
+        gap_label->setText(QString::number(value));
+    });
 }
 
 void Spiral3D::UpdateParams(SpatialEffectParams& params)
@@ -123,8 +137,16 @@ void Spiral3D::UpdateParams(SpatialEffectParams& params)
 void Spiral3D::OnSpiralParameterChanged()
 {
     if(pattern_combo) pattern_type = pattern_combo->currentIndex();
-    if(arms_slider) num_arms = arms_slider->value();
-    if(gap_slider) gap_size = gap_slider->value();
+    if(arms_slider)
+    {
+        num_arms = arms_slider->value();
+        if(arms_label) arms_label->setText(QString::number(num_arms));
+    }
+    if(gap_slider)
+    {
+        gap_size = gap_slider->value();
+        if(gap_label) gap_label->setText(QString::number(gap_size));
+    }
     emit ParametersChanged();
 }
 

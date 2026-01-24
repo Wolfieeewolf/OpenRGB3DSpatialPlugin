@@ -18,6 +18,8 @@ Matrix3D::Matrix3D(QWidget* parent) : SpatialEffect3D(parent)
     char_gap_label = nullptr;
     char_variation_slider = nullptr;
     char_variation_label = nullptr;
+    char_spacing_slider = nullptr;
+    char_spacing_label = nullptr;
     density = 60;
     trail = 50;
     char_height = 15;  // Default character height
@@ -47,7 +49,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 15.0f;
+    info.default_speed_scale = 30.0f;  // Increased for better responsiveness (was 15.0f)
     info.default_frequency_scale = 8.0f;
     info.use_size_parameter = true;
 
@@ -135,6 +137,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     connect(char_height_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
     connect(char_gap_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
     connect(char_variation_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
+    connect(char_spacing_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
 }
 
 void Matrix3D::UpdateParams(SpatialEffectParams& params)
@@ -239,7 +242,7 @@ float Matrix3D::ComputeFaceIntensity(int face,
             axis_value = y;  // Code falls along Y
             axis_min = grid.min_y;  // Bottom
             axis_max = grid.max_y;  // Top
-            face_distance = fabsf(y - grid.min_y);
+            face_distance = fabsf(z - grid.min_z);
             break;
         case 3: // Back wall - code falls top to bottom (Y axis)
             u = x;  // Horizontal position along wall
@@ -247,7 +250,7 @@ float Matrix3D::ComputeFaceIntensity(int face,
             axis_value = y;  // Code falls along Y
             axis_min = grid.min_y;  // Bottom
             axis_max = grid.max_y;  // Top
-            face_distance = fabsf(y - grid.max_y);
+            face_distance = fabsf(z - grid.max_z);
             break;
         case 4: // Floor - code moves toward viewer (Z axis, from back to front)
             u = x;  // Horizontal position
@@ -271,12 +274,24 @@ float Matrix3D::ComputeFaceIntensity(int face,
     // Safety check for column_spacing
     if(column_spacing < 0.001f) column_spacing = 0.001f;
     
-    int column_u = (int)floorf(u / column_spacing);
-    int column_v = (int)floorf(v / column_spacing);
-    // Clamp to prevent integer overflow
+    // Validate u and v before division to prevent NaN/Inf issues
+    if(u < -10000.0f || u > 10000.0f) u = 0.0f;
+    if(v < -10000.0f || v > 10000.0f) v = 0.0f;
+    
+    // Calculate column indices with safety checks
+    float col_u_float = u / column_spacing;
+    float col_v_float = v / column_spacing;
+    // Clamp before floorf to prevent overflow
+    col_u_float = fmax(-1000.0f, fmin(1000.0f, col_u_float));
+    col_v_float = fmax(-1000.0f, fmin(1000.0f, col_v_float));
+    
+    int column_u = (int)floorf(col_u_float);
+    int column_v = (int)floorf(col_v_float);
+    // Final clamp to prevent integer overflow
     column_u = (column_u < -1000) ? -1000 : (column_u > 1000 ? 1000 : column_u);
     column_v = (column_v < -1000) ? -1000 : (column_v > 1000 ? 1000 : column_v);
-    int column_id = column_u * 73856093 ^ column_v * 19349663;
+    // Fix operator precedence: use parentheses for clarity and correctness
+    int column_id = (column_u * 73856093) ^ (column_v * 19349663);
 
     float offset = ((column_id & 255) / 255.0f) * 10.0f;
     offset = fmax(0.0f, fmin(10.0f, offset)); // Clamp offset
@@ -296,7 +311,8 @@ float Matrix3D::ComputeFaceIntensity(int face,
     unsigned int safe_char_variation = (local_char_variation <= 100) ? local_char_variation : 60;
     
     // Character height scales with size and user setting
-    float char_height_base = 0.05f + (safe_char_height / 50.0f) * 0.25f; // 0.05 to 0.30 base
+    // Increased base range for better visibility (was 0.05-0.30, now 0.10-0.50)
+    float char_height_base = 0.10f + (safe_char_height / 50.0f) * 0.40f; // 0.10 to 0.50 base
     float char_height_actual = char_height_base * size_normalized;
     
     // Safety check: prevent division by zero and clamp to reasonable range
@@ -324,10 +340,14 @@ float Matrix3D::ComputeFaceIntensity(int face,
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     if(char_spacing_actual > 100.0f) char_spacing_actual = 100.0f; // Reasonable upper limit
     
-    // Wrap time to prevent overflow (similar to BouncingBall3D approach)
-    // Use a large wrap period to maintain continuity
-    float wrapped_time = fmodf(time, 1000.0f);
-    if(wrapped_time < 0.0f) wrapped_time += 1000.0f;
+    // Wrap time to prevent overflow - use a very long period (24 hours) to avoid visible restarts
+    // Safety check: ensure time is valid before fmodf
+    float safe_time_for_wrap = fmax(-1000000.0f, fmin(1000000.0f, time));
+    const float wrap_period = 86400.0f; // 24 hours in seconds
+    float wrapped_time = fmodf(safe_time_for_wrap, wrap_period);
+    if(wrapped_time < 0.0f) wrapped_time += wrap_period;
+    // Final validation
+    if(wrapped_time < 0.0f || wrapped_time >= wrap_period) wrapped_time = 0.0f;
     
     float fall_speed = fmax(0.1f, fmin(100.0f, speed_scale)); // Clamp speed to reasonable range
     float safe_offset = fmax(-100.0f, fmin(100.0f, offset)); // Clamp offset
@@ -385,8 +405,13 @@ float Matrix3D::ComputeFaceIntensity(int face,
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     if(char_spacing_actual > 100.0f) char_spacing_actual = 100.0f;
     
-    stream_pos = fmodf(stream_pos, char_spacing_actual);
-    if(stream_pos < 0.0f) stream_pos += char_spacing_actual;
+    // Validate stream_pos before fmodf to prevent NaN/Inf issues
+    if(stream_pos < -100000.0f || stream_pos > 100000.0f) stream_pos = 0.0f;
+    
+    // Use fabsf to ensure positive value for fmodf, then adjust
+    float abs_stream_pos = fabsf(stream_pos);
+    abs_stream_pos = fmodf(abs_stream_pos, char_spacing_actual);
+    stream_pos = abs_stream_pos;
     // Final clamp
     stream_pos = fmax(0.0f, fmin(char_spacing_actual - 0.0001f, stream_pos));
     
@@ -437,7 +462,9 @@ float Matrix3D::ComputeFaceIntensity(int face,
         
         if(variation_amount > 0.01f)
         {
-            float char_brightness = 0.5f + 0.5f * fmodf((char_seed * 0.1f), 1.0f) * variation_amount;
+            // Safety check for char_seed before fmodf
+            float safe_char_seed = fmax(-1000000.0f, fmin(1000000.0f, char_seed * 0.1f));
+            float char_brightness = 0.5f + 0.5f * fmodf(safe_char_seed, 1.0f) * variation_amount;
             char_brightness = fmax(0.0f, fmin(1.0f, char_brightness)); // Clamp
             intensity *= char_brightness;
         }
@@ -481,7 +508,10 @@ float Matrix3D::ComputeFaceIntensity(int face,
     }
     
     // Add gap variation (some columns have gaps)
-    float gap = fmodf((float)((column_id >> 8) & 1023), 10.0f) / 10.0f;
+    // Safety check: ensure column_id is valid
+    int safe_column_id = column_id;
+    if(safe_column_id < 0) safe_column_id = -safe_column_id; // Make positive
+    float gap = fmodf((float)((safe_column_id >> 8) & 1023), 10.0f) / 10.0f;
     gap = fmax(0.0f, fmin(1.0f, gap)); // Clamp to valid range
     float gap_factor = 0.6f + 0.4f * (gap > 0.3f ? 1.0f : gap * 3.33f);
     gap_factor = fmax(0.0f, fmin(1.0f, gap_factor));
@@ -491,9 +521,15 @@ float Matrix3D::ComputeFaceIntensity(int face,
     // Devices positioned away from room boundaries will still show the Matrix effect
     // Clamp face_distance to prevent expf overflow
     face_distance = fmax(0.0f, fmin(1000.0f, face_distance));
+    // Validate face_distance is not NaN or Inf
+    if(face_distance != face_distance) face_distance = 0.0f; // NaN check
     float exp_arg = -face_distance * 0.5f;
     exp_arg = fmax(-100.0f, fmin(100.0f, exp_arg)); // Clamp exp argument to prevent overflow
+    // Validate exp_arg before expf
+    if(exp_arg != exp_arg) exp_arg = 0.0f; // NaN check
     float face_falloff = 0.3f + 0.7f * expf(exp_arg);
+    // Validate result
+    if(face_falloff != face_falloff || face_falloff < 0.0f) face_falloff = 0.3f; // NaN or negative check
     face_falloff = fmax(0.0f, fmin(1.0f, face_falloff));
     
     // Add ambient glow for whole-room Matrix presence including devices
@@ -503,13 +539,21 @@ float Matrix3D::ComputeFaceIntensity(int face,
     // Apply face falloff and ambient
     intensity = intensity * face_falloff + ambient;
     
+    // Validate intensity is not NaN or Inf before final operations
+    if(intensity != intensity || intensity < -1000.0f || intensity > 1000.0f)
+    {
+        intensity = 0.0f; // Reset to safe value if invalid
+    }
+    
     // Clamp intensity to valid range before final operations
     intensity = fmax(0.0f, fmin(10.0f, intensity));
     
-    // Increase brightness by 60% (multiply by 1.6)
-    intensity *= 1.6f;
+    // Increase brightness multiplier for better visibility (was 1.6, now 2.0)
+    intensity *= 2.0f;
     
-    // Final clamp to 0-1 range
+    // Final validation and clamp to 0-1 range
+    if(intensity != intensity || intensity < 0.0f) intensity = 0.0f;
+    if(intensity > 1.0f) intensity = 1.0f;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
     return intensity;
 }
@@ -553,6 +597,7 @@ nlohmann::json Matrix3D::SaveSettings() const
     j["char_height"] = char_height;
     j["char_gap"] = char_gap;
     j["char_variation"] = char_variation;
+    j["char_spacing"] = char_spacing;
     return j;
 }
 

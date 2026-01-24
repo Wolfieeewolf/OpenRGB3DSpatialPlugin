@@ -8,22 +8,59 @@ REGISTER_EFFECT_3D(BouncingBall3D);
 
 namespace
 {
-float ReflectPosition(float p0, float velocity, float time_value, float min_value, float max_value)
+// Calculate ball position with proper gravity-based bouncing physics
+// Returns position and velocity after bouncing
+void CalculateBouncingBall(float& pos_x, float& pos_y, float& pos_z,
+                          float& vel_x, float& vel_y, float& vel_z,
+                          float dt, float gravity, float elasticity,
+                          float xmin, float xmax, float ymin, float ymax, float zmin, float zmax)
 {
-    float length = max_value - min_value;
-    if(length <= 0.0001f)
+    // Apply gravity to Y velocity
+    vel_y -= gravity * dt;
+    
+    // Update positions
+    pos_x += vel_x * dt;
+    pos_y += vel_y * dt;
+    pos_z += vel_z * dt;
+    
+    // Bounce off walls with energy loss (elasticity)
+    if(pos_x <= xmin)
     {
-        return min_value;
+        pos_x = xmin;
+        vel_x = -vel_x * elasticity;
     }
-
-    float relative = (p0 - min_value) + velocity * time_value;
-    float double_length = 2.0f * length;
-    float wrapped = fmodf(relative, double_length);
-    if(wrapped < 0.0f)
+    else if(pos_x >= xmax)
     {
-        wrapped += double_length;
+        pos_x = xmax;
+        vel_x = -vel_x * elasticity;
     }
-    return (wrapped <= length) ? (min_value + wrapped) : (max_value - (wrapped - length));
+    
+    if(pos_y <= ymin)
+    {
+        pos_y = ymin;
+        vel_y = -vel_y * elasticity;
+        // Prevent getting stuck on floor
+        if(fabsf(vel_y) < 0.01f && pos_y <= ymin + 0.01f)
+        {
+            vel_y = 0.5f; // Small upward push
+        }
+    }
+    else if(pos_y >= ymax)
+    {
+        pos_y = ymax;
+        vel_y = -vel_y * elasticity;
+    }
+    
+    if(pos_z <= zmin)
+    {
+        pos_z = zmin;
+        vel_z = -vel_z * elasticity;
+    }
+    else if(pos_z >= zmax)
+    {
+        pos_z = zmax;
+        vel_z = -vel_z * elasticity;
+    }
 }
 
 float HashFloat01(unsigned int seed)
@@ -41,8 +78,11 @@ float HashFloat01(unsigned int seed)
 BouncingBall3D::BouncingBall3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
+    size_label = nullptr;
     elasticity_slider = nullptr;
+    elasticity_label = nullptr;
     count_slider = nullptr;
+    count_label = nullptr;
     ball_size = 40;
     elasticity = 70;
     ball_count = 1;
@@ -98,6 +138,9 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     size_slider->setValue(ball_size);
     size_slider->setToolTip("Ball radius (room-aware)");
     layout->addWidget(size_slider, 0, 1);
+    size_label = new QLabel(QString::number(ball_size));
+    size_label->setMinimumWidth(30);
+    layout->addWidget(size_label, 0, 2);
 
     layout->addWidget(new QLabel("Elasticity:"), 1, 0);
     elasticity_slider = new QSlider(Qt::Horizontal);
@@ -105,6 +148,9 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     elasticity_slider->setValue(elasticity);
     elasticity_slider->setToolTip("Bounce elasticity (higher = higher bounces)");
     layout->addWidget(elasticity_slider, 1, 1);
+    elasticity_label = new QLabel(QString::number(elasticity));
+    elasticity_label->setMinimumWidth(30);
+    layout->addWidget(elasticity_label, 1, 2);
 
     layout->addWidget(new QLabel("Balls:"), 2, 0);
     count_slider = new QSlider(Qt::Horizontal);
@@ -112,6 +158,9 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     count_slider->setValue(ball_count);
     count_slider->setToolTip("Number of balls (1..50)");
     layout->addWidget(count_slider, 2, 1);
+    count_label = new QLabel(QString::number(ball_count));
+    count_label->setMinimumWidth(30);
+    layout->addWidget(count_label, 2, 2);
 
     if(parent && parent->layout()) parent->layout()->addWidget(w);
 
@@ -127,9 +176,21 @@ void BouncingBall3D::UpdateParams(SpatialEffectParams& params)
 
 void BouncingBall3D::OnBallParameterChanged()
 {
-    if(size_slider) ball_size = size_slider->value();
-    if(elasticity_slider) elasticity = elasticity_slider->value();
-    if(count_slider) ball_count = count_slider->value();
+    if(size_slider)
+    {
+        ball_size = size_slider->value();
+        if(size_label) size_label->setText(QString::number(ball_size));
+    }
+    if(elasticity_slider)
+    {
+        elasticity = elasticity_slider->value();
+        if(elasticity_label) elasticity_label->setText(QString::number(elasticity));
+    }
+    if(count_slider)
+    {
+        ball_count = count_slider->value();
+        if(count_label) count_label->setText(QString::number(ball_count));
+    }
     emit ParametersChanged();
 }
 
@@ -140,16 +201,16 @@ RGBColor BouncingBall3D::CalculateColor(float, float, float, float)
 
 RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-
-    // Multi-ball elastic reflections off room bounds (all axes)
+    // Multi-ball physics-based bouncing with gravity
     float speed = GetScaledSpeed();
-    float e = fmax(0.1f, elasticity / 100.0f); // 0.1..1.0
+    float e = fmax(0.1f, elasticity / 100.0f); // 0.1..1.0 elasticity (energy retention)
 
     // Ball radius scales with room size for visibility across any room
     float size_m = GetNormalizedSize();
     float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
     float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
+    // Bounding box with ball radius padding
     float xmin = grid.min_x + R;
     float xmax = grid.max_x - R;
     float ymin = grid.min_y + R;
@@ -157,31 +218,58 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float zmin = grid.min_z + R;
     float zmax = grid.max_z - R;
 
+    // Gravity strength (scales with room size and speed)
+    float gravity = room_avg * 0.8f * (0.3f + speed * 0.02f);
+
     float max_intensity = 0.0f;
     float hue_for_max = 120.0f; // matrix-green base hue
 
     unsigned int N = ball_count == 0 ? 1u : ball_count;
     for(unsigned int k = 0; k < N; k++)
     {
-        // Initial positions pseudo-random within room
+        // Initial positions pseudo-random within room (start higher up for better bouncing)
         float p0x = xmin + HashFloat01(k * 131U) * (xmax - xmin);
-        float p0y = ymin + HashFloat01(k * 313U) * (ymax - ymin);
+        float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f; // Start in upper half
         float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
 
-        // Velocity direction (unit-ish), speed factor scales with speed and elasticity
-        float ax = HashFloat01(k * 733U) * 2.0f - 1.0f;
-        float ay = HashFloat01(k * 577U) * 2.0f - 1.0f;
-        float az = HashFloat01(k * 829U) * 2.0f - 1.0f;
-        float norm = sqrtf(ax*ax + ay*ay + az*az);
-        if(norm < 0.0001f) norm = 1.0f;
-        ax /= norm; ay /= norm; az /= norm;
-        float base_speed = 0.5f + 1.5f * HashFloat01(k * 997U);
-        float vmag = base_speed * (0.2f + speed * 0.03f) * (0.6f + 0.8f * e);
+        // Initial velocity - mostly horizontal with some upward component
+        float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
+        float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f); // Upward initial velocity
+        float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
 
-        // Position at time with elastic reflections
-        float bx = ReflectPosition(p0x, ax * vmag, time, xmin, xmax);
-        float by = ReflectPosition(p0y, ay * vmag, time, ymin, ymax);
-        float bz = ReflectPosition(p0z, az * vmag, time, zmin, zmax);
+        // Simulate physics step-by-step to current time
+        // Wrap time to prevent simulation cutoff (keeps ball moving indefinitely)
+        // Use a 20-second cycle to keep simulation bounded while maintaining motion
+        float wrapped_time = fmodf(time, 20.0f);
+        
+        float pos_x = p0x;
+        float pos_y = p0y;
+        float pos_z = p0z;
+        float vel_x = v0x;
+        float vel_y = v0y;
+        float vel_z = v0z;
+
+        // Time step - balance between accuracy and performance
+        float dt = 0.08f;
+        float sim_time = 0.0f;
+        int max_steps = (int)(wrapped_time / dt) + 1;
+        // With wrapped time, max_steps is always <= 250 (20s / 0.08s), limit for safety
+        if(max_steps > 250) max_steps = 250;
+
+        // Run physics simulation
+        for(int step = 0; step < max_steps && sim_time < wrapped_time; step++)
+        {
+            float step_dt = fminf(dt, wrapped_time - sim_time);
+            CalculateBouncingBall(pos_x, pos_y, pos_z, vel_x, vel_y, vel_z,
+                                step_dt, gravity, e,
+                                xmin, xmax, ymin, ymax, zmin, zmax);
+            sim_time += step_dt;
+        }
+
+        // Final ball position
+        float bx = pos_x;
+        float by = pos_y;
+        float bz = pos_z;
 
         // Distance from LED to ball center
         float dx = (x - bx);
@@ -189,18 +277,27 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
         float dz = (z - bz);
         float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-        // Enhanced glow with core and outer glow layers for immersive effect
-        float core_glow = fmax(0.0f, 1.0f - dist / (R * 0.7f + 0.001f));
-        float outer_glow = 0.5f * fmax(0.0f, 1.0f - dist / (R * 1.5f + 0.001f));
-        float intensity = powf(core_glow, 1.1f) + outer_glow;
-        // Ensure minimum visibility for whole-room presence
-        if(intensity < 0.03f && dist <= R * 1.8f) intensity = 0.03f;
+        // Enhanced glow with larger, brighter particles for sparse LEDs
+        // Make balls more visible on disconnected LED strips
+        float core_radius = R * 0.8f; // Larger core
+        float glow_radius = R * 2.0f; // Much larger glow for sparse LEDs
+        float core_glow = fmax(0.0f, 1.0f - dist / (core_radius + 0.001f));
+        float outer_glow = 0.7f * fmax(0.0f, 1.0f - dist / (glow_radius + 0.001f)); // Brighter outer glow
+        float intensity = powf(core_glow, 0.9f) + outer_glow; // Softer core falloff
+        // Ensure minimum visibility for whole-room presence on sparse LEDs
+        if(intensity < 0.05f && dist <= glow_radius) intensity = 0.05f;
+        
+        // Increase brightness by 60% (multiply by 1.6)
+        intensity *= 1.6f;
 
+        // Clamp intensity before comparison
+        intensity = fmax(0.0f, fmin(1.0f, intensity));
+        
         if(intensity > max_intensity)
         {
             max_intensity = intensity;
             // Hue per-ball from velocity direction/time
-            float hue = fmodf((atan2f(az, ax) * 57.2958f) + time * 20.0f, 360.0f);
+            float hue = fmodf((atan2f(vel_z, vel_x) * 57.2958f) + time * 20.0f, 360.0f);
             hue_for_max = hue;
         }
     }

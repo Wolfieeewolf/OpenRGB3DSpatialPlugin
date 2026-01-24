@@ -10,6 +10,7 @@ REGISTER_EFFECT_3D(Explosion3D);
 Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     intensity_slider = nullptr;
+    intensity_label = nullptr;
     type_combo = nullptr;
     explosion_intensity = 75;
     progress = 0.0f;
@@ -75,6 +76,9 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     intensity_slider->setValue(explosion_intensity);
     intensity_slider->setToolTip("Explosion energy (affects radius and wave thickness)");
     layout->addWidget(intensity_slider, 0, 1);
+    intensity_label = new QLabel(QString::number(explosion_intensity));
+    intensity_label->setMinimumWidth(30);
+    layout->addWidget(intensity_label, 0, 2);
 
     layout->addWidget(new QLabel("Type:"), 1, 0);
     type_combo = new QComboBox();
@@ -93,6 +97,9 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     }
 
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
+    connect(intensity_slider, &QSlider::valueChanged, intensity_label, [this](int value) {
+        intensity_label->setText(QString::number(value));
+    });
     connect(type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Explosion3D::OnExplosionParameterChanged);
 }
 
@@ -103,7 +110,11 @@ void Explosion3D::UpdateParams(SpatialEffectParams& params)
 
 void Explosion3D::OnExplosionParameterChanged()
 {
-    if(intensity_slider) explosion_intensity = intensity_slider->value();
+    if(intensity_slider)
+    {
+        explosion_intensity = intensity_slider->value();
+        if(intensity_label) intensity_label->setText(QString::number(explosion_intensity));
+    }
     if(type_combo) explosion_type = type_combo->currentIndex();
     emit ParametersChanged();
 }

@@ -36,7 +36,9 @@ private slots:
 
 private:
     QSlider* core_radius_slider;
+    QLabel* core_radius_label;
     QSlider* height_slider;
+    QLabel* height_label;
     unsigned int core_radius; // 10..300 grid units * 0.01
     unsigned int tornado_height; // 50..500 grid units * 0.01
 };

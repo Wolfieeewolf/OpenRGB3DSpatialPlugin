@@ -92,9 +92,13 @@ private:
         QGroupBox* group_box;
         QCheckBox* enabled_check;
         QSlider* scale_slider;
+        QLabel* scale_label;
         QSlider* softness_slider;
+        QLabel* softness_label;
         QSlider* blend_slider;
+        QLabel* blend_label;
         QSlider* edge_zone_slider;
+        QLabel* edge_zone_label;
         QComboBox* ref_point_combo;
 
         MonitorSettings()
@@ -107,9 +111,13 @@ private:
             , group_box(nullptr)
             , enabled_check(nullptr)
             , scale_slider(nullptr)
+            , scale_label(nullptr)
             , softness_slider(nullptr)
+            , softness_label(nullptr)
             , blend_slider(nullptr)
+            , blend_label(nullptr)
             , edge_zone_slider(nullptr)
+            , edge_zone_label(nullptr)
             , ref_point_combo(nullptr)
         {}
     };
@@ -118,10 +126,15 @@ private:
     | UI Controls                                              |
     \*---------------------------------------------------------*/
     QSlider*            global_scale_slider;
+    QLabel*             global_scale_label;
     QSlider*            smoothing_time_slider;
+    QLabel*             smoothing_time_label;
     QSlider*            brightness_slider;
+    QLabel*             brightness_label;
     QSlider*            propagation_speed_slider;
+    QLabel*             propagation_speed_label;
     QSlider*            wave_decay_slider;
+    QLabel*             wave_decay_label;
     QCheckBox*          test_pattern_check;
     QCheckBox*          screen_preview_check;
     QCheckBox*          global_scale_invert_check;

@@ -48,6 +48,7 @@ private:
     | DNA-specific controls                                    |
     \*---------------------------------------------------------*/
     QSlider*        radius_slider;
+    QLabel*         radius_label;
 
     /*---------------------------------------------------------*\
     | DNA-specific parameters                                  |

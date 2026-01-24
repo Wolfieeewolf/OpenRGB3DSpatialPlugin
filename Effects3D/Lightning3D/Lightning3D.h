@@ -36,9 +36,11 @@ private slots:
 
 private:
     QSlider*        strike_rate_slider;
+    QLabel*         strike_rate_label;
     QSlider*        branch_slider;
-    unsigned int    strike_rate;   // strikes per minute approx.
-    unsigned int    branches;      // visual branching factor
+    QLabel*         branch_label;
+    unsigned int    strike_rate;   // arches per second
+    unsigned int    branches;      // number of simultaneous arches
 };
 
 #endif

@@ -9,7 +9,9 @@ REGISTER_EFFECT_3D(Rain3D);
 Rain3D::Rain3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     density_slider = nullptr;
+    density_label = nullptr;
     wind_slider = nullptr;
+    wind_label = nullptr;
     rain_density = 50;
     wind = 0;
 
@@ -71,6 +73,9 @@ void Rain3D::SetupCustomUI(QWidget* parent)
     density_slider->setValue(rain_density);
     density_slider->setToolTip("Rain density (higher = more drops)");
     layout->addWidget(density_slider, 0, 1);
+    density_label = new QLabel(QString::number(rain_density));
+    density_label->setMinimumWidth(30);
+    layout->addWidget(density_label, 0, 2);
 
     layout->addWidget(new QLabel("Wind:"), 1, 0);
     wind_slider = new QSlider(Qt::Horizontal);
@@ -78,6 +83,9 @@ void Rain3D::SetupCustomUI(QWidget* parent)
     wind_slider->setValue(wind);
     wind_slider->setToolTip("Wind drift (left/right)");
     layout->addWidget(wind_slider, 1, 1);
+    wind_label = new QLabel(QString::number(wind));
+    wind_label->setMinimumWidth(30);
+    layout->addWidget(wind_label, 1, 2);
 
     if(parent && parent->layout())
     {
@@ -95,8 +103,16 @@ void Rain3D::UpdateParams(SpatialEffectParams& params)
 
 void Rain3D::OnRainParameterChanged()
 {
-    if(density_slider) rain_density = density_slider->value();
-    if(wind_slider) wind = wind_slider->value();
+    if(density_slider)
+    {
+        rain_density = density_slider->value();
+        if(density_label) density_label->setText(QString::number(rain_density));
+    }
+    if(wind_slider)
+    {
+        wind = wind_slider->value();
+        if(wind_label) wind_label->setText(QString::number(wind));
+    }
     emit ParametersChanged();
 }
 
@@ -116,97 +132,117 @@ RGBColor Rain3D::CalculateColor(float, float, float, float)
 RGBColor Rain3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
-
     float speed = GetScaledSpeed();
-    float freq = GetScaledFrequency();
     float size_m = GetNormalizedSize();
-
-    // Map density (5..100) to drop spacing; higher density => smaller spacing
-    float base_spacing = 2.0f + (100.0f - rain_density) * 0.06f; // ~2..8 grid units
-
-    // Lateral wind drift (X/Z) in grid units per second
-    float wind_drift = (float)wind * 0.02f;
-
-    // Compute LED-relative coords from origin (room center/user)
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    | Rain falls along rotated Y-axis by default              |
-    \*---------------------------------------------------------*/
+    
+    // Apply rotation - rain falls along rotated Y-axis
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
-
-    // Rain falls along rotated Y-axis (vertical after rotation)
-    float fall_axis = rot_rel_y;
-    float lat1 = rot_rel_x;
-    float lat2 = rot_rel_z;
-
-    // Normalize world to grid spacing bands
-    float fall = time * speed * 0.5f; // fall speed factor
-    float drop_phase = fall_axis + fall;  // falling along chosen axis
-
-    // Wrap phase by spacing to create repeating drop fronts
-    float band = fmodf(drop_phase, base_spacing);
-    if(band < 0) band += base_spacing;
-
-    // Distance to the center of the drop band
-    float band_center = base_spacing * 0.25f; // highlight position
-    float band_dist = fabsf(band - band_center);
-
-    // Lateral modulation: create streaks with wind
-    float lateral = fmodf(lat1 + lat2 * 0.5f + time * wind_drift, base_spacing);
-    if(lateral < 0) lateral += base_spacing;
-    float lateral_center = base_spacing * 0.15f;
-    float lateral_dist = fabsf(lateral - lateral_center);
-
-    // Enhanced drop intensity with glow for more immersive rain
-    float band_core = fmax(0.0f, 1.0f - (band_dist / (0.25f * size_m + 0.12f)));
-    float band_glow = 0.4f * fmax(0.0f, 1.0f - (band_dist / (0.5f * size_m + 0.25f)));
-    float band_intensity = fmin(1.0f, band_core + band_glow);
     
-    float lateral_core = fmax(0.0f, 1.0f - (lateral_dist / (0.3f * size_m + 0.15f)));
-    float lateral_glow = 0.3f * fmax(0.0f, 1.0f - (lateral_dist / (0.6f * size_m + 0.3f)));
-    float lateral_intensity = fmin(1.0f, lateral_core + lateral_glow);
+    // Wind drift in rotated space
+    float wind_drift = (float)wind * 0.02f;
     
-    float intensity = band_intensity * lateral_intensity;
+    // Generate discrete drops deterministically based on time
+    // Number of drops scales with density
+    int num_drops = 5 + (rain_density * 15) / 100; // 5-20 drops
+    float max_intensity = 0.0f;
+    RGBColor drop_color = GetRainbowMode() ? GetRainbowColor(200.0f) : GetColorAtPosition(0.5f);
     
-    // Add subtle ambient rain for whole-room presence
-    float ambient_rain = 0.12f * (1.0f - fabs(band - band_center) / base_spacing);
-    ambient_rain = fmax(0.0f, ambient_rain);
-    intensity = fmin(1.0f, intensity + ambient_rain);
-
-    // Enhanced depth fade - softer for better whole-room feel
-    float room_radius = sqrt((grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height)) * 0.5f;
-    float dist_from_center = sqrt(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    float depth_fade = fmax(0.5f, 1.0f - dist_from_center / (room_radius * 1.2f + 0.001f));
-    intensity *= depth_fade;
-
-    intensity = fmax(0.0f, fmin(1.0f, intensity));
-
-    RGBColor final_color;
-    if(GetRainbowMode())
+    // Room dimensions for drop generation
+    float room_width = grid.width;
+    float room_height = grid.height;
+    float room_depth = grid.depth;
+    
+    // Drop size scales with room and size parameter
+    float drop_size = (room_width + room_depth + room_height) / 3.0f * (0.01f + 0.03f * size_m);
+    float trail_length = drop_size * 1.5f; // Trail behind drop
+    
+    // Fall speed
+    float fall_speed = speed * 0.5f;
+    
+    for(int i = 0; i < num_drops; i++)
     {
-        float hue = 200.0f + freq * 3.0f + band * 30.0f; // cool blues by default
-        final_color = GetRainbowColor(hue);
+        // Deterministic drop generation based on time and index
+        // Each drop has a unique seed
+        float drop_seed = (float)(i * 131 + 313);
+        float drop_x_seed = hash31((int)(drop_seed * 733), 0, 0);
+        float drop_z_seed = hash31((int)(drop_seed * 919), 0, 0);
+        float speed_mult = 0.8f + drop_x_seed * 0.4f; // Vary drop speeds
+        
+        // Initial X/Z position (spread across room)
+        float drop_x = -room_width * 0.5f + drop_x_seed * room_width;
+        float drop_z = -room_depth * 0.5f + drop_z_seed * room_depth;
+        
+        // Apply wind drift
+        drop_x += time * wind_drift;
+        
+        // Y position - drops fall from top
+        float drop_y_start = room_height * 0.5f;
+        float drop_y = drop_y_start - (time * fall_speed * speed_mult);
+        
+        // Wrap drops that fall below room
+        float wrap_height = room_height + drop_size * 2.0f;
+        drop_y = fmodf(drop_y + wrap_height, wrap_height) - wrap_height * 0.5f;
+        
+        // Distance from LED to drop center (in rotated space)
+        float dx = rot_rel_x - drop_x;
+        float dy = rot_rel_y - drop_y;
+        float dz = rot_rel_z - drop_z;
+        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+        
+        // Check if LED is in drop's trail (behind the drop)
+        float dist_along_fall = dy; // Positive = below drop, negative = above
+        float dist_lateral = sqrtf(dx*dx + dz*dz);
+        
+        float intensity = 0.0f;
+        
+        // Drop head (bright core)
+        if(dist < drop_size && dist_along_fall > -drop_size * 0.3f)
+        {
+            float head_dist = dist / drop_size;
+            intensity = fmax(intensity, 1.0f - head_dist);
+        }
+        
+        // Drop body (main trail)
+        if(dist_along_fall >= 0 && dist_along_fall <= trail_length && dist_lateral < drop_size)
+        {
+            float body_dist = dist_lateral / drop_size;
+            float trail_fade = 1.0f - (dist_along_fall / trail_length);
+            intensity = fmax(intensity, (1.0f - body_dist) * trail_fade * 0.8f);
+        }
+        
+        // Glow around drop
+        if(dist < drop_size * 2.0f)
+        {
+            float glow_dist = dist / (drop_size * 2.0f);
+            intensity = fmax(intensity, (1.0f - glow_dist) * 0.3f);
+        }
+        
+        if(intensity > max_intensity)
+        {
+            max_intensity = intensity;
+            // Vary drop color slightly
+            if(GetRainbowMode())
+            {
+                float hue = 200.0f + drop_x_seed * 60.0f + time * 5.0f;
+                drop_color = GetRainbowColor(hue);
+            }
+        }
     }
-    else
-    {
-        final_color = GetColorAtPosition(0.6f + 0.4f * intensity);
-    }
+    
+    // Increase brightness by 60% (multiply by 1.6)
+    max_intensity *= 1.6f;
+    max_intensity = fmax(0.0f, fmin(1.0f, max_intensity));
 
-    unsigned char r = final_color & 0xFF;
-    unsigned char g = (final_color >> 8) & 0xFF;
-    unsigned char b = (final_color >> 16) & 0xFF;
+    unsigned char r = drop_color & 0xFF;
+    unsigned char g = (drop_color >> 8) & 0xFF;
+    unsigned char b = (drop_color >> 16) & 0xFF;
     // Apply intensity (global brightness is applied by PostProcessColorGrid)
-    r = (unsigned char)(r * intensity);
-    g = (unsigned char)(g * intensity);
-    b = (unsigned char)(b * intensity);
+    r = (unsigned char)(r * max_intensity);
+    g = (unsigned char)(g * max_intensity);
+    b = (unsigned char)(b * max_intensity);
     return (b << 16) | (g << 8) | r;
 }
 

@@ -42,6 +42,7 @@ private slots:
 private:
     // Wipe-specific controls
     QSlider*        thickness_slider;
+    QLabel*         thickness_label;
     QComboBox*      shape_combo;
 
     // Wipe-specific parameters

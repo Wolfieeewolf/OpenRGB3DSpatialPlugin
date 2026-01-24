@@ -9,6 +9,7 @@ REGISTER_EFFECT_3D(Wipe3D);
 Wipe3D::Wipe3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     thickness_slider = nullptr;
+    thickness_label = nullptr;
     shape_combo = nullptr;
     wipe_thickness = 20;     // Default thickness
     edge_shape = 0;          // Default to round edges
@@ -77,6 +78,9 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
     thickness_slider->setValue(wipe_thickness);
     thickness_slider->setToolTip("Wipe edge thickness (higher = wider edge)");
     layout->addWidget(thickness_slider, 0, 1);
+    thickness_label = new QLabel(QString::number(wipe_thickness));
+    thickness_label->setMinimumWidth(30);
+    layout->addWidget(thickness_label, 0, 2);
 
     layout->addWidget(new QLabel("Edge Shape:"), 1, 0);
     shape_combo = new QComboBox();
@@ -94,6 +98,9 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
 
     // Connect signals
     connect(thickness_slider, &QSlider::valueChanged, this, &Wipe3D::OnWipeParameterChanged);
+    connect(thickness_slider, &QSlider::valueChanged, thickness_label, [this](int value) {
+        thickness_label->setText(QString::number(value));
+    });
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &Wipe3D::OnWipeParameterChanged);
 }
@@ -105,7 +112,11 @@ void Wipe3D::UpdateParams(SpatialEffectParams& params)
 
 void Wipe3D::OnWipeParameterChanged()
 {
-    if(thickness_slider) wipe_thickness = thickness_slider->value();
+    if(thickness_slider)
+    {
+        wipe_thickness = thickness_slider->value();
+        if(thickness_label) thickness_label->setText(QString::number(wipe_thickness));
+    }
     if(shape_combo) edge_shape = shape_combo->currentIndex();
     emit ParametersChanged();
 }

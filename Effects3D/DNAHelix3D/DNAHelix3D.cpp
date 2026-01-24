@@ -13,6 +13,7 @@ REGISTER_EFFECT_3D(DNAHelix3D);
 DNAHelix3D::DNAHelix3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     radius_slider = nullptr;
+    radius_label = nullptr;
     helix_radius = 180;      // Larger default helix radius for room-scale
     progress = 0.0f;
 
@@ -86,6 +87,9 @@ void DNAHelix3D::SetupCustomUI(QWidget* parent)
     radius_slider->setRange(20, 150);
     radius_slider->setValue(helix_radius);
     layout->addWidget(radius_slider, 0, 1);
+    radius_label = new QLabel(QString::number(helix_radius));
+    radius_label->setMinimumWidth(30);
+    layout->addWidget(radius_label, 0, 2);
 
     if(parent && parent->layout())
     {
@@ -103,7 +107,11 @@ void DNAHelix3D::UpdateParams(SpatialEffectParams& params)
 
 void DNAHelix3D::OnDNAParameterChanged()
 {
-    if(radius_slider) helix_radius = radius_slider->value();
+    if(radius_slider)
+    {
+        helix_radius = radius_slider->value();
+        if(radius_label) radius_label->setText(QString::number(helix_radius));
+    }
     emit ParametersChanged();
 }
 

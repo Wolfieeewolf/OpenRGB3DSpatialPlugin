@@ -36,7 +36,9 @@ private slots:
 
 private:
     QSlider*        density_slider;
+    QLabel*         density_label;
     QSlider*        wind_slider;
+    QLabel*         wind_label;
     unsigned int    rain_density;    // 1-100 (drops per area)
     int             wind;            // -50..50 lateral drift
 };

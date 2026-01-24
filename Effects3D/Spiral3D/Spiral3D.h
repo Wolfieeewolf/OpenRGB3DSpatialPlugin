@@ -49,8 +49,10 @@ private:
     | Spiral-specific controls                                 |
     \*---------------------------------------------------------*/
     QSlider*        arms_slider;
+    QLabel*         arms_label;
     QComboBox*      pattern_combo;
     QSlider*        gap_slider;
+    QLabel*         gap_label;
 
     /*---------------------------------------------------------*\
     | Spiral-specific parameters                               |

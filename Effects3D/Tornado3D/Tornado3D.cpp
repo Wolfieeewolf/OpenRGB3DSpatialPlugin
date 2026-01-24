@@ -9,7 +9,9 @@ REGISTER_EFFECT_3D(Tornado3D);
 Tornado3D::Tornado3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     core_radius_slider = nullptr;
+    core_radius_label = nullptr;
     height_slider = nullptr;
+    height_label = nullptr;
     core_radius = 80;
     tornado_height = 250;
     SetRainbowMode(true);
@@ -68,6 +70,9 @@ void Tornado3D::SetupCustomUI(QWidget* parent)
     core_radius_slider->setValue(core_radius);
     core_radius_slider->setToolTip("Tornado core radius (affects base funnel size)");
     layout->addWidget(core_radius_slider, 0, 1);
+    core_radius_label = new QLabel(QString::number(core_radius));
+    core_radius_label->setMinimumWidth(30);
+    layout->addWidget(core_radius_label, 0, 2);
 
     layout->addWidget(new QLabel("Height:"), 1, 0);
     height_slider = new QSlider(Qt::Horizontal);
@@ -75,6 +80,9 @@ void Tornado3D::SetupCustomUI(QWidget* parent)
     height_slider->setValue(tornado_height);
     height_slider->setToolTip("Tornado height (relative to room height)");
     layout->addWidget(height_slider, 1, 1);
+    height_label = new QLabel(QString::number(tornado_height));
+    height_label->setMinimumWidth(30);
+    layout->addWidget(height_label, 1, 2);
 
     if(parent && parent->layout())
     {
@@ -82,7 +90,13 @@ void Tornado3D::SetupCustomUI(QWidget* parent)
     }
 
     connect(core_radius_slider, &QSlider::valueChanged, this, &Tornado3D::OnTornadoParameterChanged);
+    connect(core_radius_slider, &QSlider::valueChanged, core_radius_label, [this](int value) {
+        core_radius_label->setText(QString::number(value));
+    });
     connect(height_slider, &QSlider::valueChanged, this, &Tornado3D::OnTornadoParameterChanged);
+    connect(height_slider, &QSlider::valueChanged, height_label, [this](int value) {
+        height_label->setText(QString::number(value));
+    });
 }
 
 void Tornado3D::UpdateParams(SpatialEffectParams& params)
@@ -92,8 +106,16 @@ void Tornado3D::UpdateParams(SpatialEffectParams& params)
 
 void Tornado3D::OnTornadoParameterChanged()
 {
-    if(core_radius_slider) core_radius = core_radius_slider->value();
-    if(height_slider) tornado_height = height_slider->value();
+    if(core_radius_slider)
+    {
+        core_radius = core_radius_slider->value();
+        if(core_radius_label) core_radius_label->setText(QString::number(core_radius));
+    }
+    if(height_slider)
+    {
+        tornado_height = height_slider->value();
+        if(height_label) height_label->setText(QString::number(tornado_height));
+    }
     emit ParametersChanged();
 }
 

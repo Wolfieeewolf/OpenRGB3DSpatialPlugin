@@ -218,7 +218,9 @@ protected:
 
     // Shaping controls
     QSlider*            intensity_slider;     // 0..200 (100 = neutral)
+    QLabel*             intensity_label;
     QSlider*            sharpness_slider;     // 0..200 (100 = neutral)
+    QLabel*             sharpness_label;
 
     // 3D Rotation controls (replaces axis/coverage)
     QSlider*            rotation_yaw_slider;   // 0-360 degrees, horizontal rotation

@@ -49,6 +49,7 @@ private:
     | Spin-specific controls                                   |
     \*---------------------------------------------------------*/
     QSlider*        arms_slider;        // Number of spinning arms
+    QLabel*         arms_label;
 
     /*---------------------------------------------------------*\
     | Spin-specific parameters                                 |

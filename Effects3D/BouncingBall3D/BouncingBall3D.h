@@ -36,8 +36,11 @@ private slots:
 
 private:
     QSlider* size_slider;
+    QLabel* size_label;
     QSlider* elasticity_slider;
+    QLabel* elasticity_label;
     QSlider* count_slider;
+    QLabel* count_label;
     unsigned int ball_size;   // radius factor
     unsigned int elasticity;  // 10..100
     unsigned int ball_count;  // number of balls (1..50)

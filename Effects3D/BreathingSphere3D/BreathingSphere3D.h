@@ -48,6 +48,7 @@ private:
     | Breathing-specific controls                              |
     \*---------------------------------------------------------*/
     QSlider*        size_slider;
+    QLabel*         size_label;
 
     /*---------------------------------------------------------*\
     | Breathing-specific parameters                            |

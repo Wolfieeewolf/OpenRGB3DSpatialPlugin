@@ -31,10 +31,15 @@ REGISTER_EFFECT_3D(ScreenMirror3D);
 ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     : SpatialEffect3D(parent)
     , global_scale_slider(nullptr)
+    , global_scale_label(nullptr)
     , smoothing_time_slider(nullptr)
+    , smoothing_time_label(nullptr)
     , brightness_slider(nullptr)
+    , brightness_label(nullptr)
     , propagation_speed_slider(nullptr)
+    , propagation_speed_label(nullptr)
     , wave_decay_slider(nullptr)
+    , wave_decay_label(nullptr)
     , test_pattern_check(nullptr)
     , screen_preview_check(nullptr)
     , global_scale_invert_check(nullptr)
@@ -164,32 +169,62 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
             connect(settings.ref_point_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(OnParameterChanged()));
             monitor_form->addRow("Reference:", settings.ref_point_combo);
 
+            QWidget* softness_widget = new QWidget();
+            QHBoxLayout* softness_layout = new QHBoxLayout(softness_widget);
+            softness_layout->setContentsMargins(0, 0, 0, 0);
             settings.softness_slider = new QSlider(Qt::Horizontal);
             settings.softness_slider->setRange(0, 100);
             settings.softness_slider->setValue((int)settings.edge_softness);
             settings.softness_slider->setTickPosition(QSlider::TicksBelow);
             settings.softness_slider->setTickInterval(10);
             settings.softness_slider->setToolTip("Edge feathering (0 = hard, 100 = very soft).");
+            softness_layout->addWidget(settings.softness_slider);
+            settings.softness_label = new QLabel(QString::number((int)settings.edge_softness));
+            settings.softness_label->setMinimumWidth(30);
+            softness_layout->addWidget(settings.softness_label);
             connect(settings.softness_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            monitor_form->addRow("Softness:", settings.softness_slider);
+            connect(settings.softness_slider, &QSlider::valueChanged, settings.softness_label, [&settings](int value) {
+                settings.softness_label->setText(QString::number(value));
+            });
+            monitor_form->addRow("Softness:", softness_widget);
 
+            QWidget* blend_widget = new QWidget();
+            QHBoxLayout* blend_layout = new QHBoxLayout(blend_widget);
+            blend_layout->setContentsMargins(0, 0, 0, 0);
             settings.blend_slider = new QSlider(Qt::Horizontal);
             settings.blend_slider->setRange(0, 100);
             settings.blend_slider->setValue((int)settings.blend);
             settings.blend_slider->setTickPosition(QSlider::TicksBelow);
             settings.blend_slider->setTickInterval(10);
             settings.blend_slider->setToolTip("Blend with other monitors (0 = isolated, 100 = fully shared).");
+            blend_layout->addWidget(settings.blend_slider);
+            settings.blend_label = new QLabel(QString::number((int)settings.blend));
+            settings.blend_label->setMinimumWidth(30);
+            blend_layout->addWidget(settings.blend_label);
             connect(settings.blend_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            monitor_form->addRow("Blend:", settings.blend_slider);
+            connect(settings.blend_slider, &QSlider::valueChanged, settings.blend_label, [&settings](int value) {
+                settings.blend_label->setText(QString::number(value));
+            });
+            monitor_form->addRow("Blend:", blend_widget);
 
+            QWidget* edge_zone_widget = new QWidget();
+            QHBoxLayout* edge_zone_layout = new QHBoxLayout(edge_zone_widget);
+            edge_zone_layout->setContentsMargins(0, 0, 0, 0);
             settings.edge_zone_slider = new QSlider(Qt::Horizontal);
             settings.edge_zone_slider->setRange(0, 50);
             settings.edge_zone_slider->setValue((int)std::round(settings.edge_zone_depth * 100.0f));
             settings.edge_zone_slider->setTickPosition(QSlider::TicksBelow);
             settings.edge_zone_slider->setTickInterval(10);
             settings.edge_zone_slider->setToolTip("Sample inside the screen edge (0 = boundary, 50 = half-way).");
+            edge_zone_layout->addWidget(settings.edge_zone_slider);
+            settings.edge_zone_label = new QLabel(QString::number((int)std::round(settings.edge_zone_depth * 100.0f)));
+            settings.edge_zone_label->setMinimumWidth(30);
+            edge_zone_layout->addWidget(settings.edge_zone_label);
             connect(settings.edge_zone_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            monitor_form->addRow("Edge Zone:", settings.edge_zone_slider);
+            connect(settings.edge_zone_slider, &QSlider::valueChanged, settings.edge_zone_label, [&settings](int value) {
+                settings.edge_zone_label->setText(QString::number(value));
+            });
+            monitor_form->addRow("Edge Zone:", edge_zone_widget);
 
             settings.group_box->setLayout(monitor_form);
             monitors_layout->addWidget(settings.group_box);
@@ -213,14 +248,24 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     // Global Scale (0-100 slider, maps to 0-200% reach internally)
     float clamped_scale = std::clamp(global_scale, 0.0f, 2.0f);
     float slider_percent = std::clamp(clamped_scale / 2.0f, 0.0f, 1.0f);
+    QWidget* global_scale_widget = new QWidget();
+    QHBoxLayout* global_scale_layout = new QHBoxLayout(global_scale_widget);
+    global_scale_layout->setContentsMargins(0, 0, 0, 0);
     global_scale_slider = new QSlider(Qt::Horizontal);
     global_scale_slider->setRange(0, 100);
     global_scale_slider->setValue((int)std::lround(slider_percent * 100.0f));
     global_scale_slider->setTickPosition(QSlider::TicksBelow);
     global_scale_slider->setTickInterval(10);
     global_scale_slider->setToolTip("Overall coverage (0 = none, 100 = full room).");
+    global_scale_layout->addWidget(global_scale_slider);
+    global_scale_label = new QLabel(QString::number((int)std::lround(slider_percent * 100.0f)));
+    global_scale_label->setMinimumWidth(30);
+    global_scale_layout->addWidget(global_scale_label);
     connect(global_scale_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-    global_form->addRow("Scale:", global_scale_slider);
+    connect(global_scale_slider, &QSlider::valueChanged, global_scale_label, [this](int value) {
+        global_scale_label->setText(QString::number(value));
+    });
+    global_form->addRow("Scale:", global_scale_widget);
     global_scale_invert_check = new QCheckBox("Collapse toward reference");
     global_scale_invert_check->setToolTip("Unchecked = light grows outward. Checked = light collapses toward the reference point.");
     global_scale_invert_check->setChecked(IsScaleInverted());
@@ -231,14 +276,24 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     global_form->addRow("Mode:", global_scale_invert_check);
 
     // Propagation speed
+    QWidget* propagation_widget = new QWidget();
+    QHBoxLayout* propagation_layout = new QHBoxLayout(propagation_widget);
+    propagation_layout->setContentsMargins(0, 0, 0, 0);
     propagation_speed_slider = new QSlider(Qt::Horizontal);
     propagation_speed_slider->setRange(0, 400); // 0.0 - 40.0 mm/ms
     propagation_speed_slider->setValue((int)std::lround(propagation_speed_mm_per_ms * 10.0f));
     propagation_speed_slider->setTickPosition(QSlider::TicksBelow);
     propagation_speed_slider->setTickInterval(40);
     propagation_speed_slider->setToolTip("Delay the wave (0 = instant, higher = slower sweep).");
+    propagation_layout->addWidget(propagation_speed_slider);
+    propagation_speed_label = new QLabel(QString::number((int)std::lround(propagation_speed_mm_per_ms * 10.0f)));
+    propagation_speed_label->setMinimumWidth(30);
+    propagation_layout->addWidget(propagation_speed_label);
     connect(propagation_speed_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-    global_form->addRow("Propagation:", propagation_speed_slider);
+    connect(propagation_speed_slider, &QSlider::valueChanged, propagation_speed_label, [this](int value) {
+        propagation_speed_label->setText(QString::number(value));
+    });
+    global_form->addRow("Propagation:", propagation_widget);
 
     global_group->setLayout(global_form);
     main_layout->addWidget(global_group);
@@ -282,32 +337,62 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     QGroupBox* appearance_group = new QGroupBox("Light & Motion");
     QFormLayout* appearance_form = new QFormLayout();
 
+    QWidget* brightness_widget = new QWidget();
+    QHBoxLayout* brightness_layout = new QHBoxLayout(brightness_widget);
+    brightness_layout->setContentsMargins(0, 0, 0, 0);
     brightness_slider = new QSlider(Qt::Horizontal);
     brightness_slider->setRange(0, 500);
     brightness_slider->setValue(100); // Default 100 = 1.0 brightness
     brightness_slider->setTickPosition(QSlider::TicksBelow);
     brightness_slider->setTickInterval(50);
     brightness_slider->setToolTip("Overall brightness multiplier.");
+    brightness_layout->addWidget(brightness_slider);
+    brightness_label = new QLabel("100");
+    brightness_label->setMinimumWidth(30);
+    brightness_layout->addWidget(brightness_label);
     connect(brightness_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-    appearance_form->addRow("Intensity:", brightness_slider);
+    connect(brightness_slider, &QSlider::valueChanged, brightness_label, [this](int value) {
+        brightness_label->setText(QString::number(value));
+    });
+    appearance_form->addRow("Intensity:", brightness_widget);
 
+    QWidget* smoothing_widget = new QWidget();
+    QHBoxLayout* smoothing_layout = new QHBoxLayout(smoothing_widget);
+    smoothing_layout->setContentsMargins(0, 0, 0, 0);
     smoothing_time_slider = new QSlider(Qt::Horizontal);
     smoothing_time_slider->setRange(0, 500);
     smoothing_time_slider->setValue(50); // Default 50ms
     smoothing_time_slider->setTickPosition(QSlider::TicksBelow);
     smoothing_time_slider->setTickInterval(50);
     smoothing_time_slider->setToolTip("Temporal smoothing (0 = crisp, higher = smoother).");
+    smoothing_layout->addWidget(smoothing_time_slider);
+    smoothing_time_label = new QLabel("50");
+    smoothing_time_label->setMinimumWidth(30);
+    smoothing_layout->addWidget(smoothing_time_label);
     connect(smoothing_time_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-    appearance_form->addRow("Smoothing:", smoothing_time_slider);
+    connect(smoothing_time_slider, &QSlider::valueChanged, smoothing_time_label, [this](int value) {
+        smoothing_time_label->setText(QString::number(value));
+    });
+    appearance_form->addRow("Smoothing:", smoothing_widget);
 
+    QWidget* wave_decay_widget = new QWidget();
+    QHBoxLayout* wave_decay_layout = new QHBoxLayout(wave_decay_widget);
+    wave_decay_layout->setContentsMargins(0, 0, 0, 0);
     wave_decay_slider = new QSlider(Qt::Horizontal);
     wave_decay_slider->setRange(50, 1000);
     wave_decay_slider->setValue((int)wave_decay_ms);
     wave_decay_slider->setTickPosition(QSlider::TicksBelow);
     wave_decay_slider->setTickInterval(100);
     wave_decay_slider->setToolTip("How long the wave stays bright as it travels.");
+    wave_decay_layout->addWidget(wave_decay_slider);
+    wave_decay_label = new QLabel(QString::number((int)wave_decay_ms));
+    wave_decay_label->setMinimumWidth(30);
+    wave_decay_layout->addWidget(wave_decay_label);
     connect(wave_decay_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-    appearance_form->addRow("Wave Decay:", wave_decay_slider);
+    connect(wave_decay_slider, &QSlider::valueChanged, wave_decay_label, [this](int value) {
+        wave_decay_label->setText(QString::number(value));
+    });
+    appearance_form->addRow("Wave Decay:", wave_decay_widget);
 
     appearance_group->setLayout(appearance_form);
     main_layout->addWidget(appearance_group);

@@ -16,6 +16,7 @@ REGISTER_EFFECT_3D(Spin3D);
 Spin3D::Spin3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     arms_slider = nullptr;
+    arms_label = nullptr;
     num_arms = 3;
     progress = 0.0f;
 
@@ -83,6 +84,9 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     arms_slider->setValue(num_arms);
     arms_slider->setToolTip("Number of spinning arms radiating from origin");
     layout->addWidget(arms_slider, 0, 1);
+    arms_label = new QLabel(QString::number(num_arms));
+    arms_label->setMinimumWidth(30);
+    layout->addWidget(arms_label, 0, 2);
 
     if(parent && parent->layout())
     {
@@ -90,6 +94,9 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     }
 
     connect(arms_slider, &QSlider::valueChanged, this, &Spin3D::OnSpinParameterChanged);
+    connect(arms_slider, &QSlider::valueChanged, arms_label, [this](int value) {
+        arms_label->setText(QString::number(value));
+    });
 }
 
 void Spin3D::UpdateParams(SpatialEffectParams& params)
@@ -99,7 +106,11 @@ void Spin3D::UpdateParams(SpatialEffectParams& params)
 
 void Spin3D::OnSpinParameterChanged()
 {
-    if(arms_slider) num_arms = arms_slider->value();
+    if(arms_slider)
+    {
+        num_arms = arms_slider->value();
+        if(arms_label) arms_label->setText(QString::number(num_arms));
+    }
     emit ParametersChanged();
 }
 
