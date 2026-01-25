@@ -567,13 +567,13 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
             QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
         }
         
-        if(origin_label) origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        if(this->origin_label) this->origin_label->setVisible(false);
+        if(this->effect_origin_combo) this->effect_origin_combo->setVisible(false);
     }
     else
     {
-        if(origin_label) origin_label->setVisible(true);
-        if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        if(this->origin_label) this->origin_label->setVisible(true);
+        if(this->effect_origin_combo) this->effect_origin_combo->setVisible(true);
     }
 
     nlohmann::json settings;
