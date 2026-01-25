@@ -8,11 +8,51 @@
 #-----------------------------------------------------------#
 
 stages:
+  - sync
   - build
   - release
 
 variables:
   GIT_DEPTH: 0
+
+#-----------------------------------------------------------#
+# Sync to GitHub (mirror code and tags)                    #
+#-----------------------------------------------------------#
+sync-to-github:
+  stage: sync
+  image: alpine/git:latest
+  before_script:
+    - apk add --no-cache git
+  script:
+    - |
+      # Skip if GITHUB_TOKEN is not set
+      if [ -z "$GITHUB_TOKEN" ]; then
+        echo "GITHUB_TOKEN not set, skipping GitHub sync"
+        exit 0
+      fi
+      
+      # Configure git
+      git config user.name "GitLab CI"
+      git config user.email "gitlab-ci@gitlab.com"
+      
+      # Add GitHub remote
+      git remote add github https://${GITHUB_TOKEN}@github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
+      git remote set-url github https://${GITHUB_TOKEN}@github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin.git
+      
+      # Fetch all refs from GitHub
+      git fetch github --prune
+      
+      # Push branch to GitHub
+      if [ "$CI_COMMIT_REF_NAME" = "master" ]; then
+        git push github HEAD:master --force || echo "GitHub branch push failed"
+      fi
+      
+      # Push all tags to GitHub
+      git push github --tags --force || echo "GitHub tag push failed"
+  only:
+    - master
+    - tags
+  when: on_success
 
 #-----------------------------------------------------------#
 # Windows Build                                             #
@@ -67,7 +107,26 @@ release:
   dependencies:
     - build-windows
     - build-linux
+  needs:
+    - job: build-windows
+      artifacts: true
+    - job: build-linux
+      artifacts: true
   script:
+    - |
+      # Check for artifacts from build jobs
+      echo "Checking for build artifacts..."
+      if [ -f "release/OpenRGB3DSpatialPlugin.dll" ]; then
+        echo "✓ Windows DLL artifact found"
+      else
+        echo "⚠ Warning: Windows DLL artifact not found"
+      fi
+      
+      if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
+        echo "✓ Linux SO artifact found"
+      else
+        echo "⚠ Warning: Linux SO artifact not found"
+      fi
     - |
       VERSION=${CI_COMMIT_TAG#v}
       if [ -z "$VERSION" ]; then
@@ -117,6 +176,57 @@ release:
             --data "{\"name\":\"Linux SO\",\"url\":\"${CI_PROJECT_URL}${UPLOAD_URL}\"}" \
             "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links" || echo "Failed to link Linux SO"
         fi
+      fi
+      
+      # Create GitHub release if GITHUB_TOKEN is set
+      if [ ! -z "$GITHUB_TOKEN" ]; then
+        echo "Creating GitHub release for version: $CI_COMMIT_TAG"
+        
+        # Download artifacts from build jobs
+        if [ -f "release/OpenRGB3DSpatialPlugin.dll" ]; then
+          DLL_FILE="release/OpenRGB3DSpatialPlugin.dll"
+        else
+          DLL_FILE=""
+        fi
+        
+        if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
+          SO_FILE="libOpenRGB3DSpatialPlugin.so"
+        else
+          SO_FILE=""
+        fi
+        
+        # Create release using GitHub API
+        RELEASE_RESPONSE=$(curl -s --request POST \
+          --header "Authorization: token ${GITHUB_TOKEN}" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data "{\"tag_name\":\"${CI_COMMIT_TAG}\",\"name\":\"${CI_COMMIT_TAG}\",\"body\":\"Release ${CI_COMMIT_TAG} - Built on GitLab CI\"}" \
+          "https://api.github.com/repos/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases" || echo "{}")
+        
+        UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | grep -o '"upload_url":"[^"]*"' | cut -d'"' -f4 | sed 's/{?name,label}//' || echo "")
+        
+        if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+          # Upload Windows DLL
+          if [ ! -z "$DLL_FILE" ] && [ -f "$DLL_FILE" ]; then
+            echo "Uploading Windows DLL to GitHub..."
+            curl -s --request POST \
+              --header "Authorization: token ${GITHUB_TOKEN}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary "@${DLL_FILE}" \
+              "${UPLOAD_URL}?name=OpenRGB3DSpatialPlugin.dll" || echo "Failed to upload DLL to GitHub"
+          fi
+          
+          # Upload Linux SO
+          if [ ! -z "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
+            echo "Uploading Linux SO to GitHub..."
+            curl -s --request POST \
+              --header "Authorization: token ${GITHUB_TOKEN}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary "@${SO_FILE}" \
+              "${UPLOAD_URL}?name=libOpenRGB3DSpatialPlugin.so" || echo "Failed to upload SO to GitHub"
+          fi
+        fi
+      else
+        echo "GITHUB_TOKEN not set, skipping GitHub release creation"
       fi
   only:
     - tags
