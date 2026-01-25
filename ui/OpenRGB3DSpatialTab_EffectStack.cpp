@@ -567,13 +567,84 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
             QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
         }
         
-        if(origin_label) origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        // Hide origin dropdown for ScreenMirror3D (each monitor has its own origin)
+        // Find the widgets through the layout hierarchy
+        if(effect_controls_layout)
+        {
+            for(int i = 0; i < effect_controls_layout->count(); i++)
+            {
+                QLayoutItem* item = effect_controls_layout->itemAt(i);
+                if(item && item->widget())
+                {
+                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
+                    if(group && group->title() == "Effect Configuration")
+                    {
+                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
+                        if(group_layout)
+                        {
+                            for(int j = 0; j < group_layout->count(); j++)
+                            {
+                                QLayoutItem* group_item = group_layout->itemAt(j);
+                                if(group_item)
+                                {
+                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
+                                    if(label && label->text() == "Origin:")
+                                    {
+                                        label->setVisible(false);
+                                    }
+                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
+                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
+                                    {
+                                        combo->setVisible(false);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
     else
     {
-        if(origin_label) origin_label->setVisible(true);
-        if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        // Show origin dropdown for other effects
+        if(effect_controls_layout)
+        {
+            for(int i = 0; i < effect_controls_layout->count(); i++)
+            {
+                QLayoutItem* item = effect_controls_layout->itemAt(i);
+                if(item && item->widget())
+                {
+                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
+                    if(group && group->title() == "Effect Configuration")
+                    {
+                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
+                        if(group_layout)
+                        {
+                            for(int j = 0; j < group_layout->count(); j++)
+                            {
+                                QLayoutItem* group_item = group_layout->itemAt(j);
+                                if(group_item)
+                                {
+                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
+                                    if(label && label->text() == "Origin:")
+                                    {
+                                        label->setVisible(true);
+                                    }
+                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
+                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
+                                    {
+                                        combo->setVisible(true);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     nlohmann::json settings;
