@@ -108,6 +108,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Push Tag to GitLab
+        continue-on-error: true
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          
+          # Skip if GITLAB_TOKEN is not set
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "GITLAB_TOKEN not set, skipping GitLab tag push"
+            exit 0
+          fi
+          
+          # Push the tag to GitLab
+          git remote add gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
+          git remote set-url gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
+          
+          git push gitlab ${GITHUB_REF} || {
+            echo "GitLab tag push failed, but continuing..."
+            exit 0
+          }
+
       - name: Create GitLab Release
         continue-on-error: true
         env:
