@@ -92,3 +92,9 @@ jobs:
             echo "GitLab push failed, but continuing..."
             exit 0
           }
+          
+          # Push all tags to GitLab
+          git push gitlab --tags || {
+            echo "GitLab tag push failed, but continuing..."
+            exit 0
+          }
