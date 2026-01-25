@@ -89,22 +89,36 @@ jobs:
           echo "Current directory:"
           pwd
           echo "GitHub ref: $GITHUB_REF"
-          if [ ! -f *.dll ] && [ ! -f *.so ]; then
+          
+          # Check for DLL files
+          DLL_COUNT=$(find . -name "*.dll" -type f | wc -l)
+          SO_COUNT=$(find . -name "*.so" -type f | wc -l)
+          
+          echo "Found $DLL_COUNT DLL file(s) and $SO_COUNT SO file(s)"
+          
+          if [ "$DLL_COUNT" -eq 0 ] && [ "$SO_COUNT" -eq 0 ]; then
             echo "ERROR: No artifacts found! Build may have failed."
             exit 1
           fi
+          
+          # List all found files
+          echo "DLL files:"
+          find . -name "*.dll" -type f
+          echo "SO files:"
+          find . -name "*.so" -type f
+          
           echo "Artifacts found successfully!"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            *.dll
-            *.so
+            **/*.dll
+            **/*.so
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -154,40 +168,54 @@ jobs:
           
           echo "GitLab release response: $RELEASE_RESPONSE"
 
-          # Upload Windows DLL if it exists
-          if [ -f "OpenRGB3DSpatialPlugin.dll" ]; then
-            echo "Uploading Windows DLL..."
+          # Find and upload Windows DLL
+          DLL_FILE=$(find . -name "*.dll" -type f | head -n 1)
+          if [ ! -z "$DLL_FILE" ] && [ -f "$DLL_FILE" ]; then
+            echo "Uploading Windows DLL: $DLL_FILE"
+            DLL_BASENAME=$(basename "$DLL_FILE")
+            
+            # Upload file to GitLab
             UPLOAD_RESPONSE=$(curl -s --request POST \
               --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --form "file=@OpenRGB3DSpatialPlugin.dll" \
+              --form "file=@$DLL_FILE" \
               "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
             
             UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
             if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+              # Add as release asset link
               curl -s --request POST \
                 --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
                 --header "Content-Type: application/json" \
-                --data "{\"name\":\"Windows DLL\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\"}" \
+                --data "{\"name\":\"$DLL_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$DLL_BASENAME\",\"link_type\":\"package\"}" \
                 "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Windows DLL"
             fi
+          else
+            echo "Warning: No DLL file found to upload"
           fi
 
-          # Upload Linux SO if it exists
-          if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
-            echo "Uploading Linux SO..."
+          # Find and upload Linux SO
+          SO_FILE=$(find . -name "*.so" -type f | head -n 1)
+          if [ ! -z "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
+            echo "Uploading Linux SO: $SO_FILE"
+            SO_BASENAME=$(basename "$SO_FILE")
+            
+            # Upload file to GitLab
             UPLOAD_RESPONSE=$(curl -s --request POST \
               --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --form "file=@libOpenRGB3DSpatialPlugin.so" \
+              --form "file=@$SO_FILE" \
               "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
             
             UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
             if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+              # Add as release asset link
               curl -s --request POST \
                 --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
                 --header "Content-Type: application/json" \
-                --data "{\"name\":\"Linux SO\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\"}" \
+                --data "{\"name\":\"$SO_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$SO_BASENAME\",\"link_type\":\"package\"}" \
                 "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Linux SO"
             fi
+          else
+            echo "Warning: No SO file found to upload"
           fi
           
           echo "GitLab release process completed"
