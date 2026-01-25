@@ -7,8 +7,6 @@
 #include <QComboBox>
 #include <QSlider>
 #include <QLabel>
-#include <QDoubleSpinBox>
-#include <QPushButton>
 #include <QCheckBox>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
@@ -64,6 +62,7 @@ public:
     \*---------------------------------------------------------*/
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void RefreshReferencePointDropdowns();
+    void RefreshMonitorStatus();
 
 signals:
     void ScreenPreviewChanged(bool enabled);
@@ -73,26 +72,17 @@ private slots:
     void OnScreenPreviewChanged();
 
 private:
-    void StartCaptureIfNeeded();
-    void StopCaptureIfNeeded();
-
-    /*---------------------------------------------------------*\
-    | Per-Monitor Settings Structure                           |
-    \*---------------------------------------------------------*/
     struct MonitorSettings
     {
         bool enabled;
-        float scale;           // 0-2.0 (0-200%), how much this monitor affects LEDs
-        float edge_softness;   // 0-100%, feathering percentage
-        float blend;           // 0-100%, blending with other monitors
-        float edge_zone_depth; // 0.01-0.50, edge sampling depth
-        int reference_point_index; // Index into reference_points vector (-1 = use global)
+        float scale;
+        float edge_softness;
+        float blend;
+        float edge_zone_depth;
+        int reference_point_index;
 
-        // UI widgets for this monitor
         QGroupBox* group_box;
-        QCheckBox* enabled_check;
         QSlider* scale_slider;
-        QLabel* scale_label;
         QSlider* softness_slider;
         QLabel* softness_label;
         QSlider* blend_slider;
@@ -109,9 +99,7 @@ private:
             , edge_zone_depth(0.01f)
             , reference_point_index(-1)
             , group_box(nullptr)
-            , enabled_check(nullptr)
             , scale_slider(nullptr)
-            , scale_label(nullptr)
             , softness_slider(nullptr)
             , softness_label(nullptr)
             , blend_slider(nullptr)
@@ -121,6 +109,10 @@ private:
             , ref_point_combo(nullptr)
         {}
     };
+
+    void StartCaptureIfNeeded();
+    void StopCaptureIfNeeded();
+    void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
 
     /*---------------------------------------------------------*\
     | UI Controls                                              |
@@ -138,7 +130,11 @@ private:
     QCheckBox*          test_pattern_check;
     QCheckBox*          screen_preview_check;
     QCheckBox*          global_scale_invert_check;
-    std::map<std::string, MonitorSettings> monitor_settings;  // Monitor name -> settings
+    QLabel*             monitor_status_label;
+    QLabel*             monitor_help_label;
+    QGroupBox*          monitors_container;     // Container for per-monitor settings
+    QVBoxLayout*        monitors_layout;        // Layout for monitor settings
+    std::map<std::string, MonitorSettings> monitor_settings;
 
     /*---------------------------------------------------------*\
     | Effect parameters                                        |
@@ -153,7 +149,6 @@ private:
 
     // Reference points (pointer to main tab's vector)
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
-    int                         global_reference_point_index;
 
     struct FrameHistory
     {

@@ -555,6 +555,27 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     ui_effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = ui_effect;
 
+    // Set reference points for ScreenMirror3D UI effect
+    if(instance->effect_class_name == "ScreenMirror3D")
+    {
+        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
+        if(screen_mirror)
+        {
+            screen_mirror->SetReferencePoints(&reference_points);
+            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
+        }
+        
+        if(origin_label) origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+    }
+    else
+    {
+        if(origin_label) origin_label->setVisible(true);
+        if(effect_origin_combo) effect_origin_combo->setVisible(true);
+    }
+
     nlohmann::json settings;
     if(instance->saved_settings && !instance->saved_settings->empty())
     {

@@ -8,7 +8,6 @@
 #include "GridSpaceUtils.h"
 #include "LogManager.h"
 #include "VirtualReferencePoint3D.h"
-#include "../EffectHelpers.h"
 
 /*---------------------------------------------------------*\
 | Register this effect with the effect manager             |
@@ -43,6 +42,10 @@ ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     , test_pattern_check(nullptr)
     , screen_preview_check(nullptr)
     , global_scale_invert_check(nullptr)
+    , monitor_status_label(nullptr)
+    , monitor_help_label(nullptr)
+    , monitors_container(nullptr)
+    , monitors_layout(nullptr)
     
     , global_scale(1.0f) // Default 100% global scale
     , smoothing_time_ms(50.0f)
@@ -51,7 +54,6 @@ ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     , wave_decay_ms(250.0f)
     , show_test_pattern(false)
     , reference_points(nullptr)
-    , global_reference_point_index(-1)
 {
 }
 
@@ -83,7 +85,24 @@ EffectInfo3D ScreenMirror3D::GetEffectInfo()
     info.needs_arms             = false;
     info.needs_frequency        = false;
     info.use_size_parameter     = false;
+    
+    // Hide base class controls that don't apply to screen mirroring
+    // Screen mirroring uses screen colors, not effect colors
+    info.show_color_controls    = false;
+    // Speed doesn't make sense - screen mirroring is real-time
+    info.show_speed_control     = false;
+    // Brightness is handled by custom "Intensity" control
+    info.show_brightness_control = false;
+    // Frequency doesn't apply to screen mirroring
+    info.show_frequency_control = false;
+    // Size doesn't apply - coverage is controlled by per-monitor scale
+    info.show_size_control      = false;
+    // Scale is handled by custom "Global Reach" controls
     info.show_scale_control     = false;
+    // FPS is not user-configurable for screen mirroring
+    info.show_fps_control       = false;
+    // Axis control doesn't apply - each monitor has its own orientation
+    info.show_axis_control      = false;
 
     return info;
 }
@@ -93,6 +112,19 @@ EffectInfo3D ScreenMirror3D::GetEffectInfo()
 \*---------------------------------------------------------*/
 void ScreenMirror3D::SetupCustomUI(QWidget* parent)
 {
+    if(rotation_yaw_slider)
+    {
+        QWidget* rotation_group = rotation_yaw_slider->parentWidget();
+        while(rotation_group && !qobject_cast<QGroupBox*>(rotation_group))
+        {
+            rotation_group = rotation_group->parentWidget();
+        }
+        if(rotation_group)
+        {
+            rotation_group->setVisible(false);
+        }
+    }
+    
     QWidget* container = new QWidget();
     QVBoxLayout* main_layout = new QVBoxLayout(container);
 
@@ -105,133 +137,62 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     info_label->setStyleSheet("QLabel { color: #888; font-style: italic; }");
     status_layout->addWidget(info_label);
 
-    // Show active planes count
-    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-    int active_count = 0;
-    for (unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
-    {
-        DisplayPlane3D* plane = planes[plane_index];
-        if (plane && !plane->GetCaptureSourceId().empty())
-        {
-            active_count++;
-        }
-    }
-
-    QLabel* count_label = new QLabel(QString("Active Monitors: %1").arg(active_count));
-    count_label->setStyleSheet("QLabel { font-weight: bold; font-size: 14pt; }");
-    status_layout->addWidget(count_label);
+    // Show active planes count (will be updated by RefreshMonitorStatus)
+    monitor_status_label = new QLabel("Calculating...");
+    monitor_status_label->setStyleSheet("QLabel { font-weight: bold; font-size: 14pt; }");
+    status_layout->addWidget(monitor_status_label);
+    monitor_help_label = nullptr;
 
     status_group->setLayout(status_layout);
     main_layout->addWidget(status_group);
 
     // Per-Monitor Settings
-    QGroupBox* monitors_container = new QGroupBox("Per-Monitor Balance");
-    QVBoxLayout* monitors_layout = new QVBoxLayout();
+    monitors_container = new QGroupBox("Per-Monitor Balance");
+    monitors_layout = new QVBoxLayout();
     monitors_layout->setSpacing(6);
 
+    // Get planes for monitor list creation
+    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
+
     // Create expandable settings group for each monitor
-    for (unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
+    for(unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
     {
         DisplayPlane3D* plane = planes[plane_index];
-        if (plane && !plane->GetCaptureSourceId().empty())
+        if(!plane) continue;
+
+        std::string plane_name = plane->GetName();
+
+        // Get or create settings for this monitor
+        std::map<std::string, MonitorSettings>::iterator settings_it = monitor_settings.find(plane_name);
+        if(settings_it == monitor_settings.end())
         {
-            std::string plane_name = plane->GetName();
-
-            // Get or create settings for this monitor
-            if (monitor_settings.find(plane_name) == monitor_settings.end())
+            MonitorSettings new_settings;
+            int plane_ref_index = plane->GetReferencePointIndex();
+            if(plane_ref_index >= 0)
             {
-                monitor_settings[plane_name] = MonitorSettings(); // Use defaults
+                new_settings.reference_point_index = plane_ref_index;
             }
-            MonitorSettings& settings = monitor_settings[plane_name];
+            monitor_settings[plane_name] = new_settings;
+            settings_it = monitor_settings.find(plane_name);
+        }
+        MonitorSettings& settings = settings_it->second;
+        
+        if(settings.reference_point_index < 0)
+        {
+            int plane_ref_index = plane->GetReferencePointIndex();
+            if(plane_ref_index >= 0)
+            {
+                settings.reference_point_index = plane_ref_index;
+            }
+        }
 
-            // Create collapsible group box
-            settings.group_box = new QGroupBox(QString::fromStdString(plane_name));
-            settings.group_box->setCheckable(true);
-            settings.group_box->setChecked(settings.enabled);
-            settings.group_box->setToolTip("Enable or disable this monitor's influence.");
-            connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror3D::OnParameterChanged);
-
-            QFormLayout* monitor_form = new QFormLayout();
-            monitor_form->setContentsMargins(8, 4, 8, 4);
-
-            settings.scale_slider = new QSlider(Qt::Horizontal);
-            settings.scale_slider->setRange(0, 200);
-            settings.scale_slider->setValue((int)(settings.scale * 100));
-            settings.scale_slider->setTickPosition(QSlider::TicksBelow);
-            settings.scale_slider->setTickInterval(25);
-            settings.scale_slider->setToolTip("Per-monitor brightness reach (0% to 200%).");
-            connect(settings.scale_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            monitor_form->addRow("Scale:", settings.scale_slider);
-
-            settings.ref_point_combo = new QComboBox();
-            settings.ref_point_combo->addItem("Room Center", -1);
-            settings.ref_point_combo->setToolTip("Anchor for falloff distance.");
-            connect(settings.ref_point_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(OnParameterChanged()));
-            monitor_form->addRow("Reference:", settings.ref_point_combo);
-
-            QWidget* softness_widget = new QWidget();
-            QHBoxLayout* softness_layout = new QHBoxLayout(softness_widget);
-            softness_layout->setContentsMargins(0, 0, 0, 0);
-            settings.softness_slider = new QSlider(Qt::Horizontal);
-            settings.softness_slider->setRange(0, 100);
-            settings.softness_slider->setValue((int)settings.edge_softness);
-            settings.softness_slider->setTickPosition(QSlider::TicksBelow);
-            settings.softness_slider->setTickInterval(10);
-            settings.softness_slider->setToolTip("Edge feathering (0 = hard, 100 = very soft).");
-            softness_layout->addWidget(settings.softness_slider);
-            settings.softness_label = new QLabel(QString::number((int)settings.edge_softness));
-            settings.softness_label->setMinimumWidth(30);
-            softness_layout->addWidget(settings.softness_label);
-            connect(settings.softness_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            connect(settings.softness_slider, &QSlider::valueChanged, settings.softness_label, [&settings](int value) {
-                settings.softness_label->setText(QString::number(value));
-            });
-            monitor_form->addRow("Softness:", softness_widget);
-
-            QWidget* blend_widget = new QWidget();
-            QHBoxLayout* blend_layout = new QHBoxLayout(blend_widget);
-            blend_layout->setContentsMargins(0, 0, 0, 0);
-            settings.blend_slider = new QSlider(Qt::Horizontal);
-            settings.blend_slider->setRange(0, 100);
-            settings.blend_slider->setValue((int)settings.blend);
-            settings.blend_slider->setTickPosition(QSlider::TicksBelow);
-            settings.blend_slider->setTickInterval(10);
-            settings.blend_slider->setToolTip("Blend with other monitors (0 = isolated, 100 = fully shared).");
-            blend_layout->addWidget(settings.blend_slider);
-            settings.blend_label = new QLabel(QString::number((int)settings.blend));
-            settings.blend_label->setMinimumWidth(30);
-            blend_layout->addWidget(settings.blend_label);
-            connect(settings.blend_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            connect(settings.blend_slider, &QSlider::valueChanged, settings.blend_label, [&settings](int value) {
-                settings.blend_label->setText(QString::number(value));
-            });
-            monitor_form->addRow("Blend:", blend_widget);
-
-            QWidget* edge_zone_widget = new QWidget();
-            QHBoxLayout* edge_zone_layout = new QHBoxLayout(edge_zone_widget);
-            edge_zone_layout->setContentsMargins(0, 0, 0, 0);
-            settings.edge_zone_slider = new QSlider(Qt::Horizontal);
-            settings.edge_zone_slider->setRange(0, 50);
-            settings.edge_zone_slider->setValue((int)std::round(settings.edge_zone_depth * 100.0f));
-            settings.edge_zone_slider->setTickPosition(QSlider::TicksBelow);
-            settings.edge_zone_slider->setTickInterval(10);
-            settings.edge_zone_slider->setToolTip("Sample inside the screen edge (0 = boundary, 50 = half-way).");
-            edge_zone_layout->addWidget(settings.edge_zone_slider);
-            settings.edge_zone_label = new QLabel(QString::number((int)std::round(settings.edge_zone_depth * 100.0f)));
-            settings.edge_zone_label->setMinimumWidth(30);
-            edge_zone_layout->addWidget(settings.edge_zone_label);
-            connect(settings.edge_zone_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
-            connect(settings.edge_zone_slider, &QSlider::valueChanged, settings.edge_zone_label, [&settings](int value) {
-                settings.edge_zone_label->setText(QString::number(value));
-            });
-            monitor_form->addRow("Edge Zone:", edge_zone_widget);
-
-            settings.group_box->setLayout(monitor_form);
-            monitors_layout->addWidget(settings.group_box);
+        if(!settings.group_box)
+        {
+            CreateMonitorSettingsUI(plane, settings);
         }
     }
 
-    if (monitor_settings.empty())
+    if(monitor_settings.empty())
     {
         QLabel* no_monitors_label = new QLabel("No monitors configured. Set up Display Planes first.");
         no_monitors_label->setStyleSheet("QLabel { color: #cc6600; font-style: italic; }");
@@ -240,6 +201,9 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
 
     monitors_container->setLayout(monitors_layout);
     main_layout->addWidget(monitors_container);
+
+    // Initial status update (after monitors_layout is created)
+    RefreshMonitorStatus();
 
     // Global reach controls
     QGroupBox* global_group = new QGroupBox("Global Reach");
@@ -523,7 +487,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 {
     std::vector<DisplayPlane3D*> all_planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
 
-    if (all_planes.empty())
+    if(all_planes.empty())
     {
         return ToRGBColor(0, 0, 0);
     }
@@ -543,12 +507,10 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     };
 
     std::vector<MonitorContribution> contributions;
-    Vector3D effect_reference_point;
-    bool has_effect_reference = GetEffectReferencePoint(effect_reference_point);
-    const Vector3D* base_falloff_ref = has_effect_reference ? &effect_reference_point : &global_reference_point;
+    Vector3D grid_center_ref = {grid.center_x, grid.center_y, grid.center_z};
 
     const float scale_mm = (grid.grid_scale_mm > 0.001f) ? grid.grid_scale_mm : 10.0f;
-    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *base_falloff_ref, scale_mm);
+    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, grid_center_ref, scale_mm);
     if(base_max_distance_mm <= 0.0f)
     {
         // Fallback to 3m radius if room bounds are unavailable
@@ -557,25 +519,22 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     float normalized_scale = std::clamp(global_scale / 2.0f, 0.0f, 1.0f);
 
-    for (size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
+    for(size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
     {
         DisplayPlane3D* plane = all_planes[plane_index];
-        if (!plane) continue;
+        if(!plane) continue;
 
         // Check if this monitor is enabled in the effect settings
         std::string plane_name = plane->GetName();
         std::map<std::string, MonitorSettings>::iterator settings_it = monitor_settings.find(plane_name);
-        if (settings_it == monitor_settings.end())
+        if(settings_it == monitor_settings.end())
         {
             settings_it = monitor_settings.emplace(plane_name, MonitorSettings()).first;
         }
 
         MonitorSettings& mon_settings = settings_it->second;
-        bool monitor_enabled = mon_settings.enabled;
-        if(mon_settings.group_box)
-        {
-            monitor_enabled = mon_settings.group_box->isChecked();
-        }
+        // Check UI state if available, otherwise use stored enabled state
+        bool monitor_enabled = mon_settings.group_box ? mon_settings.group_box->isChecked() : mon_settings.enabled;
         if(!monitor_enabled)
         {
             continue;
@@ -585,26 +544,26 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         std::string capture_id = plane->GetCaptureSourceId();
         std::shared_ptr<CapturedFrame> frame = nullptr;
 
-        if (!show_test_pattern)
+        if(!show_test_pattern)
         {
             // Normal mode: need valid capture source and frames
-            if (capture_id.empty())
+            if(capture_id.empty())
             {
                 continue;
             }
 
             // Check if capture is actually running and has frames
-            if (!capture_mgr.IsCapturing(capture_id))
+            if(!capture_mgr.IsCapturing(capture_id))
             {
                 capture_mgr.StartCapture(capture_id);
-                if (!capture_mgr.IsCapturing(capture_id))
+                if(!capture_mgr.IsCapturing(capture_id))
                 {
                     continue;
                 }
             }
 
             frame = capture_mgr.GetLatestFrame(capture_id);
-            if (!frame || !frame->valid || frame->data.empty())
+            if(!frame || !frame->valid || frame->data.empty())
             {
                 continue;
             }
@@ -612,19 +571,19 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             AddFrameToHistory(capture_id, frame);
         }
 
-        const Vector3D* falloff_ref = base_falloff_ref;
-        if (mon_settings.reference_point_index >= 0 && reference_points &&
-            mon_settings.reference_point_index < (int)reference_points->size())
+        const Vector3D* falloff_ref = &grid_center_ref;
+        if(mon_settings.reference_point_index >= 0 && reference_points &&
+           mon_settings.reference_point_index < (int)reference_points->size())
         {
-            static Vector3D custom_ref;
-            if (ResolveReferencePoint(mon_settings.reference_point_index, custom_ref))
+            Vector3D custom_ref;
+            if(ResolveReferencePoint(mon_settings.reference_point_index, custom_ref))
             {
                 falloff_ref = &custom_ref;
             }
         }
 
         float reference_max_distance_mm = base_max_distance_mm;
-        if(falloff_ref != base_falloff_ref)
+        if(falloff_ref != &grid_center_ref)
         {
             reference_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *falloff_ref, scale_mm);
             if(reference_max_distance_mm <= 0.0f)
@@ -635,7 +594,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
         Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, mon_settings.edge_zone_depth, falloff_ref, scale_mm);
 
-        if (!proj.is_valid) continue;
+        if(!proj.is_valid) continue;
 
         float monitor_scale = std::clamp(mon_settings.scale, 0.0f, 2.0f);
         float coverage = normalized_scale * monitor_scale;
@@ -662,30 +621,30 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
 
         float delay_ms = 0.0f;
-        if (propagation_speed_mm_per_ms > 0.001f)
+        if(propagation_speed_mm_per_ms > 0.001f)
         {
             delay_ms = proj.distance / propagation_speed_mm_per_ms;
         }
 
         std::shared_ptr<CapturedFrame> sampling_frame = frame;
-        if (!show_test_pattern && !capture_id.empty())
+        if(!show_test_pattern && !capture_id.empty())
         {
             std::shared_ptr<CapturedFrame> delayed = GetFrameForDelay(capture_id, delay_ms);
-            if (delayed)
+            if(delayed)
             {
                 sampling_frame = delayed;
             }
         }
 
         float wave_envelope = 1.0f;
-        if (propagation_speed_mm_per_ms > 0.001f && wave_decay_ms > 0.1f)
+        if(propagation_speed_mm_per_ms > 0.001f && wave_decay_ms > 0.1f)
         {
             wave_envelope = std::exp(-delay_ms / wave_decay_ms);
         }
 
         float weight = distance_falloff * wave_envelope;
 
-        if (weight > 0.01f)
+        if(weight > 0.01f)
         {
             MonitorContribution contrib;
             contrib.plane = plane;
@@ -700,22 +659,22 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
     }
 
-    if (contributions.empty())
+    if(contributions.empty())
     {
         int capturing_count = 0;
-        for (size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
+        for(size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
         {
             DisplayPlane3D* plane = all_planes[plane_index];
-            if (plane && !plane->GetCaptureSourceId().empty())
+            if(plane && !plane->GetCaptureSourceId().empty())
             {
-                if (capture_mgr.IsCapturing(plane->GetCaptureSourceId()))
+                if(capture_mgr.IsCapturing(plane->GetCaptureSourceId()))
                 {
                     capturing_count++;
                 }
             }
         }
 
-        if (capturing_count > 0)
+        if(capturing_count > 0)
         {
             return ToRGBColor(0, 0, 0); // Black - falloff working, waiting for first frames
         }
@@ -727,26 +686,26 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
 
     // Blend monitor contributions
     float avg_blend = 0.0f;
-    for (size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
+    for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
         avg_blend += contributions[contrib_index].blend;
     }
-    avg_blend /= fmaxf(1.0f, (float)contributions.size());
+    avg_blend /= std::max(1.0f, (float)contributions.size());
     float blend_factor = avg_blend / 100.0f; // Convert to 0-1
 
-    if (blend_factor < 0.01f && contributions.size() > 1)
+    if(blend_factor < 0.01f && contributions.size() > 1)
     {
-        float max_weight = 0.0f;
+        // Find strongest contribution when blend is disabled
         size_t strongest_idx = 0;
-        for (size_t i = 0; i < contributions.size(); i++)
+        float max_weight = 0.0f;
+        for(size_t i = 0; i < contributions.size(); i++)
         {
-            if (contributions[i].weight > max_weight)
+            if(contributions[i].weight > max_weight)
             {
                 max_weight = contributions[i].weight;
                 strongest_idx = i;
             }
         }
-
         MonitorContribution strongest = contributions[strongest_idx];
         contributions.clear();
         contributions.push_back(strongest);
@@ -756,39 +715,35 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     float total_weight = 0.0f;
     uint64_t latest_timestamp = 0;
 
-    for (size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
+    for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
-        const MonitorContribution& contrib = contributions[contrib_index];
+        MonitorContribution& contrib = contributions[contrib_index];
         float sample_u = contrib.proj.u;
         float sample_v = contrib.proj.v;
 
         float r, g, b;
 
-        if (show_test_pattern)
+        if(show_test_pattern)
         {
-            float clamped_u = sample_u;
-            float clamped_v = sample_v;
-            if (clamped_u < 0.0f) clamped_u = 0.0f;
-            if (clamped_u > 1.0f) clamped_u = 1.0f;
-            if (clamped_v < 0.0f) clamped_v = 0.0f;
-            if (clamped_v > 1.0f) clamped_v = 1.0f;
+            float clamped_u = std::clamp(sample_u, 0.0f, 1.0f);
+            float clamped_v = std::clamp(sample_v, 0.0f, 1.0f);
 
             bool left_half = (clamped_u < 0.5f);
             bool bottom_half = (clamped_v < 0.5f);
 
-            if (bottom_half && left_half)
+            if(bottom_half && left_half)
             {
                 r = 255.0f;
                 g = 0.0f;
                 b = 0.0f;
             }
-            else if (bottom_half && !left_half)
+            else if(bottom_half && !left_half)
             {
                 r = 0.0f;
                 g = 255.0f;
                 b = 0.0f;
             }
-            else if (!bottom_half && !left_half)
+            else if(!bottom_half && !left_half)
             {
                 r = 0.0f;
                 g = 0.0f;
@@ -803,7 +758,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         }
         else
         {
-            if (!contrib.frame || contrib.frame->data.empty())
+            if(!contrib.frame || contrib.frame->data.empty())
             {
                 continue;
             }
@@ -831,14 +786,14 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         total_b += b * adjusted_weight;
         total_weight += adjusted_weight;
 
-        if (contrib.sample_timestamp > latest_timestamp)
+        if(contrib.sample_timestamp > latest_timestamp)
         {
             latest_timestamp = contrib.sample_timestamp;
         }
     }
 
     // Normalize by total weight (prevents over-brightening when multiple monitors overlap)
-    if (total_weight > 0.0f)
+    if(total_weight > 0.0f)
     {
         total_r /= total_weight;
         total_g /= total_weight;
@@ -851,21 +806,23 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
     total_b *= brightness_multiplier;
 
     // Clamp to valid range
-    if (total_r > 255.0f) total_r = 255.0f;
-    if (total_g > 255.0f) total_g = 255.0f;
-    if (total_b > 255.0f) total_b = 255.0f;
+    if(total_r > 255.0f) total_r = 255.0f;
+    if(total_g > 255.0f) total_g = 255.0f;
+    if(total_b > 255.0f) total_b = 255.0f;
 
     // Temporal smoothing (EMA per LED) for trailing effect
-    if (smoothing_time_ms > 0.1f)
+    if(smoothing_time_ms > 0.1f)
     {
         LEDKey key = MakeLEDKey(x, y, z);
         LEDState& state = led_states[key];
 
         std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-        uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        // steady_clock doesn't have an epoch, use duration since a fixed point
+        static std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
         uint64_t sample_time_ms = latest_timestamp ? latest_timestamp : now_ms;
 
-        if (state.last_update_ms == 0)
+        if(state.last_update_ms == 0)
         {
             state.r = total_r;
             state.g = total_g;
@@ -875,7 +832,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         else
         {
             uint64_t dt_ms_u64 = (sample_time_ms > state.last_update_ms) ? (sample_time_ms - state.last_update_ms) : 0;
-            if (dt_ms_u64 == 0)
+            if(dt_ms_u64 == 0)
             {
                 dt_ms_u64 = 16; // assume ~60 FPS
             }
@@ -893,7 +850,7 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             total_b = state.b;
         }
     }
-    else if (!led_states.empty())
+    else if(!led_states.empty())
     {
         led_states.clear();
     }
@@ -913,16 +870,15 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
     settings["smoothing_time_ms"] = smoothing_time_ms;
     settings["brightness_multiplier"] = brightness_multiplier;
     settings["show_test_pattern"] = show_test_pattern;
-    settings["global_reference_point_index"] = global_reference_point_index;
     settings["propagation_speed_mm_per_ms"] = propagation_speed_mm_per_ms;
     settings["wave_decay_ms"] = wave_decay_ms;
     settings["scale_inverted"] = IsScaleInverted();
 
     // Save per-monitor settings
     nlohmann::json monitors = nlohmann::json::object();
-    for (std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
-         it != monitor_settings.end();
-         ++it)
+    for(std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
+        it != monitor_settings.end();
+        ++it)
     {
         const MonitorSettings& settings = it->second;
         nlohmann::json mon;
@@ -942,151 +898,192 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
 void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 {
     // Load global settings
-    if (settings.contains("global_scale"))
+    if(settings.contains("global_scale"))
     {
         global_scale = settings["global_scale"].get<float>();
     }
     // Legacy safety: if value stored as 0-200 integer, normalise back to 0-2 range
-    if (global_scale > 2.0f && global_scale <= 400.0f)
+    if(global_scale > 2.0f && global_scale <= 400.0f)
     {
         global_scale = global_scale / 100.0f;
     }
     global_scale = std::clamp(global_scale, 0.0f, 2.0f);
 
-    if (settings.contains("smoothing_time_ms"))
+    if(settings.contains("smoothing_time_ms"))
         smoothing_time_ms = settings["smoothing_time_ms"].get<float>();
 
-    if (settings.contains("brightness_multiplier"))
+    if(settings.contains("brightness_multiplier"))
         brightness_multiplier = settings["brightness_multiplier"].get<float>();
 
-    if (settings.contains("show_test_pattern"))
+    if(settings.contains("show_test_pattern"))
         show_test_pattern = settings["show_test_pattern"].get<bool>();
 
-    if (settings.contains("global_reference_point_index"))
-        global_reference_point_index = settings["global_reference_point_index"].get<int>();
-
-    if (settings.contains("propagation_speed_mm_per_ms"))
+    if(settings.contains("propagation_speed_mm_per_ms"))
         propagation_speed_mm_per_ms = settings["propagation_speed_mm_per_ms"].get<float>();
 
-    if (settings.contains("wave_decay_ms"))
+    if(settings.contains("wave_decay_ms"))
         wave_decay_ms = settings["wave_decay_ms"].get<float>();
 
     bool invert_flag = IsScaleInverted();
-    if (settings.contains("scale_inverted"))
+    if(settings.contains("scale_inverted"))
     {
         invert_flag = settings["scale_inverted"].get<bool>();
     }
 
     // Load per-monitor settings
-    if (settings.contains("monitor_settings"))
+    if(settings.contains("monitor_settings"))
     {
         const nlohmann::json& monitors = settings["monitor_settings"];
-        for (nlohmann::json::const_iterator it = monitors.begin(); it != monitors.end(); ++it)
+        for(nlohmann::json::const_iterator it = monitors.begin(); it != monitors.end(); ++it)
         {
             const std::string& monitor_name = it.key();
             const nlohmann::json& mon = it.value();
 
-            // Get or create monitor settings
-            if (monitor_settings.find(monitor_name) == monitor_settings.end())
+            // Get or create monitor settings (preserve existing UI widgets)
+            std::map<std::string, MonitorSettings>::iterator existing_it = monitor_settings.find(monitor_name);
+            bool had_existing = (existing_it != monitor_settings.end());
+            
+            // Store UI widget pointers BEFORE any operations (they will be preserved)
+            QGroupBox* existing_group_box = nullptr;
+            QComboBox* existing_ref_point_combo = nullptr;
+            QSlider* existing_scale_slider = nullptr;
+            QSlider* existing_softness_slider = nullptr;
+            QLabel* existing_softness_label = nullptr;
+            QSlider* existing_blend_slider = nullptr;
+            QLabel* existing_blend_label = nullptr;
+            QSlider* existing_edge_zone_slider = nullptr;
+            QLabel* existing_edge_zone_label = nullptr;
+            
+            if(had_existing)
             {
-                monitor_settings[monitor_name] = MonitorSettings();
+                // Preserve UI widgets from existing settings
+                existing_group_box = existing_it->second.group_box;
+                existing_ref_point_combo = existing_it->second.ref_point_combo;
+                existing_scale_slider = existing_it->second.scale_slider;
+                existing_softness_slider = existing_it->second.softness_slider;
+                existing_softness_label = existing_it->second.softness_label;
+                existing_blend_slider = existing_it->second.blend_slider;
+                existing_blend_label = existing_it->second.blend_label;
+                existing_edge_zone_slider = existing_it->second.edge_zone_slider;
+                existing_edge_zone_label = existing_it->second.edge_zone_label;
             }
-            MonitorSettings& msettings = monitor_settings[monitor_name];
+            else
+            {
+                // Create new settings (no UI widgets to preserve)
+                monitor_settings[monitor_name] = MonitorSettings();
+                existing_it = monitor_settings.find(monitor_name);
+            }
+            MonitorSettings& msettings = existing_it->second;
 
-            if (mon.contains("enabled")) msettings.enabled = mon["enabled"].get<bool>();
-            if (mon.contains("scale")) msettings.scale = mon["scale"].get<float>();
-            if (mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
-            if (mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
-            if (mon.contains("edge_zone_depth")) msettings.edge_zone_depth = mon["edge_zone_depth"].get<float>();
-            if (mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
+            // Load values from JSON
+            if(mon.contains("enabled")) msettings.enabled = mon["enabled"].get<bool>();
+            if(mon.contains("scale")) msettings.scale = mon["scale"].get<float>();
+            if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
+            if(mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
+            if(mon.contains("edge_zone_depth")) msettings.edge_zone_depth = mon["edge_zone_depth"].get<float>();
+            if(mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
 
             msettings.scale = std::clamp(msettings.scale, 0.0f, 2.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
             msettings.blend = std::clamp(msettings.blend, 0.0f, 100.0f);
             msettings.edge_zone_depth = std::clamp(msettings.edge_zone_depth, 0.0f, 0.5f);
+            
+            // Restore UI widget pointers if they existed before
+            if(had_existing)
+            {
+                msettings.group_box = existing_group_box;
+                msettings.ref_point_combo = existing_ref_point_combo;
+                msettings.scale_slider = existing_scale_slider;
+                msettings.softness_slider = existing_softness_slider;
+                msettings.softness_label = existing_softness_label;
+                msettings.blend_slider = existing_blend_slider;
+                msettings.blend_label = existing_blend_label;
+                msettings.edge_zone_slider = existing_edge_zone_slider;
+                msettings.edge_zone_label = existing_edge_zone_label;
+            }
         }
     }
 
     // Update UI - Global (convert float to slider values)
-    if (global_scale_slider)
+    if(global_scale_slider)
     {
         QSignalBlocker blocker(global_scale_slider);
         float clamped = std::clamp(global_scale, 0.0f, 2.0f);
         float slider_percent = (clamped / 2.0f) * 100.0f;
         global_scale_slider->setValue((int)std::lround(slider_percent));
     }
-    if (global_scale_invert_check)
+    if(global_scale_invert_check)
     {
         QSignalBlocker blocker(global_scale_invert_check);
         global_scale_invert_check->setChecked(invert_flag);
     }
-    if (smoothing_time_slider)
+    if(smoothing_time_slider)
     {
         QSignalBlocker blocker(smoothing_time_slider);
         smoothing_time_slider->setValue((int)std::lround(smoothing_time_ms));
     }
-    if (brightness_slider)
+    if(brightness_slider)
     {
         QSignalBlocker blocker(brightness_slider);
         brightness_slider->setValue((int)std::lround(brightness_multiplier * 100.0f));
     }
-    if (propagation_speed_slider)
+    if(propagation_speed_slider)
     {
         QSignalBlocker blocker(propagation_speed_slider);
         propagation_speed_slider->setValue((int)std::lround(propagation_speed_mm_per_ms * 10.0f));
     }
-    if (wave_decay_slider)
+    if(wave_decay_slider)
     {
         QSignalBlocker blocker(wave_decay_slider);
         wave_decay_slider->setValue((int)std::lround(wave_decay_ms));
     }
-    if (test_pattern_check)
+    if(test_pattern_check)
     {
         QSignalBlocker blocker(test_pattern_check);
         test_pattern_check->setChecked(show_test_pattern);
     }
 
     // Update monitor UI widgets to match loaded state
-    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
-         it != monitor_settings.end();
-         ++it)
+    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+        it != monitor_settings.end();
+        ++it)
     {
         MonitorSettings& msettings = it->second;
-        if (msettings.group_box)
+        if(msettings.group_box)
         {
             QSignalBlocker blocker(msettings.group_box);
             msettings.group_box->setChecked(msettings.enabled);
         }
-        if (msettings.scale_slider)
+        if(msettings.scale_slider)
         {
             QSignalBlocker blocker(msettings.scale_slider);
             msettings.scale_slider->setValue((int)std::lround(msettings.scale * 100.0f));
         }
-        if (msettings.softness_slider)
+        if(msettings.softness_slider)
         {
             QSignalBlocker blocker(msettings.softness_slider);
             msettings.softness_slider->setValue((int)std::lround(msettings.edge_softness));
         }
-        if (msettings.blend_slider)
+        if(msettings.blend_slider)
         {
             QSignalBlocker blocker(msettings.blend_slider);
             msettings.blend_slider->setValue((int)std::lround(msettings.blend));
         }
-        if (msettings.edge_zone_slider)
+        if(msettings.edge_zone_slider)
         {
             QSignalBlocker blocker(msettings.edge_zone_slider);
             msettings.edge_zone_slider->setValue((int)std::lround(msettings.edge_zone_depth * 100.0f));
         }
-        if (msettings.ref_point_combo)
+        if(msettings.ref_point_combo)
         {
             QSignalBlocker blocker(msettings.ref_point_combo);
             int desired = msettings.reference_point_index;
             int idx = msettings.ref_point_combo->findData(desired);
-            if (idx < 0)
+            if(idx < 0)
             {
                 idx = msettings.ref_point_combo->findData(-1);
             }
-            if (idx >= 0)
+            if(idx >= 0)
             {
                 msettings.ref_point_combo->setCurrentIndex(idx);
             }
@@ -1098,48 +1095,63 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 
     // Apply inversion flag after UI sync and recalc internal state
     SetScaleInverted(invert_flag);
+    
+    // Refresh monitor status display
+    RefreshMonitorStatus();
+    
     OnParameterChanged();
 }
 
 void ScreenMirror3D::OnParameterChanged()
 {
     // Update global settings (convert slider values to float)
-    if (global_scale_slider)
+    if(global_scale_slider)
     {
-        float slider_norm = clamp(global_scale_slider->value() / 100.0f, 0.0f, 1.0f);
-        global_scale = clamp(slider_norm * 2.0f, 0.0f, 2.0f);
+        float slider_norm = std::clamp(global_scale_slider->value() / 100.0f, 0.0f, 1.0f);
+        global_scale = std::clamp(slider_norm * 2.0f, 0.0f, 2.0f);
     }
-    if (global_scale_invert_check && global_scale_invert_check->isChecked() != IsScaleInverted())
+    if(global_scale_invert_check && global_scale_invert_check->isChecked() != IsScaleInverted())
     {
         QSignalBlocker blocker(global_scale_invert_check);
         global_scale_invert_check->setChecked(IsScaleInverted());
     }
-    if (smoothing_time_slider) smoothing_time_ms = (float)smoothing_time_slider->value();
-    if (brightness_slider) brightness_multiplier = brightness_slider->value() / 100.0f;
-    if (propagation_speed_slider) propagation_speed_mm_per_ms = propagation_speed_slider->value() / 10.0f;
-    if (wave_decay_slider) wave_decay_ms = (float)wave_decay_slider->value();
-    if (test_pattern_check) show_test_pattern = test_pattern_check->isChecked();
+    if(smoothing_time_slider) smoothing_time_ms = (float)smoothing_time_slider->value();
+    if(brightness_slider) brightness_multiplier = brightness_slider->value() / 100.0f;
+    if(propagation_speed_slider) propagation_speed_mm_per_ms = propagation_speed_slider->value() / 10.0f;
+    if(wave_decay_slider) wave_decay_ms = (float)wave_decay_slider->value();
+    if(test_pattern_check) show_test_pattern = test_pattern_check->isChecked();
 
     // Update per-monitor settings (convert slider values to float)
-    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
-         it != monitor_settings.end();
-         ++it)
+    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+        it != monitor_settings.end();
+        ++it)
     {
         MonitorSettings& settings = it->second;
-        if (settings.group_box) settings.enabled = settings.group_box->isChecked();
-        if (settings.scale_slider) settings.scale = settings.scale_slider->value() / 100.0f;
-        if (settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
-        if (settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
-        if (settings.edge_zone_slider) settings.edge_zone_depth = settings.edge_zone_slider->value() / 100.0f;
-        if (settings.ref_point_combo) settings.reference_point_index = settings.ref_point_combo->currentData().toInt();
+        if(settings.group_box) settings.enabled = settings.group_box->isChecked();
+        if(settings.scale_slider) settings.scale = settings.scale_slider->value() / 100.0f;
+        if(settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
+        if(settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
+        if(settings.edge_zone_slider) settings.edge_zone_depth = settings.edge_zone_slider->value() / 100.0f;
+        if(settings.ref_point_combo)
+        {
+            int index = settings.ref_point_combo->currentIndex();
+            if(index >= 0)
+            {
+                settings.reference_point_index = settings.ref_point_combo->itemData(index).toInt();
+            }
+        }
     }
 
+    // Refresh monitor status when parameters change (in case display planes were updated)
+    RefreshMonitorStatus();
+    RefreshReferencePointDropdowns();
+    
     emit ParametersChanged();
 }
 
 void ScreenMirror3D::OnScreenPreviewChanged()
 {
-    if (screen_preview_check)
+    if(screen_preview_check)
     {
         bool enabled = screen_preview_check->isChecked();
         emit ScreenPreviewChanged(enabled);
@@ -1152,73 +1164,89 @@ void ScreenMirror3D::OnScreenPreviewChanged()
 void ScreenMirror3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
 {
     reference_points = ref_points;
-
-    RefreshReferencePointDropdowns();
+    
+    // Only refresh dropdowns if this instance has UI (monitors_layout exists)
+    // and we have monitor settings with combo boxes
+    if(monitors_layout && monitor_settings.size() > 0)
+    {
+        // Check if any monitor settings have combo boxes
+        bool has_ui_widgets = false;
+        for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin(); it != monitor_settings.end(); ++it)
+        {
+            if(it->second.ref_point_combo)
+            {
+                has_ui_widgets = true;
+                break;
+            }
+        }
+        if(has_ui_widgets)
+        {
+            RefreshReferencePointDropdowns();
+        }
+    }
 }
 
 void ScreenMirror3D::RefreshReferencePointDropdowns()
 {
-    if (!reference_points) return;
+    if(!reference_points)
+    {
+        return;
+    }
 
-    // Update all monitor reference point dropdowns
-    for (std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
-         it != monitor_settings.end();
-         ++it)
+    // Only refresh if this instance has UI widgets (monitors_layout exists)
+    // Effect stack instances don't have UI, so skip them
+    if(!monitors_layout)
+    {
+        return;
+    }
+
+    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+        it != monitor_settings.end();
+        ++it)
     {
         MonitorSettings& settings = it->second;
-        if (!settings.ref_point_combo) continue;
+        if(!settings.ref_point_combo)
+        {
+            continue;
+        }
 
-        // Save current selection
         int current_index = settings.ref_point_combo->currentIndex();
         int current_data = -1;
-        if (current_index >= 0)
+        if(current_index >= 0)
         {
             current_data = settings.ref_point_combo->currentData().toInt();
         }
+        if(current_data < 0 && settings.reference_point_index >= 0)
+        {
+            current_data = settings.reference_point_index;
+        }
 
-        // Rebuild dropdown
         settings.ref_point_combo->blockSignals(true);
         settings.ref_point_combo->clear();
 
-        // Add "Room Center" option (uses calculated room center, not a reference point)
-        settings.ref_point_combo->addItem("Room Center", -1);
+        settings.ref_point_combo->addItem("Room Center", QVariant(-1));
 
-        // Add all reference points
-        for (size_t i = 0; i < reference_points->size(); i++)
+        for(size_t i = 0; i < reference_points->size(); i++)
         {
             VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
-            if (ref_point)
-            {
-                QString name = QString::fromStdString(ref_point->GetName());
-                QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-                QString display = QString("%1 (%2)").arg(name, type);
-                settings.ref_point_combo->addItem(display, (int)i);
-            }
+            if(!ref_point) continue;
+
+            QString name = QString::fromStdString(ref_point->GetName());
+            QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
+            QString display = QString("%1 (%2)").arg(name).arg(type);
+            settings.ref_point_combo->addItem(display, QVariant((int)i));
         }
 
-        // Restore selection
-        if (current_data >= -1)
+        if(current_data >= -1)
         {
-            int restore_index = settings.ref_point_combo->findData(current_data);
-            if (restore_index >= 0)
+            int restore_index = settings.ref_point_combo->findData(QVariant(current_data));
+            if(restore_index >= 0)
             {
                 settings.ref_point_combo->setCurrentIndex(restore_index);
             }
         }
 
         settings.ref_point_combo->blockSignals(false);
-    }
-
-    if(reference_points)
-    {
-        if(global_reference_point_index >= (int)reference_points->size())
-        {
-            global_reference_point_index = -1;
-        }
-    }
-    else
-    {
-        global_reference_point_index = -1;
     }
 }
 
@@ -1241,7 +1269,8 @@ bool ScreenMirror3D::ResolveReferencePoint(int index, Vector3D& out) const
 
 bool ScreenMirror3D::GetEffectReferencePoint(Vector3D& out) const
 {
-    return ResolveReferencePoint(global_reference_point_index, out);
+    (void)out;
+    return false;
 }
 
 void ScreenMirror3D::AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame)
@@ -1319,12 +1348,136 @@ float ScreenMirror3D::GetHistoryRetentionMs() const
 
 ScreenMirror3D::LEDKey ScreenMirror3D::MakeLEDKey(float x, float y, float z) const
 {
-    const float quantize_scale = 1000.0f; // Preserve millimeter precision
+    const float quantize_scale = 1000.0f;
     LEDKey key;
     key.x = (int)std::lround(x * quantize_scale);
     key.y = (int)std::lround(y * quantize_scale);
     key.z = (int)std::lround(z * quantize_scale);
     return key;
+}
+
+void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings)
+{
+    if(!plane || !monitors_layout)
+    {
+        return;
+    }
+
+    std::string plane_name = plane->GetName();
+    bool has_capture_source = !plane->GetCaptureSourceId().empty();
+
+    QString display_name = QString::fromStdString(plane_name);
+    if(!has_capture_source)
+    {
+        display_name += " (No Capture Source)";
+    }
+    settings.group_box = new QGroupBox(display_name);
+    settings.group_box->setCheckable(true);
+    settings.group_box->setChecked(settings.enabled && has_capture_source);
+    settings.group_box->setEnabled(has_capture_source);
+    if(has_capture_source)
+    {
+        settings.group_box->setToolTip("Enable or disable this monitor's influence.");
+    }
+    else
+    {
+        settings.group_box->setToolTip("This monitor needs a capture source assigned in Display Plane settings.");
+        settings.group_box->setStyleSheet("QGroupBox { color: #cc6600; }");
+    }
+    connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror3D::OnParameterChanged);
+
+    QFormLayout* monitor_form = new QFormLayout();
+    monitor_form->setContentsMargins(8, 4, 8, 4);
+
+    settings.scale_slider = new QSlider(Qt::Horizontal);
+    settings.scale_slider->setEnabled(has_capture_source);
+    settings.scale_slider->setRange(0, 200);
+    settings.scale_slider->setValue((int)(settings.scale * 100));
+    settings.scale_slider->setTickPosition(QSlider::TicksBelow);
+    settings.scale_slider->setTickInterval(25);
+    settings.scale_slider->setToolTip("Per-monitor brightness reach (0% to 200%).");
+    connect(settings.scale_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    monitor_form->addRow("Scale:", settings.scale_slider);
+
+    settings.ref_point_combo = new QComboBox();
+    settings.ref_point_combo->addItem("Room Center", QVariant(-1));
+    settings.ref_point_combo->setEnabled(has_capture_source);
+    settings.ref_point_combo->setToolTip("Anchor for falloff distance. Defaults to the display plane's position for ambilight effects.");
+    connect(settings.ref_point_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ScreenMirror3D::OnParameterChanged);
+    
+    int plane_ref_index = plane->GetReferencePointIndex();
+    if(plane_ref_index >= 0 && settings.reference_point_index < 0)
+    {
+        settings.reference_point_index = plane_ref_index;
+    }
+    
+    monitor_form->addRow("Reference:", settings.ref_point_combo);
+
+    QWidget* softness_widget = new QWidget();
+    QHBoxLayout* softness_layout = new QHBoxLayout(softness_widget);
+    softness_layout->setContentsMargins(0, 0, 0, 0);
+    settings.softness_slider = new QSlider(Qt::Horizontal);
+    settings.softness_slider->setRange(0, 100);
+    settings.softness_slider->setValue((int)settings.edge_softness);
+    settings.softness_slider->setEnabled(has_capture_source);
+    settings.softness_slider->setTickPosition(QSlider::TicksBelow);
+    settings.softness_slider->setTickInterval(10);
+    settings.softness_slider->setToolTip("Edge feathering (0 = hard, 100 = very soft).");
+    softness_layout->addWidget(settings.softness_slider);
+    settings.softness_label = new QLabel(QString::number((int)settings.edge_softness));
+    settings.softness_label->setMinimumWidth(30);
+    softness_layout->addWidget(settings.softness_label);
+    connect(settings.softness_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.softness_slider, &QSlider::valueChanged, settings.softness_label, [&settings](int value) {
+        settings.softness_label->setText(QString::number(value));
+    });
+    monitor_form->addRow("Softness:", softness_widget);
+
+    QWidget* blend_widget = new QWidget();
+    QHBoxLayout* blend_layout = new QHBoxLayout(blend_widget);
+    blend_layout->setContentsMargins(0, 0, 0, 0);
+    settings.blend_slider = new QSlider(Qt::Horizontal);
+    settings.blend_slider->setRange(0, 100);
+    settings.blend_slider->setValue((int)settings.blend);
+    settings.blend_slider->setEnabled(has_capture_source);
+    settings.blend_slider->setTickPosition(QSlider::TicksBelow);
+    settings.blend_slider->setTickInterval(10);
+    settings.blend_slider->setToolTip("Blend with other monitors (0 = isolated, 100 = fully shared).");
+    blend_layout->addWidget(settings.blend_slider);
+    settings.blend_label = new QLabel(QString::number((int)settings.blend));
+    settings.blend_label->setMinimumWidth(30);
+    blend_layout->addWidget(settings.blend_label);
+    connect(settings.blend_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.blend_slider, &QSlider::valueChanged, settings.blend_label, [&settings](int value) {
+        settings.blend_label->setText(QString::number(value));
+    });
+    monitor_form->addRow("Blend:", blend_widget);
+
+    QWidget* edge_zone_widget = new QWidget();
+    QHBoxLayout* edge_zone_layout = new QHBoxLayout(edge_zone_widget);
+    edge_zone_layout->setContentsMargins(0, 0, 0, 0);
+    settings.edge_zone_slider = new QSlider(Qt::Horizontal);
+    settings.edge_zone_slider->setRange(0, 50);
+    settings.edge_zone_slider->setValue((int)std::round(settings.edge_zone_depth * 100.0f));
+    settings.edge_zone_slider->setEnabled(has_capture_source);
+    settings.edge_zone_slider->setTickPosition(QSlider::TicksBelow);
+    settings.edge_zone_slider->setTickInterval(10);
+    settings.edge_zone_slider->setToolTip("Sample inside the screen edge (0 = boundary, 50 = half-way).");
+    edge_zone_layout->addWidget(settings.edge_zone_slider);
+    settings.edge_zone_label = new QLabel(QString::number((int)std::round(settings.edge_zone_depth * 100.0f)));
+    settings.edge_zone_label->setMinimumWidth(30);
+    edge_zone_layout->addWidget(settings.edge_zone_label);
+    connect(settings.edge_zone_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.edge_zone_slider, &QSlider::valueChanged, settings.edge_zone_label, [&settings](int value) {
+        settings.edge_zone_label->setText(QString::number(value));
+    });
+    monitor_form->addRow("Edge Zone:", edge_zone_widget);
+
+    settings.group_box->setLayout(monitor_form);
+    monitors_layout->addWidget(settings.group_box);
+    
+    // Don't call RefreshReferencePointDropdowns here - it will be called after SetReferencePoints
+    // The combo box will be populated when reference_points is set and RefreshReferencePointDropdowns is called
 }
 
 void ScreenMirror3D::StartCaptureIfNeeded()
@@ -1334,20 +1487,20 @@ void ScreenMirror3D::StartCaptureIfNeeded()
 
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
 
-    if (!capture_mgr.IsInitialized())
+    if(!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();
     }
 
-    for (size_t plane_index = 0; plane_index < planes.size(); plane_index++)
+    for(size_t plane_index = 0; plane_index < planes.size(); plane_index++)
     {
         DisplayPlane3D* plane = planes[plane_index];
-        if (!plane) continue;
+        if(!plane) continue;
 
         std::string capture_id = plane->GetCaptureSourceId();
-        if (capture_id.empty()) continue;
+        if(capture_id.empty()) continue;
 
-        if (!capture_mgr.IsCapturing(capture_id))
+        if(!capture_mgr.IsCapturing(capture_id))
         {
             capture_mgr.StartCapture(capture_id);
             LOG_INFO("[ScreenMirror3D] Started capture for '%s' (plane: %s)",
@@ -1358,6 +1511,134 @@ void ScreenMirror3D::StartCaptureIfNeeded()
 
 void ScreenMirror3D::StopCaptureIfNeeded()
 {
-    // We could stop capture here, but better to leave it running
-    // in case other effects or instances are using it
+    // Screen capture is managed globally by ScreenCaptureManager
+    // We don't stop it here as other effects or instances may be using it
+    // The manager handles cleanup when all references are gone
+}
+
+void ScreenMirror3D::RefreshMonitorStatus()
+{
+    if(!monitor_status_label) return;
+
+    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
+    int total_count = 0;
+    int active_count = 0;
+    
+    // Update existing monitor group boxes to reflect current capture source status
+    for(unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
+    {
+        DisplayPlane3D* plane = planes[plane_index];
+        if(!plane) continue;
+        
+        total_count++;
+        bool has_capture_source = !plane->GetCaptureSourceId().empty();
+        if(has_capture_source)
+        {
+            active_count++;
+        }
+        
+        std::string plane_name = plane->GetName();
+        std::map<std::string, MonitorSettings>::iterator settings_it = monitor_settings.find(plane_name);
+        if(settings_it == monitor_settings.end())
+        {
+            MonitorSettings new_settings;
+            int plane_ref_index = plane->GetReferencePointIndex();
+            if(plane_ref_index >= 0)
+            {
+                new_settings.reference_point_index = plane_ref_index;
+            }
+            monitor_settings[plane_name] = new_settings;
+            settings_it = monitor_settings.find(plane_name);
+        }
+        MonitorSettings& settings = settings_it->second;
+        
+        if(settings.reference_point_index < 0)
+        {
+            int plane_ref_index = plane->GetReferencePointIndex();
+            if(plane_ref_index >= 0)
+            {
+                settings.reference_point_index = plane_ref_index;
+            }
+        }
+
+        if(!settings.group_box && monitors_container && monitors_layout)
+        {
+            CreateMonitorSettingsUI(plane, settings);
+        }
+        else if(settings.group_box)
+        {
+            QString display_name = QString::fromStdString(plane_name);
+            if(!has_capture_source)
+            {
+                display_name += " (No Capture Source)";
+            }
+            settings.group_box->setTitle(display_name);
+            settings.group_box->setEnabled(has_capture_source);
+            
+            if(has_capture_source)
+            {
+                settings.group_box->setToolTip("Enable or disable this monitor's influence.");
+                settings.group_box->setStyleSheet("");
+            }
+            else
+            {
+                settings.group_box->setToolTip("This monitor needs a capture source assigned in Display Plane settings.");
+                settings.group_box->setStyleSheet("QGroupBox { color: #cc6600; }");
+            }
+            
+            if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
+            if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
+            if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
+            if(settings.blend_slider) settings.blend_slider->setEnabled(has_capture_source);
+            if(settings.edge_zone_slider) settings.edge_zone_slider->setEnabled(has_capture_source);
+            
+            if(!has_capture_source && settings.group_box->isChecked())
+            {
+                settings.group_box->setChecked(false);
+            }
+        }
+    }
+
+    QString status_text;
+    if(total_count == 0)
+    {
+        status_text = "No Display Planes configured";
+    }
+    else if(active_count == 0)
+    {
+        status_text = QString("Display Planes: %1 (none have capture sources)").arg(total_count);
+    }
+    else
+    {
+        status_text = QString("Display Planes: %1 total, %2 active").arg(total_count).arg(active_count);
+    }
+    monitor_status_label->setText(status_text);
+
+    // Update or create help label
+    QWidget* parent = monitor_status_label->parentWidget();
+    if(parent)
+    {
+        QGroupBox* status_group = qobject_cast<QGroupBox*>(parent);
+        if(status_group && status_group->layout())
+        {
+            if(total_count > 0 && active_count == 0)
+            {
+                if(!monitor_help_label)
+                {
+                    monitor_help_label = new QLabel("Tip: Assign capture sources to Display Planes in the Object Creator tab.");
+                    monitor_help_label->setWordWrap(true);
+                    monitor_help_label->setStyleSheet("QLabel { color: #cc6600; font-style: italic; }");
+                    status_group->layout()->addWidget(monitor_help_label);
+                }
+            }
+            else
+            {
+                if(monitor_help_label)
+                {
+                    monitor_help_label->deleteLater();
+                    monitor_help_label = nullptr;
+                }
+            }
+        }
+    }
 }
