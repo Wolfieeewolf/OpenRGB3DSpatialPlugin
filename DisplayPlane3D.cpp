@@ -19,7 +19,8 @@ DisplayPlane3D::DisplayPlane3D(const std::string& name_value) :
     name(name_value),
     width_mm(1000.0f),
     height_mm(600.0f),
-    visible(true)
+    visible(true),
+    reference_point_index(-1)
 {
     transform.position = {0.0f, 0.0f, 0.0f};
     transform.rotation = {0.0f, 0.0f, 0.0f};
@@ -40,6 +41,10 @@ nlohmann::json DisplayPlane3D::ToJson() const
     if(!monitor_preset_id.empty())
     {
         j["monitor_preset_id"] = monitor_preset_id;
+    }
+    if(reference_point_index >= 0)
+    {
+        j["reference_point_index"] = reference_point_index;
     }
 
     nlohmann::json t;
@@ -76,6 +81,7 @@ std::unique_ptr<DisplayPlane3D> DisplayPlane3D::FromJson(const nlohmann::json& j
     plane->capture_source_id = j.value("capture_id", std::string());
     plane->capture_label     = j.value("capture_label", std::string());
     plane->monitor_preset_id = j.value("monitor_preset_id", std::string());
+    plane->reference_point_index = j.value("reference_point_index", -1);
 
     if(j.contains("transform"))
     {

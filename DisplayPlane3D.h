@@ -54,6 +54,9 @@ public:
     const std::string&  GetMonitorPresetId() const { return monitor_preset_id; }
     void                SetMonitorPresetId(const std::string& preset_id) { monitor_preset_id = preset_id; }
 
+    int                 GetReferencePointIndex() const { return reference_point_index; }
+    void                SetReferencePointIndex(int index) { reference_point_index = index; }
+
     nlohmann::json      ToJson() const;
     static std::unique_ptr<DisplayPlane3D> FromJson(const nlohmann::json& j);
 
@@ -67,6 +70,7 @@ private:
     std::string     capture_source_id;
     std::string     capture_label;
     std::string     monitor_preset_id;
+    int             reference_point_index;  // Index into reference_points vector (-1 = none)
 
     static int      next_id;
 };
