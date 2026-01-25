@@ -112,20 +112,38 @@ release:
       artifacts: true
     - job: build-linux
       artifacts: true
+  variables:
+    GITHUB_TOKEN: $GITHUB_TOKEN
   script:
     - |
       # Check for artifacts from build jobs
       echo "Checking for build artifacts..."
       if [ -f "release/OpenRGB3DSpatialPlugin.dll" ]; then
-        echo "✓ Windows DLL artifact found"
+        echo "✓ Windows DLL artifact found from GitLab build"
       else
-        echo "⚠ Warning: Windows DLL artifact not found"
+        echo "⚠ Warning: Windows DLL artifact not found from GitLab build"
+        # Try to download from GitHub Actions if available
+        if [ ! -z "$GITHUB_TOKEN" ]; then
+          echo "Attempting to download Windows DLL from GitHub Actions..."
+          PACKAGE_VERSION=$(git rev-parse --short HEAD)
+          curl -s --header "PRIVATE-TOKEN: ${GITHUB_TOKEN}" \
+            --output "release/OpenRGB3DSpatialPlugin.dll" \
+            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/packages/generic/build-artifacts/${PACKAGE_VERSION}/OpenRGB3DSpatialPlugin.dll" || echo "Could not download from GitLab packages"
+        fi
       fi
       
       if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
-        echo "✓ Linux SO artifact found"
+        echo "✓ Linux SO artifact found from GitLab build"
       else
-        echo "⚠ Warning: Linux SO artifact not found"
+        echo "⚠ Warning: Linux SO artifact not found from GitLab build"
+        # Try to download from GitHub Actions if available
+        if [ ! -z "$GITHUB_TOKEN" ]; then
+          echo "Attempting to download Linux SO from GitHub Actions..."
+          PACKAGE_VERSION=$(git rev-parse --short HEAD)
+          curl -s --header "PRIVATE-TOKEN: ${GITHUB_TOKEN}" \
+            --output "libOpenRGB3DSpatialPlugin.so" \
+            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/packages/generic/build-artifacts/${PACKAGE_VERSION}/libOpenRGB3DSpatialPlugin.so" || echo "Could not download from GitLab packages"
+        fi
       fi
     - |
       VERSION=${CI_COMMIT_TAG#v}
