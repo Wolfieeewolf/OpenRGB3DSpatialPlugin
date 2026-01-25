@@ -64,6 +64,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stop_effect_button = nullptr;
     stack_blend_container = nullptr;
     stack_effect_blend_combo = nullptr;
+    origin_label = nullptr;
     effect_origin_combo = nullptr;
     effect_zone_combo = nullptr;
     effect_category_combo = nullptr;
@@ -1554,6 +1555,19 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     display_layout->addLayout(display_buttons);
 
+    // Create scroll area for settings to prevent squashing
+    QScrollArea* display_settings_scroll = new QScrollArea();
+    display_settings_scroll->setWidgetResizable(true);
+    display_settings_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    display_settings_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    display_settings_scroll->setFrameShape(QFrame::NoFrame);
+    
+    // Container widget for scrollable content
+    QWidget* settings_container = new QWidget();
+    QVBoxLayout* settings_container_layout = new QVBoxLayout(settings_container);
+    settings_container_layout->setContentsMargins(4, 4, 4, 4);
+    settings_container_layout->setSpacing(6);
+
     QGridLayout* plane_form = new QGridLayout();
     plane_form->setHorizontalSpacing(8);
     plane_form->setVerticalSpacing(6);
@@ -1618,7 +1632,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_refresh_capture_btn, plane_row, 3);
     plane_row++;
 
-    display_layout->addLayout(plane_form);
+    settings_container_layout->addLayout(plane_form);
 
     display_plane_visible_check = new QCheckBox("Visible in viewport");
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -1630,9 +1644,15 @@ void OpenRGB3DSpatialTab::SetupUI()
                 on_display_plane_visible_toggled(static_cast<Qt::CheckState>(state));
             });
 #endif
-    display_layout->addWidget(display_plane_visible_check);
+    settings_container_layout->addWidget(display_plane_visible_check);
 
-    display_layout->addStretch();
+    settings_container_layout->addStretch();
+    
+    // Set the container as the scroll area's widget
+    display_settings_scroll->setWidget(settings_container);
+    
+    // Add scroll area to main layout
+    display_layout->addWidget(display_settings_scroll, 1); // Give it stretch factor to take available space
 
     creator_stack->addWidget(display_plane_page);
     RefreshDisplayPlaneCaptureSourceList();
@@ -1735,7 +1755,7 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_effect_zone_changed(int)));
     effect_layout->addWidget(effect_zone_combo);
 
-    QLabel* origin_label = new QLabel("Origin:");
+    origin_label = new QLabel("Origin:");
     effect_layout->addWidget(origin_label);
     effect_origin_combo = new QComboBox();
     effect_origin_combo->addItem("Room Center", QVariant(-1));
@@ -2149,7 +2169,18 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
         if (screen_mirror)
         {
             screen_mirror->SetReferencePoints(&reference_points);
+            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
         }
+        
+        if(origin_label) origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+    }
+    else
+    {
+        if(origin_label) origin_label->setVisible(true);
+        if(effect_origin_combo) effect_origin_combo->setVisible(true);
     }
 
     /*---------------------------------------------------------*\
@@ -2476,6 +2507,19 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     if(index < 0 || index >= (int)effect_stack.size())
     {
         return;
+    }
+
+    QString class_name = effect_combo->itemData(index, kEffectRoleClassName).toString();
+    
+    if(class_name == QLatin1String("ScreenMirror3D"))
+    {
+        if(origin_label) origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+    }
+    else
+    {
+        if(origin_label) origin_label->setVisible(true);
+        if(effect_origin_combo) effect_origin_combo->setVisible(true);
     }
 
     if(effect_stack_list->currentRow() != index)

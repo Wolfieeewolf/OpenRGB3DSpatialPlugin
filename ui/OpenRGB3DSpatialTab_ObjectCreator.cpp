@@ -1046,16 +1046,29 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             if(plane_index >= 0 && plane_index < (int)display_planes.size())
             {
                 display_planes[plane_index]->SetVisible(false);
+                
+                // If the removed plane was selected, clear selection
+                if(current_display_plane_index == plane_index)
+                {
+                    current_display_plane_index = -1;
+                    if(display_planes_list)
+                    {
+                        QSignalBlocker block(display_planes_list);
+                        display_planes_list->setCurrentRow(-1);
+                    }
+                    RefreshDisplayPlaneDetails();
+                }
             }
-        controller_list->takeItem(selected_row);
-        viewport->update();
-        NotifyDisplayPlaneChanged();
-        emit GridLayoutChanged();
-        UpdateAvailableControllersList();
-        UpdateAvailableItemCombo();
-        RefreshHiddenControllerStates();
-        return;
-    }
+            controller_list->takeItem(selected_row);
+            viewport->update();
+            NotifyDisplayPlaneChanged();
+            emit GridLayoutChanged();
+            UpdateDisplayPlanesList();  // Update the display planes list to reflect visibility change
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
+            RefreshHiddenControllerStates();
+            return;
+        }
     }
 
     // Handle regular controllers (in controller_transforms)
@@ -3169,12 +3182,21 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
             item->setForeground(QColor(0x888888));
         }
     }
+    
+    // Set selection before unblocking signals so the selection handler fires
+    if(desired_index >= 0 && desired_index < (int)display_planes.size())
+    {
+        display_planes_list->setCurrentRow(desired_index);
+    }
+    else
+    {
+        display_planes_list->setCurrentRow(-1);
+    }
+    
     display_planes_list->blockSignals(false);
 
-    if(remove_display_plane_button)
-    {
-        remove_display_plane_button->setEnabled(!display_planes.empty());
-    }
+    // Update remove button state - should be enabled if a plane is selected
+    // This will be updated by RefreshDisplayPlaneDetails() below
 
     if(display_planes.empty())
     {
@@ -3184,31 +3206,19 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         return;
     }
 
+    // Selection was set above while signals were blocked, now update state
     if(desired_index >= 0 && desired_index < (int)display_planes.size())
     {
         current_display_plane_index = desired_index;
-        display_planes_list->setCurrentRow(desired_index);
+        // Manually trigger selection handler since we blocked signals
+        on_display_plane_selected(desired_index);
     }
     else
     {
         current_display_plane_index = -1;
-        display_planes_list->setCurrentRow(-1);
+        // Manually trigger selection handler to clear controls
+        on_display_plane_selected(-1);
     }
-
-    DisplayPlane3D* plane = GetSelectedDisplayPlane();
-    if(viewport)
-    {
-        if(plane && plane->IsVisible())
-        {
-            viewport->SelectDisplayPlane(current_display_plane_index);
-        }
-        else
-        {
-            viewport->SelectDisplayPlane(-1);
-        }
-    }
-
-    RefreshDisplayPlaneDetails();
 }
 
 
@@ -3360,6 +3370,18 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
 
 void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
 {
+    // Validate index
+    if(index < 0 || index >= (int)display_planes.size())
+    {
+        current_display_plane_index = -1;
+        RefreshDisplayPlaneDetails();
+        if(viewport)
+        {
+            viewport->SelectDisplayPlane(-1);
+        }
+        return;
+    }
+
     current_display_plane_index = index;
 
     if(controller_list)
@@ -3374,15 +3396,26 @@ void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
     }
 
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
-    SyncDisplayPlaneControls(plane);
-    RefreshDisplayPlaneDetails();
-    if(viewport)
+    if(plane)
     {
-        if(plane && plane->IsVisible())
+        SyncDisplayPlaneControls(plane);
+        RefreshDisplayPlaneDetails();
+        if(viewport)
         {
-            viewport->SelectDisplayPlane(index);
+            if(plane->IsVisible())
+            {
+                viewport->SelectDisplayPlane(index);
+            }
+            else
+            {
+                viewport->SelectDisplayPlane(-1);
+            }
         }
-        else
+    }
+    else
+    {
+        RefreshDisplayPlaneDetails();
+        if(viewport)
         {
             viewport->SelectDisplayPlane(-1);
         }
@@ -3404,6 +3437,34 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->GetTransform().position.z = room_depth_units * 0.5f;
     plane->SetVisible(false);  // Not visible until added to viewport
 
+    // Automatically create a reference point for this display plane
+    // This makes ambilight effects work better by radiating from the screen position
+    std::string ref_point_name = full_name + " Reference";
+    Vector3D plane_pos = plane->GetTransform().position;
+    std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(
+        ref_point_name, 
+        REF_POINT_MONITOR,
+        plane_pos.x,
+        plane_pos.y,
+        plane_pos.z
+    );
+    ref_point->SetDisplayColor(0x00FF00); // Green color for monitor reference points
+    ref_point->SetVisible(false);  // Not visible until added to viewport
+    
+    int ref_point_index = (int)reference_points.size();
+    reference_points.push_back(std::move(ref_point));
+    plane->SetReferencePointIndex(ref_point_index);
+    
+    // Update the reference point's rotation to match the display plane
+    if(ref_point_index >= 0 && ref_point_index < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_pt = reference_points[ref_point_index].get();
+        if(ref_pt)
+        {
+            ref_pt->GetTransform().rotation = plane->GetTransform().rotation;
+        }
+    }
+
     display_planes.push_back(std::move(plane));
 
     // Add to available controllers list with metadata
@@ -3411,17 +3472,19 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     QListWidgetItem* item = new QListWidgetItem(QString("[Display] ") + QString::fromStdString(full_name));
     item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, new_plane_id))); // -3 = display plane id
     available_controllers_list->addItem(item);
+    
+    // Set selection index and update UI
+    // UpdateDisplayPlanesList will handle selection and trigger on_display_plane_selected
     current_display_plane_index = (int)display_planes.size() - 1;
     UpdateDisplayPlanesList();
-    DisplayPlane3D* new_plane = GetSelectedDisplayPlane();
-    SyncDisplayPlaneControls(new_plane);
-    RefreshDisplayPlaneDetails();
 
     QMessageBox::information(this, "Display Plane Created",
                             QString("Display plane '%1' created successfully!\n\nYou can now add it to the 3D view from the Available Controllers list.")
                             .arg(QString::fromStdString(full_name)));
 
     UpdateAvailableControllersList();
+    UpdateReferencePointsList();  // Update reference points list to show the new one
+    
     if(new_plane_id >= 0)
     {
         SelectAvailableControllerEntry(-3, new_plane_id);
@@ -3518,12 +3581,44 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
     }
 
     int removed_plane_id = display_planes[current_display_plane_index]->GetId();
+    
+    // Also remove the associated reference point if it exists
+    DisplayPlane3D* plane_to_remove = display_planes[current_display_plane_index].get();
+    if(plane_to_remove)
+    {
+        int ref_point_index = plane_to_remove->GetReferencePointIndex();
+        if(ref_point_index >= 0 && ref_point_index < (int)reference_points.size())
+        {
+            // Remove reference point from list
+            reference_points.erase(reference_points.begin() + ref_point_index);
+            // Update indices for other display planes that reference points after this one
+            for(size_t i = 0; i < display_planes.size(); i++)
+            {
+                if(display_planes[i])
+                {
+                    int plane_ref_idx = display_planes[i]->GetReferencePointIndex();
+                    if(plane_ref_idx > ref_point_index)
+                    {
+                        display_planes[i]->SetReferencePointIndex(plane_ref_idx - 1);
+                    }
+                }
+            }
+            UpdateReferencePointsList();
+        }
+    }
 
     display_planes.erase(display_planes.begin() + current_display_plane_index);
+    
+    // Adjust selection index
     if(current_display_plane_index >= (int)display_planes.size())
     {
         current_display_plane_index = (int)display_planes.size() - 1;
     }
+    if(current_display_plane_index < 0 && !display_planes.empty())
+    {
+        current_display_plane_index = 0;
+    }
+    
     RemoveDisplayPlaneControllerEntries(removed_plane_id);
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
@@ -3694,6 +3789,18 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
     transform.position.y = y;
     transform.position.z = z;
 
+    // Update linked reference point position to match display plane
+    int ref_index = plane->GetReferencePointIndex();
+    if(ref_index >= 0 && ref_index < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[ref_index].get();
+        if(ref_point)
+        {
+            Vector3D ref_pos = {x, y, z};
+            ref_point->SetPosition(ref_pos);
+        }
+    }
+
     SyncDisplayPlaneControls(plane);
     RefreshDisplayPlaneDetails();
     emit GridLayoutChanged();
@@ -3738,6 +3845,18 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
     transform.rotation.x = x;
     transform.rotation.y = y;
     transform.rotation.z = z;
+
+    // Update linked reference point rotation to match display plane
+    int ref_index = plane->GetReferencePointIndex();
+    if(ref_index >= 0 && ref_index < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[ref_index].get();
+        if(ref_point)
+        {
+            Rotation3D ref_rot = {x, y, z};
+            ref_point->GetTransform().rotation = ref_rot;
+        }
+    }
 
     SyncDisplayPlaneControls(plane);
     RefreshDisplayPlaneDetails();

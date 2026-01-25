@@ -315,6 +315,7 @@ private:
     | Effects Section Controls                                 |
     \*---------------------------------------------------------*/
     QComboBox*                  effect_combo;
+    QLabel*                     origin_label;
     QComboBox*                  effect_origin_combo;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;

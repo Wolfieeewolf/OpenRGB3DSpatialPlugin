@@ -37,9 +37,19 @@ Write-Host "Latest commit: $commitMessage" -ForegroundColor Yellow
 # Create annotated tag
 git tag -a $tagName -m "$commitMessage"
 
-# Push tag
-Write-Host "Pushing tag to remote..." -ForegroundColor Green
+# Push tag to both remotes
+Write-Host "Pushing tag to remotes..." -ForegroundColor Green
 git push origin $tagName
+
+# Also push to GitLab if remote exists
+$gitlabRemote = git remote | Select-String "^gitlab$"
+if ($gitlabRemote) {
+    Write-Host "Pushing tag to GitLab..." -ForegroundColor Green
+    git push gitlab $tagName
+} else {
+    Write-Host "GitLab remote not found, skipping GitLab push" -ForegroundColor Yellow
+}
 
 Write-Host "`nTag created and pushed successfully: $tagName" -ForegroundColor Green
 Write-Host "Format: YY.MM.DD.version (e.g., v26.01.26.1)" -ForegroundColor Cyan
+Write-Host "Tag pushed to GitHub and GitLab" -ForegroundColor Cyan
