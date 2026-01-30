@@ -1,5 +1,6 @@
 # PowerShell script to create a release tag with correct format
-# Format: vYY.MM.DD.version (e.g., v26.01.26.1)
+# Format: vYY.MM.DD.version (e.g., v26.01.30.1)
+# Date is always today in Australian timezone (AUS Eastern Standard Time).
 # Usage: .\create-release-tag.ps1 [version_number] [commit_message]
 # If version_number is 0 or not provided, auto-increments from existing tags for today
 
@@ -8,8 +9,9 @@ param(
     [string]$Message = ""
 )
 
-# Get current date components
-$date = Get-Date
+# Get current date in Australian timezone (AUS Eastern - Sydney/Melbourne)
+$tz = [TimeZoneInfo]::FindSystemTimeZoneById("AUS Eastern Standard Time")
+$date = [TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $tz)
 $year = $date.ToString("yy")
 $month = $date.ToString("MM")
 $day = $date.ToString("dd")
@@ -58,12 +60,18 @@ Write-Host "Message: $Message" -ForegroundColor Cyan
 # Create annotated tag
 git tag -a $tagName -m $Message
 
-# Ask for confirmation before pushing
-Write-Host "`nTag created locally. Push to remote? (Y/N)" -ForegroundColor Yellow
+# Ask for confirmation before pushing (pushing triggers auto-release on GitHub and GitLab)
+Write-Host "`nTag created locally. Push to remotes? (Y/N) - Pushing triggers auto-release on GitHub and GitLab" -ForegroundColor Yellow
 $response = Read-Host
 if ($response -eq "Y" -or $response -eq "y") {
     git push origin $tagName
-    Write-Host "Tag pushed to remote: $tagName" -ForegroundColor Green
+    Write-Host "Tag pushed to origin (GitHub): $tagName" -ForegroundColor Green
+    $gitlabRemote = git remote | Select-String "^gitlab$"
+    if ($gitlabRemote) {
+        git push gitlab $tagName
+        Write-Host "Tag pushed to gitlab: $tagName" -ForegroundColor Green
+    }
+    Write-Host "Auto-release will run on both pipelines (GitHub Actions + GitLab CI)." -ForegroundColor Cyan
 } else {
-    Write-Host "Tag created locally only. Push manually with: git push origin $tagName" -ForegroundColor Yellow
+    Write-Host "Tag created locally only. Push manually: git push origin $tagName; git push gitlab $tagName" -ForegroundColor Yellow
 }
