@@ -43,6 +43,8 @@ public:
     void SelectDisplayPlane(int index);
     void NotifyDisplayPlaneChanged();
     void SetShowScreenPreview(bool show) { show_screen_preview = show; update(); }
+    void SetShowTestPattern(bool show) { show_test_pattern = show; update(); }
+    void ClearDisplayPlaneTextures();
 
     // Camera persistence helpers
     void SetCamera(float distance, float yaw, float pitch,
@@ -150,6 +152,7 @@ private:
     int                                     selected_display_plane_idx;
     int                                     selected_ref_point_idx;
     bool                                    show_screen_preview;
+    bool                                    show_test_pattern;
     std::map<std::string, GLuint>           display_plane_textures;  // Texture IDs per capture source
 
     float   camera_distance;

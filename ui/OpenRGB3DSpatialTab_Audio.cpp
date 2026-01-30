@@ -343,6 +343,8 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
         {
             connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                     viewport, &LEDViewport3D::SetShowScreenPreview);
+            connect(screen_mirror, &ScreenMirror3D::TestPatternChanged,
+                    viewport, &LEDViewport3D::SetShowTestPattern);
             screen_mirror->SetReferencePoints(&reference_points);
         }
     }

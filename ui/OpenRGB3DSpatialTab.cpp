@@ -2174,8 +2174,25 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
             QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
         }
         
-        if(origin_label) origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        // Remove origin dropdown from layout completely
+        if(origin_label && origin_label->parentWidget())
+        {
+            QLayout* layout = origin_label->parentWidget()->layout();
+            if(layout)
+            {
+                layout->removeWidget(origin_label);
+            }
+            origin_label->hide();
+        }
+        if(effect_origin_combo && effect_origin_combo->parentWidget())
+        {
+            QLayout* layout = effect_origin_combo->parentWidget()->layout();
+            if(layout)
+            {
+                layout->removeWidget(effect_origin_combo);
+            }
+            effect_origin_combo->hide();
+        }
     }
     else
     {
@@ -2188,6 +2205,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
     \*---------------------------------------------------------*/
     start_effect_button = effect->GetStartButton();
     stop_effect_button = effect->GetStopButton();
+    
     connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
     connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
     connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]()

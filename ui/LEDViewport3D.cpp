@@ -93,6 +93,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , selected_display_plane_idx(-1)
     , selected_ref_point_idx(-1)
     , show_screen_preview(false)
+    , show_test_pattern(false)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
     , camera_pitch(30.0f)
@@ -310,9 +311,14 @@ void LEDViewport3D::paintGL()
     DrawRoomBoundary();
 
     // Update textures before drawing display planes
-    if(show_screen_preview)
+    if(show_screen_preview && !show_test_pattern)
     {
         UpdateDisplayPlaneTextures();
+    }
+    else
+    {
+        // Clear textures when preview is disabled to free memory
+        ClearDisplayPlaneTextures();
     }
 
     DrawDisplayPlanes();
@@ -1011,7 +1017,76 @@ void LEDViewport3D::DrawDisplayPlanes()
         float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
 
-        if(show_screen_preview)
+        // Check per-monitor test pattern setting
+        // For now, use global flag (will be enhanced to check per-monitor via effect instance)
+        bool plane_test_pattern = show_test_pattern;
+        
+        if(plane_test_pattern)
+        {
+            // Draw test pattern: 4 quadrants (Red, Green, Blue, Yellow)
+            Vector3D center;
+            center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
+            center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
+            center.z = (world_corners[0].z + world_corners[2].z) * 0.5f;
+
+            Vector3D mid_bottom, mid_top, mid_left, mid_right;
+            mid_bottom.x = (world_corners[0].x + world_corners[1].x) * 0.5f;
+            mid_bottom.y = (world_corners[0].y + world_corners[1].y) * 0.5f;
+            mid_bottom.z = (world_corners[0].z + world_corners[1].z) * 0.5f;
+
+            mid_top.x = (world_corners[2].x + world_corners[3].x) * 0.5f;
+            mid_top.y = (world_corners[2].y + world_corners[3].y) * 0.5f;
+            mid_top.z = (world_corners[2].z + world_corners[3].z) * 0.5f;
+
+            mid_left.x = (world_corners[0].x + world_corners[3].x) * 0.5f;
+            mid_left.y = (world_corners[0].y + world_corners[3].y) * 0.5f;
+            mid_left.z = (world_corners[0].z + world_corners[3].z) * 0.5f;
+
+            mid_right.x = (world_corners[1].x + world_corners[2].x) * 0.5f;
+            mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
+            mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
+
+            // Bottom-left quadrant: RED
+            glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
+            glBegin(GL_QUADS);
+            glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
+            glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
+            glVertex3f(center.x, center.y, center.z);
+            glVertex3f(mid_left.x, mid_left.y, mid_left.z);
+            glEnd();
+
+            // Bottom-right quadrant: GREEN
+            glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
+            glBegin(GL_QUADS);
+            glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
+            glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
+            glVertex3f(mid_right.x, mid_right.y, mid_right.z);
+            glVertex3f(center.x, center.y, center.z);
+            glEnd();
+
+            // Top-right quadrant: BLUE
+            glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
+            glBegin(GL_QUADS);
+            glVertex3f(center.x, center.y, center.z);
+            glVertex3f(mid_right.x, mid_right.y, mid_right.z);
+            glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
+            glVertex3f(mid_top.x, mid_top.y, mid_top.z);
+            glEnd();
+
+            // Top-left quadrant: YELLOW
+            glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
+            glBegin(GL_QUADS);
+            glVertex3f(mid_left.x, mid_left.y, mid_left.z);
+            glVertex3f(center.x, center.y, center.z);
+            glVertex3f(mid_top.x, mid_top.y, mid_top.z);
+            glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
+            glEnd();
+        }
+        // Check per-monitor screen preview setting
+        // For now, use global flag (will be enhanced to check per-monitor via effect instance)
+        bool plane_screen_preview = show_screen_preview;
+        
+        if(plane_screen_preview)
         {
             // Try to get texture for this plane's capture source
             std::string source_id = plane_ptr->GetCaptureSourceId();
@@ -1147,7 +1222,11 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
     if(!display_planes) return;
 
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-    if(!capture_mgr.IsInitialized()) return;
+    if(!capture_mgr.IsInitialized())
+    {
+        capture_mgr.Initialize();
+        if(!capture_mgr.IsInitialized()) return;
+    }
 
     for(size_t i = 0; i < display_planes->size(); i++)
     {
@@ -1156,6 +1235,12 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
 
         std::string source_id = plane->GetCaptureSourceId();
         if(source_id.empty()) continue;
+
+        // Start capture if not already running
+        if(!capture_mgr.IsCapturing(source_id))
+        {
+            capture_mgr.StartCapture(source_id);
+        }
 
         // Get latest frame from capture manager
         std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
@@ -1185,6 +1270,20 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+}
+
+void LEDViewport3D::ClearDisplayPlaneTextures()
+{
+    // Delete all textures and clear the map
+    for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
+        it != display_plane_textures.end(); ++it)
+    {
+        if(it->second != 0)
+        {
+            glDeleteTextures(1, &(it->second));
+        }
+    }
+    display_plane_textures.clear();
 }
 
 void LEDViewport3D::DrawControllers()

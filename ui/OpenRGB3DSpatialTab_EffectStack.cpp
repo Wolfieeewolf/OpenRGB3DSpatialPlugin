@@ -507,6 +507,8 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
             {
                 connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                         viewport, &LEDViewport3D::SetShowScreenPreview);
+                connect(screen_mirror, &ScreenMirror3D::TestPatternChanged,
+                        viewport, &LEDViewport3D::SetShowTestPattern);
                 screen_mirror->SetReferencePoints(&reference_points);
             }
         }
