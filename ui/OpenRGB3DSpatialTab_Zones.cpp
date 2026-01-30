@@ -341,35 +341,7 @@ int OpenRGB3DSpatialTab::ResolveZoneTargetSelection(const QComboBox* combo) cons
     }
 
     QVariant data = combo->currentData();
-    if(data.isValid())
-    {
-        return data.toInt();
-    }
-
-    return DecodeLegacyZoneIndex(combo->currentIndex());
-}
-
-int OpenRGB3DSpatialTab::DecodeLegacyZoneIndex(int combo_index) const
-{
-    if(combo_index <= 0)
-    {
-        return -1;
-    }
-
-    int zone_count = zone_manager ? zone_manager->GetZoneCount() : 0;
-
-    if(combo_index <= zone_count)
-    {
-        return combo_index - 1;
-    }
-
-    int controller_index = combo_index - zone_count - 1;
-    if(controller_index >= 0 && controller_index < (int)controller_transforms.size())
-    {
-        return -(controller_index + 1000);
-    }
-
-    return -1;
+    return data.isValid() ? data.toInt() : -1;
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()

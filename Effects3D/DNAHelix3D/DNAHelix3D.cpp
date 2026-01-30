@@ -91,10 +91,7 @@ void DNAHelix3D::SetupCustomUI(QWidget* parent)
     radius_label->setMinimumWidth(30);
     layout->addWidget(radius_label, 0, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(dna_widget);
-    }
+    AddWidgetToParent(dna_widget, parent);
 
     // Connect signals (only for DNA-specific controls)
     connect(radius_slider, &QSlider::valueChanged, this, &DNAHelix3D::OnDNAParameterChanged);

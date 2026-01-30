@@ -39,8 +39,8 @@ ScreenCaptureManager& ScreenCaptureManager::Instance()
 \*---------------------------------------------------------*/
 ScreenCaptureManager::ScreenCaptureManager()
     : initialized(false)
-    , target_width(320)
-    , target_height(180)
+    , target_width(480)
+    , target_height(270)
     , target_fps(30)
 {
 }
@@ -494,13 +494,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
 #else
 /*---------------------------------------------------------*\
-| Platform-specific implementations - Linux / Other        |
+| Platform-specific implementations - Linux (Qt only)       |
 \*---------------------------------------------------------*/
 
 bool ScreenCaptureManager::InitializePlatform()
 {
-    // Linux capture is not implemented yet
-    return false;
+    return true;
 }
 
 void ScreenCaptureManager::ShutdownPlatform()
@@ -509,22 +508,150 @@ void ScreenCaptureManager::ShutdownPlatform()
 
 void ScreenCaptureManager::EnumerateSourcesPlatform()
 {
+    QList<QScreen*> screens = QGuiApplication::screens();
+    for (int i = 0; i < screens.size(); i++)
+    {
+        QScreen* screen = screens[i];
+        if (!screen) continue;
+
+        CaptureSourceInfo info;
+        info.id = "screen_" + std::to_string(i);
+        info.name = screen->name().toStdString();
+        info.device_name = screen->model().toStdString();
+
+        QRect geometry = screen->geometry();
+        info.width = geometry.width();
+        info.height = geometry.height();
+        info.x = geometry.x();
+        info.y = geometry.y();
+        info.is_primary = (screen == QGuiApplication::primaryScreen());
+        info.is_available = true;
+
+        sources[info.id] = info;
+    }
 }
 
 bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
-    (void)source_id;
-    return false;
+    size_t underscore_pos = source_id.find('_');
+    if (underscore_pos == std::string::npos)
+    {
+        LOG_WARNING("[ScreenCapture] Invalid source_id format in StartCapturePlatform: '%s'", source_id.c_str());
+        return false;
+    }
+    int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
+    QList<QScreen*> screens = QGuiApplication::screens();
+    if (screen_index < 0 || screen_index >= screens.size())
+    {
+        LOG_WARNING("[ScreenCapture] Invalid screen index %d (total screens: %d)", screen_index, screens.size());
+        return false;
+    }
+    return true;
 }
 
-void ScreenCaptureManager::StopCapturePlatform(const std::string& source_id)
+void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
-    (void)source_id;
+}
+
+static QPixmap GrabScreenLinux(QScreen* screen)
+{
+    if (!screen) return QPixmap();
+    QRect geometry = screen->geometry();
+    return screen->grabWindow(0, geometry.x(), geometry.y(), geometry.width(), geometry.height());
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 {
-    (void)source_id;
+    std::atomic<bool>* active_flag = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
+        if (active_it == capture_active.end())
+        {
+            LOG_WARNING("[ScreenCapture] Active flag not found for '%s'", source_id.c_str());
+            return;
+        }
+        active_flag = &(active_it->second);
+    }
+
+    size_t underscore_pos = source_id.find('_');
+    if (underscore_pos == std::string::npos)
+    {
+        LOG_WARNING("[ScreenCapture] Invalid source_id format: '%s'", source_id.c_str());
+        return;
+    }
+    int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
+
+    uint64_t frame_counter = 0;
+    const int target_frame_time_ms = 1000 / target_fps.load();
+    bool logged_screen_unavailable = false;
+
+    while (active_flag->load())
+    {
+        std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
+
+        QList<QScreen*> screens = QGuiApplication::screens();
+        QScreen* screen = nullptr;
+        if (screen_index >= 0 && screen_index < screens.size())
+        {
+            screen = screens[screen_index];
+        }
+
+        if (!screen)
+        {
+            if (!logged_screen_unavailable)
+            {
+                LOG_WARNING("[ScreenCapture] Screen %d unavailable, waiting for it to return", screen_index);
+                logged_screen_unavailable = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+        if (logged_screen_unavailable)
+        {
+            logged_screen_unavailable = false;
+        }
+
+        QPixmap pixmap = GrabScreenLinux(screen);
+        if (pixmap.isNull())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
+        QImage image = pixmap.toImage();
+        int target_w = target_width.load();
+        int target_h = target_height.load();
+        if (image.width() != target_w || image.height() != target_h)
+        {
+            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        }
+        image = image.convertToFormat(QImage::Format_RGBA8888);
+
+        std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
+        frame->width = image.width();
+        frame->height = image.height();
+        frame->data.resize(frame->width * frame->height * 4);
+        memcpy(frame->data.data(), image.constBits(), frame->data.size());
+        frame->frame_id = frame_counter++;
+        frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        frame->valid = true;
+
+        {
+            std::lock_guard<std::mutex> lock(frames_mutex);
+            latest_frames[source_id] = frame;
+        }
+
+        std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
+        int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
+        int sleep_time = target_frame_time_ms - elapsed;
+        if (sleep_time < 2)
+        {
+            sleep_time = 2;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+    }
 }
 
 #endif

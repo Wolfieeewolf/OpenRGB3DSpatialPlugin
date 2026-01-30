@@ -342,9 +342,14 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
         effect_sharpness = value;
     });
 
-    if(parent && parent->layout())
+    AddWidgetToParent(effect_controls_group, parent);
+}
+
+void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
+{
+    if(w && container && container->layout())
     {
-        parent->layout()->addWidget(effect_controls_group);
+        container->layout()->addWidget(w);
     }
 }
 
@@ -660,9 +665,6 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
             return custom_reference_point;
         case REF_MODE_ROOM_CENTER:
         default:
-            // Legacy behavior: returns corner origin (0,0,0)
-            // This is kept for backward compatibility with old effects
-            // New effects should use GetEffectOriginGrid() instead
             return {0.0f, 0.0f, 0.0f};
     }
 }
@@ -764,26 +766,22 @@ float SpatialEffect3D::CalculateProgress(float time) const
     return time * GetScaledSpeed();
 }
 
-RGBColor SpatialEffect3D::PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const
+RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
 {
-    (void)x;  // Unused - kept for API compatibility
-    (void)y;  // Unused - kept for API compatibility
-    (void)z;  // Unused - kept for API compatibility
-    (void)grid;  // Unused - kept for API compatibility
-    
-    // Apply sharpness (gamma-like), intensity multiplier, and global brightness
+    /*---------------------------------------------------------*\
+    | Intensity, brightness, gamma                             |
+    \*---------------------------------------------------------*/
     // Non-linear intensity curve: 80-90% slider = bright, 90-100% = overkill
     // Uses power curve: intensity^0.7 * 1.7 gives us:
     // - 80% (160) = ~1.36x (bright)
     // - 90% (180) = ~1.47x (bright)
     // - 100% (200) = ~1.7x (overkill for dialing in)
-    float intensity_normalized = effect_intensity / 200.0f; // 0.0..1.0
+    float intensity_normalized = effect_intensity / 200.0f;
     float intensity_mul = std::pow(intensity_normalized, 0.7f) * 1.7f;
-    float brightness_mul = effect_brightness / 100.0f; // 0.01..1.0 (slider min is 1)
+    float brightness_mul = effect_brightness / 100.0f;
     float factor = intensity_mul * brightness_mul;
     if(factor <= 0.0f) return 0x00000000;
 
-    // Apply to BGR color
     unsigned char r = color & 0xFF;
     unsigned char g = (color >> 8) & 0xFF;
     unsigned char b = (color >> 16) & 0xFF;
@@ -831,14 +829,11 @@ Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, co
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
 {
-    // If grid-aware boundary has already been validated upstream, skip legacy check
     if(boundary_prevalidated)
     {
         return true;
     }
-
-    // Legacy fixed radius calculation
-    // This assumes a "standard" room size for effects that don't have grid context
+    // Fixed-radius boundary when grid context is not available
     // Scale slider: 10 (10%) = 1mm radius, 100 (100%) = 10mm, 200 (200%) = 20mm
     float scale_radius = GetNormalizedScale() * 10.0f;
     float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
@@ -865,7 +860,7 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
 
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
 {
-    // Empty implementation - old 3D controls removed
+    // Empty implementation
 }
 
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
@@ -1111,63 +1106,18 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("sharpness"))
         effect_sharpness = settings["sharpness"].get<unsigned int>();
     
-    // Load rotation (with migration from old axis/coverage if present)
     if(settings.contains("rotation_yaw"))
-    {
         effect_rotation_yaw = settings["rotation_yaw"].get<float>();
-    }
-    else if(settings.contains("axis"))
-    {
-        // Migration: Convert old axis to rotation
-        int old_axis_int = settings["axis"].get<int>();
-        // Map old axis enum values to rotation
-        if(old_axis_int == 0) // AXIS_X
-        {
-            effect_rotation_yaw = 90.0f;
-            effect_rotation_pitch = 0.0f;
-        }
-        else if(old_axis_int == 1) // AXIS_Y
-        {
-            effect_rotation_yaw = 0.0f;
-            effect_rotation_pitch = 90.0f;
-        }
-        else if(old_axis_int == 2) // AXIS_Z
-        {
-            effect_rotation_yaw = 0.0f;
-            effect_rotation_pitch = 0.0f;
-        }
-        else // AXIS_RADIAL or other
-        {
-            effect_rotation_yaw = 0.0f;
-            effect_rotation_pitch = 0.0f;
-        }
-        if(settings.contains("reverse") && settings["reverse"].get<bool>())
-        {
-            effect_rotation_yaw += 180.0f; // Reverse direction
-        }
-    }
     else
-    {
         effect_rotation_yaw = 0.0f;
-    }
-    
     if(settings.contains("rotation_pitch"))
-    {
         effect_rotation_pitch = settings["rotation_pitch"].get<float>();
-    }
-    else if(!settings.contains("axis"))
-    {
-        effect_rotation_pitch = 0.0f;
-    }
-    
-    if(settings.contains("rotation_roll"))
-    {
-        effect_rotation_roll = settings["rotation_roll"].get<float>();
-    }
     else
-    {
+        effect_rotation_pitch = 0.0f;
+    if(settings.contains("rotation_roll"))
+        effect_rotation_roll = settings["rotation_roll"].get<float>();
+    else
         effect_rotation_roll = 0.0f;
-    }
     
     // Update UI sliders if they exist
     if(rotation_yaw_slider)
@@ -1316,7 +1266,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         fps_label->setText(QString::number(effect_fps));
     }
 
-    // Rotation sliders are updated in LoadSettings migration code
+    // Rotation sliders are updated in LoadSettings
 }
 
 void SpatialEffect3D::SetScaleInverted(bool inverted)

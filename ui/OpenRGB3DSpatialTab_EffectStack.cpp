@@ -711,17 +711,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
                     instance->effect->LoadSettings(updated);
                 }
                 SaveEffectStack();
-                // Keep preview + hardware in sync with UI changes.
-                // When effects are running, re-render immediately so the viewport
-                // and real LEDs update together, instead of waiting for the next timer tick.
-                if(effect_running)
-                {
-                    RenderEffectStack();
-                }
-                else if(viewport)
-                {
-                    viewport->UpdateColors();
-                }
+                RefreshEffectDisplay();
 
                 stack_settings_updating = false;
             });

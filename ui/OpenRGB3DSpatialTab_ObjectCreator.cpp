@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <system_error>
 #include <limits>
+#include <functional>
 
 namespace filesystem = std::filesystem;
 
@@ -585,9 +586,9 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
             unsigned int target_fps = 30;
             for(size_t i = 0; i < effect_stack.size(); i++)
             {
-                if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
+                if(effect_stack[i])
                 {
-                    unsigned int fps = effect_stack[i]->effect->GetTargetFPSSetting();
+                    unsigned int fps = effect_stack[i]->GetEffectiveTargetFPS();
                     if(fps > target_fps)
                     {
                         target_fps = fps;
@@ -937,7 +938,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     if(granularity == 0)
     {
         ctrl_transform->led_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
         name = QString("[Device] ") + QString::fromStdString(controller->name);
@@ -950,7 +951,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         }
 
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
         zone* z = &controller->zones[item_row];
@@ -974,7 +975,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         }
 
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-            controller, custom_grid_x, custom_grid_y, custom_grid_z,
+            controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
 
@@ -1513,10 +1514,10 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                 }
             }
 
-            std::string old_filepath = custom_dir + "/" + safe_old_name + ".json";
-            if(filesystem::exists(old_filepath))
+            std::string previous_filepath = custom_dir + "/" + safe_old_name + ".json";
+            if(filesystem::exists(previous_filepath))
             {
-                filesystem::remove(old_filepath);
+                filesystem::remove(previous_filepath);
             }
         }
 
@@ -1987,7 +1988,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     unsigned int led_idx = led_mapping["led_index"].get<unsigned int>();
 
                     std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-                        controller, custom_grid_x, custom_grid_y, custom_grid_z,
+                        controller, custom_grid_x, custom_grid_y,
                         ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
                         grid_scale_mm);
 
@@ -2010,7 +2011,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
                     // Count total LEDs in controller
                     std::vector<LEDPosition3D> all_leds = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
-                        controller, custom_grid_x, custom_grid_y, custom_grid_z,
+                        controller, custom_grid_x, custom_grid_y,
                         ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
                         grid_scale_mm);
 
@@ -2346,7 +2347,7 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
         layout_profiles_combo->addItem(base_name);
     }
 
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
     QString saved_profile = "";
     if(settings.contains("SelectedProfile"))
     {
@@ -2389,11 +2390,10 @@ void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
     std::string profile_name = layout_profiles_combo->currentText().toStdString();
     bool auto_load_enabled = auto_load_checkbox->isChecked();
 
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
     settings["SelectedProfile"] = profile_name;
     settings["AutoLoadEnabled"] = auto_load_enabled;
-    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-    resource_manager->GetSettingsManager()->SaveSettings();
+    SetPluginSettings(settings);
 }
 
 void OpenRGB3DSpatialTab::TryAutoLoadLayout()
@@ -2413,7 +2413,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     /*---------------------------------------------------------*\
     | Load saved settings                                      |
     \*---------------------------------------------------------*/
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
 
     bool auto_load_enabled = false;
     std::string saved_profile;
@@ -2614,15 +2614,6 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
             {
                 return true;
             }
-            // Legacy check for controllers without granularity field
-            if(ct->granularity < 0 || ct->granularity > 2)
-            {
-                std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayout(controller, custom_grid_x, custom_grid_y, custom_grid_z);
-                if(ct->led_positions.size() == all_positions.size())
-                {
-                    return true;
-                }
-            }
         }
         else if(granularity == 1)
         {
@@ -2694,7 +2685,7 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         // Physical controller - regenerate with spacing and respect granularity
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
             transform->controller,
-            custom_grid_x, custom_grid_y, custom_grid_z,
+            custom_grid_x, custom_grid_y,
             transform->led_spacing_mm_x, transform->led_spacing_mm_y, transform->led_spacing_mm_z,
             grid_scale_mm);
 
@@ -3904,7 +3895,7 @@ void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
 
     const Preset& preset = presets[index];
 
-    auto set_spin_value = [](QDoubleSpinBox* spin, double value)
+    std::function<void(QDoubleSpinBox*, double)> set_spin_value = [](QDoubleSpinBox* spin, double value)
     {
         if(!spin)
         {

@@ -20,10 +20,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y, int grid_z)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y)
 {
-    (void)grid_z;
-
     std::vector<LEDPosition3D> positions;
 
     unsigned int total_leds = 0;
@@ -124,10 +122,9 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     return positions;
 }
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBController* controller, int grid_x, int grid_y, int grid_z, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBController* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm)
 {
-    // First generate the layout with integer grid positions
-    std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y, grid_z);
+    std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y);
 
     // Now scale positions based on LED spacing and grid scale
     // Formula: grid_position = led_spacing_mm / grid_scale_mm

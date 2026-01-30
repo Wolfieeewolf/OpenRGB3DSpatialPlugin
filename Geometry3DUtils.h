@@ -698,6 +698,106 @@ namespace Geometry3D
         uint8_t b = sum_b / count;
         return ToRGBColor(r, g, b);
     }
+
+    /**
+     * @brief Content bounds after black bar detection (normalized 0-1)
+     * Used so ambilight samples only the content area, not letterbox/pillarbox bars.
+     */
+    struct ContentBounds
+    {
+        float u_min = 0.0f;
+        float u_max = 1.0f;
+        float v_min = 0.0f;
+        float v_max = 1.0f;
+    };
+
+    /**
+     * @brief Detect black letterbox (top/bottom) and optionally pillarbox (left/right) bars.
+     * Uses multi-point sampling per row/column so subtitles or logos in one spot
+     * don't break detection; per-channel black (R,G,B all below threshold).
+     * @param frame_data RGBA pixel data (row-major)
+     * @param frame_width Width of frame
+     * @param frame_height Height of frame
+     * @param black_threshold Per-channel threshold 0-255; pixel is black if R,G,B are all below this
+     * @param min_content_fraction If content would be smaller than this fraction, return full frame
+     * @param letterbox_only If true, only detect top/bottom bars (u_min=0, u_max=1); for wide content
+     * @return Content bounds (u_min, u_max, v_min, v_max); (0,1,0,1) if no bars or invalid
+     */
+    inline ContentBounds DetectBlackBars(const uint8_t* frame_data, int frame_width, int frame_height,
+                                         float black_threshold = 25.0f,
+                                         float min_content_fraction = 0.2f,
+                                         bool letterbox_only = false)
+    {
+        ContentBounds out;
+        if(!frame_data || frame_width <= 0 || frame_height <= 0)
+        {
+            return out;
+        }
+
+        uint8_t thresh = (uint8_t)std::max(0, std::min(255, (int)(black_threshold + 0.5f)));
+        auto isBlack = [&](int x, int y) -> bool
+        {
+            if(x < 0 || x >= frame_width || y < 0 || y >= frame_height) return false;
+            int idx = (y * frame_width + x) * 4;
+            uint8_t r = frame_data[idx + 0];
+            uint8_t g = frame_data[idx + 1];
+            uint8_t b = frame_data[idx + 2];
+            return (r <= thresh) && (g <= thresh) && (b <= thresh);
+        };
+
+        int x25 = frame_width / 4;
+        int x50 = frame_width / 2;
+        int x75 = (frame_width * 3) / 4;
+        int y25 = frame_height / 4;
+        int y50 = frame_height / 2;
+        int y75 = (frame_height * 3) / 4;
+
+        auto rowIsBlack = [&](int y) -> bool
+        {
+            return isBlack(x25, y) && isBlack(x50, y) && isBlack(x75, y);
+        };
+        auto colIsBlack = [&](int x) -> bool
+        {
+            return isBlack(x, y25) && isBlack(x, y50) && isBlack(x, y75);
+        };
+
+        int top = 0;
+        for(; top < frame_height; top++)
+        {
+            if(!rowIsBlack(top)) break;
+        }
+        int bottom = frame_height - 1;
+        for(; bottom >= top; bottom--)
+        {
+            if(!rowIsBlack(bottom)) break;
+        }
+        int left = 0;
+        int right = frame_width - 1;
+        if(!letterbox_only)
+        {
+            for(; left < frame_width; left++)
+            {
+                if(!colIsBlack(left)) break;
+            }
+            for(; right >= left; right--)
+            {
+                if(!colIsBlack(right)) break;
+            }
+        }
+
+        float content_h = (float)(bottom - top + 1);
+        float content_w = (float)(right - left + 1);
+        if(content_h < frame_height * min_content_fraction || content_w < frame_width * min_content_fraction)
+        {
+            return out;
+        }
+
+        out.v_min = (float)top / (float)frame_height;
+        out.v_max = (float)(bottom + 1) / (float)frame_height;
+        out.u_min = (float)left / (float)frame_width;
+        out.u_max = (float)(right + 1) / (float)frame_width;
+        return out;
+    }
 }
 
 #endif // GEOMETRY3DUTILS_H

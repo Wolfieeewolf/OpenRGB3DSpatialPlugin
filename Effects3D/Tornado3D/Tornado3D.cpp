@@ -84,10 +84,7 @@ void Tornado3D::SetupCustomUI(QWidget* parent)
     height_label->setMinimumWidth(30);
     layout->addWidget(height_label, 1, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(w);
-    }
+    AddWidgetToParent(w, parent);
 
     connect(core_radius_slider, &QSlider::valueChanged, this, &Tornado3D::OnTornadoParameterChanged);
     connect(core_radius_slider, &QSlider::valueChanged, core_radius_label, [this](int value) {
@@ -127,12 +124,6 @@ RGBColor Tornado3D::CalculateColor(float, float, float, float)
 RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-    (void)rel_x;  // Unused - using rotated coordinates instead
-    (void)rel_y;  // Unused - using rotated coordinates instead
-    (void)rel_z;  // Unused - using rotated coordinates instead
 
     float speed = GetScaledSpeed();
     float freq = GetScaledFrequency();

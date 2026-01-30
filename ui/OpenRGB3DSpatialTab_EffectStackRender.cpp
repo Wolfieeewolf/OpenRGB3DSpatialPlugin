@@ -309,7 +309,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
-                        effect_color = effect->PostProcessColorGrid(sample_x, sample_y, sample_z, effect_color, active_grid);
+                        effect_color = effect->PostProcessColorGrid(effect_color);
 
                         /*---------------------------------------------------------*\
                         | Blend with accumulated color                             |
@@ -426,7 +426,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
                     RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
-                    effect_color = effect->PostProcessColorGrid(sample_x, sample_y, sample_z, effect_color, active_grid);
+                    effect_color = effect->PostProcessColorGrid(effect_color);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                 }

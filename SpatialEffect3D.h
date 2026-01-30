@@ -112,7 +112,7 @@ public:
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
 
-    // Optional grid calculation hook (defaults to CalculateColor for legacy effects)
+    // Optional grid calculation hook (defaults to CalculateColor)
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
     {
         // Default grid-aware behavior: compute origin with grid context and apply room-relative boundary.
@@ -126,14 +126,12 @@ public:
             return 0x00000000; // Outside coverage area
         }
 
-        // Adjust coordinates so legacy CalculateColor() computes the same rel_* using its own origin
-        // x_adj = x - origin_grid + origin_legacy. For room-center, legacy origin is (0,0,0).
-        Vector3D origin_legacy = GetEffectOrigin();
-        float x_adj = x - origin_grid.x + origin_legacy.x;
-        float y_adj = y - origin_grid.y + origin_legacy.y;
-        float z_adj = z - origin_grid.z + origin_legacy.z;
-
-        // Temporarily mark boundary as prevalidated so legacy boundary check passes
+        // Adjust coordinates so CalculateColor() gets correct relative position from its origin
+        Vector3D effect_origin = GetEffectOrigin();
+        float x_adj = x - origin_grid.x + effect_origin.x;
+        float y_adj = y - origin_grid.y + effect_origin.y;
+        float z_adj = z - origin_grid.z + effect_origin.z;
+        // Mark boundary prevalidated so fixed-radius check is skipped
         boundary_prevalidated = true;
         RGBColor result = CalculateColor(x_adj, y_adj, z_adj, time);
         boundary_prevalidated = false;
@@ -180,8 +178,7 @@ public:
     float GetRotationPitch() const { return effect_rotation_pitch; }
     float GetRotationRoll() const { return effect_rotation_roll; }
 
-    // Global post-processing helpers apply coverage/intensity shaping consistently
-    RGBColor PostProcessColorGrid(float x, float y, float z, RGBColor color, const GridContext3D& grid) const;
+    RGBColor PostProcessColorGrid(RGBColor color) const;
 
     // Most spatial effects should operate in true world space so controller rotation/translation
     // changes their position in the room. Effects that must be controller-local can override.
@@ -257,7 +254,7 @@ protected:
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
-    // When true, legacy boundary check is bypassed (grid boundary already validated)
+    // When true, fixed-radius boundary check is skipped (grid boundary already validated)
     bool                boundary_prevalidated;
 
     // Global shaping params
@@ -275,8 +272,10 @@ protected:
     Vector3D            custom_reference_point; // Effect-specific override (future)
     bool                use_custom_reference;   // Override global setting
 
+    void AddWidgetToParent(QWidget* w, QWidget* container);
+
     // Helper methods for derived classes
-    Vector3D GetEffectOrigin() const;           // Returns correct origin based on reference mode (legacy - returns 0,0,0 for room center)
+    Vector3D GetEffectOrigin() const;           // Origin from reference mode (room center = 0,0,0)
     Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;  // Grid-aware origin (uses grid.center for room center)
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
@@ -298,8 +297,8 @@ protected:
     float CalculateProgress(float time) const;  // Returns time * scaled_speed (handles reverse too)
 
     // Boundary checking helpers
-    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;  // Legacy version (uses fixed radius)
-    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;  // Room-aware version (RECOMMENDED)
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;  // Fixed-radius (no grid)
+    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;  // Room-aware (preferred)
 
     // 3D Rotation transformation helper
     Vector3D TransformPointByRotation(float x, float y, float z, 

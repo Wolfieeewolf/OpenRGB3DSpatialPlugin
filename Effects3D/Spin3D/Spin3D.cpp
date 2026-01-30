@@ -88,10 +88,7 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     arms_label->setMinimumWidth(30);
     layout->addWidget(arms_label, 0, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(spin_widget);
-    }
+    AddWidgetToParent(spin_widget, parent);
 
     connect(arms_slider, &QSlider::valueChanged, this, &Spin3D::OnSpinParameterChanged);
     connect(arms_slider, &QSlider::valueChanged, arms_label, [this](int value) {
@@ -132,8 +129,6 @@ float Spin3D::Clamp01(float value)
     return value;
 }
 
-// Old ComputeSpin functions removed - now using rotation transformation
-
 // Grid-aware version with room-relative fades and radii
 RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -156,24 +151,13 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Calculate spin based on rotated coordinates
-    // Spin arms radiate from origin in rotated space
-    // Use the plane perpendicular to the rotation axis (default: Y-axis for horizontal spin)
-    // Calculate angle in the rotated XZ plane (horizontal plane after rotation)
-    float radius = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
-    (void)radius;  // Unused - kept for potential future use
     float angle = atan2(rot_rel_z, rot_rel_x);
-    
-    // Calculate radial distance for enhanced 3D fade
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
-    
-    // Enhanced radial fade - softer falloff for whole-room feel
     float radial_fade = 1.0f;
     if(max_radius > 0.001f)
     {
         float normalized_dist = fmin(1.0f, radial_distance / max_radius);
-        // Gentle fade that never goes fully black - keeps effect visible across room
         radial_fade = 0.35f + 0.65f * (1.0f - normalized_dist * 0.6f);
     }
     

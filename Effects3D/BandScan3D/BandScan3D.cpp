@@ -58,8 +58,7 @@ EffectInfo3D BandScan3D::GetEffectInfo()
 
 void BandScan3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
-    // All controls live in the shared Audio panel.
+    (void)parent;
 }
 
 void BandScan3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -202,26 +201,20 @@ void BandScan3D::UpdateSmoothedBands(const std::vector<float>& spectrum)
     }
 }
 
+static float normalize_linear(float value, float min, float max)
+{
+    float range = max - min;
+    if(range <= 1e-5f) return 0.0f;
+    return (value - min) / range;
+}
+
 float BandScan3D::ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    (void)y;  // Unused - using rotated X coordinate
-    (void)z;  // Unused - using rotated X coordinate
-    // Use rotated X coordinate (rotation already applied in CalculateColorGrid)
+    (void)y;
+    (void)z;
     float normalized = 0.0f;
-
-    auto normalize_linear = [](float value, float min, float max) -> float
-    {
-        float range = max - min;
-        if(range <= 1e-5f)
-        {
-            return 0.0f;
-        }
-        return (value - min) / range;
-    };
-
     if(grid)
     {
-        // Use rotated X coordinate for axis position
         normalized = normalize_linear(x, grid->min_x, grid->max_x);
     }
     else
@@ -235,9 +228,8 @@ float BandScan3D::ResolveCoordinateNormalized(const GridContext3D* grid, float x
 
 float BandScan3D::ResolveHeightNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    (void)x;  // Unused - using rotated Y coordinate
-    (void)z;  // Unused - using rotated Y coordinate
-    // Use rotated Y coordinate for height (rotation already applied in CalculateColorGrid)
+    (void)x;
+    (void)z;
     if(grid)
     {
         return NormalizeRange(y, grid->min_y, grid->max_y);
@@ -276,9 +268,8 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
 {
     if(smoothed_bands.empty())
     {
-        RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
-        // Global brightness is applied by PostProcessColorGrid
         (void)brightness;
+        RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
         return ModulateRGBColors(base, axis_color);
     }
 
@@ -296,7 +287,6 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
     {
         scan_phase += 1.0f;
     }
-    // Reverse removed - use rotation controls instead
     float scan_index = scan_phase * count;
     float distance = WrapDistance(scaled, scan_index, count);
     float highlight = std::exp(-distance * 1.35f);

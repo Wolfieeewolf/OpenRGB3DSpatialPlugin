@@ -93,6 +93,7 @@ private slots:
 
 private:
     void SetupUI();
+    void ApplyGridTableHeaderStyle();
     void UpdateItemCombo();
     void UpdateGridDisplay();
     void UpdateGridColors();
@@ -141,7 +142,6 @@ private:
     QPushButton*    flip_horizontal_button;
     QPushButton*    flip_vertical_button;
     QPushButton*    apply_preview_button;
-    // (Removed) Shape remap controls
 
     QTimer*         color_refresh_timer;
 

@@ -15,6 +15,7 @@
 #include <cmath>
 #include <algorithm>
 #include <climits>
+#include <functional>
 
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
@@ -140,16 +141,11 @@ void CustomControllerDialog::SetupUI()
     grid_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connect(grid_table, &QTableWidget::cellClicked, this, &CustomControllerDialog::on_grid_cell_clicked);
 
-    grid_table->horizontalHeader()->setDefaultSectionSize(30);
-    grid_table->verticalHeader()->setDefaultSectionSize(30);
-    grid_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    grid_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ApplyGridTableHeaderStyle();
     grid_table->setShowGrid(true);
     first_tab_layout->addWidget(grid_table);
     layer_tabs->addTab(first_tab, "Layer 0");
     right_layout->addWidget(layer_tabs);
-
-    // (Removed) Shape Remap tools: previously provided "Remap Selected" controls
 
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
@@ -646,6 +642,12 @@ void CustomControllerDialog::UpdateGridDisplay()
         }
     }
 
+    ApplyGridTableHeaderStyle();
+}
+
+void CustomControllerDialog::ApplyGridTableHeaderStyle()
+{
+    if(!grid_table) return;
     grid_table->horizontalHeader()->setDefaultSectionSize(30);
     grid_table->verticalHeader()->setDefaultSectionSize(30);
     grid_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
@@ -776,7 +778,7 @@ void CustomControllerDialog::on_assign_clicked()
         }
     }
 
-    std::vector<LEDPosition3D> positions = ControllerLayout3D::GenerateCustomGridLayout(controller, 10, 10, 1);
+    std::vector<LEDPosition3D> positions = ControllerLayout3D::GenerateCustomGridLayout(controller, 10, 10);
 
     if(granularity == 0)
     {
@@ -1073,7 +1075,7 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     depth_spin->setValue(depth);
     led_mappings = mappings;
 
-    auto clamp_spacing = [](double value, double min_value, double max_value)
+    std::function<double(double, double, double)> clamp_spacing = [](double value, double min_value, double max_value)
     {
         if(value < min_value) return min_value;
         if(value > max_value) return max_value;
@@ -1669,11 +1671,6 @@ void CustomControllerDialog::on_apply_preview_remap_clicked()
     led_mappings = preview_led_mappings;
     UpdateGridDisplay();
 }
-
-// (Removed) on_apply_shape_remap_clicked implementation
-
-
-
 
 
 

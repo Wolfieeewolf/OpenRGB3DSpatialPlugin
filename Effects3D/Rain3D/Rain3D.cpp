@@ -87,10 +87,7 @@ void Rain3D::SetupCustomUI(QWidget* parent)
     wind_label->setMinimumWidth(30);
     layout->addWidget(wind_label, 1, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(w);
-    }
+    AddWidgetToParent(w, parent);
 
     connect(density_slider, &QSlider::valueChanged, this, &Rain3D::OnRainParameterChanged);
     connect(wind_slider, &QSlider::valueChanged, this, &Rain3D::OnRainParameterChanged);

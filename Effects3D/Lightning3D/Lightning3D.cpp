@@ -82,7 +82,7 @@ void Lightning3D::SetupCustomUI(QWidget* parent)
     branch_label->setMinimumWidth(30);
     layout->addWidget(branch_label, 1, 2);
 
-    if(parent && parent->layout()) parent->layout()->addWidget(w);
+    AddWidgetToParent(w, parent);
 
     connect(strike_rate_slider, &QSlider::valueChanged, this, &Lightning3D::OnLightningParameterChanged);
     connect(strike_rate_slider, &QSlider::valueChanged, strike_rate_label, [this](int value) {

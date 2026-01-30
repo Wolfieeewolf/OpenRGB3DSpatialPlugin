@@ -69,7 +69,6 @@ public:
         target_z = camera_target_z;
     }
 
-    void EnforceFloorConstraint(ControllerTransform* ctrl);
     void UpdateGizmoPosition();
     void NotifyControllerTransformChanged();
 

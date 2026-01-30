@@ -128,8 +128,8 @@ public:
 
     /**
      * @brief Set the target downscale resolution for all captures
-     * @param width Target width (default: 320)
-     * @param height Target height (default: 180)
+     * @param width Target width (default: 480)
+     * @param height Target height (default: 270)
      *
      * Applies to new captures. Existing captures need restart to apply.
      */

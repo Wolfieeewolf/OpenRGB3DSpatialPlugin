@@ -91,10 +91,7 @@ void Wipe3D::SetupCustomUI(QWidget* parent)
     shape_combo->setToolTip("Wipe edge profile");
     layout->addWidget(shape_combo, 1, 1);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(wipe_widget);
-    }
+    AddWidgetToParent(wipe_widget, parent);
 
     // Connect signals
     connect(thickness_slider, &QSlider::valueChanged, this, &Wipe3D::OnWipeParameterChanged);
@@ -156,10 +153,6 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
-    float rot_rel_y = rotated_pos.y - origin.y;
-    float rot_rel_z = rotated_pos.z - origin.z;
-    (void)rot_rel_y;  // Unused - kept for potential future use
-    (void)rot_rel_z;  // Unused - kept for potential future use
 
     /*---------------------------------------------------------*\
     | Calculate position based on rotated coordinates         |
@@ -280,16 +273,12 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
-    (void)rot_rel_y;  // Unused - kept for potential future use
-    (void)rot_rel_z;  // Unused - kept for potential future use
 
     /*---------------------------------------------------------*\
     | Calculate position based on rotated coordinates         |
     | Wipe moves along rotated X-axis by default              |
     \*---------------------------------------------------------*/
     float position;
-    // Use rotated X coordinate, normalize by room width
-    // Maps from [grid.min_x, grid.max_x] to [0, 1]
     if(grid.width > 0.001f)
     {
         position = (rot_rel_x + grid.width * 0.5f) / grid.width;

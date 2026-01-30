@@ -91,10 +91,7 @@ void Explosion3D::SetupCustomUI(QWidget* parent)
     type_combo->setCurrentIndex(explosion_type);
     layout->addWidget(type_combo, 1, 1);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(explosion_widget);
-    }
+    AddWidgetToParent(explosion_widget, parent);
 
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion3D::OnExplosionParameterChanged);
     connect(intensity_slider, &QSlider::valueChanged, intensity_label, [this](int value) {

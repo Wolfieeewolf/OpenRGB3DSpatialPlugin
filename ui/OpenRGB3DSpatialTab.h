@@ -162,7 +162,6 @@ private:
     void PopulateZoneTargetCombo(QComboBox* combo, int saved_value);
     void RefreshHiddenControllerStates();
     int ResolveZoneTargetSelection(const QComboBox* combo) const;
-    int DecodeLegacyZoneIndex(int combo_index) const;
     void UpdateEffectCombo();
     void SaveZones();
     void LoadZones();
@@ -173,6 +172,9 @@ private:
     void SetupStackPresetUI();
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
+    void ApplyPositionComponent(int axis, double value);
+    void ApplyRotationComponent(int axis, double value);
+    void RemoveWidgetFromParentLayout(QWidget* w);
 
     // Effect Stack helpers
     void SetupEffectStackPanel(QVBoxLayout* parent_layout);
@@ -188,6 +190,11 @@ private:
     void SaveStackPresets();
     void UpdateStackPresetsList();
     std::string GetStackPresetsPath();
+
+    nlohmann::json GetPluginSettings() const;
+    void SetPluginSettings(const nlohmann::json& settings);
+    void SetPluginSettingsNoSave(const nlohmann::json& settings);
+    void RefreshEffectDisplay();
 
     // Effect Stack persistence
     void SaveEffectStack();
@@ -373,16 +380,12 @@ private:
     QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
     QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
-    // Removed input smoothing; smoothing is per-effect now
     QProgressBar*   audio_level_bar = nullptr;
     QPushButton*    audio_start_button = nullptr;
     QPushButton*    audio_stop_button = nullptr;
     QLabel*         audio_gain_value_label = nullptr;     // shows gain as e.g. 1.0x
 
-    // Bands (crossovers removed from UI)
     QComboBox*      audio_bands_combo = nullptr;   // 8/16/32
-
-    // Removed legacy Bass/Mid/Treble mapping combos (unused)
 
     // Audio effects section (moved to Audio tab)
     QComboBox*      audio_effect_combo = nullptr;
@@ -394,8 +397,6 @@ private:
     SpatialEffect3D* running_audio_effect = nullptr; // active instance in the renderer
     QPushButton*    audio_effect_start_button = nullptr; // start selected audio effect
     QPushButton*    audio_effect_stop_button = nullptr;  // stop selected audio effect
-
-    // Removed legacy Areas, Channel routing, and Band Mapping UI (unused)
 
     /*---------------------------------------------------------*\
     | Custom Audio Effects (save/load)                        |
@@ -411,12 +412,10 @@ private:
 private slots:
     void on_audio_device_changed(int index);
     void on_audio_gain_changed(int value);
-    // Removed: on_audio_smooth_changed (smoothing moved to effect settings)
     void on_audio_start_clicked();
     void on_audio_stop_clicked();
     void on_audio_level_updated(float level);
     void on_audio_bands_changed(int index);
-    // Removed: on_audio_crossovers_changed, on_apply_audio_mapping_clicked
     void on_audio_effect_start_clicked();
     void on_audio_effect_stop_clicked();
     void SetupAudioEffectUI(int eff_index);
@@ -434,8 +433,6 @@ private slots:
     void on_audio_std_smooth_changed(int v);
     void on_audio_std_falloff_changed(int v);
     void on_audio_fft_changed(int index);
-    // Removed: UpdateAudioZoneCombos
-    // Removed legacy channel/band mapping slots
 
     // Custom audio effects helpers and slots
     void SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout);

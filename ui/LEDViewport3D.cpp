@@ -126,17 +126,6 @@ void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<Controll
 {
     controller_transforms = transforms;
 
-    if(controller_transforms)
-    {
-        for(unsigned int i = 0; i < controller_transforms->size(); i++)
-        {
-            if((*controller_transforms)[i])
-            {
-                EnforceFloorConstraint((*controller_transforms)[i].get());
-            }
-        }
-    }
-
     update();
 }
 
@@ -151,8 +140,6 @@ void LEDViewport3D::SelectController(int index)
         {
             return;
         }
-
-        EnforceFloorConstraint(ctrl);
 
         if(!IsControllerSelected(index))
         {
@@ -445,7 +432,6 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                     if(controller_transforms && picked_controller < (int)controller_transforms->size())
                     {
                         ControllerTransform* ctrl = (*controller_transforms)[picked_controller].get();
-                        EnforceFloorConstraint(ctrl);
                         gizmo.SetTarget(ctrl);
                         gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
                         UpdateGizmoPosition();
@@ -505,7 +491,6 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
             selected_controller_idx < (int)controller_transforms->size())
         {
             ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
-            EnforceFloorConstraint(ctrl);
             if(ctrl)
             {
                 ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
@@ -1858,16 +1843,6 @@ Vector3D LEDViewport3D::GetControllerSize(ControllerTransform* ctrl)
         max_bounds.y - min_bounds.y,
         max_bounds.z - min_bounds.z
     };
-}
-
-void LEDViewport3D::EnforceFloorConstraint(ControllerTransform* ctrl)
-{
-    // Floor constraint disabled for corner-origin coordinate system
-    // Standard OpenGL Y-up: Y ranges from 0 (floor) to max (ceiling)
-    // Z ranges from 0 (front wall) to max (back wall)
-    // No constraint is needed since all valid positions are positive
-    (void)ctrl;  // Suppress unused parameter warning
-    return;
 }
 
 bool LEDViewport3D::IsControllerAboveFloor(ControllerTransform* ctrl)

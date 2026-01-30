@@ -96,10 +96,7 @@ void Wave3D::SetupCustomUI(QWidget* parent)
     /*---------------------------------------------------------*\
     | Add to parent layout                                     |
     \*---------------------------------------------------------*/
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(wave_widget);
-    }
+    AddWidgetToParent(wave_widget, parent);
 
     /*---------------------------------------------------------*\
     | Connect signals                                          |

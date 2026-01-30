@@ -4,7 +4,6 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "VirtualReferencePoint3D.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
-#include "LogManager.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 
@@ -54,7 +53,6 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     SetObjectCreatorStatus(QString("Reference point '%1' created. Add it from the Available Controllers list when ready.")
                            .arg(QString::fromStdString(name)),
                            false);
-    LOG_INFO("[3DSpatial] Reference point '%s' created.", name.c_str());
 }
 
 void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()

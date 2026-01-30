@@ -130,7 +130,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     char_spacing_label->setMinimumWidth(30);
     layout->addWidget(char_spacing_label, 5, 2);
 
-    if(parent && parent->layout()) parent->layout()->addWidget(w);
+    AddWidgetToParent(w, parent);
 
     connect(density_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
     connect(trail_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);

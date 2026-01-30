@@ -89,10 +89,7 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
     pattern_combo->setToolTip("Plasma pattern variant");
     layout->addWidget(pattern_combo, 0, 1);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(plasma_widget);
-    }
+    AddWidgetToParent(plasma_widget, parent);
 
     // Connect signals (only for Plasma-specific controls)
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),

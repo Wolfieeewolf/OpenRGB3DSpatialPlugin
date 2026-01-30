@@ -77,9 +77,11 @@ struct EffectInstance3D
     {
     }
 
-    /*---------------------------------------------------------*\
-    | Generate display name for UI                            |
-    \*---------------------------------------------------------*/
+    unsigned int GetEffectiveTargetFPS() const
+    {
+        return (effect && enabled) ? effect->GetTargetFPSSetting() : 0;
+    }
+
     std::string GetDisplayName() const
     {
         std::string zone_name = (zone_index == -1) ? "All" : "Zone " + std::to_string(zone_index);

@@ -17,13 +17,10 @@
 #include <nlohmann/json.hpp>
 
 /*---------------------------------------------------------*\
-| Zone3D - A named group of controllers                    |
+| Zone3D - Named group of controllers for effect targeting |
 |                                                           |
-| Zones are used to target effects at specific groups of   |
-| controllers. For example:                                 |
-|   - "Desk" zone: keyboard, mouse, desk lamp              |
-|   - "Front Wall" zone: nanoleafs, LED strips             |
-|   - "Ceiling" zone: ceiling lights                       |
+| Not the same as RGBController::zone (LED grouping on a   |
+| device). Here: which controllers an effect applies to.   |
 \*---------------------------------------------------------*/
 class Zone3D
 {

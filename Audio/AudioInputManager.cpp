@@ -13,6 +13,7 @@
 #include <complex>
 #include <algorithm>
 #include <thread>
+#include <functional>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -372,9 +373,6 @@ void AudioInputManager::setDeviceByIndex(int index)
     }
 }
 
-// Unified device list; separate render list removed
-
-
 void AudioInputManager::start()
 {
     QMutexLocker lock(&mutex);
@@ -462,8 +460,6 @@ void AudioInputManager::setSmoothing(float s)
     if(s > 0.99f) s = 0.99f;
     ema_smoothing = s;
 }
-
-// Deprecated: capture source is implicit in device selection
 
 void AudioInputManager::setBandsCount(int bands)
 {
@@ -902,8 +898,6 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
     return (cnt>0) ? std::min(1.0f, sum / (float)cnt) : 0.0f;
 }
 
-// Removed duplicate WasapiLoopback class (now defined at top)
-
 AudioInputManager::SpectrumSnapshot AudioInputManager::getSpectrumSnapshot(int target_bins) const
 {
     SpectrumSnapshot snapshot;
@@ -918,7 +912,7 @@ AudioInputManager::SpectrumSnapshot AudioInputManager::getSpectrumSnapshot(int t
         return snapshot;
     }
 
-    auto resample = [target_bins](const std::vector<float>& src, std::vector<float>& dst)
+    std::function<void(const std::vector<float>&, std::vector<float>&)> resample = [target_bins](const std::vector<float>& src, std::vector<float>& dst)
     {
         if(src.empty())
         {

@@ -6,7 +6,6 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
-#include "LogManager.h"
 #include "VirtualReferencePoint3D.h"
 
 /*---------------------------------------------------------*\
@@ -33,10 +32,9 @@ REGISTER_EFFECT_3D(ScreenMirror3D);
 #include <limits>
 #include <functional>
 
-// Forward declaration
-class ScreenMirror3D;
-
-// Custom widget to display multiple capture zones with interactive corner handles
+/*---------------------------------------------------------*\
+| Capture zone preview widget (zones + corner handles)      |
+\*---------------------------------------------------------*/
 class CaptureAreaPreviewWidget : public QWidget
 {
 public:
@@ -107,7 +105,7 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override
     {
-        Q_UNUSED(event);
+        (void)event;
         if(!capture_zones || !display_plane) return;
         
         QPainter painter(this);
@@ -626,7 +624,7 @@ protected:
     
     void mouseReleaseEvent(QMouseEvent* event) override
     {
-        Q_UNUSED(event);
+        (void)event;
         if(dragging && selected_zone_index >= 0 && selected_zone_index < (int)capture_zones->size())
         {
             // Update drag_start_zone to current zone state so next click uses current state
@@ -675,13 +673,8 @@ ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
     , monitors_layout(nullptr)
-    
-    , global_scale(1.0f) // Default 100% global scale
-    , smoothing_time_ms(50.0f)
-    , brightness_multiplier(1.0f)
-    , brightness_threshold(0.0f) // Default: no threshold (capture everything)
-    , propagation_speed_mm_per_ms(10.0f) // Slower default for more noticeable delay
-    , wave_decay_ms(500.0f) // Longer decay for more noticeable wave
+    , capture_quality(1)
+    , capture_quality_combo(nullptr)
     , show_test_pattern(false)
     , reference_points(nullptr)
 {
@@ -795,6 +788,38 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     status_group->setLayout(status_layout);
     main_layout->addWidget(status_group);
 
+    // Capture quality (resolution presets; higher = better ambilight detail, more CPU/GPU/RAM)
+    QGroupBox* capture_group = new QGroupBox("Capture Quality");
+    QHBoxLayout* capture_layout = new QHBoxLayout();
+    QLabel* capture_quality_label = new QLabel("Resolution:");
+    capture_quality_combo = new QComboBox();
+    capture_quality_combo->addItem("Low (320×180)", QVariant(0));
+    capture_quality_combo->addItem("Medium (480×270)", QVariant(1));
+    capture_quality_combo->addItem("High (640×360)", QVariant(2));
+    capture_quality_combo->addItem("Ultra (960×540)", QVariant(3));
+    capture_quality_combo->addItem("Maximum (1280×720)", QVariant(4));
+    capture_quality_combo->addItem("1080p (1920×1080)", QVariant(5));
+    capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
+    capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
+    capture_quality_combo->setCurrentIndex(std::clamp(capture_quality, 0, 7));
+    capture_quality_combo->setToolTip("Higher resolution = sharper ambilight, more CPU/GPU/RAM. 4K for high-end GPUs.");
+    capture_layout->addWidget(capture_quality_label);
+    capture_layout->addWidget(capture_quality_combo, 1);
+    capture_group->setLayout(capture_layout);
+    main_layout->addWidget(capture_group);
+    connect(capture_quality_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        capture_quality = std::clamp(index, 0, 7);
+        int w = 320, h = 180;
+        if(capture_quality == 1) { w = 480; h = 270; }
+        else if(capture_quality == 2) { w = 640; h = 360; }
+        else if(capture_quality == 3) { w = 960; h = 540; }
+        else if(capture_quality == 4) { w = 1280; h = 720; }
+        else if(capture_quality == 5) { w = 1920; h = 1080; }
+        else if(capture_quality == 6) { w = 2560; h = 1440; }
+        else if(capture_quality == 7) { w = 3840; h = 2160; }
+        ScreenCaptureManager::Instance().SetDownscaleResolution(w, h);
+    });
+
     // Per-Monitor Settings
     monitors_container = new QGroupBox("Per-Monitor Balance");
     monitors_layout = new QVBoxLayout();
@@ -864,10 +889,7 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     main_layout->addStretch();
 
     // Add container to parent's layout
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(container);
-    }
+    AddWidgetToParent(container, parent);
 
     // Start capturing from all configured monitors
     StartCaptureIfNeeded();
@@ -1006,8 +1028,23 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         uint64_t sample_timestamp;
         float brightness_multiplier;  // Per-monitor brightness
         float brightness_threshold;   // Per-monitor threshold
+        float black_bar_threshold;    // Per-monitor black bar detection (0-255)
+        bool letterbox_only;         // Per-monitor: only detect top/bottom bars
         float smoothing_time_ms;     // Per-monitor smoothing
         bool use_test_pattern;       // Per-monitor test pattern
+    };
+
+    struct ContentBoundsCacheKey
+    {
+        uint64_t frame_id;
+        int black_threshold_int;
+        bool letterbox_only;
+        bool operator<(const ContentBoundsCacheKey& o) const
+        {
+            if(frame_id != o.frame_id) return frame_id < o.frame_id;
+            if(black_threshold_int != o.black_threshold_int) return black_threshold_int < o.black_threshold_int;
+            return letterbox_only < o.letterbox_only;
+        }
     };
 
     std::vector<MonitorContribution> contributions;
@@ -1188,26 +1225,17 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             }
         }
 
-        // Use per-monitor propagation and wave settings
-        // Frame-based propagation: LEDs closest to screen use current frame (real-time)
-        // Further LEDs use progressively older frames, creating a pulse/wave effect
-        // The same frame "travels" outward from the screen like ripples
-        // 
-        // Propagation Speed control:
-        // - 0 = All LEDs instant (no wave/pulse, all use current frame)
-        // - Low values (1-10 mm/ms) = Very noticeable wave, LEDs many frames behind
-        // - High values (100-200 mm/ms) = Subtle wave, LEDs closer to real-time
+        // Wave effect: slider 0 = no wave; 1–200 = wave strength (higher = more delay = bigger wave).
+        // Stored value is "wave strength"; we convert to speed so delay = distance / speed.
         std::shared_ptr<CapturedFrame> sampling_frame = frame;
-        int frame_offset = 0;  // How many frames behind (0 = current frame)
-        float delay_ms = 0.0f;  // Delay in milliseconds (for wave envelope calculation)
-        
+        int frame_offset = 0;
+        float delay_ms = 0.0f;
+
         if(!monitor_test_pattern && !capture_id.empty() && mon_settings.propagation_speed_mm_per_ms > 0.001f)
         {
-            float max_speed = 200.0f;
-            float effective_speed = max_speed - mon_settings.propagation_speed_mm_per_ms + 1.0f;
-            if(effective_speed < 0.1f) effective_speed = 0.1f;
-            
-            delay_ms = proj.distance / effective_speed;
+            float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 200.0f);
+            float speed_mm_per_ms = 200.0f - strength + 1.0f;  // strength 1 → fast (subtle), 200 → slow (big wave)
+            delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
             delay_ms = std::clamp(delay_ms, 0.0f, 5000.0f);
             std::unordered_map<std::string, FrameHistory>::iterator history_it;
             std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator>::iterator cache_it = history_cache.find(capture_id);
@@ -1298,12 +1326,11 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         float wave_envelope = 1.0f;
         if(mon_settings.propagation_speed_mm_per_ms > 0.001f && mon_settings.wave_decay_ms > 0.1f)
         {
-            if(delay_ms <= 0.0f && mon_settings.propagation_speed_mm_per_ms > 0.001f)
+            if(delay_ms <= 0.0f)
             {
-                float max_speed = 200.0f;
-                float effective_speed = max_speed - mon_settings.propagation_speed_mm_per_ms + 1.0f;
-                if(effective_speed < 0.1f) effective_speed = 0.1f;
-                delay_ms = proj.distance / effective_speed;
+                float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 200.0f);
+                float speed_mm_per_ms = 200.0f - strength + 1.0f;
+                delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
                 delay_ms = std::clamp(delay_ms, 0.0f, 5000.0f);
             }
             wave_envelope = std::exp(-delay_ms / mon_settings.wave_decay_ms);
@@ -1324,6 +1351,8 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                                        (frame ? frame->timestamp_ms : 0);
             contrib.brightness_multiplier = mon_settings.brightness_multiplier;
             contrib.brightness_threshold = mon_settings.brightness_threshold;
+            contrib.black_bar_threshold = mon_settings.black_bar_threshold;
+            contrib.letterbox_only = mon_settings.letterbox_only;
             contrib.smoothing_time_ms = mon_settings.smoothing_time_ms;
             contrib.use_test_pattern = mon_settings.show_test_pattern;
             contributions.push_back(contrib);
@@ -1390,6 +1419,30 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
         contributions.resize(1);
     }
 
+    std::map<ContentBoundsCacheKey, Geometry3D::ContentBounds> content_bounds_cache;
+    for(size_t i = 0; i < contributions.size(); i++)
+    {
+        if(!contributions[i].use_test_pattern && contributions[i].frame && !contributions[i].frame->data.empty())
+        {
+            ContentBoundsCacheKey key;
+            key.frame_id = contributions[i].frame->frame_id;
+            key.black_threshold_int = (int)(contributions[i].black_bar_threshold + 0.5f);
+            key.black_threshold_int = std::clamp(key.black_threshold_int, 0, 255);
+            key.letterbox_only = contributions[i].letterbox_only;
+            if(content_bounds_cache.find(key) == content_bounds_cache.end())
+            {
+                content_bounds_cache[key] = Geometry3D::DetectBlackBars(
+                    contributions[i].frame->data.data(),
+                    contributions[i].frame->width,
+                    contributions[i].frame->height,
+                    contributions[i].black_bar_threshold,
+                    0.2f,
+                    contributions[i].letterbox_only
+                );
+            }
+        }
+    }
+
     float total_r = 0.0f, total_g = 0.0f, total_b = 0.0f;
     float total_weight = 0.0f;
     uint64_t latest_timestamp = 0;
@@ -1443,13 +1496,20 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
                 continue;
             }
 
+            ContentBoundsCacheKey bkey;
+            bkey.frame_id = contrib.frame->frame_id;
+            bkey.black_threshold_int = std::clamp((int)(contrib.black_bar_threshold + 0.5f), 0, 255);
+            bkey.letterbox_only = contrib.letterbox_only;
+            Geometry3D::ContentBounds& bounds = content_bounds_cache[bkey];
+            float sample_u_clamped = std::clamp(sample_u, bounds.u_min, bounds.u_max);
             float flipped_v = 1.0f - sample_v;
+            flipped_v = std::clamp(flipped_v, bounds.v_min, bounds.v_max);
 
             RGBColor sampled_color = Geometry3D::SampleFrame(
                 contrib.frame->data.data(),
                 contrib.frame->width,
                 contrib.frame->height,
-                sample_u,
+                sample_u_clamped,
                 flipped_v,
                 true
             );
@@ -1458,26 +1518,19 @@ RGBColor ScreenMirror3D::CalculateColorGrid(float x, float y, float z, float /*t
             g = (float)RGBGetGValue(sampled_color);
             b = (float)RGBGetBValue(sampled_color);
 
-            // Apply per-monitor brightness threshold filter
-            // Threshold filters out dim content - higher values = only bright content passes
+            // Brightness threshold: dim or suppress pixels below the luminance cutoff (0-255).
             if(contrib.brightness_threshold > 0.0f)
             {
-                // Calculate luminance using standard formula: 0.299*R + 0.587*G + 0.114*B
                 float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
-                
-                if(luminance < contrib.brightness_threshold)
+                float thr = std::clamp(contrib.brightness_threshold, 0.0f, 255.0f);
+                if(luminance <= thr)
                 {
-                    // At threshold 255, only pure white (255) should pass
-                    // Use a steeper falloff curve for more aggressive filtering
-                    float normalized_lum = std::clamp(luminance / 255.0f, 0.0f, 1.0f);
-                    float normalized_threshold = std::clamp(contrib.brightness_threshold / 255.0f, 0.0f, 1.0f);
-                    
-                    if(normalized_lum < normalized_threshold)
-                    {
-                        float threshold_factor = std::max(0.0f, normalized_lum / std::max(normalized_threshold, 0.001f));
-                        threshold_factor = threshold_factor * threshold_factor * threshold_factor;
-                        contrib.weight *= threshold_factor;
-                    }
+                    float t = (thr <= 0.0f) ? 1.0f : std::max(0.0f, luminance / thr);
+                    t = t * t;  // Quadratic falloff so effect is obvious
+                    contrib.weight *= t;
+                    r *= t;
+                    g *= t;
+                    b *= t;
                 }
             }
             
@@ -1583,7 +1636,7 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
 {
     nlohmann::json settings;
 
-    // All settings are now per-monitor (no global settings to save)
+    settings["capture_quality"] = std::clamp(capture_quality, 0, 7);
 
     // Save per-monitor settings (all settings are now per-monitor)
     nlohmann::json monitors = nlohmann::json::object();
@@ -1603,6 +1656,8 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
         mon["smoothing_time_ms"] = mon_settings.smoothing_time_ms;
         mon["brightness_multiplier"] = mon_settings.brightness_multiplier;
         mon["brightness_threshold"] = mon_settings.brightness_threshold;
+        mon["black_bar_threshold"] = mon_settings.black_bar_threshold;
+        mon["letterbox_only"] = mon_settings.letterbox_only;
         
         // Light & Motion
         mon["edge_softness"] = mon_settings.edge_softness;
@@ -1635,48 +1690,155 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
     return settings;
 }
 
+void ScreenMirror3D::SyncMonitorSettingsToUI(MonitorSettings& msettings)
+{
+    if(msettings.group_box)
+    {
+        QSignalBlocker blocker(msettings.group_box);
+        msettings.group_box->setChecked(msettings.enabled);
+    }
+    if(msettings.scale_slider)
+    {
+        QSignalBlocker blocker(msettings.scale_slider);
+        msettings.scale_slider->setValue((int)std::lround(msettings.scale * 100.0f));
+    }
+    if(msettings.scale_label)
+    {
+        msettings.scale_label->setText(QString::number((int)std::lround(msettings.scale * 100.0f)) + "%");
+    }
+    if(msettings.scale_invert_check)
+    {
+        QSignalBlocker blocker(msettings.scale_invert_check);
+        msettings.scale_invert_check->setChecked(msettings.scale_inverted);
+    }
+    if(msettings.smoothing_time_slider)
+    {
+        QSignalBlocker blocker(msettings.smoothing_time_slider);
+        msettings.smoothing_time_slider->setValue((int)std::lround(msettings.smoothing_time_ms));
+    }
+    if(msettings.smoothing_time_label)
+    {
+        msettings.smoothing_time_label->setText(QString::number((int)msettings.smoothing_time_ms) + "ms");
+    }
+    if(msettings.brightness_slider)
+    {
+        QSignalBlocker blocker(msettings.brightness_slider);
+        msettings.brightness_slider->setValue((int)std::lround(msettings.brightness_multiplier * 100.0f));
+    }
+    if(msettings.brightness_label)
+    {
+        msettings.brightness_label->setText(QString::number((int)std::lround(msettings.brightness_multiplier * 100.0f)) + "%");
+    }
+    if(msettings.brightness_threshold_slider)
+    {
+        QSignalBlocker blocker(msettings.brightness_threshold_slider);
+        msettings.brightness_threshold_slider->setValue((int)msettings.brightness_threshold);
+    }
+    if(msettings.brightness_threshold_label)
+    {
+        msettings.brightness_threshold_label->setText(QString::number((int)msettings.brightness_threshold));
+    }
+    if(msettings.black_bar_threshold_slider)
+    {
+        QSignalBlocker blocker(msettings.black_bar_threshold_slider);
+        msettings.black_bar_threshold_slider->setValue((int)msettings.black_bar_threshold);
+    }
+    if(msettings.black_bar_threshold_label)
+    {
+        msettings.black_bar_threshold_label->setText(QString::number((int)msettings.black_bar_threshold));
+    }
+    if(msettings.letterbox_only_check)
+    {
+        QSignalBlocker blocker(msettings.letterbox_only_check);
+        msettings.letterbox_only_check->setChecked(msettings.letterbox_only);
+    }
+    if(msettings.softness_slider)
+    {
+        QSignalBlocker blocker(msettings.softness_slider);
+        msettings.softness_slider->setValue((int)std::lround(msettings.edge_softness));
+    }
+    if(msettings.softness_label)
+    {
+        msettings.softness_label->setText(QString::number((int)msettings.edge_softness));
+    }
+    if(msettings.blend_slider)
+    {
+        QSignalBlocker blocker(msettings.blend_slider);
+        msettings.blend_slider->setValue((int)std::lround(msettings.blend));
+    }
+    if(msettings.blend_label)
+    {
+        msettings.blend_label->setText(QString::number((int)msettings.blend));
+    }
+    if(msettings.propagation_speed_slider)
+    {
+        QSignalBlocker blocker(msettings.propagation_speed_slider);
+        msettings.propagation_speed_slider->setValue((int)std::lround(msettings.propagation_speed_mm_per_ms));
+    }
+    if(msettings.propagation_speed_label)
+    {
+        msettings.propagation_speed_label->setText(QString::number((int)std::lround(msettings.propagation_speed_mm_per_ms)));
+    }
+    if(msettings.wave_decay_slider)
+    {
+        QSignalBlocker blocker(msettings.wave_decay_slider);
+        msettings.wave_decay_slider->setValue((int)std::lround(msettings.wave_decay_ms));
+    }
+    if(msettings.wave_decay_label)
+    {
+        msettings.wave_decay_label->setText(QString::number((int)msettings.wave_decay_ms) + "ms");
+    }
+    if(msettings.test_pattern_check)
+    {
+        QSignalBlocker blocker(msettings.test_pattern_check);
+        msettings.test_pattern_check->setChecked(msettings.show_test_pattern);
+    }
+    if(msettings.screen_preview_check)
+    {
+        QSignalBlocker blocker(msettings.screen_preview_check);
+        msettings.screen_preview_check->setChecked(msettings.show_screen_preview);
+    }
+    if(msettings.capture_area_preview)
+    {
+        msettings.capture_area_preview->update();
+    }
+    if(msettings.ref_point_combo)
+    {
+        QSignalBlocker blocker(msettings.ref_point_combo);
+        int desired = msettings.reference_point_index;
+        int idx = msettings.ref_point_combo->findData(desired);
+        if(idx < 0) idx = msettings.ref_point_combo->findData(-1);
+        if(idx >= 0) msettings.ref_point_combo->setCurrentIndex(idx);
+    }
+}
+
 void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 {
-    // All settings are now per-monitor (no global settings to load)
+    static const float default_scale = 1.0f;
+    static const bool default_scale_inverted = false;
+    static const float default_smoothing_time_ms = 50.0f;
+    static const float default_brightness_multiplier = 1.0f;
+    static const float default_brightness_threshold = 0.0f;
+    static const float default_propagation_speed_mm_per_ms = 10.0f;
+    static const float default_wave_decay_ms = 500.0f;
 
-    // Backward compatibility: Load old global settings to use as defaults for monitors
-    float legacy_global_scale = 1.0f;
-    bool legacy_scale_inverted = false;
-    float legacy_smoothing_time_ms = 50.0f;
-    float legacy_brightness_multiplier = 1.0f;
-    float legacy_brightness_threshold = 0.0f;
-    float legacy_propagation_speed_mm_per_ms = 10.0f;
-    float legacy_wave_decay_ms = 500.0f;
-    
-    if(settings.contains("global_scale"))
+    if(settings.contains("capture_quality"))
     {
-        legacy_global_scale = settings["global_scale"].get<float>();
-        // Legacy safety: if value stored as 0-200 integer, normalise back to 0-2 range
-        if(legacy_global_scale > 2.0f && legacy_global_scale <= 400.0f)
+        capture_quality = std::clamp(settings["capture_quality"].get<int>(), 0, 7);
+        if(capture_quality_combo)
         {
-            legacy_global_scale = legacy_global_scale / 100.0f;
+            capture_quality_combo->setCurrentIndex(capture_quality);
         }
-        legacy_global_scale = std::clamp(legacy_global_scale, 0.0f, 2.0f);
     }
-    if(settings.contains("smoothing_time_ms"))
-        legacy_smoothing_time_ms = settings["smoothing_time_ms"].get<float>();
-    if(settings.contains("brightness_multiplier"))
-        legacy_brightness_multiplier = settings["brightness_multiplier"].get<float>();
-    if(settings.contains("brightness_threshold"))
-        legacy_brightness_threshold = settings["brightness_threshold"].get<float>();
-    if(settings.contains("propagation_speed_mm_per_ms"))
-        legacy_propagation_speed_mm_per_ms = settings["propagation_speed_mm_per_ms"].get<float>();
-    if(settings.contains("wave_decay_ms"))
-        legacy_wave_decay_ms = settings["wave_decay_ms"].get<float>();
-    if(settings.contains("scale_inverted"))
-        legacy_scale_inverted = settings["scale_inverted"].get<bool>();
 
-    // Load per-monitor settings
-    if(settings.contains("monitor_settings"))
+    if(!settings.contains("monitor_settings"))
     {
-        const nlohmann::json& monitors = settings["monitor_settings"];
-        for(nlohmann::json::const_iterator it = monitors.begin(); it != monitors.end(); ++it)
-        {
+        return;
+    }
+
+    const nlohmann::json& monitors = settings["monitor_settings"];
+    for(nlohmann::json::const_iterator it = monitors.begin(); it != monitors.end(); ++it)
+    {
             const std::string& monitor_name = it.key();
             const nlohmann::json& mon = it.value();
 
@@ -1696,6 +1858,9 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             QLabel* existing_brightness_label = nullptr;
             QSlider* existing_brightness_threshold_slider = nullptr;
             QLabel* existing_brightness_threshold_label = nullptr;
+            QSlider* existing_black_bar_threshold_slider = nullptr;
+            QLabel* existing_black_bar_threshold_label = nullptr;
+            QCheckBox* existing_letterbox_only_check = nullptr;
             QSlider* existing_softness_slider = nullptr;
             QLabel* existing_softness_label = nullptr;
             QSlider* existing_blend_slider = nullptr;
@@ -1723,6 +1888,9 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 existing_brightness_label = existing_it->second.brightness_label;
                 existing_brightness_threshold_slider = existing_it->second.brightness_threshold_slider;
                 existing_brightness_threshold_label = existing_it->second.brightness_threshold_label;
+                existing_black_bar_threshold_slider = existing_it->second.black_bar_threshold_slider;
+                existing_black_bar_threshold_label = existing_it->second.black_bar_threshold_label;
+                existing_letterbox_only_check = existing_it->second.letterbox_only_check;
                 existing_softness_slider = existing_it->second.softness_slider;
                 existing_softness_label = existing_it->second.softness_label;
                 existing_blend_slider = existing_it->second.blend_slider;
@@ -1742,37 +1910,36 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             }
             MonitorSettings& msettings = existing_it->second;
 
-            // Load values from JSON (with backward compatibility to global settings)
             if(mon.contains("enabled")) msettings.enabled = mon["enabled"].get<bool>();
             
             // Global Reach / Scale
             if(mon.contains("scale")) msettings.scale = mon["scale"].get<float>();
-            else msettings.scale = legacy_global_scale; // Use legacy global as default
+            else msettings.scale = default_scale;
             if(mon.contains("scale_inverted")) msettings.scale_inverted = mon["scale_inverted"].get<bool>();
-            else msettings.scale_inverted = legacy_scale_inverted;
-            
-            // Calibration
+            else msettings.scale_inverted = default_scale_inverted;
+
             if(mon.contains("smoothing_time_ms")) msettings.smoothing_time_ms = mon["smoothing_time_ms"].get<float>();
-            else msettings.smoothing_time_ms = legacy_smoothing_time_ms;
+            else msettings.smoothing_time_ms = default_smoothing_time_ms;
             if(mon.contains("brightness_multiplier")) msettings.brightness_multiplier = mon["brightness_multiplier"].get<float>();
-            else msettings.brightness_multiplier = legacy_brightness_multiplier;
+            else msettings.brightness_multiplier = default_brightness_multiplier;
             if(mon.contains("brightness_threshold")) msettings.brightness_threshold = mon["brightness_threshold"].get<float>();
-            else msettings.brightness_threshold = legacy_brightness_threshold;
-            
-            // Light & Motion
+            else msettings.brightness_threshold = default_brightness_threshold;
+            if(mon.contains("black_bar_threshold")) msettings.black_bar_threshold = mon["black_bar_threshold"].get<float>();
+            else msettings.black_bar_threshold = 25.0f;
+            if(mon.contains("letterbox_only")) msettings.letterbox_only = mon["letterbox_only"].get<bool>();
+            else msettings.letterbox_only = false;
+
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
             if(mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
             if(mon.contains("propagation_speed_mm_per_ms")) msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();
-            else msettings.propagation_speed_mm_per_ms = legacy_propagation_speed_mm_per_ms;
+            else msettings.propagation_speed_mm_per_ms = default_propagation_speed_mm_per_ms;
             if(mon.contains("wave_decay_ms")) msettings.wave_decay_ms = mon["wave_decay_ms"].get<float>();
-            else msettings.wave_decay_ms = legacy_wave_decay_ms;
+            else msettings.wave_decay_ms = default_wave_decay_ms;
             
             // Preview settings
             if(mon.contains("show_test_pattern")) msettings.show_test_pattern = mon["show_test_pattern"].get<bool>();
             if(mon.contains("show_screen_preview")) msettings.show_screen_preview = mon["show_screen_preview"].get<bool>();
             
-            // Load capture zones (new format) or convert old edge zone settings
-            // First, try to load new format
             if(mon.contains("capture_zones") && mon["capture_zones"].is_array())
             {
                 msettings.capture_zones.clear();
@@ -1805,69 +1972,8 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             }
             else
             {
-                // Backward compatibility: convert old edge zone settings to a capture zone
-                float left_inner = 0.0f, left_outer = 0.5f;
-                float right_inner = 0.0f, right_outer = 0.5f;
-                float bottom_inner = 0.0f, bottom_outer = 0.5f;
-                float top_inner = 0.0f, top_outer = 0.5f;
-                
-                // Try to load old edge zone values
-                if(mon.contains("edge_zone_left_inner")) left_inner = mon["edge_zone_left_inner"].get<float>();
-                else if(mon.contains("edge_zone_left")) left_inner = left_outer = mon["edge_zone_left"].get<float>();
-                else if(mon.contains("edge_zone_depth")) left_inner = left_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_left_outer")) left_outer = mon["edge_zone_left_outer"].get<float>();
-                else if(mon.contains("edge_zone_left")) left_outer = mon["edge_zone_left"].get<float>();
-                else if(mon.contains("edge_zone_depth")) left_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_right_inner")) right_inner = mon["edge_zone_right_inner"].get<float>();
-                else if(mon.contains("edge_zone_right")) right_inner = right_outer = mon["edge_zone_right"].get<float>();
-                else if(mon.contains("edge_zone_depth")) right_inner = right_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_right_outer")) right_outer = mon["edge_zone_right_outer"].get<float>();
-                else if(mon.contains("edge_zone_right")) right_outer = mon["edge_zone_right"].get<float>();
-                else if(mon.contains("edge_zone_depth")) right_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_bottom_inner")) bottom_inner = mon["edge_zone_bottom_inner"].get<float>();
-                else if(mon.contains("edge_zone_bottom")) bottom_inner = bottom_outer = mon["edge_zone_bottom"].get<float>();
-                else if(mon.contains("edge_zone_depth")) bottom_inner = bottom_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_bottom_outer")) bottom_outer = mon["edge_zone_bottom_outer"].get<float>();
-                else if(mon.contains("edge_zone_bottom")) bottom_outer = mon["edge_zone_bottom"].get<float>();
-                else if(mon.contains("edge_zone_depth")) bottom_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_top_inner")) top_inner = mon["edge_zone_top_inner"].get<float>();
-                else if(mon.contains("edge_zone_top")) top_inner = top_outer = mon["edge_zone_top"].get<float>();
-                else if(mon.contains("edge_zone_depth")) top_inner = top_outer = mon["edge_zone_depth"].get<float>();
-                
-                if(mon.contains("edge_zone_top_outer")) top_outer = mon["edge_zone_top_outer"].get<float>();
-                else if(mon.contains("edge_zone_top")) top_outer = mon["edge_zone_top"].get<float>();
-                else if(mon.contains("edge_zone_depth")) top_outer = mon["edge_zone_depth"].get<float>();
-                
-                // Clamp values
-                left_inner = std::clamp(left_inner, 0.0f, 0.5f);
-                left_outer = std::clamp(left_outer, left_inner, 0.5f);
-                right_inner = std::clamp(right_inner, 0.0f, 0.5f);
-                right_outer = std::clamp(right_outer, right_inner, 0.5f);
-                bottom_inner = std::clamp(bottom_inner, 0.0f, 0.5f);
-                bottom_outer = std::clamp(bottom_outer, bottom_inner, 0.5f);
-                top_inner = std::clamp(top_inner, 0.0f, 0.5f);
-                top_outer = std::clamp(top_outer, top_inner, 0.5f);
-                
-                // Convert edge zones to capture zone
-                // Edge zones define bands from edges, so we create a zone covering the area
-                float u_min = left_inner;
-                float u_max = 1.0f - right_inner;
-                float v_min = bottom_inner;
-                float v_max = 1.0f - top_inner;
-                
-                // Ensure valid zone
-                if(u_min >= u_max) { u_min = 0.0f; u_max = 1.0f; }
-                if(v_min >= v_max) { v_min = 0.0f; v_max = 1.0f; }
-                
                 msettings.capture_zones.clear();
-                msettings.capture_zones.push_back(CaptureZone(u_min, u_max, v_min, v_max));
-                msettings.capture_zones[0].name = "Converted Zone";
+                msettings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
             }
             
             if(mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
@@ -1877,9 +1983,10 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
             msettings.brightness_threshold = std::clamp(msettings.brightness_threshold, 0.0f, 255.0f);
+            msettings.black_bar_threshold = std::clamp(msettings.black_bar_threshold, 0.0f, 255.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
             msettings.blend = std::clamp(msettings.blend, 0.0f, 100.0f);
-            msettings.propagation_speed_mm_per_ms = std::clamp(msettings.propagation_speed_mm_per_ms, 0.0f, 100.0f);
+            msettings.propagation_speed_mm_per_ms = std::clamp(msettings.propagation_speed_mm_per_ms, 0.0f, 200.0f);
             msettings.wave_decay_ms = std::clamp(msettings.wave_decay_ms, 0.0f, 2000.0f);
             
             // Restore UI widget pointers if they existed before
@@ -1896,6 +2003,9 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 msettings.brightness_label = existing_brightness_label;
                 msettings.brightness_threshold_slider = existing_brightness_threshold_slider;
                 msettings.brightness_threshold_label = existing_brightness_threshold_label;
+                msettings.black_bar_threshold_slider = existing_black_bar_threshold_slider;
+                msettings.black_bar_threshold_label = existing_black_bar_threshold_label;
+                msettings.letterbox_only_check = existing_letterbox_only_check;
                 msettings.softness_slider = existing_softness_slider;
                 msettings.softness_label = existing_softness_label;
                 msettings.blend_slider = existing_blend_slider;
@@ -1930,139 +2040,17 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                     });
                 }
             }
-        }
     }
 
     // Emit initial preview states based on per-monitor settings
     OnScreenPreviewChanged();
     OnTestPatternChanged();
 
-    // Update monitor UI widgets to match loaded state
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
     {
-        MonitorSettings& msettings = it->second;
-        if(msettings.group_box)
-        {
-            QSignalBlocker blocker(msettings.group_box);
-            msettings.group_box->setChecked(msettings.enabled);
-        }
-        
-        // Global Reach / Scale
-        if(msettings.scale_slider)
-        {
-            QSignalBlocker blocker(msettings.scale_slider);
-            msettings.scale_slider->setValue((int)std::lround(msettings.scale * 100.0f));
-        }
-        if(msettings.scale_label)
-        {
-            msettings.scale_label->setText(QString::number((int)std::lround(msettings.scale * 100.0f)) + "%");
-        }
-        if(msettings.scale_invert_check)
-        {
-            QSignalBlocker blocker(msettings.scale_invert_check);
-            msettings.scale_invert_check->setChecked(msettings.scale_inverted);
-        }
-        
-        // Calibration
-        if(msettings.smoothing_time_slider)
-        {
-            QSignalBlocker blocker(msettings.smoothing_time_slider);
-            msettings.smoothing_time_slider->setValue((int)std::lround(msettings.smoothing_time_ms));
-        }
-        if(msettings.smoothing_time_label)
-        {
-            msettings.smoothing_time_label->setText(QString::number((int)msettings.smoothing_time_ms) + "ms");
-        }
-        if(msettings.brightness_slider)
-        {
-            QSignalBlocker blocker(msettings.brightness_slider);
-            msettings.brightness_slider->setValue((int)std::lround(msettings.brightness_multiplier * 100.0f));
-        }
-        if(msettings.brightness_label)
-        {
-            msettings.brightness_label->setText(QString::number((int)std::lround(msettings.brightness_multiplier * 100.0f)) + "%");
-        }
-        if(msettings.brightness_threshold_slider)
-        {
-            QSignalBlocker blocker(msettings.brightness_threshold_slider);
-            msettings.brightness_threshold_slider->setValue((int)msettings.brightness_threshold);
-        }
-        if(msettings.brightness_threshold_label)
-        {
-            msettings.brightness_threshold_label->setText(QString::number((int)msettings.brightness_threshold));
-        }
-        
-        // Light & Motion
-        if(msettings.softness_slider)
-        {
-            QSignalBlocker blocker(msettings.softness_slider);
-            msettings.softness_slider->setValue((int)std::lround(msettings.edge_softness));
-        }
-        if(msettings.softness_label)
-        {
-            msettings.softness_label->setText(QString::number((int)msettings.edge_softness));
-        }
-        if(msettings.blend_slider)
-        {
-            QSignalBlocker blocker(msettings.blend_slider);
-            msettings.blend_slider->setValue((int)std::lround(msettings.blend));
-        }
-        if(msettings.blend_label)
-        {
-            msettings.blend_label->setText(QString::number((int)msettings.blend));
-        }
-        if(msettings.propagation_speed_slider)
-        {
-            QSignalBlocker blocker(msettings.propagation_speed_slider);
-            msettings.propagation_speed_slider->setValue((int)std::lround(msettings.propagation_speed_mm_per_ms * 10.0f));
-        }
-        if(msettings.propagation_speed_label)
-        {
-            msettings.propagation_speed_label->setText(QString::number(msettings.propagation_speed_mm_per_ms, 'f', 1) + " mm/ms");
-        }
-        if(msettings.wave_decay_slider)
-        {
-            QSignalBlocker blocker(msettings.wave_decay_slider);
-            msettings.wave_decay_slider->setValue((int)std::lround(msettings.wave_decay_ms));
-        }
-        if(msettings.wave_decay_label)
-        {
-            msettings.wave_decay_label->setText(QString::number((int)msettings.wave_decay_ms) + "ms");
-        }
-        
-        // Preview settings
-        if(msettings.test_pattern_check)
-        {
-            QSignalBlocker blocker(msettings.test_pattern_check);
-            msettings.test_pattern_check->setChecked(msettings.show_test_pattern);
-        }
-        if(msettings.screen_preview_check)
-        {
-            QSignalBlocker blocker(msettings.screen_preview_check);
-            msettings.screen_preview_check->setChecked(msettings.show_screen_preview);
-        }
-        
-        // Update preview widget to reflect loaded values
-        if(msettings.capture_area_preview)
-        {
-            msettings.capture_area_preview->update();
-        }
-        if(msettings.ref_point_combo)
-        {
-            QSignalBlocker blocker(msettings.ref_point_combo);
-            int desired = msettings.reference_point_index;
-            int idx = msettings.ref_point_combo->findData(desired);
-            if(idx < 0)
-            {
-                idx = msettings.ref_point_combo->findData(-1);
-            }
-            if(idx >= 0)
-            {
-                msettings.ref_point_combo->setCurrentIndex(idx);
-            }
-        }
+        SyncMonitorSettingsToUI(it->second);
     }
 
     // Ensure reference point menus reflect updated selections
@@ -2096,11 +2084,13 @@ void ScreenMirror3D::OnParameterChanged()
         if(settings.smoothing_time_slider) settings.smoothing_time_ms = (float)settings.smoothing_time_slider->value();
         if(settings.brightness_slider) settings.brightness_multiplier = std::clamp(settings.brightness_slider->value() / 100.0f, 0.0f, 2.0f);
         if(settings.brightness_threshold_slider) settings.brightness_threshold = (float)settings.brightness_threshold_slider->value();
+        if(settings.black_bar_threshold_slider) settings.black_bar_threshold = (float)settings.black_bar_threshold_slider->value();
+        if(settings.letterbox_only_check) settings.letterbox_only = settings.letterbox_only_check->isChecked();
         
         // Light & Motion
         if(settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
         if(settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
-        if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp(settings.propagation_speed_slider->value() / 10.0f, 0.0f, 200.0f);
+        if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp((float)settings.propagation_speed_slider->value(), 0.0f, 200.0f);
         if(settings.wave_decay_slider) settings.wave_decay_ms = (float)settings.wave_decay_slider->value();
         
         // Preview settings
@@ -2326,12 +2316,6 @@ bool ScreenMirror3D::ResolveReferencePoint(int index, Vector3D& out) const
     return true;
 }
 
-bool ScreenMirror3D::GetEffectReferencePoint(Vector3D& out) const
-{
-    (void)out;
-    return false;
-}
-
 void ScreenMirror3D::AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame)
 {
     if(capture_id.empty() || !frame || !frame->valid)
@@ -2555,6 +2539,33 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     });
     monitor_form->addRow("Brightness Threshold:", threshold_widget);
 
+    QWidget* black_bar_widget = new QWidget();
+    QHBoxLayout* black_bar_layout = new QHBoxLayout(black_bar_widget);
+    black_bar_layout->setContentsMargins(0, 0, 0, 0);
+    settings.black_bar_threshold_slider = new QSlider(Qt::Horizontal);
+    settings.black_bar_threshold_slider->setRange(0, 255);
+    settings.black_bar_threshold_slider->setValue((int)settings.black_bar_threshold);
+    settings.black_bar_threshold_slider->setEnabled(has_capture_source);
+    settings.black_bar_threshold_slider->setTickPosition(QSlider::TicksBelow);
+    settings.black_bar_threshold_slider->setTickInterval(25);
+    settings.black_bar_threshold_slider->setToolTip("Per-channel black threshold for letterbox/pillarbox detection (0-255). Pixels below this are treated as black bars.");
+    black_bar_layout->addWidget(settings.black_bar_threshold_slider);
+    settings.black_bar_threshold_label = new QLabel(QString::number((int)settings.black_bar_threshold));
+    settings.black_bar_threshold_label->setMinimumWidth(50);
+    black_bar_layout->addWidget(settings.black_bar_threshold_label);
+    connect(settings.black_bar_threshold_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.black_bar_threshold_slider, &QSlider::valueChanged, settings.black_bar_threshold_label, [&settings](int value) {
+        settings.black_bar_threshold_label->setText(QString::number(value));
+    });
+    monitor_form->addRow("Black bar threshold:", black_bar_widget);
+
+    settings.letterbox_only_check = new QCheckBox("Letterbox only (top/bottom)");
+    settings.letterbox_only_check->setEnabled(has_capture_source);
+    settings.letterbox_only_check->setChecked(settings.letterbox_only);
+    settings.letterbox_only_check->setToolTip("Only detect top/bottom black bars; ignore left/right. Use for wide content.");
+    connect(settings.letterbox_only_check, &QCheckBox::toggled, this, &ScreenMirror3D::OnParameterChanged);
+    monitor_form->addRow("", settings.letterbox_only_check);
+
     settings.ref_point_combo = new QComboBox();
     settings.ref_point_combo->addItem("Room Center", QVariant(-1));
     settings.ref_point_combo->setEnabled(has_capture_source);
@@ -2614,21 +2625,21 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* propagation_layout = new QHBoxLayout(propagation_widget);
     propagation_layout->setContentsMargins(0, 0, 0, 0);
     settings.propagation_speed_slider = new QSlider(Qt::Horizontal);
-    settings.propagation_speed_slider->setRange(0, 200);  // Doubled range: 0-200 mm/ms
-    settings.propagation_speed_slider->setValue((int)(settings.propagation_speed_mm_per_ms * 10.0f));
+    settings.propagation_speed_slider->setRange(0, 200);  // 0 = no wave, 1-200 = wave strength (higher = bigger wave)
+    settings.propagation_speed_slider->setValue((int)std::lround(settings.propagation_speed_mm_per_ms));
     settings.propagation_speed_slider->setEnabled(has_capture_source);
     settings.propagation_speed_slider->setTickPosition(QSlider::TicksBelow);
     settings.propagation_speed_slider->setTickInterval(20);
-    settings.propagation_speed_slider->setToolTip("Wave/Pulse intensity (0-200). 0 = All LEDs instant (no wave). Higher values = Stronger wave/pulse effect (LEDs more frames behind). Adjust to match the feel of the scene.");
+    settings.propagation_speed_slider->setToolTip("Wave intensity (0-200). 0 = no wave (instant). Higher = stronger wave, LEDs more frames behind.");
     propagation_layout->addWidget(settings.propagation_speed_slider);
-    settings.propagation_speed_label = new QLabel(QString::number(settings.propagation_speed_mm_per_ms, 'f', 1) + " mm/ms");
+    settings.propagation_speed_label = new QLabel(QString::number((int)std::lround(settings.propagation_speed_mm_per_ms)));
     settings.propagation_speed_label->setMinimumWidth(80);
     propagation_layout->addWidget(settings.propagation_speed_label);
     connect(settings.propagation_speed_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
     connect(settings.propagation_speed_slider, &QSlider::valueChanged, settings.propagation_speed_label, [&settings](int value) {
-        settings.propagation_speed_label->setText(QString::number(value / 10.0f, 'f', 1) + " mm/ms");
+        settings.propagation_speed_label->setText(QString::number(value));
     });
-    monitor_form->addRow("Propagation Speed:", propagation_widget);
+    monitor_form->addRow("Wave intensity:", propagation_widget);
 
     QWidget* wave_decay_widget = new QWidget();
     QHBoxLayout* wave_decay_layout = new QHBoxLayout(wave_decay_widget);
@@ -2724,15 +2735,26 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
 void ScreenMirror3D::StartCaptureIfNeeded()
 {
-    // Get ALL planes and start capture for each one with a capture source
-    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
 
     if(!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();
     }
+
+    // Apply current capture quality (resolution) so all captures use it
+    int w = 320, h = 180;
+    int q = std::clamp(capture_quality, 0, 7);
+    if(q == 1) { w = 480; h = 270; }
+    else if(q == 2) { w = 640; h = 360; }
+    else if(q == 3) { w = 960; h = 540; }
+    else if(q == 4) { w = 1280; h = 720; }
+    else if(q == 5) { w = 1920; h = 1080; }
+    else if(q == 6) { w = 2560; h = 1440; }
+    else if(q == 7) { w = 3840; h = 2160; }
+    capture_mgr.SetDownscaleResolution(w, h);
+
+    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
 
     for(size_t plane_index = 0; plane_index < planes.size(); plane_index++)
     {
@@ -2745,8 +2767,6 @@ void ScreenMirror3D::StartCaptureIfNeeded()
         if(!capture_mgr.IsCapturing(capture_id))
         {
             capture_mgr.StartCapture(capture_id);
-            LOG_INFO("[ScreenMirror3D] Started capture for '%s' (plane: %s)",
-                       capture_id.c_str(), plane->GetName().c_str());
         }
     }
 }
@@ -2838,6 +2858,8 @@ void ScreenMirror3D::RefreshMonitorStatus()
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
             if(settings.brightness_slider) settings.brightness_slider->setEnabled(has_capture_source);
             if(settings.brightness_threshold_slider) settings.brightness_threshold_slider->setEnabled(has_capture_source);
+            if(settings.black_bar_threshold_slider) settings.black_bar_threshold_slider->setEnabled(has_capture_source);
+            if(settings.letterbox_only_check) settings.letterbox_only_check->setEnabled(has_capture_source);
             if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
             if(settings.blend_slider) settings.blend_slider->setEnabled(has_capture_source);
             if(settings.propagation_speed_slider) settings.propagation_speed_slider->setEnabled(has_capture_source);

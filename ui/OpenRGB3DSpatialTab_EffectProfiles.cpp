@@ -53,25 +53,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
         profile_json["origin_index"] = effect_origin_combo->currentIndex();
     }
 
-    // Legacy compatibility: keep the first stack entry serialized as a "primary" effect
-    if(!effect_stack.empty() && effect_stack[0])
-    {
-        EffectInstance3D* primary = effect_stack[0].get();
-        profile_json["effect_class"] = primary->effect_class_name;
-        profile_json["effect_type"] = -1;
-        profile_json["zone_target"] = primary->zone_index;
-        profile_json["zone_index"] = primary->zone_index;
-
-        if(primary->effect)
-        {
-            profile_json["effect_params"] = primary->effect->SaveSettings();
-        }
-        else if(primary->saved_settings && !primary->saved_settings->empty())
-        {
-            profile_json["effect_params"] = *primary->saved_settings;
-        }
-    }
-
     // Save audio settings (input + currently configured audio effect UI)
     nlohmann::json audio_json;
     int device_index = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
@@ -173,29 +154,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                     effect_stack.push_back(std::move(instance));
                 }
             }
-        }
-        else if(profile_json.contains("effect_class"))
-        {
-            std::unique_ptr<EffectInstance3D> legacy_instance = std::make_unique<EffectInstance3D>();
-            legacy_instance->effect_class_name = profile_json["effect_class"].get<std::string>();
-            legacy_instance->name = legacy_instance->effect_class_name;
-            legacy_instance->enabled = true;
-
-            if(profile_json.contains("zone_target"))
-            {
-                legacy_instance->zone_index = profile_json["zone_target"].get<int>();
-            }
-            else if(profile_json.contains("zone_index"))
-            {
-                legacy_instance->zone_index = DecodeLegacyZoneIndex(profile_json["zone_index"].get<int>());
-            }
-
-            if(profile_json.contains("effect_params"))
-            {
-                legacy_instance->saved_settings = std::make_unique<nlohmann::json>(profile_json["effect_params"]);
-            }
-
-            effect_stack.push_back(std::move(legacy_instance));
         }
 
         UpdateEffectStackList();

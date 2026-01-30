@@ -87,10 +87,7 @@ void BreathingSphere3D::SetupCustomUI(QWidget* parent)
     size_label->setMinimumWidth(30);
     layout->addWidget(size_label, 0, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(breathing_widget);
-}
+    AddWidgetToParent(breathing_widget, parent);
 
 
     connect(size_slider, &QSlider::valueChanged, this, &BreathingSphere3D::OnBreathingParameterChanged);

@@ -33,7 +33,10 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
     \*---------------------------------------------------------*/
     for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
-        j["effects"].push_back(effect_stack[i]->ToJson());
+        if(effect_stack[i])
+        {
+            j["effects"].push_back(effect_stack[i]->ToJson());
+        }
     }
 
     /*---------------------------------------------------------*\

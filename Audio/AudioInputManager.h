@@ -43,7 +43,6 @@ public:
     void stop();
     bool isRunning() const { return running; }
 
-    // Deprecated: capture source is implicit in device choice now
     enum class CaptureSource { InputDevice = 0, SystemLoopback = 1 };
     void setCaptureSource(CaptureSource) {}
     CaptureSource captureSource() const { return CaptureSource::InputDevice; }

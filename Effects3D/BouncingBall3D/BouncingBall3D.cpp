@@ -162,7 +162,7 @@ void BouncingBall3D::SetupCustomUI(QWidget* parent)
     count_label->setMinimumWidth(30);
     layout->addWidget(count_label, 2, 2);
 
-    if(parent && parent->layout()) parent->layout()->addWidget(w);
+    AddWidgetToParent(w, parent);
 
     connect(size_slider, &QSlider::valueChanged, this, &BouncingBall3D::OnBallParameterChanged);
     connect(elasticity_slider, &QSlider::valueChanged, this, &BouncingBall3D::OnBallParameterChanged);

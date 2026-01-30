@@ -128,11 +128,13 @@ private:
         float smoothing_time_ms;        // Temporal smoothing (0-500ms)
         float brightness_multiplier;    // Brightness multiplier (0-200%)
         float brightness_threshold;     // Minimum brightness to trigger (0-255)
+        float black_bar_threshold;      // Black bar detection threshold 0-255 (per-channel)
+        bool letterbox_only;            // Only detect top/bottom bars (ignore pillarbox)
         
         // Light & Motion
         float edge_softness;            // Edge softness (0-100%)
         float blend;                    // Blend percentage (0-100%)
-        float propagation_speed_mm_per_ms;  // Wave propagation speed (0-200 mm/ms)
+        float propagation_speed_mm_per_ms;  // Wave intensity 0-200 (0=off, higher=bigger wave)
         float wave_decay_ms;            // Wave decay time (0-4000ms)
         
         int reference_point_index;
@@ -154,6 +156,9 @@ private:
         QLabel* brightness_label;
         QSlider* brightness_threshold_slider;
         QLabel* brightness_threshold_label;
+        QSlider* black_bar_threshold_slider;
+        QLabel* black_bar_threshold_label;
+        QCheckBox* letterbox_only_check;
         QSlider* softness_slider;
         QLabel* softness_label;
         QSlider* blend_slider;
@@ -175,6 +180,8 @@ private:
             , smoothing_time_ms(50.0f)
             , brightness_multiplier(1.0f)
             , brightness_threshold(0.0f)
+            , black_bar_threshold(25.0f)
+            , letterbox_only(false)
             , edge_softness(30.0f)
             , blend(50.0f)
             , propagation_speed_mm_per_ms(10.0f)
@@ -192,6 +199,9 @@ private:
             , brightness_label(nullptr)
             , brightness_threshold_slider(nullptr)
             , brightness_threshold_label(nullptr)
+            , black_bar_threshold_slider(nullptr)
+            , black_bar_threshold_label(nullptr)
+            , letterbox_only_check(nullptr)
             , softness_slider(nullptr)
             , softness_label(nullptr)
             , blend_slider(nullptr)
@@ -214,6 +224,13 @@ private:
     void StartCaptureIfNeeded();
     void StopCaptureIfNeeded();
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
+    void SyncMonitorSettingsToUI(MonitorSettings& msettings);
+
+    /*---------------------------------------------------------*\
+    | Capture quality (effect-level)                           |
+    \*---------------------------------------------------------*/
+    int                 capture_quality;       // 0=Low 320x180 .. 5=1080p, 6=1440p, 7=4K
+    QComboBox*          capture_quality_combo;
 
     /*---------------------------------------------------------*\
     | UI Controls                                              |
@@ -240,17 +257,7 @@ private:
     /*---------------------------------------------------------*\
     | Effect parameters                                        |
     \*---------------------------------------------------------*/
-    // NOTE: The following global variables are kept ONLY for backward compatibility
-    // when loading old settings files. They are NOT used in calculations.
-    // All calculations now use per-monitor settings from monitor_settings map.
-    float                       global_scale;           // DEPRECATED: Only for legacy loading
-    float                       smoothing_time_ms;      // DEPRECATED: Only for legacy loading
-    float                       brightness_multiplier;  // DEPRECATED: Only for legacy loading
-    float                       brightness_threshold;   // DEPRECATED: Only for legacy loading
-    float                       propagation_speed_mm_per_ms; // DEPRECATED: Only for legacy loading
-    float                       wave_decay_ms;         // DEPRECATED: Only for legacy loading
-    bool                        show_test_pattern;     // Still global (affects all monitors)
-    // Per-monitor settings stored in monitor_settings map - these are used in all calculations
+    bool                        show_test_pattern;
 
     // Reference points (pointer to main tab's vector)
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
@@ -295,7 +302,6 @@ private:
     | Helpers                                                  |
     \*---------------------------------------------------------*/
     bool ResolveReferencePoint(int index, Vector3D& out) const;
-    bool GetEffectReferencePoint(Vector3D& out) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     std::shared_ptr<CapturedFrame> GetFrameForDelay(const std::string& capture_id, float delay_ms) const;
     float GetHistoryRetentionMs() const;

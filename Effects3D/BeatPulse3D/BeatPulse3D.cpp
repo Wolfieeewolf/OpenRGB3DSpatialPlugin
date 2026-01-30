@@ -84,8 +84,6 @@ RGBColor BeatPulse3D::CalculateColor(float x, float y, float z, float time)
     {
         wave_front += 1.0f;
     }
-    // Reverse removed - use rotation controls instead
-
     float radial_norm = std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);
     float height_norm = std::clamp(0.5f + y, 0.0f, 1.0f);
     float distance = std::fabs(radial_norm - wave_front);
@@ -117,8 +115,6 @@ RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, 
     {
         wave_front += 1.0f;
     }
-    // Reverse removed - use rotation controls instead
-
     float dx = x - grid.center_x;
     float dy = y - grid.center_y;
     float dz = z - grid.center_z;

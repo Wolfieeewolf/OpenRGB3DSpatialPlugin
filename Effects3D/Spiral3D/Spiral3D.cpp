@@ -113,10 +113,7 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     gap_label->setMinimumWidth(30);
     layout->addWidget(gap_label, 2, 2);
 
-    if(parent && parent->layout())
-    {
-        parent->layout()->addWidget(spiral_widget);
-    }
+    AddWidgetToParent(spiral_widget, parent);
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral3D::OnSpiralParameterChanged);
     connect(arms_slider, &QSlider::valueChanged, this, &Spiral3D::OnSpiralParameterChanged);

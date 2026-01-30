@@ -64,8 +64,7 @@ EffectInfo3D SpectrumBars3D::GetEffectInfo()
 
 void SpectrumBars3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
-    // All controls are provided by the shared Audio panel.
+    (void)parent;
 }
 
 void SpectrumBars3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -212,27 +211,21 @@ void SpectrumBars3D::UpdateSmoothedBands(const std::vector<float>& spectrum, flo
     }
 }
 
+static float normalize_linear_sb(float value, float min, float max)
+{
+    float range = max - min;
+    if(range <= 1e-5f) return 0.0f;
+    return (value - min) / range;
+}
+
 float SpectrumBars3D::ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    (void)y;  // Unused - using rotated X coordinate
-    (void)z;  // Unused - using rotated X coordinate
-    // Use rotated X coordinate (rotation already applied in CalculateColorGrid)
+    (void)y;
+    (void)z;
     float normalized = 0.0f;
-
-    auto normalize_linear = [](float value, float min, float max) -> float
-    {
-        float range = max - min;
-        if(range <= 1e-5f)
-        {
-            return 0.0f;
-        }
-        return (value - min) / range;
-    };
-
     if(grid)
     {
-        // Use rotated X coordinate for axis position
-        normalized = normalize_linear(x, grid->min_x, grid->max_x);
+        normalized = normalize_linear_sb(x, grid->min_x, grid->max_x);
     }
     else
     {
@@ -245,9 +238,8 @@ float SpectrumBars3D::ResolveCoordinateNormalized(const GridContext3D* grid, flo
 
 float SpectrumBars3D::ResolveHeightNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
-    (void)x;  // Unused - using rotated Y coordinate
-    (void)z;  // Unused - using rotated Y coordinate
-    // Use rotated Y coordinate for height (rotation already applied in CalculateColorGrid)
+    (void)x;
+    (void)z;
     if(grid)
     {
         return NormalizeRange(y, grid->min_y, grid->max_y);
@@ -273,7 +265,6 @@ float SpectrumBars3D::ResolveRadialNormalized(const GridContext3D* grid, float x
 
 RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const
 {
-    // Global brightness is applied by PostProcessColorGrid
     (void)brightness;
     if(smoothed_bands.empty())
     {

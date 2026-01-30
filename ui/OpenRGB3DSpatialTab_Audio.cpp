@@ -70,11 +70,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     connect(audio_stop_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_stop_clicked);
     connect(AudioInputManager::instance(), &AudioInputManager::LevelUpdated, this, &OpenRGB3DSpatialTab::on_audio_level_updated);
 
-    // Capture source (Windows only)
-#ifdef _WIN32
-    // Render device combo removed; unified device list used
-#endif
-
     // Device selection
     layout->addWidget(new QLabel("Input Device:"));
     audio_device_combo = new QComboBox();
@@ -112,8 +107,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     gain_layout->addWidget(audio_gain_value_label);
     layout->addLayout(gain_layout);
 
-    // Input smoothing removed; per-effect smoothing is configured below
-
     // Bands & crossovers
     QHBoxLayout* bands_layout = new QHBoxLayout();
     bands_layout->addWidget(new QLabel("Bands:"));
@@ -126,7 +119,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     bands_layout->addStretch();
     layout->addLayout(bands_layout);
 
-    // Crossovers removed from UI; per-effect Hz mapping used instead
     // Audio Effects section
     QGroupBox* audio_fx_group = new QGroupBox("Audio Effects");
     QVBoxLayout* audio_fx_layout = new QVBoxLayout(audio_fx_group);
@@ -206,7 +198,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 
     // Load persisted audio settings (device, gain, bands, audio controls)
     {
-        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json settings = GetPluginSettings();
         // Device index
         if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
         {
@@ -229,7 +221,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
             audio_gain_slider->blockSignals(false);
             on_audio_gain_changed(gv);
         }
-        // Input smoothing removed (now per-effect)
         // Bands (8/16/32)
         if(audio_bands_combo && settings.contains("AudioBands"))
         {
@@ -386,9 +377,9 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
         unsigned int target_fps = 30;
         for(size_t i = 0; i < effect_stack.size(); i++)
         {
-            if(effect_stack[i] && effect_stack[i]->effect && effect_stack[i]->enabled)
+            if(effect_stack[i])
             {
-                unsigned int f = effect_stack[i]->effect->GetTargetFPSSetting();
+                unsigned int f = effect_stack[i]->GetEffectiveTargetFPS();
                 if(f > target_fps) target_fps = f;
             }
         }
@@ -417,11 +408,9 @@ void OpenRGB3DSpatialTab::on_audio_effect_stop_clicked()
 void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
 {
     AudioInputManager::instance()->setDeviceByIndex(index);
-    // Persist setting
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
     settings["AudioDeviceIndex"] = index;
-    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-    resource_manager->GetSettingsManager()->SaveSettings();
+    SetPluginSettings(settings);
 }
 
 void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
@@ -432,13 +421,10 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
     {
         audio_gain_value_label->setText(QString::number(g, 'f', (g < 10.0f ? 1 : 0)) + "x");
     }
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
     settings["AudioGain"] = value;
-    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-    resource_manager->GetSettingsManager()->SaveSettings();
+    SetPluginSettings(settings);
 }
-
-// input smoothing removed
 
 void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
 {
@@ -669,10 +655,9 @@ void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
 {
     int bands = audio_bands_combo->itemText(index).toInt();
     AudioInputManager::instance()->setBandsCount(bands);
-    nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+    nlohmann::json settings = GetPluginSettings();
     settings["AudioBands"] = bands;
-    resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-    resource_manager->GetSettingsManager()->SaveSettings();
+    SetPluginSettings(settings);
 }
 
 //
@@ -803,7 +788,9 @@ void OpenRGB3DSpatialTab::on_audio_custom_save_clicked()
 void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
 {
     if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
-    QString name = audio_custom_list->currentItem()->text();
+    QListWidgetItem* item = audio_custom_list->currentItem();
+    if(!item) return;
+    QString name = item->text();
     std::string path = GetAudioCustomEffectPath(name.toStdString());
     if(!filesystem::exists(path)) return;
     QFile file(QString::fromStdString(path));
@@ -835,18 +822,26 @@ void OpenRGB3DSpatialTab::on_audio_custom_load_clicked()
         if(j.contains("settings"))
         {
             const nlohmann::json& s = j["settings"];
-            // Ensure effect UI exists, then load settings into effect UI
             SetupAudioEffectUI(idx);
             if(current_audio_effect_ui) current_audio_effect_ui->LoadSettings(s);
         }
     }
-    catch(...){ }
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to load audio custom preset: %s", e.what());
+    }
+    catch(...)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to load audio custom preset: unknown error");
+    }
 }
 
 void OpenRGB3DSpatialTab::on_audio_custom_delete_clicked()
 {
     if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
-    QString name = audio_custom_list->currentItem()->text();
+    QListWidgetItem* item = audio_custom_list->currentItem();
+    if(!item) return;
+    QString name = item->text();
     std::string path = GetAudioCustomEffectPath(name.toStdString());
     if(filesystem::exists(path)) filesystem::remove(path);
     UpdateAudioCustomEffectsList();
@@ -855,7 +850,9 @@ void OpenRGB3DSpatialTab::on_audio_custom_delete_clicked()
 void OpenRGB3DSpatialTab::on_audio_custom_add_to_stack_clicked()
 {
     if(!audio_custom_list || audio_custom_list->currentRow() < 0) return;
-    QString name = audio_custom_list->currentItem()->text();
+    QListWidgetItem* item = audio_custom_list->currentItem();
+    if(!item) return;
+    QString name = item->text();
     std::string path = GetAudioCustomEffectPath(name.toStdString());
     if(!filesystem::exists(path)) return;
     QFile file(QString::fromStdString(path));
@@ -1025,14 +1022,12 @@ void OpenRGB3DSpatialTab::on_audio_std_low_changed(double)
     current_audio_effect_ui->LoadSettings(s);
     if(running_audio_effect) running_audio_effect->LoadSettings(s);
     if(viewport) viewport->UpdateColors();
-    // Persist
     if(resource_manager)
     {
-        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json st = GetPluginSettings();
         st["AudioLowHz"] = lowhz;
         st["AudioHighHz"] = highhz;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
-        resource_manager->GetSettingsManager()->SaveSettings();
+        SetPluginSettings(st);
     }
 }
 
@@ -1064,10 +1059,9 @@ void OpenRGB3DSpatialTab::on_audio_std_smooth_changed(int)
     if(viewport) viewport->UpdateColors();
     if(resource_manager)
     {
-        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json st = GetPluginSettings();
         st["AudioSmoothing"] = audio_smooth_slider ? audio_smooth_slider->value() : 60;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
-        resource_manager->GetSettingsManager()->SaveSettings();
+        SetPluginSettings(st);
     }
 }
 
@@ -1086,16 +1080,15 @@ void OpenRGB3DSpatialTab::on_audio_std_falloff_changed(int)
     if(viewport) viewport->UpdateColors();
     if(resource_manager)
     {
-        nlohmann::json st = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json st = GetPluginSettings();
         st["AudioFalloff"] = audio_falloff_slider ? audio_falloff_slider->value() : 100;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", st);
-        resource_manager->GetSettingsManager()->SaveSettings();
+        SetPluginSettings(st);
     }
 }
 
 void OpenRGB3DSpatialTab::on_audio_effect_zone_changed(int index)
 {
-    Q_UNUSED(index);
+    (void)index;
     if(!audio_effect_zone_combo) return;
     QVariant data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
     if(!data.isValid()) return;
@@ -1117,13 +1110,11 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
     AudioInputManager::instance()->setFFTSize(n);
     // Re-apply Hz mapping for band-based effects since resolution changed
     on_audio_std_low_changed(audio_low_spin ? audio_low_spin->value() : 0.0);
-    // Persist setting
     if(resource_manager)
     {
-        nlohmann::json settings = resource_manager->GetSettingsManager()->GetSettings("3DSpatialPlugin");
+        nlohmann::json settings = GetPluginSettings();
         settings["AudioFFTSize"] = n;
-        resource_manager->GetSettingsManager()->SetSettings("3DSpatialPlugin", settings);
-        resource_manager->GetSettingsManager()->SaveSettings();
+        SetPluginSettings(settings);
     }
 }
 
