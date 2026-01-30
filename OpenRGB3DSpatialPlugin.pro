@@ -248,7 +248,9 @@ win32:LIBS += \
     -lPropsys \
     -luuid \
     -lgdi32 \
-    -luser32
+    -luser32 \
+    -ld3d11 \
+    -ldxgi
 
 win32:CONFIG(debug, debug|release) {
     win32:DESTDIR = debug
