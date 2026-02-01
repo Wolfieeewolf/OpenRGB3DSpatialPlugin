@@ -33,9 +33,6 @@ enum SpatialEffectType
     SPATIAL_EFFECT_BOUNCING_BALL    = 11,
 };
 
-/*---------------------------------------------------------*\
-| Reference Point System                                   |
-\*---------------------------------------------------------*/
 enum ReferencePointType
 {
     REF_POINT_USER          = 0,    // User position (green stick figure)
@@ -51,10 +48,6 @@ enum ReferencePointType
     REF_POINT_CUSTOM        = 10    // Custom user-defined
 };
 
-/*---------------------------------------------------------*\
-| Forward declaration for VirtualReferencePoint3D         |
-| Full definition is in VirtualReferencePoint3D.h         |
-\*---------------------------------------------------------*/
 class VirtualReferencePoint3D;
 
 struct UserPosition3D
@@ -68,10 +61,7 @@ struct UserPosition3D
     UserPosition3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_), visible(true) {}
 };
 
-/*---------------------------------------------------------*\
-| Reference Mode for Effect Origin                         |
-| Determines where effects originate from in 3D space      |
-\*---------------------------------------------------------*/
+/** Where effects originate in 3D space. */
 enum ReferenceMode
 {
     REF_MODE_ROOM_CENTER    = 0,    // Default: Effects use room center (0,0,0)
@@ -79,9 +69,6 @@ enum ReferenceMode
     REF_MODE_CUSTOM_POINT   = 2     // Effect-specific custom reference point (future)
 };
 
-/*---------------------------------------------------------*\
-| Common Effect Axis Types                                 |
-\*---------------------------------------------------------*/
 enum EffectAxis
 {
     AXIS_X              = 0,    // Left to Right (width)
@@ -91,9 +78,7 @@ enum EffectAxis
     AXIS_CUSTOM         = 4     // Custom direction vector
 };
 
-/*---------------------------------------------------------*\
-| Multi-Reference Point Effects                            |
-\*---------------------------------------------------------*/
+/** Multi-reference point effect config. */
 struct MultiPointConfig
 {
     std::vector<int>    reference_point_ids;    // IDs of reference points to use
@@ -114,29 +99,17 @@ struct SpatialEffectParams
     RGBColor            color_end;
     bool                use_gradient;
 
-    /*---------------------------------------------------------*\
-    | Common Effect Controls (all effects have these)         |
-    \*---------------------------------------------------------*/
-    EffectAxis          axis;               // Primary axis for effect
+    EffectAxis          axis;
     bool                reverse;            // Reverse direction
     Vector3D            direction;          // Custom direction vector (for AXIS_CUSTOM)
 
-    /*---------------------------------------------------------*\
-    | Multi-Reference Point System                             |
-    \*---------------------------------------------------------*/
-    MultiPointConfig    multi_points;       // Multiple reference points configuration
+    MultiPointConfig    multi_points;
 
-    /*---------------------------------------------------------*\
-    | 3D Spatial Controls                                      |
-    \*---------------------------------------------------------*/
-    Vector3D            scale_3d;           // Scale per axis (X, Y, Z)
+    Vector3D            scale_3d;
     Vector3D            origin;             // Center point for effect (custom coordinates)
     Rotation3D          rotation;           // Rotation around each axis
 
-    /*---------------------------------------------------------*\
-    | Effect-specific controls                                 |
-    \*---------------------------------------------------------*/
-    float               thickness;          // For beam/wave thickness
+    float               thickness;
     float               intensity;          // For effect intensity
     float               falloff;            // Distance falloff factor
     unsigned int        num_arms;           // For spiral, star effects

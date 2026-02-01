@@ -19,9 +19,7 @@ static QString RGBColorToCssHex(unsigned int color_value)
         .toUpper();
 }
 
-/*---------------------------------------------------------*\
-| Reference Points Management                              |
-\*---------------------------------------------------------*/
+// Reference Points Management
 void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 {
     std::string name = ref_point_name_edit->text().toStdString();
@@ -57,14 +55,34 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
 void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
 {
+    if(!reference_points_list) return;
     int index = reference_points_list->currentRow();
-    if(index >= 0 && index < (int)reference_points.size())
+    if(index < 0 || index >= (int)reference_points.size())
     {
-        reference_points.erase(reference_points.begin() + index);
-        UpdateReferencePointsList();
-        viewport->update();
-        UpdateAvailableControllersList();
+        return;
     }
+
+    // Update display planes: clear or renumber reference_point_index so they stay valid after erase
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        if(!display_planes[i]) continue;
+        int ref_idx = display_planes[i]->GetReferencePointIndex();
+        if(ref_idx == index)
+        {
+            display_planes[i]->SetReferencePointIndex(-1);
+        }
+        else if(ref_idx > index)
+        {
+            display_planes[i]->SetReferencePointIndex(ref_idx - 1);
+        }
+    }
+
+    RemoveReferencePointControllerEntries(index);
+
+    reference_points.erase(reference_points.begin() + index);
+    UpdateReferencePointsList();
+    if(viewport) viewport->update();
+    UpdateAvailableControllersList();
 }
 
 void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
@@ -84,14 +102,20 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
     if(has_selection)
     {
         // Update the reference points list selection
-        reference_points_list->blockSignals(true);
-        reference_points_list->setCurrentRow(index);
-        reference_points_list->blockSignals(false);
+        if(reference_points_list)
+        {
+            reference_points_list->blockSignals(true);
+            reference_points_list->setCurrentRow(index);
+            reference_points_list->blockSignals(false);
+        }
 
         // Clear controller selection when reference point is selected
-        controller_list->blockSignals(true);
-        controller_list->clearSelection();
-        controller_list->blockSignals(false);
+        if(controller_list)
+        {
+            controller_list->blockSignals(true);
+            controller_list->clearSelection();
+            controller_list->blockSignals(false);
+        }
 
         // Update position/rotation controls with reference point values
         VirtualReferencePoint3D* ref_point = reference_points[index].get();
@@ -210,6 +234,7 @@ void OpenRGB3DSpatialTab::on_ref_point_color_clicked()
 
 void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 {
+    if(!reference_points_list) return;
     reference_points_list->clear();
     for(size_t i = 0; i < reference_points.size(); i++)
     {

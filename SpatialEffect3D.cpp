@@ -768,10 +768,7 @@ float SpatialEffect3D::CalculateProgress(float time) const
 
 RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
 {
-    /*---------------------------------------------------------*\
-    | Intensity, brightness, gamma                             |
-    \*---------------------------------------------------------*/
-    // Non-linear intensity curve: 80-90% slider = bright, 90-100% = overkill
+    // Intensity, brightness, gamma// Non-linear intensity curve: 80-90% slider = bright, 90-100% = overkill
     // Uses power curve: intensity^0.7 * 1.7 gives us:
     // - 80% (160) = ~1.36x (bright)
     // - 90% (180) = ~1.47x (bright)

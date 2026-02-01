@@ -72,9 +72,6 @@ static float AverageAlongAxis(ControllerTransform* transform,
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
-    /*---------------------------------------------------------*\
-    | Safety: Check if we have any controllers                |
-    \*---------------------------------------------------------*/
     if(controller_transforms.empty())
     {
         return; // No controllers to update
@@ -82,17 +79,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     
 
-    /*---------------------------------------------------------*\
-    | Update effect time                                       |
-    \*---------------------------------------------------------*/
     // effect_time is advanced in on_effect_timer_timeout()
 
-    /*---------------------------------------------------------*\
-    | Calculate room bounds for effects                        |
-    | Origin: Front-Left-Floor Corner (0,0,0)                 |
-    | Uses manual room dimensions if enabled, otherwise        |
-    | auto-detects from LED positions                          |
-    \*---------------------------------------------------------*/
     ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
                                                               manual_room_width,
                                                               manual_room_height,
@@ -110,10 +98,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             room_bounds.min_z, room_bounds.max_z,
                             grid_scale_mm);
 
-    /*---------------------------------------------------------*\
-    | Configure effect origin for all stack effects            |
-    | Uses selected reference point (if any) or room center    |
-    \*---------------------------------------------------------*/
     ReferenceMode stack_origin_mode = REF_MODE_ROOM_CENTER;
     Vector3D stack_ref_origin = {0.0f, 0.0f, 0.0f};
     if(effect_origin_combo)
@@ -163,6 +147,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(active_effects.empty())
     {
+        if(viewport)
+        {
+            viewport->SetRoomGridColorCallback(nullptr);
+            viewport->SetRoomGridColorBuffer(std::vector<RGBColor>());
+        }
         return;
     }
 
@@ -172,6 +161,44 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         {
             active_effects[idx].effect->SetGlobalReferencePoint(stack_ref_origin);
             active_effects[idx].effect->SetReferenceMode(stack_origin_mode);
+        }
+    }
+
+    // Room grid overlay: compute colors once per frame and pass buffer (faster than per-point callback)
+    if(viewport && viewport->GetShowRoomGridOverlay())
+    {
+        int nx = 0, ny = 0, nz = 0;
+        viewport->GetRoomGridOverlayDimensions(&nx, &ny, &nz);
+        const int step = viewport->GetRoomGridStep();
+        const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
+        if(count > 0 && count <= 500000u) // cap to avoid huge allocs
+        {
+            std::vector<RGBColor> buf(count);
+            const float time_val = effect_time;
+            for(int ix = 0; ix < nx; ix++)
+            {
+                const float px = (float)(ix * step);
+                for(int iy = 0; iy < ny; iy++)
+                {
+                    const float py = (float)(iy * step);
+                    for(int iz = 0; iz < nz; iz++)
+                    {
+                        const float pz = (float)(iz * step);
+                        RGBColor final_color = ToRGBColor(0, 0, 0);
+                        for(const RenderEffectSlot& slot : active_effects)
+                        {
+                            if(!slot.effect) continue;
+                            const bool use_world_bounds = slot.effect->RequiresWorldSpaceCoordinates() && slot.effect->RequiresWorldSpaceGridBounds();
+                            const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                            RGBColor effect_color = slot.effect->CalculateColorGrid(px, py, pz, time_val, active_grid);
+                            effect_color = slot.effect->PostProcessColorGrid(effect_color);
+                            final_color = BlendColors(final_color, effect_color, slot.blend_mode);
+                        }
+                        buf[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
+                    }
+                }
+            }
+            viewport->SetRoomGridColorBuffer(buf);
         }
     }
 
@@ -196,10 +223,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     
 
-    /*---------------------------------------------------------*\
-    | Step 1: Calculate colors for ALL controllers first      |
-    | This separates color calculation from hardware updates   |
-    \*---------------------------------------------------------*/
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
@@ -240,14 +263,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_y = world_pos.y;
                 float world_z = world_pos.z;
 
-                    /*---------------------------------------------------------*\
-                    | Initialize with black (no color)                         |
-                    \*---------------------------------------------------------*/
                     RGBColor final_color = ToRGBColor(0, 0, 0);
-
-                    /*---------------------------------------------------------*\
-                    | Iterate through effect stack and blend colors            |
-                    \*---------------------------------------------------------*/
                     for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                     {
                         const RenderEffectSlot& slot = active_effects[effect_idx];
@@ -291,9 +307,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                         
 
-                        /*---------------------------------------------------------*\
-                        | Calculate effect color                                   |
-                        \*---------------------------------------------------------*/
                         const bool requires_world = effect->RequiresWorldSpaceCoordinates();
                         float sample_x = requires_world ? world_x : room_x;
                         float sample_y = requires_world ? world_y : room_y;
@@ -311,9 +324,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
-                        /*---------------------------------------------------------*\
-                        | Blend with accumulated color                             |
-                        \*---------------------------------------------------------*/
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
                     
@@ -369,14 +379,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 // Get the actual LED index for color updates
                 unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
 
-                /*---------------------------------------------------------*\
-                | Initialize with black (no color)                         |
-                \*---------------------------------------------------------*/
                 RGBColor final_color = ToRGBColor(0, 0, 0);
-
-                /*---------------------------------------------------------*\
-                | Iterate through effect stack and blend colors            |
-                \*---------------------------------------------------------*/
                 for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                 {
                     const RenderEffectSlot& slot = active_effects[effect_idx];
@@ -443,16 +446,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    /*---------------------------------------------------------*\
-    | Step 2: Spatial UpdateLEDs ordering                      |
-    | Sort controllers along Y-axis (vertical) to reduce       |
-    | perceived temporal skew between devices.                 |
-    | Note: Effects now use rotation instead of axis selection  |
-    \*---------------------------------------------------------*/
-
-    // Use default Y-axis sorting (floor to ceiling)
-    // Effects now use rotation controls instead of axis selection
-    EffectAxis sort_axis = AXIS_Y; // default: floor->ceiling (Y-up)
+    // Sort controllers along Y-axis for spatial UpdateLEDs order
+    EffectAxis sort_axis = AXIS_Y;
     bool sort_reverse = false;
 
     // Build sortable keys per controller
@@ -510,9 +505,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    /*---------------------------------------------------------*\
-    | Update viewport to show changes                          |
-    \*---------------------------------------------------------*/
     if(viewport)
     {
         viewport->UpdateColors();

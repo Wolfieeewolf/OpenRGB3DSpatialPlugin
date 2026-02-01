@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Geometry3DUtils.h                                         |
-|                                                           |
-|   3D geometry utilities for spatial calculations         |
-|                                                           |
-|   Date: 2025-10-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef GEOMETRY3DUTILS_H
 #define GEOMETRY3DUTILS_H
@@ -143,11 +134,16 @@ namespace Geometry3D
 
         // Convert to UV coordinates [0,1]
         // Plane extends from [-width/2, +width/2] in X and [-height/2, +height/2] in Y
-        float half_width = plane.GetWidthMM() * 0.5f;
-        float half_height = plane.GetHeightMM() * 0.5f;
-
-        result.u = (local.x + half_width) / plane.GetWidthMM();
-        result.v = (local.y + half_height) / plane.GetHeightMM();
+        float width_mm = plane.GetWidthMM();
+        float height_mm = plane.GetHeightMM();
+        if (width_mm <= 0.0f || height_mm <= 0.0f)
+        {
+            return result;
+        }
+        float half_width = width_mm * 0.5f;
+        float half_height = height_mm * 0.5f;
+        result.u = (local.x + half_width) / width_mm;
+        result.v = (local.y + half_height) / height_mm;
 
         // UV coordinates are correct as-is for transparent screen viewing
         // LEDs behind screen naturally see mirrored view (like looking through glass)
@@ -243,11 +239,16 @@ namespace Geometry3D
         local.z = rotation_matrix[2] * relative.x + rotation_matrix[5] * relative.y + rotation_matrix[8] * relative.z;
 
         // Convert to UV coordinates [0,1]
-        float half_width = plane.GetWidthMM() * 0.5f;
-        float half_height = plane.GetHeightMM() * 0.5f;
-
-        result.u = (local.x + half_width) / plane.GetWidthMM();
-        result.v = (local.y + half_height) / plane.GetHeightMM();
+        float width_mm = plane.GetWidthMM();
+        float height_mm = plane.GetHeightMM();
+        if (width_mm <= 0.0f || height_mm <= 0.0f)
+        {
+            return result;
+        }
+        float half_width = width_mm * 0.5f;
+        float half_height = height_mm * 0.5f;
+        result.u = (local.x + half_width) / width_mm;
+        result.v = (local.y + half_height) / height_mm;
 
         result.is_valid = true;
         return result;
@@ -480,10 +481,15 @@ namespace Geometry3D
 
         // Map local offset to UV coordinates [0, 1]
         // LED at screen center (local 0,0,0) → UV (0.5, 0.5)
+        if (screen_width_units <= 0.0f || screen_height_units <= 0.0f)
+        {
+            result.is_valid = false;
+            return result;
+        }
         result.u = (local_offset.x + screen_width_units * 0.5f) / screen_width_units;
         result.v = (local_offset.z + screen_height_units * 0.5f) / screen_height_units;
 
-        // Clamp UV to valid range [0, 1]
+        // Clamp UV to valid range [0, 1]; LEDs outside screen sample the nearest edge
         if (result.u < 0.0f) result.u = 0.0f;
         if (result.u > 1.0f) result.u = 1.0f;
         if (result.v < 0.0f) result.v = 0.0f;
@@ -508,9 +514,12 @@ namespace Geometry3D
             }
         }
 
-        // NOTE: V coordinate is NOT flipped here because screen capture is already
-        // in the correct orientation (verified with 3D viewport texture display)
-
+        // Reject NaN/Inf so consumers get a valid projection or none
+        if (std::isnan(result.u) || std::isnan(result.v) || !std::isfinite(result.u) || !std::isfinite(result.v))
+        {
+            result.is_valid = false;
+            return result;
+        }
         result.is_valid = true;
         return result;
     }
@@ -529,6 +538,10 @@ namespace Geometry3D
     inline RGBColor SampleFrame(const uint8_t* frame_data, int frame_width, int frame_height,
                                float u, float v, bool use_bilinear = true)
     {
+        if (!frame_data || frame_width <= 0 || frame_height <= 0)
+        {
+            return ToRGBColor(0, 0, 0);
+        }
         // Clamp UV to valid range for ambilight edge extension
         // LEDs outside screen bounds sample the nearest edge pixel
         if (u < 0.0f) u = 0.0f;

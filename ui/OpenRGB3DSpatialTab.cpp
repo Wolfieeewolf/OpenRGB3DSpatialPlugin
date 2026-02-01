@@ -103,6 +103,13 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     grid_snap_checkbox = nullptr;
     grid_scale_spin = nullptr;
     selection_info_label = nullptr;
+    room_grid_overlay_checkbox = nullptr;
+    room_grid_brightness_slider = nullptr;
+    room_grid_brightness_label = nullptr;
+    room_grid_point_size_slider = nullptr;
+    room_grid_point_size_label = nullptr;
+    room_grid_step_slider = nullptr;
+    room_grid_step_label = nullptr;
     custom_grid_x = 10;
     custom_grid_y = 10;
     custom_grid_z = 10;
@@ -172,10 +179,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
 
-    /*---------------------------------------------------------*\
-    | Initialize zone and effect combos                        |
-    \*---------------------------------------------------------*/
-    UpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
+    // Initialize zone and effect combosUpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
     UpdateEffectOriginCombo();      // Initialize Effects tab origin dropdown
     UpdateAudioEffectZoneCombo();   // Initialize Audio tab zone dropdown
     UpdateAudioEffectOriginCombo(); // Initialize Audio tab origin dropdown
@@ -205,6 +209,10 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
             settings["Camera"]["TargetX"] = tx;
             settings["Camera"]["TargetY"] = ty;
             settings["Camera"]["TargetZ"] = tz;
+            settings["RoomGrid"]["Show"] = viewport->GetShowRoomGridOverlay();
+            settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
+            settings["RoomGrid"]["PointSize"] = viewport->GetRoomGridPointSize();
+            settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
             SetPluginSettingsNoSave(settings);
         }
         catch(const std::exception&){}
@@ -226,9 +234,7 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 void OpenRGB3DSpatialTab::SetupUI()
 {
 
-    /*---------------------------------------------------------*\
-    | Create main tab widget to separate Setup and Effects     |
-    \*---------------------------------------------------------*/
+    // Create main tab widget to separate Setup and Effects
     QVBoxLayout* root_layout = new QVBoxLayout(this);
     root_layout->setContentsMargins(0, 0, 0, 0);
     root_layout->setSpacing(0);
@@ -236,17 +242,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     QTabWidget* main_tabs = new QTabWidget();
     root_layout->addWidget(main_tabs);
 
-    /*---------------------------------------------------------*\
-    | Setup Tab (Grid/Layout Configuration)                    |
-    \*---------------------------------------------------------*/
+    // Setup Tab (Grid/Layout Configuration)
     QWidget* setup_tab = new QWidget();
     QHBoxLayout* main_layout = new QHBoxLayout(setup_tab);
     main_layout->setSpacing(6);
     main_layout->setContentsMargins(4, 4, 4, 4);
 
-    /*---------------------------------------------------------*\
-    | Left panel with scroll area                              |
-    \*---------------------------------------------------------*/
+    // Left panel with scroll area
     QScrollArea* left_scroll = new QScrollArea();
     left_scroll->setWidgetResizable(true);
     left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -260,14 +262,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* left_panel = new QVBoxLayout(left_content);
     left_panel->setSpacing(6);
 
-    /*---------------------------------------------------------*\
-    | Tab Widget for left panel                                |
-    \*---------------------------------------------------------*/
+    // Tab Widget for left panel
     left_tabs = new QTabWidget();
 
-    /*---------------------------------------------------------*\
-    | Available Controllers Tab                                |
-    \*---------------------------------------------------------*/
+    // Available Controllers Tab
     QWidget* available_tab = new QWidget();
     QVBoxLayout* available_layout = new QVBoxLayout();
     available_layout->setSpacing(3);
@@ -361,9 +359,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     left_panel->addWidget(left_tabs);
 
-    /*---------------------------------------------------------*\
-    | Controllers in 3D Scene (below tabs)                     |
-    \*---------------------------------------------------------*/
+    // Controllers in 3D Scene (below tabs)
     QGroupBox* controller_group = new QGroupBox("Controllers in 3D Scene");
     QVBoxLayout* controller_layout = new QVBoxLayout();
     controller_layout->setSpacing(3);
@@ -373,7 +369,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(controller_list, &QListWidget::currentRowChanged, [this](int row) {
         if(row >= 0)
         {
-            viewport->SelectController(row);
+            int transform_index = ControllerListRowToTransformIndex(row);
+            if(viewport)
+            {
+                viewport->SelectController(transform_index >= 0 ? transform_index : -1);
+            }
             on_controller_selected(row);
         }
     });
@@ -434,14 +434,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     controller_group->setLayout(controller_layout);
     left_panel->addWidget(controller_group);
 
-    /*---------------------------------------------------------*\
-    | Add stretch to push content to top of scroll area       |
-    \*---------------------------------------------------------*/
+    // Add stretch to push content to top of scroll area
     left_panel->addStretch();
 
-    /*---------------------------------------------------------*\
-    | Set up left scroll area and add to main layout          |
-    \*---------------------------------------------------------*/
+    // Set up left scroll area and add to main layout
     left_scroll->setWidget(left_content);
     main_layout->addWidget(left_scroll, 1);
 
@@ -492,14 +488,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
     middle_panel->addWidget(viewport, 1);
 
-    /*---------------------------------------------------------*\
-    | Tab Widget for Position/Rotation and Grid Settings      |
-    \*---------------------------------------------------------*/
+    // Tab Widget for Position/Rotation and Grid Settings
     QTabWidget* settings_tabs = new QTabWidget();
 
-    /*---------------------------------------------------------*\
-    | Grid Settings Tab                                        |
-    \*---------------------------------------------------------*/
+    // Grid Settings Tab
     QWidget* grid_settings_tab = new QWidget();
     QGridLayout* layout_layout = new QGridLayout();
     layout_layout->setSpacing(3);
@@ -541,6 +533,13 @@ void OpenRGB3DSpatialTab::SetupUI()
             viewport->SetGridScaleMM(grid_scale_mm);
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
+        // Keep ambilight preview in sync so its math matches the viewport
+        if(current_effect_ui)
+        {
+            ScreenMirror3D* sm = qobject_cast<ScreenMirror3D*>(current_effect_ui);
+            if(sm)
+                sm->SetGridScaleMM(grid_scale_mm);
+        }
         // Regenerate LED positions for all controllers to reflect new grid scale
         for(unsigned int i = 0; i < controller_transforms.size(); i++)
         {
@@ -559,9 +558,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_snap_checkbox->setToolTip("Snap controller positions to grid intersections");
     layout_layout->addWidget(grid_snap_checkbox, 1, 3, 1, 3);
 
-    /*---------------------------------------------------------*\
-    | Room Dimensions Section                                  |
-    \*---------------------------------------------------------*/
+    // Room Dimensions Section
     layout_layout->addWidget(new QLabel("=== Room Dimensions (Origin: Front-Left-Floor Corner) ==="), 2, 0, 1, 6);
 
     // Manual room size checkbox
@@ -622,7 +619,88 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_help2->setWordWrap(true);
     layout_layout->addWidget(grid_help2, 6, 0, 1, 6);
 
+    // Room grid overlay (virtual LEDs fill)
+    room_grid_overlay_checkbox = new QCheckBox("Show room grid overlay (virtual LEDs)");
+    room_grid_overlay_checkbox->setToolTip("Fill the room with a grid of dim points so you can see the full space and tell real vs virtual LEDs.");
+    layout_layout->addWidget(room_grid_overlay_checkbox, 7, 0, 1, 2);
+
+    layout_layout->addWidget(new QLabel("Overlay brightness:"), 8, 0);
+    room_grid_brightness_slider = new QSlider(Qt::Horizontal);
+    room_grid_brightness_slider->setRange(0, 100);
+    room_grid_brightness_slider->setValue(35);
+    room_grid_brightness_slider->setToolTip("Brightness of overlay points (lower = real LEDs stand out more)");
+    layout_layout->addWidget(room_grid_brightness_slider, 8, 1);
+    room_grid_brightness_label = new QLabel("35%");
+    layout_layout->addWidget(room_grid_brightness_label, 8, 2);
+
+    layout_layout->addWidget(new QLabel("Point size:"), 8, 3);
+    room_grid_point_size_slider = new QSlider(Qt::Horizontal);
+    room_grid_point_size_slider->setRange(1, 12);
+    room_grid_point_size_slider->setValue(3);
+    room_grid_point_size_slider->setToolTip("Size of overlay points (larger = easier to see which are real)");
+    layout_layout->addWidget(room_grid_point_size_slider, 8, 4);
+    room_grid_point_size_label = new QLabel("3");
+    layout_layout->addWidget(room_grid_point_size_label, 8, 5);
+
+    layout_layout->addWidget(new QLabel("Overlay step:"), 9, 0);
+    room_grid_step_slider = new QSlider(Qt::Horizontal);
+    room_grid_step_slider->setRange(1, 24);
+    room_grid_step_slider->setValue(4);
+    room_grid_step_slider->setToolTip("Grid units between overlay points (1=dense/more CPU, 24=sparse/less CPU). Physical spacing = step × grid scale.");
+    layout_layout->addWidget(room_grid_step_slider, 9, 1);
+    room_grid_step_label = new QLabel("4");
+    layout_layout->addWidget(room_grid_step_label, 9, 2);
+
     grid_settings_tab->setLayout(layout_layout);
+
+    // Connect room grid overlay to viewport
+    connect(room_grid_overlay_checkbox, &QCheckBox::toggled, [this](bool checked) {
+        if(viewport) viewport->SetShowRoomGridOverlay(checked);
+    });
+    connect(room_grid_brightness_slider, &QSlider::valueChanged, [this](int value) {
+        if(room_grid_brightness_label) room_grid_brightness_label->setText(QString("%1%").arg(value));
+        if(viewport) viewport->SetRoomGridBrightness((float)value / 100.0f);
+    });
+    connect(room_grid_point_size_slider, &QSlider::valueChanged, [this](int value) {
+        if(room_grid_point_size_label) room_grid_point_size_label->setText(QString::number(value));
+        if(viewport) viewport->SetRoomGridPointSize((float)value);
+    });
+    connect(room_grid_step_slider, &QSlider::valueChanged, [this](int value) {
+        if(room_grid_step_label) room_grid_step_label->setText(QString::number(value));
+        if(viewport) viewport->SetRoomGridStep(value);
+    });
+
+    // Load room grid overlay from settings and apply to viewport + UI
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        if(settings.contains("RoomGrid"))
+        {
+            const nlohmann::json& rg = settings["RoomGrid"];
+            bool show = rg.value("Show", false);
+            int bright = (int)(rg.value("Brightness", 0.35) * 100.0);
+            int size = (int)rg.value("PointSize", 3.0);
+            int step_val = (int)rg.value("Step", 4);
+            bright = std::max(0, std::min(100, bright));
+            size = std::max(1, std::min(12, size));
+            step_val = std::max(1, std::min(24, step_val));
+            if(room_grid_overlay_checkbox) room_grid_overlay_checkbox->setChecked(show);
+            if(room_grid_brightness_slider) room_grid_brightness_slider->setValue(bright);
+            if(room_grid_brightness_label) room_grid_brightness_label->setText(QString("%1%").arg(bright));
+            if(room_grid_point_size_slider) room_grid_point_size_slider->setValue(size);
+            if(room_grid_point_size_label) room_grid_point_size_label->setText(QString::number(size));
+            if(room_grid_step_slider) room_grid_step_slider->setValue(step_val);
+            if(room_grid_step_label) room_grid_step_label->setText(QString::number(step_val));
+            if(viewport)
+            {
+                viewport->SetShowRoomGridOverlay(show);
+                viewport->SetRoomGridBrightness((float)bright / 100.0f);
+                viewport->SetRoomGridPointSize((float)size);
+                viewport->SetRoomGridStep(step_val);
+            }
+        }
+    }
+    catch(const std::exception&) { /* ignore */ }
 
     // Connect signals
     connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
@@ -678,9 +756,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         emit GridLayoutChanged();
     });
 
-    /*---------------------------------------------------------*\
-    | Position & Rotation Tab                                  |
-    \*---------------------------------------------------------*/
+    // Position & Rotation Tab
     QWidget* transform_tab = new QWidget();
     QHBoxLayout* transform_layout = new QHBoxLayout();
     transform_layout->setSpacing(6);
@@ -850,9 +926,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     settings_tabs->addTab(transform_tab, "Position & Rotation");
     settings_tabs->addTab(grid_settings_tab, "Grid Settings");
 
-    /*---------------------------------------------------------*\
-    | Object Creator Tab (Custom Controllers, Ref Points, Displays) |
-    \*---------------------------------------------------------*/
+    // Object Creator Tab (Custom Controllers, Ref Points, Displays)
     QWidget* object_creator_tab = new QWidget();
     QVBoxLayout* creator_layout = new QVBoxLayout();
     creator_layout->setSpacing(6);
@@ -896,9 +970,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     empty_layout->addStretch();
     creator_stack->addWidget(empty_page);
 
-    /*---------------------------------------------------------*\
-    | Custom Controllers Page                                  |
-    \*---------------------------------------------------------*/
+    // Custom Controllers Page
     QWidget* custom_controller_page = new QWidget();
     QVBoxLayout* custom_layout = new QVBoxLayout(custom_controller_page);
     custom_layout->setSpacing(4);
@@ -939,9 +1011,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     creator_stack->addWidget(custom_controller_page);
 
-    /*---------------------------------------------------------*\
-    | Reference Points Page                                    |
-    \*---------------------------------------------------------*/
+    // Reference Points Page
     QWidget* ref_point_page = new QWidget();
     QVBoxLayout* ref_points_layout = new QVBoxLayout(ref_point_page);
     ref_points_layout->setSpacing(4);
@@ -1008,9 +1078,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     creator_stack->addWidget(ref_point_page);
 
-    /*---------------------------------------------------------*\
-    | Display Planes Page                                      |
-    \*---------------------------------------------------------*/
+    // Display Planes Page
     QWidget* display_plane_page = new QWidget();
     QVBoxLayout* display_layout = new QVBoxLayout(display_plane_page);
     display_layout->setSpacing(6);
@@ -1139,12 +1207,17 @@ void OpenRGB3DSpatialTab::SetupUI()
     creator_layout->addWidget(creator_stack);
     creator_layout->addStretch();
 
-    // Connect dropdown to switch pages
-    connect(object_type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [creator_stack](int index) {
+    // Connect dropdown to switch pages; when switching to Display Plane page, refresh list so it is up to date
+    connect(object_type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, creator_stack](int index) {
         if(index == 0) creator_stack->setCurrentIndex(0); // Select to Create
         else if(index == 1) creator_stack->setCurrentIndex(1); // Custom Controller
         else if(index == 2) creator_stack->setCurrentIndex(2); // Reference Point
-        else if(index == 3) creator_stack->setCurrentIndex(3); // Display Plane
+        else if(index == 3)
+        {
+            creator_stack->setCurrentIndex(3); // Display Plane
+            UpdateDisplayPlanesList();
+            RefreshDisplayPlaneDetails();
+        }
     });
     object_type_combo->setCurrentIndex(0);
 
@@ -1156,9 +1229,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Initialize capture source list for display planes page
     RefreshDisplayPlaneCaptureSourceList();
 
-    /*---------------------------------------------------------*\
-    | Unified Profiles Tab (Layout + Effect profiles)         |
-    \*---------------------------------------------------------*/
+    // Unified Profiles Tab (Layout + Effect profiles)
     SetupProfilesTab(settings_tabs);
 
     settings_tabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -1167,10 +1238,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space
 
-    /*---------------------------------------------------------*\
-    | Effects Tab (Effect Controls and Presets)                |
-    | Created first so it's the default tab on startup         |
-    \*---------------------------------------------------------*/
+    // Effects tab (default on startup)
     QWidget* effects_tab = new QWidget();
     QVBoxLayout* effects_tab_layout = new QVBoxLayout(effects_tab);
     effects_tab_layout->setContentsMargins(4, 4, 4, 4);
@@ -1300,15 +1368,11 @@ void OpenRGB3DSpatialTab::SetupUI()
                 }
             });
 
-    /*---------------------------------------------------------*\
-    | Add tabs to main tab widget (Effects first as default)  |
-    \*---------------------------------------------------------*/
+    // Add tabs to main tab widget (Effects first as default)
     main_tabs->addTab(effects_tab, "Effects / Presets");
     main_tabs->addTab(setup_tab, "Setup / Grid");
 
-    /*---------------------------------------------------------*\
-    | Set the root layout                                      |
-    \*---------------------------------------------------------*/
+    // Set the root layout
     setLayout(root_layout);
 }
 
@@ -1564,14 +1628,10 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
 
 void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 {
-    /*---------------------------------------------------------*\
-    | Clear current custom UI                                  |
-    \*---------------------------------------------------------*/
+    // Clear current custom UI
     ClearCustomEffectUI();
 
-    /*---------------------------------------------------------*\
-    | Set up new custom UI based on effect type               |
-    \*---------------------------------------------------------*/
+    // Set up new custom UI based on effect type
     QString class_name;
     if(effect_type_combo && index >= 0)
     {
@@ -1582,9 +1642,7 @@ void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 
 void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
 {
-    /*---------------------------------------------------------*\
-    | Validate all required UI components                      |
-    \*---------------------------------------------------------*/
+    // Validate all required UI components
     if(!effect_controls_widget || !effect_controls_layout)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect controls widget or layout is null!");
@@ -1621,10 +1679,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Create effect using the registration system             |
-    \*---------------------------------------------------------*/
-    
+    // Create effect using the registration system
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
     if(!effect)
     {
@@ -1633,9 +1688,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
     }
     
 
-    /*---------------------------------------------------------*\
-    | Setup effect UI (same for ALL effects)                  |
-    \*---------------------------------------------------------*/
+    // Setup effect UI (same for ALL effects)
     effect->setParent(effect_controls_widget);
     effect->CreateCommonEffectControls(effect_controls_widget);
     effect->SetupCustomUI(effect_controls_widget);
@@ -1662,9 +1715,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
         if(effect_origin_combo) effect_origin_combo->setVisible(true);
     }
 
-    /*---------------------------------------------------------*\
-    | Get and connect buttons                                  |
-    \*---------------------------------------------------------*/
+    // Get and connect buttons
     start_effect_button = effect->GetStartButton();
     stop_effect_button = effect->GetStopButton();
     
@@ -1675,14 +1726,10 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
         RefreshEffectDisplay();
     });
 
-    /*---------------------------------------------------------*\
-    | Add effect to layout                                     |
-    \*---------------------------------------------------------*/
+    // Add effect to layout
     effect_controls_layout->addWidget(effect);
 
-    /*---------------------------------------------------------*\
-    | Force geometry update to ensure layout is ready         |
-    \*---------------------------------------------------------*/
+    // Force geometry update to ensure layout is ready
     effect_controls_widget->updateGeometry();
     effect_controls_widget->update();
 }
@@ -1775,9 +1822,7 @@ void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem*
 
 void OpenRGB3DSpatialTab::SetupStackPresetUI()
 {
-    /*---------------------------------------------------------*\
-    | Validate required UI components                          |
-    \*---------------------------------------------------------*/
+    // Validate required UI components
     if(!effect_controls_widget || !effect_controls_layout)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect controls widget or layout is null!");
@@ -1786,9 +1831,7 @@ void OpenRGB3DSpatialTab::SetupStackPresetUI()
 
     
 
-    /*---------------------------------------------------------*\
-    | Create informational label                               |
-    \*---------------------------------------------------------*/
+    // Create informational label
     QLabel* info_label = new QLabel(
         "This is a saved stack preset with pre-configured settings.\n\n"
         "Click Start to load and run all effects in this preset.\n\n"
@@ -1802,9 +1845,7 @@ void OpenRGB3DSpatialTab::SetupStackPresetUI()
     info_label->setContentsMargins(6, 6, 6, 6);
     effect_controls_layout->addWidget(info_label);
 
-    /*---------------------------------------------------------*\
-    | Create Start/Stop button container                       |
-    \*---------------------------------------------------------*/
+    // Create Start/Stop button container
     QWidget* button_container = new QWidget();
     QHBoxLayout* button_layout = new QHBoxLayout(button_container);
     button_layout->setContentsMargins(0, 6, 0, 0);
@@ -1819,15 +1860,11 @@ void OpenRGB3DSpatialTab::SetupStackPresetUI()
 
     effect_controls_layout->addWidget(button_container);
 
-    /*---------------------------------------------------------*\
-    | Connect buttons to handlers                              |
-    \*---------------------------------------------------------*/
+    // Connect buttons to handlers
     connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
     connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
 
-    /*---------------------------------------------------------*\
-    | Force geometry update                                    |
-    \*---------------------------------------------------------*/
+    // Force geometry update
     effect_controls_widget->updateGeometry();
     effect_controls_widget->update();
 }
@@ -1839,26 +1876,20 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Stop timer to prevent callbacks during cleanup           |
-    \*---------------------------------------------------------*/
+    // Stop timer to prevent callbacks during cleanup
     if(effect_timer && effect_timer->isActive())
     {
         effect_timer->stop();
     }
     effect_running = false;
 
-    /*---------------------------------------------------------*\
-    | Disconnect current effect to prevent crashes             |
-    \*---------------------------------------------------------*/
+    // Disconnect current effect to prevent crashes
     if(current_effect_ui)
     {
         disconnect(current_effect_ui, nullptr, this, nullptr);
     }
 
-    /*---------------------------------------------------------*\
-    | Disconnect buttons before deletion                       |
-    \*---------------------------------------------------------*/
+    // Disconnect buttons before deletion
     if(start_effect_button)
     {
         disconnect(start_effect_button, nullptr, this, nullptr);
@@ -1868,16 +1899,11 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         disconnect(stop_effect_button, nullptr, this, nullptr);
     }
 
-    /*---------------------------------------------------------*\
-    | Reset effect UI pointers BEFORE deletion                 |
-    \*---------------------------------------------------------*/
-    current_effect_ui = nullptr;
+    // Reset effect UI pointers BEFORE deletioncurrent_effect_ui = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 
-    /*---------------------------------------------------------*\
-    | Remove all widgets from the container                    |
-    \*---------------------------------------------------------*/
+    // Remove all widgets from the container
     if(!effect_controls_layout)
     {
         return;
@@ -1895,25 +1921,18 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
 
 void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
 {
-    /*---------------------------------------------------------*\
-    | Update grid dimensions from UI                           |
-    \*---------------------------------------------------------*/
+    // Update grid dimensions from UI
     if(grid_x_spin) custom_grid_x = grid_x_spin->value();
     if(grid_y_spin) custom_grid_y = grid_y_spin->value();
     if(grid_z_spin) custom_grid_z = grid_z_spin->value();
 
-    /*---------------------------------------------------------*\
-    | Regenerate LED positions for all controllers            |
-    | Must respect granularity and LED spacing!               |
-    \*---------------------------------------------------------*/
+    // Regenerate LED positions for all controllers
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         RegenerateLEDPositions(controller_transforms[i].get());
     }
 
-    /*---------------------------------------------------------*\
-    | Update viewport                                          |
-    \*---------------------------------------------------------*/
+    // Update viewport
     if(viewport)
     {
         viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);

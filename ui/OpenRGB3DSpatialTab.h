@@ -57,6 +57,9 @@ public:
     explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
+    /** Current grid scale (mm per unit) used by viewport and effects for consistent math. */
+    float GetGridScaleMM() const { return grid_scale_mm; }
+
 signals:
     void GridLayoutChanged();
 
@@ -153,6 +156,11 @@ private:
     void UpdateCustomControllersList();
     int  FindDisplayPlaneIndexById(int plane_id) const;
     void RemoveDisplayPlaneControllerEntries(int plane_id);
+    void RemoveReferencePointControllerEntries(int removed_index);
+    /** Maps controller_list row to controller_transforms index; -1 if that row is not a transform. */
+    int  ControllerListRowToTransformIndex(int row) const;
+    /** Maps controller_transforms index to controller_list row; -1 if not found. */
+    int  TransformIndexToControllerListRow(int transform_index) const;
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
     void SaveReferencePoints();
@@ -250,9 +258,7 @@ private:
     QSlider*                    rot_y_slider;
     QSlider*                    rot_z_slider;
 
-    /*---------------------------------------------------------*\
-    | Effect Library Controls                                  |
-    \*---------------------------------------------------------*/
+    // Effect Library
     QComboBox*                  effect_category_combo;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
@@ -276,23 +282,26 @@ private:
     QElapsedTimer               effect_elapsed;
     bool                        stack_settings_updating;
 
-    /*---------------------------------------------------------*\
-    | Custom grid dimensions (always 1:1 LED mapping)         |
-    \*---------------------------------------------------------*/
+    // Grid (custom dimensions)
     QSpinBox*                   grid_x_spin;
     QSpinBox*                   grid_y_spin;
     QSpinBox*                   grid_z_spin;
     QCheckBox*                  grid_snap_checkbox;
     QDoubleSpinBox*             grid_scale_spin;
     QLabel*                     selection_info_label;
+    QCheckBox*                  room_grid_overlay_checkbox;
+    QSlider*                    room_grid_brightness_slider;
+    QLabel*                     room_grid_brightness_label;
+    QSlider*                    room_grid_point_size_slider;
+    QLabel*                     room_grid_point_size_label;
+    QSlider*                    room_grid_step_slider;
+    QLabel*                     room_grid_step_label;
     int                         custom_grid_x;
     int                         custom_grid_y;
     int                         custom_grid_z;
     float                       grid_scale_mm;
 
-    /*---------------------------------------------------------*\
-    | Room Dimension Settings (Manual room size)              |
-    \*---------------------------------------------------------*/
+    // Room dimensions (manual)
     QDoubleSpinBox*             room_width_spin;
     QDoubleSpinBox*             room_depth_spin;
     QDoubleSpinBox*             room_height_spin;
@@ -302,34 +311,26 @@ private:
     float                       manual_room_height;
     bool                        use_manual_room_size;
 
-    /*---------------------------------------------------------*\
-    | LED Spacing Controls (for adding controllers)           |
-    \*---------------------------------------------------------*/
+    // LED spacing (add)
     QDoubleSpinBox*             led_spacing_x_spin;
     QDoubleSpinBox*             led_spacing_y_spin;
     QDoubleSpinBox*             led_spacing_z_spin;
     QComboBox*                  led_spacing_preset_combo;
 
-    /*---------------------------------------------------------*\
-    | LED Spacing Edit Controls (for selected controller)     |
-    \*---------------------------------------------------------*/
+    // LED spacing (edit selected)
     QDoubleSpinBox*             edit_led_spacing_x_spin;
     QDoubleSpinBox*             edit_led_spacing_y_spin;
     QDoubleSpinBox*             edit_led_spacing_z_spin;
     QPushButton*                apply_spacing_button;
 
-    /*---------------------------------------------------------*\
-    | Effects Section Controls                                 |
-    \*---------------------------------------------------------*/
+    // Effect configuration
     QComboBox*                  effect_combo;
     QLabel*                     origin_label;
     QComboBox*                  effect_origin_combo;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
 
-    /*---------------------------------------------------------*\
-    | Reference Points Section Controls                        |
-    \*---------------------------------------------------------*/
+    // Reference points
     QListWidget*                reference_points_list;
     QLineEdit*                  ref_point_name_edit;
     QComboBox*                  ref_point_type_combo;
@@ -338,9 +339,7 @@ private:
     QPushButton*                remove_ref_point_button;
     RGBColor                    selected_ref_point_color;
 
-    /*---------------------------------------------------------*\
-    | Zone Section Controls                                    |
-    \*---------------------------------------------------------*/
+    // Zones
     QListWidget*                zones_list;
     QPushButton*                create_zone_button;
     QPushButton*                edit_zone_button;
@@ -351,32 +350,24 @@ private:
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
 
-    /*---------------------------------------------------------*\
-    | Effect Stack Section Controls                            |
-    \*---------------------------------------------------------*/
+    // Effect stack
     QListWidget*                effect_stack_list;
     QComboBox*                  stack_effect_type_combo;
     QComboBox*                  stack_effect_zone_combo;
     QComboBox*                  stack_effect_blend_combo;
     QWidget*                    stack_blend_container;
 
-    /*---------------------------------------------------------*\
-    | Effect Stack Data                                        |
-    \*---------------------------------------------------------*/
+    // Effect stack data
     std::vector<std::unique_ptr<EffectInstance3D>> effect_stack;
     int next_effect_instance_id;
 
-    /*---------------------------------------------------------*\
-    | Stack Presets                                            |
-    \*---------------------------------------------------------*/
+    // Stack presets
     QListWidget*                stack_presets_list;
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
     void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
-    /*---------------------------------------------------------*\
-    | Audio Tab Controls                                      |
-    \*---------------------------------------------------------*/
+    // Audio tab
     QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
     QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
@@ -398,9 +389,7 @@ private:
     QPushButton*    audio_effect_start_button = nullptr; // start selected audio effect
     QPushButton*    audio_effect_stop_button = nullptr;  // stop selected audio effect
 
-    /*---------------------------------------------------------*\
-    | Custom Audio Effects (save/load)                        |
-    \*---------------------------------------------------------*/
+    // Audio custom effects
     QGroupBox*      audio_custom_group = nullptr;
     QListWidget*    audio_custom_list = nullptr;
     QPushButton*    audio_custom_save_btn = nullptr;
@@ -473,9 +462,7 @@ private:
     // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
 
-    /*---------------------------------------------------------*\
-    | Display Plane Management                                 |
-    \*---------------------------------------------------------*/
+    // Display planes
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     QListWidget*    display_planes_list = nullptr;
     QLineEdit*      display_plane_name_edit = nullptr;
@@ -489,6 +476,8 @@ private:
     int             current_display_plane_index = -1;
 
     void UpdateDisplayPlanesList();
+    /** Update only the current display plane list item label (name + dimensions); avoids full repopulate + selection chain. */
+    void UpdateCurrentDisplayPlaneListItemLabel();
     void RefreshDisplayPlaneDetails();
     DisplayPlane3D* GetSelectedDisplayPlane();
     void NotifyDisplayPlaneChanged();
@@ -524,13 +513,6 @@ private:
 };
 
 #endif
-
-
-
-
-
-
-
 
 
 

@@ -27,9 +27,7 @@ public:
                            float x = 0.0f, float y = 0.0f, float z = 0.0f);
     ~VirtualReferencePoint3D();
 
-    /*---------------------------------------------------------*\
-    | Basic Properties                                         |
-    \*---------------------------------------------------------*/
+    // Basic Properties
     int GetId() const { return id; }
     std::string GetName() const { return name; }
     ReferencePointType GetType() const { return type; }
@@ -41,9 +39,7 @@ public:
     void SetVisible(bool vis) { visible = vis; }
     void SetDisplayColor(RGBColor color) { display_color = color; }
 
-    /*---------------------------------------------------------*\
-    | Transform Properties (same as controllers)              |
-    \*---------------------------------------------------------*/
+    // Transform Properties (same as controllers)
     Vector3D GetPosition() const { return transform.position; }
     Rotation3D GetRotation() const { return transform.rotation; }
     Vector3D GetScale() const { return transform.scale; }
@@ -55,28 +51,20 @@ public:
     Transform3D GetTransform() const { return transform; }
     void SetTransform(const Transform3D& t) { transform = t; }
 
-    /*---------------------------------------------------------*\
-    | Viewport Display                                         |
-    \*---------------------------------------------------------*/
+    // Viewport Display
     int GetIconType() const;                    // Returns icon based on type
     static const char* GetTypeName(ReferencePointType type);
     static RGBColor GetDefaultColor(ReferencePointType type);
 
-    /*---------------------------------------------------------*\
-    | Serialization (same pattern as VirtualController3D)     |
-    \*---------------------------------------------------------*/
+    // Serialization (same pattern as VirtualController3D)
     json ToJson() const;
     static std::unique_ptr<VirtualReferencePoint3D> FromJson(const json& j);
 
-    /*---------------------------------------------------------*\
-    | Static Helper for UI                                     |
-    \*---------------------------------------------------------*/
+    // Static Helper for UI
     static std::vector<std::string> GetTypeNames();
 
 private:
-    /*---------------------------------------------------------*\
-    | Core Properties                                          |
-    \*---------------------------------------------------------*/
+    // Core Properties
     int id;                         // Unique ID
     std::string name;              // User-friendly name
     ReferencePointType type;       // Type (monitor, chair, etc.)
@@ -84,9 +72,7 @@ private:
     bool visible;                  // Show/hide in viewport
     RGBColor display_color;       // Display color in viewport
 
-    /*---------------------------------------------------------*\
-    | Static ID counter (like virtual controllers)            |
-    \*---------------------------------------------------------*/
+    // Static ID counter (like virtual controllers)
     static int next_id;
 };
 

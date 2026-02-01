@@ -11,9 +11,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     profiles_layout->setSpacing(4);
     profiles_layout->setContentsMargins(4, 4, 4, 4);
 
-    /*---------------------------------------------------------*\
-    | Layout Profiles Section                                  |
-    \*---------------------------------------------------------*/
+    // Layout Profiles Section
     QGroupBox* layout_group = new QGroupBox("Layout Profile");
     QVBoxLayout* layout_layout = new QVBoxLayout(layout_group);
     layout_layout->setSpacing(4);
@@ -24,9 +22,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     layout_label->setForegroundRole(QPalette::PlaceholderText);
     layout_layout->addWidget(layout_label);
 
-    /*---------------------------------------------------------*\
-    | Layout Profile Dropdown                                  |
-    \*---------------------------------------------------------*/
+    // Layout Profile Dropdown
     QHBoxLayout* layout_combo_layout = new QHBoxLayout();
     layout_combo_layout->setSpacing(4);
     layout_combo_layout->addWidget(new QLabel("Profile:"));
@@ -38,9 +34,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     layout_combo_layout->addStretch();
     layout_layout->addLayout(layout_combo_layout);
 
-    /*---------------------------------------------------------*\
-    | Layout Profile Buttons                                   |
-    \*---------------------------------------------------------*/
+    // Layout Profile Buttons
     QHBoxLayout* layout_buttons = new QHBoxLayout();
     layout_buttons->setSpacing(6);
     layout_buttons->addStretch();
@@ -65,9 +59,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     layout_layout->addLayout(layout_buttons);
 
-    /*---------------------------------------------------------*\
-    | Layout Auto-load Option                                  |
-    \*---------------------------------------------------------*/
+    // Layout Auto-load Option
     auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
     auto_load_checkbox->setToolTip("Automatically load this layout when OpenRGB starts");
     connect(auto_load_checkbox, &QCheckBox::toggled,
@@ -76,9 +68,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     profiles_layout->addWidget(layout_group);
 
-    /*---------------------------------------------------------*\
-    | Effect Profiles Section                                  |
-    \*---------------------------------------------------------*/
+    // Effect Profiles Section
     QGroupBox* effect_group = new QGroupBox("Effect Profile");
     QVBoxLayout* effect_layout = new QVBoxLayout(effect_group);
     effect_layout->setSpacing(4);
@@ -89,9 +79,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     effect_label->setForegroundRole(QPalette::PlaceholderText);
     effect_layout->addWidget(effect_label);
 
-    /*---------------------------------------------------------*\
-    | Effect Profile Dropdown                                  |
-    \*---------------------------------------------------------*/
+    // Effect Profile Dropdown
     QHBoxLayout* effect_combo_layout = new QHBoxLayout();
     effect_combo_layout->setSpacing(4);
     effect_combo_layout->addWidget(new QLabel("Profile:"));
@@ -103,9 +91,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     effect_combo_layout->addStretch();
     effect_layout->addLayout(effect_combo_layout);
 
-    /*---------------------------------------------------------*\
-    | Effect Profile Buttons                                   |
-    \*---------------------------------------------------------*/
+    // Effect Profile Buttons
     QHBoxLayout* effect_buttons = new QHBoxLayout();
     effect_buttons->setSpacing(6);
     effect_buttons->addStretch();
@@ -130,9 +116,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     effect_layout->addLayout(effect_buttons);
 
-    /*---------------------------------------------------------*\
-    | Effect Auto-load Option                                  |
-    \*---------------------------------------------------------*/
+    // Effect Auto-load Option
     effect_auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
     effect_auto_load_checkbox->setToolTip("Automatically load this effect configuration when OpenRGB starts");
     connect(effect_auto_load_checkbox, &QCheckBox::toggled,
@@ -141,17 +125,10 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     profiles_layout->addWidget(effect_group);
 
-    /*---------------------------------------------------------*\
-    | Spacer                                                   |
-    \*---------------------------------------------------------*/
-    /*---------------------------------------------------------*\
-    | Populate dropdowns                                       |
-    \*---------------------------------------------------------*/
+    // Populate dropdowns
     PopulateLayoutDropdown();
     PopulateEffectProfileDropdown();
 
-    /*---------------------------------------------------------*\
-    | Add tab to main tab widget                               |
-    \*---------------------------------------------------------*/
+    // Add tab to main tab widget
     tab_widget->insertTab(0, profiles_tab, "Profiles");
 }

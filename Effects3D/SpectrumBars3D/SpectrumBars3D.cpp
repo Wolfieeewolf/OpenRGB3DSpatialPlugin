@@ -294,4 +294,4 @@ RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float r
     return color;
 }
 
-REGISTER_EFFECT_3D(SpectrumBars3D)
+REGISTER_EFFECT_3D(SpectrumBars3D);

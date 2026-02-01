@@ -19,9 +19,7 @@
 #include "EffectListManager3D.h"
 #include <nlohmann/json.hpp>
 
-/*---------------------------------------------------------*\
-| Blend modes for combining multiple effects               |
-\*---------------------------------------------------------*/
+/** Blend modes for combining multiple effects. */
 enum class BlendMode
 {
     NO_BLEND,   // No blending - effect runs independently
@@ -33,9 +31,6 @@ enum class BlendMode
     MIN         // Take darkest channel
 };
 
-/*---------------------------------------------------------*\
-| Helper to convert blend mode to string                   |
-\*---------------------------------------------------------*/
 inline const char* BlendModeToString(BlendMode mode)
 {
     switch(mode)
@@ -51,9 +46,7 @@ inline const char* BlendModeToString(BlendMode mode)
     }
 }
 
-/*---------------------------------------------------------*\
-| Effect instance - one effect in the stack                |
-\*---------------------------------------------------------*/
+/** One effect in the stack. */
 struct EffectInstance3D
 {
     std::string name;                           // User-friendly name ("Wave on Desk")
@@ -110,16 +103,12 @@ struct EffectInstance3D
         return effect_type + " - " + zone_name + " - " + BlendModeToString(blend_mode);
     }
 
-    /*---------------------------------------------------------*\
-    | Serialization                                            |
-    \*---------------------------------------------------------*/
+    // Serialization
     nlohmann::json ToJson() const;
     static std::unique_ptr<EffectInstance3D> FromJson(const nlohmann::json& j);
 };
 
-/*---------------------------------------------------------*\
-| Blend two colors together                                |
-\*---------------------------------------------------------*/
+// Blend two colors together
 inline RGBColor BlendColors(RGBColor base, RGBColor overlay, BlendMode mode)
 {
     unsigned char base_r = RGBGetRValue(base);

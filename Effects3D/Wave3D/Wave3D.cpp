@@ -3,9 +3,7 @@
 #include "Wave3D.h"
 
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
+// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Wave3D);
 #include <QGridLayout>
 #include <algorithm>
@@ -76,16 +74,12 @@ EffectInfo3D Wave3D::GetEffectInfo()
 
 void Wave3D::SetupCustomUI(QWidget* parent)
 {
-    /*---------------------------------------------------------*\
-    | Create Wave-specific controls (base has axis/speed/etc) |
-    \*---------------------------------------------------------*/
+    // Create Wave-specific controls (base has axis/speed/etc)
     QWidget* wave_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(wave_widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    /*---------------------------------------------------------*\
-    | Row 0: Shape (like RadialRainbow)                       |
-    \*---------------------------------------------------------*/
+    // Row 0: Shape (like RadialRainbow)
     layout->addWidget(new QLabel("Shape:"), 0, 0);
     shape_combo = new QComboBox();
     shape_combo->addItem("Circles");
@@ -93,14 +87,10 @@ void Wave3D::SetupCustomUI(QWidget* parent)
     shape_combo->setCurrentIndex(shape_type);
     layout->addWidget(shape_combo, 0, 1);
 
-    /*---------------------------------------------------------*\
-    | Add to parent layout                                     |
-    \*---------------------------------------------------------*/
+    // Add to parent layout
     AddWidgetToParent(wave_widget, parent);
 
-    /*---------------------------------------------------------*\
-    | Connect signals                                          |
-    \*---------------------------------------------------------*/
+    // Connect signals
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wave3D::OnWaveParameterChanged);
 }
 
@@ -111,27 +101,18 @@ void Wave3D::UpdateParams(SpatialEffectParams& params)
 
 void Wave3D::OnWaveParameterChanged()
 {
-    /*---------------------------------------------------------*\
-    | Update internal parameters                               |
-    \*---------------------------------------------------------*/
+    // Update internal parameters
     if(shape_combo) shape_type = shape_combo->currentIndex();
 
-    /*---------------------------------------------------------*\
-    | Emit parameter change signal                             |
-    \*---------------------------------------------------------*/
-    emit ParametersChanged();
+    // Emit parameter change signalemit ParametersChanged();
 }
 
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 {
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
+    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
 
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
@@ -151,9 +132,7 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
     \*---------------------------------------------------------*/
     float actual_frequency = GetScaledFrequency();
 
-    /*---------------------------------------------------------*\
-    | Update progress for animation using universal helper    |
-    \*---------------------------------------------------------*/
+    // Update progress for animation using universal helper
     progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
@@ -189,16 +168,12 @@ RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 
     wave_value = sin(position * freq_scale - progress);
 
-    /*---------------------------------------------------------*\
-    | Convert wave to hue (0-360 degrees)                     |
-    \*---------------------------------------------------------*/
+    // Convert wave to hue (0-360 degrees)
     float hue = (wave_value + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
 
-    /*---------------------------------------------------------*\
-    | Get color based on mode                                  |
-    \*---------------------------------------------------------*/
+    // Get color based on mode
     RGBColor final_color;
 
     if(GetRainbowMode())
@@ -230,9 +205,7 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
 
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
@@ -246,14 +219,10 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    /*---------------------------------------------------------*\
-    | Use standardized parameter helpers                       |
-    \*---------------------------------------------------------*/
+    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
 
-    /*---------------------------------------------------------*\
-    | Update progress for animation                            |
-    \*---------------------------------------------------------*/
+    // Update progress for animation
     progress = CalculateProgress(time);
 
     /*---------------------------------------------------------*\
@@ -328,16 +297,12 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     float wave_enhanced = wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale * 20.0f - progress * 1.5f);
     wave_enhanced = fmax(-1.0f, fmin(1.0f, wave_enhanced));
 
-    /*---------------------------------------------------------*\
-    | Convert wave to hue (0-360 degrees)                     |
-    \*---------------------------------------------------------*/
+    // Convert wave to hue (0-360 degrees)
     float hue = (wave_enhanced + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
 
-    /*---------------------------------------------------------*\
-    | Get color based on mode                                  |
-    \*---------------------------------------------------------*/
+    // Get color based on mode
     RGBColor final_color;
 
     if(GetRainbowMode())

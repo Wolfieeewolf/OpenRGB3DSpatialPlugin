@@ -118,28 +118,20 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Remove from vector                                       |
-    \*---------------------------------------------------------*/
+    // Remove from vector
     effect_stack.erase(effect_stack.begin() + current_row);
 
-    /*---------------------------------------------------------*\
-    | Update UI                                                |
-    \*---------------------------------------------------------*/
+    // Update UI
     UpdateEffectStackList();
 
-    /*---------------------------------------------------------*\
-    | Select next item (or previous if we removed the last one)|
-    \*---------------------------------------------------------*/
+    // Select next item (or previous if we removed the last one)
     if(!effect_stack.empty())
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
     }
 
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
+    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -152,25 +144,17 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Toggle enabled state                                     |
-    \*---------------------------------------------------------*/
+    // Toggle enabled state
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->enabled = !instance->enabled;
 
-    /*---------------------------------------------------------*\
-    | Update list display                                      |
-    \*---------------------------------------------------------*/
+    // Update list display
     UpdateEffectStackList();
 
-    /*---------------------------------------------------------*\
-    | Restore selection                                        |
-    \*---------------------------------------------------------*/
+    // Restore selection
     effect_stack_list->setCurrentRow(current_row);
 
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
+    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -318,44 +302,29 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
         instance->effect_class_name = "";
         instance->name = "None";
 
-        /*---------------------------------------------------------*\
-        | Update list display                                      |
-        \*---------------------------------------------------------*/
+        // Update list display
         UpdateEffectStackList();
 
-        /*---------------------------------------------------------*\
-        | Clear effect controls                                    |
-        \*---------------------------------------------------------*/
+        // Clear effect controls
         LoadStackEffectControls(instance);
 
-        /*---------------------------------------------------------*\
-        | Auto-save effect stack                                   |
-        \*---------------------------------------------------------*/
+        // Auto-save effect stack
         SaveEffectStack();
         return;
     }
 
-    /*---------------------------------------------------------*\
-    | Clear old effect and store new class name                |
-    \*---------------------------------------------------------*/
-    
+    // Clear old effect and store new class name
     instance->effect.reset();
     instance->effect_class_name = class_name.toStdString();
     instance->name              = ui_name.toStdString();
 
-    /*---------------------------------------------------------*\
-    | Update list display                                      |
-    \*---------------------------------------------------------*/
+    // Update list display
     UpdateEffectStackList();
 
-    /*---------------------------------------------------------*\
-    | Reload effect controls (will create effect if needed)    |
-    \*---------------------------------------------------------*/
+    // Reload effect controls (will create effect if needed)
     LoadStackEffectControls(instance);
 
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
+    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -370,14 +339,10 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = stack_effect_zone_combo->currentData().toInt();
 
-    /*---------------------------------------------------------*\
-    | Update list display                                      |
-    \*---------------------------------------------------------*/
+    // Update list display
     UpdateEffectStackList();
 
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
+    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -397,27 +362,19 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->blend_mode = (BlendMode)stack_effect_blend_combo->currentData().toInt();
 
-    /*---------------------------------------------------------*\
-    | Update list display                                      |
-    \*---------------------------------------------------------*/
+    // Update list display
     UpdateEffectStackList();
 
-    /*---------------------------------------------------------*\
-    | Auto-save effect stack                                   |
-    \*---------------------------------------------------------*/
+    // Auto-save effect stack
     SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
 {
-    /*---------------------------------------------------------*\
-    | Save current selection                                   |
-    \*---------------------------------------------------------*/
+    // Save current selection
     int current_row = effect_stack_list->currentRow();
 
-    /*---------------------------------------------------------*\
-    | Block signals to prevent selection change                |
-    \*---------------------------------------------------------*/
+    // Block signals to prevent selection change
     effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
@@ -432,9 +389,7 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         effect_stack_list->addItem(item);
     }
 
-    /*---------------------------------------------------------*\
-    | Restore selection                                        |
-    \*---------------------------------------------------------*/
+    // Restore selection
     if(current_row >= 0 && current_row < (int)effect_stack.size())
     {
         effect_stack_list->setCurrentRow(current_row);
@@ -564,6 +519,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(screen_mirror)
         {
             screen_mirror->SetReferencePoints(&reference_points);
+            ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
+            screen_mirror->SetRunningEffectForPreview(running_screen);
             connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
             QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
             QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);

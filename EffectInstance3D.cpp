@@ -27,9 +27,7 @@ nlohmann::json EffectInstance3D::ToJson() const
     {
         j["effect_type"] = effect_class_name;
 
-        /*---------------------------------------------------------*\
-        | Save effect parameters                                   |
-        \*---------------------------------------------------------*/
+        // Save effect parameters
         if(effect)
         {
             j["effect_settings"] = effect->SaveSettings();
@@ -68,33 +66,25 @@ std::unique_ptr<EffectInstance3D> EffectInstance3D::FromJson(const nlohmann::jso
         instance->id = j["id"].get<int>();
     }
 
-    /*---------------------------------------------------------*\
-    | Restore effect from type                                 |
-    \*---------------------------------------------------------*/
+    // Restore effect from type
     if(j.contains("effect_type"))
     {
         std::string effect_type = j["effect_type"].get<std::string>();
         instance->effect_class_name = effect_type;
 
-        /*---------------------------------------------------------*\
-        | Store settings for lazy loading                         |
-        \*---------------------------------------------------------*/
+        // Store settings for lazy loading
         if(j.contains("effect_settings"))
         {
             instance->saved_settings = std::make_unique<nlohmann::json>(j["effect_settings"]);
         }
 
-        /*---------------------------------------------------------*\
-        | Create effect immediately and load settings              |
-        \*---------------------------------------------------------*/
+        // Create effect immediately and load settings
         SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(effect_type);
         if(effect)
         {
             instance->effect.reset(effect);
 
-            /*---------------------------------------------------------*\
-            | Load effect parameters if they exist                     |
-            \*---------------------------------------------------------*/
+            // Load effect parameters if they exist
             if(instance->saved_settings)
             {
                 effect->LoadSettings(*instance->saved_settings);

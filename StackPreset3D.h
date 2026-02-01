@@ -23,15 +23,11 @@ struct StackPreset3D
     std::string name;
     std::vector<std::unique_ptr<EffectInstance3D>> effect_instances;
 
-    /*---------------------------------------------------------*\
-    | Serialization                                            |
-    \*---------------------------------------------------------*/
+    // Serialization
     nlohmann::json ToJson() const;
     static std::unique_ptr<StackPreset3D> FromJson(const nlohmann::json& j);
 
-    /*---------------------------------------------------------*\
-    | Helper to create a copy of the stack                    |
-    \*---------------------------------------------------------*/
+    // Helper to create a copy of the stack
     static std::unique_ptr<StackPreset3D> CreateFromStack(
         const std::string& preset_name,
         const std::vector<std::unique_ptr<EffectInstance3D>>& stack);

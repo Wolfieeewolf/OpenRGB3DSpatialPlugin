@@ -2,9 +2,7 @@
 
 #include "Spiral3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
+// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Spiral3D);
 #include <QGridLayout>
 #include <cmath>
@@ -155,14 +153,10 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     | (default 10mm). LED positions use grid units.           |
     \*---------------------------------------------------------*/
 
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
+    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
 
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
@@ -176,9 +170,7 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    /*---------------------------------------------------------*\
-    | Use standardized parameter helpers                       |
-    \*---------------------------------------------------------*/
+    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
 
     progress = CalculateProgress(time);
@@ -206,9 +198,7 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     float z_twist = twist_coord * 0.3f;
     float spiral_angle = angle * num_arms + radius * freq_scale + z_twist - progress;
 
-    /*---------------------------------------------------------*\
-    | Calculate intensity based on pattern type               |
-    \*---------------------------------------------------------*/
+    // Calculate intensity based on pattern type
     float spiral_value;
     float gap_factor = gap_size / 100.0f;
 
@@ -278,9 +268,7 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
             break;
     }
 
-    /*---------------------------------------------------------*\
-    | Get color based on spiral value and position            |
-    \*---------------------------------------------------------*/
+    // Get color based on spiral value and position
     RGBColor final_color;
 
     // For pinwheel modes, color each arm differently

@@ -240,10 +240,7 @@ void ControllerLayout3D::MarkWorldPositionsDirty(ControllerTransform* ctrl_trans
     ctrl_transform->world_positions_dirty = true;
 }
 
-/*---------------------------------------------------------*\
-| SpatialHash Implementation                               |
-\*---------------------------------------------------------*/
-
+// SpatialHash Implementation
 ControllerLayout3D::SpatialHash::SpatialHash(float cell_size)
     : cell_size(cell_size)
 {

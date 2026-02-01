@@ -120,14 +120,10 @@ void Wipe3D::OnWipeParameterChanged()
 
 RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
 {
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
+    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
 
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
@@ -141,9 +137,7 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    /*---------------------------------------------------------*\
-    | Use standardized parameter helpers                       |
-    \*---------------------------------------------------------*/
+    // Use standardized parameter helpers
     progress = fmod(CalculateProgress(time), 2.0f);
     if(progress > 1.0f) progress = 2.0f - progress;
 
@@ -160,9 +154,7 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     \*---------------------------------------------------------*/
     float position = rot_rel_x;
 
-    /*---------------------------------------------------------*\
-    | Normalize position to 0-1 range                          |
-    \*---------------------------------------------------------*/
+    // Normalize position to 0-1 range
     position = (position + 100.0f) / 200.0f;
     position = fmax(0.0f, fmin(1.0f, position));
 
@@ -259,10 +251,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    /*---------------------------------------------------------*\
-    | Update progress                                          |
-    \*---------------------------------------------------------*/
-    progress = fmod(CalculateProgress(time), 2.0f);
+    // Update progressprogress = fmod(CalculateProgress(time), 2.0f);
     if(progress > 1.0f) progress = 2.0f - progress;
 
     /*---------------------------------------------------------*\

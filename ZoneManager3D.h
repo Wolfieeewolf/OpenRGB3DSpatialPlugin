@@ -17,41 +17,31 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-/*---------------------------------------------------------*\
-| ZoneManager3D - Manages all zones                        |
-\*---------------------------------------------------------*/
+// ZoneManager3D - Manages all zones
 class ZoneManager3D
 {
 public:
     ZoneManager3D();
     ~ZoneManager3D();
 
-    /*---------------------------------------------------------*\
-    | Zone Management                                          |
-    \*---------------------------------------------------------*/
+    // Zone Management
     Zone3D* CreateZone(const std::string& name);
     void DeleteZone(int zone_idx);
     void DeleteZone(const std::string& name);
     void ClearAllZones();
 
-    /*---------------------------------------------------------*\
-    | Access                                                   |
-    \*---------------------------------------------------------*/
+    // Access
     int GetZoneCount() const { return (int)zones.size(); }
     Zone3D* GetZone(int idx);
     Zone3D* GetZoneByName(const std::string& name);
     const std::vector<Zone3D*>& GetAllZones() const { return zones; }
 
-    /*---------------------------------------------------------*\
-    | Query                                                    |
-    \*---------------------------------------------------------*/
+    // Query
     std::vector<int> GetControllersInZone(const std::string& zone_name);
     std::vector<int> GetControllersInZone(int zone_idx);
     bool ZoneExists(const std::string& name) const;
 
-    /*---------------------------------------------------------*\
-    | Serialization                                            |
-    \*---------------------------------------------------------*/
+    // Serialization
     nlohmann::json ToJSON() const;
     void FromJSON(const nlohmann::json& json);
 

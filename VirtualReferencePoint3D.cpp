@@ -29,17 +29,13 @@ VirtualReferencePoint3D::~VirtualReferencePoint3D()
 {
 }
 
-/*---------------------------------------------------------*\
-| Get icon type for viewport rendering                     |
-\*---------------------------------------------------------*/
+// Get icon type for viewport rendering
 int VirtualReferencePoint3D::GetIconType() const
 {
     return (int)type;  // Icon type matches reference point type
 }
 
-/*---------------------------------------------------------*\
-| Get display name for reference point type               |
-\*---------------------------------------------------------*/
+// Get display name for reference point type
 const char* VirtualReferencePoint3D::GetTypeName(ReferencePointType type)
 {
     switch(type)
@@ -59,9 +55,7 @@ const char* VirtualReferencePoint3D::GetTypeName(ReferencePointType type)
     }
 }
 
-/*---------------------------------------------------------*\
-| Get default colors for different reference point types  |
-\*---------------------------------------------------------*/
+// Get default colors for different reference point types
 RGBColor VirtualReferencePoint3D::GetDefaultColor(ReferencePointType type)
 {
     switch(type)
@@ -81,9 +75,7 @@ RGBColor VirtualReferencePoint3D::GetDefaultColor(ReferencePointType type)
     }
 }
 
-/*---------------------------------------------------------*\
-| Get all type names for UI dropdown                      |
-\*---------------------------------------------------------*/
+// Get all type names for UI dropdown
 std::vector<std::string> VirtualReferencePoint3D::GetTypeNames()
 {
     return {
@@ -101,9 +93,7 @@ std::vector<std::string> VirtualReferencePoint3D::GetTypeNames()
     };
 }
 
-/*---------------------------------------------------------*\
-| Serialize to JSON (same pattern as VirtualController3D) |
-\*---------------------------------------------------------*/
+// Serialize to JSON (same pattern as VirtualController3D)
 json VirtualReferencePoint3D::ToJson() const
 {
     json j;
@@ -126,9 +116,7 @@ json VirtualReferencePoint3D::ToJson() const
     return j;
 }
 
-/*---------------------------------------------------------*\
-| Deserialize from JSON                                    |
-\*---------------------------------------------------------*/
+// Deserialize from JSON
 std::unique_ptr<VirtualReferencePoint3D> VirtualReferencePoint3D::FromJson(const json& j)
 {
     if(!j.contains("name") || !j.contains("type") || !j.contains("transform"))

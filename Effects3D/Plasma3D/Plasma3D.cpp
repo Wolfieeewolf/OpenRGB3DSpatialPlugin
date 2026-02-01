@@ -2,9 +2,7 @@
 
 #include "Plasma3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
+// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Plasma3D);
 #include <QGridLayout>
 #include <cmath>
@@ -115,14 +113,10 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     | (default 10mm). LED positions use grid units.           |
     \*---------------------------------------------------------*/
 
-    /*---------------------------------------------------------*\
-    | Get effect origin (room center or user head position)   |
-    \*---------------------------------------------------------*/
+    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
 
-    /*---------------------------------------------------------*\
-    | Calculate position relative to origin                    |
-    \*---------------------------------------------------------*/
+    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
@@ -136,9 +130,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    /*---------------------------------------------------------*\
-    | Use standardized parameter helpers                       |
-    \*---------------------------------------------------------*/
+    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
 
     progress = CalculateProgress(time);
@@ -152,9 +144,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Use rotated coordinates directly for plasma pattern     |
-    \*---------------------------------------------------------*/
+    // Use rotated coordinates directly for plasma pattern
     float coord1 = rot_rel_x;
     float coord2 = rot_rel_y;
     float coord3 = rot_rel_z;

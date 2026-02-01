@@ -34,18 +34,14 @@ public:
     explicit ScreenMirror3D(QWidget* parent = nullptr);
     ~ScreenMirror3D();
 
-    /*---------------------------------------------------------*\
-    | Auto-registration system                                 |
-    \*---------------------------------------------------------*/
+    // Auto-registration system
     EFFECT_REGISTERER_3D("ScreenMirror3D", "Screen Mirror 3D", "Ambilight", [](){return new ScreenMirror3D;});
 
     static std::string const ClassName() { return "ScreenMirror3D"; }
     static std::string const UIName() { return "Screen Mirror 3D"; }
     static void ForceLink() {}  // Dummy to force linker inclusion
 
-    /*---------------------------------------------------------*\
-    | Pure virtual implementations                             |
-    \*---------------------------------------------------------*/
+    // Pure virtual implementations
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
@@ -54,15 +50,17 @@ public:
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
 
-    /*---------------------------------------------------------*\
-    | Settings persistence                                     |
-    \*---------------------------------------------------------*/
+    /** Set grid scale (mm/unit) so ambilight preview uses same math as viewport. Tab calls this when grid scale changes. */
+    void SetGridScaleMM(float mm);
+
+    /** When set, ambilight preview uses this effect's CalculateColorGrid so the preview matches what the running effect outputs to LEDs. Tab sets this when displaying the effect. */
+    void SetRunningEffectForPreview(ScreenMirror3D* source);
+
+    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-    /*---------------------------------------------------------*\
-    | Reference Points Access                                  |
-    \*---------------------------------------------------------*/
+    // Reference Points Access
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void RefreshReferencePointDropdowns();
     void RefreshMonitorStatus();
@@ -127,20 +125,26 @@ private:
         // Calibration
         float smoothing_time_ms;        // Temporal smoothing (0-500ms)
         float brightness_multiplier;    // Brightness multiplier (0-200%)
-        float brightness_threshold;     // Minimum brightness to trigger (0-255)
-        float black_bar_threshold;      // Black bar detection threshold 0-255 (per-channel)
-        bool letterbox_only;            // Only detect top/bottom bars (ignore pillarbox)
+        float brightness_threshold;     // Minimum brightness to trigger (0-1020; at max ambilight nearly off)
+        float black_bar_letterbox_percent;   // Crop top+bottom (0-50%). Content V = [letterbox/100, 1-letterbox/100]
+        float black_bar_pillarbox_percent;   // Crop left+right (0-50%). Content U = [pillarbox/100, 1-pillarbox/100]
         
         // Light & Motion
         float edge_softness;            // Edge softness (0-100%)
         float blend;                    // Blend percentage (0-100%)
-        float propagation_speed_mm_per_ms;  // Wave intensity 0-200 (0=off, higher=bigger wave)
-        float wave_decay_ms;            // Wave decay time (0-4000ms)
+        float propagation_speed_mm_per_ms;  // Wave intensity 0-800 (0=off, higher=bigger wave)
+        float wave_decay_ms;            // Wave decay time (0-20000ms)
+        float wave_time_to_edge_sec;    // 0=use intensity; 0.5-30 = time (s) for wave to reach farthest LED
+        float falloff_curve_exponent;   // 0.5-2.0: softer to sharper falloff (100%=linear)
+        float front_back_balance;       // -100..+100: favor front(+) or back(-) LEDs
+        float left_right_balance;       // -100..+100: favor right(+) or left(-) LEDs
+        float top_bottom_balance;       // -100..+100: favor top(+) or bottom(-) LEDs
         
         int reference_point_index;
         
         // Preview settings
         bool show_test_pattern;      // Show test pattern for this monitor
+        bool show_test_pattern_pulse;  // Pulse test pattern (for tuning wave intensity/decay)
         bool show_screen_preview;    // Show screen preview for this monitor
         
         // Multiple independent capture zones
@@ -156,9 +160,10 @@ private:
         QLabel* brightness_label;
         QSlider* brightness_threshold_slider;
         QLabel* brightness_threshold_label;
-        QSlider* black_bar_threshold_slider;
-        QLabel* black_bar_threshold_label;
-        QCheckBox* letterbox_only_check;
+        QSlider* black_bar_letterbox_slider;
+        QLabel* black_bar_letterbox_label;
+        QSlider* black_bar_pillarbox_slider;
+        QLabel* black_bar_pillarbox_label;
         QSlider* softness_slider;
         QLabel* softness_label;
         QSlider* blend_slider;
@@ -167,27 +172,45 @@ private:
         QLabel* propagation_speed_label;
         QSlider* wave_decay_slider;
         QLabel* wave_decay_label;
+        QSlider* wave_time_to_edge_slider;
+        QLabel* wave_time_to_edge_label;
+        QSlider* falloff_curve_slider;
+        QLabel* falloff_curve_label;
+        QSlider* front_back_balance_slider;
+        QLabel* front_back_balance_label;
+        QSlider* left_right_balance_slider;
+        QLabel* left_right_balance_label;
+        QSlider* top_bottom_balance_slider;
+        QLabel* top_bottom_balance_label;
         QComboBox* ref_point_combo;
         QCheckBox* test_pattern_check;
+        QCheckBox* test_pattern_pulse_check;
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
+        QWidget* ambilight_preview_3d;
 
         MonitorSettings()
             : enabled(true)
             , scale(1.0f)
-            , scale_inverted(false)
+            , scale_inverted(true)  // Invert scale falloff by default
             , smoothing_time_ms(50.0f)
             , brightness_multiplier(1.0f)
             , brightness_threshold(0.0f)
-            , black_bar_threshold(25.0f)
-            , letterbox_only(false)
+            , black_bar_letterbox_percent(0.0f)
+            , black_bar_pillarbox_percent(0.0f)
             , edge_softness(30.0f)
             , blend(50.0f)
-            , propagation_speed_mm_per_ms(10.0f)
-            , wave_decay_ms(1000.0f)  // Increased default for more noticeable wave
+            , propagation_speed_mm_per_ms(0.0f)   // 0 = no wave (instant 3D ambilight); use sliders to add wave
+            , wave_decay_ms(0.0f)
+            , wave_time_to_edge_sec(0.0f)
+            , falloff_curve_exponent(1.0f)
+            , front_back_balance(0.0f)
+            , left_right_balance(0.0f)
+            , top_bottom_balance(0.0f)
             , reference_point_index(-1)
             , show_test_pattern(false)
+            , show_test_pattern_pulse(false)
             , show_screen_preview(false)
             , group_box(nullptr)
             , scale_slider(nullptr)
@@ -199,9 +222,10 @@ private:
             , brightness_label(nullptr)
             , brightness_threshold_slider(nullptr)
             , brightness_threshold_label(nullptr)
-            , black_bar_threshold_slider(nullptr)
-            , black_bar_threshold_label(nullptr)
-            , letterbox_only_check(nullptr)
+            , black_bar_letterbox_slider(nullptr)
+            , black_bar_letterbox_label(nullptr)
+            , black_bar_pillarbox_slider(nullptr)
+            , black_bar_pillarbox_label(nullptr)
             , softness_slider(nullptr)
             , softness_label(nullptr)
             , blend_slider(nullptr)
@@ -210,11 +234,23 @@ private:
             , propagation_speed_label(nullptr)
             , wave_decay_slider(nullptr)
             , wave_decay_label(nullptr)
+            , wave_time_to_edge_slider(nullptr)
+            , wave_time_to_edge_label(nullptr)
+            , falloff_curve_slider(nullptr)
+            , falloff_curve_label(nullptr)
+            , front_back_balance_slider(nullptr)
+            , front_back_balance_label(nullptr)
+            , left_right_balance_slider(nullptr)
+            , left_right_balance_label(nullptr)
+            , top_bottom_balance_slider(nullptr)
+            , top_bottom_balance_label(nullptr)
             , ref_point_combo(nullptr)
             , test_pattern_check(nullptr)
+            , test_pattern_pulse_check(nullptr)
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
+            , ambilight_preview_3d(nullptr)
         {
             // Default: one zone covering the entire screen
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
@@ -225,16 +261,13 @@ private:
     void StopCaptureIfNeeded();
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
+    void UpdateAmbilightPreviews();
 
-    /*---------------------------------------------------------*\
-    | Capture quality (effect-level)                           |
-    \*---------------------------------------------------------*/
+    // Capture quality (effect-level)
     int                 capture_quality;       // 0=Low 320x180 .. 5=1080p, 6=1440p, 7=4K
     QComboBox*          capture_quality_combo;
 
-    /*---------------------------------------------------------*\
-    | UI Controls                                              |
-    \*---------------------------------------------------------*/
+    // UI Controls
     QSlider*            global_scale_slider;
     QLabel*             global_scale_label;
     QSlider*            smoothing_time_slider;
@@ -250,13 +283,17 @@ private:
     QCheckBox*          global_scale_invert_check;
     QLabel*             monitor_status_label;
     QLabel*             monitor_help_label;
-    QGroupBox*          monitors_container;     // Container for per-monitor settings
+    QGroupBox*          monitors_container;
+    QTimer*             ambilight_preview_timer;
     QVBoxLayout*        monitors_layout;        // Layout for monitor settings
     std::map<std::string, MonitorSettings> monitor_settings;
 
-    /*---------------------------------------------------------*\
-    | Effect parameters                                        |
-    \*---------------------------------------------------------*/
+    float               grid_scale_mm_;         // Same as viewport for consistent preview/effect math
+
+    /** When non-null, UpdateAmbilightPreviews uses this effect's CalculateColorGrid so the preview matches the running effect's LED output. */
+    ScreenMirror3D*     source_effect_for_preview_;
+
+    // Effect parameters
     bool                        show_test_pattern;
 
     // Reference points (pointer to main tab's vector)
@@ -298,14 +335,23 @@ private:
     };
     std::map<LEDKey, LEDState> led_states;  // Key by quantized LED position
 
-    /*---------------------------------------------------------*\
-    | Helpers                                                  |
-    \*---------------------------------------------------------*/
+    // Helpers
     bool ResolveReferencePoint(int index, Vector3D& out) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     std::shared_ptr<CapturedFrame> GetFrameForDelay(const std::string& capture_id, float delay_ms) const;
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;
+
+    /** Internal: single-point color with optional pre-filled frame cache (nullptr = fetch per plane).
+        If pre_fetched_planes != nullptr, use it instead of GetDisplayPlanes() (batch optimization). */
+    RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
+                                       const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
+                                       const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr);
+    /** Build current frame per capture_id for batch sampling. Call once per batch. */
+    void BuildFrameCache(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* out_cache);
+    /** Batch version: pre-fetches frames once, then computes color per position. Use for ambilight preview. */
+    void CalculateColorGridBatch(const std::vector<Vector3D>& positions, float time, const GridContext3D& grid,
+                                std::vector<RGBColor>& out);
 };
 
 #endif // SCREENMIRROR3D_H

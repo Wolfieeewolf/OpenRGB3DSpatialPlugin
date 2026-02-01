@@ -2,10 +2,7 @@
 
 #include "DNAHelix3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
-REGISTER_EFFECT_3D(DNAHelix3D);
+// Register this effect with the effect managerREGISTER_EFFECT_3D(DNAHelix3D);
 
 #include <QGridLayout>
 #include "../EffectHelpers.h"

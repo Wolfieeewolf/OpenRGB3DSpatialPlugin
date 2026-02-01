@@ -30,9 +30,7 @@ public:
     static void UpdateWorldPositions(ControllerTransform* ctrl_transform);
     static void MarkWorldPositionsDirty(ControllerTransform* ctrl_transform);
 
-    /*---------------------------------------------------------*\
-    | Spatial Hash for Fast Nearest-Neighbor Queries           |
-    \*---------------------------------------------------------*/
+    /** Spatial hash for fast nearest-neighbor queries. */
     struct SpatialCell
     {
         std::vector<LEDPosition3D*> leds;

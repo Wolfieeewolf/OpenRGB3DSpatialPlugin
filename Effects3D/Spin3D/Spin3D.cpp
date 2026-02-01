@@ -2,9 +2,7 @@
 
 #include "Spin3D.h"
 
-/*---------------------------------------------------------*\
-| Register this effect with the effect manager             |
-\*---------------------------------------------------------*/
+// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Spin3D);
 #include <QGridLayout>
 #include <cmath>

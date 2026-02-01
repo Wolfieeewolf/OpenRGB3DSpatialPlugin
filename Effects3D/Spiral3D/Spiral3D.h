@@ -18,26 +18,20 @@ public:
     explicit Spiral3D(QWidget* parent = nullptr);
     ~Spiral3D();
 
-    /*---------------------------------------------------------*\
-    | Auto-registration system                                 |
-    \*---------------------------------------------------------*/
+    // Auto-registration system
     EFFECT_REGISTERER_3D("Spiral3D", "3D Spiral", "3D Spatial", [](){return new Spiral3D;});
 
     static std::string const ClassName() { return "Spiral3D"; }
     static std::string const UIName() { return "3D Spiral"; }
 
-    /*---------------------------------------------------------*\
-    | Pure virtual implementations                             |
-    \*---------------------------------------------------------*/
+    // Pure virtual implementations
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    /*---------------------------------------------------------*\
-    | Settings persistence                                     |
-    \*---------------------------------------------------------*/
+    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
@@ -45,9 +39,7 @@ private slots:
     void OnSpiralParameterChanged();
 
 private:
-    /*---------------------------------------------------------*\
-    | Spiral-specific controls                                 |
-    \*---------------------------------------------------------*/
+    // Spiral-specific controls
     QSlider*        arms_slider;
     QLabel*         arms_label;
     QComboBox*      pattern_combo;

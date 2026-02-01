@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| ScreenCaptureManager.cpp                                  |
-|                                                           |
-|   Multi-monitor screen capture manager for ambilight     |
-|                                                           |
-|   Date: 2025-10-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "ScreenCaptureManager.h"
 #include "LogManager.h"
@@ -25,23 +16,16 @@
 
     #pragma comment(lib, "d3d11.lib")
     #pragma comment(lib, "dxgi.lib")
-
-    // Forward declaration for Qt internal function
     extern QPixmap qt_pixmapFromWinHBITMAP(HBITMAP bitmap, int format = 0);
 #endif
 
-/*---------------------------------------------------------*\
-| Singleton access                                         |
-\*---------------------------------------------------------*/
+// Singleton access
 ScreenCaptureManager& ScreenCaptureManager::Instance()
 {
     static ScreenCaptureManager instance;
     return instance;
 }
 
-/*---------------------------------------------------------*\
-| Constructor / Destructor                                 |
-\*---------------------------------------------------------*/
 ScreenCaptureManager::ScreenCaptureManager()
     : initialized(false)
     , target_width(480)
@@ -55,9 +39,6 @@ ScreenCaptureManager::~ScreenCaptureManager()
     Shutdown();
 }
 
-/*---------------------------------------------------------*\
-| Initialize                                               |
-\*---------------------------------------------------------*/
 bool ScreenCaptureManager::Initialize()
 {
     if (initialized.load())
@@ -75,9 +56,6 @@ bool ScreenCaptureManager::Initialize()
     return true;
 }
 
-/*---------------------------------------------------------*\
-| Shutdown                                                 |
-\*---------------------------------------------------------*/
 void ScreenCaptureManager::Shutdown()
 {
     if (!initialized.load())
@@ -96,7 +74,6 @@ void ScreenCaptureManager::Shutdown()
         }
     }
 
-    // Wait for threads to finish
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         for (std::map<std::string, std::thread>::iterator it = capture_threads.begin();
@@ -127,9 +104,6 @@ void ScreenCaptureManager::Shutdown()
     initialized.store(false);
 }
 
-/*---------------------------------------------------------*\
-| Refresh sources                                          |
-\*---------------------------------------------------------*/
 void ScreenCaptureManager::RefreshSources()
 {
     std::lock_guard<std::mutex> lock(sources_mutex);
@@ -137,9 +111,6 @@ void ScreenCaptureManager::RefreshSources()
     EnumerateSourcesPlatform();
 }
 
-/*---------------------------------------------------------*\
-| Get available sources                                    |
-\*---------------------------------------------------------*/
 std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
 {
     std::lock_guard<std::mutex> lock(sources_mutex);
@@ -156,9 +127,6 @@ std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
     return result;
 }
 
-/*---------------------------------------------------------*\
-| Start capture                                            |
-\*---------------------------------------------------------*/
 bool ScreenCaptureManager::StartCapture(const std::string& source_id)
 {
     // Check if source exists
@@ -170,7 +138,6 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         }
     }
 
-    // Check if already capturing
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         if (capture_active.find(source_id) != capture_active.end() &&
@@ -180,7 +147,6 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         }
     }
 
-    // Start platform-specific capture
     if (!StartCapturePlatform(source_id))
     {
         LOG_WARNING("[ScreenCapture] StartCapturePlatform failed for '%s'", source_id.c_str());
@@ -197,9 +163,6 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
     return true;
 }
 
-/*---------------------------------------------------------*\
-| Stop capture                                             |
-\*---------------------------------------------------------*/
 void ScreenCaptureManager::StopCapture(const std::string& source_id)
 {
     // Signal thread to stop
@@ -212,7 +175,6 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
         }
     }
 
-    // Wait for thread to finish
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         std::map<std::string, std::thread>::iterator thread_it = capture_threads.find(source_id);
@@ -227,9 +189,6 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
     StopCapturePlatform(source_id);
 }
 
-/*---------------------------------------------------------*\
-| Check if capturing                                       |
-\*---------------------------------------------------------*/
 bool ScreenCaptureManager::IsCapturing(const std::string& source_id) const
 {
     std::lock_guard<std::mutex> lock(threads_mutex);
@@ -237,9 +196,6 @@ bool ScreenCaptureManager::IsCapturing(const std::string& source_id) const
     return (it != capture_active.end() && it->second.load());
 }
 
-/*---------------------------------------------------------*\
-| Get latest frame                                         |
-\*---------------------------------------------------------*/
 std::shared_ptr<CapturedFrame> ScreenCaptureManager::GetLatestFrame(const std::string& source_id) const
 {
     std::lock_guard<std::mutex> lock(frames_mutex);
@@ -251,26 +207,17 @@ std::shared_ptr<CapturedFrame> ScreenCaptureManager::GetLatestFrame(const std::s
     return nullptr;
 }
 
-/*---------------------------------------------------------*\
-| Set downscale resolution                                 |
-\*---------------------------------------------------------*/
 void ScreenCaptureManager::SetDownscaleResolution(int width, int height)
 {
     target_width.store((std::max)(32, (std::min)(width, 3840)));
     target_height.store((std::max)(32, (std::min)(height, 2160)));
 }
 
-/*---------------------------------------------------------*\
-| Set target FPS                                           |
-\*---------------------------------------------------------*/
 void ScreenCaptureManager::SetTargetFPS(int fps)
 {
     target_fps.store((std::max)(1, (std::min)(fps, 60)));
 }
 
-/*---------------------------------------------------------*\
-| Platform-specific implementations - Windows              |
-\*---------------------------------------------------------*/
 #ifdef _WIN32
 
 bool ScreenCaptureManager::InitializePlatform()
@@ -282,7 +229,6 @@ bool ScreenCaptureManager::InitializePlatform()
 
 void ScreenCaptureManager::ShutdownPlatform()
 {
-    // Per-source cleanup handled in StopCapturePlatform
 }
 
 void ScreenCaptureManager::EnumerateSourcesPlatform()
@@ -305,7 +251,6 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         info.x = geometry.x();
         info.y = geometry.y();
 
-        // Primary screen is at the top-left of the virtual desktop (usually 0,0)
         info.is_primary = (screen == QGuiApplication::primaryScreen());
         info.is_available = true;
 
@@ -332,19 +277,14 @@ bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
         return false;
     }
 
-    // No platform-specific initialization needed - will be done in capture thread
     return true;
 }
 
 void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
-    // Cleanup will be done in capture thread when it exits
-    // Platform-specific resources are managed per-thread
 }
 
-/*---------------------------------------------------------*\
-| Helper function to capture screen using GDI BitBlt       |
-\*---------------------------------------------------------*/
+// Helper function to capture screen using GDI BitBlt
 static QPixmap GrabScreen(QScreen* screen)
 {
     if (!screen) return QPixmap();
@@ -375,9 +315,6 @@ static QPixmap GrabScreen(QScreen* screen)
     return pixmap;
 }
 
-/*---------------------------------------------------------*\
-| DXGI Desktop Duplication state (per capture thread)      |
-\*---------------------------------------------------------*/
 struct DXGICaptureState
 {
     ID3D11Device* device = nullptr;
@@ -548,6 +485,8 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     const int target_frame_time_ms = 1000 / target_fps.load();
     bool logged_screen_unavailable = false;
     std::vector<uint8_t> dxgi_rgba_buffer;
+    std::chrono::steady_clock::time_point last_dxgi_retry = std::chrono::steady_clock::now();
+    const std::chrono::seconds dxgi_retry_interval(5);
 
     while (active_flag->load())
     {
@@ -582,6 +521,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             {
                 dxgi_state.Release();
                 use_dxgi = false;
+                last_dxgi_retry = std::chrono::steady_clock::now();
                 image = GrabScreen(screen).toImage();
             }
             else if (SUCCEEDED(hr) && resource)
@@ -601,8 +541,10 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                         size_t need = (size_t)dxgi_state.width * dxgi_state.height * 4;
                         if (dxgi_rgba_buffer.size() < need)
                             dxgi_rgba_buffer.resize(need);
+                        // Desktop Duplication API returns B8G8R8A8; convert to RGBA for consumers.
                         const uint8_t* src = (const uint8_t*)mapped.pData;
                         uint8_t* dst = dxgi_rgba_buffer.data();
+                        const UINT row_pitch_skip = mapped.RowPitch - dxgi_state.width * 4;
                         for (UINT y = 0; y < dxgi_state.height; y++)
                         {
                             for (UINT x = 0; x < dxgi_state.width; x++)
@@ -614,7 +556,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 src += 4;
                                 dst += 4;
                             }
-                            src += (mapped.RowPitch - dxgi_state.width * 4);
+                            src += row_pitch_skip;
                         }
                         dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
                         image = QImage(dxgi_rgba_buffer.data(), (int)dxgi_state.width, (int)dxgi_state.height, (int)dxgi_state.width * 4, QImage::Format_RGBA8888).copy();
@@ -634,13 +576,29 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         }
         if (!use_dxgi || image.isNull())
         {
-            QPixmap pixmap = GrabScreen(screen);
-            if (pixmap.isNull())
+            if (!use_dxgi)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
+                auto now = std::chrono::steady_clock::now();
+                if (now - last_dxgi_retry >= dxgi_retry_interval)
+                {
+                    last_dxgi_retry = now;
+                    QRect geo = screen->geometry();
+                    if (TryCreateDXGIDuplication(geo.x(), geo.y(), geo.width(), geo.height(), dxgi_state))
+                    {
+                        use_dxgi = true;
+                    }
+                }
             }
-            image = pixmap.toImage();
+            if (!use_dxgi || image.isNull())
+            {
+                QPixmap pixmap = GrabScreen(screen);
+                if (pixmap.isNull())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+                image = pixmap.toImage();
+            }
         }
 
         int target_w = target_width.load();
@@ -653,7 +611,17 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         frame->width = image.width();
         frame->height = image.height();
         frame->data.resize(frame->width * frame->height * 4);
-        memcpy(frame->data.data(), image.constBits(), frame->data.size());
+        // Copy row-by-row: QImage may have bytesPerLine() > width*4 (alignment padding).
+        const int line_bytes = frame->width * 4;
+        const int src_stride = image.bytesPerLine();
+        const uint8_t* src = image.constBits();
+        uint8_t* dst = frame->data.data();
+        for (int y = 0; y < frame->height; y++)
+        {
+            memcpy(dst, src, (size_t)line_bytes);
+            dst += line_bytes;
+            src += src_stride;
+        }
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
@@ -676,9 +644,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 }
 
 #else
-/*---------------------------------------------------------*\
-| Platform-specific implementations - Linux (Qt only)       |
-\*---------------------------------------------------------*/
 
 bool ScreenCaptureManager::InitializePlatform()
 {
@@ -815,7 +780,16 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         frame->width = image.width();
         frame->height = image.height();
         frame->data.resize(frame->width * frame->height * 4);
-        memcpy(frame->data.data(), image.constBits(), frame->data.size());
+        const int line_bytes = frame->width * 4;
+        const int src_stride = image.bytesPerLine();
+        const uint8_t* src = image.constBits();
+        uint8_t* dst = frame->data.data();
+        for (int y = 0; y < frame->height; y++)
+        {
+            memcpy(dst, src, (size_t)line_bytes);
+            dst += line_bytes;
+            src += src_stride;
+        }
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();

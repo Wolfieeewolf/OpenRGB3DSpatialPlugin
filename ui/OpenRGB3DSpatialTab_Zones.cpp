@@ -11,10 +11,7 @@
 #include <QLabel>
 #include <QVariant>
 
-/*---------------------------------------------------------*\
-| Zone Management                                          |
-\*---------------------------------------------------------*/
-
+// Zone Management
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
     // Prompt for zone name

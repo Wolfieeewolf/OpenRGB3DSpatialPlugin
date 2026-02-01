@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
 #include "Gizmo3D.h"
 #include "QtCompat.h"
 
-/*---------------------------------------------------------*\
-| System Includes                                          |
-\*---------------------------------------------------------*/
 #include <cmath>
 
-/*---------------------------------------------------------*\
-| OpenGL Includes                                          |
-\*---------------------------------------------------------*/
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -31,9 +22,6 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-/*---------------------------------------------------------*\
-| Gizmo Constants                                          |
-\*---------------------------------------------------------*/
 #define GIZMO_SIZE                  1.5f
 #define AXIS_THICKNESS              0.1f
 #define AXIS_HIT_THICKNESS          0.25f    // Larger hit box for easier clicking
@@ -63,18 +51,12 @@ Gizmo3D::Gizmo3D()
     axis_thickness = AXIS_THICKNESS;
     center_sphere_radius = CENTER_SPHERE_RADIUS;
 
-    /*---------------------------------------------------------*\
-    | Initialize Colors                                        |
-    \*---------------------------------------------------------*/
     color_x_axis[0] = 1.0f; color_x_axis[1] = 0.0f; color_x_axis[2] = 0.0f;  // Red
     color_y_axis[0] = 0.0f; color_y_axis[1] = 1.0f; color_y_axis[2] = 0.0f;  // Green
     color_z_axis[0] = 0.0f; color_z_axis[1] = 0.0f; color_z_axis[2] = 1.0f;  // Blue
     color_center[0] = 1.0f; color_center[1] = 1.0f; color_center[2] = 0.0f;  // Yellow
     color_highlight[0] = 1.0f; color_highlight[1] = 1.0f; color_highlight[2] = 1.0f;  // White
 
-    /*---------------------------------------------------------*\
-    | Initialize Grid Snapping                                 |
-    \*---------------------------------------------------------*/
     grid_snap_enabled = false;
     grid_size = 1.0f;
 
@@ -199,9 +181,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
     last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
     drag_start_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
 
-    /*---------------------------------------------------------*\
-    | Check for gizmo interaction                             |
-    \*---------------------------------------------------------*/
+    // Check for gizmo interaction
     selected_axis = PickGizmoAxis(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event), modelview, projection, viewport);
 
     if(selected_axis == GIZMO_AXIS_CENTER)
@@ -394,9 +374,7 @@ Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, con
 {
     Ray3D ray;
 
-    /*---------------------------------------------------------*\
-    | Use gluUnProject to convert screen coords to world     |
-    \*---------------------------------------------------------*/
+    // Use gluUnProject to convert screen coords to world
     GLdouble near_x, near_y, near_z;
     GLdouble far_x, far_y, far_z;
 
@@ -424,16 +402,12 @@ Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, con
                  mv, proj, vp,
                  &far_x, &far_y, &far_z);
 
-    /*---------------------------------------------------------*\
-    | Set ray origin (near plane point)                       |
-    \*---------------------------------------------------------*/
+    // Set ray origin (near plane point)
     ray.origin[0] = (float)near_x;
     ray.origin[1] = (float)near_y;
     ray.origin[2] = (float)near_z;
 
-    /*---------------------------------------------------------*\
-    | Set ray direction (from near to far, normalized)        |
-    \*---------------------------------------------------------*/
+    // Set ray direction (from near to far, normalized)
     float dx = (float)(far_x - near_x);
     float dy = (float)(far_y - near_y);
     float dz = (float)(far_z - near_z);
@@ -532,9 +506,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
         return GIZMO_AXIS_CENTER;
     }
 
-    /*---------------------------------------------------------*\
-    | In ROTATE mode, check grab handles on rotation rings   |
-    \*---------------------------------------------------------*/
+    // In ROTATE mode, check grab handles on rotation rings
     if(mode == GIZMO_MODE_ROTATE)
     {
         float handle_radius = 0.25f;  // Slightly larger for easier clicking
@@ -589,9 +561,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
             return closest_axis;
     }
 
-    /*---------------------------------------------------------*\
-    | In FREEROAM mode, allow precise picking of top cube     |
-    \*---------------------------------------------------------*/
+    // In FREEROAM mode, allow precise picking of top cube
     if(mode == GIZMO_MODE_FREEROAM)
     {
         // Purple cube centered at (0, gizmo_size, 0) in local coords
@@ -608,9 +578,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
         }
     }
 
-    /*---------------------------------------------------------*\
-    | Check X axis (with larger hit box)                     |
-    \*---------------------------------------------------------*/
+    // Check X axis (with larger hit box)
     Box3D x_box;
     x_box.min[0] = gizmo_x; x_box.max[0] = gizmo_x + gizmo_size;
     x_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; x_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
@@ -622,9 +590,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
         closest_axis = GIZMO_AXIS_X;
     }
 
-    /*---------------------------------------------------------*\
-    | Check Y axis (with larger hit box)                     |
-    \*---------------------------------------------------------*/
+    // Check Y axis (with larger hit box)
     Box3D y_box;
     y_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; y_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
     y_box.min[1] = gizmo_y; y_box.max[1] = gizmo_y + gizmo_size;
@@ -636,9 +602,7 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
         closest_axis = GIZMO_AXIS_Y;
     }
 
-    /*---------------------------------------------------------*\
-    | Check Z axis (with larger hit box)                     |
-    \*---------------------------------------------------------*/
+    // Check Z axis (with larger hit box)
     Box3D z_box;
     z_box.min[0] = gizmo_x - AXIS_HIT_THICKNESS; z_box.max[0] = gizmo_x + AXIS_HIT_THICKNESS;
     z_box.min[1] = gizmo_y - AXIS_HIT_THICKNESS; z_box.max[1] = gizmo_y + AXIS_HIT_THICKNESS;
@@ -1033,11 +997,7 @@ void Gizmo3D::DrawMoveGizmo()
     glDisable(GL_LIGHTING);
     glLineWidth(4.0f);
 
-    /*---------------------------------------------------------*\
-    | Draw 3D arrow axes with proper arrowheads               |
-    \*---------------------------------------------------------*/
-
-    // X axis (Red) - pointing right
+    // Draw 3D arrow axes with proper arrowheads// X axis (Red) - pointing right
     GizmoAxis hl = dragging ? selected_axis : hover_axis;
     float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
     glColor3f(color[0], color[1], color[2]);
@@ -1098,10 +1058,8 @@ void Gizmo3D::DrawMoveGizmo()
     glVertex3f(0.0f, -0.15f, gizmo_size - 0.3f);
     glEnd();
 
-    /*---------------------------------------------------------*\
-    | Draw orange center cube for mode switching             |
-    \*---------------------------------------------------------*/
-    float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
+    // Draw orange center cube for mode switching
+    float orange[3] = {1.0f, 0.5f, 0.0f};
     color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, color);
@@ -1167,11 +1125,7 @@ void Gizmo3D::DrawRotateGizmo()
 
     float handle_radius = 0.15f;  // Size of grab handles
 
-    /*---------------------------------------------------------*\
-    | Draw rotation rings for each axis with grab handles    |
-    \*---------------------------------------------------------*/
-
-    // X axis rotation ring (Red) - rotation around X axis (YZ plane)
+    // Draw rotation rings for each axis with grab handles// X axis rotation ring (Red) - rotation around X axis (YZ plane)
     GizmoAxis hl = dragging ? selected_axis : hover_axis;
     float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
     glColor3f(color[0], color[1], color[2]);
@@ -1226,10 +1180,8 @@ void Gizmo3D::DrawRotateGizmo()
         DrawSphere(handle_pos, handle_radius, color);
     }
 
-    /*---------------------------------------------------------*\
-    | Draw orange center cube for mode switching             |
-    \*---------------------------------------------------------*/
-    float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
+    // Draw orange center cube for mode switching
+    float orange[3] = {1.0f, 0.5f, 0.0f};
     color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, color);
@@ -1343,10 +1295,7 @@ void Gizmo3D::DrawFreeroamGizmo()
 {
     glDisable(GL_LIGHTING);
 
-    /*---------------------------------------------------------*\
-    | Draw vertical stick for freeroam grab handle            |
-    \*---------------------------------------------------------*/
-    glLineWidth(5.0f);
+    // Draw vertical stick for freeroam grab handleglLineWidth(5.0f);
 
     // Purple color for freeroam stick
     float purple[3] = {0.5f, 0.0f, 1.0f};
@@ -1359,9 +1308,7 @@ void Gizmo3D::DrawFreeroamGizmo()
     glVertex3f(0.0f, gizmo_size, 0.0f);
     glEnd();
 
-    /*---------------------------------------------------------*\
-    | Draw purple grab cube at top of stick                   |
-    \*---------------------------------------------------------*/
+    // Draw purple grab cube at top of stick
     float cube_size = 0.3f;
     float stick_height = gizmo_size;
 
@@ -1405,10 +1352,8 @@ void Gizmo3D::DrawFreeroamGizmo()
 
     glEnd();
 
-    /*---------------------------------------------------------*\
-    | Draw orange center cube for mode switching             |
-    \*---------------------------------------------------------*/
-    float orange[3] = {1.0f, 0.5f, 0.0f}; // Orange color for mode switching
+    // Draw orange center cube for mode switching
+    float orange[3] = {1.0f, 0.5f, 0.0f};
     float* center_color = (hl == GIZMO_AXIS_CENTER) ? color_highlight : orange;
     float center[3] = { 0.0f, 0.0f, 0.0f };
     DrawCube(center, center_sphere_radius, center_color);

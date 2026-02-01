@@ -528,9 +528,7 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
 {
     if(!audio_effect_zone_combo) return;
 
-    /*---------------------------------------------------------*\
-    | Save current selection to restore after rebuild         |
-    \*---------------------------------------------------------*/
+    // Save current selection to restore after rebuild
     int saved_index = audio_effect_zone_combo->currentIndex();
     if(saved_index < 0)
     {
@@ -540,14 +538,9 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
     audio_effect_zone_combo->blockSignals(true);
     audio_effect_zone_combo->clear();
 
-    /*---------------------------------------------------------*\
-    | Add "All Controllers" option with data -1               |
-    \*---------------------------------------------------------*/
-    audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
+    // Add "All Controllers" option with data -1audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
 
-    /*---------------------------------------------------------*\
-    | Add all zones with their index as data                  |
-    \*---------------------------------------------------------*/
+    // Add all zones with their index as data
     if(zone_manager)
     {
         for(int i = 0; i < zone_manager->GetZoneCount(); i++)
@@ -584,9 +577,7 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
         audio_effect_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
     }
 
-    /*---------------------------------------------------------*\
-    | Restore previous selection (or default to 0 if invalid) |
-    \*---------------------------------------------------------*/
+    // Restore previous selection (or default to 0 if invalid)
     if(saved_index < audio_effect_zone_combo->count())
     {
         audio_effect_zone_combo->setCurrentIndex(saved_index);

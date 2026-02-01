@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QFont>
+#include <QTimer>
 
 #include <cmath>
 #include <cfloat>
@@ -94,6 +95,14 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , selected_ref_point_idx(-1)
     , show_screen_preview(false)
     , show_test_pattern(false)
+    , show_room_grid_overlay(false)
+    , room_grid_brightness(0.35f)
+    , room_grid_point_size(3.0f)
+    , room_grid_step(4)
+    , room_grid_overlay_last_nx(-1)
+    , room_grid_overlay_last_ny(-1)
+    , room_grid_overlay_last_nz(-1)
+    , screen_preview_refresh_timer(nullptr)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
     , camera_pitch(30.0f)
@@ -110,7 +119,12 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
 
 LEDViewport3D::~LEDViewport3D()
 {
-    // Clean up OpenGL textures
+    if(screen_preview_refresh_timer)
+    {
+        screen_preview_refresh_timer->stop();
+        delete screen_preview_refresh_timer;
+        screen_preview_refresh_timer = nullptr;
+    }
     makeCurrent();
     for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
         it != display_plane_textures.end();
@@ -120,6 +134,28 @@ LEDViewport3D::~LEDViewport3D()
     }
     display_plane_textures.clear();
     doneCurrent();
+}
+
+void LEDViewport3D::SetShowScreenPreview(bool show)
+{
+    if(show_screen_preview == show)
+        return;
+    show_screen_preview = show;
+    if(show)
+    {
+        if(!screen_preview_refresh_timer)
+        {
+            screen_preview_refresh_timer = new QTimer(this);
+            connect(screen_preview_refresh_timer, &QTimer::timeout, this, [this]() { update(); });
+        }
+        screen_preview_refresh_timer->start(33);
+    }
+    else
+    {
+        if(screen_preview_refresh_timer)
+            screen_preview_refresh_timer->stop();
+    }
+    update();
 }
 
 void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
@@ -309,6 +345,10 @@ void LEDViewport3D::paintGL()
     }
 
     DrawDisplayPlanes();
+    if(show_room_grid_overlay)
+    {
+        DrawRoomGridOverlay();
+    }
     DrawControllers();
     DrawUserFigure();
     DrawReferencePoints();
@@ -962,6 +1002,126 @@ void LEDViewport3D::DrawRoomBoundary()
     glColor3f(1.0f, 1.0f, 1.0f);
 }
 
+void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const
+{
+    const GridExtents extents = GetRoomExtents();
+    const int step = std::max(1, room_grid_step);
+    if(out_nx) *out_nx = (int)(extents.width_units / (float)step) + 1;
+    if(out_ny) *out_ny = (int)(extents.height_units / (float)step) + 1;
+    if(out_nz) *out_nz = (int)(extents.depth_units / (float)step) + 1;
+}
+
+void LEDViewport3D::SetRoomGridColorBuffer(const std::vector<RGBColor>& buf)
+{
+    room_grid_color_buffer = buf;
+    update();
+}
+
+void LEDViewport3D::DrawRoomGridOverlay()
+{
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
+
+    const int step = std::max(1, room_grid_step);
+    const int nx = (int)(max_x / (float)step) + 1;
+    const int ny = (int)(max_y / (float)step) + 1;
+    const int nz = (int)(max_z / (float)step) + 1;
+    const int count = nx * ny * nz;
+    if(count <= 0) return;
+
+    const bool use_buffer = ((int)room_grid_color_buffer.size() == count);
+    const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
+    const float default_r = 0.4f * room_grid_brightness;
+    const float default_g = 0.6f * room_grid_brightness;
+    const float default_b = 0.7f * room_grid_brightness;
+
+    // Rebuild cached positions when layout changes (step or extents)
+    if(room_grid_overlay_positions.size() != (size_t)(3 * count) ||
+       room_grid_overlay_last_nx != nx || room_grid_overlay_last_ny != ny || room_grid_overlay_last_nz != nz)
+    {
+        room_grid_overlay_last_nx = nx;
+        room_grid_overlay_last_ny = ny;
+        room_grid_overlay_last_nz = nz;
+        room_grid_overlay_positions.resize(3 * (size_t)count);
+        float* pos = room_grid_overlay_positions.data();
+        for(int ix = 0; ix < nx; ix++)
+        {
+            const float x = (float)(ix * step);
+            for(int iy = 0; iy < ny; iy++)
+            {
+                const float y = (float)(iy * step);
+                for(int iz = 0; iz < nz; iz++)
+                {
+                    const float z = (float)(iz * step);
+                    *pos++ = x;
+                    *pos++ = y;
+                    *pos++ = z;
+                }
+            }
+        }
+    }
+
+    // Fill color array (from buffer, callback, or default). Same iteration order as positions.
+    room_grid_overlay_colors.resize(3 * (size_t)count);
+    float* col = room_grid_overlay_colors.data();
+    for(int ix = 0; ix < nx; ix++)
+    {
+        const float x = (float)(ix * step);
+        for(int iy = 0; iy < ny; iy++)
+        {
+            const float y = (float)(iy * step);
+            for(int iz = 0; iz < nz; iz++)
+            {
+                const float z = (float)(iz * step);
+                float r, g, b;
+                if(use_buffer)
+                {
+                    const size_t idx = (size_t)(ix * ny * nz + iy * nz + iz);
+                    RGBColor c = room_grid_color_buffer[idx];
+                    r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
+                    g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
+                    b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
+                }
+                else if(use_callback)
+                {
+                    RGBColor c = room_grid_color_callback(x, y, z);
+                    r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
+                    g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
+                    b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
+                }
+                else
+                {
+                    r = default_r;
+                    g = default_g;
+                    b = default_b;
+                }
+                *col++ = r;
+                *col++ = g;
+                *col++ = b;
+            }
+        }
+    }
+
+    // Single batched draw instead of N glColor3f/glVertex3f
+    glPointSize(room_grid_point_size);
+    glVertexPointer(3, GL_FLOAT, 0, room_grid_overlay_positions.data());
+    glColorPointer(3, GL_FLOAT, 0, room_grid_overlay_colors.data());
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glDrawArrays(GL_POINTS, 0, count);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glPointSize(1.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+}
+
 void LEDViewport3D::DrawDisplayPlanes()
 {
     if(!display_planes) return;
@@ -1341,11 +1501,8 @@ void LEDViewport3D::DrawControllers()
 
         glEnd();
 
-        /*---------------------------------------------------------*\
-        | Draw TOP indicator sphere                                |
-        | Shows which way is "up" on the controller                |
-        \*---------------------------------------------------------*/
-        float top_y = max_bounds.y;  // Top of bounding box
+        // Top indicator sphere (green = up, red = down)
+        float top_y = max_bounds.y;
         float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
         float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
         const float indicator_radius = 0.15f;
@@ -1499,9 +1656,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    /*---------------------------------------------------------*\
-    | Use gluUnProject for proper ray generation             |
-    \*---------------------------------------------------------*/
     GLdouble near_x, near_y, near_z;
     GLdouble far_x, far_y, far_z;
 
@@ -2105,10 +2259,6 @@ bool LEDViewport3D::IsControllerSelected(int index) const
 {
     return std::find(selected_controller_indices.begin(), selected_controller_indices.end(), index) != selected_controller_indices.end();
 }
-
-/*---------------------------------------------------------*\
-| User Position Functions                                   |
-\*---------------------------------------------------------*/
 
 void LEDViewport3D::SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points)
 {

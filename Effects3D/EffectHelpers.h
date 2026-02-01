@@ -5,9 +5,7 @@
 
 #include <cmath>
 
-/*---------------------------------------------------------*\
-| Mathematical constants                                    |
-\*---------------------------------------------------------*/
+// Mathematical constants
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -28,17 +26,13 @@ static inline float smoothstep(float edge0, float edge1, float x)
     return t * t * (3.0f - 2.0f * t);
 }
 
-/*---------------------------------------------------------*\
-| Linear interpolation                                      |
-\*---------------------------------------------------------*/
+// Linear interpolation
 static inline float lerp(float a, float b, float t)
 {
     return a + t * (b - a);
 }
 
-/*---------------------------------------------------------*\
-| Clamp value between min and max                           |
-\*---------------------------------------------------------*/
+// Clamp value between min and max
 static inline float clamp(float value, float min_val, float max_val)
 {
     return fmax(min_val, fmin(max_val, value));

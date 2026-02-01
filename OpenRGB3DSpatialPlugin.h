@@ -1,33 +1,14 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialPlugin.h                                  |
-|                                                           |
-|   OpenRGB 3D Spatial LED Control System Plugin           |
-|                                                           |
-|   Date: 2025-09-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
+// OpenRGB 3D Spatial Plugin
 
 #ifndef OPENRGB3DSPATIALPLUGIN_H
 #define OPENRGB3DSPATIALPLUGIN_H
 
-/*---------------------------------------------------------*\
-| Qt Includes                                              |
-\*---------------------------------------------------------*/
 #include <QObject>
 #include <QWidget>
 #include <QMenu>
-
-/*---------------------------------------------------------*\
-| OpenRGB Includes                                         |
-\*---------------------------------------------------------*/
 #include "OpenRGBPluginInterface.h"
 #include "ResourceManagerInterface.h"
-
-/*---------------------------------------------------------*\
-| Local Includes                                           |
-\*---------------------------------------------------------*/
 #include "OpenRGB3DSpatialTab.h"
 
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
