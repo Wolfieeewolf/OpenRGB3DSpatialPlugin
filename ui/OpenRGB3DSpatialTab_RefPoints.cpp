@@ -22,6 +22,7 @@ static QString RGBColorToCssHex(unsigned int color_value)
 // Reference Points Management
 void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 {
+    if(!ref_point_name_edit || !ref_point_type_combo || !reference_points_list) return;
     std::string name = ref_point_name_edit->text().toStdString();
     if(name.empty())
     {
@@ -45,8 +46,8 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     ref_point_name_edit->clear();
     ref_point_type_combo->setCurrentIndex(0);
 
-    // Select the newly added reference point
-    reference_points_list->setCurrentRow((int)reference_points.size() - 1);
+    if(reference_points_list)
+        reference_points_list->setCurrentRow((int)reference_points.size() - 1);
 
     SetObjectCreatorStatus(QString("Reference point '%1' created. Add it from the Available Controllers list when ready.")
                            .arg(QString::fromStdString(name)),
@@ -97,7 +98,7 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
     if(viewport) viewport->SelectDisplayPlane(-1);
 
     bool has_selection = (index >= 0 && index < (int)reference_points.size());
-    remove_ref_point_button->setEnabled(has_selection);
+    if(remove_ref_point_button) remove_ref_point_button->setEnabled(has_selection);
 
     if(has_selection)
     {
@@ -184,36 +185,34 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
 
 void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, float y, float z)
 {
-    if(index >= 0 && index < (int)reference_points.size())
-    {
-        VirtualReferencePoint3D* ref_point = reference_points[index].get();
-        Vector3D pos = {x, y, z};
-        ref_point->SetPosition(pos);
+    if(index < 0 || index >= (int)reference_points.size()) return;
+    if(!pos_x_slider || !pos_x_spin) return;
+    VirtualReferencePoint3D* ref_point = reference_points[index].get();
+    Vector3D pos = {x, y, z};
+    ref_point->SetPosition(pos);
 
-        // Update position controls
-        pos_x_slider->blockSignals(true);
-        pos_y_slider->blockSignals(true);
-        pos_z_slider->blockSignals(true);
-        pos_x_spin->blockSignals(true);
-        pos_y_spin->blockSignals(true);
-        pos_z_spin->blockSignals(true);
+    pos_x_slider->blockSignals(true);
+    pos_y_slider->blockSignals(true);
+    pos_z_slider->blockSignals(true);
+    pos_x_spin->blockSignals(true);
+    pos_y_spin->blockSignals(true);
+    pos_z_spin->blockSignals(true);
 
-        pos_x_slider->setValue((int)(x * 10));
-        pos_y_slider->setValue((int)(y * 10));
-        pos_z_slider->setValue((int)(z * 10));
-        pos_x_spin->setValue(x);
-        pos_y_spin->setValue(y);
-        pos_z_spin->setValue(z);
+    pos_x_slider->setValue((int)(x * 10));
+    pos_y_slider->setValue((int)(y * 10));
+    pos_z_slider->setValue((int)(z * 10));
+    pos_x_spin->setValue(x);
+    pos_y_spin->setValue(y);
+    pos_z_spin->setValue(z);
 
-        pos_x_slider->blockSignals(false);
-        pos_y_slider->blockSignals(false);
-        pos_z_slider->blockSignals(false);
-        pos_x_spin->blockSignals(false);
-        pos_y_spin->blockSignals(false);
-        pos_z_spin->blockSignals(false);
+    pos_x_slider->blockSignals(false);
+    pos_y_slider->blockSignals(false);
+    pos_z_slider->blockSignals(false);
+    pos_x_spin->blockSignals(false);
+    pos_y_spin->blockSignals(false);
+    pos_z_spin->blockSignals(false);
 
-        viewport->update();
-    }
+    if(viewport) viewport->update();
 }
 
 void OpenRGB3DSpatialTab::on_ref_point_color_clicked()

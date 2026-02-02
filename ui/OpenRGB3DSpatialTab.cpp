@@ -303,7 +303,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     spacing_layout->setSpacing(2);
     spacing_layout->setContentsMargins(0, 0, 0, 0);
 
-    std::function<QHBoxLayout*(const QString&, QDoubleSpinBox*&)> create_spacing_row = [](const QString& label_text, QDoubleSpinBox*& spin) -> QHBoxLayout*
+    auto create_spacing_row = [](const QString& label_text, QDoubleSpinBox*& spin, bool enabled = true) -> QHBoxLayout*
     {
         QHBoxLayout* row = new QHBoxLayout();
         row->setSpacing(3);
@@ -317,22 +317,23 @@ void OpenRGB3DSpatialTab::SetupUI()
         spin->setSingleStep(1.0);
         spin->setSuffix(" mm");
         spin->setAlignment(Qt::AlignRight);
+        spin->setEnabled(enabled);
         row->addWidget(spin, 1);
 
         return row;
     };
 
-    QHBoxLayout* spacing_x_row = create_spacing_row("X:", led_spacing_x_spin);
+    QHBoxLayout* spacing_x_row = create_spacing_row("X:", led_spacing_x_spin, true);
     led_spacing_x_spin->setValue(10.0);
     led_spacing_x_spin->setToolTip("Horizontal spacing between LEDs (left/right)");
     spacing_layout->addLayout(spacing_x_row);
 
-    QHBoxLayout* spacing_y_row = create_spacing_row("Y:", led_spacing_y_spin);
+    QHBoxLayout* spacing_y_row = create_spacing_row("Y:", led_spacing_y_spin, true);
     led_spacing_y_spin->setValue(0.0);
     led_spacing_y_spin->setToolTip("Vertical spacing between LEDs (floor/ceiling)");
     spacing_layout->addLayout(spacing_y_row);
 
-    QHBoxLayout* spacing_z_row = create_spacing_row("Z:", led_spacing_z_spin);
+    QHBoxLayout* spacing_z_row = create_spacing_row("Z:", led_spacing_z_spin, true);
     led_spacing_z_spin->setValue(0.0);
     led_spacing_z_spin->setToolTip("Depth spacing between LEDs (front/back)");
     spacing_layout->addLayout(spacing_z_row);
@@ -367,15 +368,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     controller_list = new QListWidget();
     controller_list->setMaximumHeight(80);
     connect(controller_list, &QListWidget::currentRowChanged, [this](int row) {
-        if(row >= 0)
+        if(viewport)
         {
-            int transform_index = ControllerListRowToTransformIndex(row);
-            if(viewport)
-            {
-                viewport->SelectController(transform_index >= 0 ? transform_index : -1);
-            }
-            on_controller_selected(row);
+            viewport->SelectController(row >= 0 ? ControllerListRowToTransformIndex(row) : -1);
         }
+        on_controller_selected(row);
     });
     controller_layout->addWidget(controller_list);
 
@@ -391,36 +388,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     edit_spacing_layout->setSpacing(2);
     edit_spacing_layout->setContentsMargins(0, 0, 0, 0);
 
-    std::function<QHBoxLayout*(const QString&, QDoubleSpinBox*&)> create_edit_row = [](const QString& text, QDoubleSpinBox*& spin) -> QHBoxLayout*
-    {
-        QHBoxLayout* row = new QHBoxLayout();
-        row->setSpacing(3);
-        row->setContentsMargins(0, 0, 0, 0);
-
-        QLabel* lbl = new QLabel(text);
-        lbl->setMinimumWidth(14);
-        row->addWidget(lbl);
-
-        spin = new QDoubleSpinBox();
-        spin->setRange(0.0, 1000.0);
-        spin->setSingleStep(1.0);
-        spin->setSuffix(" mm");
-        spin->setAlignment(Qt::AlignRight);
-        spin->setEnabled(false);
-        row->addWidget(spin, 1);
-
-        return row;
-    };
-
-    QHBoxLayout* edit_x_row = create_edit_row("X:", edit_led_spacing_x_spin);
+    QHBoxLayout* edit_x_row = create_spacing_row("X:", edit_led_spacing_x_spin, false);
     edit_led_spacing_x_spin->setValue(10.0);
     edit_spacing_layout->addLayout(edit_x_row);
 
-    QHBoxLayout* edit_y_row = create_edit_row("Y:", edit_led_spacing_y_spin);
+    QHBoxLayout* edit_y_row = create_spacing_row("Y:", edit_led_spacing_y_spin, false);
     edit_led_spacing_y_spin->setValue(0.0);
     edit_spacing_layout->addLayout(edit_y_row);
 
-    QHBoxLayout* edit_z_row = create_edit_row("Z:", edit_led_spacing_z_spin);
+    QHBoxLayout* edit_z_row = create_spacing_row("Z:", edit_led_spacing_z_spin, false);
     edit_led_spacing_z_spin->setValue(0.0);
     edit_spacing_layout->addLayout(edit_z_row);
 
@@ -491,56 +467,74 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Tab Widget for Position/Rotation and Grid Settings
     QTabWidget* settings_tabs = new QTabWidget();
 
-    // Grid Settings Tab
+    // Grid Settings Tab — three sections: Grid & scale, Room size, 3D view overlay
     QWidget* grid_settings_tab = new QWidget();
-    QGridLayout* layout_layout = new QGridLayout();
-    layout_layout->setSpacing(3);
-    layout_layout->setContentsMargins(2, 2, 2, 2);
+    QVBoxLayout* grid_tab_main = new QVBoxLayout(grid_settings_tab);
+    grid_tab_main->setSpacing(8);
+    grid_tab_main->setContentsMargins(4, 4, 4, 4);
 
-    // Grid Dimensions
-    layout_layout->addWidget(new QLabel("Grid X:"), 0, 0);
+    QGroupBox* grid_scale_group = new QGroupBox("Grid & scale");
+    QGridLayout* grid_gl = new QGridLayout(grid_scale_group);
+    grid_gl->setSpacing(4);
+
+    grid_gl->addWidget(new QLabel("Layout size (X × Y × Z):"), 0, 0, 1, 2);
+    grid_gl->addWidget(new QLabel("X:"), 0, 2);
     grid_x_spin = new QSpinBox();
     grid_x_spin->setRange(1, 100);
     grid_x_spin->setValue(custom_grid_x);
-    layout_layout->addWidget(grid_x_spin, 0, 1);
-
-    layout_layout->addWidget(new QLabel("Grid Y:"), 0, 2);
+    grid_x_spin->setToolTip("LED layout width (grid units) for new controllers");
+    grid_gl->addWidget(grid_x_spin, 0, 3);
+    grid_gl->addWidget(new QLabel("Y:"), 0, 4);
     grid_y_spin = new QSpinBox();
     grid_y_spin->setRange(1, 100);
     grid_y_spin->setValue(custom_grid_y);
-    layout_layout->addWidget(grid_y_spin, 0, 3);
-
-    layout_layout->addWidget(new QLabel("Grid Z:"), 0, 4);
+    grid_y_spin->setToolTip("LED layout height (grid units) for new controllers");
+    grid_gl->addWidget(grid_y_spin, 0, 5);
+    grid_gl->addWidget(new QLabel("Z:"), 0, 6);
     grid_z_spin = new QSpinBox();
     grid_z_spin->setRange(1, 100);
     grid_z_spin->setValue(custom_grid_z);
-    layout_layout->addWidget(grid_z_spin, 0, 5);
+    grid_z_spin->setToolTip("LED layout depth (grid units) for new controllers");
+    grid_gl->addWidget(grid_z_spin, 0, 7);
 
-    // Grid Scale (mm per grid unit)
-    layout_layout->addWidget(new QLabel("Grid Scale:"), 1, 0);
+    grid_gl->addWidget(new QLabel("Grid scale:"), 1, 0);
     grid_scale_spin = new QDoubleSpinBox();
     grid_scale_spin->setRange(0.1, 1000.0);
     grid_scale_spin->setSingleStep(1.0);
     grid_scale_spin->setValue(grid_scale_mm);
     grid_scale_spin->setSuffix(" mm/unit");
-    grid_scale_spin->setToolTip("Physical size of one grid unit in millimeters (default: 10mm = 1cm)");
-    layout_layout->addWidget(grid_scale_spin, 1, 1, 1, 2);
+    grid_scale_spin->setToolTip("One grid unit in mm. Positions × scale = real size (e.g. 10 mm/unit = 1 cm per unit).");
+    grid_gl->addWidget(grid_scale_spin, 1, 1, 1, 2);
 
-    // Update grid scale when changed: affects viewport conversion and LED spacing to grid units
+    grid_snap_checkbox = new QCheckBox("Snap positions to grid");
+    grid_snap_checkbox->setToolTip("When moving controllers, snap to grid intersections.");
+    grid_gl->addWidget(grid_snap_checkbox, 1, 3, 1, 2);
+
+    selection_info_label = new QLabel("No selection");
+    selection_info_label->setAlignment(Qt::AlignRight);
+    QFont selection_font = selection_info_label->font();
+    selection_font.setBold(true);
+    selection_info_label->setFont(selection_font);
+    grid_gl->addWidget(new QLabel("Selection:"), 1, 5);
+    grid_gl->addWidget(selection_info_label, 1, 6, 1, 2);
+
+    QLabel* grid_scale_help = new QLabel("Default size for new LED layouts; scale is mm per grid unit.");
+    grid_scale_help->setForegroundRole(QPalette::PlaceholderText);
+    grid_scale_help->setWordWrap(true);
+    grid_gl->addWidget(grid_scale_help, 2, 0, 1, 8);
+
     connect(grid_scale_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value){
         grid_scale_mm = (float)value;
         if(viewport) {
             viewport->SetGridScaleMM(grid_scale_mm);
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         }
-        // Keep ambilight preview in sync so its math matches the viewport
         if(current_effect_ui)
         {
             ScreenMirror3D* sm = qobject_cast<ScreenMirror3D*>(current_effect_ui);
             if(sm)
                 sm->SetGridScaleMM(grid_scale_mm);
         }
-        // Regenerate LED positions for all controllers to reflect new grid scale
         for(unsigned int i = 0; i < controller_transforms.size(); i++)
         {
             RegenerateLEDPositions(controller_transforms[i].get());
@@ -553,124 +547,84 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
     });
 
-    // Grid Snap Checkbox
-    grid_snap_checkbox = new QCheckBox("Grid Snapping");
-    grid_snap_checkbox->setToolTip("Snap controller positions to grid intersections");
-    layout_layout->addWidget(grid_snap_checkbox, 1, 3, 1, 3);
+    grid_tab_main->addWidget(grid_scale_group);
 
-    // Room Dimensions Section
-    layout_layout->addWidget(new QLabel("=== Room Dimensions (Origin: Front-Left-Floor Corner) ==="), 2, 0, 1, 6);
+    QGroupBox* room_group = new QGroupBox("Room size");
+    QGridLayout* room_gl = new QGridLayout(room_group);
+    room_gl->setSpacing(4);
 
-    // Manual room size checkbox
-    use_manual_room_size_checkbox = new QCheckBox("Use Manual Room Size");
+    use_manual_room_size_checkbox = new QCheckBox("Use manual room size");
     use_manual_room_size_checkbox->setChecked(use_manual_room_size);
-    use_manual_room_size_checkbox->setToolTip("Enable to set room dimensions manually. Disable to auto-detect from LED positions.");
-    layout_layout->addWidget(use_manual_room_size_checkbox, 3, 0, 1, 2);
+    use_manual_room_size_checkbox->setToolTip("Off: room size is derived from LED positions. On: set width, height, depth below.");
+    room_gl->addWidget(use_manual_room_size_checkbox, 0, 0, 1, 6);
 
-    // Room Width (X-axis: Left to Right)
-    layout_layout->addWidget(new QLabel("Width (X):"), 4, 0);
-    room_width_spin = new QDoubleSpinBox();
-    room_width_spin->setRange(100.0, 50000.0);
-    room_width_spin->setSingleStep(10.0);
-    room_width_spin->setValue(manual_room_width);
-    room_width_spin->setSuffix(" mm");
-    room_width_spin->setToolTip("Room width (left wall to right wall)");
-    room_width_spin->setEnabled(use_manual_room_size);
-    layout_layout->addWidget(room_width_spin, 4, 1);
+    auto add_room_dim_spin = [this](QGridLayout* lo, int row, int col, const QString& label, QDoubleSpinBox*& spin, double value, const QString& tooltip)
+    {
+        lo->addWidget(new QLabel(label), row, col);
+        spin = new QDoubleSpinBox();
+        spin->setRange(100.0, 50000.0);
+        spin->setSingleStep(10.0);
+        spin->setValue(value);
+        spin->setSuffix(" mm");
+        spin->setToolTip(tooltip);
+        spin->setEnabled(use_manual_room_size);
+        lo->addWidget(spin, row, col + 1);
+    };
 
-    // Room Height (Y-axis: Floor to Ceiling, Y-up)
-    layout_layout->addWidget(new QLabel("Height (Y):"), 4, 2);
-    room_height_spin = new QDoubleSpinBox();
-    room_height_spin->setRange(100.0, 50000.0);
-    room_height_spin->setSingleStep(10.0);
-    room_height_spin->setValue(manual_room_height);
-    room_height_spin->setSuffix(" mm");
-    room_height_spin->setToolTip("Room height (floor to ceiling, Y-axis in standard OpenGL Y-up)");
-    room_height_spin->setEnabled(use_manual_room_size);
-    layout_layout->addWidget(room_height_spin, 4, 3);
+    add_room_dim_spin(room_gl, 1, 0, "Width (X):", room_width_spin, manual_room_width, "Left to right");
+    add_room_dim_spin(room_gl, 1, 2, "Height (Y):", room_height_spin, manual_room_height, "Floor to ceiling");
+    add_room_dim_spin(room_gl, 1, 4, "Depth (Z):", room_depth_spin, manual_room_depth, "Front to back");
 
-    // Room Depth (Z-axis: Front to Back)
-    layout_layout->addWidget(new QLabel("Depth (Z):"), 4, 4);
-    room_depth_spin = new QDoubleSpinBox();
-    room_depth_spin->setRange(100.0, 50000.0);
-    room_depth_spin->setSingleStep(10.0);
-    room_depth_spin->setValue(manual_room_depth);
-    room_depth_spin->setSuffix(" mm");
-    room_depth_spin->setToolTip("Room depth (front to back, Z-axis in standard OpenGL Y-up)");
-    room_depth_spin->setEnabled(use_manual_room_size);
-    layout_layout->addWidget(room_depth_spin, 4, 5);
+    QLabel* room_help = new QLabel("Origin is front-left-floor. Used by effects that need room bounds. Positions are in grid units (× Grid scale = mm).");
+    room_help->setForegroundRole(QPalette::PlaceholderText);
+    room_help->setWordWrap(true);
+    room_gl->addWidget(room_help, 2, 0, 1, 6);
 
-    // Selection Info Label
-    selection_info_label = new QLabel("No selection");
-    selection_info_label->setAlignment(Qt::AlignRight);
-    QFont selection_font = selection_info_label->font();
-    selection_font.setBold(true);
-    selection_info_label->setFont(selection_font);
-    layout_layout->addWidget(selection_info_label, 1, 3, 1, 3);
+    grid_tab_main->addWidget(room_group);
 
-    // Add helpful labels with text wrapping
-    QLabel* grid_help1 = new QLabel(QString("Measure from front-left-floor corner. Positions in grid units (%1mm)").arg(grid_scale_mm));
-    grid_help1->setForegroundRole(QPalette::PlaceholderText);
-    grid_help1->setWordWrap(true);
-    layout_layout->addWidget(grid_help1, 5, 0, 1, 6);
+    QGroupBox* overlay_group = new QGroupBox("3D view overlay");
+    QGridLayout* overlay_gl = new QGridLayout(overlay_group);
+    overlay_gl->setSpacing(4);
 
-    QLabel* grid_help2 = new QLabel("Use Ctrl+Click for multi-select. Add User position in Object Creator tab");
-    grid_help2->setForegroundRole(QPalette::PlaceholderText);
-    grid_help2->setWordWrap(true);
-    layout_layout->addWidget(grid_help2, 6, 0, 1, 6);
+    room_grid_overlay_checkbox = new QCheckBox("Show overlay in 3D view");
+    room_grid_overlay_checkbox->setToolTip("Draw a dim grid of points in the room so you see the space. Real LEDs stand out.");
+    overlay_gl->addWidget(room_grid_overlay_checkbox, 0, 0, 1, 4);
 
-    // Room grid overlay (virtual LEDs fill)
-    room_grid_overlay_checkbox = new QCheckBox("Show room grid overlay (virtual LEDs)");
-    room_grid_overlay_checkbox->setToolTip("Fill the room with a grid of dim points so you can see the full space and tell real vs virtual LEDs.");
-    layout_layout->addWidget(room_grid_overlay_checkbox, 7, 0, 1, 2);
+    auto add_grid_slider_row = [this](QGridLayout* lo, int row, int label_col, int slider_col, int value_col,
+        const QString& labelText, int minVal, int maxVal, int value, const QString& initialValueText, const QString& tooltip,
+        QSlider*& slider, QLabel*& valueLabel, std::function<QString(int)> valueFormatter, std::function<void(int)> onValueChanged)
+    {
+        lo->addWidget(new QLabel(labelText), row, label_col);
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(minVal, maxVal);
+        slider->setValue(value);
+        slider->setToolTip(tooltip);
+        valueLabel = new QLabel(initialValueText);
+        lo->addWidget(slider, row, slider_col);
+        lo->addWidget(valueLabel, row, value_col);
+        connect(slider, &QSlider::valueChanged, [this, valueLabel, valueFormatter, onValueChanged](int v) {
+            if(valueLabel) valueLabel->setText(valueFormatter(v));
+            onValueChanged(v);
+        });
+    };
 
-    layout_layout->addWidget(new QLabel("Overlay brightness:"), 8, 0);
-    room_grid_brightness_slider = new QSlider(Qt::Horizontal);
-    room_grid_brightness_slider->setRange(0, 100);
-    room_grid_brightness_slider->setValue(35);
-    room_grid_brightness_slider->setToolTip("Brightness of overlay points (lower = real LEDs stand out more)");
-    layout_layout->addWidget(room_grid_brightness_slider, 8, 1);
-    room_grid_brightness_label = new QLabel("35%");
-    layout_layout->addWidget(room_grid_brightness_label, 8, 2);
+    add_grid_slider_row(overlay_gl, 1, 0, 1, 2, "Brightness:", 0, 100, 35, "35%", "Lower = real LEDs stand out more",
+        room_grid_brightness_slider, room_grid_brightness_label, [](int v) { return QString("%1%").arg(v); },
+        [this](int v) { if(viewport) viewport->SetRoomGridBrightness((float)v / 100.0f); });
+    add_grid_slider_row(overlay_gl, 1, 3, 4, 5, "Point size:", 1, 12, 3, "3", "Larger = easier to see points",
+        room_grid_point_size_slider, room_grid_point_size_label, [](int v) { return QString::number(v); },
+        [this](int v) { if(viewport) viewport->SetRoomGridPointSize((float)v); });
+    add_grid_slider_row(overlay_gl, 2, 0, 1, 2, "Step:", 1, 24, 4, "4", "Grid units between points (1=dense, 24=sparse). Step × scale = mm.",
+        room_grid_step_slider, room_grid_step_label, [](int v) { return QString::number(v); },
+        [this](int v) { if(viewport) viewport->SetRoomGridStep(v); });
 
-    layout_layout->addWidget(new QLabel("Point size:"), 8, 3);
-    room_grid_point_size_slider = new QSlider(Qt::Horizontal);
-    room_grid_point_size_slider->setRange(1, 12);
-    room_grid_point_size_slider->setValue(3);
-    room_grid_point_size_slider->setToolTip("Size of overlay points (larger = easier to see which are real)");
-    layout_layout->addWidget(room_grid_point_size_slider, 8, 4);
-    room_grid_point_size_label = new QLabel("3");
-    layout_layout->addWidget(room_grid_point_size_label, 8, 5);
+    grid_tab_main->addWidget(overlay_group);
 
-    layout_layout->addWidget(new QLabel("Overlay step:"), 9, 0);
-    room_grid_step_slider = new QSlider(Qt::Horizontal);
-    room_grid_step_slider->setRange(1, 24);
-    room_grid_step_slider->setValue(4);
-    room_grid_step_slider->setToolTip("Grid units between overlay points (1=dense/more CPU, 24=sparse/less CPU). Physical spacing = step × grid scale.");
-    layout_layout->addWidget(room_grid_step_slider, 9, 1);
-    room_grid_step_label = new QLabel("4");
-    layout_layout->addWidget(room_grid_step_label, 9, 2);
-
-    grid_settings_tab->setLayout(layout_layout);
-
-    // Connect room grid overlay to viewport
     connect(room_grid_overlay_checkbox, &QCheckBox::toggled, [this](bool checked) {
         if(viewport) viewport->SetShowRoomGridOverlay(checked);
     });
-    connect(room_grid_brightness_slider, &QSlider::valueChanged, [this](int value) {
-        if(room_grid_brightness_label) room_grid_brightness_label->setText(QString("%1%").arg(value));
-        if(viewport) viewport->SetRoomGridBrightness((float)value / 100.0f);
-    });
-    connect(room_grid_point_size_slider, &QSlider::valueChanged, [this](int value) {
-        if(room_grid_point_size_label) room_grid_point_size_label->setText(QString::number(value));
-        if(viewport) viewport->SetRoomGridPointSize((float)value);
-    });
-    connect(room_grid_step_slider, &QSlider::valueChanged, [this](int value) {
-        if(room_grid_step_label) room_grid_step_label->setText(QString::number(value));
-        if(viewport) viewport->SetRoomGridStep(value);
-    });
 
-    // Load room grid overlay from settings and apply to viewport + UI
+    // Load room grid overlay from settings; checkbox and slider setValue trigger existing connects to update labels and viewport
     try
     {
         nlohmann::json settings = GetPluginSettings();
@@ -686,18 +640,8 @@ void OpenRGB3DSpatialTab::SetupUI()
             step_val = std::max(1, std::min(24, step_val));
             if(room_grid_overlay_checkbox) room_grid_overlay_checkbox->setChecked(show);
             if(room_grid_brightness_slider) room_grid_brightness_slider->setValue(bright);
-            if(room_grid_brightness_label) room_grid_brightness_label->setText(QString("%1%").arg(bright));
             if(room_grid_point_size_slider) room_grid_point_size_slider->setValue(size);
-            if(room_grid_point_size_label) room_grid_point_size_label->setText(QString::number(size));
             if(room_grid_step_slider) room_grid_step_slider->setValue(step_val);
-            if(room_grid_step_label) room_grid_step_label->setText(QString::number(step_val));
-            if(viewport)
-            {
-                viewport->SetShowRoomGridOverlay(show);
-                viewport->SetRoomGridBrightness((float)bright / 100.0f);
-                viewport->SetRoomGridPointSize((float)size);
-                viewport->SetRoomGridStep(step_val);
-            }
         }
     }
     catch(const std::exception&) { /* ignore */ }
@@ -725,34 +669,17 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     connect(room_width_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         manual_room_width = value;
-
-        // Update viewport with new width
-        if(viewport)
-        {
-            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
-        }
+        if(viewport) viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         emit GridLayoutChanged();
     });
-
     connect(room_height_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         manual_room_height = value;
-
-        // Update viewport with new depth
-        if(viewport)
-        {
-            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
-        }
+        if(viewport) viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         emit GridLayoutChanged();
     });
-
     connect(room_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
         manual_room_depth = value;
-
-        // Update viewport with new height
-        if(viewport)
-        {
-            viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
-        }
+        if(viewport) viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
         emit GridLayoutChanged();
     });
 
@@ -766,83 +693,60 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->setSpacing(3);
     position_layout->setContentsMargins(0, 0, 0, 0);
 
-    position_layout->addWidget(new QLabel("Position X:"), 0, 0);
+    auto add_position_row = [this, position_layout](int row, const QString& label, QSlider*& sl, QDoubleSpinBox*& sp, int axis, bool clamp_non_negative)
+    {
+        position_layout->addWidget(new QLabel(label), row, 0);
+        sl = new QSlider(Qt::Horizontal);
+        sl->setRange(-5000, 5000);
+        sl->setValue(0);
+        sp = new QDoubleSpinBox();
+        sp->setRange(-500, 500);
+        sp->setDecimals(1);
+        sp->setMaximumWidth(80);
+        position_layout->addWidget(sl, row, 1);
+        position_layout->addWidget(sp, row, 2);
 
-    pos_x_slider = new QSlider(Qt::Horizontal);
-    pos_x_slider->setRange(-5000, 5000);  // Corner-origin: 0 (left wall) to 500 grid units (5000mm = 5m)
-    pos_x_slider->setValue(0);
-    connect(pos_x_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        if(pos_x_spin) { QSignalBlocker b(pos_x_spin); pos_x_spin->setValue(pos_value); }
-        ApplyPositionComponent(0, pos_value);
-    });
-    position_layout->addWidget(pos_x_slider, 0, 1);
-
-    pos_x_spin = new QDoubleSpinBox();
-    pos_x_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
-    pos_x_spin->setDecimals(1);
-    pos_x_spin->setMaximumWidth(80);
-    connect(pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(pos_x_slider) { QSignalBlocker b(pos_x_slider); pos_x_slider->setValue((int)(value * 10.0 + 0.5)); }
-        ApplyPositionComponent(0, value);
-    });
-    position_layout->addWidget(pos_x_spin, 0, 2);
-
-    position_layout->addWidget(new QLabel("Position Y:"), 1, 0);
-
-    pos_y_slider = new QSlider(Qt::Horizontal);
-    pos_y_slider->setRange(-5000, 5000);
-    pos_y_slider->setValue(0);
-    connect(pos_y_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        if(pos_value < 0.0)
+        if(clamp_non_negative)
         {
-            pos_value = 0.0;
-            if(pos_y_spin) { QSignalBlocker b(pos_y_spin); pos_y_spin->setValue(pos_value); }
-            if(pos_y_slider) { QSignalBlocker b(pos_y_slider); pos_y_slider->setValue(0); }
+            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
+                double pos_value = value / 10.0;
+                if(pos_value < 0.0)
+                {
+                    pos_value = 0.0;
+                    if(sp) { QSignalBlocker b(sp); sp->setValue(0); }
+                    if(sl) { QSignalBlocker b(sl); sl->setValue(0); }
+                }
+                else if(sp) { QSignalBlocker b(sp); sp->setValue(pos_value); }
+                ApplyPositionComponent(axis, pos_value);
+            });
+            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value) {
+                if(value < 0.0)
+                {
+                    value = 0.0;
+                    if(sp) { QSignalBlocker b(sp); sp->setValue(value); }
+                    if(sl) { QSignalBlocker b(sl); sl->setValue(0); }
+                }
+                else if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value * 10.0)); }
+                ApplyPositionComponent(axis, value);
+            });
         }
-        else if(pos_y_spin) { QSignalBlocker b(pos_y_spin); pos_y_spin->setValue(pos_value); }
-        ApplyPositionComponent(1, pos_value);
-    });
-    position_layout->addWidget(pos_y_slider, 1, 1);
-
-    pos_y_spin = new QDoubleSpinBox();
-    pos_y_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
-    pos_y_spin->setDecimals(1);
-    pos_y_spin->setMaximumWidth(80);
-    connect(pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(value < 0.0)
+        else
         {
-            value = 0.0;
-            if(pos_y_spin) { QSignalBlocker b(pos_y_spin); pos_y_spin->setValue(value); }
-            if(pos_y_slider) { QSignalBlocker b(pos_y_slider); pos_y_slider->setValue(0); }
+            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
+                double pos_value = value / 10.0;
+                if(sp) { QSignalBlocker b(sp); sp->setValue(pos_value); }
+                ApplyPositionComponent(axis, pos_value);
+            });
+            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value) {
+                if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value * 10.0)); }
+                ApplyPositionComponent(axis, value);
+            });
         }
-        else if(pos_y_slider) { QSignalBlocker b(pos_y_slider); pos_y_slider->setValue((int)std::lround(value * 10.0)); }
-        ApplyPositionComponent(1, value);
-    });
-    position_layout->addWidget(pos_y_spin, 1, 2);
+    };
 
-    position_layout->addWidget(new QLabel("Position Z:"), 2, 0);
-
-    pos_z_slider = new QSlider(Qt::Horizontal);
-    pos_z_slider->setRange(-5000, 5000);
-    pos_z_slider->setValue(0);
-    connect(pos_z_slider, &QSlider::valueChanged, [this](int value) {
-        double pos_value = value / 10.0;
-        if(pos_z_spin) { QSignalBlocker b(pos_z_spin); pos_z_spin->setValue(pos_value); }
-        ApplyPositionComponent(2, pos_value);
-    });
-    position_layout->addWidget(pos_z_slider, 2, 1);
-
-    pos_z_spin = new QDoubleSpinBox();
-    pos_z_spin->setRange(-500, 500);  // Allow negative for outside-room LEDs, up to 500 grid units
-    pos_z_spin->setDecimals(1);
-    pos_z_spin->setMaximumWidth(80);
-    connect(pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(pos_z_slider) { QSignalBlocker b(pos_z_slider); pos_z_slider->setValue((int)std::lround(value * 10.0)); }
-        ApplyPositionComponent(2, value);
-    });
-    position_layout->addWidget(pos_z_spin, 2, 2);
+    add_position_row(0, "Position X:", pos_x_slider, pos_x_spin, 0, false);
+    add_position_row(1, "Position Y:", pos_y_slider, pos_y_spin, 1, true);
+    add_position_row(2, "Position Z:", pos_z_slider, pos_z_spin, 2, false);
 
     position_layout->setColumnStretch(1, 1);
 
@@ -850,71 +754,32 @@ void OpenRGB3DSpatialTab::SetupUI()
     rotation_layout->setSpacing(3);
     rotation_layout->setContentsMargins(0, 0, 0, 0);
 
-    rotation_layout->addWidget(new QLabel("Rotation X:"), 0, 0);
+    auto add_rotation_row = [this, rotation_layout](int row, const QString& label, QSlider*& sl, QDoubleSpinBox*& sp, int axis)
+    {
+        rotation_layout->addWidget(new QLabel(label), row, 0);
+        sl = new QSlider(Qt::Horizontal);
+        sl->setRange(-180, 180);
+        sl->setValue(0);
+        sp = new QDoubleSpinBox();
+        sp->setRange(-180, 180);
+        sp->setDecimals(1);
+        sp->setMaximumWidth(80);
+        rotation_layout->addWidget(sl, row, 1);
+        rotation_layout->addWidget(sp, row, 2);
+        connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
+            double rot_value = (double)value;
+            if(sp) { QSignalBlocker b(sp); sp->setValue(rot_value); }
+            ApplyRotationComponent(axis, rot_value);
+        });
+        connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value) {
+            if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value)); }
+            ApplyRotationComponent(axis, value);
+        });
+    };
 
-    rot_x_slider = new QSlider(Qt::Horizontal);
-    rot_x_slider->setRange(-180, 180);
-    rot_x_slider->setValue(0);
-    connect(rot_x_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = (double)value;
-        if(rot_x_spin) { QSignalBlocker b(rot_x_spin); rot_x_spin->setValue(rot_value); }
-        ApplyRotationComponent(0, rot_value);
-    });
-    rotation_layout->addWidget(rot_x_slider, 0, 1);
-
-    rot_x_spin = new QDoubleSpinBox();
-    rot_x_spin->setRange(-180, 180);
-    rot_x_spin->setDecimals(1);
-    rot_x_spin->setMaximumWidth(80);
-    connect(rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(rot_x_slider) { QSignalBlocker b(rot_x_slider); rot_x_slider->setValue((int)std::lround(value)); }
-        ApplyRotationComponent(0, value);
-    });
-    rotation_layout->addWidget(rot_x_spin, 0, 2);
-
-    rotation_layout->addWidget(new QLabel("Rotation Y:"), 1, 0);
-
-    rot_y_slider = new QSlider(Qt::Horizontal);
-    rot_y_slider->setRange(-180, 180);
-    rot_y_slider->setValue(0);
-    connect(rot_y_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = (double)value;
-        if(rot_y_spin) { QSignalBlocker b(rot_y_spin); rot_y_spin->setValue(rot_value); }
-        ApplyRotationComponent(1, rot_value);
-    });
-    rotation_layout->addWidget(rot_y_slider, 1, 1);
-
-    rot_y_spin = new QDoubleSpinBox();
-    rot_y_spin->setRange(-180, 180);
-    rot_y_spin->setDecimals(1);
-    rot_y_spin->setMaximumWidth(80);
-    connect(rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(rot_y_slider) { QSignalBlocker b(rot_y_slider); rot_y_slider->setValue((int)std::lround(value)); }
-        ApplyRotationComponent(1, value);
-    });
-    rotation_layout->addWidget(rot_y_spin, 1, 2);
-
-    rotation_layout->addWidget(new QLabel("Rotation Z:"), 2, 0);
-
-    rot_z_slider = new QSlider(Qt::Horizontal);
-    rot_z_slider->setRange(-180, 180);
-    rot_z_slider->setValue(0);
-    connect(rot_z_slider, &QSlider::valueChanged, [this](int value) {
-        double rot_value = (double)value;
-        if(rot_z_spin) { QSignalBlocker b(rot_z_spin); rot_z_spin->setValue(rot_value); }
-        ApplyRotationComponent(2, rot_value);
-    });
-    rotation_layout->addWidget(rot_z_slider, 2, 1);
-
-    rot_z_spin = new QDoubleSpinBox();
-    rot_z_spin->setRange(-180, 180);
-    rot_z_spin->setDecimals(1);
-    rot_z_spin->setMaximumWidth(80);
-    connect(rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double value) {
-        if(rot_z_slider) { QSignalBlocker b(rot_z_slider); rot_z_slider->setValue((int)std::lround(value)); }
-        ApplyRotationComponent(2, value);
-    });
-    rotation_layout->addWidget(rot_z_spin, 2, 2);
+    add_rotation_row(0, "Rotation X:", rot_x_slider, rot_x_spin, 0);
+    add_rotation_row(1, "Rotation Y:", rot_y_slider, rot_y_spin, 1);
+    add_rotation_row(2, "Rotation Z:", rot_z_slider, rot_z_spin, 2);
 
     rotation_layout->setColumnStretch(1, 1);
 
@@ -923,8 +788,17 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     transform_tab->setLayout(transform_layout);
 
-    settings_tabs->addTab(transform_tab, "Position & Rotation");
-    settings_tabs->addTab(grid_settings_tab, "Grid Settings");
+    auto wrap_tab_in_scroll = [](QWidget* content) {
+        QScrollArea* sa = new QScrollArea();
+        sa->setWidget(content);
+        sa->setWidgetResizable(true);
+        sa->setFrameShape(QFrame::NoFrame);
+        sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        return sa;
+    };
+
+    settings_tabs->addTab(wrap_tab_in_scroll(transform_tab), "Position & Rotation");
+    settings_tabs->addTab(wrap_tab_in_scroll(grid_settings_tab), "Grid Settings");
 
     // Object Creator Tab (Custom Controllers, Ref Points, Displays)
     QWidget* object_creator_tab = new QWidget();
@@ -1222,7 +1096,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     object_type_combo->setCurrentIndex(0);
 
     object_creator_tab->setLayout(creator_layout);
-    settings_tabs->addTab(object_creator_tab, "Object Creator");
+    settings_tabs->addTab(wrap_tab_in_scroll(object_creator_tab), "Object Creator");
 
     LoadMonitorPresets();
 
@@ -1232,8 +1106,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Unified Profiles Tab (Layout + Effect profiles)
     SetupProfilesTab(settings_tabs);
 
-    settings_tabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    settings_tabs->setMaximumHeight(260);
+    // Let tab area size to content: minimum height so content isn't squashed, no max so it can grow
+    const int kSettingsTabsMinHeight = 320;
+    settings_tabs->setMinimumHeight(kSettingsTabsMinHeight);
+    settings_tabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     middle_panel->addWidget(settings_tabs, 0, Qt::AlignTop);
 
     main_layout->addLayout(middle_panel, 3);  // Give middle panel more space

@@ -84,7 +84,7 @@ void OpenRGB3DSpatialTab::LoadDevices()
 
     UpdateAvailableControllersList();
 
-    viewport->SetControllerTransforms(&controller_transforms);
+    if(viewport) viewport->SetControllerTransforms(&controller_transforms);
     RefreshHiddenControllerStates();
 }
 
@@ -371,64 +371,66 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
 
         ControllerTransform* ctrl = controller_transforms[transform_index].get();
 
-        // Block signals to prevent feedback loops
-        pos_x_spin->blockSignals(true);
-        pos_y_spin->blockSignals(true);
-        pos_z_spin->blockSignals(true);
-        rot_x_spin->blockSignals(true);
-        rot_y_spin->blockSignals(true);
-        rot_z_spin->blockSignals(true);
-        pos_x_slider->blockSignals(true);
-        pos_y_slider->blockSignals(true);
-        pos_z_slider->blockSignals(true);
-        rot_x_slider->blockSignals(true);
-        rot_y_slider->blockSignals(true);
-        rot_z_slider->blockSignals(true);
+        bool has_transform_ui = pos_x_spin && pos_y_spin && pos_z_spin && rot_x_spin && rot_y_spin && rot_z_spin
+            && pos_x_slider && pos_y_slider && pos_z_slider && rot_x_slider && rot_y_slider && rot_z_slider;
 
-        pos_x_spin->setValue(ctrl->transform.position.x);
-        pos_y_spin->setValue(ctrl->transform.position.y);
-        pos_z_spin->setValue(ctrl->transform.position.z);
-        rot_x_spin->setValue(ctrl->transform.rotation.x);
-        rot_y_spin->setValue(ctrl->transform.rotation.y);
-        rot_z_spin->setValue(ctrl->transform.rotation.z);
+        if(has_transform_ui)
+        {
+            pos_x_spin->blockSignals(true);
+            pos_y_spin->blockSignals(true);
+            pos_z_spin->blockSignals(true);
+            rot_x_spin->blockSignals(true);
+            rot_y_spin->blockSignals(true);
+            rot_z_spin->blockSignals(true);
+            pos_x_slider->blockSignals(true);
+            pos_y_slider->blockSignals(true);
+            pos_z_slider->blockSignals(true);
+            rot_x_slider->blockSignals(true);
+            rot_y_slider->blockSignals(true);
+            rot_z_slider->blockSignals(true);
 
-        pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
-        float constrained_y = std::max(ctrl->transform.position.y, (float)0.0f);
-        pos_y_slider->setValue((int)(constrained_y * 10));
-        pos_z_slider->setValue((int)(ctrl->transform.position.z * 10));
-        rot_x_slider->setValue((int)(ctrl->transform.rotation.x));
-        rot_y_slider->setValue((int)(ctrl->transform.rotation.y));
-        rot_z_slider->setValue((int)(ctrl->transform.rotation.z));
+            pos_x_spin->setValue(ctrl->transform.position.x);
+            pos_y_spin->setValue(ctrl->transform.position.y);
+            pos_z_spin->setValue(ctrl->transform.position.z);
+            rot_x_spin->setValue(ctrl->transform.rotation.x);
+            rot_y_spin->setValue(ctrl->transform.rotation.y);
+            rot_z_spin->setValue(ctrl->transform.rotation.z);
 
-        // Unblock signals
-        pos_x_spin->blockSignals(false);
-        pos_y_spin->blockSignals(false);
-        pos_z_spin->blockSignals(false);
-        rot_x_spin->blockSignals(false);
-        rot_y_spin->blockSignals(false);
-        rot_z_spin->blockSignals(false);
-        pos_x_slider->blockSignals(false);
-        pos_y_slider->blockSignals(false);
-        pos_z_slider->blockSignals(false);
-        rot_x_slider->blockSignals(false);
-        rot_y_slider->blockSignals(false);
-        rot_z_slider->blockSignals(false);
+            pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
+            float constrained_y = std::max(ctrl->transform.position.y, (float)0.0f);
+            pos_y_slider->setValue((int)(constrained_y * 10));
+            pos_z_slider->setValue((int)(ctrl->transform.position.z * 10));
+            rot_x_slider->setValue((int)(ctrl->transform.rotation.x));
+            rot_y_slider->setValue((int)(ctrl->transform.rotation.y));
+            rot_z_slider->setValue((int)(ctrl->transform.rotation.z));
 
-        // Clear reference point selection when controller is selected
+            pos_x_spin->blockSignals(false);
+            pos_y_spin->blockSignals(false);
+            pos_z_spin->blockSignals(false);
+            rot_x_spin->blockSignals(false);
+            rot_y_spin->blockSignals(false);
+            rot_z_spin->blockSignals(false);
+            pos_x_slider->blockSignals(false);
+            pos_y_slider->blockSignals(false);
+            pos_z_slider->blockSignals(false);
+            rot_x_slider->blockSignals(false);
+            rot_y_slider->blockSignals(false);
+            rot_z_slider->blockSignals(false);
+
+            rot_x_slider->setEnabled(true);
+            rot_y_slider->setEnabled(true);
+            rot_z_slider->setEnabled(true);
+            rot_x_spin->setEnabled(true);
+            rot_y_spin->setEnabled(true);
+            rot_z_spin->setEnabled(true);
+        }
+
         if(reference_points_list)
         {
             reference_points_list->blockSignals(true);
             reference_points_list->clearSelection();
             reference_points_list->blockSignals(false);
         }
-
-        // Enable rotation controls - controllers have rotation
-        rot_x_slider->setEnabled(true);
-        rot_y_slider->setEnabled(true);
-        rot_z_slider->setEnabled(true);
-        rot_x_spin->setEnabled(true);
-        rot_y_spin->setEnabled(true);
-        rot_z_spin->setEnabled(true);
 
         // Update LED spacing controls
         if(edit_led_spacing_x_spin)
@@ -461,7 +463,19 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
     {
         if(controller_list) controller_list->setCurrentRow(-1);
 
-        // Disable LED spacing controls
+        if(pos_x_spin) pos_x_spin->setEnabled(false);
+        if(pos_y_spin) pos_y_spin->setEnabled(false);
+        if(pos_z_spin) pos_z_spin->setEnabled(false);
+        if(rot_x_spin) rot_x_spin->setEnabled(false);
+        if(rot_y_spin) rot_y_spin->setEnabled(false);
+        if(rot_z_spin) rot_z_spin->setEnabled(false);
+        if(pos_x_slider) pos_x_slider->setEnabled(false);
+        if(pos_y_slider) pos_y_slider->setEnabled(false);
+        if(pos_z_slider) pos_z_slider->setEnabled(false);
+        if(rot_x_slider) rot_x_slider->setEnabled(false);
+        if(rot_y_slider) rot_y_slider->setEnabled(false);
+        if(rot_z_slider) rot_z_slider->setEnabled(false);
+
         if(edit_led_spacing_x_spin) edit_led_spacing_x_spin->setEnabled(false);
         if(edit_led_spacing_y_spin) edit_led_spacing_y_spin->setEnabled(false);
         if(edit_led_spacing_z_spin) edit_led_spacing_z_spin->setEnabled(false);
@@ -668,7 +682,7 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 
 void OpenRGB3DSpatialTab::on_effect_updated()
 {
-    viewport->UpdateColors();
+    if(viewport) viewport->UpdateColors();
 }
 
 void OpenRGB3DSpatialTab::on_effect_timer_timeout()
@@ -828,7 +842,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, item_row)));
         controller_list->addItem(list_item);
 
-        viewport->update();
+        if(viewport) viewport->update();
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
 
@@ -856,8 +870,11 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane->GetId())));
         controller_list->addItem(list_item);
 
-        viewport->SelectDisplayPlane(plane_index);
-        viewport->update();
+        if(viewport)
+        {
+            viewport->SelectDisplayPlane(plane_index);
+            viewport->update();
+        }
         NotifyDisplayPlaneChanged();
         emit GridLayoutChanged();
         UpdateAvailableControllersList();
@@ -916,11 +933,10 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         controller_list->setCurrentRow(new_row);
         if(viewport)
         {
-            viewport->SelectController(new_row);
-        }
-
+            viewport->SelectController((int)controller_transforms.size() - 1);
             viewport->SetControllerTransforms(&controller_transforms);
-        viewport->update();
+            viewport->update();
+        }
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
         RefreshHiddenControllerStates();
@@ -1022,8 +1038,11 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     QListWidgetItem* item = new QListWidgetItem(name);
     controller_list->addItem(item);
 
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1054,7 +1073,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             reference_points[object_index]->SetVisible(false);
         }
         delete controller_list->takeItem(selected_row);
-        viewport->update();
+        if(viewport) viewport->update();
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
         RefreshHiddenControllerStates();
@@ -1080,7 +1099,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
                 }
             }
             delete controller_list->takeItem(selected_row);
-            viewport->update();
+            if(viewport) viewport->update();
             NotifyDisplayPlaneChanged();
             emit GridLayoutChanged();
             UpdateDisplayPlanesList();  // Update the display planes list to reflect visibility change
@@ -1102,8 +1121,11 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
 
     delete controller_list->takeItem(selected_row);
 
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1124,8 +1146,11 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
         delete controller_list->takeItem(list_row);
     }
 
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1146,8 +1171,11 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     controller_transforms.clear();
     controller_list->clear();
 
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     NotifyDisplayPlaneChanged();
@@ -1177,9 +1205,11 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     // Mark world positions dirty so effects and viewport can recompute
     ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
 
-    // Update viewport
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
 }
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
@@ -1189,8 +1219,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     if(grid_y_spin) custom_grid_y = grid_y_spin->value();
     if(grid_z_spin) custom_grid_z = grid_z_spin->value();
 
-    // User position is now handled through reference points system
-
+    if(!layout_profiles_combo) return;
     bool ok;
     QString profile_name = QInputDialog::getText(this, "Save Layout Profile",
                                                  "Profile name:", QLineEdit::Normal,
@@ -1235,6 +1264,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
 
 void OpenRGB3DSpatialTab::on_load_layout_clicked()
 {
+    if(!layout_profiles_combo) return;
     QString profile_name = layout_profiles_combo->currentText();
 
     if(profile_name.isEmpty())
@@ -1259,6 +1289,7 @@ void OpenRGB3DSpatialTab::on_load_layout_clicked()
 
 void OpenRGB3DSpatialTab::on_delete_layout_clicked()
 {
+    if(!layout_profiles_combo) return;
     QString profile_name = layout_profiles_combo->currentText();
 
     if(profile_name.isEmpty())
@@ -1634,9 +1665,11 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
         SaveCustomControllers();
         UpdateAvailableControllersList();
 
-        // Refresh viewport so changes take effect immediately
-        viewport->SetControllerTransforms(&controller_transforms);
-        viewport->update();
+        if(viewport)
+        {
+            viewport->SetControllerTransforms(&controller_transforms);
+            viewport->update();
+        }
 
         QMessageBox::information(this, "Custom Controller Updated",
                                 QString("Custom controller '%1' updated successfully!")
@@ -2301,9 +2334,12 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
-    viewport->SetControllerTransforms(&controller_transforms);
-    viewport->SetReferencePoints(&reference_points);
-    viewport->update();
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->SetReferencePoints(&reference_points);
+        viewport->update();
+    }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -2370,6 +2406,7 @@ std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
 
 void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
 {
+    if(!layout_profiles_combo) return;
     QString current_text = layout_profiles_combo->currentText();
 
     layout_profiles_combo->blockSignals(true);

@@ -100,8 +100,7 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
             }
         }
 
-        // Update UIUpdateEffectStackList();
-        if(!effect_stack.empty())
+        if(!effect_stack.empty() && effect_stack_list)
         {
             effect_stack_list->setCurrentRow(0);
         }

@@ -14,7 +14,7 @@
 // Zone Management
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
-    // Prompt for zone name
+    if(!zone_manager) return;
     bool ok;
     QString zone_name = QInputDialog::getText(this, "Create Zone",
                                               "Zone name:", QLineEdit::Normal,
@@ -112,6 +112,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
 void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 {
+    if(!zones_list || !zone_manager) return;
     int selected_idx = zones_list->currentRow();
     if(selected_idx < 0 || selected_idx >= zone_manager->GetZoneCount())
     {
@@ -201,6 +202,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
 void OpenRGB3DSpatialTab::on_delete_zone_clicked()
 {
+    if(!zones_list || !zone_manager) return;
     int selected_idx = zones_list->currentRow();
     if(selected_idx < 0 || selected_idx >= zone_manager->GetZoneCount())
     {
@@ -231,9 +233,10 @@ void OpenRGB3DSpatialTab::on_delete_zone_clicked()
 
 void OpenRGB3DSpatialTab::on_zone_selected(int index)
 {
+    if(!zone_manager) return;
     bool has_selection = (index >= 0 && index < zone_manager->GetZoneCount());
-    edit_zone_button->setEnabled(has_selection);
-    delete_zone_button->setEnabled(has_selection);
+    if(edit_zone_button) edit_zone_button->setEnabled(has_selection);
+    if(delete_zone_button) delete_zone_button->setEnabled(has_selection);
 }
 
 void OpenRGB3DSpatialTab::UpdateZonesList()

@@ -180,6 +180,7 @@ void OpenRGB3DSpatialTab::on_save_stack_preset_clicked()
 
 void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
 {
+    if(!stack_presets_list) return;
     int current_row = stack_presets_list->currentRow();
 
     if(current_row < 0 || current_row >= (int)stack_presets.size())
@@ -206,8 +207,7 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
 
     // Update UIUpdateEffectStackList();
 
-    // Select first effect if any
-    if(!effect_stack.empty())
+    if(!effect_stack.empty() && effect_stack_list)
     {
         effect_stack_list->setCurrentRow(0);
     }
@@ -225,6 +225,7 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
 
 void OpenRGB3DSpatialTab::on_delete_stack_preset_clicked()
 {
+    if(!stack_presets_list) return;
     int current_row = stack_presets_list->currentRow();
 
     if(current_row < 0 || current_row >= (int)stack_presets.size())

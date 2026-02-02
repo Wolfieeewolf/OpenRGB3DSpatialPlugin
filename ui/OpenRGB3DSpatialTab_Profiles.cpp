@@ -3,6 +3,8 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include <QPalette>
+#include <QScrollArea>
+#include <QFrame>
 
 void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 {
@@ -129,6 +131,11 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     PopulateLayoutDropdown();
     PopulateEffectProfileDropdown();
 
-    // Add tab to main tab widget
-    tab_widget->insertTab(0, profiles_tab, "Profiles");
+    QScrollArea* profiles_scroll = new QScrollArea();
+    profiles_scroll->setWidget(profiles_tab);
+    profiles_scroll->setWidgetResizable(true);
+    profiles_scroll->setFrameShape(QFrame::NoFrame);
+    profiles_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    tab_widget->insertTab(0, profiles_scroll, "Profiles");
 }

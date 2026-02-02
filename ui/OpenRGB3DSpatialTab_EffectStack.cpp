@@ -109,6 +109,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
 {
+    if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
     if(current_row < 0 || current_row >= (int)effect_stack.size())
@@ -118,25 +119,25 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
         return;
     }
 
-    // Remove from vector
     effect_stack.erase(effect_stack.begin() + current_row);
-
-    // Update UI
     UpdateEffectStackList();
 
-    // Select next item (or previous if we removed the last one)
-    if(!effect_stack.empty())
+    if(effect_stack.empty())
+    {
+        effect_stack_list->setCurrentRow(-1);
+    }
+    else
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
     }
 
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
 {
+    if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
     if(current_row < 0 || current_row >= (int)effect_stack.size())
@@ -160,6 +161,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
 
 void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 {
+    if(!effect_stack_list) return;
     if(index < 0 || index >= (int)effect_stack.size())
     {
         if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(false);
@@ -279,18 +281,12 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 {
-    
-
+    if(!effect_stack_list || !stack_effect_type_combo) return;
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
-    {
-        
         return;
-    }
 
     EffectInstance3D* instance = effect_stack[current_row].get();
-
-    // Get selected effect type
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
 
@@ -330,11 +326,10 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 
 void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
 {
+    if(!effect_stack_list || !stack_effect_zone_combo) return;
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
-    {
         return;
-    }
 
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = stack_effect_zone_combo->currentData().toInt();
@@ -348,11 +343,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
 
 void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 {
-    if(!stack_effect_blend_combo)
-    {
-        return;
-    }
-
+    if(!stack_effect_blend_combo || !effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
     if(current_row < 0 || current_row >= (int)effect_stack.size())
     {
@@ -371,7 +362,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
 {
-    // Save current selection
+    if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
     // Block signals to prevent selection change
@@ -458,7 +449,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         if(instance->effect_class_name == "ScreenMirror3D")
         {
             ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
-            if(screen_mirror)
+            if(screen_mirror && viewport)
             {
                 connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                         viewport, &LEDViewport3D::SetShowScreenPreview);
