@@ -54,10 +54,11 @@ Lists and preset pickers use a **unified filter/sort pattern** so behaviour and 
 
 **Recommended: let GitHub create the tag and release for you** — no timezone or script issues.
 
+- **Version file**: The repo has a **PROJECT_VERSION** file in the root (one line: `YY.MM.DD.V`, e.g. `26.02.03.5`). The build and release workflows use it when present: qmake injects it into the plugin, and **Create release tag** (GitHub or `create-release-tag.ps1`) uses it for the tag. Update **PROJECT_VERSION** to the next release version before creating the tag so the version number is correct everywhere.
 - **Tag format**: `vYY.MM.DD.V` — YY=year, MM=month, DD=day, V=version (e.g. `v26.02.03.1` = 3 Feb 2026, first release that day).
-- **One-click from GitHub**: **Actions** → **Create release tag** → **Run workflow**. Leave **Release date** blank for today (UTC), or set it (e.g. `2026-02-03`). Leave **Version** at 0 to auto-increment. Click **Run workflow**. The workflow creates the tag on `master`, pushes it, and **Create Release** then builds and publishes the release. No local commands or manual tag needed.
+- **One-click from GitHub**: **Actions** → **Create release tag** → **Run workflow**. If **PROJECT_VERSION** exists, that version is used for the tag. Else leave **Release date** blank for today (UTC), or set it; leave **Version** at 0 to auto-increment. Click **Run workflow**. The workflow creates the tag, pushes it, and **Create Release** then builds and publishes the release.
 - **Manual release in GitHub**: Repo → **Releases** → **Draft a new release** → create tag (e.g. `v26.02.03.2`) and publish.
-- **Optional (CLI)**: From the repo root, `.\create-release-tag.ps1 -Date "YYYY-MM-DD"` then push the tag.
+- **Optional (CLI)**: From the repo root, `.\create-release-tag.ps1` (uses **PROJECT_VERSION** if present) or `.\create-release-tag.ps1 -Date "YYYY-MM-DD"` then push the tag.
 
 ## Building
 

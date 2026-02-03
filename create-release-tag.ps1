@@ -1,15 +1,43 @@
 # PowerShell script to create a release tag with correct format
 # Format: vYY.MM.DD.V (e.g. v26.02.03.1) — YY=year, MM=month, DD=day, V=version number
-# Without -Date: uses today in AUS Eastern. With -Date: use that date so the tag is correct regardless of timezone.
+# If PROJECT_VERSION file exists (one line: YY.MM.DD.V), that version is used for the tag. Else use -Date and -VersionNumber.
 # Usage: .\create-release-tag.ps1 [version_number] [commit_message]
 #        .\create-release-tag.ps1 -Date "2026-02-03" [version_number] [commit_message]
-# If version_number is 0 or not provided, auto-increments from existing tags for that date.
+# If version_number is 0 and no PROJECT_VERSION file, auto-increments from existing tags for that date.
 
 param(
     [string]$Date = "",
     [int]$VersionNumber = 0,
     [string]$Message = ""
 )
+
+# Prefer PROJECT_VERSION file in repo root (one line: YY.MM.DD.V)
+if (Test-Path "PROJECT_VERSION") {
+    $versionLine = (Get-Content "PROJECT_VERSION" -TotalCount 1).Trim()
+    if ($versionLine -match '^(\d{2})\.(\d{2})\.(\d{2})\.(\d+)$') {
+        $tagName = "v$versionLine"
+        Write-Host "Using PROJECT_VERSION: $tagName" -ForegroundColor Green
+        $existingTags = git tag | Select-String "^$tagName$"
+        if ($existingTags) {
+            Write-Host "ERROR: Tag $tagName already exists!" -ForegroundColor Red
+            exit 1
+        }
+        if ([string]::IsNullOrWhiteSpace($Message)) {
+            $Message = git log -1 --pretty=%B
+        }
+        git tag -a $tagName -m $Message
+        Write-Host "`nTag created locally. Push to remotes? (Y/N) - Pushing triggers auto-release" -ForegroundColor Yellow
+        $response = Read-Host
+        if ($response -eq "Y" -or $response -eq "y") {
+            git push origin $tagName
+            if (git remote | Select-String "^gitlab$") { git push gitlab $tagName }
+            Write-Host "Pushed $tagName" -ForegroundColor Green
+        } else {
+            Write-Host "Push manually: git push origin $tagName" -ForegroundColor Yellow
+        }
+        exit 0
+    }
+}
 
 # Resolve year, month, day: from -Date or from today in AUS Eastern
 if ([string]::IsNullOrWhiteSpace($Date)) {

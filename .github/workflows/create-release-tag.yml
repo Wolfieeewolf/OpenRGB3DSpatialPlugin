@@ -1,17 +1,17 @@
 # Create a release tag in format vYY.MM.DD.V and push it. Pushing the tag triggers "Create Release" (release.yml).
 # Run from GitHub: Actions → "Create release tag" → Run workflow.
-# Optional: set Release date (YYYY-MM-DD) or leave blank for today (UTC). Version 0 = auto-increment for that date.
+# If PROJECT_VERSION file exists (one line: YY.MM.DD.V), that version is used for the tag. Else use release_date + version (or auto-increment).
 name: Create release tag
 
 on:
   workflow_dispatch:
     inputs:
       release_date:
-        description: 'Release date (YYYY-MM-DD). Leave blank for today (UTC).'
+        description: 'Release date (YYYY-MM-DD). Leave blank for today (UTC). Ignored if PROJECT_VERSION exists.'
         required: false
         type: string
       version:
-        description: 'Version number (V). Use 0 to auto-increment from existing tags for that date.'
+        description: 'Version number (V). Use 0 to auto-increment. Ignored if PROJECT_VERSION exists.'
         required: false
         type: number
         default: 0
@@ -30,12 +30,22 @@ jobs:
       - name: Compute tag vYY.MM.DD.V
         id: tag
         run: |
+          # Prefer PROJECT_VERSION file in repo root (one line: YY.MM.DD.V)
+          if [ -f PROJECT_VERSION ]; then
+            VER=$(head -n1 PROJECT_VERSION | tr -d '\r\n' | tr -d ' ')
+            if echo "$VER" | grep -qE '^[0-9]{2}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$'; then
+              TAG="v${VER}"
+              echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+              echo "Using PROJECT_VERSION: ${TAG}"
+              exit 0
+            fi
+          fi
+          # Fallback: date + version (or auto-increment)
           if [ -n "${{ github.event.inputs.release_date }}" ]; then
             DATE="${{ github.event.inputs.release_date }}"
           else
             DATE=$(date -u +%Y-%m-%d)
           fi
-          # Parse YYYY-MM-DD -> YY, MM, DD
           YY=$(echo "$DATE" | cut -d'-' -f1 | sed 's/^..//')
           MM=$(echo "$DATE" | cut -d'-' -f2)
           DD=$(echo "$DATE" | cut -d'-' -f3)

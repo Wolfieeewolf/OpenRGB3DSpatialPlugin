@@ -1,6 +1,6 @@
 # Custom controller preset JSON format
 
-Preset files live in the **custom_controllers** folder (plugin config dir). Each preset is one `.json` file. Use **Add from preset** in the Object Creator to add them.
+Preset files live in the **controller_presets** folder (plugin config dir). Each preset is one `.json` file. Use **Add from preset** in the Object Creator to add them. Your saved custom controllers stay in **custom_controllers** (one file per controller); presets are templates in **controller_presets**.
 
 ## Matching (presets “just work”)
 
@@ -79,7 +79,9 @@ When you add this preset and have one matching Corsair SP120 RGB PRO, the custom
 ## Adding presets
 
 1. Create a custom controller in the plugin, assign LEDs, then **Export** it to a file.
-2. Copy the JSON into the preset folder: `.../OpenRGB/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers/`.
+2. Copy the JSON into the preset folder: `.../OpenRGB/plugins/settings/OpenRGB3DSpatialPlugin/controller_presets/` (one file per preset).
+
+The repo ships **ui/controller_presets/** with an example; copy that folder (or files) to the config path above to use it, or add your own preset files there.
 3. Edit the JSON: set `name` to a short label, add `category` (e.g. `"fans"`, `"mouses"`, `"cpu_cooler"`, `"motherboard"`), and for device-only names set `brand` and `model`.
 4. Use **Add from preset** in the Object Creator; filter by category if needed, select the preset, and add. Matching uses OpenRGB device name; virtual controller(s) use the naming rules above.
 

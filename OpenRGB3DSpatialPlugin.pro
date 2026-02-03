@@ -29,10 +29,18 @@ CONFIG +=                                                                       
 #-----------------------------------------------------------------------------------------------#
 # Date-based versioning: YY.MM.DD.V (e.g., 26.01.20.1)
 # Tags should be in format: v26.01.20.1
-# For development builds, version is extracted from the latest tag or uses today's date
+# Prefer PROJECT_VERSION file in repo root when present; else git describe; else today's date
 SHORTHASH   = $$system("git rev-parse --short=7 HEAD")
 
-# Try to get version from git describe
+# 1. Optional PROJECT_VERSION file (one line: YY.MM.DD.V, e.g. 26.02.03.5)
+exists(PROJECT_VERSION) {
+    win32: VERSION_FROM_FILE = $$system(powershell -NoProfile -Command "(Get-Content PROJECT_VERSION -TotalCount 1).Trim()")
+    else: VERSION_FROM_FILE = $$system(head -n1 PROJECT_VERSION 2>/dev/null | tr -d '\\n')
+    contains(VERSION_FROM_FILE, "\\."): VERSION_NUM = $$VERSION_FROM_FILE
+}
+
+# 2. Try to get version from git describe if no PROJECT_VERSION file
+isEmpty(VERSION_NUM) {
 # Format: v26.01.20.1 or v26.01.20.1-5-gabc1234
 GIT_DESCRIBE = $$system("git describe --tags --always 2>nul || git describe --tags --always 2>/dev/null || echo ''")
 !isEmpty(GIT_DESCRIBE) {
@@ -57,6 +65,7 @@ isEmpty(VERSION_NUM) {
     unix:DATE_MONTH = $$system(date +%m)
     unix:DATE_DAY = $$system(date +%d)
     VERSION_NUM = $$DATE_YEAR"."$$DATE_MONTH"."$$DATE_DAY".1"
+}
 }
 
 VERSION_STR = $$VERSION_NUM
@@ -205,6 +214,7 @@ SOURCES +=                                                                      
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/OpenRGB3DSpatialTab_Audio.cpp                                                            \
     ui/OpenRGB3DSpatialTab_ObjectCreator.cpp                                                    \
+    ui/OpenRGB3DSpatialTab_Presets.cpp                                                          \
     ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \

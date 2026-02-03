@@ -1,0 +1,24 @@
+{
+    "name": "Cooler",
+    "category": "cpu_cooler",
+    "brand": "AMD",
+    "model": "Wraith Prism",
+    "width": 2,
+    "height": 2,
+    "depth": 1,
+    "spacing_mm_x": 10,
+    "spacing_mm_y": 10,
+    "spacing_mm_z": 10,
+    "mappings": [
+        {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "controller_name": "AMD Wraith Prism",
+            "controller_location": "1:1",
+            "zone_idx": 0,
+            "led_idx": 0,
+            "granularity": 2
+        }
+    ]
+}

@@ -520,6 +520,8 @@ private:
         }
     };
 
+    static bool ParseMonitorPresetEntry(const nlohmann::json& entry, const QString& file_id, MonitorPreset& out_preset);
+
     std::vector<MonitorPreset> monitor_presets;
     QComboBox*      display_plane_monitor_combo = nullptr;
     QCompleter*     monitor_preset_completer = nullptr;

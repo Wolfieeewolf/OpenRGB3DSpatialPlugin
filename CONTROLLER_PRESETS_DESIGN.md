@@ -1,6 +1,6 @@
 # Custom controller presets – design note
 
-**Implemented:** “Add from preset” uses the **custom_controllers** folder (same as saved custom controllers). Presets are JSON files there. Preset format and naming are in [PRESET_JSON.md](PRESET_JSON.md). Matching uses OpenRGB controller name (and location) from the preset mappings, so presets "just work" for anyone with the same device—no setup. When brand and model are set, names are device-only; when not set (e.g. onboard LED), names use category + controller name + preset name. Previously we matched by OpenRGB controller name and named entries with the official device (e.g. “Corsair SP120 RGB PRO - Front Fan 1”, “2”, “3” for multiple fans).
+**Implemented:** “Add from preset” uses the **controller_presets** folder (one file per preset). Saved custom controllers use **custom_controllers** (one file per controller). Presets are JSON files in controller_presets. Preset format and naming are in [PRESET_JSON.md](PRESET_JSON.md). Matching uses OpenRGB controller name (and location) from the preset mappings, so presets "just work" for anyone with the same device—no setup. When brand and model are set, names are device-only; when not set (e.g. onboard LED), names use category + controller name + preset name. Previously we matched by OpenRGB controller name and named entries with the official device (e.g. “Corsair SP120 RGB PRO - Front Fan 1”, “2”, “3” for multiple fans).
 
 ## Is there an external list we could use?
 

@@ -11,6 +11,70 @@
 
 #include "VirtualController3D.h"
 #include "GridSpaceUtils.h"
+#include <cctype>
+#include <algorithm>
+
+namespace
+{
+std::string ToLower(const std::string& s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for(unsigned char c : s)
+        out += static_cast<char>(std::tolower(c));
+    return out;
+}
+
+bool ControllerNameMatches(const std::string& preset_name, const std::string& actual_name)
+{
+    if(preset_name.empty() || actual_name.empty())
+        return false;
+    std::string pa = ToLower(preset_name);
+    std::string ac = ToLower(actual_name);
+    if(pa == ac)
+        return true;
+    const size_t min_len = 15;
+    if(pa.size() >= min_len && ac.size() >= min_len)
+    {
+        if(pa.find(ac) != std::string::npos || ac.find(pa) != std::string::npos)
+            return true;
+    }
+    return false;
+}
+
+std::string ControllerSearchText(RGBController* c)
+{
+    std::string t;
+    if(!c->name.empty()) t += c->name + " ";
+    if(!c->description.empty()) t += c->description + " ";
+    if(!c->location.empty()) t += c->location + " ";
+    if(!c->vendor.empty()) t += c->vendor + " ";
+    if(!c->serial.empty()) t += c->serial + " ";
+    if(!c->version.empty()) t += c->version + " ";
+    t += device_type_to_str(c->type);
+    return ToLower(t);
+}
+
+bool ControllerMatchesPreset(RGBController* c, const std::string& ctrl_name, const std::string& ctrl_location,
+                             const std::string& preset_model, const std::string& preset_brand,
+                             const std::string& preset_brand_model, bool match_location)
+{
+    if(ControllerNameMatches(ctrl_name, c->name))
+        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+    if(match_location && !ctrl_location.empty() && c->location == ctrl_location)
+        return true;
+    std::string searchText = ControllerSearchText(c);
+    if(ctrl_name.size() >= 4 && searchText.find(ToLower(ctrl_name)) != std::string::npos)
+        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+    if(preset_brand_model.size() >= 4 && searchText.find(ToLower(preset_brand_model)) != std::string::npos)
+        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+    if(preset_model.size() >= 4 && searchText.find(ToLower(preset_model)) != std::string::npos)
+        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+    if(preset_brand.size() >= 2 && searchText.find(ToLower(preset_brand)) != std::string::npos)
+        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+    return false;
+}
+}
 
 VirtualController3D::VirtualController3D(const std::string& name,
                                          int width, int height, int depth,
@@ -124,20 +188,27 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
 
     std::vector<GridLEDMapping> mappings;
 
+    std::string preset_model = j.value("model", std::string());
+    std::string preset_brand = j.value("brand", std::string());
+    std::string preset_brand_model = preset_brand.empty() ? preset_model : preset_brand + " " + preset_model;
+
     json mappings_json = j["mappings"];
     for(unsigned int i = 0; i < mappings_json.size(); i++)
     {
         std::string ctrl_name = mappings_json[i]["controller_name"];
-        std::string ctrl_location = mappings_json[i]["controller_location"];
+        std::string ctrl_location = mappings_json[i].value("controller_location", std::string());
+        bool match_location = !ctrl_location.empty() && ctrl_location != "1:1";
 
         RGBController* found_controller = nullptr;
         for(unsigned int c = 0; c < controllers.size(); c++)
         {
-            if(controllers[c]->name == ctrl_name && controllers[c]->location == ctrl_location)
+            if(!ControllerMatchesPreset(controllers[c], ctrl_name, ctrl_location,
+                                        preset_model, preset_brand, preset_brand_model, match_location))
             {
-                found_controller = controllers[c];
-                break;
+                continue;
             }
+            found_controller = controllers[c];
+            break;
         }
 
         GridLEDMapping mapping;
