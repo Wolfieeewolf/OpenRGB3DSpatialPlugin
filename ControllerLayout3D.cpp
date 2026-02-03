@@ -23,6 +23,7 @@
 std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y)
 {
     std::vector<LEDPosition3D> positions;
+    if(!controller) return positions;
 
     unsigned int total_leds = 0;
     for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)

@@ -538,7 +538,8 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
     audio_effect_zone_combo->blockSignals(true);
     audio_effect_zone_combo->clear();
 
-    // Add "All Controllers" option with data -1audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
+    // Add "All Controllers" option with data -1
+    audio_effect_zone_combo->addItem("All Controllers", QVariant(-1));
 
     // Add all zones with their index as data
     if(zone_manager)
@@ -694,6 +695,7 @@ void OpenRGB3DSpatialTab::SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout)
 
 std::string OpenRGB3DSpatialTab::GetAudioCustomEffectsDir()
 {
+    if(!resource_manager) return std::string();
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "AudioCustomEffects";
     filesystem::create_directories(dir);
@@ -712,6 +714,7 @@ void OpenRGB3DSpatialTab::UpdateAudioCustomEffectsList()
     if(!audio_custom_list) return;
     audio_custom_list->clear();
     std::string dir = GetAudioCustomEffectsDir();
+    if(dir.empty()) return;
     for(filesystem::directory_iterator entry(dir); entry != filesystem::directory_iterator(); ++entry)
     {
         if(entry->path().extension() == ".json")

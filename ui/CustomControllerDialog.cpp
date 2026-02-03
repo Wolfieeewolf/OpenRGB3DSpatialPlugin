@@ -32,6 +32,7 @@ CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWi
 
 void CustomControllerDialog::SetupUI()
 {
+    if(!resource_manager) return;
     QVBoxLayout* main_layout = new QVBoxLayout(this);
 
     QHBoxLayout* name_layout = new QHBoxLayout();
@@ -273,6 +274,7 @@ void CustomControllerDialog::on_granularity_changed(int)
 
 void CustomControllerDialog::UpdateItemCombo()
 {
+    if(!resource_manager) return;
     // Preserve current selection where possible
     int prev_index = item_combo->currentIndex();
     int prev_data = item_combo->currentData().isValid() ? item_combo->currentData().toInt() : -9999;
@@ -749,6 +751,7 @@ void CustomControllerDialog::on_assign_clicked()
         return;
     }
 
+    if(!resource_manager) return;
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
     if(ctrl_idx >= (int)controllers.size()) return;
 

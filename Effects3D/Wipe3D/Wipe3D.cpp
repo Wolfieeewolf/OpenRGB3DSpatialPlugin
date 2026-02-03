@@ -251,7 +251,8 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         return 0x00000000;  // Black - outside effect boundary
     }
 
-    // Update progressprogress = fmod(CalculateProgress(time), 2.0f);
+    // Update progress
+    progress = fmod(CalculateProgress(time), 2.0f);
     if(progress > 1.0f) progress = 2.0f - progress;
 
     /*---------------------------------------------------------*\

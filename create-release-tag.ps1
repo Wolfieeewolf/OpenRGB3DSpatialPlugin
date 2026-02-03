@@ -1,20 +1,39 @@
 # PowerShell script to create a release tag with correct format
-# Format: vYY.MM.DD.version (e.g., v26.01.30.1)
-# Date is always today in Australian timezone (AUS Eastern Standard Time).
+# Format: vYY.MM.DD.version (e.g., v26.02.03.1)
+# Without -Date: uses today in AUS Eastern. With -Date: use that date so the tag is correct regardless of timezone.
 # Usage: .\create-release-tag.ps1 [version_number] [commit_message]
-# If version_number is 0 or not provided, auto-increments from existing tags for today
+#        .\create-release-tag.ps1 -Date "2026-02-03" [version_number] [commit_message]
+# If version_number is 0 or not provided, auto-increments from existing tags for that date.
 
 param(
+    [string]$Date = "",
     [int]$VersionNumber = 0,
     [string]$Message = ""
 )
 
-# Get current date in Australian timezone (AUS Eastern - Sydney/Melbourne)
-$tz = [TimeZoneInfo]::FindSystemTimeZoneById("AUS Eastern Standard Time")
-$date = [TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $tz)
-$year = $date.ToString("yy")
-$month = $date.ToString("MM")
-$day = $date.ToString("dd")
+# Resolve year, month, day: from -Date or from today in AUS Eastern
+if ([string]::IsNullOrWhiteSpace($Date)) {
+    $tz = [TimeZoneInfo]::FindSystemTimeZoneById("AUS Eastern Standard Time")
+    $dateObj = [TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $tz)
+    $year = $dateObj.ToString("yy")
+    $month = $dateObj.ToString("MM")
+    $day = $dateObj.ToString("dd")
+} else {
+    # -Date: accept YYYY-MM-DD or YY.MM.DD (e.g. 2026-02-03 or 26.02.03)
+    $Date = $Date.Trim()
+    if ($Date -match '^(\d{4})-(\d{2})-(\d{2})$') {
+        $year = $Matches[1].Substring(2, 2)
+        $month = $Matches[2]
+        $day = $Matches[3]
+    } elseif ($Date -match '^(\d{2})\.(\d{2})\.(\d{2})$') {
+        $year = $Matches[1]
+        $month = $Matches[2]
+        $day = $Matches[3]
+    } else {
+        Write-Host "ERROR: -Date must be YYYY-MM-DD (e.g. 2026-02-03) or YY.MM.DD (e.g. 26.02.03)" -ForegroundColor Red
+        exit 1
+    }
+}
 
 # Auto-increment version if not specified
 if ($VersionNumber -eq 0) {
@@ -40,7 +59,7 @@ $tagName = "v$year.$month.$day.$VersionNumber"
 $existingTags = git tag | Select-String "^$tagName$"
 if ($existingTags) {
     Write-Host "ERROR: Tag $tagName already exists!" -ForegroundColor Red
-    Write-Host "Existing tags for today:" -ForegroundColor Yellow
+    Write-Host "Existing tags for this date:" -ForegroundColor Yellow
     git tag | Select-String "^v$year\.$month\.$day\." | ForEach-Object { Write-Host "  $_" }
     exit 1
 }
@@ -53,7 +72,7 @@ if ([string]::IsNullOrWhiteSpace($Message)) {
 
 Write-Host "Creating tag: $tagName" -ForegroundColor Green
 if ($VersionNumber -eq 0 -or $VersionNumber -gt 1) {
-    Write-Host "Auto-incremented version number for today" -ForegroundColor Cyan
+    Write-Host "Auto-incremented version number for this date" -ForegroundColor Cyan
 }
 Write-Host "Message: $Message" -ForegroundColor Cyan
 

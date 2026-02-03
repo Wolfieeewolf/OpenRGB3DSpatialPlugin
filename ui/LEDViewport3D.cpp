@@ -285,6 +285,7 @@ void LEDViewport3D::UpdateGizmoPosition()
 void LEDViewport3D::NotifyControllerTransformChanged()
 {
     // Mark world positions as dirty for the selected controller
+    if(!controller_transforms) return;
     if(selected_controller_idx >= 0 && selected_controller_idx < (int)controller_transforms->size())
     {
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();

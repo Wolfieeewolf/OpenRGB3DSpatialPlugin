@@ -8,6 +8,7 @@
 
 std::string OpenRGB3DSpatialTab::GetEffectStackPath()
 {
+    if(!resource_manager) return std::string();
     filesystem::path config_dir  = resource_manager->GetConfigurationDirectory();
     filesystem::path plugin_dir  = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
     filesystem::path stack_file  = plugin_dir / "effect_stack.json";
@@ -21,6 +22,7 @@ std::string OpenRGB3DSpatialTab::GetEffectStackPath()
 void OpenRGB3DSpatialTab::SaveEffectStack()
 {
     std::string stack_file = GetEffectStackPath();
+    if(stack_file.empty()) return;
 
     nlohmann::json j;
     j["version"] = 1;
@@ -63,6 +65,7 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
 void OpenRGB3DSpatialTab::LoadEffectStack()
 {
     std::string stack_file = GetEffectStackPath();
+    if(stack_file.empty()) return;
     filesystem::path stack_path(stack_file);
 
     if(!filesystem::exists(stack_path))
@@ -84,7 +87,8 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
         file >> j;
         file.close();
 
-        // Clear current stackeffect_stack.clear();
+        // Clear current stack
+        effect_stack.clear();
 
         // Load effects from JSON
         if(j.contains("effects") && j["effects"].is_array())

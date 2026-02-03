@@ -19,7 +19,8 @@ nlohmann::json StackPreset3D::ToJson() const
 
     for(unsigned int i = 0; i < effect_instances.size(); i++)
     {
-        j["effects"].push_back(effect_instances[i]->ToJson());
+        if(effect_instances[i])
+            j["effects"].push_back(effect_instances[i]->ToJson());
     }
 
     return j;
@@ -60,6 +61,7 @@ std::unique_ptr<StackPreset3D> StackPreset3D::CreateFromStack(
     // Deep copy each effect instance
     for(unsigned int i = 0; i < stack.size(); i++)
     {
+        if(!stack[i]) continue;
         // Convert to JSON and back to create a deep copy
         nlohmann::json instance_json = stack[i]->ToJson();
         std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);

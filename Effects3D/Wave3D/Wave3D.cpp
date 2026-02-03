@@ -104,7 +104,8 @@ void Wave3D::OnWaveParameterChanged()
     // Update internal parameters
     if(shape_combo) shape_type = shape_combo->currentIndex();
 
-    // Emit parameter change signalemit ParametersChanged();
+    // Emit parameter change signal
+    emit ParametersChanged();
 }
 
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)

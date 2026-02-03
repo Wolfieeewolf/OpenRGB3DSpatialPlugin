@@ -207,38 +207,37 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     if(effect_zone_combo) effect_zone_combo->setEnabled(true);
 
     EffectInstance3D* instance = effect_stack[index].get();
+    if(!instance) return;
 
     QSignalBlocker type_blocker(stack_effect_type_combo ? stack_effect_type_combo : nullptr);
     QSignalBlocker zone_blocker(stack_effect_zone_combo ? stack_effect_zone_combo : nullptr);
     QSignalBlocker blend_blocker(stack_effect_blend_combo ? stack_effect_blend_combo : nullptr);
 
-    if(!instance->effect_class_name.empty())
+    if(stack_effect_type_combo)
     {
-        QString class_name = QString::fromStdString(instance->effect_class_name);
-        int type_index = stack_effect_type_combo->findData(class_name);
-        if(type_index >= 0)
+        if(!instance->effect_class_name.empty())
         {
-            stack_effect_type_combo->setCurrentIndex(type_index);
+            QString class_name = QString::fromStdString(instance->effect_class_name);
+            int type_index = stack_effect_type_combo->findData(class_name);
+            if(type_index >= 0)
+                stack_effect_type_combo->setCurrentIndex(type_index);
+            else
+                stack_effect_type_combo->setCurrentIndex(0);
         }
         else
         {
             stack_effect_type_combo->setCurrentIndex(0);
         }
     }
-    else
-    {
-        stack_effect_type_combo->setCurrentIndex(0);
-    }
 
     UpdateStackEffectZoneCombo();
-    int zone_index = stack_effect_zone_combo->findData(instance->zone_index);
-    if(zone_index >= 0)
+    if(stack_effect_zone_combo)
     {
-        stack_effect_zone_combo->setCurrentIndex(zone_index);
-    }
-    else
-    {
-        stack_effect_zone_combo->setCurrentIndex(0);
+        int zone_index = stack_effect_zone_combo->findData(instance->zone_index);
+        if(zone_index >= 0)
+            stack_effect_zone_combo->setCurrentIndex(zone_index);
+        else
+            stack_effect_zone_combo->setCurrentIndex(0);
     }
 
     if(stack_effect_blend_combo)

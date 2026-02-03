@@ -179,7 +179,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
 
-    // Initialize zone and effect combosUpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
+    // Initialize zone and effect combos
+    UpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
     UpdateEffectOriginCombo();      // Initialize Effects tab origin dropdown
     UpdateAudioEffectZoneCombo();   // Initialize Audio tab zone dropdown
     UpdateAudioEffectOriginCombo(); // Initialize Audio tab origin dropdown
@@ -1775,7 +1776,8 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         disconnect(stop_effect_button, nullptr, this, nullptr);
     }
 
-    // Reset effect UI pointers BEFORE deletioncurrent_effect_ui = nullptr;
+    // Reset effect UI pointers BEFORE deletion
+    current_effect_ui = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 

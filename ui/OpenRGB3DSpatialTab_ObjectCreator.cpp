@@ -90,6 +90,7 @@ void OpenRGB3DSpatialTab::LoadDevices()
 
 void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 {
+    if(!resource_manager) return;
     if(!available_controllers_list)
     {
         return;
@@ -1169,7 +1170,7 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     }
 
     controller_transforms.clear();
-    controller_list->clear();
+    if(controller_list) controller_list->clear();
 
     if(viewport)
     {
@@ -1231,6 +1232,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     }
 
     std::string layout_path = GetLayoutPath(profile_name.toStdString());
+    if(layout_path.empty()) return;
 
     // Check if profile already exists
     if(filesystem::exists(layout_path))
@@ -1274,6 +1276,7 @@ void OpenRGB3DSpatialTab::on_load_layout_clicked()
     }
 
     std::string layout_path = GetLayoutPath(profile_name.toStdString());
+    if(layout_path.empty()) return;
     QFileInfo check_file(QString::fromStdString(layout_path));
 
     if(!check_file.exists())
@@ -1305,6 +1308,7 @@ void OpenRGB3DSpatialTab::on_delete_layout_clicked()
     if(reply == QMessageBox::Yes)
     {
         std::string layout_path = GetLayoutPath(profile_name.toStdString());
+        if(layout_path.empty()) return;
         QFile file(QString::fromStdString(layout_path));
 
         if(file.remove())
@@ -1682,16 +1686,19 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 
     nlohmann::json layout_json;
 
-    // Header Informationlayout_json["format"] = "OpenRGB3DSpatialLayout";
+    // Header Information
+    layout_json["format"] = "OpenRGB3DSpatialLayout";
     layout_json["version"] = 6;
 
-    // Grid Settingslayout_json["grid"]["dimensions"]["x"] = custom_grid_x;
+    // Grid Settings
+    layout_json["grid"]["dimensions"]["x"] = custom_grid_x;
     layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
     layout_json["grid"]["dimensions"]["z"] = custom_grid_z;
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
-    // Room Dimensions (Manual room size settings)layout_json["room"]["use_manual_size"] = use_manual_room_size;
+    // Room Dimensions (Manual room size settings)
+    layout_json["room"]["use_manual_size"] = use_manual_room_size;
     layout_json["room"]["width"] = manual_room_width;
     layout_json["room"]["depth"] = manual_room_depth;
     layout_json["room"]["height"] = manual_room_height;
@@ -1744,7 +1751,8 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
             controller_json["led_mappings"].push_back(led_mapping);
         }
 
-        // Transformcontroller_json["transform"]["position"]["x"] = ct->transform.position.x;
+        // Transform
+        controller_json["transform"]["position"]["x"] = ct->transform.position.x;
         controller_json["transform"]["position"]["y"] = ct->transform.position.y;
         controller_json["transform"]["position"]["z"] = ct->transform.position.z;
 
@@ -1756,12 +1764,14 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["transform"]["scale"]["y"] = ct->transform.scale.y;
         controller_json["transform"]["scale"]["z"] = ct->transform.scale.z;
 
-        // LED Spacingcontroller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
+        // LED Spacing
+        controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
         controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
         controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
 
 
-        // Granularity (-1=virtual, 0=device, 1=zone, 2=LED)controller_json["granularity"] = ct->granularity;
+        // Granularity (-1=virtual, 0=device, 1=zone, 2=LED)
+        controller_json["granularity"] = ct->granularity;
         controller_json["item_idx"] = ct->item_idx;
 
         controller_json["display_color"] = ct->display_color;
@@ -1948,7 +1958,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
     }
 
-    // Clear existing controllerson_clear_all_clicked();
+    // Clear existing controllers
+    on_clear_all_clicked();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
@@ -2258,7 +2269,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     UpdateReferencePointsList();
 
-    // Load Display Planesdisplay_planes.clear();
+    // Load Display Planes
+    display_planes.clear();
     current_display_plane_index = -1;
     if(layout_json.contains("display_planes"))
     {
@@ -2392,6 +2404,7 @@ void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
 
 std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
 {
+    if(!resource_manager) return std::string();
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path plugins_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "layouts";
 
@@ -2406,7 +2419,7 @@ std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
 
 void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
 {
-    if(!layout_profiles_combo) return;
+    if(!resource_manager || !layout_profiles_combo) return;
     QString current_text = layout_profiles_combo->currentText();
 
     layout_profiles_combo->blockSignals(true);
@@ -2508,7 +2521,8 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     }
 
 
-    // Restore checkbox stateauto_load_checkbox->blockSignals(true);
+    // Restore checkbox state
+    auto_load_checkbox->blockSignals(true);
     auto_load_checkbox->setChecked(auto_load_enabled);
     auto_load_checkbox->blockSignals(false);
 
@@ -2528,6 +2542,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     if(auto_load_enabled && !saved_profile.empty())
     {
         std::string layout_path = GetLayoutPath(saved_profile);
+        if(layout_path.empty()) return;
         QFileInfo check_file(QString::fromStdString(layout_path));
 
         if(check_file.exists())
@@ -2536,11 +2551,13 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         }
     }
 
-    // Try to auto-load effect profile after layout loadsTryAutoLoadEffectProfile();
+    // Try to auto-load effect profile after layout loads
+    TryAutoLoadEffectProfile();
 }
 
 void OpenRGB3DSpatialTab::SaveCustomControllers()
 {
+    if(!resource_manager) return;
     std::string config_dir = resource_manager->GetConfigurationDirectory().string();
     std::string custom_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
 
@@ -2596,6 +2613,7 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
 
 void OpenRGB3DSpatialTab::LoadCustomControllers()
 {
+    if(!resource_manager) return;
     std::string config_dir = resource_manager->GetConfigurationDirectory().string();
     std::string custom_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
 

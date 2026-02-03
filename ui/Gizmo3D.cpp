@@ -1295,7 +1295,8 @@ void Gizmo3D::DrawFreeroamGizmo()
 {
     glDisable(GL_LIGHTING);
 
-    // Draw vertical stick for freeroam grab handleglLineWidth(5.0f);
+    // Draw vertical stick for freeroam grab handle
+    glLineWidth(5.0f);
 
     // Purple color for freeroam stick
     float purple[3] = {0.5f, 0.0f, 1.0f};

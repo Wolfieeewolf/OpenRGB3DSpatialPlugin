@@ -10,6 +10,7 @@
 
 std::string OpenRGB3DSpatialTab::GetStackPresetsPath()
 {
+    if(!resource_manager) return std::string();
     filesystem::path config_dir  = resource_manager->GetConfigurationDirectory();
     filesystem::path presets_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "StackPresets";
 
@@ -24,6 +25,7 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
     stack_presets.clear();
 
     std::string presets_dir = GetStackPresetsPath();
+    if(presets_dir.empty()) return;
     filesystem::path presets_path(presets_dir);
 
     if(!filesystem::exists(presets_path))
@@ -75,6 +77,7 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
 void OpenRGB3DSpatialTab::SaveStackPresets()
 {
     std::string presets_dir = GetStackPresetsPath();
+    if(presets_dir.empty()) return;
     filesystem::path presets_path(presets_dir);
 
     for(unsigned int i = 0; i < stack_presets.size(); i++)
@@ -155,7 +158,8 @@ void OpenRGB3DSpatialTab::on_save_stack_preset_clicked()
 
             if(reply == QMessageBox::Yes)
             {
-                // Remove old presetstack_presets.erase(stack_presets.begin() + i);
+                // Remove old preset
+                stack_presets.erase(stack_presets.begin() + i);
             }
             else
             {
@@ -169,9 +173,11 @@ void OpenRGB3DSpatialTab::on_save_stack_preset_clicked()
     std::unique_ptr<StackPreset3D> preset = StackPreset3D::CreateFromStack(preset_name, effect_stack);
     stack_presets.push_back(std::move(preset));
 
-    // Save to diskSaveStackPresets();
+    // Save to disk
+    SaveStackPresets();
 
-    // Update UIUpdateStackPresetsList();
+    // Update UI
+    UpdateStackPresetsList();
     UpdateEffectCombo();
 
     QMessageBox::information(this, "Success",
@@ -191,12 +197,15 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
     }
 
     StackPreset3D* preset = stack_presets[current_row].get();
+    if(!preset) return;
 
-    // Clear current stackeffect_stack.clear();
+    // Clear current stack
+    effect_stack.clear();
 
     // Load preset effects (deep copy)
     for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
     {
+        if(!preset->effect_instances[i]) continue;
         nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
         std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)
@@ -205,7 +214,8 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
         }
     }
 
-    // Update UIUpdateEffectStackList();
+    // Update UI
+    UpdateEffectStackList();
 
     if(!effect_stack.empty() && effect_stack_list)
     {
@@ -248,16 +258,20 @@ void OpenRGB3DSpatialTab::on_delete_stack_preset_clicked()
     }
 
     // Delete file
-    filesystem::path presets_path(GetStackPresetsPath());
+    std::string presets_dir = GetStackPresetsPath();
+    if(presets_dir.empty()) return;
+    filesystem::path presets_path(presets_dir);
     filesystem::path file_path = presets_path / (preset->name + ".stack.json");
     if(filesystem::exists(file_path))
     {
         filesystem::remove(file_path);
     }
 
-    // Remove from vectorstack_presets.erase(stack_presets.begin() + current_row);
+    // Remove from vector
+    stack_presets.erase(stack_presets.begin() + current_row);
 
-    // Update UIUpdateStackPresetsList();
+    // Update UI
+    UpdateStackPresetsList();
     UpdateEffectCombo();
 
     QMessageBox::information(this, "Success",
