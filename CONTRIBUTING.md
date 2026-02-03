@@ -35,13 +35,12 @@
 
 ## Releasing
 
-Use the **date-based release script** so the tag matches the expected format and CI can create the release:
+**Recommended: let GitHub create the tag and release for you** — no timezone or script issues.
 
-- **Tag format**: `vYY.MM.DD.version` (e.g. `v26.02.03.1` = 3 Feb 2026, first release that day).
-- **Create tag**: run `.\create-release-tag.ps1` from the repo root. Without `-Date`, the script uses **today in AUS Eastern** (Sydney/Melbourne). To avoid timezone mix-ups, pass the date explicitly: `.\create-release-tag.ps1 -Date "2026-02-03"` (YYYY-MM-DD) or `-Date "26.02.03"` (YY.MM.DD). Optionally pass `[version_number]` and `[commit_message]`; if version is omitted, it auto-increments from existing tags for that date.
-- **Push**: when the script prompts, answer `Y` to push the tag. Pushing the tag triggers the release workflow (GitHub Actions builds and creates the GitHub Release; GitLab is updated if configured).
-
-Do not create release tags manually; use the script (with `-Date` if your local timezone is not AUS Eastern) so the date and version are correct.
+- **Tag format**: `vYY.MM.DD.V` — YY=year, MM=month, DD=day, V=version (e.g. `v26.02.03.1` = 3 Feb 2026, first release that day).
+- **One-click from GitHub**: **Actions** → **Create release tag** → **Run workflow**. Leave **Release date** blank for today (UTC), or set it (e.g. `2026-02-03`). Leave **Version** at 0 to auto-increment. Click **Run workflow**. The workflow creates the tag on `master`, pushes it, and **Create Release** then builds and publishes the release. No local commands or manual tag needed.
+- **Manual release in GitHub**: Repo → **Releases** → **Draft a new release** → create tag (e.g. `v26.02.03.2`) and publish.
+- **Optional (CLI)**: From the repo root, `.\create-release-tag.ps1 -Date "YYYY-MM-DD"` then push the tag.
 
 ## Building
 

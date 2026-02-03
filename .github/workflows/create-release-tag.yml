@@ -1,0 +1,62 @@
+# Create a release tag in format vYY.MM.DD.V and push it. Pushing the tag triggers "Create Release" (release.yml).
+# Run from GitHub: Actions → "Create release tag" → Run workflow.
+# Optional: set Release date (YYYY-MM-DD) or leave blank for today (UTC). Version 0 = auto-increment for that date.
+name: Create release tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_date:
+        description: 'Release date (YYYY-MM-DD). Leave blank for today (UTC).'
+        required: false
+        type: string
+      version:
+        description: 'Version number (V). Use 0 to auto-increment from existing tags for that date.'
+        required: false
+        type: number
+        default: 0
+
+permissions:
+  contents: write
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute tag vYY.MM.DD.V
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.release_date }}" ]; then
+            DATE="${{ github.event.inputs.release_date }}"
+          else
+            DATE=$(date -u +%Y-%m-%d)
+          fi
+          # Parse YYYY-MM-DD -> YY, MM, DD
+          YY=$(echo "$DATE" | cut -d'-' -f1 | sed 's/^..//')
+          MM=$(echo "$DATE" | cut -d'-' -f2)
+          DD=$(echo "$DATE" | cut -d'-' -f3)
+          V="${{ github.event.inputs.version }}"
+          if [ "$V" = "0" ] || [ -z "$V" ]; then
+            EXISTING=$(git tag -l "v${YY}.${MM}.${DD}.*" 2>/dev/null | sed 's/.*\.//' | sort -n | tail -n1)
+            if [ -n "$EXISTING" ]; then
+              V=$((EXISTING + 1))
+            else
+              V=1
+            fi
+          fi
+          TAG="v${YY}.${MM}.${DD}.${V}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Created tag: ${TAG}"
+
+      - name: Create and push tag
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Pushed $TAG — Create Release workflow will run next."

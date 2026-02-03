@@ -1,5 +1,5 @@
 # PowerShell script to create a release tag with correct format
-# Format: vYY.MM.DD.version (e.g., v26.02.03.1)
+# Format: vYY.MM.DD.V (e.g. v26.02.03.1) — YY=year, MM=month, DD=day, V=version number
 # Without -Date: uses today in AUS Eastern. With -Date: use that date so the tag is correct regardless of timezone.
 # Usage: .\create-release-tag.ps1 [version_number] [commit_message]
 #        .\create-release-tag.ps1 -Date "2026-02-03" [version_number] [commit_message]

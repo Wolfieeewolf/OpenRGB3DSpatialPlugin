@@ -1,4 +1,4 @@
-# PowerShell script to create a release tag in the format YY.MM.DD.version
+# PowerShell script to create a release tag in the format YY.MM.DD.V
 # Date is always today in Australian timezone (AUS Eastern Standard Time).
 # Usage: .\scripts\create-release-tag.ps1 [version_number]
 # If version_number is not provided, it will auto-increment based on existing tags for today
@@ -54,5 +54,5 @@ if ($gitlabRemote) {
 }
 
 Write-Host "`nTag created and pushed successfully: $tagName" -ForegroundColor Green
-Write-Host "Format: YY.MM.DD.version (e.g., v26.01.30.1), date = Australian (AUS Eastern)" -ForegroundColor Cyan
+Write-Host "Format: YY.MM.DD.V (e.g. v26.02.03.1), date = Australian (AUS Eastern)" -ForegroundColor Cyan
 Write-Host "Auto-release runs on push: GitHub Actions and GitLab CI will build and create releases." -ForegroundColor Cyan
