@@ -22,6 +22,10 @@
 - `snake_case` for variables, `CamelCase` for types and functions.
 - Do not modify files under `OpenRGB/` (upstream submodule); only plugin-owned sources.
 
+## OpenRGB RGBController API
+
+The plugin consumes OpenRGB’s **RGBController** (device name, location, zones, LEDs, colors). When reading or writing controller/zone/LED data, follow the OpenRGB RGBController API: use `name` and `location` for device identity; use `zones[].start_idx` and zone LED counts for indices into `leds` and `colors`; colors are 32-bit `0x00BBGGRR`. Always guard controller pointers: custom controllers use `controller == nullptr` and `virtual_controller != nullptr`; physical controllers use `controller != nullptr`. Check `zone_idx < controller->zones.size()` and similar before indexing.
+
 ## UI correctness and null safety
 
 - **Connections**: Every signal that should drive UI or viewport behaviour is connected; no missing or duplicate connects.
@@ -56,12 +60,8 @@ The plugin is built with **Qt** (qmake) and **OpenRGB** as a submodule. Only plu
 
 ## Custom Controller UX
 
-Custom controller creation, editing, import/export, and 3D preview are documented in **CUSTOM_CONTROLLER_UI_PLAN.md**. Phases 1–3 (critical UX, polish, enhancements) are implemented. See that file for architecture, flow, and implementation status.
+Custom controller creation, editing, import/export, and 3D preview (Phases 1–3) are implemented in the Object Creator and CustomControllerDialog.
 
-## Custom Controller UX
+## Code audit
 
-Custom controller creation, editing, import/export, and 3D preview are documented in **CUSTOM_CONTROLLER_UI_PLAN.md**. Phases 1–3 (critical UX, polish, enhancements) are implemented. See that file for architecture, flow, and implementation status.
-
-## Cleanup checklist
-
-Use `CLEANUP_CHECKLIST.md` to audit files for DRY, KISS, SOLID, YAGNI, Tell Don't Ask, dead/debug code, comment bloat, **UI/links**, **null safety**, **layout**, and **clear/unstick** (clear on unselect, no stuck state when items removed). Mark items as done as you complete each pass. **Re-audit** already-checked files for the UI and null-safety criteria when doing Pass 2.
+When touching code, keep DRY, KISS, null safety, layout, and clear/unstick in mind: selection and viewport stay in sync, no stuck state when items are removed.
