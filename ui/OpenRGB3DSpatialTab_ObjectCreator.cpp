@@ -228,6 +228,11 @@ void OpenRGB3DSpatialTab::UpdateCustomControllersList()
     {
         custom_controllers_list->addItem(QString::fromStdString(virtual_controllers[i]->GetName()));
     }
+
+    if(custom_controllers_empty_label)
+    {
+        custom_controllers_empty_label->setVisible(custom_controllers_list->count() == 0);
+    }
 }
 
 int OpenRGB3DSpatialTab::FindAvailableControllerRow(int type_code, int object_index) const
@@ -808,6 +813,141 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
     }
 }
 
+bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_index)
+{
+    if(virtual_controller_index < 0 || virtual_controller_index >= (int)virtual_controllers.size())
+        return false;
+    VirtualController3D* virtual_ctrl = virtual_controllers[virtual_controller_index].get();
+    if(!virtual_ctrl) return false;
+
+    std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
+    ctrl_transform->controller = nullptr;
+    ctrl_transform->virtual_controller = virtual_ctrl;
+    ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f};
+    ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
+    ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+    ctrl_transform->hidden_by_virtual = false;
+    ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
+    ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
+    ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+    ctrl_transform->granularity = -1;
+    ctrl_transform->item_idx = -1;
+    ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
+    ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
+    int hue = (controller_transforms.size() * 137) % 360;
+    QColor color = QColor::fromHsv(hue, 200, 255);
+    ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+    ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
+    controller_transforms.push_back(std::move(ctrl_transform));
+    QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
+    QListWidgetItem* list_item = new QListWidgetItem(name);
+    controller_list->addItem(list_item);
+    controller_list->setCurrentRow(controller_list->count() - 1);
+    if(viewport)
+    {
+        viewport->SelectController((int)controller_transforms.size() - 1);
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
+    return true;
+}
+
+void OpenRGB3DSpatialTab::AddCustomControllerPreview(CustomControllerDialog* dialog)
+{
+    if(!dialog) return;
+
+    ClearCustomControllerPreview();
+
+    std::string name_str = dialog->GetControllerName().trimmed().toStdString();
+    if(name_str.empty()) name_str = "[Preview]";
+
+    std::vector<GridLEDMapping> mappings = dialog->GetLEDMappings();
+    int w = dialog->GetGridWidth();
+    int h = dialog->GetGridHeight();
+    int d = dialog->GetGridDepth();
+    float sx = dialog->GetSpacingX();
+    float sy = dialog->GetSpacingY();
+    float sz = dialog->GetSpacingZ();
+
+    preview_virtual_controller = std::make_unique<VirtualController3D>(
+        name_str, w, h, d, mappings, sx, sy, sz);
+
+    std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
+    ctrl_transform->controller = nullptr;
+    ctrl_transform->virtual_controller = preview_virtual_controller.get();
+    ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f};
+    ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
+    ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
+    ctrl_transform->hidden_by_virtual = false;
+    ctrl_transform->led_spacing_mm_x = sx;
+    ctrl_transform->led_spacing_mm_y = sy;
+    ctrl_transform->led_spacing_mm_z = sz;
+    ctrl_transform->granularity = -1;
+    ctrl_transform->item_idx = -1;
+    ctrl_transform->led_positions = preview_virtual_controller->GenerateLEDPositions(grid_scale_mm);
+    ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
+    int hue = (controller_transforms.size() * 137) % 360;
+    QColor color = QColor::fromHsv(hue, 200, 255);
+    ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
+    ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
+    controller_transforms.push_back(std::move(ctrl_transform));
+
+    QString name = QString("[Custom] ") + QString::fromStdString(name_str);
+    QListWidgetItem* list_item = new QListWidgetItem(name);
+    controller_list->addItem(list_item);
+    controller_list->setCurrentRow(controller_list->count() - 1);
+    if(viewport)
+    {
+        viewport->SelectController((int)controller_transforms.size() - 1);
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
+}
+
+void OpenRGB3DSpatialTab::ClearCustomControllerPreview()
+{
+    if(!preview_virtual_controller) return;
+
+    VirtualController3D* preview_ptr = preview_virtual_controller.get();
+    int remove_index = -1;
+    for(size_t i = 0; i < controller_transforms.size(); i++)
+    {
+        if(controller_transforms[i]->virtual_controller == preview_ptr)
+        {
+            remove_index = static_cast<int>(i);
+            break;
+        }
+    }
+    if(remove_index < 0)
+    {
+        preview_virtual_controller.reset();
+        return;
+    }
+
+    int list_row = TransformIndexToControllerListRow(remove_index);
+    if(controller_list && list_row >= 0)
+    {
+        delete controller_list->takeItem(list_row);
+    }
+    controller_transforms.erase(controller_transforms.begin() + remove_index);
+    preview_virtual_controller.reset();
+
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
+    UpdateAvailableControllersList();
+    UpdateAvailableItemCombo();
+    RefreshHiddenControllerStates();
+}
+
 void OpenRGB3DSpatialTab::on_add_clicked()
 {
     int granularity = granularity_combo->currentIndex();
@@ -825,6 +965,18 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     int item_row = data.second;
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+
+    // Handle Custom Controllers (-1) via helper
+    if(ctrl_idx == -1)
+    {
+        if(AddCustomControllerToScene(item_row))
+        {
+            QMessageBox::information(this, "Custom Controller Added",
+                QString("Custom controller '%1' added to 3D view!\n\nYou can now position and configure it.")
+                .arg(QString::fromStdString(virtual_controllers[item_row]->GetName())));
+        }
+        return;
+    }
 
     // Handle Reference Points (-2)
     if(ctrl_idx == -2)
@@ -884,62 +1036,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         QMessageBox::information(this, "Display Plane Added",
                                 QString("Display plane '%1' added to 3D view!\n\nYou can now position and configure it.")
                                 .arg(QString::fromStdString(plane->GetName())));
-        RefreshHiddenControllerStates();
-        return;
-    }
-
-    // Handle Custom Controllers (-1)
-    if(ctrl_idx == -1)
-    {
-        if(item_row >= (int)virtual_controllers.size())
-        {
-            return;
-        }
-
-        VirtualController3D* virtual_ctrl = virtual_controllers[item_row].get();
-
-        std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
-        ctrl_transform->controller = nullptr;
-        ctrl_transform->virtual_controller = virtual_ctrl;
-        ctrl_transform->transform.position = {-5.0f, 0.0f, -5.0f}; // Snapped to 0.5 grid
-        ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
-        ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
-        ctrl_transform->hidden_by_virtual = false;
-
-        // Set LED spacing from UI
-        ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
-        ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
-        ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
-
-        // Virtual controllers always use whole device granularity
-        ctrl_transform->granularity = -1;  // -1 = virtual controller
-        ctrl_transform->item_idx = -1;
-
-        ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
-        ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
-
-        int hue = (controller_transforms.size() * 137) % 360;
-        QColor color = QColor::fromHsv(hue, 200, 255);
-        ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
-
-        // Pre-compute world positions before adding to vector
-        ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
-
-        controller_transforms.push_back(std::move(ctrl_transform));
-
-        QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
-        QListWidgetItem* list_item = new QListWidgetItem(name);
-        controller_list->addItem(list_item);
-        int new_row = controller_list->count() - 1;
-        controller_list->setCurrentRow(new_row);
-        if(viewport)
-        {
-            viewport->SelectController((int)controller_transforms.size() - 1);
-            viewport->SetControllerTransforms(&controller_transforms);
-            viewport->update();
-        }
-        UpdateAvailableControllersList();
-        UpdateAvailableItemCombo();
         RefreshHiddenControllerStates();
         return;
     }
@@ -1332,34 +1428,108 @@ void OpenRGB3DSpatialTab::on_layout_profile_changed(int)
 void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 {
     CustomControllerDialog dialog(resource_manager, this);
+    connect(&dialog, &CustomControllerDialog::previewRequested, this, [this, &dialog]() { AddCustomControllerPreview(&dialog); });
+    connect(&dialog, &QDialog::finished, this, [this]() { ClearCustomControllerPreview(); });
 
-    if(dialog.exec() == QDialog::Accepted)
+    if(dialog.exec() != QDialog::Accepted)
+        return;
+
+    QString controller_name = dialog.GetControllerName();
+    std::string name_str = controller_name.toStdString();
+
+    int existing_index = -1;
+    for(size_t i = 0; i < virtual_controllers.size(); i++)
     {
-        QString controller_name = dialog.GetControllerName();
-        std::unique_ptr<VirtualController3D> virtual_ctrl = std::make_unique<VirtualController3D>(
-            controller_name.toStdString(),
-            dialog.GetGridWidth(),
-            dialog.GetGridHeight(),
-            dialog.GetGridDepth(),
-            dialog.GetLEDMappings(),
-            dialog.GetSpacingX(),
-            dialog.GetSpacingY(),
-            dialog.GetSpacingZ()
-        );
-
-        int new_index = (int)virtual_controllers.size();
-        virtual_controllers.push_back(std::move(virtual_ctrl));
-
-        SaveCustomControllers();
-        UpdateAvailableControllersList();
-        SelectAvailableControllerEntry(-1, new_index);
-
-        QMessageBox::information(this, "Custom Controller Created",
-                                QString("Custom controller '%1' created successfully!\n\nYou can now add it to the 3D view.")
-                                .arg(controller_name));
-        SetObjectCreatorStatus(QString("Custom controller '%1' saved. Select it from Available Controllers to add it to the scene.")
-                               .arg(controller_name));
+        if(virtual_controllers[i] && virtual_controllers[i]->GetName() == name_str)
+        {
+            existing_index = static_cast<int>(i);
+            break;
+        }
     }
+    if(existing_index >= 0)
+    {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, "Duplicate Name",
+            QString("A custom controller named '%1' already exists.\n\nReplace it?")
+                .arg(controller_name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if(reply != QMessageBox::Yes)
+        {
+            SetObjectCreatorStatus(QString("Create cancelled. Use a different name and try again."), true);
+            return;
+        }
+        VirtualController3D* to_remove = virtual_controllers[existing_index].get();
+        std::vector<int> transform_indices_to_remove;
+        for(size_t ti = 0; ti < controller_transforms.size(); ti++)
+        {
+            if(controller_transforms[ti] && controller_transforms[ti]->virtual_controller == to_remove)
+                transform_indices_to_remove.push_back(static_cast<int>(ti));
+        }
+        std::vector<int> row_for_transform(controller_transforms.size(), -1);
+        int transform_count = 0;
+        if(controller_list)
+        {
+            for(int row = 0; row < controller_list->count() && transform_count < (int)controller_transforms.size(); row++)
+            {
+                QListWidgetItem* list_item = controller_list->item(row);
+                if(list_item && !list_item->data(Qt::UserRole).isValid())
+                    row_for_transform[transform_count++] = row;
+            }
+        }
+        std::vector<int> rows_to_remove;
+        for(int ti : transform_indices_to_remove)
+        {
+            if(ti >= 0 && ti < (int)row_for_transform.size() && row_for_transform[ti] >= 0)
+                rows_to_remove.push_back(row_for_transform[ti]);
+        }
+        std::sort(rows_to_remove.begin(), rows_to_remove.end(), std::greater<int>());
+        for(int row : rows_to_remove)
+            delete controller_list->takeItem(row);
+        std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
+        for(int ti : transform_indices_to_remove)
+            controller_transforms.erase(controller_transforms.begin() + ti);
+        if(viewport)
+        {
+            viewport->SetControllerTransforms(&controller_transforms);
+            viewport->update();
+        }
+        virtual_controllers.erase(virtual_controllers.begin() + existing_index);
+        if(custom_controllers_list && existing_index < custom_controllers_list->count())
+            delete custom_controllers_list->takeItem(existing_index);
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+        RefreshHiddenControllerStates();
+    }
+
+    std::unique_ptr<VirtualController3D> virtual_ctrl = std::make_unique<VirtualController3D>(
+        name_str,
+        dialog.GetGridWidth(),
+        dialog.GetGridHeight(),
+        dialog.GetGridDepth(),
+        dialog.GetLEDMappings(),
+        dialog.GetSpacingX(),
+        dialog.GetSpacingY(),
+        dialog.GetSpacingZ()
+    );
+
+    int new_index = (int)virtual_controllers.size();
+    virtual_controllers.push_back(std::move(virtual_ctrl));
+
+    SaveCustomControllers();
+    UpdateCustomControllersList();
+    UpdateAvailableControllersList();
+    SelectAvailableControllerEntry(-1, new_index);
+
+    QMessageBox::StandardButton add_now = QMessageBox::question(this, "Custom Controller Created",
+        QString("Custom controller '%1' created successfully!\n\nAdd it to the 3D view now?")
+            .arg(controller_name),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    bool added = (add_now == QMessageBox::Yes && AddCustomControllerToScene(new_index));
+    if(added)
+        SetObjectCreatorStatus(QString("Custom controller '%1' added to 3D view. Position it in the scene.")
+            .arg(controller_name));
+    else
+        SetObjectCreatorStatus(QString("Custom controller '%1' saved. Add it from Available Controllers when ready.")
+            .arg(controller_name));
 }
 
 void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
@@ -1547,9 +1717,29 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                 }
             }
 
+            VirtualController3D* added = virtual_ctrl.get();
             virtual_controllers.push_back(std::move(virtual_ctrl));
             SaveCustomControllers();
             UpdateAvailableControllersList();
+
+            int unmatched = 0;
+            if(added)
+            {
+                const std::vector<GridLEDMapping>& maps = added->GetMappings();
+                for(size_t i = 0; i < maps.size(); i++)
+                {
+                    if(!maps[i].controller)
+                    {
+                        unmatched++;
+                    }
+                }
+            }
+            if(unmatched > 0)
+            {
+                QMessageBox::information(this, "Import Complete",
+                    QString("Custom controller imported.\n\n%1 mapping(s) could not be matched to current devices and will appear as \"Unknown device\" in the grid. You can reassign those cells or leave them as placeholders.")
+                    .arg(unmatched));
+            }
 
 
             QMessageBox::information(this, "Import Successful",
@@ -1557,11 +1747,11 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                                            "Grid: %2x%3x%4\n"
                                            "LEDs: %5\n\n"
                                            "You can now add it to the 3D view.")
-                                    .arg(QString::fromStdString(virtual_ctrl->GetName()))
-                                    .arg(virtual_ctrl->GetWidth())
-                                    .arg(virtual_ctrl->GetHeight())
-                                    .arg(virtual_ctrl->GetDepth())
-                                    .arg(virtual_ctrl->GetMappings().size()));
+                                    .arg(added ? QString::fromStdString(added->GetName()) : QString())
+                                    .arg(added ? added->GetWidth() : 0)
+                                    .arg(added ? added->GetHeight() : 0)
+                                    .arg(added ? added->GetDepth() : 0)
+                                    .arg(added ? (int)added->GetMappings().size() : 0));
         }
         else
         {
@@ -1605,10 +1795,79 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                                   virtual_ctrl->GetSpacingY(),
                                   virtual_ctrl->GetSpacingZ());
 
+    connect(&dialog, &CustomControllerDialog::previewRequested, this, [this, &dialog]() { AddCustomControllerPreview(&dialog); });
+    connect(&dialog, &QDialog::finished, this, [this]() { ClearCustomControllerPreview(); });
+
     if(dialog.exec() == QDialog::Accepted)
     {
         std::string old_name = virtual_ctrl->GetName();
         std::string new_name = dialog.GetControllerName().toStdString();
+
+        int other_index = -1;
+        for(size_t i = 0; i < virtual_controllers.size(); i++)
+        {
+            if((int)i != list_row && virtual_controllers[i] && virtual_controllers[i]->GetName() == new_name)
+            {
+                other_index = static_cast<int>(i);
+                break;
+            }
+        }
+        if(other_index >= 0)
+        {
+            QMessageBox::StandardButton reply = QMessageBox::question(this, "Duplicate Name",
+                QString("A custom controller named '%1' already exists.\n\nReplace it?")
+                    .arg(QString::fromStdString(new_name)),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if(reply != QMessageBox::Yes)
+            {
+                SetObjectCreatorStatus(QString("Edit cancelled. Use a different name and try again."), true);
+                return;
+            }
+            VirtualController3D* to_remove = virtual_controllers[other_index].get();
+            std::vector<int> transform_indices_to_remove;
+            for(size_t ti = 0; ti < controller_transforms.size(); ti++)
+            {
+                if(controller_transforms[ti] && controller_transforms[ti]->virtual_controller == to_remove)
+                    transform_indices_to_remove.push_back(static_cast<int>(ti));
+            }
+            std::vector<int> row_for_transform(controller_transforms.size(), -1);
+            int transform_count = 0;
+            if(controller_list)
+            {
+                for(int row = 0; row < controller_list->count() && transform_count < (int)controller_transforms.size(); row++)
+                {
+                    QListWidgetItem* list_item = controller_list->item(row);
+                    if(list_item && !list_item->data(Qt::UserRole).isValid())
+                        row_for_transform[transform_count++] = row;
+                }
+            }
+            std::vector<int> rows_to_remove;
+            for(int ti : transform_indices_to_remove)
+            {
+                if(ti >= 0 && ti < (int)row_for_transform.size() && row_for_transform[ti] >= 0)
+                    rows_to_remove.push_back(row_for_transform[ti]);
+            }
+            std::sort(rows_to_remove.begin(), rows_to_remove.end(), std::greater<int>());
+            for(int row : rows_to_remove)
+                delete controller_list->takeItem(row);
+            std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
+            for(int ti : transform_indices_to_remove)
+                controller_transforms.erase(controller_transforms.begin() + ti);
+            if(viewport)
+            {
+                viewport->SetControllerTransforms(&controller_transforms);
+                viewport->update();
+            }
+            virtual_controllers.erase(virtual_controllers.begin() + other_index);
+            if(custom_controllers_list && other_index < custom_controllers_list->count())
+                delete custom_controllers_list->takeItem(other_index);
+            if(other_index < list_row)
+                list_row--;
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
+            RefreshHiddenControllerStates();
+            virtual_ctrl = virtual_controllers[list_row].get();
+        }
 
         if(old_name != new_name)
         {
@@ -1679,6 +1938,101 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                                 QString("Custom controller '%1' updated successfully!")
                                 .arg(QString::fromStdString(virtual_controllers[list_row]->GetName())));
     }
+}
+
+void OpenRGB3DSpatialTab::on_delete_custom_controller_clicked()
+{
+    if(!custom_controllers_list) return;
+    int list_row = custom_controllers_list->currentRow();
+    if(list_row < 0)
+    {
+        QMessageBox::warning(this, "No Selection", "Please select a custom controller from the list to delete.");
+        return;
+    }
+    if(list_row >= (int)virtual_controllers.size())
+    {
+        QMessageBox::warning(this, "Invalid Selection", "Selected custom controller does not exist.");
+        return;
+    }
+
+    VirtualController3D* to_delete = virtual_controllers[list_row].get();
+    std::string name = to_delete->GetName();
+
+    std::vector<int> transform_indices_to_remove;
+    for(size_t ti = 0; ti < controller_transforms.size(); ti++)
+    {
+        if(controller_transforms[ti] && controller_transforms[ti]->virtual_controller == to_delete)
+        {
+            transform_indices_to_remove.push_back(static_cast<int>(ti));
+        }
+    }
+
+    if(!transform_indices_to_remove.empty())
+    {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, "Controller in 3D Scene",
+            QString("Custom controller '%1' is in the 3D scene.\n\nRemove it from the scene and delete from library?")
+                .arg(QString::fromStdString(name)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if(reply != QMessageBox::Yes)
+            return;
+
+        std::vector<int> row_for_transform(controller_transforms.size(), -1);
+        int transform_count = 0;
+        if(controller_list)
+        {
+            for(int row = 0; row < controller_list->count() && transform_count < (int)controller_transforms.size(); row++)
+            {
+                QListWidgetItem* list_item = controller_list->item(row);
+                if(list_item && !list_item->data(Qt::UserRole).isValid())
+                {
+                    row_for_transform[transform_count++] = row;
+                }
+            }
+        }
+        std::vector<int> rows_to_remove;
+        for(int ti : transform_indices_to_remove)
+        {
+            if(ti >= 0 && ti < (int)row_for_transform.size() && row_for_transform[ti] >= 0)
+                rows_to_remove.push_back(row_for_transform[ti]);
+        }
+        std::sort(rows_to_remove.begin(), rows_to_remove.end(), std::greater<int>());
+        for(int row : rows_to_remove)
+        {
+            delete controller_list->takeItem(row);
+        }
+        std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
+        for(int ti : transform_indices_to_remove)
+        {
+            controller_transforms.erase(controller_transforms.begin() + ti);
+        }
+        if(viewport)
+        {
+            viewport->SetControllerTransforms(&controller_transforms);
+            viewport->update();
+        }
+        UpdateAvailableControllersList();
+        UpdateAvailableItemCombo();
+        RefreshHiddenControllerStates();
+    }
+    else
+    {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, "Delete Custom Controller",
+            QString("Delete custom controller '%1' from library?").arg(QString::fromStdString(name)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if(reply != QMessageBox::Yes)
+            return;
+    }
+
+    virtual_controllers.erase(virtual_controllers.begin() + list_row);
+    if(custom_controllers_list)
+    {
+        delete custom_controllers_list->takeItem(list_row);
+    }
+    SaveCustomControllers();
+    UpdateCustomControllersList();
+    UpdateAvailableControllersList();
+    SetObjectCreatorStatus(QString("Custom controller '%1' deleted.").arg(QString::fromStdString(name)));
+    QMessageBox::information(this, "Deleted", QString("Custom controller '%1' removed from library.").arg(QString::fromStdString(name)));
 }
 
 void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
@@ -3344,6 +3698,11 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
     }
     
     display_planes_list->blockSignals(false);
+
+    if(display_planes_empty_label)
+    {
+        display_planes_empty_label->setVisible(display_planes_list->count() == 0);
+    }
 
     // Update remove button state - should be enabled if a plane is selected
     // This will be updated by RefreshDisplayPlaneDetails() below

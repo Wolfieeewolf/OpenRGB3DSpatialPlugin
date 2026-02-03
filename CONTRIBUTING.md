@@ -54,6 +54,14 @@ The plugin is built with **Qt** (qmake) and **OpenRGB** as a submodule. Only plu
 - **Qt Creator**: Open `OpenRGB3DSpatialPlugin.pro`, configure the kit (Qt + compiler), then build. Ensure the OpenRGB submodule is present.
 - **CI**: GitHub Actions (see `.github/workflows/build.yml` and `release.yml`) and GitLab CI build on push/tag; no local Qt required for release builds.
 
+## Custom Controller UX
+
+Custom controller creation, editing, import/export, and 3D preview are documented in **CUSTOM_CONTROLLER_UI_PLAN.md**. Phases 1–3 (critical UX, polish, enhancements) are implemented. See that file for architecture, flow, and implementation status.
+
+## Custom Controller UX
+
+Custom controller creation, editing, import/export, and 3D preview are documented in **CUSTOM_CONTROLLER_UI_PLAN.md**. Phases 1–3 (critical UX, polish, enhancements) are implemented. See that file for architecture, flow, and implementation status.
+
 ## Cleanup checklist
 
 Use `CLEANUP_CHECKLIST.md` to audit files for DRY, KISS, SOLID, YAGNI, Tell Don't Ask, dead/debug code, comment bloat, **UI/links**, **null safety**, **layout**, and **clear/unstick** (clear on unselect, no stuck state when items removed). Mark items as done as you complete each pass. **Re-audit** already-checked files for the UI and null-safety criteria when doing Pass 2.

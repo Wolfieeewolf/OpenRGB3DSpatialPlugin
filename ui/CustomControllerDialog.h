@@ -69,10 +69,17 @@ public:
     float GetSpacingY() const;
     float GetSpacingZ() const;
 
+signals:
+    /** Emitted when user clicks "Preview in 3D View"; caller should add current dialog state to viewport as a temporary transform. */
+    void previewRequested();
+
 private slots:
     void on_controller_selected(int index);
     void on_granularity_changed(int index);
+    void on_allow_reuse_toggled(bool checked);
     void on_grid_cell_clicked(int row, int column);
+    void on_grid_cell_double_clicked(int row, int column);
+    void on_grid_current_cell_changed(int current_row, int current_col, int, int);
     void on_layer_tab_changed(int index);
     void on_dimension_changed();
     void on_assign_clicked();
@@ -112,6 +119,7 @@ private:
     QLineEdit*      name_edit;
     QListWidget*    available_controllers;
     QComboBox*      granularity_combo;
+    QCheckBox*      allow_reuse_checkbox;
     QComboBox*      item_combo;
 
     QSpinBox*       width_spin;

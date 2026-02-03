@@ -2,6 +2,8 @@
 
 Use this list to audit each file against: **CONTRIBUTING.md**, **DRY**, **KISS**, **SOLID**, **YAGNI**, **Tell Don't Ask**, **UI/links**, **null safety**, **layout**, and **clear/unstick**. Remove debug/dead/legacy/deprecated code; keep comments minimal.
 
+**Feature completion:** Custom Controller UI (create/edit/import/export, preview, robustness) is fully implemented per **CUSTOM_CONTROLLER_UI_PLAN.md** (Phases 1–3 done). See that file for implementation status.
+
 **Per-file checks:** x = done, - = not done (needs audit), n/a = not applicable.
 
 **Columns:** **Links** = UI connections, selection sync, clear-selection handling (ui/ only; n/a elsewhere). **Null** = viewport/widget pointer use guarded. **Layout** = UI layout makes sense; no overlapping/squashed controls; tab content fits (ui/ only; n/a elsewhere). **Clear** = clear on unselect + no stuck state (e.g. effect detail UI closes when effect removed from stack; ui/ only; n/a elsewhere).

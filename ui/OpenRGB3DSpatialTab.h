@@ -91,6 +91,7 @@ private slots:
     void on_import_custom_controller_clicked();
     void on_export_custom_controller_clicked();
     void on_edit_custom_controller_clicked();
+    void on_delete_custom_controller_clicked();
     void on_add_ref_point_clicked();
     void on_remove_ref_point_clicked();
     void on_ref_point_selected(int index);
@@ -241,6 +242,7 @@ private:
 
     QListWidget*                available_controllers_list;
     QListWidget*                custom_controllers_list;
+    QLabel*                     custom_controllers_empty_label;
     QLabel*                     object_creator_status_label;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;
@@ -332,6 +334,7 @@ private:
 
     // Reference points
     QListWidget*                reference_points_list;
+    QLabel*                     ref_points_empty_label;
     QLineEdit*                  ref_point_name_edit;
     QComboBox*                  ref_point_type_combo;
     QPushButton*                ref_point_color_button;
@@ -347,6 +350,7 @@ private:
     QComboBox*                  effect_zone_combo;
 
     std::vector<std::unique_ptr<VirtualController3D>> virtual_controllers;
+    std::unique_ptr<VirtualController3D> preview_virtual_controller;
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
 
@@ -465,6 +469,7 @@ private:
     // Display planes
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     QListWidget*    display_planes_list = nullptr;
+    QLabel*         display_planes_empty_label = nullptr;
     QLineEdit*      display_plane_name_edit = nullptr;
     QDoubleSpinBox* display_plane_width_spin = nullptr;
     QDoubleSpinBox* display_plane_height_spin = nullptr;
@@ -487,6 +492,12 @@ private:
     void PopulateMonitorPresetCombo();
     int  FindAvailableControllerRow(int type_code, int object_index) const;
     void SelectAvailableControllerEntry(int type_code, int object_index);
+    /** Add a custom controller (by virtual_controllers index) to the 3D scene. Returns true if added. */
+    bool AddCustomControllerToScene(int virtual_controller_index);
+    /** Add a temporary preview of the current dialog state to the 3D viewport. Removed on ClearCustomControllerPreview(). */
+    void AddCustomControllerPreview(CustomControllerDialog* dialog);
+    /** Remove the temporary custom controller preview from the viewport, if any. */
+    void ClearCustomControllerPreview();
     void ClearMonitorPresetSelectionIfManualEdit();
 
     struct MonitorPreset

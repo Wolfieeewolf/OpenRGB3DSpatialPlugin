@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QIcon>
 #include <QPixmap>
+#include <QShortcut>
 #include <cmath>
 #include <algorithm>
 #include <climits>
@@ -34,55 +35,26 @@ void CustomControllerDialog::SetupUI()
 {
     if(!resource_manager) return;
     QVBoxLayout* main_layout = new QVBoxLayout(this);
+    main_layout->setSpacing(10);
 
+    QLabel* help_label = new QLabel(
+        "Step 1: Enter a name and set grid dimensions (width, height, depth) and LED spacing.\n"
+        "Step 2: Select a physical controller and an item (device/zone/LED), click a grid cell, then click \"Assign to Selected Cell\" or double-click the cell. Use the layer tabs for 3D depth.");
+    help_label->setWordWrap(true);
+    help_label->setStyleSheet("color: gray; font-size: small;");
+    help_label->setContentsMargins(0, 0, 0, 6);
+    main_layout->addWidget(help_label);
+
+    // Step 1: Name & Grid
+    QGroupBox* step1_group = new QGroupBox("Step 1: Name & Grid");
+    QVBoxLayout* step1_layout = new QVBoxLayout(step1_group);
     QHBoxLayout* name_layout = new QHBoxLayout();
     name_layout->addWidget(new QLabel("Controller Name:"));
     name_edit = new QLineEdit();
     name_edit->setPlaceholderText("Enter custom controller name");
     name_layout->addWidget(name_edit);
-    main_layout->addLayout(name_layout);
+    step1_layout->addLayout(name_layout);
 
-    QHBoxLayout* content_layout = new QHBoxLayout();
-
-    QGroupBox* left_group = new QGroupBox("Available Controllers");
-    QVBoxLayout* left_layout = new QVBoxLayout();
-
-    available_controllers = new QListWidget();
-    connect(available_controllers, &QListWidget::currentRowChanged, this, &CustomControllerDialog::on_controller_selected);
-    left_layout->addWidget(available_controllers);
-
-    QHBoxLayout* granularity_layout = new QHBoxLayout();
-    granularity_layout->addWidget(new QLabel("Select:"));
-    granularity_combo = new QComboBox();
-    granularity_combo->addItem("Whole Device");
-    granularity_combo->addItem("Zone");
-    granularity_combo->addItem("LED");
-    connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
-    granularity_layout->addWidget(granularity_combo);
-    left_layout->addLayout(granularity_layout);
-
-    item_combo = new QComboBox();
-    item_combo->setItemDelegate(new ColorComboDelegate(this));
-    left_layout->addWidget(item_combo);
-
-    assign_button = new QPushButton("Assign to Selected Cell");
-    connect(assign_button, &QPushButton::clicked, this, &CustomControllerDialog::on_assign_clicked);
-    left_layout->addWidget(assign_button);
-
-    clear_button = new QPushButton("Clear Selected Cell");
-    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
-    left_layout->addWidget(clear_button);
-
-    remove_from_grid_button = new QPushButton("Remove All LEDs from Grid");
-    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
-    left_layout->addWidget(remove_from_grid_button);
-
-    left_group->setLayout(left_layout);
-    content_layout->addWidget(left_group, 1);
-
-    QVBoxLayout* right_layout = new QVBoxLayout();
-
-    QGroupBox* dim_group = new QGroupBox("Grid Dimensions");
     QGridLayout* dim_layout = new QGridLayout();
     dim_layout->addWidget(new QLabel("Width:"), 0, 0);
     width_spin = new QSpinBox();
@@ -105,7 +77,6 @@ void CustomControllerDialog::SetupUI()
     connect(depth_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
     dim_layout->addWidget(depth_spin, 0, 5);
 
-    // LED Spacing Row
     dim_layout->addWidget(new QLabel("Spacing X:"), 1, 0);
     spacing_x_spin = new QDoubleSpinBox();
     spacing_x_spin->setRange(0.1, 1000.0);
@@ -127,8 +98,56 @@ void CustomControllerDialog::SetupUI()
     spacing_z_spin->setSuffix(" mm");
     dim_layout->addWidget(spacing_z_spin, 1, 5);
 
-    dim_group->setLayout(dim_layout);
-    right_layout->addWidget(dim_group);
+    step1_layout->addLayout(dim_layout);
+    main_layout->addWidget(step1_group);
+
+    // Step 2: Assign LEDs
+    QGroupBox* step2_group = new QGroupBox("Step 2: Assign LEDs");
+    QHBoxLayout* content_layout = new QHBoxLayout(step2_group);
+
+    QGroupBox* left_group = new QGroupBox("Available Controllers");
+    QVBoxLayout* left_layout = new QVBoxLayout();
+
+    available_controllers = new QListWidget();
+    connect(available_controllers, &QListWidget::currentRowChanged, this, &CustomControllerDialog::on_controller_selected);
+    left_layout->addWidget(available_controllers);
+
+    QHBoxLayout* granularity_layout = new QHBoxLayout();
+    granularity_layout->addWidget(new QLabel("Select:"));
+    granularity_combo = new QComboBox();
+    granularity_combo->addItem("Whole Device");
+    granularity_combo->addItem("Zone");
+    granularity_combo->addItem("LED");
+    connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
+    granularity_layout->addWidget(granularity_combo);
+    left_layout->addLayout(granularity_layout);
+
+    allow_reuse_checkbox = new QCheckBox("Allow reusing same zone/LED in multiple cells");
+    allow_reuse_checkbox->setChecked(false);
+    allow_reuse_checkbox->setToolTip("When checked, the same device/zone/LED can be assigned to multiple grid cells (e.g. for strips repeated in layout).");
+    connect(allow_reuse_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_allow_reuse_toggled);
+    left_layout->addWidget(allow_reuse_checkbox);
+
+    item_combo = new QComboBox();
+    item_combo->setItemDelegate(new ColorComboDelegate(this));
+    left_layout->addWidget(item_combo);
+
+    assign_button = new QPushButton("Assign to Selected Cell");
+    connect(assign_button, &QPushButton::clicked, this, &CustomControllerDialog::on_assign_clicked);
+    left_layout->addWidget(assign_button);
+
+    clear_button = new QPushButton("Clear Selected Cell");
+    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
+    left_layout->addWidget(clear_button);
+
+    remove_from_grid_button = new QPushButton("Remove All LEDs from Grid");
+    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
+    left_layout->addWidget(remove_from_grid_button);
+
+    left_group->setLayout(left_layout);
+    content_layout->addWidget(left_group, 1);
+
+    QVBoxLayout* right_layout = new QVBoxLayout();
 
     layer_tabs = new QTabWidget();
     connect(layer_tabs, SIGNAL(currentChanged(int)), this, SLOT(on_layer_tab_changed(int)));
@@ -141,9 +160,12 @@ void CustomControllerDialog::SetupUI()
     grid_table->setSelectionBehavior(QAbstractItemView::SelectItems);
     grid_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connect(grid_table, &QTableWidget::cellClicked, this, &CustomControllerDialog::on_grid_cell_clicked);
+    connect(grid_table, &QTableWidget::cellDoubleClicked, this, &CustomControllerDialog::on_grid_cell_double_clicked);
+    connect(grid_table, &QTableWidget::currentCellChanged, this, &CustomControllerDialog::on_grid_current_cell_changed);
 
     ApplyGridTableHeaderStyle();
     grid_table->setShowGrid(true);
+    grid_table->setMinimumHeight(220);
     first_tab_layout->addWidget(grid_table);
     layer_tabs->addTab(first_tab, "Layer 0");
     right_layout->addWidget(layer_tabs);
@@ -151,7 +173,7 @@ void CustomControllerDialog::SetupUI()
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
 
-        QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
+    QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
     QGridLayout* transform_grid = new QGridLayout();
 
     // Lock transform checkbox
@@ -232,14 +254,24 @@ void CustomControllerDialog::SetupUI()
     connect(apply_preview_button, &QPushButton::clicked, this, &CustomControllerDialog::on_apply_preview_remap_clicked);
     transform_grid->addWidget(apply_preview_button, 7, 0, 1, 4);
 
+    QLabel* transform_help = new QLabel("Lock freezes the current layout so effects keep flowing left-to-right; rotate or flip, then click Apply Preview Remap to commit.");
+    transform_help->setWordWrap(true);
+    transform_help->setStyleSheet("color: gray; font-size: small;");
+    transform_help->setContentsMargins(0, 4, 0, 0);
+    transform_grid->addWidget(transform_help, 8, 0, 1, 4);
+
     transform_group->setLayout(transform_grid);
     right_layout->addWidget(transform_group);
 
     content_layout->addLayout(right_layout, 2);
 
-    main_layout->addLayout(content_layout);
+    main_layout->addWidget(step2_group);
 
     QHBoxLayout* button_layout = new QHBoxLayout();
+    QPushButton* preview_button = new QPushButton("Preview in 3D View");
+    preview_button->setToolTip("Temporarily add the current grid to the 3D viewport to check scale and layout. Removed when you close the dialog.");
+    connect(preview_button, &QPushButton::clicked, this, [this]() { emit previewRequested(); });
+    button_layout->addWidget(preview_button);
     button_layout->addStretch();
     save_button = new QPushButton("Save Custom Controller");
     connect(save_button, &QPushButton::clicked, this, &CustomControllerDialog::on_save_clicked);
@@ -259,6 +291,13 @@ void CustomControllerDialog::SetupUI()
     connect(color_refresh_timer, &QTimer::timeout, this, &CustomControllerDialog::refresh_colors);
     color_refresh_timer->start(750);
 
+    QShortcut* save_shortcut = new QShortcut(QKeySequence::Save, this);
+    connect(save_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_save_clicked);
+    QShortcut* escape_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(escape_shortcut, &QShortcut::activated, this, &QDialog::reject);
+    QShortcut* delete_shortcut = new QShortcut(QKeySequence::Delete, this);
+    connect(delete_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_clear_cell_clicked);
+
     UpdateGridDisplay();
 }
 
@@ -268,6 +307,11 @@ void CustomControllerDialog::on_controller_selected(int)
 }
 
 void CustomControllerDialog::on_granularity_changed(int)
+{
+    UpdateItemCombo();
+}
+
+void CustomControllerDialog::on_allow_reuse_toggled(bool)
 {
     UpdateItemCombo();
 }
@@ -291,9 +335,11 @@ void CustomControllerDialog::UpdateItemCombo()
     if(!controller) return;
     int granularity = granularity_combo->currentIndex();
 
+    bool allow_reuse = allow_reuse_checkbox && allow_reuse_checkbox->isChecked();
+
     if(granularity == 0)
     {
-        if(!IsItemAssigned(controller, granularity, 0))
+        if(allow_reuse || !IsItemAssigned(controller, granularity, 0))
         {
             QColor color = GetItemColor(controller, granularity, 0);
             QPixmap pixmap(16, 16);
@@ -306,7 +352,7 @@ void CustomControllerDialog::UpdateItemCombo()
     {
         for(unsigned int i = 0; i < controller->zones.size(); i++)
         {
-            if(!IsItemAssigned(controller, granularity, i))
+            if(allow_reuse || !IsItemAssigned(controller, granularity, i))
             {
                 QColor color = GetItemColor(controller, granularity, i);
                 QPixmap pixmap(16, 16);
@@ -320,7 +366,7 @@ void CustomControllerDialog::UpdateItemCombo()
     {
         for(unsigned int i = 0; i < controller->leds.size(); i++)
         {
-            if(!IsItemAssigned(controller, granularity, i))
+            if(allow_reuse || !IsItemAssigned(controller, granularity, i))
             {
                 QColor color = GetItemColor(controller, granularity, i);
                 QPixmap pixmap(16, 16);
@@ -359,6 +405,21 @@ void CustomControllerDialog::on_grid_cell_clicked(int row, int column)
     UpdateGridColors();
 }
 
+void CustomControllerDialog::on_grid_cell_double_clicked(int row, int column)
+{
+    selected_row = row;
+    selected_col = column;
+    UpdateCellInfo();
+    on_assign_clicked();
+}
+
+void CustomControllerDialog::on_grid_current_cell_changed(int current_row, int current_col, int, int)
+{
+    selected_row = current_row;
+    selected_col = current_col;
+    UpdateCellInfo();
+}
+
 void CustomControllerDialog::on_layer_tab_changed(int index)
 {
     current_layer = index;
@@ -382,13 +443,63 @@ void CustomControllerDialog::on_layer_tab_changed(int index)
 
 void CustomControllerDialog::on_dimension_changed()
 {
-    if(current_layer >= depth_spin->value())
+    const int new_width = width_spin->value();
+    const int new_height = height_spin->value();
+    const int new_depth = depth_spin->value();
+
+    size_t removed = 0;
+    for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end(); )
     {
-        current_layer = depth_spin->value() - 1;
-        layer_tabs->setCurrentIndex(current_layer);
+        if(it->x >= new_width || it->y >= new_height || it->z >= new_depth)
+        {
+            it = led_mappings.erase(it);
+            removed++;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    if(transform_locked)
+    {
+        for(std::vector<GridLEDMapping>::iterator it = preview_led_mappings.begin(); it != preview_led_mappings.end(); )
+        {
+            if(it->x >= new_width || it->y >= new_height || it->z >= new_depth)
+            {
+                it = preview_led_mappings.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        for(std::vector<GridLEDMapping>::iterator it = original_led_mappings.begin(); it != original_led_mappings.end(); )
+        {
+            if(it->x >= new_width || it->y >= new_height || it->z >= new_depth)
+            {
+                it = original_led_mappings.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+    if(removed > 0)
+    {
+        QMessageBox::information(this, "Grid Resized",
+            QString("%1 mapping(s) were outside the new grid and were removed.").arg(static_cast<qlonglong>(removed)));
+    }
+
+    if(current_layer >= new_depth)
+    {
+        current_layer = new_depth - 1;
+        if(layer_tabs) layer_tabs->setCurrentIndex(current_layer);
     }
     RebuildLayerTabs();
     UpdateGridDisplay();
+    UpdateCellInfo();
+    UpdateItemCombo();
 }
 
 void CustomControllerDialog::RebuildLayerTabs()
@@ -494,7 +605,7 @@ void CustomControllerDialog::UpdateGridDisplay()
 
                     if(!mapping.controller)
                     {
-                        tooltip_text = "Invalid assignment";
+                        tooltip_text = "Unknown device (not found on this system)";
                     }
                     else if(mapping.granularity == 0)
                     {
@@ -541,7 +652,11 @@ void CustomControllerDialog::UpdateGridDisplay()
                     for(size_t i = 0; i < cell_mappings.size() && i < 5; i++) // Limit to 5 for readability
                     {
                         const GridLEDMapping& mapping = cell_mappings[i];
-                        if(!mapping.controller) continue;
+                        if(!mapping.controller)
+                        {
+                            tooltip_text += QString(QChar(0x2022)) + " Unknown device (not found on this system)\n";
+                            continue;
+                        }
 
                         QString assignment_type;
                         if(mapping.granularity == 0)
@@ -565,7 +680,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                             }
                         }
 
-                        tooltip_text += QString("â€¢ %1%2\n")
+                        tooltip_text += QString(QChar(0x2022)) + QString(" %1%2\n")
                                        .arg(QString::fromStdString(mapping.controller->name), assignment_type);
                     }
                     if(cell_mappings.size() > 5)
@@ -580,7 +695,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                 // Add indicator based on number of LEDs
                 if(cell_mappings.size() == 1)
                 {
-                    item->setText("â—");
+                    item->setText(QString(QChar(0x25CF)));
                 }
                 else
                 {
@@ -688,7 +803,7 @@ void CustomControllerDialog::UpdateCellInfo()
         const GridLEDMapping& mapping = cell_mappings[0];
         if(!mapping.controller)
         {
-            info += " - Invalid assignment";
+            info += " - Unknown device (not found on this system)";
         }
         else if(mapping.granularity == 0)
         {
@@ -978,6 +1093,52 @@ void CustomControllerDialog::on_save_clicked()
     {
         QMessageBox::warning(this, "No Name", "Please enter a name for the custom controller");
         return;
+    }
+
+    int w = width_spin->value();
+    int h = height_spin->value();
+    int d = depth_spin->value();
+    size_t removed = 0;
+
+    for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end(); )
+    {
+        if(it->x < 0 || it->x >= w || it->y < 0 || it->y >= h || it->z < 0 || it->z >= d)
+        {
+            it = led_mappings.erase(it);
+            removed++;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    for(std::vector<GridLEDMapping>::iterator it = preview_led_mappings.begin(); it != preview_led_mappings.end(); )
+    {
+        if(it->x < 0 || it->x >= w || it->y < 0 || it->y >= h || it->z < 0 || it->z >= d)
+        {
+            it = preview_led_mappings.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    for(std::vector<GridLEDMapping>::iterator it = original_led_mappings.begin(); it != original_led_mappings.end(); )
+    {
+        if(it->x < 0 || it->x >= w || it->y < 0 || it->y >= h || it->z < 0 || it->z >= d)
+        {
+            it = original_led_mappings.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if(removed > 0)
+    {
+        QMessageBox::information(this, "Mappings Cleaned",
+            QString("Some invalid mappings (outside current grid bounds) were removed."));
     }
 
     if(led_mappings.empty())

@@ -244,6 +244,11 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
         reference_points_list->addItem(item_text);
     }
 
+    if(ref_points_empty_label)
+    {
+        ref_points_empty_label->setVisible(reference_points_list->count() == 0);
+    }
+
     // Update effect origin combo whenever reference points change
     UpdateEffectOriginCombo();
     UpdateAudioEffectOriginCombo();

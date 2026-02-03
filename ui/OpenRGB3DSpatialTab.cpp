@@ -79,6 +79,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     object_creator_status_label = nullptr;
     controller_list = nullptr;
     reference_points_list = nullptr;
+    ref_points_empty_label = nullptr;
     display_planes_list = nullptr;
     display_plane_name_edit = nullptr;
     display_plane_width_spin = nullptr;
@@ -833,7 +834,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     // Page 0: Empty placeholder
     QWidget* empty_page = new QWidget();
     QVBoxLayout* empty_layout = new QVBoxLayout(empty_page);
-    QLabel* empty_label = new QLabel("Select an object type from the dropdown above to begin creating custom objects.");
+    QLabel* empty_label = new QLabel("Choose Custom Controller, Reference Point, or Display Plane above to create objects and add them to the 3D view.");
     empty_label->setWordWrap(true);
     empty_label->setContentsMargins(0, 6, 0, 6);
     empty_label->setForegroundRole(QPalette::PlaceholderText);
@@ -856,10 +857,23 @@ void OpenRGB3DSpatialTab::SetupUI()
     custom_list_label->setFont(custom_list_font);
     custom_layout->addWidget(custom_list_label);
 
+    QLabel* custom_subtitle = new QLabel("Create a grid of LEDs from your physical devices, then add it to the 3D view from the Available Controllers list.");
+    custom_subtitle->setWordWrap(true);
+    custom_subtitle->setStyleSheet("color: gray; font-size: small;");
+    custom_subtitle->setContentsMargins(0, 0, 0, 6);
+    custom_layout->addWidget(custom_subtitle);
+
     custom_controllers_list = new QListWidget();
     custom_controllers_list->setMinimumHeight(150);
     custom_controllers_list->setToolTip("Select a custom controller to edit or export");
     custom_layout->addWidget(custom_controllers_list);
+
+    custom_controllers_empty_label = new QLabel("No custom controllers yet. Create one or import from file.");
+    custom_controllers_empty_label->setWordWrap(true);
+    custom_controllers_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    custom_controllers_empty_label->setAlignment(Qt::AlignHCenter);
+    custom_controllers_empty_label->setContentsMargins(0, 8, 0, 8);
+    custom_layout->addWidget(custom_controllers_empty_label);
 
     QPushButton* custom_controller_button = new QPushButton("Create New Custom Controller");
     connect(custom_controller_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
@@ -881,6 +895,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
     custom_io_layout->addWidget(edit_button);
 
+    QPushButton* delete_custom_button = new QPushButton("Delete");
+    delete_custom_button->setToolTip("Remove selected custom controller from library (remove from 3D scene first if in use)");
+    connect(delete_custom_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_custom_controller_clicked);
+    custom_io_layout->addWidget(delete_custom_button);
+
     custom_layout->addLayout(custom_io_layout);
     custom_layout->addStretch();
 
@@ -891,10 +910,29 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* ref_points_layout = new QVBoxLayout(ref_point_page);
     ref_points_layout->setSpacing(4);
 
+    QLabel* ref_list_label = new QLabel("Reference Points:");
+    QFont ref_list_font = ref_list_label->font();
+    ref_list_font.setBold(true);
+    ref_list_label->setFont(ref_list_font);
+    ref_points_layout->addWidget(ref_list_label);
+
+    QLabel* ref_subtitle = new QLabel("Mark positions in the 3D room (e.g. monitor center). Add to the 3D view from Available Controllers.");
+    ref_subtitle->setWordWrap(true);
+    ref_subtitle->setStyleSheet("color: gray; font-size: small;");
+    ref_subtitle->setContentsMargins(0, 0, 0, 6);
+    ref_points_layout->addWidget(ref_subtitle);
+
     reference_points_list = new QListWidget();
     reference_points_list->setMinimumHeight(150);
     connect(reference_points_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_ref_point_selected);
     ref_points_layout->addWidget(reference_points_list);
+
+    ref_points_empty_label = new QLabel("No reference points yet. Click Add Reference Point to create one.");
+    ref_points_empty_label->setWordWrap(true);
+    ref_points_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    ref_points_empty_label->setAlignment(Qt::AlignHCenter);
+    ref_points_empty_label->setContentsMargins(0, 8, 0, 8);
+    ref_points_layout->addWidget(ref_points_empty_label);
 
     QHBoxLayout* name_layout = new QHBoxLayout();
     name_layout->addWidget(new QLabel("Name:"));
@@ -958,12 +996,31 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* display_layout = new QVBoxLayout(display_plane_page);
     display_layout->setSpacing(6);
 
+    QLabel* display_list_label = new QLabel("Display Planes:");
+    QFont display_list_font = display_list_label->font();
+    display_list_font.setBold(true);
+    display_list_label->setFont(display_list_font);
+    display_layout->addWidget(display_list_label);
+
+    QLabel* display_subtitle = new QLabel("Add virtual screens for Screen Mirror and other effects. Add to the 3D view from Available Controllers.");
+    display_subtitle->setWordWrap(true);
+    display_subtitle->setStyleSheet("color: gray; font-size: small;");
+    display_subtitle->setContentsMargins(0, 0, 0, 6);
+    display_layout->addWidget(display_subtitle);
+
     display_planes_list = new QListWidget();
     display_planes_list->setMinimumHeight(200);
     display_planes_list->setUniformItemSizes(true);
     display_planes_list->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     connect(display_planes_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_display_plane_selected);
     display_layout->addWidget(display_planes_list);
+
+    display_planes_empty_label = new QLabel("No display planes yet. Click Add Display to create one.");
+    display_planes_empty_label->setWordWrap(true);
+    display_planes_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    display_planes_empty_label->setAlignment(Qt::AlignHCenter);
+    display_planes_empty_label->setContentsMargins(0, 8, 0, 8);
+    display_layout->addWidget(display_planes_empty_label);
 
     QHBoxLayout* display_buttons = new QHBoxLayout();
     add_display_plane_button = new QPushButton("Add Display");

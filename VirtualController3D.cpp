@@ -42,12 +42,17 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
 
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
+        if(!led_mappings[i].controller)
+        {
+            continue;
+        }
+
         LEDPosition3D pos{};
         pos.controller = led_mappings[i].controller;
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
 
-        if(pos.controller && pos.zone_idx >= pos.controller->zones.size())
+        if(pos.zone_idx >= pos.controller->zones.size())
         {
             continue;
         }
@@ -85,8 +90,16 @@ json VirtualController3D::ToJson() const
         m["x"] = led_mappings[i].x;
         m["y"] = led_mappings[i].y;
         m["z"] = led_mappings[i].z;
-        m["controller_name"] = led_mappings[i].controller->name;
-        m["controller_location"] = led_mappings[i].controller->location;
+        if(led_mappings[i].controller)
+        {
+            m["controller_name"] = led_mappings[i].controller->name;
+            m["controller_location"] = led_mappings[i].controller->location;
+        }
+        else
+        {
+            m["controller_name"] = "Unknown (not found on this system)";
+            m["controller_location"] = "";
+        }
         m["zone_idx"] = led_mappings[i].zone_idx;
         m["led_idx"] = led_mappings[i].led_idx;
         m["granularity"] = led_mappings[i].granularity;
@@ -118,28 +131,24 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
         std::string ctrl_location = mappings_json[i]["controller_location"];
 
         RGBController* found_controller = nullptr;
-        for(unsigned int i = 0; i < controllers.size(); i++)
+        for(unsigned int c = 0; c < controllers.size(); c++)
         {
-            if(controllers[i]->name == ctrl_name && controllers[i]->location == ctrl_location)
+            if(controllers[c]->name == ctrl_name && controllers[c]->location == ctrl_location)
             {
-                found_controller = controllers[i];
+                found_controller = controllers[c];
                 break;
             }
         }
 
-        if(found_controller)
-        {
-            GridLEDMapping mapping;
-            mapping.x = mappings_json[i]["x"];
-            mapping.y = mappings_json[i]["y"];
-            mapping.z = mappings_json[i]["z"];
-            mapping.controller = found_controller;
-            mapping.zone_idx = mappings_json[i]["zone_idx"];
-            mapping.led_idx = mappings_json[i]["led_idx"];
-            // Load granularity (with default for older files)
-            mapping.granularity = mappings_json[i].contains("granularity") ? mappings_json[i]["granularity"].get<int>() : 2;
-            mappings.push_back(mapping);
-        }
+        GridLEDMapping mapping;
+        mapping.x = mappings_json[i]["x"];
+        mapping.y = mappings_json[i]["y"];
+        mapping.z = mappings_json[i]["z"];
+        mapping.controller = found_controller;
+        mapping.zone_idx = mappings_json[i]["zone_idx"];
+        mapping.led_idx = mappings_json[i]["led_idx"];
+        mapping.granularity = mappings_json[i].contains("granularity") ? mappings_json[i]["granularity"].get<int>() : 2;
+        mappings.push_back(mapping);
     }
 
     if(!mappings.empty())
