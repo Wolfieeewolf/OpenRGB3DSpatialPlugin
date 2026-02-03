@@ -12,6 +12,8 @@
 #include "SettingsManager.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <nlohmann/json.hpp>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -41,10 +43,95 @@ namespace
 {
 const char* kDefaultMonitorPresetJson = R"([
     {"id":"lg_27gp950","brand":"LG","model":"27GP950-B","width_mm":609.0,"height_mm":355.0},
+    {"id":"lg_34wk95u","brand":"LG","model":"34WK95U","width_mm":794.0,"height_mm":340.0},
     {"id":"dell_aw3423dw","brand":"Dell","model":"Alienware AW3423DW","width_mm":799.0,"height_mm":339.0},
     {"id":"asus_pg32uqx","brand":"ASUS","model":"ROG Swift PG32UQX","width_mm":715.0,"height_mm":403.0},
     {"id":"samsung_odyssey_g9","brand":"Samsung","model":"Odyssey G9","width_mm":1149.0,"height_mm":363.0},
-    {"id":"lg_c2_42","brand":"LG","model":"C2 42\" OLED","width_mm":932.0,"height_mm":532.0}
+    {"id":"lg_c2_42","brand":"LG","model":"C2 42\" OLED","width_mm":932.0,"height_mm":532.0},
+    {"id":"dell_s2721dgf","brand":"Dell","model":"S2721DGF","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_vg27aq","brand":"ASUS","model":"TUF VG27AQ","width_mm":597.0,"height_mm":336.0},
+    {"id":"lg_27gp850","brand":"LG","model":"27GP850-B","width_mm":597.0,"height_mm":336.0},
+    {"id":"dell_s3221qs","brand":"Dell","model":"S3221QS","width_mm":698.0,"height_mm":393.0},
+    {"id":"samsung_odyssey_g7_27","brand":"Samsung","model":"Odyssey G7 27\"","width_mm":597.0,"height_mm":336.0},
+    {"id":"gigabyte_m28u","brand":"Gigabyte","model":"M28U","width_mm":621.0,"height_mm":341.0},
+    {"id":"msi_optix_mag341cq","brand":"MSI","model":"Optix MAG341CQ","width_mm":799.0,"height_mm":334.0},
+    {"id":"acer_predator_x38","brand":"Acer","model":"Predator X38","width_mm":880.0,"height_mm":367.0},
+    {"id":"lg_27gr95qe","brand":"LG","model":"27GR95QE-B","width_mm":597.0,"height_mm":336.0},
+    {"id":"samsung_odyssey_g7_32","brand":"Samsung","model":"Odyssey G7 32\"","width_mm":698.0,"height_mm":393.0},
+    {"id":"samsung_odyssey_g8","brand":"Samsung","model":"Odyssey G8","width_mm":1149.0,"height_mm":363.0},
+    {"id":"samsung_odyssey_g6_27","brand":"Samsung","model":"Odyssey G6 27\"","width_mm":597.0,"height_mm":336.0},
+    {"id":"samsung_odyssey_g6_32","brand":"Samsung","model":"Odyssey G6 32\"","width_mm":698.0,"height_mm":393.0},
+    {"id":"dell_aw3821dw","brand":"Dell","model":"Alienware AW3821DW","width_mm":880.0,"height_mm":367.0},
+    {"id":"dell_s2722dgm","brand":"Dell","model":"S2722DGM","width_mm":597.0,"height_mm":336.0},
+    {"id":"dell_s3222dgm","brand":"Dell","model":"S3222DGM","width_mm":698.0,"height_mm":393.0},
+    {"id":"dell_u2722de","brand":"Dell","model":"U2722DE","width_mm":597.0,"height_mm":336.0},
+    {"id":"dell_u2723qe","brand":"Dell","model":"U2723QE","width_mm":597.0,"height_mm":336.0},
+    {"id":"dell_u3223qe","brand":"Dell","model":"U3223QE","width_mm":698.0,"height_mm":393.0},
+    {"id":"dell_p2722he","brand":"Dell","model":"P2722HE","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_rog_swift_pg27aqdm","brand":"ASUS","model":"ROG Swift PG27AQDM","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_rog_strix_xg27aq","brand":"ASUS","model":"ROG Strix XG27AQ","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_rog_swift_pg279qm","brand":"ASUS","model":"ROG Swift PG279QM","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_tuf_vg32vq","brand":"ASUS","model":"TUF VG32VQ","width_mm":698.0,"height_mm":393.0},
+    {"id":"asus_proart_pa278qv","brand":"ASUS","model":"ProArt PA278QV","width_mm":597.0,"height_mm":336.0},
+    {"id":"asus_rog_swift_pg34wqcdm","brand":"ASUS","model":"ROG Swift PG34WQCDM","width_mm":799.0,"height_mm":334.0},
+    {"id":"lg_27gn950","brand":"LG","model":"27GN950-B","width_mm":597.0,"height_mm":336.0},
+    {"id":"lg_32gq850","brand":"LG","model":"32GQ850-B","width_mm":698.0,"height_mm":393.0},
+    {"id":"lg_34gp83a","brand":"LG","model":"34GP83A-B","width_mm":799.0,"height_mm":334.0},
+    {"id":"lg_34wn80c","brand":"LG","model":"34WN80C-B","width_mm":799.0,"height_mm":334.0},
+    {"id":"lg_24gn650","brand":"LG","model":"24GN650-B","width_mm":531.0,"height_mm":299.0},
+    {"id":"lg_27uk850","brand":"LG","model":"27UK850-W","width_mm":597.0,"height_mm":336.0},
+    {"id":"acer_predator_x27","brand":"Acer","model":"Predator X27","width_mm":597.0,"height_mm":336.0},
+    {"id":"acer_predator_x28","brand":"Acer","model":"Predator X28","width_mm":621.0,"height_mm":341.0},
+    {"id":"acer_nitro_xv272u","brand":"Acer","model":"Nitro XV272U","width_mm":597.0,"height_mm":336.0},
+    {"id":"acer_predator_x34","brand":"Acer","model":"Predator X34","width_mm":799.0,"height_mm":334.0},
+    {"id":"acer_nitro_xz342cu","brand":"Acer","model":"Nitro XZ342CU","width_mm":799.0,"height_mm":334.0},
+    {"id":"msi_optix_mag274qrf","brand":"MSI","model":"Optix MAG274QRF","width_mm":597.0,"height_mm":336.0},
+    {"id":"msi_optix_mag321cqr","brand":"MSI","model":"Optix MAG321CQR","width_mm":698.0,"height_mm":393.0},
+    {"id":"msi_optix_mag342cqr","brand":"MSI","model":"Optix MAG342CQR","width_mm":799.0,"height_mm":334.0},
+    {"id":"msi_optix_g273qf","brand":"MSI","model":"Optix G273QF","width_mm":597.0,"height_mm":336.0},
+    {"id":"gigabyte_m27q","brand":"Gigabyte","model":"M27Q","width_mm":597.0,"height_mm":336.0},
+    {"id":"gigabyte_m32q","brand":"Gigabyte","model":"M32Q","width_mm":698.0,"height_mm":393.0},
+    {"id":"gigabyte_m34wq","brand":"Gigabyte","model":"M34WQ","width_mm":799.0,"height_mm":334.0},
+    {"id":"gigabyte_aorus_fi27q","brand":"Gigabyte","model":"AORUS FI27Q","width_mm":597.0,"height_mm":336.0},
+    {"id":"benq_ex2780q","brand":"BenQ","model":"EX2780Q","width_mm":597.0,"height_mm":336.0},
+    {"id":"benq_ew2780u","brand":"BenQ","model":"EW2780U","width_mm":597.0,"height_mm":336.0},
+    {"id":"benq_mobiuz_ex2710u","brand":"BenQ","model":"Mobiuz EX2710U","width_mm":597.0,"height_mm":336.0},
+    {"id":"benq_pd2700u","brand":"BenQ","model":"PD2700U","width_mm":597.0,"height_mm":336.0},
+    {"id":"aoc_cq27g2","brand":"AOC","model":"CQ27G2","width_mm":597.0,"height_mm":336.0},
+    {"id":"aoc_cu34g2x","brand":"AOC","model":"CU34G2X","width_mm":799.0,"height_mm":334.0},
+    {"id":"aoc_ag274qx","brand":"AOC","model":"AG274QX","width_mm":597.0,"height_mm":336.0},
+    {"id":"aoc_24g2","brand":"AOC","model":"24G2","width_mm":531.0,"height_mm":299.0},
+    {"id":"aoc_q27g2s","brand":"AOC","model":"Q27G2S","width_mm":597.0,"height_mm":336.0},
+    {"id":"hp_x27q","brand":"HP","model":"X27q","width_mm":597.0,"height_mm":336.0},
+    {"id":"hp_omen_27","brand":"HP","model":"Omen 27","width_mm":597.0,"height_mm":336.0},
+    {"id":"hp_z27k_g3","brand":"HP","model":"Z27k G3","width_mm":597.0,"height_mm":336.0},
+    {"id":"viewsonic_xg270qg","brand":"ViewSonic","model":"XG270QG","width_mm":597.0,"height_mm":336.0},
+    {"id":"viewsonic_elite_xg270","brand":"ViewSonic","model":"Elite XG270","width_mm":597.0,"height_mm":336.0},
+    {"id":"viewsonic_vx2758","brand":"ViewSonic","model":"VX2758-2KP-MHD","width_mm":597.0,"height_mm":336.0},
+    {"id":"corsair_xeneon_27","brand":"Corsair","model":"Xeneon 27","width_mm":597.0,"height_mm":336.0},
+    {"id":"corsair_xeneon_32","brand":"Corsair","model":"Xeneon 32","width_mm":698.0,"height_mm":393.0},
+    {"id":"lenovo_g27q_30","brand":"Lenovo","model":"G27q-30","width_mm":597.0,"height_mm":336.0},
+    {"id":"lenovo_legion_y27q_25","brand":"Lenovo","model":"Legion Y27q-25","width_mm":597.0,"height_mm":336.0},
+    {"id":"lenovo_legion_y32p_30","brand":"Lenovo","model":"Legion Y32p-30","width_mm":698.0,"height_mm":393.0},
+    {"id":"philips_275m1rz","brand":"Philips","model":"275M1RZ","width_mm":597.0,"height_mm":336.0},
+    {"id":"philips_328e1ca","brand":"Philips","model":"328E1CA","width_mm":698.0,"height_mm":393.0},
+    {"id":"philips_346p1crh","brand":"Philips","model":"346P1CRH","width_mm":799.0,"height_mm":334.0},
+    {"id":"lg_c3_42","brand":"LG","model":"C3 42\" OLED","width_mm":932.0,"height_mm":532.0},
+    {"id":"samsung_odyssey_oled_g8_34","brand":"Samsung","model":"Odyssey OLED G8 34\"","width_mm":799.0,"height_mm":334.0},
+    {"id":"dell_aw3423df","brand":"Dell","model":"Alienware AW3423DF","width_mm":799.0,"height_mm":339.0},
+    {"id":"asus_rog_swift_oled_pg27aqdm","brand":"ASUS","model":"ROG Swift OLED PG27AQDM","width_mm":597.0,"height_mm":336.0},
+    {"id":"lg_45gr95qe","brand":"LG","model":"45GR95QE-B","width_mm":1003.0,"height_mm":419.0},
+    {"id":"samsung_odyssey_ark_55","brand":"Samsung","model":"Odyssey Ark 55\"","width_mm":1214.0,"height_mm":683.0},
+    {"id":"lg_34gs95qe","brand":"LG","model":"34GS95QE-B","width_mm":799.0,"height_mm":334.0},
+    {"id":"dell_u2422he","brand":"Dell","model":"U2422HE","width_mm":531.0,"height_mm":299.0},
+    {"id":"dell_p2422h","brand":"Dell","model":"P2422H","width_mm":531.0,"height_mm":299.0},
+    {"id":"asus_va24ehe","brand":"ASUS","model":"VA24EHE","width_mm":531.0,"height_mm":299.0},
+    {"id":"acer_ka242y","brand":"Acer","model":"KA242Y","width_mm":531.0,"height_mm":299.0},
+    {"id":"samsung_s24r350","brand":"Samsung","model":"S24R350","width_mm":531.0,"height_mm":299.0},
+    {"id":"lg_27mp600","brand":"LG","model":"27MP600-B","width_mm":597.0,"height_mm":336.0},
+    {"id":"msi_modern_md271qp","brand":"MSI","model":"Modern MD271QP","width_mm":597.0,"height_mm":336.0},
+    {"id":"acer_b247y","brand":"Acer","model":"B247Y","width_mm":531.0,"height_mm":299.0},
+    {"id":"benq_gw2480","brand":"BenQ","model":"GW2480","width_mm":531.0,"height_mm":299.0}
 ])";
 }
 
@@ -1532,6 +1619,410 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
             .arg(controller_name));
 }
 
+void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
+{
+    if(!resource_manager)
+    {
+        return;
+    }
+
+    std::string config_dir = resource_manager->GetConfigurationDirectory().string();
+    std::string preset_dir = config_dir + "/plugins/settings/OpenRGB3DSpatialPlugin/custom_controllers";
+
+    std::error_code ec;
+    filesystem::create_directories(preset_dir, ec);
+
+    filesystem::path dir_path(preset_dir);
+    if(!filesystem::exists(dir_path))
+    {
+        QMessageBox::information(this, "Preset Library",
+            QString("Preset folder does not exist yet.\n\nAdd JSON files (exported custom controllers) to:\n%1")
+                .arg(QString::fromStdString(preset_dir)));
+        return;
+    }
+
+    // Category key (in JSON) -> display label. Matches OpenRGB device types (https://openrgb.org/devices.html) plus a few extras.
+    static const std::vector<std::pair<std::string, QString>> kPresetCategories = {
+        {"graphics_cards", QObject::tr("Graphics Cards")},
+        {"motherboards", QObject::tr("Motherboards")},
+        {"motherboard", QObject::tr("Motherboards")},  // alias for backward compatibility
+        {"ram_sticks", QObject::tr("RAM Sticks")},
+        {"ram", QObject::tr("RAM Sticks")},  // alias
+        {"mouses", QObject::tr("Mouses")},
+        {"keyboards", QObject::tr("Keyboards")},
+        {"mousemats", QObject::tr("Mousemats")},
+        {"coolers", QObject::tr("Coolers")},
+        {"led_strips", QObject::tr("LED Strips")},
+        {"headsets", QObject::tr("Headsets & Headset Stands")},
+        {"gamepads", QObject::tr("Gamepads")},
+        {"accessories", QObject::tr("Accessories")},
+        {"microphones", QObject::tr("Microphones")},
+        {"speakers", QObject::tr("Speakers")},
+        {"storages", QObject::tr("Storages")},
+        {"cases", QObject::tr("Cases")},
+        {"fans", QObject::tr("Fans")},
+        {"cpu_cooler", QObject::tr("CPU cooler")},
+        {"waterblock", QObject::tr("Waterblock")},
+        {"psu", QObject::tr("PSU")},
+        {"other", QObject::tr("Other")},
+    };
+
+    auto categoryLabel = [](const std::string& key) -> QString
+    {
+        for(const auto& p : kPresetCategories)
+        {
+            if(p.first == key) return p.second;
+        }
+        return QObject::tr("Other");
+    };
+
+    struct PresetEntry
+    {
+        std::string filepath;
+        std::string display_name;
+        std::string controller_name;
+        std::string category;
+        std::string brand;
+        std::string model;
+    };
+    std::vector<PresetEntry> presets;
+
+    try
+    {
+        for(const auto& entry : filesystem::directory_iterator(dir_path))
+        {
+            if(entry.path().extension() != ".json")
+            {
+                continue;
+            }
+            std::ifstream file(entry.path().string());
+            if(!file.is_open())
+            {
+                continue;
+            }
+            try
+            {
+                nlohmann::json j;
+                file >> j;
+                file.close();
+                PresetEntry e;
+                e.filepath = entry.path().string();
+                e.display_name = j.value("name", entry.path().stem().string());
+                e.controller_name.clear();
+                e.category = j.value("category", std::string("other"));
+                if(e.category.empty()) e.category = "other";
+                e.brand = j.value("brand", std::string());
+                e.model = j.value("model", std::string());
+                if(j.contains("mappings") && j["mappings"].is_array() && !j["mappings"].empty())
+                {
+                    std::string ctrl = j["mappings"][0].value("controller_name", std::string());
+                    if(!ctrl.empty() && ctrl != "Unknown (not found on this system)")
+                    {
+                        e.controller_name = ctrl;
+                    }
+                }
+                presets.push_back(e);
+            }
+            catch(const std::exception&)
+            {
+                file.close();
+                PresetEntry e;
+                e.filepath = entry.path().string();
+                e.display_name = entry.path().stem().string();
+                e.controller_name.clear();
+                e.category = "other";
+                e.brand.clear();
+                e.model.clear();
+                presets.push_back(e);
+            }
+        }
+    }
+    catch(const std::exception& e)
+    {
+        QMessageBox::critical(this, "Preset Library",
+            QString("Failed to read preset folder:\n%1").arg(e.what()));
+        return;
+    }
+
+    if(presets.empty())
+    {
+        QMessageBox::information(this, "Preset Library",
+            QString("No preset JSON files found.\n\nAdd exported custom controller JSON files to:\n%1\n\nThen use \"Add from preset\" to add them with official device names (e.g. Corsair SP120 RGB PRO - Front Fan 1, 2, 3).")
+                .arg(QString::fromStdString(preset_dir)));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Add from preset");
+    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+
+    QLabel* hint = new QLabel("Select a preset. Names use device (e.g. Corsair SP120 RGB PRO or Corsair SP120 RGB PRO 1, 2, 3). Matching uses OpenRGB device name so presets work for anyone with the same device.");
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: gray; font-size: small;");
+    layout->addWidget(hint);
+
+    QHBoxLayout* filter_row = new QHBoxLayout();
+    QLabel* filter_label = new QLabel(tr("Filter:"));
+    filter_label->setStyleSheet("color: gray; font-size: small;");
+    filter_row->addWidget(filter_label);
+    QComboBox* category_combo = new QComboBox();
+    category_combo->addItem(tr("All"), QString());
+    for(const auto& p : kPresetCategories)
+    {
+        category_combo->addItem(p.second, QString::fromStdString(p.first));
+    }
+    filter_row->addWidget(category_combo);
+
+    QLabel* sort_label = new QLabel(tr("Sort:"));
+    sort_label->setStyleSheet("color: gray; font-size: small;");
+    filter_row->addWidget(sort_label);
+    QComboBox* sort_combo = new QComboBox();
+    sort_combo->addItem(tr("Name"), QString("name"));
+    sort_combo->addItem(tr("Category"), QString("category"));
+    sort_combo->addItem(tr("Brand"), QString("brand"));
+    filter_row->addWidget(sort_combo);
+    filter_row->addStretch();
+    layout->addLayout(filter_row);
+
+    QListWidget* list = new QListWidget();
+    list->setMinimumHeight(200);
+
+    auto buildPresetList = [list, &presets, category_combo, sort_combo, &categoryLabel]()
+    {
+        QString filter = category_combo->currentData().toString();
+        QString sort_key = sort_combo->currentData().toString();
+        std::vector<size_t> indices;
+        for(size_t i = 0; i < presets.size(); i++)
+        {
+            if(!filter.isEmpty() && QString::fromStdString(presets[i].category) != filter)
+            {
+                continue;
+            }
+            indices.push_back(i);
+        }
+        std::sort(indices.begin(), indices.end(), [&presets, &sort_key](size_t a, size_t b)
+        {
+            const PresetEntry& pa = presets[a];
+            const PresetEntry& pb = presets[b];
+            if(sort_key == QLatin1String("category"))
+            {
+                return pa.category < pb.category;
+            }
+            if(sort_key == QLatin1String("brand"))
+            {
+                std::string ba = pa.brand.empty() ? pa.model : pa.brand;
+                std::string bb = pb.brand.empty() ? pb.model : pb.brand;
+                return ba < bb;
+            }
+            return pa.display_name < pb.display_name;
+        });
+        list->clear();
+        for(size_t idx : indices)
+        {
+            const PresetEntry& e = presets[idx];
+            QString cat = categoryLabel(e.category);
+            QString text = QString("[%1] ").arg(cat);
+            if(!e.brand.empty() || !e.model.empty())
+            {
+                text += QString::fromStdString(e.brand.empty() ? e.model : e.brand + " " + e.model);
+                text += " - ";
+            }
+            text += QString::fromStdString(e.display_name);
+            if(!e.controller_name.empty())
+            {
+                text += " — " + QString::fromStdString(e.controller_name);
+            }
+            QListWidgetItem* item = new QListWidgetItem(text);
+            item->setData(Qt::UserRole, QString::fromStdString(e.filepath));
+            item->setData(Qt::UserRole + 1, QString::fromStdString(e.category));
+            list->addItem(item);
+        }
+        if(list->count() > 0)
+        {
+            list->setCurrentRow(0);
+        }
+    };
+    buildPresetList();
+    layout->addWidget(list);
+
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    auto updateOkAndList = [buildPresetList, list, buttons]()
+    {
+        buildPresetList();
+        QPushButton* ok_btn = buttons->button(QDialogButtonBox::Ok);
+        if(ok_btn) ok_btn->setEnabled(list->count() > 0);
+    };
+    updateOkAndList();
+    connect(category_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [updateOkAndList](int) { updateOkAndList(); });
+    connect(sort_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [updateOkAndList](int) { updateOkAndList(); });
+
+    if(dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    QListWidgetItem* selected = list->currentItem();
+    if(!selected)
+    {
+        return;
+    }
+
+    std::string chosen_path = selected->data(Qt::UserRole).toString().toStdString();
+    std::ifstream file(chosen_path);
+    if(!file.is_open())
+    {
+        QMessageBox::critical(this, "Add from preset",
+            QString("Could not open file:\n%1").arg(QString::fromStdString(chosen_path)));
+        return;
+    }
+
+    nlohmann::json j;
+    try
+    {
+        file >> j;
+        file.close();
+    }
+    catch(const std::exception& e)
+    {
+        file.close();
+        QMessageBox::critical(this, "Add from preset",
+            QString("Invalid JSON in preset file:\n%1").arg(e.what()));
+        return;
+    }
+
+    if(!j.contains("name") || !j.contains("mappings") || !j["mappings"].is_array())
+    {
+        QMessageBox::critical(this, "Add from preset", "Preset JSON must contain \"name\" and \"mappings\" array.");
+        return;
+    }
+
+    std::string preset_display_name = j["name"].get<std::string>();
+    std::string category = j.value("category", std::string("other"));
+    if(category.empty()) category = "other";
+
+    std::string brand = j.value("brand", std::string());
+    std::string model = j.value("model", std::string());
+    std::string brand_model;  // Used for display name when set (cleaner than full OpenRGB controller name)
+    if(!brand.empty() && !model.empty())
+    {
+        brand_model = brand + " " + model;
+    }
+    else if(!model.empty())
+    {
+        brand_model = model;
+    }
+
+    std::string controller_name;
+    if(!j["mappings"].empty())
+    {
+        controller_name = j["mappings"][0].value("controller_name", std::string());
+        if(controller_name == "Unknown (not found on this system)")
+        {
+            controller_name.clear();
+        }
+    }
+
+    std::string cat_prefix;
+    if(category != "other")
+    {
+        cat_prefix = categoryLabel(category).toStdString() + " - ";
+    }
+
+    auto truncate = [](const std::string& s, size_t max_len) -> std::string
+    {
+        if(s.length() <= max_len) return s;
+        return s.substr(0, max_len - 3) + "...";
+    };
+
+    auto device_label = [&brand_model, &truncate](RGBController* c, size_t max_len) -> std::string
+    {
+        if(!brand_model.empty())
+        {
+            return truncate(brand_model, max_len);
+        }
+        return c ? truncate(c->name, max_len) : std::string();
+    };
+
+    std::vector<RGBController*>& all_controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBController*> matching;
+    for(RGBController* c : all_controllers)
+    {
+        if(c && c->name == controller_name)
+        {
+            matching.push_back(c);
+        }
+    }
+
+    if(matching.empty())
+    {
+        std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJson(j, all_controllers);
+        if(!virtual_ctrl)
+        {
+            QMessageBox::critical(this, "Add from preset", "Could not create virtual controller from preset (no valid mappings).");
+            return;
+        }
+        std::string device_part = brand_model.empty()
+            ? preset_display_name
+            : truncate(brand_model, 60);
+        std::string name_not_found = brand_model.empty()
+            ? (cat_prefix + device_part + " (device not found)")
+            : (device_part + " (device not found)");
+        virtual_ctrl->SetName(name_not_found);
+        virtual_controllers.push_back(std::move(virtual_ctrl));
+        SaveCustomControllers();
+        UpdateCustomControllersList();
+        UpdateAvailableControllersList();
+        QMessageBox::information(this, "Add from preset",
+            QString("Preset '%1' added.\n\nNo matching device was found on this system; mappings show as \"Unknown device\". You can reassign cells or leave as placeholder.")
+                .arg(QString::fromStdString(preset_display_name)));
+        return;
+    }
+
+    if(matching.size() == 1)
+    {
+        std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJson(j, all_controllers);
+        if(!virtual_ctrl)
+        {
+            QMessageBox::critical(this, "Add from preset", "Could not create virtual controller from preset.");
+            return;
+        }
+        std::string new_name = brand_model.empty()
+            ? (cat_prefix + device_label(matching[0], 80) + " - " + preset_display_name)
+            : device_label(matching[0], 80);
+        virtual_ctrl->SetName(truncate(new_name, 120));
+        virtual_controllers.push_back(std::move(virtual_ctrl));
+        SaveCustomControllers();
+        UpdateCustomControllersList();
+        UpdateAvailableControllersList();
+        QMessageBox::information(this, "Add from preset",
+            QString("Preset '%1' added as '%2'.")
+                .arg(QString::fromStdString(preset_display_name), QString::fromStdString(truncate(new_name, 120))));
+        return;
+    }
+
+    for(size_t i = 0; i < matching.size(); i++)
+    {
+        std::string display_name = device_label(matching[i], 50) + " " + std::to_string(i + 1);
+        std::unique_ptr<VirtualController3D> virtual_ctrl = VirtualController3D::FromJsonForController(j, matching[i], display_name);
+        if(virtual_ctrl)
+        {
+            virtual_controllers.push_back(std::move(virtual_ctrl));
+        }
+    }
+    SaveCustomControllers();
+    UpdateCustomControllersList();
+    UpdateAvailableControllersList();
+    QMessageBox::information(this, "Add from preset",
+        QString("Added %1 custom controller(s) from preset '%2' (one per matching device: %3).")
+            .arg(matching.size())
+            .arg(QString::fromStdString(preset_display_name))
+            .arg(QString::fromStdString(controller_name)));
+}
+
 void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
 {
     if(virtual_controllers.empty())
@@ -2605,7 +3096,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
-    // Load Reference Points// Clear existing reference points
+    // Load Reference Points
     reference_points.clear();
 
     if(layout_json.contains("reference_points"))
@@ -3303,6 +3794,11 @@ void OpenRGB3DSpatialTab::LoadMonitorPresets()
     PopulateMonitorPresetCombo();
 }
 
+void OpenRGB3DSpatialTab::on_monitor_filter_or_sort_changed(int)
+{
+    PopulateMonitorPresetCombo();
+}
+
 void OpenRGB3DSpatialTab::PopulateMonitorPresetCombo()
 {
     if(!display_plane_monitor_combo)
@@ -3316,14 +3812,78 @@ void OpenRGB3DSpatialTab::PopulateMonitorPresetCombo()
         current_id = display_plane_monitor_combo->currentData().toString();
     }
 
+    QString filter_brand;
+    if(display_plane_monitor_brand_filter && display_plane_monitor_brand_filter->currentIndex() >= 0)
+    {
+        filter_brand = display_plane_monitor_brand_filter->currentData().toString();
+    }
+
+    if(display_plane_monitor_brand_filter)
+    {
+        std::set<QString> brands;
+        for(const MonitorPreset& p : monitor_presets)
+        {
+            if(!p.brand.isEmpty()) brands.insert(p.brand);
+        }
+        display_plane_monitor_brand_filter->blockSignals(true);
+        display_plane_monitor_brand_filter->clear();
+        display_plane_monitor_brand_filter->addItem(tr("All brands"), QString());
+        for(const QString& b : brands)
+        {
+            display_plane_monitor_brand_filter->addItem(b, b);
+        }
+        int restore = 0;
+        for(int i = 0; i < display_plane_monitor_brand_filter->count(); i++)
+        {
+            if(display_plane_monitor_brand_filter->itemData(i).toString() == filter_brand)
+            {
+                restore = i;
+                break;
+            }
+        }
+        display_plane_monitor_brand_filter->setCurrentIndex(restore);
+        display_plane_monitor_brand_filter->blockSignals(false);
+        filter_brand = display_plane_monitor_brand_filter->currentData().toString();
+    }
+
+    std::vector<size_t> indices;
+    for(size_t i = 0; i < monitor_presets.size(); i++)
+    {
+        if(!filter_brand.isEmpty() && monitor_presets[i].brand != filter_brand)
+        {
+            continue;
+        }
+        indices.push_back(i);
+    }
+
+    QString sort_key = QString("brand");
+    if(display_plane_monitor_sort_combo && display_plane_monitor_sort_combo->currentIndex() >= 0)
+    {
+        sort_key = display_plane_monitor_sort_combo->currentData().toString();
+    }
+    std::sort(indices.begin(), indices.end(), [this, &sort_key](size_t a, size_t b)
+    {
+        const MonitorPreset& pa = monitor_presets[a];
+        const MonitorPreset& pb = monitor_presets[b];
+        if(sort_key == QLatin1String("model"))
+        {
+            return QString::compare(pa.model, pb.model, Qt::CaseInsensitive) < 0;
+        }
+        if(sort_key == QLatin1String("width"))
+        {
+            return pa.width_mm < pb.width_mm;
+        }
+        return QString::compare(pa.brand, pb.brand, Qt::CaseInsensitive) < 0;
+    });
+
     display_plane_monitor_combo->blockSignals(true);
     display_plane_monitor_combo->clear();
     display_plane_monitor_combo->setCurrentIndex(-1);
     display_plane_monitor_combo->setEditText(QString());
 
-    for(size_t preset_index = 0; preset_index < monitor_presets.size(); preset_index++)
+    for(size_t idx : indices)
     {
-        const MonitorPreset& preset = monitor_presets[preset_index];
+        const MonitorPreset& preset = monitor_presets[idx];
         display_plane_monitor_combo->addItem(preset.DisplayLabel(), preset.id);
     }
 

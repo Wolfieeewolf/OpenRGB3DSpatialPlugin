@@ -158,3 +158,40 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
 
     return nullptr;
 }
+
+std::unique_ptr<VirtualController3D> VirtualController3D::FromJsonForController(const json& j, RGBController* controller, const std::string& display_name)
+{
+    if(!controller || !j.contains("mappings"))
+    {
+        return nullptr;
+    }
+
+    int width = j["width"];
+    int height = j["height"];
+    int depth = j["depth"];
+    float spacing_x = j.contains("spacing_mm_x") ? j["spacing_mm_x"].get<float>() : 10.0f;
+    float spacing_y = j.contains("spacing_mm_y") ? j["spacing_mm_y"].get<float>() : 10.0f;
+    float spacing_z = j.contains("spacing_mm_z") ? j["spacing_mm_z"].get<float>() : 10.0f;
+
+    std::vector<GridLEDMapping> mappings;
+    json mappings_json = j["mappings"];
+    for(unsigned int i = 0; i < mappings_json.size(); i++)
+    {
+        GridLEDMapping mapping;
+        mapping.x = mappings_json[i]["x"];
+        mapping.y = mappings_json[i]["y"];
+        mapping.z = mappings_json[i]["z"];
+        mapping.controller = controller;
+        mapping.zone_idx = mappings_json[i]["zone_idx"];
+        mapping.led_idx = mappings_json[i]["led_idx"];
+        mapping.granularity = mappings_json[i].contains("granularity") ? mappings_json[i]["granularity"].get<int>() : 2;
+        mappings.push_back(mapping);
+    }
+
+    if(mappings.empty())
+    {
+        return nullptr;
+    }
+
+    return std::make_unique<VirtualController3D>(display_name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
+}

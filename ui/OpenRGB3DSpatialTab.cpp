@@ -85,6 +85,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     display_plane_width_spin = nullptr;
     display_plane_height_spin = nullptr;
     display_plane_monitor_combo = nullptr;
+    display_plane_monitor_brand_filter = nullptr;
+    display_plane_monitor_sort_combo = nullptr;
     display_plane_capture_combo = nullptr;
     display_plane_refresh_capture_btn = nullptr;
     display_plane_visible_check = nullptr;
@@ -880,6 +882,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     custom_layout->addWidget(custom_controller_button);
 
     QHBoxLayout* custom_io_layout = new QHBoxLayout();
+    QPushButton* add_from_preset_button = new QPushButton("Add from preset");
+    add_from_preset_button->setToolTip("Add a pre-built custom controller from the preset library (uses official device names; multiple instances get numbered)");
+    connect(add_from_preset_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_add_from_preset_clicked);
+    custom_io_layout->addWidget(add_from_preset_button);
     QPushButton* import_button = new QPushButton("Import");
     import_button->setToolTip("Import a custom controller from file");
     connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
@@ -1058,6 +1064,29 @@ void OpenRGB3DSpatialTab::SetupUI()
     display_plane_name_edit = new QLineEdit();
     connect(display_plane_name_edit, &QLineEdit::textEdited, this, &OpenRGB3DSpatialTab::on_display_plane_name_edited);
     plane_form->addWidget(display_plane_name_edit, plane_row, 1, 1, 2);
+    plane_row++;
+
+    QLabel* monitor_filter_label = new QLabel(tr("Filter:"));
+    monitor_filter_label->setStyleSheet("color: gray; font-size: small;");
+    plane_form->addWidget(monitor_filter_label, plane_row, 0);
+    display_plane_monitor_brand_filter = new QComboBox();
+    display_plane_monitor_brand_filter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    display_plane_monitor_brand_filter->addItem(tr("All brands"), QString());
+    connect(display_plane_monitor_brand_filter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_monitor_filter_or_sort_changed);
+    plane_form->addWidget(display_plane_monitor_brand_filter, plane_row, 1);
+
+    QLabel* monitor_sort_label = new QLabel(tr("Sort:"));
+    monitor_sort_label->setStyleSheet("color: gray; font-size: small;");
+    plane_form->addWidget(monitor_sort_label, plane_row, 2);
+    display_plane_monitor_sort_combo = new QComboBox();
+    display_plane_monitor_sort_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    display_plane_monitor_sort_combo->addItem(tr("Brand"), QString("brand"));
+    display_plane_monitor_sort_combo->addItem(tr("Model"), QString("model"));
+    display_plane_monitor_sort_combo->addItem(tr("Size (width)"), QString("width"));
+    connect(display_plane_monitor_sort_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_monitor_filter_or_sort_changed);
+    plane_form->addWidget(display_plane_monitor_sort_combo, plane_row, 3);
     plane_row++;
 
     plane_form->addWidget(new QLabel("Monitor Preset:"), plane_row, 0);
@@ -1316,7 +1345,8 @@ void OpenRGB3DSpatialTab::SetupEffectLibraryPanel(QVBoxLayout* parent_layout)
     QVBoxLayout* library_layout = new QVBoxLayout(library_group);
     library_layout->setSpacing(4);
 
-    QLabel* category_label = new QLabel("Category:");
+    QLabel* category_label = new QLabel(tr("Filter:"));
+    category_label->setStyleSheet("color: gray; font-size: small;");
     library_layout->addWidget(category_label);
 
     effect_category_combo = new QComboBox();
@@ -1632,7 +1662,7 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
     if(class_name == QLatin1String("ScreenMirror3D"))
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
-        if (screen_mirror)
+        if(screen_mirror)
         {
             screen_mirror->SetReferencePoints(&reference_points);
             connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);

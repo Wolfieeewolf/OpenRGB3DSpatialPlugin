@@ -254,13 +254,13 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     UpdateAudioEffectOriginCombo();
 
     // Update ScreenMirror3D reference point dropdowns in effect stack
-    for (unsigned int i = 0; i < effect_stack.size(); i++)
+    for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
         std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
-        if (inst && inst->effect_class_name == "ScreenMirror3D" && inst->effect)
+        if(inst && inst->effect_class_name == "ScreenMirror3D" && inst->effect)
         {
             ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(inst->effect.get());
-            if (screen_mirror)
+            if(screen_mirror)
             {
                 screen_mirror->RefreshReferencePointDropdowns();
             }
@@ -268,10 +268,10 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     }
 
     // Update ScreenMirror3D UI effect reference point dropdowns
-    if (current_effect_ui)
+    if(current_effect_ui)
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(current_effect_ui);
-        if (screen_mirror)
+        if(screen_mirror)
         {
             screen_mirror->RefreshReferencePointDropdowns();
         }

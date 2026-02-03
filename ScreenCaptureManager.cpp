@@ -41,12 +41,12 @@ ScreenCaptureManager::~ScreenCaptureManager()
 
 bool ScreenCaptureManager::Initialize()
 {
-    if (initialized.load())
+    if(initialized.load())
     {
         return true;
     }
 
-    if (!InitializePlatform())
+    if(!InitializePlatform())
     {
         return false;
     }
@@ -58,7 +58,7 @@ bool ScreenCaptureManager::Initialize()
 
 void ScreenCaptureManager::Shutdown()
 {
-    if (!initialized.load())
+    if(!initialized.load())
     {
         return;
     }
@@ -66,7 +66,7 @@ void ScreenCaptureManager::Shutdown()
     // Stop all capture threads
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        for (std::map<std::string, std::atomic<bool>>::iterator it = capture_active.begin();
+        for(std::map<std::string, std::atomic<bool>>::iterator it = capture_active.begin();
              it != capture_active.end();
              ++it)
         {
@@ -76,11 +76,11 @@ void ScreenCaptureManager::Shutdown()
 
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        for (std::map<std::string, std::thread>::iterator it = capture_threads.begin();
+        for(std::map<std::string, std::thread>::iterator it = capture_threads.begin();
              it != capture_threads.end();
              ++it)
         {
-            if (it->second.joinable())
+            if(it->second.joinable())
             {
                 it->second.join();
             }
@@ -117,7 +117,7 @@ std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
     std::vector<CaptureSourceInfo> result;
     result.reserve(sources.size());
 
-    for (std::map<std::string, CaptureSourceInfo>::const_iterator it = sources.begin();
+    for(std::map<std::string, CaptureSourceInfo>::const_iterator it = sources.begin();
          it != sources.end();
          ++it)
     {
@@ -132,7 +132,7 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
     // Check if source exists
     {
         std::lock_guard<std::mutex> lock(sources_mutex);
-        if (sources.find(source_id) == sources.end())
+        if(sources.find(source_id) == sources.end())
         {
             return false;
         }
@@ -140,14 +140,14 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
 
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
-        if (capture_active.find(source_id) != capture_active.end() &&
+        if(capture_active.find(source_id) != capture_active.end() &&
             capture_active[source_id].load())
         {
             return true; // Already running
         }
     }
 
-    if (!StartCapturePlatform(source_id))
+    if(!StartCapturePlatform(source_id))
     {
         LOG_WARNING("[ScreenCapture] StartCapturePlatform failed for '%s'", source_id.c_str());
         return false;
@@ -169,7 +169,7 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
-        if (active_it != capture_active.end())
+        if(active_it != capture_active.end())
         {
             active_it->second.store(false);
         }
@@ -178,7 +178,7 @@ void ScreenCaptureManager::StopCapture(const std::string& source_id)
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         std::map<std::string, std::thread>::iterator thread_it = capture_threads.find(source_id);
-        if (thread_it != capture_threads.end() && thread_it->second.joinable())
+        if(thread_it != capture_threads.end() && thread_it->second.joinable())
         {
             thread_it->second.join();
             capture_threads.erase(thread_it);
@@ -200,7 +200,7 @@ std::shared_ptr<CapturedFrame> ScreenCaptureManager::GetLatestFrame(const std::s
 {
     std::lock_guard<std::mutex> lock(frames_mutex);
     std::map<std::string, std::shared_ptr<CapturedFrame>>::const_iterator it = latest_frames.find(source_id);
-    if (it != latest_frames.end())
+    if(it != latest_frames.end())
     {
         return it->second;
     }
@@ -235,10 +235,10 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
 {
     QList<QScreen*> screens = QGuiApplication::screens();
 
-    for (int i = 0; i < screens.size(); i++)
+    for(int i = 0; i < screens.size(); i++)
     {
         QScreen* screen = screens[i];
-        if (!screen) continue;
+        if(!screen) continue;
 
         CaptureSourceInfo info;
         info.id = "screen_" + std::to_string(i);
@@ -262,7 +262,7 @@ bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
     // Extract screen index from source_id (format: "screen_N")
     size_t underscore_pos = source_id.find('_');
-    if (underscore_pos == std::string::npos)
+    if(underscore_pos == std::string::npos)
     {
         LOG_WARNING("[ScreenCapture] Invalid source_id format in StartCapturePlatform: '%s'", source_id.c_str());
         return false;
@@ -271,7 +271,7 @@ bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
     int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
 
     QList<QScreen*> screens = QGuiApplication::screens();
-    if (screen_index < 0 || screen_index >= screens.size())
+    if(screen_index < 0 || screen_index >= screens.size())
     {
         LOG_WARNING("[ScreenCapture] Invalid screen index %d (total screens: %d)", screen_index, screens.size());
         return false;
@@ -287,7 +287,7 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 // Helper function to capture screen using GDI BitBlt
 static QPixmap GrabScreen(QScreen* screen)
 {
-    if (!screen) return QPixmap();
+    if(!screen) return QPixmap();
 
     const QRect screen_geometry = screen->geometry();
     int width = screen_geometry.width();
@@ -326,10 +326,10 @@ struct DXGICaptureState
 
     void Release()
     {
-        if (staging_texture) { staging_texture->Release(); staging_texture = nullptr; }
-        if (duplication) { duplication->Release(); duplication = nullptr; }
-        if (context) { context->Release(); context = nullptr; }
-        if (device) { device->Release(); device = nullptr; }
+        if(staging_texture) { staging_texture->Release(); staging_texture = nullptr; }
+        if(duplication) { duplication->Release(); duplication = nullptr; }
+        if(context) { context->Release(); context = nullptr; }
+        if(device) { device->Release(); device = nullptr; }
         width = 0;
         height = 0;
     }
@@ -346,12 +346,12 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     HRESULT hr = D3D11CreateDevice(
         nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0,
         D3D11_SDK_VERSION, &device, &feature_level, &context);
-    if (FAILED(hr) || !device || !context)
+    if(FAILED(hr) || !device || !context)
         return false;
 
     IDXGIDevice* dxgi_device = nullptr;
     hr = device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi_device);
-    if (FAILED(hr) || !dxgi_device)
+    if(FAILED(hr) || !dxgi_device)
     {
         context->Release();
         device->Release();
@@ -361,7 +361,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     IDXGIAdapter* adapter = nullptr;
     hr = dxgi_device->GetAdapter(&adapter);
     dxgi_device->Release();
-    if (FAILED(hr) || !adapter)
+    if(FAILED(hr) || !adapter)
     {
         context->Release();
         device->Release();
@@ -374,27 +374,27 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     ID3D11Texture2D* staging_texture = nullptr;
     UINT out_width = 0, out_height = 0;
 
-    for (UINT i = 0; adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND; i++)
+    for(UINT i = 0; adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND; i++)
     {
-        if (!output) continue;
+        if(!output) continue;
         DXGI_OUTPUT_DESC desc;
-        if (FAILED(output->GetDesc(&desc)))
+        if(FAILED(output->GetDesc(&desc)))
         {
             output->Release();
             continue;
         }
         RECT& r = desc.DesktopCoordinates;
         int left = r.left, top = r.top, right = r.right, bottom = r.bottom;
-        if (left == screen_x && top == screen_y &&
+        if(left == screen_x && top == screen_y &&
             (right - left) == screen_width && (bottom - top) == screen_height)
         {
             hr = output->QueryInterface(__uuidof(IDXGIOutput1), (void**)&output1);
             output->Release();
-            if (FAILED(hr) || !output1) break;
+            if(FAILED(hr) || !output1) break;
 
             hr = output1->DuplicateOutput(device, &duplication);
             output1->Release();
-            if (FAILED(hr) || !duplication)
+            if(FAILED(hr) || !duplication)
             {
                 context->Release();
                 device->Release();
@@ -419,7 +419,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
             tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
             tex_desc.MiscFlags = 0;
             hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
-            if (FAILED(hr) || !staging_texture)
+            if(FAILED(hr) || !staging_texture)
             {
                 duplication->Release();
                 context->Release();
@@ -458,7 +458,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     }
 
     size_t underscore_pos = source_id.find('_');
-    if (underscore_pos == std::string::npos)
+    if(underscore_pos == std::string::npos)
     {
         LOG_WARNING("[ScreenCapture] Invalid source_id format: '%s'", source_id.c_str());
         return;
@@ -467,7 +467,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
     QList<QScreen*> screens = QGuiApplication::screens();
     QScreen* screen = (screen_index >= 0 && screen_index < screens.size()) ? screens[screen_index] : nullptr;
-    if (!screen)
+    if(!screen)
     {
         LOG_WARNING("[ScreenCapture] Screen %d unavailable", screen_index);
         return;
@@ -476,7 +476,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     QRect geometry = screen->geometry();
     DXGICaptureState dxgi_state;
     bool use_dxgi = TryCreateDXGIDuplication(geometry.x(), geometry.y(), geometry.width(), geometry.height(), dxgi_state);
-    if (!use_dxgi)
+    if(!use_dxgi)
     {
         LOG_INFO("[ScreenCapture] Using GDI for screen %d (DXGI unavailable or failed)", screen_index);
     }
@@ -488,14 +488,14 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     std::chrono::steady_clock::time_point last_dxgi_retry = std::chrono::steady_clock::now();
     const std::chrono::seconds dxgi_retry_interval(5);
 
-    while (active_flag->load())
+    while(active_flag->load())
     {
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
 
         screen = (screen_index >= 0 && screen_index < screens.size()) ? screens[screen_index] : nullptr;
-        if (!screen)
+        if(!screen)
         {
-            if (!logged_screen_unavailable)
+            if(!logged_screen_unavailable)
             {
                 LOG_WARNING("[ScreenCapture] Screen %d unavailable, waiting for it to return", screen_index);
                 logged_screen_unavailable = true;
@@ -503,51 +503,51 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
-        if (logged_screen_unavailable)
+        if(logged_screen_unavailable)
             logged_screen_unavailable = false;
 
         QImage image;
-        if (use_dxgi && dxgi_state.IsValid())
+        if(use_dxgi && dxgi_state.IsValid())
         {
             DXGI_OUTDUPL_FRAME_INFO frame_info;
             IDXGIResource* resource = nullptr;
             HRESULT hr = dxgi_state.duplication->AcquireNextFrame(8, &frame_info, &resource);
-            if (hr == DXGI_ERROR_WAIT_TIMEOUT)
+            if(hr == DXGI_ERROR_WAIT_TIMEOUT)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(target_frame_time_ms > 0 ? target_frame_time_ms : 2));
                 continue;
             }
-            if (hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
+            if(hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
             {
                 dxgi_state.Release();
                 use_dxgi = false;
                 last_dxgi_retry = std::chrono::steady_clock::now();
                 image = GrabScreen(screen).toImage();
             }
-            else if (SUCCEEDED(hr) && resource)
+            else if(SUCCEEDED(hr) && resource)
             {
                 ID3D11Texture2D* tex = nullptr;
                 hr = resource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);
                 resource->Release();
-                if (SUCCEEDED(hr) && tex)
+                if(SUCCEEDED(hr) && tex)
                 {
                     dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
                     tex->Release();
 
                     D3D11_MAPPED_SUBRESOURCE mapped;
                     hr = dxgi_state.context->Map(dxgi_state.staging_texture, 0, D3D11_MAP_READ, 0, &mapped);
-                    if (SUCCEEDED(hr))
+                    if(SUCCEEDED(hr))
                     {
                         size_t need = (size_t)dxgi_state.width * dxgi_state.height * 4;
-                        if (dxgi_rgba_buffer.size() < need)
+                        if(dxgi_rgba_buffer.size() < need)
                             dxgi_rgba_buffer.resize(need);
                         // Desktop Duplication API returns B8G8R8A8; convert to RGBA for consumers.
                         const uint8_t* src = (const uint8_t*)mapped.pData;
                         uint8_t* dst = dxgi_rgba_buffer.data();
                         const UINT row_pitch_skip = mapped.RowPitch - dxgi_state.width * 4;
-                        for (UINT y = 0; y < dxgi_state.height; y++)
+                        for(UINT y = 0; y < dxgi_state.height; y++)
                         {
-                            for (UINT x = 0; x < dxgi_state.width; x++)
+                            for(UINT x = 0; x < dxgi_state.width; x++)
                             {
                                 dst[0] = src[2];
                                 dst[1] = src[1];
@@ -568,31 +568,31 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                     dxgi_state.duplication->ReleaseFrame();
                 }
             }
-            if (image.isNull() && use_dxgi)
+            if(image.isNull() && use_dxgi)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
         }
-        if (!use_dxgi || image.isNull())
+        if(!use_dxgi || image.isNull())
         {
-            if (!use_dxgi)
+            if(!use_dxgi)
             {
                 auto now = std::chrono::steady_clock::now();
-                if (now - last_dxgi_retry >= dxgi_retry_interval)
+                if(now - last_dxgi_retry >= dxgi_retry_interval)
                 {
                     last_dxgi_retry = now;
                     QRect geo = screen->geometry();
-                    if (TryCreateDXGIDuplication(geo.x(), geo.y(), geo.width(), geo.height(), dxgi_state))
+                    if(TryCreateDXGIDuplication(geo.x(), geo.y(), geo.width(), geo.height(), dxgi_state))
                     {
                         use_dxgi = true;
                     }
                 }
             }
-            if (!use_dxgi || image.isNull())
+            if(!use_dxgi || image.isNull())
             {
                 QPixmap pixmap = GrabScreen(screen);
-                if (pixmap.isNull())
+                if(pixmap.isNull())
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
@@ -603,7 +603,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
         int target_w = target_width.load();
         int target_h = target_height.load();
-        if (image.width() != target_w || image.height() != target_h)
+        if(image.width() != target_w || image.height() != target_h)
             image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         image = image.convertToFormat(QImage::Format_RGBA8888);
 
@@ -616,7 +616,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         const int src_stride = image.bytesPerLine();
         const uint8_t* src = image.constBits();
         uint8_t* dst = frame->data.data();
-        for (int y = 0; y < frame->height; y++)
+        for(int y = 0; y < frame->height; y++)
         {
             memcpy(dst, src, (size_t)line_bytes);
             dst += line_bytes;
@@ -635,7 +635,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
         int sleep_time = target_frame_time_ms - elapsed;
-        if (sleep_time < 2)
+        if(sleep_time < 2)
             sleep_time = 2;
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
     }
@@ -657,10 +657,10 @@ void ScreenCaptureManager::ShutdownPlatform()
 void ScreenCaptureManager::EnumerateSourcesPlatform()
 {
     QList<QScreen*> screens = QGuiApplication::screens();
-    for (int i = 0; i < screens.size(); i++)
+    for(int i = 0; i < screens.size(); i++)
     {
         QScreen* screen = screens[i];
-        if (!screen) continue;
+        if(!screen) continue;
 
         CaptureSourceInfo info;
         info.id = "screen_" + std::to_string(i);
@@ -682,14 +682,14 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
 bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
     size_t underscore_pos = source_id.find('_');
-    if (underscore_pos == std::string::npos)
+    if(underscore_pos == std::string::npos)
     {
         LOG_WARNING("[ScreenCapture] Invalid source_id format in StartCapturePlatform: '%s'", source_id.c_str());
         return false;
     }
     int screen_index = std::stoi(source_id.substr(underscore_pos + 1));
     QList<QScreen*> screens = QGuiApplication::screens();
-    if (screen_index < 0 || screen_index >= screens.size())
+    if(screen_index < 0 || screen_index >= screens.size())
     {
         LOG_WARNING("[ScreenCapture] Invalid screen index %d (total screens: %d)", screen_index, screens.size());
         return false;
@@ -703,7 +703,7 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 
 static QPixmap GrabScreenLinux(QScreen* screen)
 {
-    if (!screen) return QPixmap();
+    if(!screen) return QPixmap();
     QRect geometry = screen->geometry();
     return screen->grabWindow(0, geometry.x(), geometry.y(), geometry.width(), geometry.height());
 }
@@ -714,7 +714,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
-        if (active_it == capture_active.end())
+        if(active_it == capture_active.end())
         {
             LOG_WARNING("[ScreenCapture] Active flag not found for '%s'", source_id.c_str());
             return;
@@ -723,7 +723,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     }
 
     size_t underscore_pos = source_id.find('_');
-    if (underscore_pos == std::string::npos)
+    if(underscore_pos == std::string::npos)
     {
         LOG_WARNING("[ScreenCapture] Invalid source_id format: '%s'", source_id.c_str());
         return;
@@ -734,20 +734,20 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     const int target_frame_time_ms = 1000 / target_fps.load();
     bool logged_screen_unavailable = false;
 
-    while (active_flag->load())
+    while(active_flag->load())
     {
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
 
         QList<QScreen*> screens = QGuiApplication::screens();
         QScreen* screen = nullptr;
-        if (screen_index >= 0 && screen_index < screens.size())
+        if(screen_index >= 0 && screen_index < screens.size())
         {
             screen = screens[screen_index];
         }
 
-        if (!screen)
+        if(!screen)
         {
-            if (!logged_screen_unavailable)
+            if(!logged_screen_unavailable)
             {
                 LOG_WARNING("[ScreenCapture] Screen %d unavailable, waiting for it to return", screen_index);
                 logged_screen_unavailable = true;
@@ -755,13 +755,13 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
-        if (logged_screen_unavailable)
+        if(logged_screen_unavailable)
         {
             logged_screen_unavailable = false;
         }
 
         QPixmap pixmap = GrabScreenLinux(screen);
-        if (pixmap.isNull())
+        if(pixmap.isNull())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
@@ -770,7 +770,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         QImage image = pixmap.toImage();
         int target_w = target_width.load();
         int target_h = target_height.load();
-        if (image.width() != target_w || image.height() != target_h)
+        if(image.width() != target_w || image.height() != target_h)
         {
             image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         }
@@ -784,7 +784,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         const int src_stride = image.bytesPerLine();
         const uint8_t* src = image.constBits();
         uint8_t* dst = frame->data.data();
-        for (int y = 0; y < frame->height; y++)
+        for(int y = 0; y < frame->height; y++)
         {
             memcpy(dst, src, (size_t)line_bytes);
             dst += line_bytes;
@@ -803,7 +803,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
         int sleep_time = target_frame_time_ms - elapsed;
-        if (sleep_time < 2)
+        if(sleep_time < 2)
         {
             sleep_time = 2;
         }

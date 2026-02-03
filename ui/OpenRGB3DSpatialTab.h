@@ -88,6 +88,7 @@ private slots:
     void on_delete_effect_profile_clicked();
     void on_effect_profile_changed(int index);
     void on_create_custom_controller_clicked();
+    void on_add_from_preset_clicked();
     void on_import_custom_controller_clicked();
     void on_export_custom_controller_clicked();
     void on_edit_custom_controller_clicked();
@@ -448,6 +449,7 @@ private slots:
     void on_display_plane_position_signal(int index, float x, float y, float z);
     void on_display_plane_rotation_signal(int index, float x, float y, float z);
     void on_display_plane_monitor_preset_selected(int index);
+    void on_monitor_filter_or_sort_changed(int);
 
     void on_monitor_preset_text_edited(const QString& text);
 private:
@@ -521,6 +523,8 @@ private:
     std::vector<MonitorPreset> monitor_presets;
     QComboBox*      display_plane_monitor_combo = nullptr;
     QCompleter*     monitor_preset_completer = nullptr;
+    QComboBox*      display_plane_monitor_brand_filter = nullptr;
+    QComboBox*      display_plane_monitor_sort_combo = nullptr;
 };
 
 #endif

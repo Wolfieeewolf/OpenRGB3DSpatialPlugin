@@ -327,10 +327,10 @@ void OpenRGB3DSpatialTab::on_audio_effect_start_clicked()
     inst->saved_settings = std::make_unique<nlohmann::json>(settings);
 
     // Connect ScreenMirror3D screen preview signal to viewport
-    if (class_name == "ScreenMirror3D")
+    if(class_name == "ScreenMirror3D")
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(eff);
-        if (screen_mirror && viewport)
+        if(screen_mirror && viewport)
         {
             connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
                     viewport, &LEDViewport3D::SetShowScreenPreview);

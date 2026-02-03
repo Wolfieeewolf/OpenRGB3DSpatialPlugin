@@ -7,6 +7,13 @@
         "height_mm": 355.0
     },
     {
+        "id": "lg_34wk95u",
+        "brand": "LG",
+        "model": "34WK95U",
+        "width_mm": 794.0,
+        "height_mm": 340.0
+    },
+    {
         "id": "dell_aw3423dw",
         "brand": "Dell",
         "model": "Alienware AW3423DW",
@@ -33,5 +40,593 @@
         "model": "C2 42\" OLED",
         "width_mm": 932.0,
         "height_mm": 532.0
+    },
+    {
+        "id": "dell_s2721dgf",
+        "brand": "Dell",
+        "model": "S2721DGF",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_vg27aq",
+        "brand": "ASUS",
+        "model": "TUF VG27AQ",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "lg_27gp850",
+        "brand": "LG",
+        "model": "27GP850-B",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "dell_s3221qs",
+        "brand": "Dell",
+        "model": "S3221QS",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "samsung_odyssey_g7_27",
+        "brand": "Samsung",
+        "model": "Odyssey G7 27\"",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "gigabyte_m28u",
+        "brand": "Gigabyte",
+        "model": "M28U",
+        "width_mm": 621.0,
+        "height_mm": 341.0
+    },
+    {
+        "id": "msi_optix_mag341cq",
+        "brand": "MSI",
+        "model": "Optix MAG341CQ",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "acer_predator_x38",
+        "brand": "Acer",
+        "model": "Predator X38",
+        "width_mm": 880.0,
+        "height_mm": 367.0
+    },
+    {
+        "id": "lg_27gr95qe",
+        "brand": "LG",
+        "model": "27GR95QE-B",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "samsung_odyssey_g7_32",
+        "brand": "Samsung",
+        "model": "Odyssey G7 32\"",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "samsung_odyssey_g8",
+        "brand": "Samsung",
+        "model": "Odyssey G8",
+        "width_mm": 1149.0,
+        "height_mm": 363.0
+    },
+    {
+        "id": "samsung_odyssey_g6_27",
+        "brand": "Samsung",
+        "model": "Odyssey G6 27\"",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "samsung_odyssey_g6_32",
+        "brand": "Samsung",
+        "model": "Odyssey G6 32\"",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "dell_aw3821dw",
+        "brand": "Dell",
+        "model": "Alienware AW3821DW",
+        "width_mm": 880.0,
+        "height_mm": 367.0
+    },
+    {
+        "id": "dell_s2722dgm",
+        "brand": "Dell",
+        "model": "S2722DGM",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "dell_s3222dgm",
+        "brand": "Dell",
+        "model": "S3222DGM",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "dell_u2722de",
+        "brand": "Dell",
+        "model": "U2722DE",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "dell_u2723qe",
+        "brand": "Dell",
+        "model": "U2723QE",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "dell_u3223qe",
+        "brand": "Dell",
+        "model": "U3223QE",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "dell_p2722he",
+        "brand": "Dell",
+        "model": "P2722HE",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_rog_swift_pg27aqdm",
+        "brand": "ASUS",
+        "model": "ROG Swift PG27AQDM",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_rog_strix_xg27aq",
+        "brand": "ASUS",
+        "model": "ROG Strix XG27AQ",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_rog_swift_pg279qm",
+        "brand": "ASUS",
+        "model": "ROG Swift PG279QM",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_tuf_vg32vq",
+        "brand": "ASUS",
+        "model": "TUF VG32VQ",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "asus_proart_pa278qv",
+        "brand": "ASUS",
+        "model": "ProArt PA278QV",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "asus_rog_swift_pg34wqcdm",
+        "brand": "ASUS",
+        "model": "ROG Swift PG34WQCDM",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "lg_27gn950",
+        "brand": "LG",
+        "model": "27GN950-B",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "lg_32gq850",
+        "brand": "LG",
+        "model": "32GQ850-B",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "lg_34gp83a",
+        "brand": "LG",
+        "model": "34GP83A-B",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "lg_34wn80c",
+        "brand": "LG",
+        "model": "34WN80C-B",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "lg_24gn650",
+        "brand": "LG",
+        "model": "24GN650-B",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "lg_27uk850",
+        "brand": "LG",
+        "model": "27UK850-W",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "acer_predator_x27",
+        "brand": "Acer",
+        "model": "Predator X27",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "acer_predator_x28",
+        "brand": "Acer",
+        "model": "Predator X28",
+        "width_mm": 621.0,
+        "height_mm": 341.0
+    },
+    {
+        "id": "acer_nitro_xv272u",
+        "brand": "Acer",
+        "model": "Nitro XV272U",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "acer_predator_x34",
+        "brand": "Acer",
+        "model": "Predator X34",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "acer_nitro_xz342cu",
+        "brand": "Acer",
+        "model": "Nitro XZ342CU",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "msi_optix_mag274qrf",
+        "brand": "MSI",
+        "model": "Optix MAG274QRF",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "msi_optix_mag321cqr",
+        "brand": "MSI",
+        "model": "Optix MAG321CQR",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "msi_optix_mag342cqr",
+        "brand": "MSI",
+        "model": "Optix MAG342CQR",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "msi_optix_g273qf",
+        "brand": "MSI",
+        "model": "Optix G273QF",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "gigabyte_m27q",
+        "brand": "Gigabyte",
+        "model": "M27Q",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "gigabyte_m32q",
+        "brand": "Gigabyte",
+        "model": "M32Q",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "gigabyte_m34wq",
+        "brand": "Gigabyte",
+        "model": "M34WQ",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "gigabyte_aorus_fi27q",
+        "brand": "Gigabyte",
+        "model": "AORUS FI27Q",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "benq_ex2780q",
+        "brand": "BenQ",
+        "model": "EX2780Q",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "benq_ew2780u",
+        "brand": "BenQ",
+        "model": "EW2780U",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "benq_mobiuz_ex2710u",
+        "brand": "BenQ",
+        "model": "Mobiuz EX2710U",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "benq_pd2700u",
+        "brand": "BenQ",
+        "model": "PD2700U",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "aoc_cq27g2",
+        "brand": "AOC",
+        "model": "CQ27G2",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "aoc_cu34g2x",
+        "brand": "AOC",
+        "model": "CU34G2X",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "aoc_ag274qx",
+        "brand": "AOC",
+        "model": "AG274QX",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "aoc_24g2",
+        "brand": "AOC",
+        "model": "24G2",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "aoc_q27g2s",
+        "brand": "AOC",
+        "model": "Q27G2S",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "hp_x27q",
+        "brand": "HP",
+        "model": "X27q",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "hp_omen_27",
+        "brand": "HP",
+        "model": "Omen 27",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "hp_z27k_g3",
+        "brand": "HP",
+        "model": "Z27k G3",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "viewsonic_xg270qg",
+        "brand": "ViewSonic",
+        "model": "XG270QG",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "viewsonic_elite_xg270",
+        "brand": "ViewSonic",
+        "model": "Elite XG270",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "viewsonic_vx2758",
+        "brand": "ViewSonic",
+        "model": "VX2758-2KP-MHD",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "corsair_xeneon_27",
+        "brand": "Corsair",
+        "model": "Xeneon 27",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "corsair_xeneon_32",
+        "brand": "Corsair",
+        "model": "Xeneon 32",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "lenovo_g27q_30",
+        "brand": "Lenovo",
+        "model": "G27q-30",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "lenovo_legion_y27q_25",
+        "brand": "Lenovo",
+        "model": "Legion Y27q-25",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "lenovo_legion_y32p_30",
+        "brand": "Lenovo",
+        "model": "Legion Y32p-30",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "philips_275m1rz",
+        "brand": "Philips",
+        "model": "275M1RZ",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "philips_328e1ca",
+        "brand": "Philips",
+        "model": "328E1CA",
+        "width_mm": 698.0,
+        "height_mm": 393.0
+    },
+    {
+        "id": "philips_346p1crh",
+        "brand": "Philips",
+        "model": "346P1CRH",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "lg_c3_42",
+        "brand": "LG",
+        "model": "C3 42\" OLED",
+        "width_mm": 932.0,
+        "height_mm": 532.0
+    },
+    {
+        "id": "samsung_odyssey_oled_g8_34",
+        "brand": "Samsung",
+        "model": "Odyssey OLED G8 34\"",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "dell_aw3423df",
+        "brand": "Dell",
+        "model": "Alienware AW3423DF",
+        "width_mm": 799.0,
+        "height_mm": 339.0
+    },
+    {
+        "id": "asus_rog_swift_oled_pg27aqdm",
+        "brand": "ASUS",
+        "model": "ROG Swift OLED PG27AQDM",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "lg_45gr95qe",
+        "brand": "LG",
+        "model": "45GR95QE-B",
+        "width_mm": 1003.0,
+        "height_mm": 419.0
+    },
+    {
+        "id": "samsung_odyssey_ark_55",
+        "brand": "Samsung",
+        "model": "Odyssey Ark 55\"",
+        "width_mm": 1214.0,
+        "height_mm": 683.0
+    },
+    {
+        "id": "lg_34gs95qe",
+        "brand": "LG",
+        "model": "34GS95QE-B",
+        "width_mm": 799.0,
+        "height_mm": 334.0
+    },
+    {
+        "id": "dell_u2422he",
+        "brand": "Dell",
+        "model": "U2422HE",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "dell_p2422h",
+        "brand": "Dell",
+        "model": "P2422H",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "asus_va24ehe",
+        "brand": "ASUS",
+        "model": "VA24EHE",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "acer_ka242y",
+        "brand": "Acer",
+        "model": "KA242Y",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "samsung_s24r350",
+        "brand": "Samsung",
+        "model": "S24R350",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "lg_27mp600",
+        "brand": "LG",
+        "model": "27MP600-B",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "msi_modern_md271qp",
+        "brand": "MSI",
+        "model": "Modern MD271QP",
+        "width_mm": 597.0,
+        "height_mm": 336.0
+    },
+    {
+        "id": "acer_b247y",
+        "brand": "Acer",
+        "model": "B247Y",
+        "width_mm": 531.0,
+        "height_mm": 299.0
+    },
+    {
+        "id": "benq_gw2480",
+        "brand": "BenQ",
+        "model": "GW2480",
+        "width_mm": 531.0,
+        "height_mm": 299.0
     }
 ]

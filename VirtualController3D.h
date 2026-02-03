@@ -30,6 +30,7 @@ public:
     ~VirtualController3D();
 
     std::string GetName() const { return name; }
+    void SetName(const std::string& n) { name = n; }
     int GetWidth() const { return width; }
     int GetHeight() const { return height; }
     int GetDepth() const { return depth; }
@@ -44,6 +45,8 @@ public:
 
     json ToJson() const;
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
+    /** Build a virtual controller from preset JSON with all mappings bound to the given controller. Used when adding preset for multiple instances (e.g. Fan 1, Fan 2, Fan 3). */
+    static std::unique_ptr<VirtualController3D> FromJsonForController(const json& j, RGBController* controller, const std::string& display_name);
 
 private:
     std::string name;

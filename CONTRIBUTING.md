@@ -1,5 +1,10 @@
 # Contributing to OpenRGB 3D Spatial Plugin
 
+This plugin follows the coding practices and API guidelines of the OpenRGB project. When in doubt, align with:
+
+- **OpenRGB CONTRIBUTING** (style, merge request practices, C-style preferences, no QDebug/printf/cout).
+- **OpenRGB RGBController API** (device/zone/LED/color vectors, `0x00BBGGRR` colors, name/location identity, null and bounds checks).
+
 ## Coding practices
 
 - **DRY** (Don't Repeat Yourself): Extract repeated logic into shared helpers or types; avoid copy-paste.
@@ -25,6 +30,14 @@
 ## OpenRGB RGBController API
 
 The plugin consumes OpenRGB’s **RGBController** (device name, location, zones, LEDs, colors). When reading or writing controller/zone/LED data, follow the OpenRGB RGBController API: use `name` and `location` for device identity; use `zones[].start_idx` and zone LED counts for indices into `leds` and `colors`; colors are 32-bit `0x00BBGGRR`. Always guard controller pointers: custom controllers use `controller == nullptr` and `virtual_controller != nullptr`; physical controllers use `controller != nullptr`. Check `zone_idx < controller->zones.size()` and similar before indexing.
+
+## Filter and sort (universal pattern)
+
+Lists and preset pickers use a **unified filter/sort pattern** so behaviour and look are consistent across the plugin:
+
+- **Filter:** Label **"Filter:"** with a combo that narrows the list (e.g. by brand for monitors, by category for controller presets, by category for the effect library). Use style: `color: gray; font-size: small;` for the label.
+- **Sort:** Label **"Sort:"** with a combo that sets list order (e.g. Brand / Model / Size for monitors; Name / Category / Brand for presets). Same label style as Filter.
+- When adding new list UIs (presets, devices, etc.), use this Filter + Sort row so users see the same pattern everywhere.
 
 ## UI correctness and null safety
 
