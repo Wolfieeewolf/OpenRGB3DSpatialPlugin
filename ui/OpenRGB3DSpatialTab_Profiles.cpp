@@ -220,14 +220,14 @@ bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
 void OpenRGB3DSpatialTab::on_quick_save_layout_clicked()
 {
     // Get current profile name from dropdown
-    if(!layout_profile_combo || layout_profile_combo->currentIndex() < 0)
+    if(!layout_profiles_combo || layout_profiles_combo->currentIndex() < 0)
     {
         QMessageBox::warning(this, "No Profile Selected",
                            "Please select a layout profile first, or use 'Save As...' to create a new one.");
         return;
     }
     
-    QString profile_name = layout_profile_combo->currentText();
+    QString profile_name = layout_profiles_combo->currentText();
     if(profile_name.isEmpty())
     {
         QMessageBox::warning(this, "No Profile Selected",
@@ -241,9 +241,9 @@ void OpenRGB3DSpatialTab::on_quick_save_layout_clicked()
     if(grid_x_spin) custom_grid_x = grid_x_spin->value();
     if(grid_y_spin) custom_grid_y = grid_y_spin->value();
     if(grid_z_spin) custom_grid_z = grid_z_spin->value();
-    if(room_width_spin) room_width_mm = room_width_spin->value();
-    if(room_height_spin) room_height_mm = room_height_spin->value();
-    if(room_depth_spin) room_depth_mm = room_depth_spin->value();
+    if(room_width_spin) manual_room_width = room_width_spin->value();
+    if(room_height_spin) manual_room_height = room_height_spin->value();
+    if(room_depth_spin) manual_room_depth = room_depth_spin->value();
     
     SaveLayout(layout_path);
     ClearLayoutDirty();

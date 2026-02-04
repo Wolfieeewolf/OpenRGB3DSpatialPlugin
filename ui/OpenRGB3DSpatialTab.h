@@ -85,6 +85,7 @@ private slots:
     void on_remove_controller_from_viewport(int index);
     void on_clear_all_clicked();
 
+    void on_quick_save_layout_clicked();
     void on_save_layout_clicked();
     void on_load_layout_clicked();
     void on_delete_layout_clicked();
@@ -156,6 +157,12 @@ private:
     void TryAutoLoadLayout();
     void PopulateLayoutDropdown();
     void SaveCurrentLayoutName();
+    
+    // Dirty flag system
+    void SetLayoutDirty(bool dirty = true);
+    void ClearLayoutDirty();
+    bool IsLayoutDirty() const { return layout_dirty; }
+    bool PromptSaveIfDirty();
     void SaveCustomControllers();
     void LoadCustomControllers();
     void UpdateAvailableItemCombo();
@@ -473,6 +480,10 @@ private:
 
     // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
+
+    // Dirty flag tracking
+    bool layout_dirty = false;
+    QPushButton* save_layout_btn = nullptr;
 
     // Display planes
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
