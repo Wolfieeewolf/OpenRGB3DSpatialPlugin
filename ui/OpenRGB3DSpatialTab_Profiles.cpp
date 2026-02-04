@@ -5,6 +5,8 @@
 #include <QPalette>
 #include <QScrollArea>
 #include <QFrame>
+#include <QMessageBox>
+#include <QTimer>
 
 void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 {
@@ -41,11 +43,19 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     layout_buttons->setSpacing(6);
     layout_buttons->addStretch();
 
-    QPushButton* save_layout_btn = new QPushButton("Save As...");
-    save_layout_btn->setToolTip("Save current controller layout, zones, and reference points");
+    // Quick save button (enabled when dirty)
+    save_layout_btn = new QPushButton("Save");
+    save_layout_btn->setToolTip("Save changes to current layout profile");
+    save_layout_btn->setEnabled(false);
     connect(save_layout_btn, &QPushButton::clicked,
-            this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+            this, &OpenRGB3DSpatialTab::on_quick_save_layout_clicked);
     layout_buttons->addWidget(save_layout_btn);
+
+    QPushButton* save_as_layout_btn = new QPushButton("Save As...");
+    save_as_layout_btn->setToolTip("Save current controller layout, zones, and reference points as a new profile");
+    connect(save_as_layout_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_save_layout_clicked);
+    layout_buttons->addWidget(save_as_layout_btn);
 
     QPushButton* load_layout_btn = new QPushButton("Load");
     load_layout_btn->setToolTip("Load selected layout profile");
@@ -138,4 +148,118 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     profiles_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     tab_widget->insertTab(0, profiles_scroll, "Profiles");
+}
+
+//==============================================================================
+// Dirty Flag System
+//==============================================================================
+
+void OpenRGB3DSpatialTab::SetLayoutDirty(bool dirty)
+{
+    if(layout_dirty == dirty)
+    {
+        return; // No change
+    }
+    
+    layout_dirty = dirty;
+    
+    // Update Save button state and text
+    if(save_layout_btn)
+    {
+        save_layout_btn->setEnabled(dirty);
+        if(dirty)
+        {
+            save_layout_btn->setText("Save *");
+            save_layout_btn->setToolTip("Save changes to current layout profile (unsaved changes)");
+        }
+        else
+        {
+            save_layout_btn->setText("Save");
+            save_layout_btn->setToolTip("Save changes to current layout profile");
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::ClearLayoutDirty()
+{
+    SetLayoutDirty(false);
+}
+
+bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
+{
+    if(!layout_dirty)
+    {
+        return true; // No changes, proceed
+    }
+    
+    QMessageBox msgBox;
+    msgBox.setWindowTitle("Unsaved Changes");
+    msgBox.setText("The current layout has unsaved changes.");
+    msgBox.setInformativeText("Do you want to save your changes?");
+    msgBox.setStandardButtons(QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    msgBox.setDefaultButton(QMessageBox::Save);
+    msgBox.setIcon(QMessageBox::Warning);
+    
+    int ret = msgBox.exec();
+    
+    switch(ret)
+    {
+        case QMessageBox::Save:
+            on_quick_save_layout_clicked();
+            return !layout_dirty; // Return true if save succeeded (dirty cleared)
+            
+        case QMessageBox::Discard:
+            return true; // User chose to discard changes
+            
+        case QMessageBox::Cancel:
+        default:
+            return false; // User cancelled the operation
+    }
+}
+
+void OpenRGB3DSpatialTab::on_quick_save_layout_clicked()
+{
+    // Get current profile name from dropdown
+    if(!layout_profile_combo || layout_profile_combo->currentIndex() < 0)
+    {
+        QMessageBox::warning(this, "No Profile Selected",
+                           "Please select a layout profile first, or use 'Save As...' to create a new one.");
+        return;
+    }
+    
+    QString profile_name = layout_profile_combo->currentText();
+    if(profile_name.isEmpty())
+    {
+        QMessageBox::warning(this, "No Profile Selected",
+                           "Please select a layout profile first, or use 'Save As...' to create a new one.");
+        return;
+    }
+    
+    std::string layout_path = GetLayoutPath(profile_name.toStdString());
+    
+    // Update all settings from UI before saving
+    if(grid_x_spin) custom_grid_x = grid_x_spin->value();
+    if(grid_y_spin) custom_grid_y = grid_y_spin->value();
+    if(grid_z_spin) custom_grid_z = grid_z_spin->value();
+    if(room_width_spin) room_width_mm = room_width_spin->value();
+    if(room_height_spin) room_height_mm = room_height_spin->value();
+    if(room_depth_spin) room_depth_mm = room_depth_spin->value();
+    
+    SaveLayout(layout_path);
+    ClearLayoutDirty();
+    
+    // Show brief feedback
+    if(save_layout_btn)
+    {
+        QString original_text = save_layout_btn->text();
+        save_layout_btn->setText("Saved!");
+        save_layout_btn->setEnabled(false);
+        QTimer::singleShot(1500, this, [this, original_text]()
+        {
+            if(save_layout_btn && !layout_dirty)
+            {
+                save_layout_btn->setText(original_text);
+            }
+        });
+    }
 }
