@@ -43,7 +43,7 @@ public:
     static ResourceManagerInterface* RMPointer;
 
 private:
-    static void                 DeviceListChangedCallback(void* ptr);
+    static void                 DeviceListChangedCallback(void* ptr, unsigned int update_reason);
 
     OpenRGB3DSpatialTab*        ui;
 };

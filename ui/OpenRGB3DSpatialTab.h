@@ -146,7 +146,6 @@ private:
     void LoadDevices();
     void SaveLayout(const std::string& filename);
     void LoadLayout(const std::string& filename);
-    void LoadLayoutFromJSON(const nlohmann::json& layout_json);
     std::string GetLayoutPath(const std::string& layout_name);
     void TryAutoLoadLayout();
     void PopulateLayoutDropdown();
@@ -452,6 +451,10 @@ private slots:
     void on_monitor_filter_or_sort_changed(int);
 
     void on_monitor_preset_text_edited(const QString& text);
+
+    // Public for plugin profile API
+    void LoadLayoutFromJSON(const nlohmann::json& layout_json);
+
 private:
     // Audio Standard Controls (data members)
     QGroupBox*      audio_std_group = nullptr;

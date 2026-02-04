@@ -47,13 +47,13 @@ QWidget* OpenRGB3DSpatialPlugin::GetWidget()
         return nullptr;
     }
 
-    RMPointer->WaitForDeviceDetection();
+    RMPointer->WaitForDetection();
 
     ui = new OpenRGB3DSpatialTab(RMPointer);
 
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    RMPointer->RegisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+    RMPointer->RegisterResourceManagerCallback(DeviceListChangedCallback, ui);
 
     return ui;
 }
@@ -67,20 +67,24 @@ void OpenRGB3DSpatialPlugin::Unload()
 {
     if(RMPointer && ui != nullptr)
     {
-        RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+        RMPointer->UnregisterResourceManagerCallback(DeviceListChangedCallback, ui);
     }
 
     ui = nullptr;
 }
 
-void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
+void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o, unsigned int update_reason)
 {
     if(!o)
     {
         return;
     }
 
-    QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
+    // Only update on device list changes
+    if(update_reason == RESOURCEMANAGER_UPDATE_REASON_DEVICE_LIST_UPDATED)
+    {
+        QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
+    }
 }
 
 void OpenRGB3DSpatialPlugin::OnProfileAboutToLoad()

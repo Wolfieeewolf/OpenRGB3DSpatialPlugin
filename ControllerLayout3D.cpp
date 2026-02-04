@@ -25,47 +25,56 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     std::vector<LEDPosition3D> positions;
     if(!controller) return positions;
 
-    const std::vector<zone>& zones = controller->GetZones();
+    std::size_t zone_count = controller->GetZoneCount();
     unsigned int total_leds = 0;
-    for(unsigned int zone_idx = 0; zone_idx < zones.size(); zone_idx++)
+    for(std::size_t zone_idx = 0; zone_idx < zone_count; zone_idx++)
     {
-        total_leds += zones[zone_idx].leds_count;
+        total_leds += controller->GetZoneLEDsCount((unsigned int)zone_idx);
     }
 
     unsigned int global_led_idx = 0;
-    for(unsigned int zone_idx = 0; zone_idx < zones.size(); zone_idx++)
+    for(std::size_t zone_idx = 0; zone_idx < zone_count; zone_idx++)
     {
-        const zone* current_zone = &zones[zone_idx];
+        unsigned int zone_leds_count = controller->GetZoneLEDsCount((unsigned int)zone_idx);
+        zone_type current_zone_type = controller->GetZoneType((unsigned int)zone_idx);
 
-        for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
+        for(unsigned int led_idx = 0; led_idx < zone_leds_count; led_idx++)
         {
             LEDPosition3D led_pos;
             led_pos.controller = controller;
-            led_pos.zone_idx = zone_idx;
+            led_pos.zone_idx = (unsigned int)zone_idx;
             led_pos.led_idx = led_idx;
 
             unsigned int mapping_idx = led_idx;
-            if(current_zone->type != ZONE_TYPE_MATRIX)
+            if(current_zone_type != ZONE_TYPE_MATRIX)
             {
                 mapping_idx = global_led_idx;
             }
 
             int x_pos, y_pos, z_pos;
 
-            if(controller->GetType() == DEVICE_TYPE_LEDSTRIP)
+            if(controller->GetDeviceType() == DEVICE_TYPE_LEDSTRIP)
             {
                 x_pos = mapping_idx;
                 y_pos = 0;
                 z_pos = 0;
             }
-            else if(controller->GetType() == DEVICE_TYPE_KEYBOARD &&
-                    current_zone->type == ZONE_TYPE_MATRIX &&
-                    current_zone->matrix_map != nullptr)
+            else if(controller->GetDeviceType() == DEVICE_TYPE_KEYBOARD &&
+                    current_zone_type == ZONE_TYPE_MATRIX)
             {
-                int matrix_width = current_zone->matrix_map->width;
-                x_pos = led_idx % matrix_width;
-                y_pos = led_idx / matrix_width;
-                z_pos = 0;
+                unsigned int matrix_width = controller->GetZoneMatrixMapWidth((unsigned int)zone_idx);
+                if(matrix_width > 0)
+                {
+                    x_pos = led_idx % matrix_width;
+                    y_pos = led_idx / matrix_width;
+                    z_pos = 0;
+                }
+                else
+                {
+                    x_pos = mapping_idx % grid_x;
+                    y_pos = (mapping_idx / grid_x) % grid_y;
+                    z_pos = mapping_idx / (grid_x * grid_y);
+                }
             }
             else
             {
