@@ -284,7 +284,7 @@ void CustomControllerDialog::SetupUI()
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
-        available_controllers->addItem(QString::fromStdString(controllers[i]->name));
+        available_controllers->addItem(QString::fromStdString(controllers[i]->GetName()));
     }
 
     color_refresh_timer = new QTimer(this);
@@ -619,10 +619,9 @@ void CustomControllerDialog::UpdateGridDisplay()
                     {
                         // Zone assignment
                         QString zone_name = "Unknown Zone";
-                        const std::vector<zone>& zones = mapping.controller->GetZones();
-                        if(mapping.zone_idx < zones.size())
+                        if(mapping.zone_idx < mapping.controller->GetZoneCount())
                         {
-                            zone_name = QString::fromStdString(zones[mapping.zone_idx].name);
+                            zone_name = QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx));
                         }
                         tooltip_text = QString("Assigned: %1\nZone: %2")
                                        .arg(QString::fromStdString(mapping.controller->GetName()), zone_name);
@@ -632,14 +631,13 @@ void CustomControllerDialog::UpdateGridDisplay()
                         // LED assignment
                         QString led_name = "Unknown LED";
                         unsigned int global_led_idx = 0;
-                        const std::vector<zone>& zones = mapping.controller->GetZones();
-                        const std::vector<led>& leds = mapping.controller->GetLEDs();
-                        if(mapping.zone_idx < zones.size())
+                        if(mapping.zone_idx < mapping.controller->GetZoneCount())
                         {
-                            global_led_idx = zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                            if(global_led_idx < leds.size())
+                            unsigned int zone_start = mapping.controller->GetZoneStartIndex(mapping.zone_idx);
+                            global_led_idx = zone_start + mapping.led_idx;
+                            if(global_led_idx < mapping.controller->GetLEDCount())
                             {
-                                led_name = QString::fromStdString(leds[global_led_idx].name);
+                                led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
                             }
                         }
                         tooltip_text = QString("Assigned: %1\nLED: %2")
@@ -668,21 +666,20 @@ void CustomControllerDialog::UpdateGridDisplay()
                         {
                             assignment_type = " (Whole Device)";
                         }
-                        else if(mapping.granularity == 1 && mapping.zone_idx < mapping.controller->GetZones().size())
+                        else if(mapping.granularity == 1 && mapping.zone_idx < mapping.controller->GetZoneCount())
                         {
-                            assignment_type = QString(" [Zone: %1]").arg(QString::fromStdString(mapping.controller->GetZones()[mapping.zone_idx].name));
+                            assignment_type = QString(" [Zone: %1]").arg(QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx)));
                         }
                         else if(mapping.granularity == 2)
                         {
                             unsigned int global_led_idx = 0;
-                            const std::vector<zone>& zones = mapping.controller->GetZones();
-                            const std::vector<led>& leds = mapping.controller->GetLEDs();
-                            if(mapping.zone_idx < zones.size())
+                            if(mapping.zone_idx < mapping.controller->GetZoneCount())
                             {
-                                global_led_idx = zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                                if(global_led_idx < leds.size())
+                                unsigned int zone_start = mapping.controller->GetZoneStartIndex(mapping.zone_idx);
+                                global_led_idx = zone_start + mapping.led_idx;
+                                if(global_led_idx < mapping.controller->GetLEDCount())
                                 {
-                                    assignment_type = QString(" [LED: %1]").arg(QString::fromStdString(leds[global_led_idx].name));
+                                    assignment_type = QString(" [LED: %1]").arg(QString::fromStdString(mapping.controller->GetLEDName(global_led_idx)));
                                 }
                             }
                         }
@@ -822,10 +819,9 @@ void CustomControllerDialog::UpdateCellInfo()
         {
             // Zone assignment
             QString zone_name = "Unknown Zone";
-            const std::vector<zone>& zones = mapping.controller->GetZones();
-            if(mapping.zone_idx < zones.size())
+            if(mapping.zone_idx < mapping.controller->GetZoneCount())
             {
-                zone_name = QString::fromStdString(zones[mapping.zone_idx].name);
+                zone_name = QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx));
             }
             info += QString(" - Assigned: %1, Zone: %2")
                     .arg(QString::fromStdString(mapping.controller->GetName()), zone_name);
@@ -835,14 +831,13 @@ void CustomControllerDialog::UpdateCellInfo()
             // LED assignment
             QString led_name = "Unknown LED";
             unsigned int global_led_idx = 0;
-            const std::vector<zone>& zones = mapping.controller->GetZones();
-            const std::vector<led>& leds = mapping.controller->GetLEDs();
-            if(mapping.zone_idx < zones.size())
+            if(mapping.zone_idx < mapping.controller->GetZoneCount())
             {
-                global_led_idx = zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                if(global_led_idx < leds.size())
+                unsigned int zone_start = mapping.controller->GetZoneStartIndex(mapping.zone_idx);
+                global_led_idx = zone_start + mapping.led_idx;
+                if(global_led_idx < mapping.controller->GetLEDCount())
                 {
-                    led_name = QString::fromStdString(leds[global_led_idx].name);
+                    led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
                 }
             }
             info += QString(" - Assigned: %1, LED: %2")
@@ -1017,11 +1012,11 @@ void CustomControllerDialog::on_assign_clicked()
         for(unsigned int p = 0; p < positions.size(); p++)
         {
             // Add bounds checking before accessing zones array
-            const std::vector<zone>& zones = controller->GetZones();
-            if(positions[p].zone_idx >= zones.size())
+            if(positions[p].zone_idx >= controller->GetZoneCount())
                 continue;
 
-            unsigned int global_led_idx = zones[positions[p].zone_idx].start_idx + positions[p].led_idx;
+            unsigned int zone_start = controller->GetZoneStartIndex(positions[p].zone_idx);
+            unsigned int global_led_idx = zone_start + positions[p].led_idx;
             if(global_led_idx == (unsigned int)item_idx)
             {
                 GridLEDMapping mapping;
@@ -1220,13 +1215,13 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
     else if(granularity == 2)
     {
-        const std::vector<zone>& zones = controller->GetZones();
         for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
-            if(led_mappings[i].zone_idx >= zones.size())
+            if(led_mappings[i].zone_idx >= controller->GetZoneCount())
                 continue;
 
-            unsigned int global_led_idx = zones[led_mappings[i].zone_idx].start_idx + led_mappings[i].led_idx;
+            unsigned int zone_start = controller->GetZoneStartIndex(led_mappings[i].zone_idx);
+            unsigned int global_led_idx = zone_start + led_mappings[i].led_idx;
             if(led_mappings[i].controller == controller && global_led_idx == (unsigned int)item_idx)
             {
                 return true;
