@@ -10,9 +10,16 @@ Plugins can now save/load state as part of the main OpenRGB profile:
 virtual void OnProfileAboutToLoad() = 0;
 virtual void OnProfileLoad(nlohmann::json profile_data) = 0;
 virtual nlohmann::json OnProfileSave() = 0;
+virtual unsigned char* OnSDKCommand(unsigned int command, unsigned char* data, unsigned int size, unsigned int* out_size) = 0;
 ```
 
-### 2. **RGBController Members Now Protected**
+### 2. **RGBController Per-Item API**
+The vector-returning methods have been replaced with per-item accessors:
+- `controller->GetZones()` → `controller->GetZoneCount()`, `controller->GetZoneName(idx)`, `controller->GetZoneStartIndex(idx)`
+- `controller->GetLEDs()` → `controller->GetLEDCount()`, `controller->GetLEDName(idx)`
+- `controller->GetColors()` → `controller->GetColor(idx)`, `controller->SetColor(idx, color)`
+
+### 3. **RGBController Members Now Protected**
 Direct member access is **BREAKING**. Must use getters:
 - `controller->name` → `controller->GetName()`
 - `controller->description` → `controller->GetDescription()`
@@ -20,102 +27,109 @@ Direct member access is **BREAKING**. Must use getters:
 - `controller->vendor` → `controller->GetVendor()`
 - `controller->serial` → `controller->GetSerial()`
 - `controller->version` → `controller->GetVersion()`
-- `controller->type` → `controller->GetType()`
-- `controller->zones` → `controller->GetZones()` (returns `const std::vector<zone>&`)
-- `controller->leds` → `controller->GetLEDs()` (returns `const std::vector<led>&`)
-- `controller->colors` → `controller->GetColors()` (returns `std::vector<RGBColor>&`)
-- `controller->modes` → `controller->GetModes()` (returns `const std::vector<mode>&`)
-- `controller->active_mode` → `controller->GetActiveMode()` / `controller->SetActiveMode(int)`
-- `controller->flags` → `controller->GetFlags()`
+- `controller->type` → `controller->GetDeviceType()`
 
-### 3. **ProfileManager Now Uses JSON**
-- Profiles stored as `.json` (not binary `.orp`/`.ors`)
-- Auto-load profiles (open, exit, resume, suspend) in ProfileManager settings
-- `SaveProfile()` / `LoadProfile()` API changed
+### 4. **ResourceManager API Updates**
+- `WaitForDeviceDetection()` → `WaitForDetection()`
+- `RegisterDeviceListChangeCallback()` → `RegisterResourceManagerCallback()`
+- Callback signature changed to include `unsigned int update_reason` parameter
 
-### 4. **SDK v6**
-- Unique controller IDs
-- Settings API via SDK
-- Per-zone modes
+### 5. **New Dependencies**
+- `StringUtils.h/cpp` - String utility functions used by RGBController
 
 ---
 
-## Files Requiring Updates
+## Files Updated (15 total)
 
-### Plugin Core
+### ✅ Plugin Core
 - [x] `OpenRGB3DSpatialPlugin.h` - Add new profile API methods
-- [x] `OpenRGB3DSpatialPlugin.cpp` - Implement profile API methods
+- [x] `OpenRGB3DSpatialPlugin.cpp` - Implement profile API methods, update ResourceManager calls
+- [x] `OpenRGB3DSpatialPlugin.pro` - Add StringUtils to build
 
-### Files with Direct Member Access (BREAKING)
-- [ ] `VirtualController3D.cpp` (3 occurrences)
-  - Line 119: `pos.controller->zones.size()` → `pos.controller->GetZones().size()`
-  - Line 159: `controller->name` → `controller->GetName()`
-  - Line 160: `controller->location` → `controller->GetLocation()`
+### ✅ Core Components
+- [x] `ControllerLayout3D.cpp` - Update to per-item zone/LED API
+- [x] `VirtualController3D.cpp` - Update controller matching to use getters
 
-- [ ] `ui/OpenRGB3DSpatialTab_ObjectCreator.cpp` (33 occurrences)
-  - Line 783: `controller->name` → `controller->GetName()`
-  - Line 788: `controller->zones.size()` → `controller->GetZones().size()`
-  - Line 792: `controller->zones[i].name` → `controller->GetZones()[i].name`
-  - Line 798: `controller->leds.size()` → `controller->GetLEDs().size()`
-  - Line 802: `controller->leds[i].name` → `controller->GetLEDs()[i].name`
-  - Lines 1069, 1073, 1082, 1093, 1097, 1109, 1117: Similar patterns
-  - Lines 2570-2572, 2945, 2979, 3039-3070, 3552, 3566, 3578, 3633: More patterns
-
-- [ ] `ui/OpenRGB3DSpatialTab_Audio.cpp` (1 occurrence)
-  - Line 568: `controller->name` → `controller->GetName()`
-
-- [ ] `ui/CustomControllerDialog.cpp` (52 occurrences)
-  - Lines 353-375: `controller->zones`, `controller->leds` access
-  - Lines 612-641: Multiple member accesses in tooltip generation
-  - More throughout file
-
-- [ ] `ui/LEDViewport3D.cpp` (5 occurrences)
-  - Check for `controller->` member access
-
-- [ ] `ControllerLayout3D.cpp` (6 occurrences)
-  - Check for `controller->zones`, `controller->type`, `controller->leds` access
-
-- [ ] `ui/OpenRGB3DSpatialTab_Zones.cpp` (7 occurrences)
-  - Check for `controller->` member access
-
-- [ ] `ui/OpenRGB3DSpatialTab_EffectStackRender.cpp` (10 occurrences)
-  - Check for `controller->colors`, `controller->zones` access
+### ✅ UI Components
+- [x] `ui/OpenRGB3DSpatialTab.h` - Make LoadLayoutFromJSON public
+- [x] `ui/OpenRGB3DSpatialTab_Zones.cpp` - Fix namespace conflict, update to per-item API
+- [x] `ui/OpenRGB3DSpatialTab_ObjectCreator.cpp` - Update 24 instances to per-item API
+- [x] `ui/OpenRGB3DSpatialTab_EffectStackRender.cpp` - Update 6 instances to per-item API
+- [x] `ui/CustomControllerDialog.cpp` - Update 12 instances to per-item API
+- [x] `ui/LEDViewport3D.cpp` - Update 3 instances to per-item API
 
 ---
 
-## Implementation Plan
+## Implementation Summary
 
-### Phase 1: Add Profile API (Required for Compilation)
-1. Update `OpenRGB3DSpatialPlugin.h` with new methods
-2. Implement stub methods in `OpenRGB3DSpatialPlugin.cpp`
-3. Wire up to existing save/load system
+### Phase 1: Core API Changes ✅ **COMPLETE**
+- [x] Added `OnProfileAboutToLoad()`, `OnProfileLoad()`, `OnProfileSave()`, `OnSDKCommand()` to plugin interface
+- [x] Implemented basic profile load for layout JSON
+- [x] Updated `WaitForDeviceDetection()` → `WaitForDetection()`
+- [x] Updated `RegisterDeviceListChangeCallback()` → `RegisterResourceManagerCallback()`
+- [x] Updated callback signature to include `update_reason` parameter
+- [x] Added StringUtils to build system
 
-### Phase 2: Replace Direct Member Access (BREAKING CHANGES)
-1. VirtualController3D.cpp
-2. OpenRGB3DSpatialTab_ObjectCreator.cpp
-3. CustomControllerDialog.cpp
-4. LEDViewport3D.cpp
-5. ControllerLayout3D.cpp
-6. OpenRGB3DSpatialTab_Zones.cpp
-7. OpenRGB3DSpatialTab_EffectStackRender.cpp
-8. OpenRGB3DSpatialTab_Audio.cpp
+### Phase 2: Per-Item API Migration ✅ **COMPLETE**
+All files updated to use the new per-item API:
+- Replaced `GetZones()` vector access with `GetZoneCount()` + `GetZoneName(idx)`
+- Replaced `GetLEDs()` vector access with `GetLEDCount()` + `GetLEDName(idx)`
+- Replaced `GetColors()` vector access with `GetColor(idx)` + `SetColor(idx, color)`
+- Used `GetZoneStartIndex(idx)` for LED global index calculations
+- Replaced all direct member access with getter methods
 
-### Phase 3: Test & Validate
-1. Build and fix any remaining compilation errors
-2. Test layout save/load
-3. Test effect stack
-4. Test custom controllers
-5. Test profile integration
+**Key Fixes:**
+- Fixed namespace conflict in `OpenRGB3DSpatialTab_Zones.cpp` (local `zone` variable vs `OpenRGB::zone` struct)
+- Fixed undeclared identifier errors after removing vector references
+- Updated all tooltip, info display, and validation logic
 
-### Phase 4: Save/Load Audit
-Once compilation works, audit all save/load paths per CONTRIBUTING.md
+### Phase 3: Compilation ✅ **COMPLETE**
+- [x] All 15 files successfully updated
+- [x] Plugin compiles successfully on `next` branch
+- [x] Only remaining warning is from OpenRGB's own code (C4267 in RGBController.cpp:1411)
+
+---
+
+## Next Steps
+
+### Phase 4: Testing & Validation
+- [ ] Build OpenRGB from `next_profile_updates` branch
+- [ ] Test plugin loading and initialization
+- [ ] Test device detection and layout generation
+- [ ] Test effect rendering
+- [ ] Test custom controllers
+- [ ] Test profile save/load
+
+### Phase 5: Full Profile Implementation
+- [ ] Implement complete `OnProfileSave()` to save all plugin state:
+  - Layout (zones, reference points, display planes)
+  - Custom controllers
+  - Effect stack
+  - Effect profiles
+  - Stack presets
+- [ ] Implement complete `OnProfileLoad()` to restore all plugin state
+- [ ] Test profile persistence across OpenRGB restarts
+
+### Phase 6: Critical Bug Fixes (from SAVE_LOAD_AUDIT.md)
+- [ ] Fix zones not being saved
+- [ ] Fix reference points not being saved
+- [ ] Fix display planes not being saved
 
 ---
 
 ## Status
+
+✅ **API v5 Migration: COMPILATION COMPLETE**
+
 - [x] Branch created: `next`
 - [x] Submodule updated to `next_profile_updates` (2105319d)
-- [ ] Phase 1: Profile API
-- [ ] Phase 2: Member access migration
-- [ ] Phase 3: Testing
-- [ ] Phase 4: Save/load audit
+- [x] Phase 1: Core API ✅
+- [x] Phase 2: Per-Item API Migration ✅
+- [x] Phase 3: Compilation ✅
+- [ ] Phase 4: Testing & Validation
+- [ ] Phase 5: Full Profile Implementation
+- [ ] Phase 6: Critical Bug Fixes
+
+**The plugin now compiles successfully with OpenRGB API v5!** 🎉
+
+The `master` branch remains stable with the old API. The `next` branch is ready for testing with OpenRGB's `next_profile_updates` branch.
