@@ -300,6 +300,9 @@ win32:DEFINES +=                                                                
     _WINSOCK_DEPRECATED_NO_WARNINGS                                                             \
     WIN32_LEAN_AND_MEAN                                                                         \
 
+# Suppress size_t to unsigned int conversion warnings from OpenRGB submodule
+win32:QMAKE_CXXFLAGS += /wd4267
+
 #-----------------------------------------------------------------------------------------------#
 # Linux-specific Configuration                                                                  #
 #-----------------------------------------------------------------------------------------------#
