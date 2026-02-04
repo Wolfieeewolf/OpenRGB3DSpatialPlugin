@@ -334,19 +334,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     continue;
                 }
 
-                const std::vector<zone>& zones = mapping.controller->GetZones();
-                std::vector<RGBColor>& colors = mapping.controller->GetColors();
-                if(zones.empty() || colors.empty())
+                std::size_t zone_count = mapping.controller->GetZoneCount();
+                std::size_t led_count = mapping.controller->GetLEDCount();
+                if(zone_count == 0 || led_count == 0)
                 {
                     continue;
                 }
 
-                if(mapping.zone_idx < zones.size())
+                if(mapping.zone_idx < zone_count)
                 {
-                    unsigned int led_global_idx = zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                    if(led_global_idx < colors.size())
+                    unsigned int zone_start = mapping.controller->GetZoneStartIndex(mapping.zone_idx);
+                    unsigned int led_global_idx = zone_start + mapping.led_idx;
+                    if(led_global_idx < led_count)
                     {
-                        colors[led_global_idx] = final_color;
+                        mapping.controller->SetColor(led_global_idx, final_color);
                     }
                 }
             }
@@ -362,9 +363,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 continue;
             }
 
-            const std::vector<zone>& zones = controller->GetZones();
-            std::vector<RGBColor>& colors = controller->GetColors();
-            if(zones.empty() || colors.empty())
+            std::size_t zone_count = controller->GetZoneCount();
+            std::size_t led_count = controller->GetLEDCount();
+            if(zone_count == 0 || led_count == 0)
             {
                 continue;
             }
@@ -385,14 +386,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_z = world_pos.z;
 
                 // Validate zone index before accessing
-                const std::vector<zone>& zones = controller->GetZones();
-                if(led_position.zone_idx >= zones.size())
+                if(led_position.zone_idx >= controller->GetZoneCount())
                 {
                     continue; // Skip invalid zone
                 }
 
                 // Get the actual LED index for color updates
-                unsigned int led_global_idx = zones[led_position.zone_idx].start_idx + led_position.led_idx;
+                unsigned int zone_start = controller->GetZoneStartIndex(led_position.zone_idx);
+                unsigned int led_global_idx = zone_start + led_position.led_idx;
 
                 RGBColor final_color = ToRGBColor(0, 0, 0);
                 for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
