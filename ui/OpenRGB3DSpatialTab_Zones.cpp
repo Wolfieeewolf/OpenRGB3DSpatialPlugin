@@ -56,10 +56,11 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         }
         else if(ctrl->controller)
         {
-            name = QString::fromStdString(ctrl->controller->name);
-            if(ctrl->granularity == 1 && ctrl->item_idx < (int)ctrl->controller->zones.size())
+            name = QString::fromStdString(ctrl->controller->GetName());
+            const std::vector<zone>& zones = ctrl->controller->GetZones();
+            if(ctrl->granularity == 1 && ctrl->item_idx < (int)zones.size())
             {
-                name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
+                name += " - " + QString::fromStdString(zones[ctrl->item_idx].name);
             }
         }
         else
@@ -148,10 +149,11 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         }
         else if(ctrl->controller)
         {
-            name = QString::fromStdString(ctrl->controller->name);
-            if(ctrl->granularity == 1 && ctrl->item_idx < (int)ctrl->controller->zones.size())
+            name = QString::fromStdString(ctrl->controller->GetName());
+            const std::vector<zone>& zones = ctrl->controller->GetZones();
+            if(ctrl->granularity == 1 && ctrl->item_idx < (int)zones.size())
             {
-                name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
+                name += " - " + QString::fromStdString(zones[ctrl->item_idx].name);
             }
         }
         else
@@ -301,7 +303,7 @@ void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_va
         {
             if(transform->controller)
             {
-                base_name = QString::fromStdString(transform->controller->name);
+                base_name = QString::fromStdString(transform->controller->GetName());
             }
             if(transform->virtual_controller && base_name.isEmpty())
             {

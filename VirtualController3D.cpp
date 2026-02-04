@@ -116,7 +116,7 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
 
-        if(pos.zone_idx >= pos.controller->zones.size())
+        if(pos.zone_idx >= pos.controller->GetZones().size())
         {
             continue;
         }
@@ -156,8 +156,8 @@ json VirtualController3D::ToJson() const
         m["z"] = led_mappings[i].z;
         if(led_mappings[i].controller)
         {
-            m["controller_name"] = led_mappings[i].controller->name;
-            m["controller_location"] = led_mappings[i].controller->location;
+            m["controller_name"] = led_mappings[i].controller->GetName();
+            m["controller_location"] = led_mappings[i].controller->GetLocation();
         }
         else
         {

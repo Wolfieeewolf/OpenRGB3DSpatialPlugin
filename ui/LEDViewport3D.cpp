@@ -764,7 +764,7 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
 
             if(ctrl && ctrl->controller)
             {
-                controller_name = QString::fromStdString(ctrl->controller->name);
+                controller_name = QString::fromStdString(ctrl->controller->GetName());
             }
             else if(ctrl && ctrl->virtual_controller)
             {
@@ -1621,12 +1621,17 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
             const LEDPosition3D& pos = ctrl->led_positions[i];
             RGBColor color = pos.preview_color;
 
-            if(ctrl->controller && pos.zone_idx < ctrl->controller->zones.size())
+            if(ctrl->controller)
             {
-                unsigned int global_led_idx = ctrl->controller->zones[pos.zone_idx].start_idx + pos.led_idx;
-                if(global_led_idx < ctrl->controller->colors.size())
+                const std::vector<zone>& zones = ctrl->controller->GetZones();
+                const std::vector<RGBColor>& colors = ctrl->controller->GetColors();
+                if(pos.zone_idx < zones.size())
                 {
-                    color = ctrl->controller->colors[global_led_idx];
+                    unsigned int global_led_idx = zones[pos.zone_idx].start_idx + pos.led_idx;
+                    if(global_led_idx < colors.size())
+                    {
+                        color = colors[global_led_idx];
+                    }
                 }
             }
 

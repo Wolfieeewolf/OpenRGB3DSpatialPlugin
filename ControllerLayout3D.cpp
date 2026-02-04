@@ -25,16 +25,17 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     std::vector<LEDPosition3D> positions;
     if(!controller) return positions;
 
+    const std::vector<zone>& zones = controller->GetZones();
     unsigned int total_leds = 0;
-    for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
+    for(unsigned int zone_idx = 0; zone_idx < zones.size(); zone_idx++)
     {
-        total_leds += controller->zones[zone_idx].leds_count;
+        total_leds += zones[zone_idx].leds_count;
     }
 
     unsigned int global_led_idx = 0;
-    for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
+    for(unsigned int zone_idx = 0; zone_idx < zones.size(); zone_idx++)
     {
-        zone* current_zone = &controller->zones[zone_idx];
+        const zone* current_zone = &zones[zone_idx];
 
         for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
         {
@@ -51,13 +52,13 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
 
             int x_pos, y_pos, z_pos;
 
-            if(controller->type == DEVICE_TYPE_LEDSTRIP)
+            if(controller->GetType() == DEVICE_TYPE_LEDSTRIP)
             {
                 x_pos = mapping_idx;
                 y_pos = 0;
                 z_pos = 0;
             }
-            else if(controller->type == DEVICE_TYPE_KEYBOARD &&
+            else if(controller->GetType() == DEVICE_TYPE_KEYBOARD &&
                     current_zone->type == ZONE_TYPE_MATRIX &&
                     current_zone->matrix_map != nullptr)
             {

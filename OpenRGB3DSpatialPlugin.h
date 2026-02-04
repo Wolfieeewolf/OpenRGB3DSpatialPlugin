@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QWidget>
 #include <QMenu>
+#include <nlohmann/json.hpp>
 #include "OpenRGBPluginInterface.h"
 #include "ResourceManagerInterface.h"
 #include "OpenRGB3DSpatialTab.h"
@@ -34,6 +35,10 @@ public:
     virtual QWidget*            GetWidget()                                                         override;
     virtual QMenu*              GetTrayMenu()                                                       override;
     virtual void                Unload()                                                            override;
+    virtual void                OnProfileAboutToLoad()                                              override;
+    virtual void                OnProfileLoad(nlohmann::json profile_data)                          override;
+    virtual nlohmann::json      OnProfileSave()                                                     override;
+    virtual unsigned char*      OnSDKCommand(unsigned int pkt_id, unsigned char * pkt_data, unsigned int *pkt_size)      override;
 
     static ResourceManagerInterface* RMPointer;
 

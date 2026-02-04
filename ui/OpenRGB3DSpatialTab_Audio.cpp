@@ -565,7 +565,7 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
         QString name;
         if(t && t->controller)
         {
-            name = QString::fromStdString(t->controller->name);
+            name = QString::fromStdString(t->controller->GetName());
         }
         else if(t && t->virtual_controller)
         {
