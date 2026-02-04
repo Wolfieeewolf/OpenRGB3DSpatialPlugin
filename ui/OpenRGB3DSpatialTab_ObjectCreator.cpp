@@ -129,7 +129,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
         if(unassigned_leds > 0)
         {
-            QString display_text = QString::fromStdString(controllers[i]->name) +
+            QString display_text = QString::fromStdString(controllers[i]->GetName()) +
                                    QString(" [%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
             QListWidgetItem* item = new QListWidgetItem(display_text);
             item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(static_cast<int>(i), -1)));
@@ -785,23 +785,23 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         }
         else if(granularity == 1)
         {
-            const std::vector<zone>& zones = controller->GetZones();
-            for(unsigned int i = 0; i < zones.size(); i++)
+            std::size_t zone_count = controller->GetZoneCount();
+            for(std::size_t i = 0; i < zone_count; i++)
             {
-                if(!IsItemInScene(controller, granularity, i))
+                if(!IsItemInScene(controller, granularity, (unsigned int)i))
                 {
-                    item_combo->addItem(QString::fromStdString(zones[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                    item_combo->addItem(QString::fromStdString(controller->GetZoneName((unsigned int)i)), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
                 }
             }
         }
         else if(granularity == 2)
         {
-            const std::vector<led>& leds = controller->GetLEDs();
-            for(unsigned int i = 0; i < leds.size(); i++)
+            std::size_t led_count = controller->GetLEDCount();
+            for(std::size_t i = 0; i < led_count; i++)
             {
-                if(!IsItemInScene(controller, granularity, i))
+                if(!IsItemInScene(controller, granularity, (unsigned int)i))
                 {
-                    item_combo->addItem(QString::fromStdString(leds[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                    item_combo->addItem(QString::fromStdString(controller->GetLEDName((unsigned int)i)), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
                 }
             }
         }
@@ -1072,8 +1072,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     }
     else if(granularity == 1)
     {
-        const std::vector<zone>& zones = controller->GetZones();
-        if(item_row >= (int)zones.size())
+        std::size_t zone_count = controller->GetZoneCount();
+        if(item_row >= (int)zone_count)
         {
             return;  // ctrl_transform auto-deleted
         }
@@ -1082,7 +1082,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
-        const zone* z = &zones[item_row];
+        std::string zone_name = controller->GetZoneName((unsigned int)item_row);
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
@@ -1093,13 +1093,12 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         }
         
 
-        name = QString("[Zone] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(z->name);
+        name = QString("[Zone] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(zone_name);
     }
     else if(granularity == 2)
     {
-        const std::vector<led>& leds = controller->GetLEDs();
-        const std::vector<zone>& zones = controller->GetZones();
-        if(item_row >= (int)leds.size())
+        std::size_t led_count = controller->GetLEDCount();
+        if(item_row >= (int)led_count)
         {
             return;  // ctrl_transform auto-deleted
         }
@@ -1111,7 +1110,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
-            unsigned int global_led_idx = zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+            unsigned int zone_start = controller->GetZoneStartIndex(all_positions[i].zone_idx);
+            unsigned int global_led_idx = zone_start + all_positions[i].led_idx;
             if(global_led_idx == (unsigned int)item_row)
             {
                 ctrl_transform->led_positions.push_back(all_positions[i]);
@@ -1119,7 +1119,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             }
         }
 
-        name = QString("[LED] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(leds[item_row].name);
+        name = QString("[LED] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(controller->GetLEDName((unsigned int)item_row));
     }
 
     int hue = (controller_transforms.size() * 137) % 360;
@@ -1887,7 +1887,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         {
             return truncate(brand_model, max_len);
         }
-        return c ? truncate(c->name, max_len) : std::string();
+        return c ? truncate(c->GetName(), max_len) : std::string();
     };
 
     std::string preset_location = j["mappings"].empty() ? std::string() : j["mappings"][0].value("controller_location", std::string());
@@ -1896,13 +1896,20 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     auto controllerSearchText = [](RGBController* c) -> QString
     {
         std::string t;
-        if(!c->name.empty()) t += c->name + " ";
-        if(!c->description.empty()) t += c->description + " ";
-        if(!c->location.empty()) t += c->location + " ";
-        if(!c->vendor.empty()) t += c->vendor + " ";
-        if(!c->serial.empty()) t += c->serial + " ";
-        if(!c->version.empty()) t += c->version + " ";
-        t += device_type_to_str(c->type);
+        std::string name = c->GetName();
+        std::string description = c->GetDescription();
+        std::string location = c->GetLocation();
+        std::string vendor = c->GetVendor();
+        std::string serial = c->GetSerial();
+        std::string version = c->GetVersion();
+        
+        if(!name.empty()) t += name + " ";
+        if(!description.empty()) t += description + " ";
+        if(!location.empty()) t += location + " ";
+        if(!vendor.empty()) t += vendor + " ";
+        if(!serial.empty()) t += serial + " ";
+        if(!version.empty()) t += version + " ";
+        t += device_type_to_str(c->GetDeviceType());
         return QString::fromStdString(t).toLower();
     };
 
@@ -1916,7 +1923,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     for(RGBController* c : all_controllers)
     {
         if(!c) continue;
-        QString actual_name = QString::fromStdString(c->name);
+        QString actual_name = QString::fromStdString(c->GetName());
         if(actual_name.compare(preset_ctrl_name, Qt::CaseInsensitive) == 0)
         {
             matching.push_back(c);
@@ -1929,7 +1936,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
             matching.push_back(c);
             continue;
         }
-        if(!preset_location_q.isEmpty() && QString::fromStdString(c->location).trimmed() == preset_location_q)
+        if(!preset_location_q.isEmpty() && QString::fromStdString(c->GetLocation()).trimmed() == preset_location_q)
         {
             matching.push_back(c);
             continue;
@@ -2817,7 +2824,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             {
                 for(unsigned int j = 0; j < controllers.size(); j++)
                 {
-                    if(controllers[j]->name == ctrl_name && controllers[j]->location == ctrl_location)
+                    if(controllers[j]->GetName() == ctrl_name && controllers[j]->GetLocation() == ctrl_location)
                     {
                         controller = controllers[j];
                         break;
@@ -2947,10 +2954,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             // Calculate global LED index from zone/led indices
                             unsigned int zone_idx = ctrl_transform->led_positions[0].zone_idx;
                             unsigned int led_idx = ctrl_transform->led_positions[0].led_idx;
-                            const std::vector<zone>& zones = controller->GetZones();
-                            if(zone_idx < zones.size())
+                            std::size_t zone_count = controller->GetZoneCount();
+                            if(zone_idx < zone_count)
                             {
-                                ctrl_transform->item_idx = zones[zone_idx].start_idx + led_idx;
+                                ctrl_transform->item_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
                             }
                         }
                     }
@@ -3040,8 +3047,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             else
             {
                 // Use granularity info to create proper name with prefix
-                const std::vector<zone>& zones = controller->GetZones();
-                const std::vector<led>& leds = controller->GetLEDs();
+                std::size_t zone_count = controller->GetZoneCount();
+                std::size_t led_count = controller->GetLEDCount();
                 if(granularity == 0)
                 {
                     name = QString("[Device] ") + QString::fromStdString(controller->GetName());
@@ -3555,10 +3562,10 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         else if(granularity == 2)
         {
             // Check if this specific LED is in the controller
-            const std::vector<zone>& zones = controller->GetZones();
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                unsigned int global_led_idx = zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
+                unsigned int zone_start = controller->GetZoneStartIndex(ct->led_positions[j].zone_idx);
+                unsigned int global_led_idx = zone_start + ct->led_positions[j].led_idx;
                 if(global_led_idx == (unsigned int)item_idx)
                 {
                     return true;
@@ -3571,11 +3578,11 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
 
 int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 {
-    const std::vector<zone>& zones = controller->GetZones();
+    std::size_t zone_count = controller->GetZoneCount();
     int unassigned_count = 0;
-    for(unsigned int i = 0; i < zones.size(); i++)
+    for(std::size_t i = 0; i < zone_count; i++)
     {
-        if(!IsItemInScene(controller, 1, i))
+        if(!IsItemInScene(controller, 1, (int)i))
         {
             unassigned_count++;
         }
@@ -3585,7 +3592,7 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 
 int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
 {
-    int total_leds = (int)controller->GetLEDs().size();
+    int total_leds = (int)controller->GetLEDCount();
     int assigned_leds = 0;
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
@@ -3638,10 +3645,10 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         else if(transform->granularity == 2)
         {
             // LED - filter to specific LED
-            const std::vector<zone>& zones = transform->controller->GetZones();
             for(unsigned int i = 0; i < all_positions.size(); i++)
             {
-                unsigned int global_led_idx = zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+                unsigned int zone_start = transform->controller->GetZoneStartIndex(all_positions[i].zone_idx);
+                unsigned int global_led_idx = zone_start + all_positions[i].led_idx;
                 if(global_led_idx == (unsigned int)transform->item_idx)
                 {
                     transform->led_positions.push_back(all_positions[i]);
