@@ -1595,12 +1595,13 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
                 unsigned int zone_idx = mappings[i].zone_idx;
                 unsigned int led_idx = mappings[i].led_idx;
                 RGBController* mapping_ctrl = mappings[i].controller;
-                if(mapping_ctrl && zone_idx < mapping_ctrl->zones.size())
+                if(mapping_ctrl && zone_idx < mapping_ctrl->GetZoneCount())
                 {
-                    unsigned int global_led_idx = mapping_ctrl->zones[zone_idx].start_idx + led_idx;
-                    if(global_led_idx < mapping_ctrl->colors.size())
+                    unsigned int zone_start = mapping_ctrl->GetZoneStartIndex(zone_idx);
+                    unsigned int global_led_idx = zone_start + led_idx;
+                    if(global_led_idx < mapping_ctrl->GetLEDCount())
                     {
-                        color = mapping_ctrl->colors[global_led_idx];
+                        color = mapping_ctrl->GetColor(global_led_idx);
                     }
                 }
             }
@@ -1623,14 +1624,13 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
 
             if(ctrl->controller)
             {
-                const std::vector<zone>& zones = ctrl->controller->GetZones();
-                const std::vector<RGBColor>& colors = ctrl->controller->GetColors();
-                if(pos.zone_idx < zones.size())
+                if(pos.zone_idx < ctrl->controller->GetZoneCount())
                 {
-                    unsigned int global_led_idx = zones[pos.zone_idx].start_idx + pos.led_idx;
-                    if(global_led_idx < colors.size())
+                    unsigned int zone_start = ctrl->controller->GetZoneStartIndex(pos.zone_idx);
+                    unsigned int global_led_idx = zone_start + pos.led_idx;
+                    if(global_led_idx < ctrl->controller->GetLEDCount())
                     {
-                        color = colors[global_led_idx];
+                        color = ctrl->controller->GetColor(global_led_idx);
                     }
                 }
             }

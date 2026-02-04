@@ -3056,33 +3056,34 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 else if(granularity == 1)
                 {
                     name = QString("[Zone] ") + QString::fromStdString(controller->GetName());
-                    if(item_idx >= 0 && item_idx < (int)zones.size())
+                    if(item_idx >= 0 && item_idx < (int)zone_count)
                     {
-                        name += " - " + QString::fromStdString(zones[item_idx].name);
+                        name += " - " + QString::fromStdString(controller->GetZoneName((unsigned int)item_idx));
                     }
                 }
                 else if(granularity == 2)
                 {
                     name = QString("[LED] ") + QString::fromStdString(controller->GetName());
-                    if(item_idx >= 0 && item_idx < (int)leds.size())
+                    if(item_idx >= 0 && item_idx < (int)led_count)
                     {
-                        name += " - " + QString::fromStdString(leds[item_idx].name);
+                        name += " - " + QString::fromStdString(controller->GetLEDName((unsigned int)item_idx));
                     }
                 }
                 else
                 {
                     // Fallback for old files without granularity
                     name = QString::fromStdString(controller->GetName());
-                    if(led_positions_size < leds.size())
+                    if(led_positions_size < led_count)
                     {
                         if(led_positions_size == 1)
                         {
-                            unsigned int led_global_idx = zones[first_zone_idx].start_idx + first_led_idx;
-                            name = QString("[LED] ") + name + " - " + QString::fromStdString(leds[led_global_idx].name);
+                            unsigned int zone_start = controller->GetZoneStartIndex(first_zone_idx);
+                            unsigned int led_global_idx = zone_start + first_led_idx;
+                            name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->GetLEDName(led_global_idx));
                         }
                         else
                         {
-                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(zones[first_zone_idx].name);
+                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->GetZoneName(first_zone_idx));
                         }
                     }
                     else

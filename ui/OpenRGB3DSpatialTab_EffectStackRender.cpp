@@ -452,9 +452,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 transform->led_positions[led_pos_idx].preview_color = final_color;
 
-                if(led_global_idx < colors.size())
+                if(led_global_idx < led_count)
                 {
-                    colors[led_global_idx] = final_color;
+                    controller->SetColor(led_global_idx, final_color);
                 }
             }
 
