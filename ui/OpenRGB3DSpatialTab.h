@@ -60,6 +60,9 @@ public:
     /** Current grid scale (mm per unit) used by viewport and effects for consistent math. */
     float GetGridScaleMM() const { return grid_scale_mm; }
 
+    /** Public for plugin profile API - loads layout from JSON */
+    void LoadLayoutFromJSON(const nlohmann::json& layout_json);
+
 signals:
     void GridLayoutChanged();
 
@@ -451,9 +454,6 @@ private slots:
     void on_monitor_filter_or_sort_changed(int);
 
     void on_monitor_preset_text_edited(const QString& text);
-
-    // Public for plugin profile API
-    void LoadLayoutFromJSON(const nlohmann::json& layout_json);
 
 private:
     // Audio Standard Controls (data members)
