@@ -141,11 +141,13 @@ HEADERS +=                                                                      
     OpenRGB/RGBController/RGBController.h                                                       \
     OpenRGB/LogManager.h                                                                        \
     OpenRGB/NetworkServer.h                                                                     \
+    OpenRGB/StringUtils.h                                                                       \
 
 SOURCES +=                                                                                      \
     OpenRGB/RGBController/RGBController.cpp                                                     \
     OpenRGB/LogManager.cpp                                                                      \
-    OpenRGB/qt/hsv.cpp
+    OpenRGB/qt/hsv.cpp                                                                          \
+    OpenRGB/StringUtils.cpp
 
 #-------------------------------------------------------------------#
 # Includes                                                          #
