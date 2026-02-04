@@ -98,6 +98,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty(); // Mark layout as modified
 
         QMessageBox::information(this, "Zone Created",
                                 QString("Zone '%1' created with %2 controller(s).")
@@ -193,6 +194,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty(); // Mark layout as modified
 
         QMessageBox::information(this, "Zone Updated",
                                 QString("Zone '%1' now has %2 controller(s).")
@@ -228,6 +230,7 @@ void OpenRGB3DSpatialTab::on_delete_zone_clicked()
         zone_manager->DeleteZone(selected_idx);
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty(); // Mark layout as modified
     }
 }
 
@@ -351,10 +354,8 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::SaveZones()
 {
-    // Zones are automatically saved as part of the layout JSON
-    // when SaveLayout() is called. This function is kept for
-    // future standalone save functionality if needed.
-    
+    // Mark layout as dirty - zones will be saved when user saves layout profile
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::LoadZones()

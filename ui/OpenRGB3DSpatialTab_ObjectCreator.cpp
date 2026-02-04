@@ -495,6 +495,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        SetLayoutDirty();
 
         // Block signals to prevent feedback loops
         pos_x_spin->blockSignals(true);
@@ -538,6 +539,7 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ctrl->transform.rotation.y = y;
         ctrl->transform.rotation.z = z;
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        SetLayoutDirty();
 
         // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);
@@ -1134,6 +1136,10 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
     }
+    
+    // Mark layout as dirty when controller added
+    SetLayoutDirty();
+    
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1242,6 +1248,10 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
         viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
     }
+    
+    // Mark layout as dirty when controller removed
+    SetLayoutDirty();
+    
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1267,6 +1277,10 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
         viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
     }
+    
+    // Mark layout as dirty when all cleared
+    SetLayoutDirty();
+    
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     NotifyDisplayPlaneChanged();
@@ -1338,6 +1352,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     }
 
     SaveLayout(layout_path);
+    ClearLayoutDirty(); // Saving clears dirty flag
 
     PopulateLayoutDropdown();
 
@@ -1356,6 +1371,12 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
 
 void OpenRGB3DSpatialTab::on_load_layout_clicked()
 {
+    // Prompt to save if there are unsaved changes
+    if(!PromptSaveIfDirty())
+    {
+        return; // User cancelled
+    }
+    
     if(!layout_profiles_combo) return;
     QString profile_name = layout_profiles_combo->currentText();
 
@@ -1376,6 +1397,7 @@ void OpenRGB3DSpatialTab::on_load_layout_clicked()
     }
 
     LoadLayout(layout_path);
+    ClearLayoutDirty(); // Loading a profile clears dirty flag
     QMessageBox::information(this, "Layout Loaded",
                             QString("Profile '%1' loaded successfully").arg(profile_name));
 }
@@ -4568,6 +4590,9 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     }
 
     display_planes.push_back(std::move(plane));
+    
+    // Mark layout as dirty
+    SetLayoutDirty();
 
     int new_plane_id = display_planes.back() ? display_planes.back()->GetId() : -1;
 
@@ -4726,6 +4751,9 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
 
     display_planes.erase(display_planes.begin() + current_display_plane_index);
     
+    // Mark layout as dirty
+    SetLayoutDirty();
+    
     // Adjust selection index
     if(current_display_plane_index >= (int)display_planes.size())
     {
@@ -4749,6 +4777,7 @@ void OpenRGB3DSpatialTab::on_display_plane_name_edited(const QString& text)
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
     plane->SetName(text.toStdString());
+    SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
     NotifyDisplayPlaneChanged();
     UpdateAvailableControllersList();
@@ -4759,6 +4788,7 @@ void OpenRGB3DSpatialTab::on_display_plane_width_changed(double value)
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
     plane->SetWidthMM((float)value);
+    SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
     NotifyDisplayPlaneChanged();
     ClearMonitorPresetSelectionIfManualEdit();
@@ -4769,6 +4799,7 @@ void OpenRGB3DSpatialTab::on_display_plane_height_changed(double value)
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
     plane->SetHeightMM((float)value);
+    SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
     NotifyDisplayPlaneChanged();
     ClearMonitorPresetSelectionIfManualEdit();
@@ -4912,6 +4943,7 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
     transform.position.x = x;
     transform.position.y = y;
     transform.position.z = z;
+    SetLayoutDirty();
 
     // Update linked reference point position to match display plane
     int ref_index = plane->GetReferencePointIndex();
@@ -4977,6 +5009,7 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
     transform.rotation.x = x;
     transform.rotation.y = y;
     transform.rotation.z = z;
+    SetLayoutDirty();
 
     // Update linked reference point rotation to match display plane
     int ref_index = plane->GetReferencePointIndex();

@@ -41,6 +41,7 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     UpdateAvailableControllersList();
     SelectAvailableControllerEntry(-2, ref_index);
     UpdateReferencePointsList();
+    SaveReferencePoints(); // Mark layout as dirty
 
     // Clear inputs for next point
     ref_point_name_edit->clear();
@@ -82,6 +83,7 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
 
     reference_points.erase(reference_points.begin() + index);
     UpdateReferencePointsList();
+    SaveReferencePoints(); // Mark layout as dirty
     if(viewport) viewport->update();
     UpdateAvailableControllersList();
 }
@@ -212,6 +214,9 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     pos_y_spin->blockSignals(false);
     pos_z_spin->blockSignals(false);
 
+    // Mark layout as dirty when reference point moves
+    SetLayoutDirty();
+
     if(viewport) viewport->update();
 }
 
@@ -280,8 +285,8 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 
 void OpenRGB3DSpatialTab::SaveReferencePoints()
 {
-    // Reference points are now saved as part of the layout JSON
-    // This function is kept for future standalone save functionality if needed
+    // Mark layout as dirty - reference points will be saved when user saves layout profile
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::LoadReferencePoints()
