@@ -145,10 +145,7 @@ nlohmann::json OpenRGB3DSpatialPlugin::OnProfileSave()
         /*-------------------------------------------------*\
         | Save current layout state                         |
         \*-------------------------------------------------*/
-        nlohmann::json layout_json;
-        // TODO: Export layout to JSON (similar to SaveLayout but to JSON object)
-        // For now, return empty - will implement after member access migration
-        plugin_data["3DSpatialPlugin"]["layout"] = layout_json;
+        plugin_data["3DSpatialPlugin"]["layout"] = ui->ExportLayoutToJSON();
     }
     catch(const std::exception& e)
     {

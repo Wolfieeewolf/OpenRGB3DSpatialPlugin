@@ -2524,9 +2524,8 @@ void OpenRGB3DSpatialTab::on_delete_custom_controller_clicked()
     QMessageBox::information(this, "Deleted", QString("Custom controller '%1' removed from library.").arg(QString::fromStdString(name)));
 }
 
-void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
+nlohmann::json OpenRGB3DSpatialTab::ExportLayoutToJSON() const
 {
-
     nlohmann::json layout_json;
 
     // Header Information
@@ -2645,13 +2644,20 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         layout_json["zones"] = zone_manager->ToJSON();
     }
 
+    return layout_json;
+}
+
+void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
+{
+    nlohmann::json layout_json = ExportLayoutToJSON();
+
     // Write JSON to file
     QFile file(QString::fromStdString(filename));
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QString error_msg = QString("Failed to save layout file:\n%1\n\nError: %2")
             .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Save Failed", error_msg);
+        QMessageBox::critical(nullptr, "Save Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for writing: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
         return;
@@ -2665,13 +2671,11 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     {
         QString error_msg = QString("Failed to write layout file:\n%1\n\nError: %2")
             .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Write Failed", error_msg);
+        QMessageBox::critical(nullptr, "Write Failed", error_msg);
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write file: %s - %s",
                   filename.c_str(), file.errorString().toStdString().c_str());
         return;
     }
-
-    
 }
 
 void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)

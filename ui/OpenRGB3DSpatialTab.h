@@ -59,6 +59,9 @@ public:
 
     /** Current grid scale (mm per unit) used by viewport and effects for consistent math. */
     float GetGridScaleMM() const { return grid_scale_mm; }
+    
+    /** Export current layout state to JSON (for OpenRGB profile integration) */
+    nlohmann::json ExportLayoutToJSON() const;
 
     /** Public for plugin profile API - loads layout from JSON */
     void LoadLayoutFromJSON(const nlohmann::json& layout_json);
