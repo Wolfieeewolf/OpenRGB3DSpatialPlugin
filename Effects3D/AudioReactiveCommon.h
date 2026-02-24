@@ -187,11 +187,11 @@ inline void NormalizeAudioReactiveSettings(AudioReactiveSettings3D& cfg)
 inline void AudioGradientSaveToJson(nlohmann::json& j, const std::string& key, const AudioGradient3D& grad)
 {
     nlohmann::json arr = nlohmann::json::array();
-    for(const AudioGradientStop3D& stop : grad.stops)
+    for(size_t i = 0; i < grad.stops.size(); i++)
     {
         nlohmann::json entry;
-        entry["position"] = stop.position;
-        entry["color"] = stop.color;
+        entry["position"] = grad.stops[i].position;
+        entry["color"] = grad.stops[i].color;
         arr.push_back(entry);
     }
     j[key] = arr;
@@ -209,8 +209,9 @@ inline void AudioGradientLoadFromJson(AudioGradient3D& grad, const nlohmann::jso
         return;
     }
     grad.stops.clear();
-    for(const nlohmann::json& entry : arr)
+    for(size_t i = 0; i < arr.size(); i++)
     {
+        const nlohmann::json& entry = arr[i];
         if(!entry.contains("position") || !entry.contains("color"))
         {
             continue;

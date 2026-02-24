@@ -51,7 +51,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    // Hz range
     QHBoxLayout* hz_row = new QHBoxLayout();
     hz_row->addWidget(new QLabel("Low Hz:"));
     QSpinBox* low_spin = new QSpinBox();
@@ -74,7 +73,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Expand speed
     QHBoxLayout* speed_row = new QHBoxLayout();
     speed_row->addWidget(new QLabel("Expand Speed:"));
     QSlider* speed_slider = new QSlider(Qt::Horizontal);
@@ -92,7 +90,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Trail width
     QHBoxLayout* width_row = new QHBoxLayout();
     width_row->addWidget(new QLabel("Ring Width:"));
     QSlider* width_slider = new QSlider(Qt::Horizontal);
@@ -110,7 +107,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Decay
     QHBoxLayout* decay_row = new QHBoxLayout();
     decay_row->addWidget(new QLabel("Decay:"));
     QSlider* decay_slider = new QSlider(Qt::Horizontal);
@@ -128,7 +124,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Trigger threshold
     QHBoxLayout* thresh_row = new QHBoxLayout();
     thresh_row->addWidget(new QLabel("Threshold:"));
     QSlider* thresh_slider = new QSlider(Qt::Horizontal);
@@ -178,18 +173,15 @@ void FreqRipple3D::TickRipples(float time)
                : std::clamp(time - last_tick_time, 0.0f, 0.1f);
     last_tick_time = time;
 
-    // Smooth the onset level
     float onset_raw = AudioInputManager::instance()->getBandEnergyHz(
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
     onset_smoothed = 0.5f * onset_smoothed + 0.5f * onset_raw;
 
-    // Decay hold timer
     if(onset_hold > 0.0f)
     {
         onset_hold = std::max(0.0f, onset_hold - dt);
     }
 
-    // Trigger a new ripple when above threshold and hold expired
     if(onset_hold <= 0.0f && onset_smoothed >= onset_threshold)
     {
         Ripple r;
@@ -199,7 +191,6 @@ void FreqRipple3D::TickRipples(float time)
         onset_hold = 0.12f; // minimum gap between triggers
     }
 
-    // Remove ripples that have fully decayed or travelled past 2x max radius
     ripples.erase(std::remove_if(ripples.begin(), ripples.end(),
         [&](const Ripple& r) {
             float age = time - r.birth_time;
@@ -212,16 +203,16 @@ RGBColor FreqRipple3D::ComputeRippleColor(float dist_norm, float time) const
 {
     RGBColor result = ToRGBColor(0, 0, 0);
 
-    for(const Ripple& r : ripples)
+    for(unsigned int i = 0; i < ripples.size(); i++)
     {
+        const Ripple& r = ripples[i];
         float age = time - r.birth_time;
         if(age < 0.0f) continue;
 
-        float front = expand_speed * age; // how far out the ring has travelled (grid units)
+        float front = expand_speed * age; // how far the ring front has travelled (grid units)
         float ring_dist = std::fabs(dist_norm - front);
         float half_w = std::max(trail_width * 0.5f, 1e-3f);
 
-        // Gaussian ring profile
         float ring_bright = std::exp(-(ring_dist * ring_dist) / (half_w * half_w));
 
         float fade = r.strength * std::exp(-decay_rate * age);

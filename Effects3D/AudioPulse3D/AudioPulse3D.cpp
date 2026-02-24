@@ -71,7 +71,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    // Hz range
     QHBoxLayout* hz_row = new QHBoxLayout();
     hz_row->addWidget(new QLabel("Low Hz:"));
     QSpinBox* low_spin = new QSpinBox();
@@ -94,7 +93,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Smoothing
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
@@ -112,7 +110,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Falloff
     QHBoxLayout* falloff_row = new QHBoxLayout();
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
@@ -130,7 +127,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Peak Boost
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
@@ -148,7 +144,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Radial fade
     QCheckBox* radial_check = new QCheckBox("Radial Fade");
     radial_check->setChecked(use_radial);
     connect(radial_check, &QCheckBox::toggled, this, [this](bool checked){

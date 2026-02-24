@@ -67,7 +67,6 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    // Axis selector
     QHBoxLayout* axis_row = new QHBoxLayout();
     axis_row->addWidget(new QLabel("Fill Axis:"));
     QComboBox* axis_combo = new QComboBox();
@@ -83,7 +82,6 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Edge softness
     QHBoxLayout* edge_row = new QHBoxLayout();
     edge_row->addWidget(new QLabel("Edge Width:"));
     QSlider* edge_slider = new QSlider(Qt::Horizontal);
@@ -101,7 +99,6 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Hz range
     QHBoxLayout* hz_row = new QHBoxLayout();
     hz_row->addWidget(new QLabel("Low Hz:"));
     QSpinBox* low_spin = new QSpinBox();

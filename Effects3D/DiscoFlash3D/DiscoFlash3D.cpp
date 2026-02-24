@@ -51,7 +51,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    // Hz range
     QHBoxLayout* hz_row = new QHBoxLayout();
     hz_row->addWidget(new QLabel("Low Hz:"));
     QSpinBox* low_spin = new QSpinBox();
@@ -74,7 +73,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Flash density
     QHBoxLayout* density_row = new QHBoxLayout();
     density_row->addWidget(new QLabel("Density:"));
     QSlider* density_slider = new QSlider(Qt::Horizontal);
@@ -92,7 +90,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Flash size
     QHBoxLayout* size_row = new QHBoxLayout();
     size_row->addWidget(new QLabel("Flash Size:"));
     QSlider* size_slider = new QSlider(Qt::Horizontal);
@@ -110,7 +107,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Decay
     QHBoxLayout* decay_row = new QHBoxLayout();
     decay_row->addWidget(new QLabel("Decay:"));
     QSlider* decay_slider = new QSlider(Qt::Horizontal);
@@ -128,7 +124,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Threshold
     QHBoxLayout* thresh_row = new QHBoxLayout();
     thresh_row->addWidget(new QLabel("Threshold:"));
     QSlider* thresh_slider = new QSlider(Qt::Horizontal);
@@ -211,7 +206,6 @@ void DiscoFlash3D::TickFlashes(float time)
         onset_hold = 0.10f;
     }
 
-    // Remove dead flashes
     flashes.erase(std::remove_if(flashes.begin(), flashes.end(),
         [&](const Flash& f) {
             float age = time - f.birth_time;
@@ -223,8 +217,9 @@ RGBColor DiscoFlash3D::SampleFlashField(float nx, float ny, float nz, float time
 {
     RGBColor result = ToRGBColor(0, 0, 0);
 
-    for(const Flash& f : flashes)
+    for(unsigned int i = 0; i < flashes.size(); i++)
     {
+        const Flash& f = flashes[i];
         float age = time - f.birth_time;
         if(age < 0.0f) continue;
 
