@@ -395,7 +395,6 @@ private:
     QComboBox*      audio_bands_combo = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
     
-    // Frequency Range Effects System
     std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
     int             next_freq_range_id = 1;
     
@@ -415,28 +414,6 @@ private:
     QComboBox*      freq_zone_combo = nullptr;
     QCheckBox*      freq_range_enabled_check = nullptr;
     
-    // Spatial controls for frequency ranges
-    QDoubleSpinBox* freq_pos_x_spin = nullptr;
-    QDoubleSpinBox* freq_pos_y_spin = nullptr;
-    QDoubleSpinBox* freq_pos_z_spin = nullptr;
-    QDoubleSpinBox* freq_rot_x_spin = nullptr;
-    QDoubleSpinBox* freq_rot_y_spin = nullptr;
-    QDoubleSpinBox* freq_rot_z_spin = nullptr;
-    QDoubleSpinBox* freq_scale_x_spin = nullptr;
-    QDoubleSpinBox* freq_scale_y_spin = nullptr;
-    QDoubleSpinBox* freq_scale_z_spin = nullptr;
-    
-    // Audio processing controls for frequency ranges
-    QSlider*        freq_smoothing_slider = nullptr;
-    QLabel*         freq_smoothing_label = nullptr;
-    QSlider*        freq_sensitivity_slider = nullptr;
-    QLabel*         freq_sensitivity_label = nullptr;
-    QSlider*        freq_attack_slider = nullptr;
-    QLabel*         freq_attack_label = nullptr;
-    QSlider*        freq_decay_slider = nullptr;
-    QLabel*         freq_decay_label = nullptr;
-    
-    // Effect settings container (dynamic based on selected effect)
     QWidget*        freq_effect_settings_widget = nullptr;
     QVBoxLayout*    freq_effect_settings_layout = nullptr;
     SpatialEffect3D* current_freq_effect_ui = nullptr;
@@ -450,7 +427,6 @@ private slots:
     void on_audio_bands_changed(int index);
     void on_audio_fft_changed(int index);
     
-    // Frequency Range Effects helpers and slots
     void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
     void UpdateFrequencyRangesList();
     void PopulateFreqEffectCombo(QComboBox* combo);
@@ -470,13 +446,6 @@ private slots:
     void on_freq_effect_changed(int index);
     void on_freq_zone_changed(int index);
     void on_freq_enabled_toggled(bool checked);
-    void on_freq_position_changed();
-    void on_freq_rotation_changed();
-    void on_freq_scale_changed();
-    void on_freq_smoothing_changed(int value);
-    void on_freq_sensitivity_changed(int value);
-    void on_freq_attack_changed(int value);
-    void on_freq_decay_changed(int value);
     void OnFreqRangeEffectParamsChanged();
     void RenderFrequencyRangeEffects();
 

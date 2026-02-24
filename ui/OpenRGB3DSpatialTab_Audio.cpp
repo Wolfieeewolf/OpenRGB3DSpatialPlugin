@@ -248,6 +248,7 @@ void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
         }
     }
 
-    if(audio_panel_group)   audio_panel_group->setVisible(show_audio);
-    if(freq_ranges_group)   freq_ranges_group->setVisible(show_audio);
+    if(audio_panel_group) audio_panel_group->setVisible(show_audio);
+    if(freq_ranges_group) freq_ranges_group->setVisible(show_audio);
+    if(show_audio && effect_config_group) effect_config_group->setVisible(false);
 }
