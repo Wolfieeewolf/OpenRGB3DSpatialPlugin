@@ -3003,7 +3003,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 if(ctrl_transform->led_positions.size() > 0)
                 {
                     int original_granularity = ctrl_transform->granularity;
-                    int original_item_idx = ctrl_transform->item_idx;
 
                     std::vector<LEDPosition3D> all_leds = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
                         controller, custom_grid_x, custom_grid_y,
