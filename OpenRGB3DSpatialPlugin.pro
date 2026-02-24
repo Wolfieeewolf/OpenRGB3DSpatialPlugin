@@ -186,6 +186,9 @@ HEADERS +=                                                                      
     Effects3D/BandScan3D/BandScan3D.h                                                           \
     Effects3D/AudioLevel3D/AudioLevel3D.h                                                       \
     Effects3D/AudioPulse3D/AudioPulse3D.h                                                       \
+    Effects3D/FreqFill3D/FreqFill3D.h                                                           \
+    Effects3D/FreqRipple3D/FreqRipple3D.h                                                       \
+    Effects3D/DiscoFlash3D/DiscoFlash3D.h                                                       \
     Audio/AudioInputManager.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
     Effects3D/Spiral3D/Spiral3D.h                                                               \
@@ -247,6 +250,9 @@ SOURCES +=                                                                      
     Effects3D/BandScan3D/BandScan3D.cpp                                                         \
     Effects3D/AudioLevel3D/AudioLevel3D.cpp                                                     \
     Effects3D/AudioPulse3D/AudioPulse3D.cpp                                                     \
+    Effects3D/FreqFill3D/FreqFill3D.cpp                                                         \
+    Effects3D/FreqRipple3D/FreqRipple3D.cpp                                                     \
+    Effects3D/DiscoFlash3D/DiscoFlash3D.cpp                                                     \
     Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                 \
     Audio/AudioInputManager.cpp                                                                 \
 

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "AudioPulse3D.h"
-#include <QLabel>
-#include <QCheckBox>
-#include <QSlider>
-#include <QSpinBox>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include "FreqFill3D.h"
 #include <cmath>
 #include <algorithm>
+#include <QLabel>
+#include <QSlider>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
-float AudioPulse3D::EvaluateIntensity(float amplitude, float time)
+float FreqFill3D::EvaluateIntensity(float amplitude, float time)
 {
     float alpha = std::clamp(audio_settings.smoothing, 0.0f, 0.99f);
     if(std::fabs(time - last_intensity_time) > 1e-4f)
@@ -25,30 +25,26 @@ float AudioPulse3D::EvaluateIntensity(float amplitude, float time)
     return ApplyAudioIntensity(smoothed, audio_settings);
 }
 
-AudioPulse3D::AudioPulse3D(QWidget* parent)
+FreqFill3D::FreqFill3D(QWidget* parent)
     : SpatialEffect3D(parent)
 {
 }
 
-EffectInfo3D AudioPulse3D::GetEffectInfo()
+EffectInfo3D FreqFill3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Audio Pulse";
-    info.effect_description = "Whole-room brightness pulse driven by a frequency band";
+    info.effect_name = "Freq Fill";
+    info.effect_description = "Fills along an axis proportional to audio level (3D VU meter)";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
-    info.is_reversible = false;
+    info.is_reversible = true;
     info.supports_random = false;
-    info.max_speed = 100;
+    info.max_speed = 0;
     info.min_speed = 0;
-    info.user_colors = 1;
+    info.user_colors = 2;
     info.has_custom_settings = true;
     info.needs_3d_origin = false;
-    info.needs_direction = false;
-    info.needs_thickness = false;
-    info.needs_arms = false;
-    info.needs_frequency = false;
     info.default_speed_scale = 1.0f;
     info.default_frequency_scale = 1.0f;
     info.use_size_parameter = false;
@@ -63,13 +59,47 @@ EffectInfo3D AudioPulse3D::GetEffectInfo()
     return info;
 }
 
-void AudioPulse3D::SetupCustomUI(QWidget* parent)
+void FreqFill3D::SetupCustomUI(QWidget* parent)
 {
     QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(parent->layout());
     if(!layout)
     {
         layout = new QVBoxLayout(parent);
     }
+
+    // Axis selector
+    QHBoxLayout* axis_row = new QHBoxLayout();
+    axis_row->addWidget(new QLabel("Fill Axis:"));
+    QComboBox* axis_combo = new QComboBox();
+    axis_combo->addItem("X (left → right)", 0);
+    axis_combo->addItem("Y (floor → ceiling)", 1);
+    axis_combo->addItem("Z (front → back)", 2);
+    axis_combo->setCurrentIndex(fill_axis);
+    axis_row->addWidget(axis_combo);
+    layout->addLayout(axis_row);
+
+    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, axis_combo](int){
+        fill_axis = axis_combo->currentData().toInt();
+        emit ParametersChanged();
+    });
+
+    // Edge softness
+    QHBoxLayout* edge_row = new QHBoxLayout();
+    edge_row->addWidget(new QLabel("Edge Width:"));
+    QSlider* edge_slider = new QSlider(Qt::Horizontal);
+    edge_slider->setRange(0, 40);
+    edge_slider->setValue((int)(edge_width * 100.0f));
+    QLabel* edge_label = new QLabel(QString::number((int)(edge_width * 100)) + "%");
+    edge_label->setMinimumWidth(40);
+    edge_row->addWidget(edge_slider);
+    edge_row->addWidget(edge_label);
+    layout->addLayout(edge_row);
+
+    connect(edge_slider, &QSlider::valueChanged, this, [this, edge_label](int v){
+        edge_width = v / 100.0f;
+        edge_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
 
     // Hz range
     QHBoxLayout* hz_row = new QHBoxLayout();
@@ -94,7 +124,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Smoothing
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
@@ -112,25 +141,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    // Falloff
-    QHBoxLayout* falloff_row = new QHBoxLayout();
-    falloff_row->addWidget(new QLabel("Falloff:"));
-    QSlider* falloff_slider = new QSlider(Qt::Horizontal);
-    falloff_slider->setRange(20, 500);
-    falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
-    QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
-    falloff_label->setMinimumWidth(36);
-    falloff_row->addWidget(falloff_slider);
-    falloff_row->addWidget(falloff_label);
-    layout->addLayout(falloff_row);
-
-    connect(falloff_slider, &QSlider::valueChanged, this, [this, falloff_label](int v){
-        audio_settings.falloff = v / 100.0f;
-        falloff_label->setText(QString::number(audio_settings.falloff, 'f', 1));
-        emit ParametersChanged();
-    });
-
-    // Peak Boost
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
@@ -147,96 +157,89 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
-
-    // Radial fade
-    QCheckBox* radial_check = new QCheckBox("Radial Fade");
-    radial_check->setChecked(use_radial);
-    connect(radial_check, &QCheckBox::toggled, this, [this](bool checked){
-        use_radial = checked;
-        emit ParametersChanged();
-    });
-    layout->addWidget(radial_check);
 }
 
-void AudioPulse3D::UpdateParams(SpatialEffectParams& /*params*/)
+void FreqFill3D::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor AudioPulse3D::CalculateColor(float x, float y, float z, float time)
+static float AxisPosition(int axis, float x, float y, float z,
+                          float min_x, float max_x,
+                          float min_y, float max_y,
+                          float min_z, float max_z)
+{
+    float val = 0.0f, lo = 0.0f, hi = 1.0f;
+    switch(axis)
+    {
+        case 0: val = x; lo = min_x; hi = max_x; break;
+        case 2: val = z; lo = min_z; hi = max_z; break;
+        default: val = y; lo = min_y; hi = max_y; break;
+    }
+    float range = hi - lo;
+    if(range < 1e-5f) return 0.5f;
+    return std::clamp((val - lo) / range, 0.0f, 1.0f);
+}
+
+RGBColor FreqFill3D::CalculateColor(float x, float y, float z, float time)
 {
     float amplitude = AudioInputManager::instance()->getBandEnergyHz(
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float intensity = EvaluateIntensity(amplitude, time);
+    float fill_level = EvaluateIntensity(amplitude, time);
 
-    float distance = 0.0f;
-    if(use_radial)
-    {
-        Vector3D origin = GetEffectOrigin();
-        float dx = x - origin.x;
-        float dy = y - origin.y;
-        float dz = z - origin.z;
-        distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / 0.75f, 0.0f, 1.0f);
-    }
+    float pos = AxisPosition(fill_axis, x, y, z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
 
-    float brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
-    brightness = std::clamp(brightness, 0.0f, 1.0f);
+    float edge = std::max(edge_width, 1e-3f);
+    float blend = std::clamp((fill_level - pos) / edge + 0.5f, 0.0f, 1.0f);
 
-    RGBColor color = ComposeAudioGradientColor(audio_settings, use_radial ? (1.0f - distance) : 0.5f, intensity);
-    color = ScaleRGBColor(color, 0.25f + 0.75f * brightness);
+    RGBColor lit_color = GetRainbowMode()
+        ? GetRainbowColor(pos * 360.0f)
+        : GetColorAtPosition(pos);
+    RGBColor dark_color = GetColorAtPosition(1.0f);
 
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
-    return ModulateRGBColors(color, user_color);
+    RGBColor color = BlendRGBColors(dark_color, lit_color, blend);
+    return ScaleRGBColor(color, 0.1f + 0.9f * blend);
 }
 
-RGBColor AudioPulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor FreqFill3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     float amplitude = AudioInputManager::instance()->getBandEnergyHz(
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float intensity = EvaluateIntensity(amplitude, time);
+    float fill_level = EvaluateIntensity(amplitude, time);
 
-    float distance = 0.0f;
-    if(use_radial)
-    {
-        Vector3D origin = GetEffectOriginGrid(grid);
-        float dx = x - origin.x;
-        float dy = y - origin.y;
-        float dz = z - origin.z;
-        float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
-        distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 1.0f);
-    }
+    float pos = AxisPosition(fill_axis, x, y, z,
+                             grid.min_x, grid.max_x,
+                             grid.min_y, grid.max_y,
+                             grid.min_z, grid.max_z);
 
-    float brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
-    brightness = std::clamp(brightness, 0.0f, 1.0f);
+    float edge = std::max(edge_width, 1e-3f);
+    float blend = std::clamp((fill_level - pos) / edge + 0.5f, 0.0f, 1.0f);
 
-    RGBColor color = ComposeAudioGradientColor(audio_settings, use_radial ? (1.0f - distance) : 0.5f, intensity);
-    color = ScaleRGBColor(color, 0.25f + 0.75f * brightness);
+    RGBColor lit_color = GetRainbowMode()
+        ? GetRainbowColor(pos * 360.0f)
+        : GetColorAtPosition(pos);
+    RGBColor dark_color = GetColorAtPosition(1.0f);
 
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
-    return ModulateRGBColors(color, user_color);
+    RGBColor color = BlendRGBColors(dark_color, lit_color, blend);
+    return ScaleRGBColor(color, 0.1f + 0.9f * blend);
 }
 
-nlohmann::json AudioPulse3D::SaveSettings() const
+nlohmann::json FreqFill3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    j["use_radial"] = use_radial;
+    j["fill_axis"] = fill_axis;
+    j["edge_width"] = edge_width;
     return j;
 }
 
-void AudioPulse3D::LoadSettings(const nlohmann::json& settings)
+void FreqFill3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("use_radial"))
-    {
-        use_radial = settings["use_radial"].get<bool>();
-    }
+    if(settings.contains("fill_axis"))  fill_axis  = settings["fill_axis"].get<int>();
+    if(settings.contains("edge_width")) edge_width = settings["edge_width"].get<float>();
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
 }
 
-REGISTER_EFFECT_3D(AudioPulse3D)
+REGISTER_EFFECT_3D(FreqFill3D)

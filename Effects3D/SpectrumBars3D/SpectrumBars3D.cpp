@@ -4,6 +4,11 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <QLabel>
+#include <QSlider>
+#include <QSpinBox>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 namespace
 {
@@ -64,7 +69,86 @@ EffectInfo3D SpectrumBars3D::GetEffectInfo()
 
 void SpectrumBars3D::SetupCustomUI(QWidget* parent)
 {
-    (void)parent;
+    QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(parent->layout());
+    if(!layout)
+    {
+        layout = new QVBoxLayout(parent);
+    }
+
+    QHBoxLayout* hz_row = new QHBoxLayout();
+    hz_row->addWidget(new QLabel("Low Hz:"));
+    QSpinBox* low_spin = new QSpinBox();
+    low_spin->setRange(1, 20000);
+    low_spin->setValue(audio_settings.low_hz);
+    hz_row->addWidget(low_spin);
+    hz_row->addWidget(new QLabel("High Hz:"));
+    QSpinBox* high_spin = new QSpinBox();
+    high_spin->setRange(1, 20000);
+    high_spin->setValue(audio_settings.high_hz);
+    hz_row->addWidget(high_spin);
+    layout->addLayout(hz_row);
+
+    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
+        audio_settings.low_hz = v;
+        RefreshBandRange();
+        emit ParametersChanged();
+    });
+    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
+        audio_settings.high_hz = v;
+        RefreshBandRange();
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* smooth_row = new QHBoxLayout();
+    smooth_row->addWidget(new QLabel("Smoothing:"));
+    QSlider* smooth_slider = new QSlider(Qt::Horizontal);
+    smooth_slider->setRange(0, 99);
+    smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
+    QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
+    smooth_label->setMinimumWidth(36);
+    smooth_row->addWidget(smooth_slider);
+    smooth_row->addWidget(smooth_label);
+    layout->addLayout(smooth_row);
+
+    connect(smooth_slider, &QSlider::valueChanged, this, [this, smooth_label](int v){
+        audio_settings.smoothing = v / 100.0f;
+        smooth_label->setText(QString::number(audio_settings.smoothing, 'f', 2));
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* falloff_row = new QHBoxLayout();
+    falloff_row->addWidget(new QLabel("Falloff:"));
+    QSlider* falloff_slider = new QSlider(Qt::Horizontal);
+    falloff_slider->setRange(20, 500);
+    falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
+    QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
+    falloff_label->setMinimumWidth(36);
+    falloff_row->addWidget(falloff_slider);
+    falloff_row->addWidget(falloff_label);
+    layout->addLayout(falloff_row);
+
+    connect(falloff_slider, &QSlider::valueChanged, this, [this, falloff_label](int v){
+        audio_settings.falloff = v / 100.0f;
+        falloff_label->setText(QString::number(audio_settings.falloff, 'f', 1));
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* boost_row = new QHBoxLayout();
+    boost_row->addWidget(new QLabel("Peak Boost:"));
+    QSlider* boost_slider = new QSlider(Qt::Horizontal);
+    boost_slider->setRange(50, 400);
+    boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
+    QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
+    boost_label->setMinimumWidth(44);
+    boost_row->addWidget(boost_slider);
+    boost_row->addWidget(boost_label);
+    layout->addLayout(boost_row);
+
+    connect(boost_slider, &QSlider::valueChanged, this, [this, boost_label](int v){
+        audio_settings.peak_boost = v / 100.0f;
+        boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
+        emit ParametersChanged();
+    });
 }
 
 void SpectrumBars3D::UpdateParams(SpatialEffectParams& /*params*/)
