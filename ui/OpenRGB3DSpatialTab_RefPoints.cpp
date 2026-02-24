@@ -19,7 +19,6 @@ static QString RGBColorToCssHex(unsigned int color_value)
         .toUpper();
 }
 
-// Reference Points Management
 void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 {
     if(!ref_point_name_edit || !ref_point_type_combo || !reference_points_list) return;
@@ -43,7 +42,6 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     UpdateReferencePointsList();
     SaveReferencePoints(); // Mark layout as dirty
 
-    // Clear inputs for next point
     ref_point_name_edit->clear();
     ref_point_type_combo->setCurrentIndex(0);
 
@@ -104,7 +102,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
 
     if(has_selection)
     {
-        // Update the reference points list selection
         if(reference_points_list)
         {
             reference_points_list->blockSignals(true);
@@ -112,7 +109,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
             reference_points_list->blockSignals(false);
         }
 
-        // Clear controller selection when reference point is selected
         if(controller_list)
         {
             controller_list->blockSignals(true);
@@ -120,7 +116,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
             controller_list->blockSignals(false);
         }
 
-        // Update position/rotation controls with reference point values (position in grid units -> display in mm)
         VirtualReferencePoint3D* ref_point = reference_points[index].get();
         Vector3D pos = ref_point->GetPosition();
         double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
@@ -150,7 +145,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         pos_y_spin->blockSignals(false);
         pos_z_spin->blockSignals(false);
 
-        // Enable position and rotation controls so user can move the reference point
         if(pos_x_spin) pos_x_spin->setEnabled(true);
         if(pos_y_spin) pos_y_spin->setEnabled(true);
         if(pos_z_spin) pos_z_spin->setEnabled(true);
@@ -164,7 +158,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         rot_y_spin->setEnabled(true);
         rot_z_spin->setEnabled(true);
 
-        // Update rotation sliders with reference point rotation
         Rotation3D rot = ref_point->GetRotation();
 
         rot_x_slider->blockSignals(true);
@@ -188,7 +181,6 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         rot_y_spin->blockSignals(false);
         rot_z_spin->blockSignals(false);
 
-        // Tell viewport about the selection
         if(viewport)
         {
             viewport->SelectReferencePoint(index);
@@ -231,7 +223,6 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     pos_y_spin->blockSignals(false);
     pos_z_spin->blockSignals(false);
 
-    // Mark layout as dirty when reference point moves
     SetLayoutDirty();
 
     if(viewport) viewport->update();
@@ -271,10 +262,8 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
         ref_points_empty_label->setVisible(reference_points_list->count() == 0);
     }
 
-    // Update effect origin combo whenever reference points change
     UpdateEffectOriginCombo();
 
-    // Update ScreenMirror3D reference point dropdowns in effect stack
     for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
         std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
@@ -288,7 +277,6 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
         }
     }
 
-    // Update ScreenMirror3D UI effect reference point dropdowns
     if(current_effect_ui)
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(current_effect_ui);

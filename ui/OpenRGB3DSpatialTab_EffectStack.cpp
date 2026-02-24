@@ -145,17 +145,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
         return;
     }
 
-    // Toggle enabled state
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->enabled = !instance->enabled;
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Restore selection
     effect_stack_list->setCurrentRow(current_row);
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -288,37 +282,24 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
 
-    // If "None" is selected, clear the effect
     if(class_name.isEmpty())
     {
-        
         instance->effect.reset();
         instance->effect_class_name = "";
         instance->name = "None";
 
-        // Update list display
         UpdateEffectStackList();
-
-        // Clear effect controls
         LoadStackEffectControls(instance);
-
-        // Auto-save effect stack
         SaveEffectStack();
         return;
     }
 
-    // Clear old effect and store new class name
     instance->effect.reset();
     instance->effect_class_name = class_name.toStdString();
     instance->name              = ui_name.toStdString();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Reload effect controls (will create effect if needed)
     LoadStackEffectControls(instance);
-
-    // Auto-save effect stack
     SaveEffectStack();
     UpdateAudioPanelVisibility();
 }
@@ -333,10 +314,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = stack_effect_zone_combo->currentData().toInt();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -352,10 +330,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->blend_mode = (BlendMode)stack_effect_blend_combo->currentData().toInt();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -379,7 +354,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         effect_stack_list->addItem(item);
     }
 
-    // Restore selection
     if(current_row >= 0 && current_row < (int)effect_stack.size())
     {
         effect_stack_list->setCurrentRow(current_row);
@@ -502,7 +476,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     ui_effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = ui_effect;
 
-    // Set reference points for ScreenMirror3D UI effect
     if(instance->effect_class_name == "ScreenMirror3D")
     {
         ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
@@ -517,7 +490,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         }
         
         // Hide origin dropdown for ScreenMirror3D (each monitor has its own origin)
-        // Find the widgets through the layout hierarchy
         if(effect_controls_layout)
         {
             for(int i = 0; i < effect_controls_layout->count(); i++)
@@ -557,7 +529,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
     else
     {
-        // Show origin dropdown for other effects
         if(effect_controls_layout)
         {
             for(int i = 0; i < effect_controls_layout->count(); i++)

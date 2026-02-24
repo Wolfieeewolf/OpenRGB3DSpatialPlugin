@@ -29,7 +29,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     freq_ranges_group = new QGroupBox("Frequency Range Effects");
     QVBoxLayout* freq_layout = new QVBoxLayout(freq_ranges_group);
     
-    // Header
     QLabel* header = new QLabel("Multi-Band Audio Effects");
     header->setStyleSheet("font-weight: bold;");
     freq_layout->addWidget(header);
@@ -39,7 +38,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     description->setStyleSheet("color: gray; font-size: 10px;");
     freq_layout->addWidget(description);
     
-    // Ranges list
     QLabel* ranges_label = new QLabel("Audio Frequency Ranges:");
     ranges_label->setStyleSheet("font-weight: bold;");
     freq_layout->addWidget(ranges_label);
@@ -51,7 +49,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
             this, &OpenRGB3DSpatialTab::on_freq_range_selected);
     freq_layout->addWidget(freq_ranges_list);
     
-    // Add/Remove/Duplicate buttons
     QHBoxLayout* range_buttons = new QHBoxLayout();
     add_freq_range_btn = new QPushButton("Add Range");
     remove_freq_range_btn = new QPushButton("Remove Selected");
@@ -70,12 +67,10 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     range_buttons->addStretch();
     freq_layout->addLayout(range_buttons);
     
-    // Range details panel (hidden when no selection)
     freq_range_details = new QWidget();
     QVBoxLayout* details_layout = new QVBoxLayout(freq_range_details);
     details_layout->setContentsMargins(0, 8, 0, 0);
     
-    // Name and enabled
     QHBoxLayout* name_row = new QHBoxLayout();
     name_row->addWidget(new QLabel("Name:"));
     freq_range_name_edit = new QLineEdit();
@@ -90,11 +85,9 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     name_row->addWidget(freq_range_enabled_check);
     details_layout->addLayout(name_row);
     
-    // Frequency range sliders
     QGroupBox* freq_group = new QGroupBox("Frequency Range");
     QVBoxLayout* freq_sliders = new QVBoxLayout(freq_group);
     
-    // Low Hz
     QHBoxLayout* low_row = new QHBoxLayout();
     low_row->addWidget(new QLabel("Low Hz:"));
     freq_low_spin = new QSpinBox();
@@ -112,7 +105,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     low_row->addWidget(freq_low_slider, 1);
     freq_sliders->addLayout(low_row);
     
-    // High Hz
     QHBoxLayout* high_row = new QHBoxLayout();
     high_row->addWidget(new QLabel("High Hz:"));
     freq_high_spin = new QSpinBox();
@@ -132,7 +124,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     
     details_layout->addWidget(freq_group);
     
-    // Effect and zone selectors
     QHBoxLayout* effect_row = new QHBoxLayout();
     effect_row->addWidget(new QLabel("Effect:"));
     freq_effect_combo = new QComboBox();
@@ -151,7 +142,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     zone_row->addWidget(freq_zone_combo, 1);
     details_layout->addLayout(zone_row);
     
-    // Scale control (simple slider)
     QHBoxLayout* scale_row = new QHBoxLayout();
     scale_row->addWidget(new QLabel("Scale:"));
     freq_scale_x_spin = new QDoubleSpinBox();
@@ -166,11 +156,9 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     scale_row->addStretch();
     details_layout->addLayout(scale_row);
     
-    // Audio processing controls
     QGroupBox* audio_proc_group = new QGroupBox("Audio Processing");
     QGridLayout* proc_grid = new QGridLayout(audio_proc_group);
     
-    // Smoothing
     proc_grid->addWidget(new QLabel("Smoothing:"), 0, 0);
     freq_smoothing_slider = new QSlider(Qt::Horizontal);
     freq_smoothing_slider->setRange(0, 99);
@@ -183,7 +171,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     freq_smoothing_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     proc_grid->addWidget(freq_smoothing_label, 0, 2);
     
-    // Sensitivity
     proc_grid->addWidget(new QLabel("Sensitivity:"), 1, 0);
     freq_sensitivity_slider = new QSlider(Qt::Horizontal);
     freq_sensitivity_slider->setRange(1, 100);  // Maps to 0.1..10.0
@@ -198,7 +185,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     
     details_layout->addWidget(audio_proc_group);
     
-    // Effect settings container (dynamic)
     freq_effect_settings_widget = new QWidget();
     freq_effect_settings_layout = new QVBoxLayout(freq_effect_settings_widget);
     freq_effect_settings_layout->setContentsMargins(0, 0, 0, 0);
@@ -211,7 +197,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     
     parent_layout->addWidget(freq_ranges_group);
     
-    // Load saved ranges
     LoadFrequencyRanges();
     UpdateFrequencyRangesList();
 }
@@ -224,7 +209,6 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
     combo->addItem("None");
     combo->setItemData(0, QVariant(), kEffectRoleClassName);
     
-    // Add all audio effects
     std::vector<EffectRegistration3D> all_effects = EffectListManager3D::get()->GetAllEffects();
     for(const EffectRegistration3D& reg : all_effects)
     {
@@ -249,10 +233,8 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
     freq_zone_combo->blockSignals(true);
     freq_zone_combo->clear();
     
-    // Add "All Controllers"
     freq_zone_combo->addItem("All Controllers", QVariant(-1));
     
-    // Add zones
     if(zone_manager)
     {
         for(int i = 0; i < zone_manager->GetZoneCount(); i++)
@@ -266,7 +248,6 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
         }
     }
     
-    // Add individual controllers
     for(unsigned int ci = 0; ci < controller_transforms.size(); ci++)
     {
         ControllerTransform* t = controller_transforms[ci].get();
@@ -309,7 +290,6 @@ void OpenRGB3DSpatialTab::UpdateFrequencyRangesList()
         freq_ranges_list->addItem(label);
     }
     
-    // Restore selection
     if(selected_row >= 0 && selected_row < freq_ranges_list->count())
     {
         freq_ranges_list->setCurrentRow(selected_row);
@@ -357,7 +337,6 @@ void OpenRGB3DSpatialTab::on_duplicate_freq_range_clicked()
     int row = freq_ranges_list->currentRow();
     if(row < 0 || row >= (int)frequency_ranges.size()) return;
     
-    // Clone the selected range
     FrequencyRangeEffect3D* source = frequency_ranges[row].get();
     if(!source) return;
     
@@ -459,7 +438,6 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         freq_effect_combo->setCurrentIndex(effect_idx);
         freq_effect_combo->blockSignals(false);
         
-        // Setup effect UI after loading combo selection
         SetupFreqRangeEffectUI(range, selected_class_name);
     }
     
@@ -471,7 +449,6 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         freq_zone_combo->blockSignals(false);
     }
     
-    // Spatial transform
     if(freq_pos_x_spin) { freq_pos_x_spin->blockSignals(true); freq_pos_x_spin->setValue(range->position.x); freq_pos_x_spin->blockSignals(false); }
     if(freq_pos_y_spin) { freq_pos_y_spin->blockSignals(true); freq_pos_y_spin->setValue(range->position.y); freq_pos_y_spin->blockSignals(false); }
     if(freq_pos_z_spin) { freq_pos_z_spin->blockSignals(true); freq_pos_z_spin->setValue(range->position.z); freq_pos_z_spin->blockSignals(false); }
@@ -482,7 +459,6 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
     if(freq_scale_y_spin) { freq_scale_y_spin->blockSignals(true); freq_scale_y_spin->setValue(range->scale.y); freq_scale_y_spin->blockSignals(false); }
     if(freq_scale_z_spin) { freq_scale_z_spin->blockSignals(true); freq_scale_z_spin->setValue(range->scale.z); freq_scale_z_spin->blockSignals(false); }
     
-    // Audio processing
     if(freq_smoothing_slider && freq_smoothing_label)
     {
         int smooth_val = (int)(range->smoothing * 100.0f);
@@ -520,7 +496,6 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
     }
 }
 
-// Slot implementations
 void OpenRGB3DSpatialTab::on_freq_range_name_changed(const QString& text)
 {
     int row = freq_ranges_list->currentRow();
@@ -571,7 +546,6 @@ void OpenRGB3DSpatialTab::on_freq_effect_changed(int index)
     QString class_name = freq_effect_combo->itemData(index, kEffectRoleClassName).toString();
     range->effect_class_name = class_name.toStdString();
     
-    // Setup dynamic effect UI
     SetupFreqRangeEffectUI(range, class_name);
     
     SaveFrequencyRanges();
@@ -744,17 +718,14 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
 {
     if(!range || !freq_effect_settings_widget || !freq_effect_settings_layout) return;
     
-    // Clear previous effect UI
     ClearFreqRangeEffectUI();
-    
-    // Handle "None" option
+
     if(class_name.isEmpty())
     {
         freq_effect_settings_widget->hide();
         return;
     }
     
-    // Create effect instance for UI
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
     if(!effect)
     {
@@ -763,19 +734,14 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
     }
     
     effect->setParent(freq_effect_settings_widget);
-    
-    // Create effect's custom UI (without common controls like Start/Stop)
     effect->SetupCustomUI(freq_effect_settings_widget);
-    
-    // Load saved settings from range into effect UI
+
     if(!range->effect_settings.is_null())
     {
         effect->LoadSettings(range->effect_settings);
     }
     
     current_freq_effect_ui = effect;
-    
-    // Connect parameter changes to save handler
     connect(effect, &SpatialEffect3D::ParametersChanged, 
             this, &OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged);
     
@@ -787,7 +753,6 @@ void OpenRGB3DSpatialTab::ClearFreqRangeEffectUI()
 {
     if(!freq_effect_settings_layout) return;
     
-    // Remove and delete all widgets from layout
     while(QLayoutItem* item = freq_effect_settings_layout->takeAt(0))
     {
         if(QWidget* widget = item->widget())
@@ -808,7 +773,6 @@ void OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged()
     FrequencyRangeEffect3D* range = frequency_ranges[row].get();
     if(!range || !current_freq_effect_ui) return;
     
-    // Save current effect settings to range
     range->effect_settings = current_freq_effect_ui->SaveSettings();
     
     SaveFrequencyRanges();
@@ -825,44 +789,36 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
         if(!range || !range->enabled) continue;
         if(range->effect_class_name.empty()) continue;
         
-        // Get audio energy in this frequency range
         float raw_level = AudioInputManager::instance()->getBandEnergyHz(
             range->low_hz, range->high_hz);
         
-        // Apply attack/decay envelope
         if(raw_level > range->current_level)
         {
-            // Attack (rise)
             range->current_level += (raw_level - range->current_level) * range->attack;
         }
         else
         {
-            // Decay (fall)
             range->current_level += (raw_level - range->current_level) * range->decay;
         }
-        
-        // Apply EMA smoothing
-        range->smoothed_level = range->smoothing * range->smoothed_level + 
+
+        range->smoothed_level = range->smoothing * range->smoothed_level +
                                (1.0f - range->smoothing) * range->current_level;
-        
-        // Apply sensitivity (gain)
+
         float effect_level = range->smoothed_level * range->sensitivity;
         effect_level = std::min(1.0f, std::max(0.0f, effect_level));
         
-        // Create or reuse effect instance
         if(!range->effect_instance)
         {
             SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(range->effect_class_name);
             if(!effect) continue;
-            
+
             range->effect_instance.reset(effect);
-            
-            // Load saved settings
+
             if(!range->effect_settings.is_null())
             {
                 effect->LoadSettings(range->effect_settings);
             }
-            
+
             // Set reference point (room center for now)
             effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
             Vector3D room_center = {0.0f, 0.0f, 0.0f};
@@ -872,28 +828,23 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
         SpatialEffect3D* effect = range->effect_instance.get();
         if(!effect) continue;
         
-        // Update effect with audio level
         nlohmann::json audio_params = range->effect_settings;
         audio_params["audio_level"] = effect_level;
         audio_params["frequency_band_energy"] = raw_level;
         effect->LoadSettings(audio_params);
         
-        // Render effect to target controllers
         for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
         {
             ControllerTransform* transform = controller_transforms[ctrl_idx].get();
             if(!transform) continue;
             
-            // Check if this controller is targeted by this range
             bool is_targeted = false;
             if(range->zone_index == -1)
             {
-                // All controllers
                 is_targeted = true;
             }
             else if(range->zone_index >= 0)
             {
-                // Specific zone
                 if(zone_manager && range->zone_index < zone_manager->GetZoneCount())
                 {
                     Zone3D* zone = zone_manager->GetZone(range->zone_index);
@@ -905,14 +856,12 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
             }
             else if(range->zone_index <= -1000)
             {
-                // Specific controller
                 int target_ctrl = -(range->zone_index + 1000);
                 is_targeted = ((int)ctrl_idx == target_ctrl);
             }
             
             if(!is_targeted) continue;
             
-            // Render effect for this controller
             if(transform->virtual_controller)
             {
                 VirtualController3D* vctrl = transform->virtual_controller;
@@ -923,19 +872,12 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
                     const GridLEDMapping& mapping = mappings[led_idx];
                     if(!mapping.controller) continue;
                     
-                    // Get world position for this LED
                     Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    
-                    // Apply spatial transform from range
                     Vector3D relative_pos;
                     relative_pos.x = (world_pos.x - range->position.x) / range->scale.x;
                     relative_pos.y = (world_pos.y - range->position.y) / range->scale.y;
                     relative_pos.z = (world_pos.z - range->position.z) / range->scale.z;
-                    
-                    // Calculate color for this position
                     RGBColor color = effect->CalculateColor(relative_pos.x, relative_pos.y, relative_pos.z, effect_time);
-                    
-                    // Apply to physical LED
                     unsigned int physical_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
                     if(physical_led_idx < mapping.controller->colors.size())
                     {
@@ -954,19 +896,12 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
                 
                 for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
                 {
-                    // Get world position for this LED
                     Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    
-                    // Apply spatial transform from range
                     Vector3D relative_pos;
                     relative_pos.x = (world_pos.x - range->position.x) / range->scale.x;
                     relative_pos.y = (world_pos.y - range->position.y) / range->scale.y;
                     relative_pos.z = (world_pos.z - range->position.z) / range->scale.z;
-                    
-                    // Calculate color for this position
                     RGBColor color = effect->CalculateColor(relative_pos.x, relative_pos.y, relative_pos.z, effect_time);
-                    
-                    // Apply to physical LED
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
                     unsigned int physical_led_idx = ctrl->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
                     if(physical_led_idx < ctrl->colors.size())

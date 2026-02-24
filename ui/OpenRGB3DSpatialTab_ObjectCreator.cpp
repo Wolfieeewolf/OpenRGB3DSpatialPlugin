@@ -177,10 +177,8 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
     available_controllers_list->blockSignals(false);
 
-    // Also update the custom controllers list
     UpdateCustomControllersList();
 
-    // Restore previous selection when possible
     bool selection_restored = false;
     if(previous_metadata.first != std::numeric_limits<int>::min())
     {
@@ -352,7 +350,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
                     SyncDisplayPlaneControls(plane);
                     RefreshDisplayPlaneDetails();
                     if(viewport) viewport->SelectDisplayPlane(plane_index);
-                    // Enable position/rotation so user can move the display plane
                     if(pos_x_spin) pos_x_spin->setEnabled(true);
                     if(pos_y_spin) pos_y_spin->setEnabled(true);
                     if(pos_z_spin) pos_z_spin->setEnabled(true);
@@ -488,7 +485,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
             reference_points_list->blockSignals(false);
         }
 
-        // Update LED spacing controls
         if(edit_led_spacing_x_spin)
         {
             edit_led_spacing_x_spin->setEnabled(true);
@@ -589,7 +585,6 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         pos_y_slider->setValue((int)std::lround(constrained_y_mm));
         pos_z_slider->setValue((int)std::lround(z_mm));
 
-        // Unblock signals
         pos_x_spin->blockSignals(false);
         pos_y_spin->blockSignals(false);
         pos_z_spin->blockSignals(false);
@@ -597,7 +592,6 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         pos_y_slider->blockSignals(false);
         pos_z_slider->blockSignals(false);
 
-        // Immediately update effect rendering when position changes
         if(effect_running)
         {
             RenderEffectStack();
@@ -632,7 +626,6 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         rot_y_slider->setValue((int)y);
         rot_z_slider->setValue((int)z);
 
-        // Unblock signals
         rot_x_spin->blockSignals(false);
         rot_y_spin->blockSignals(false);
         rot_z_spin->blockSignals(false);
@@ -640,7 +633,6 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         rot_y_slider->blockSignals(false);
         rot_z_slider->blockSignals(false);
 
-        // Immediately update effect rendering when rotation changes
         if(effect_running)
         {
             RenderEffectStack();
@@ -795,7 +787,6 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
 
     int actual_ctrl_idx = -1;
 
-    // Check if the selected item has metadata (Reference Point, Display Plane, Custom Controller, or Physical Controller index)
     QListWidgetItem* selected_item = available_controllers_list->item(list_row);
     if(selected_item && selected_item->data(Qt::UserRole).isValid())
     {
@@ -1037,7 +1028,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
-    // Handle Custom Controllers (-1) via helper
     if(ctrl_idx == -1)
     {
         if(AddCustomControllerToScene(item_row))
@@ -1049,7 +1039,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         return;
     }
 
-    // Handle Reference Points (-2)
     if(ctrl_idx == -2)
     {
         if(item_row < 0 || item_row >= (int)reference_points.size())
@@ -1060,7 +1049,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         VirtualReferencePoint3D* ref_point = reference_points[item_row].get();
         ref_point->SetVisible(true);
 
-        // Add to Controllers in 3D Scene list
         QString name = QString("[Ref Point] ") + QString::fromStdString(ref_point->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(name);
         list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, item_row)));
@@ -1076,7 +1064,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         return;
     }
 
-    // Handle Display Planes (-3)
     if(ctrl_idx == -3)
     {
         int plane_index = FindDisplayPlaneIndexById(item_row);
@@ -1143,12 +1130,10 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
     ctrl_transform->hidden_by_virtual = false;
 
-    // Set LED spacing from UI
     ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
     ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
     ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
 
-    // Set granularity
     ctrl_transform->granularity = granularity;
     ctrl_transform->item_idx = item_row;
 
@@ -1229,9 +1214,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         viewport->update();
     }
     
-    // Mark layout as dirty when controller added
     SetLayoutDirty();
-    
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1247,7 +1230,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         return;
     }
 
-    // Check if this item has metadata (Reference Point or Display Plane)
     QListWidgetItem* item = controller_list->item(selected_row);
     if(item && item->data(Qt::UserRole).isValid())
     {
@@ -1360,9 +1342,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
         viewport->update();
     }
     
-    // Mark layout as dirty when controller removed
     SetLayoutDirty();
-    
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1370,7 +1350,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
 
 void OpenRGB3DSpatialTab::on_clear_all_clicked()
 {
-    // Hide all Reference Points and Display Planes
     for(unsigned int i = 0; i < reference_points.size(); i++)
     {
         reference_points[i]->SetVisible(false);
@@ -1389,9 +1368,8 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
         viewport->update();
     }
     
-    // Mark layout as dirty when all cleared
     SetLayoutDirty();
-    
+
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     NotifyDisplayPlaneChanged();
@@ -1410,12 +1388,10 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
 
     ControllerTransform* ctrl = controller_transforms[transform_index].get();
 
-    // Update LED spacing values
     ctrl->led_spacing_mm_x = edit_led_spacing_x_spin ? (float)edit_led_spacing_x_spin->value() : 10.0f;
     ctrl->led_spacing_mm_y = edit_led_spacing_y_spin ? (float)edit_led_spacing_y_spin->value() : 0.0f;
     ctrl->led_spacing_mm_z = edit_led_spacing_z_spin ? (float)edit_led_spacing_z_spin->value() : 0.0f;
 
-    // Regenerate LED positions with new spacing
     RegenerateLEDPositions(ctrl);
 
     // Mark world positions dirty so effects and viewport can recompute
@@ -1430,7 +1406,6 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
 
 void OpenRGB3DSpatialTab::on_save_layout_clicked()
 {
-    // Update all settings from UI before saving
     if(grid_x_spin) custom_grid_x = grid_x_spin->value();
     if(grid_y_spin) custom_grid_y = grid_y_spin->value();
     if(grid_z_spin) custom_grid_z = grid_z_spin->value();
@@ -1449,7 +1424,6 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
     std::string layout_path = GetLayoutPath(profile_name.toStdString());
     if(layout_path.empty()) return;
 
-    // Check if profile already exists
     if(filesystem::exists(layout_path))
     {
         QMessageBox::StandardButton reply = QMessageBox::question(this, "Overwrite Profile",
@@ -1473,7 +1447,6 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
         layout_profiles_combo->setCurrentIndex(index);
     }
 
-    // Save the selected profile name to settings
     SaveCurrentLayoutName();
 
     QMessageBox::information(this, "Layout Saved",
@@ -1482,7 +1455,6 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
 
 void OpenRGB3DSpatialTab::on_load_layout_clicked()
 {
-    // Prompt to save if there are unsaved changes
     if(!PromptSaveIfDirty())
     {
         return; // User cancelled
@@ -2650,24 +2622,20 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 
     nlohmann::json layout_json;
 
-    // Header Information
     layout_json["format"] = "OpenRGB3DSpatialLayout";
     layout_json["version"] = 6;
 
-    // Grid Settings
     layout_json["grid"]["dimensions"]["x"] = custom_grid_x;
     layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
     layout_json["grid"]["dimensions"]["z"] = custom_grid_z;
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
-    // Room Dimensions (Manual room size settings)
     layout_json["room"]["use_manual_size"] = use_manual_room_size;
     layout_json["room"]["width"] = manual_room_width;
     layout_json["room"]["depth"] = manual_room_depth;
     layout_json["room"]["height"] = manual_room_height;
 
-    // Camera
     if(viewport)
     {
         float dist, yaw, pitch, tx, ty, tz;
@@ -2680,7 +2648,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         layout_json["camera"]["target"]["z"] = tz;
     }
 
-    // Controllers
     layout_json["controllers"] = nlohmann::json::array();
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
@@ -2705,7 +2672,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
             controller_json["location"] = ct->controller->location;
         }
 
-        // LED Mappings
         controller_json["led_mappings"] = nlohmann::json::array();
         for(unsigned int j = 0; j < ct->led_positions.size(); j++)
         {
@@ -2715,7 +2681,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
             controller_json["led_mappings"].push_back(led_mapping);
         }
 
-        // Transform
         controller_json["transform"]["position"]["x"] = ct->transform.position.x;
         controller_json["transform"]["position"]["y"] = ct->transform.position.y;
         controller_json["transform"]["position"]["z"] = ct->transform.position.z;
@@ -2728,7 +2693,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["transform"]["scale"]["y"] = ct->transform.scale.y;
         controller_json["transform"]["scale"]["z"] = ct->transform.scale.z;
 
-        // LED Spacing
         controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
         controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
         controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
@@ -2743,7 +2707,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         layout_json["controllers"].push_back(controller_json);
     }
 
-    // Reference Points
     layout_json["reference_points"] = nlohmann::json::array();
     for(size_t i = 0; i < reference_points.size(); i++)
     {
@@ -2752,7 +2715,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         layout_json["reference_points"].push_back(reference_points[i]->ToJson());
     }
 
-    // Display Planes
     layout_json["display_planes"] = nlohmann::json::array();
     for(size_t i = 0; i < display_planes.size(); i++)
     {
@@ -2760,13 +2722,11 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         layout_json["display_planes"].push_back(display_planes[i]->ToJson());
     }
 
-    // Zones
     if(zone_manager)
     {
         layout_json["zones"] = zone_manager->ToJSON();
     }
 
-    // Write JSON to file
     QFile file(QString::fromStdString(filename));
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
@@ -2798,7 +2758,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 {
 
-    // Load Grid Settings
     if(layout_json.contains("grid"))
     {
         custom_grid_x = layout_json["grid"]["dimensions"]["x"].get<int>();
@@ -2848,7 +2807,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
-    // Load Room Dimensions
     if(layout_json.contains("room"))
     {
         if(layout_json["room"].contains("use_manual_size"))
@@ -2898,7 +2856,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
         }
 
-        // Update viewport with loaded manual room dimensions
         if(viewport)
         {
             viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
@@ -2906,7 +2863,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         emit GridLayoutChanged();
     }
 
-    // Load Camera
     if(layout_json.contains("camera") && viewport)
     {
         const nlohmann::json& cam = layout_json["camera"];
@@ -2924,12 +2880,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
     }
 
-    // Clear existing controllers
     on_clear_all_clicked();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
-    // Load Controllers
     if(layout_json.contains("controllers"))
     {
         const nlohmann::json& controllers_array = layout_json["controllers"];
@@ -2979,7 +2933,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             ctrl_transform->led_spacing_mm_z = 0.0f;
         }
 
-            // Load granularity
             if(controller_json.contains("granularity"))
             {
                 ctrl_transform->granularity = controller_json["granularity"].get<int>();
@@ -3023,7 +2976,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
             else
             {
-                // Load LED mappings for physical controllers
                 const nlohmann::json& led_mappings_array = controller_json["led_mappings"];
                 for(size_t j = 0; j < led_mappings_array.size(); j++)
                 {
@@ -3053,7 +3005,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     int original_granularity = ctrl_transform->granularity;
                     int original_item_idx = ctrl_transform->item_idx;
 
-                    // Count total LEDs in controller
                     std::vector<LEDPosition3D> all_leds = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
                         controller, custom_grid_x, custom_grid_y,
                         ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
@@ -3061,7 +3012,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
                     if(ctrl_transform->led_positions.size() == all_leds.size())
                     {
-                        // All LEDs loaded - this is whole device
                         if(ctrl_transform->granularity != 0)
                         {
                             ctrl_transform->granularity = 0;
@@ -3070,11 +3020,9 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     }
                     else if(ctrl_transform->led_positions.size() == 1)
                     {
-                        // Single LED - granularity should be 2
                         if(ctrl_transform->granularity != 2)
                         {
                             ctrl_transform->granularity = 2;
-                            // Calculate global LED index from zone/led indices
                             unsigned int zone_idx = ctrl_transform->led_positions[0].zone_idx;
                             unsigned int led_idx = ctrl_transform->led_positions[0].led_idx;
                             if(zone_idx < controller->zones.size())
@@ -3085,7 +3033,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     }
                     else
                     {
-                        // Multiple LEDs but not all - check if they're all from same zone
                         unsigned int first_zone = ctrl_transform->led_positions[0].zone_idx;
                         bool same_zone = true;
                         for(unsigned int i = 1; i < ctrl_transform->led_positions.size(); i++)
@@ -3099,7 +3046,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
                         if(same_zone)
                         {
-                            // All from same zone
                             if(ctrl_transform->granularity != 1)
                             {
                                 ctrl_transform->granularity = 1;
@@ -3120,14 +3066,9 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         }
                     }
 
-                    // Validation success - no logging needed
-                    if(ctrl_transform->granularity == original_granularity && ctrl_transform->item_idx == original_item_idx)
-                    {
-                    }
                 }
             }
 
-            // Load transform
             ctrl_transform->transform.position.x = controller_json["transform"]["position"]["x"].get<float>();
             ctrl_transform->transform.position.y = controller_json["transform"]["position"]["y"].get<float>();
             ctrl_transform->transform.position.z = controller_json["transform"]["position"]["z"].get<float>();
@@ -3150,7 +3091,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             unsigned int first_zone_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].zone_idx : 0;
             unsigned int first_led_idx = (led_positions_size > 0) ? ctrl_transform->led_positions[0].led_idx : 0;
 
-            // Pre-compute world positions
             ControllerLayout3D::MarkWorldPositionsDirty(ctrl_transform.get());
             ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
@@ -3168,7 +3108,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
             else
             {
-                // Use granularity info to create proper name with prefix
                 if(granularity == 0)
                 {
                     name = QString("[Device] ") + QString::fromStdString(controller->name);
@@ -3217,7 +3156,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
-    // Load Reference Points
     reference_points.clear();
 
     if(layout_json.contains("reference_points"))
@@ -3235,7 +3173,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     UpdateReferencePointsList();
 
-    // Load Display Planes
     display_planes.clear();
     current_display_plane_index = -1;
     if(layout_json.contains("display_planes"))
@@ -3310,7 +3247,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         controller_list->addItem(ref_item);
     }
 
-    // Sync display planes to global manager and viewport
     std::vector<DisplayPlane3D*> plane_ptrs;
     for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
     {
@@ -3325,7 +3261,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     emit GridLayoutChanged();
 
-    // Load Zones
     if(zone_manager)
     {
         if(layout_json.contains("zones"))
@@ -3510,7 +3445,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         return;
     }
 
-    // Load saved settings
     nlohmann::json settings = GetPluginSettings();
 
     bool auto_load_enabled = false;
@@ -3527,12 +3461,10 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     }
 
 
-    // Restore checkbox state
     auto_load_checkbox->blockSignals(true);
     auto_load_checkbox->setChecked(auto_load_enabled);
     auto_load_checkbox->blockSignals(false);
 
-    // Restore profile selection
     if(!saved_profile.empty())
     {
         int index = layout_profiles_combo->findText(QString::fromStdString(saved_profile));
@@ -3544,7 +3476,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         }
     }
 
-    // Auto-load if enabled
     if(auto_load_enabled && !saved_profile.empty())
     {
         std::string layout_path = GetLayoutPath(saved_profile);
@@ -3557,7 +3488,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
         }
     }
 
-    // Try to auto-load effect profile after layout loads
     TryAutoLoadEffectProfile();
 }
 
@@ -3693,7 +3623,6 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         if(ct->controller == nullptr) continue;
         if(ct->controller != controller) continue;
 
-        // Use granularity field if available
         if(ct->granularity == granularity && ct->item_idx == item_idx)
         {
             return true;
