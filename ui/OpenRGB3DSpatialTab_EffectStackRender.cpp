@@ -505,6 +505,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
+    // Render frequency range effects (additive blend on top of effect stack)
+    RenderFrequencyRangeEffects();
+    
     if(viewport)
     {
         viewport->UpdateColors();

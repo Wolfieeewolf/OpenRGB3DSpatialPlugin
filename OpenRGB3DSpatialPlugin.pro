@@ -174,6 +174,7 @@ HEADERS +=                                                                      
     ScreenCaptureManager.h                                                                      \
     Geometry3DUtils.h                                                                           \
     QtCompat.h                                                                                  \
+    FrequencyRangeEffect3D.h                                                                    \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
@@ -223,6 +224,7 @@ SOURCES +=                                                                      
     ui/OpenRGB3DSpatialTab_EffectStackPersist.cpp                                               \
     ui/OpenRGB3DSpatialTab_EffectProfiles.cpp                                                   \
     ui/OpenRGB3DSpatialTab_StackPresets.cpp                                                     \
+    ui/OpenRGB3DSpatialTab_FreqRanges.cpp                                                       \
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \

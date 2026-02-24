@@ -107,181 +107,81 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     gain_layout->addWidget(audio_gain_value_label);
     layout->addLayout(gain_layout);
 
-    // Bands & crossovers
+    // Bands
     QHBoxLayout* bands_layout = new QHBoxLayout();
-    bands_layout->addWidget(new QLabel("Bands:"));
+    bands_layout->addWidget(new QLabel("FFT Bands:"));
     audio_bands_combo = new QComboBox();
     audio_bands_combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     audio_bands_combo->addItems({"8", "16", "32"});
     audio_bands_combo->setCurrentText("16");
     connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_bands_changed);
     bands_layout->addWidget(audio_bands_combo);
+    
+    bands_layout->addWidget(new QLabel("  FFT Size:"));
+    audio_fft_combo = new QComboBox();
+    audio_fft_combo->addItems({"512","1024","2048","4096","8192"});
+    int cur_fft = AudioInputManager::instance()->getFFTSize();
+    int fft_idx = audio_fft_combo->findText(QString::number(cur_fft));
+    if(fft_idx >= 0) audio_fft_combo->setCurrentIndex(fft_idx);
+    connect(audio_fft_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_fft_changed);
+    bands_layout->addWidget(audio_fft_combo);
     bands_layout->addStretch();
     layout->addLayout(bands_layout);
 
-    // Audio Effects section
-    QGroupBox* audio_fx_group = new QGroupBox("Audio Effects");
-    QVBoxLayout* audio_fx_layout = new QVBoxLayout(audio_fx_group);
-    QHBoxLayout* fx_row1 = new QHBoxLayout();
-    fx_row1->addWidget(new QLabel("Effect:"));
-    audio_effect_combo = new QComboBox();
-    audio_effect_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    audio_effect_combo->addItem("None");
-    audio_effect_combo->setItemData(audio_effect_combo->count() - 1, QVariant(), kEffectRoleClassName);
-
-    std::vector<EffectRegistration3D> all_effects = EffectListManager3D::get()->GetAllEffects();
-    for(const EffectRegistration3D& reg : all_effects)
-    {
-        QString category = QString::fromStdString(reg.category);
-        if(category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) != 0)
-        {
-            continue;
-        }
-
-        QString label = QString::fromStdString(reg.ui_name);
-        audio_effect_combo->addItem(label);
-        int row = audio_effect_combo->count() - 1;
-        audio_effect_combo->setItemData(row, QString::fromStdString(reg.class_name), kEffectRoleClassName);
-        audio_effect_combo->setItemData(row, QString::fromStdString(reg.category), Qt::ToolTipRole);
-    }
-
-    if(audio_effect_combo->count() <= 1)
-    {
-        audio_effect_combo->setEnabled(false);
-    }
-    fx_row1->addWidget(audio_effect_combo);
-    audio_fx_layout->addLayout(fx_row1);
-
-    // Zone selector (on its own row, matching Effects tab layout)
-    QHBoxLayout* fx_row2 = new QHBoxLayout();
-    fx_row2->addWidget(new QLabel("Zone:"));
-    audio_effect_zone_combo = new QComboBox();
-    audio_effect_zone_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    fx_row2->addWidget(audio_effect_zone_combo);
-    connect(audio_effect_zone_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_zone_changed);
-    audio_fx_layout->addLayout(fx_row2);
-
-    // Origin selector (on its own row, matching Effects tab layout)
-    QHBoxLayout* fx_row3 = new QHBoxLayout();
-    fx_row3->addWidget(new QLabel("Origin:"));
-    audio_effect_origin_combo = new QComboBox();
-    audio_effect_origin_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    audio_effect_origin_combo->addItem("Room Center", QVariant(-1));
-    connect(audio_effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_audio_effect_origin_changed);
-    fx_row3->addWidget(audio_effect_origin_combo);
-    audio_fx_layout->addLayout(fx_row3);
-
-    // Per-effect Hz mapping
-    // Dynamic effect controls (consistent with main Effects tab)
-    audio_effect_controls_widget = new QWidget();
-    audio_effect_controls_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::MinimumExpanding);
-    audio_effect_controls_layout = new QVBoxLayout(audio_effect_controls_widget);
-    audio_effect_controls_layout->setContentsMargins(0,0,0,0);
-    audio_effect_controls_widget->setLayout(audio_effect_controls_layout);
-    audio_fx_layout->addWidget(audio_effect_controls_widget);
-
-    // Standard Audio Controls panel (Hz, smoothing, falloff)
-    SetupStandardAudioControls(audio_fx_layout);
-
-    // Dynamic effect UI provides Start/Stop (consistent with main Effects tab)
-    layout->addWidget(audio_fx_group);
-
-    connect(audio_effect_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::SetupAudioEffectUI);
-    audio_effect_combo->setCurrentIndex(0);  // Default to "None"
-    SetupAudioEffectUI(0);  // Initialize with "None" selected (hides controls)
-
-    // Help text
-    QLabel* help = new QLabel("Use Effects > select 'Audio Level 3D' to react to audio.\nThis tab manages input device and sensitivity shared by audio effects.");
+    QLabel* help = new QLabel("Configure audio input device and parameters. Use Frequency Range Effects below for multi-band audio-reactive lighting.");
     help->setStyleSheet("color: gray; font-size: 10px;");
     help->setWordWrap(true);
     layout->addWidget(help);
+    
+    SetupFrequencyRangeEffectsUI(layout);
 
-    // Load persisted audio settings (device, gain, bands, audio controls)
+    nlohmann::json settings = GetPluginSettings();
+    if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
     {
-        nlohmann::json settings = GetPluginSettings();
-        // Device index
-        if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
+        int di = settings["AudioDeviceIndex"].get<int>();
+        if(di >= 0 && di < audio_device_combo->count())
         {
-            int di = settings["AudioDeviceIndex"].get<int>();
-            if(di >= 0 && di < audio_device_combo->count())
-            {
-                audio_device_combo->blockSignals(true);
-                audio_device_combo->setCurrentIndex(di);
-                audio_device_combo->blockSignals(false);
-                on_audio_device_changed(di);
-            }
+            audio_device_combo->blockSignals(true);
+            audio_device_combo->setCurrentIndex(di);
+            audio_device_combo->blockSignals(false);
+            on_audio_device_changed(di);
         }
-        // Gain (slider 1..100)
-        if(audio_gain_slider && settings.contains("AudioGain"))
-        {
-            int gv = settings["AudioGain"].get<int>();
-            gv = std::max(1, std::min(100, gv));
-            audio_gain_slider->blockSignals(true);
-            audio_gain_slider->setValue(gv);
-            audio_gain_slider->blockSignals(false);
-            on_audio_gain_changed(gv);
-        }
-        // Bands (8/16/32)
-        if(audio_bands_combo && settings.contains("AudioBands"))
-        {
-            int bc = settings["AudioBands"].get<int>();
-            int idx = audio_bands_combo->findText(QString::number(bc));
-            if(idx >= 0)
-            {
-                audio_bands_combo->blockSignals(true);
-                audio_bands_combo->setCurrentIndex(idx);
-                audio_bands_combo->blockSignals(false);
-                on_audio_bands_changed(idx);
-            }
-        }
-        // Standard Audio Controls
-        if(audio_low_spin && settings.contains("AudioLowHz"))
-        {
-            audio_low_spin->blockSignals(true);
-            audio_low_spin->setValue(settings["AudioLowHz"].get<int>());
-            audio_low_spin->blockSignals(false);
-        }
-        if(audio_high_spin && settings.contains("AudioHighHz"))
-        {
-            audio_high_spin->blockSignals(true);
-            audio_high_spin->setValue(settings["AudioHighHz"].get<int>());
-            audio_high_spin->blockSignals(false);
-        }
-        if(audio_smooth_slider && settings.contains("AudioSmoothing"))
-        {
-            int sv = settings["AudioSmoothing"].get<int>();
-            sv = std::max(0, std::min(99, sv));
-            audio_smooth_slider->blockSignals(true);
-            audio_smooth_slider->setValue(sv);
-            audio_smooth_slider->blockSignals(false);
-        }
-        if(audio_falloff_slider && settings.contains("AudioFalloff"))
-        {
-            int fv = settings["AudioFalloff"].get<int>();
-            fv = std::max(20, std::min(500, fv));
-            audio_falloff_slider->blockSignals(true);
-            audio_falloff_slider->setValue(fv);
-            audio_falloff_slider->blockSignals(false);
-        }
-        if(audio_fft_combo && settings.contains("AudioFFTSize"))
-        {
-            int n = settings["AudioFFTSize"].get<int>();
-            int idx = audio_fft_combo->findText(QString::number(n));
-            if(idx >= 0)
-            {
-                audio_fft_combo->blockSignals(true);
-                audio_fft_combo->setCurrentIndex(idx);
-                audio_fft_combo->blockSignals(false);
-                on_audio_fft_changed(idx);
-            }
-        }
-        // Apply audio controls to effect UI if present
-        on_audio_std_low_changed(audio_low_spin ? audio_low_spin->value() : 0.0);
-        on_audio_std_smooth_changed(audio_smooth_slider ? audio_smooth_slider->value() : 60);
-        on_audio_std_falloff_changed(audio_falloff_slider ? audio_falloff_slider->value() : 100);
     }
-    // Populate origin combo after zones
-    UpdateAudioEffectOriginCombo();
+    if(audio_gain_slider && settings.contains("AudioGain"))
+    {
+        int gv = settings["AudioGain"].get<int>();
+        gv = std::max(1, std::min(100, gv));
+        audio_gain_slider->blockSignals(true);
+        audio_gain_slider->setValue(gv);
+        audio_gain_slider->blockSignals(false);
+        on_audio_gain_changed(gv);
+    }
+    if(audio_bands_combo && settings.contains("AudioBands"))
+    {
+        int bc = settings["AudioBands"].get<int>();
+        int idx = audio_bands_combo->findText(QString::number(bc));
+        if(idx >= 0)
+        {
+            audio_bands_combo->blockSignals(true);
+            audio_bands_combo->setCurrentIndex(idx);
+            audio_bands_combo->blockSignals(false);
+            on_audio_bands_changed(idx);
+        }
+    }
+    if(audio_fft_combo && settings.contains("AudioFFTSize"))
+    {
+        int n = settings["AudioFFTSize"].get<int>();
+        int idx = audio_fft_combo->findText(QString::number(n));
+        if(idx >= 0)
+        {
+            audio_fft_combo->blockSignals(true);
+            audio_fft_combo->setCurrentIndex(idx);
+            audio_fft_combo->blockSignals(false);
+            on_audio_fft_changed(idx);
+        }
+    }
+    
+    LoadFrequencyRanges();
 
     layout->addStretch();
 

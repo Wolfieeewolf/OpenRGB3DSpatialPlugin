@@ -43,6 +43,7 @@ class QStackedWidget;
 #include "StackPreset3D.h"
 // Effect headers are included in the .cpp for registration
 #include "ZoneManager3D.h"
+#include "FrequencyRangeEffect3D.h"
 
 namespace Ui
 {
@@ -409,6 +410,52 @@ private:
     QPushButton*    audio_custom_delete_btn = nullptr;
     QPushButton*    audio_custom_add_to_stack_btn = nullptr;
     QLineEdit*      audio_custom_name_edit = nullptr;
+    
+    // Frequency Range Effects System
+    std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
+    int             next_freq_range_id = 1;
+    
+    QGroupBox*      freq_ranges_group = nullptr;
+    QListWidget*    freq_ranges_list = nullptr;
+    QPushButton*    add_freq_range_btn = nullptr;
+    QPushButton*    remove_freq_range_btn = nullptr;
+    QPushButton*    duplicate_freq_range_btn = nullptr;
+    
+    QWidget*        freq_range_details = nullptr;
+    QLineEdit*      freq_range_name_edit = nullptr;
+    QSpinBox*       freq_low_spin = nullptr;
+    QSlider*        freq_low_slider = nullptr;
+    QSpinBox*       freq_high_spin = nullptr;
+    QSlider*        freq_high_slider = nullptr;
+    QComboBox*      freq_effect_combo = nullptr;
+    QComboBox*      freq_zone_combo = nullptr;
+    QCheckBox*      freq_range_enabled_check = nullptr;
+    
+    // Spatial controls for frequency ranges
+    QDoubleSpinBox* freq_pos_x_spin = nullptr;
+    QDoubleSpinBox* freq_pos_y_spin = nullptr;
+    QDoubleSpinBox* freq_pos_z_spin = nullptr;
+    QDoubleSpinBox* freq_rot_x_spin = nullptr;
+    QDoubleSpinBox* freq_rot_y_spin = nullptr;
+    QDoubleSpinBox* freq_rot_z_spin = nullptr;
+    QDoubleSpinBox* freq_scale_x_spin = nullptr;
+    QDoubleSpinBox* freq_scale_y_spin = nullptr;
+    QDoubleSpinBox* freq_scale_z_spin = nullptr;
+    
+    // Audio processing controls for frequency ranges
+    QSlider*        freq_smoothing_slider = nullptr;
+    QLabel*         freq_smoothing_label = nullptr;
+    QSlider*        freq_sensitivity_slider = nullptr;
+    QLabel*         freq_sensitivity_label = nullptr;
+    QSlider*        freq_attack_slider = nullptr;
+    QLabel*         freq_attack_label = nullptr;
+    QSlider*        freq_decay_slider = nullptr;
+    QLabel*         freq_decay_label = nullptr;
+    
+    // Effect settings container (dynamic based on selected effect)
+    QWidget*        freq_effect_settings_widget = nullptr;
+    QVBoxLayout*    freq_effect_settings_layout = nullptr;
+    SpatialEffect3D* current_freq_effect_ui = nullptr;
 
 private slots:
     void on_audio_device_changed(int index);
@@ -442,6 +489,36 @@ private slots:
     void on_audio_custom_load_clicked();
     void on_audio_custom_delete_clicked();
     void on_audio_custom_add_to_stack_clicked();
+    
+    // Frequency Range Effects helpers and slots
+    void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
+    void UpdateFrequencyRangesList();
+    void PopulateFreqEffectCombo(QComboBox* combo);
+    void UpdateFreqZoneCombo();
+    void LoadFreqRangeDetails(FrequencyRangeEffect3D* range);
+    void SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, const QString& class_name);
+    void ClearFreqRangeEffectUI();
+    void SaveFrequencyRanges();
+    void LoadFrequencyRanges();
+    void on_add_freq_range_clicked();
+    void on_remove_freq_range_clicked();
+    void on_duplicate_freq_range_clicked();
+    void on_freq_range_selected(int row);
+    void on_freq_range_name_changed(const QString& text);
+    void on_freq_low_changed(int value);
+    void on_freq_high_changed(int value);
+    void on_freq_effect_changed(int index);
+    void on_freq_zone_changed(int index);
+    void on_freq_enabled_toggled(bool checked);
+    void on_freq_position_changed();
+    void on_freq_rotation_changed();
+    void on_freq_scale_changed();
+    void on_freq_smoothing_changed(int value);
+    void on_freq_sensitivity_changed(int value);
+    void on_freq_attack_changed(int value);
+    void on_freq_decay_changed(int value);
+    void OnFreqRangeEffectParamsChanged();
+    void RenderFrequencyRangeEffects();
 
     // Display plane management
     void on_display_plane_selected(int index);
