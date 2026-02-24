@@ -1088,21 +1088,18 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         DisplayPlane3D* plane = display_planes[plane_index].get();
         plane->SetVisible(true);
 
-        // Add [Display] entry to Controllers in 3D Scene list
         QString plane_name = QString::fromStdString(plane->GetName());
         QListWidgetItem* list_item = new QListWidgetItem(QString("[Display] ") + plane_name);
         list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane->GetId())));
         controller_list->addItem(list_item);
 
-        // Auto-add the linked reference point (display plane centre) right below the plane entry
         int linked_ref_idx = plane->GetReferencePointIndex();
         if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
         {
             VirtualReferencePoint3D* ref_pt = reference_points[linked_ref_idx].get();
             if(ref_pt && !ref_pt->IsVisible())
             {
-                // Snap ref point to the plane's centre (transform.position IS the centre)
-                const Transform3D& pt = plane->GetTransform();
+                const Transform3D& pt = plane->GetTransform(); // transform.position is the plane centre
                 ref_pt->SetPosition({pt.position.x, pt.position.y, pt.position.z});
                 ref_pt->SetRotation({pt.rotation.x, pt.rotation.y, pt.rotation.z});
                 ref_pt->SetVisible(true);
@@ -1279,12 +1276,10 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
                 DisplayPlane3D* plane = display_planes[plane_index].get();
                 plane->SetVisible(false);
 
-                // Also hide and remove the linked reference point from the scene list
                 int linked_ref_idx = plane->GetReferencePointIndex();
                 if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
                 {
                     reference_points[linked_ref_idx]->SetVisible(false);
-                    // Find the ref point entry in controller_list and remove it
                     for(int r = 0; r < controller_list->count(); r++)
                     {
                         QListWidgetItem* it = controller_list->item(r);
@@ -1300,7 +1295,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
                     }
                 }
 
-                // If the removed plane was selected, clear selection
                 if(current_display_plane_index == plane_index)
                 {
                     current_display_plane_index = -1;
@@ -3276,9 +3270,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
 
-    // Rebuild controller_list entries for visible ref points and display planes.
-    // For display planes: add the [Display] entry followed by its linked [Ref] entry.
-    // Standalone visible ref points (not linked to any display plane) are added afterwards.
+    // Rebuild scene list: display planes first (each followed by their linked ref), then standalone ref points.
     std::vector<bool> ref_added(reference_points.size(), false);
 
     for(size_t i = 0; i < display_planes.size(); i++)
@@ -3306,7 +3298,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
     }
 
-    // Standalone visible ref points (not belonging to a display plane)
     for(size_t i = 0; i < reference_points.size(); i++)
     {
         if(ref_added[i]) continue;
@@ -5102,15 +5093,13 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
     transform.position.z = z;
     SetLayoutDirty();
 
-    // Update linked reference point position to match display plane
     int ref_index = plane->GetReferencePointIndex();
     if(ref_index >= 0 && ref_index < (int)reference_points.size())
     {
         VirtualReferencePoint3D* ref_point = reference_points[ref_index].get();
         if(ref_point)
         {
-            Vector3D ref_pos = {x, y, z};
-            ref_point->SetPosition(ref_pos);
+            ref_point->SetPosition({x, y, z});
         }
     }
 
@@ -5166,7 +5155,6 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
     transform.rotation.z = z;
     SetLayoutDirty();
 
-    // Update linked reference point rotation to match display plane
     int ref_index = plane->GetReferencePointIndex();
     if(ref_index >= 0 && ref_index < (int)reference_points.size())
     {

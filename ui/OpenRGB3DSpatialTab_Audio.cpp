@@ -22,9 +22,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_panel_group = audio_group;
     QVBoxLayout* layout = new QVBoxLayout(audio_group);
 
-    /*---------------------------------------------------------*\
-    | Start/Stop Controls                                       |
-    \*---------------------------------------------------------*/
     QHBoxLayout* top_controls = new QHBoxLayout();
     audio_start_button = new QPushButton("Start Listening");
     audio_stop_button = new QPushButton("Stop");
@@ -38,9 +35,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     connect(audio_stop_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_stop_clicked);
     connect(AudioInputManager::instance(), &AudioInputManager::LevelUpdated, this, &OpenRGB3DSpatialTab::on_audio_level_updated);
 
-    /*---------------------------------------------------------*\
-    | Level Meter                                               |
-    \*---------------------------------------------------------*/
     layout->addWidget(new QLabel("Level:"));
     audio_level_bar = new QProgressBar();
     audio_level_bar->setRange(0, 1000);
@@ -49,14 +43,10 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_level_bar->setFixedHeight(14);
     layout->addWidget(audio_level_bar);
 
-    /*---------------------------------------------------------*\
-    | Device Selection                                          |
-    \*---------------------------------------------------------*/
     layout->addWidget(new QLabel("Input Device:"));
     audio_device_combo = new QComboBox();
     audio_device_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_device_combo->setMinimumWidth(200);
-    
     QStringList devs = AudioInputManager::instance()->listInputDevices();
     if(devs.isEmpty())
     {
@@ -66,16 +56,13 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     else
     {
         audio_device_combo->addItems(devs);
-        connect(audio_device_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+        connect(audio_device_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                 this, &OpenRGB3DSpatialTab::on_audio_device_changed);
         audio_device_combo->setCurrentIndex(0);
         on_audio_device_changed(0);
     }
     layout->addWidget(audio_device_combo);
 
-    /*---------------------------------------------------------*\
-    | Gain Control                                              |
-    \*---------------------------------------------------------*/
     QHBoxLayout* gain_layout = new QHBoxLayout();
     gain_layout->addWidget(new QLabel("Gain:"));
     audio_gain_slider = new QSlider(Qt::Horizontal);
@@ -84,31 +71,24 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_gain_slider->setValue(10);
     connect(audio_gain_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_gain_changed);
     gain_layout->addWidget(audio_gain_slider);
-    
     audio_gain_value_label = new QLabel("1.0x");
     audio_gain_value_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     audio_gain_value_label->setMinimumWidth(48);
     gain_layout->addWidget(audio_gain_value_label);
     layout->addLayout(gain_layout);
 
-    /*---------------------------------------------------------*\
-    | Bands Selection                                           |
-    \*---------------------------------------------------------*/
     QHBoxLayout* bands_layout = new QHBoxLayout();
     bands_layout->addWidget(new QLabel("Bands:"));
     audio_bands_combo = new QComboBox();
     audio_bands_combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     audio_bands_combo->addItems({"8", "16", "32"});
     audio_bands_combo->setCurrentText("16");
-    connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+    connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_audio_bands_changed);
     bands_layout->addWidget(audio_bands_combo);
     bands_layout->addStretch();
     layout->addLayout(bands_layout);
 
-    /*---------------------------------------------------------*\
-    | FFT Size                                                  |
-    \*---------------------------------------------------------*/
     QHBoxLayout* fft_layout = new QHBoxLayout();
     fft_layout->addWidget(new QLabel("FFT Size:"));
     audio_fft_combo = new QComboBox();
@@ -116,30 +96,19 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     int cur_fft = AudioInputManager::instance()->getFFTSize();
     int idx = audio_fft_combo->findText(QString::number(cur_fft));
     if(idx >= 0) audio_fft_combo->setCurrentIndex(idx);
-    connect(audio_fft_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+    connect(audio_fft_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_audio_fft_changed);
     fft_layout->addWidget(audio_fft_combo);
     fft_layout->addStretch();
     layout->addLayout(fft_layout);
 
-    /*---------------------------------------------------------*\
-    | Help Text                                                 |
-    \*---------------------------------------------------------*/
     QLabel* help = new QLabel("Configure audio input for frequency range effects below.");
     help->setStyleSheet("color: gray; font-size: 10px;");
     help->setWordWrap(true);
     layout->addWidget(help);
-    
-    /*---------------------------------------------------------*\
-    | Frequency Range Effects (Multi-Band System)               |
-    \*---------------------------------------------------------*/
     SetupFrequencyRangeEffectsUI(layout);
 
-    /*---------------------------------------------------------*\
-    | Load Saved Settings                                       |
-    \*---------------------------------------------------------*/
     nlohmann::json settings = GetPluginSettings();
-    
     if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
     {
         int di = settings["AudioDeviceIndex"].get<int>();
@@ -151,7 +120,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
             on_audio_device_changed(di);
         }
     }
-    
+
     if(audio_gain_slider && settings.contains("AudioGain"))
     {
         int gv = settings["AudioGain"].get<int>();
@@ -161,7 +130,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
         audio_gain_slider->blockSignals(false);
         on_audio_gain_changed(gv);
     }
-    
+
     if(audio_bands_combo && settings.contains("AudioBands"))
     {
         int bc = settings["AudioBands"].get<int>();
@@ -174,7 +143,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
             on_audio_bands_changed(bidx);
         }
     }
-    
+
     if(audio_fft_combo && settings.contains("AudioFFTSize"))
     {
         int n = settings["AudioFFTSize"].get<int>();
@@ -218,7 +187,7 @@ void OpenRGB3DSpatialTab::on_audio_level_updated(float level)
 void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
 {
     AudioInputManager::instance()->setDeviceByIndex(index);
-    
+
     nlohmann::json settings = GetPluginSettings();
     settings["AudioDeviceIndex"] = index;
     SetPluginSettings(settings);
@@ -228,12 +197,12 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
 {
     float g = std::max(0.1f, std::min(10.0f, value / 10.0f));
     AudioInputManager::instance()->setGain(g);
-    
+
     if(audio_gain_value_label)
     {
         audio_gain_value_label->setText(QString::number(g, 'f', (g < 10.0f ? 1 : 0)) + "x");
     }
-    
+
     nlohmann::json settings = GetPluginSettings();
     settings["AudioGain"] = value;
     SetPluginSettings(settings);
@@ -243,7 +212,7 @@ void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
 {
     int bands = audio_bands_combo->itemText(index).toInt();
     AudioInputManager::instance()->setBandsCount(bands);
-    
+
     nlohmann::json settings = GetPluginSettings();
     settings["AudioBands"] = bands;
     SetPluginSettings(settings);
@@ -252,7 +221,7 @@ void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
 void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
 {
     if(!audio_fft_combo) return;
-    
+
     int n = audio_fft_combo->currentText().toInt();
     AudioInputManager::instance()->setFFTSize(n);
 
