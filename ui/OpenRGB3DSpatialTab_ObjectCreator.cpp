@@ -4974,22 +4974,12 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
 {
     if(index < 0)
     {
-        if(!display_planes.empty() && display_planes_list)
-        {
-            int restore = (current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
-                ? current_display_plane_index : 0;
-            QSignalBlocker block(display_planes_list);
-            display_planes_list->setCurrentRow(restore);
-            current_display_plane_index = restore;
-            return;
-        }
         current_display_plane_index = -1;
         if(display_planes_list)
         {
             QSignalBlocker block(display_planes_list);
             display_planes_list->clearSelection();
         }
-        RefreshDisplayPlaneDetails();
         return;
     }
 
@@ -5048,13 +5038,11 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
 {
     if(index < 0)
     {
-        if(!display_planes.empty() && display_planes_list)
+        current_display_plane_index = -1;
+        if(display_planes_list)
         {
-            int restore = (current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
-                ? current_display_plane_index : 0;
             QSignalBlocker block(display_planes_list);
-            display_planes_list->setCurrentRow(restore);
-            current_display_plane_index = restore;
+            display_planes_list->clearSelection();
         }
         return;
     }
