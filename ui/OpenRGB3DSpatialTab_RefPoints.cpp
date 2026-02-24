@@ -120,9 +120,14 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
             controller_list->blockSignals(false);
         }
 
-        // Update position/rotation controls with reference point values
+        // Update position/rotation controls with reference point values (position in grid units -> display in mm)
         VirtualReferencePoint3D* ref_point = reference_points[index].get();
         Vector3D pos = ref_point->GetPosition();
+        double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+        if(scale_mm < 0.001) scale_mm = 10.0;
+        double pos_x_mm = (double)pos.x * scale_mm;
+        double pos_y_mm = (double)pos.y * scale_mm;
+        double pos_z_mm = (double)pos.z * scale_mm;
 
         pos_x_slider->blockSignals(true);
         pos_y_slider->blockSignals(true);
@@ -131,12 +136,12 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         pos_y_spin->blockSignals(true);
         pos_z_spin->blockSignals(true);
 
-        pos_x_slider->setValue((int)(pos.x * 10));
-        pos_y_slider->setValue((int)(pos.y * 10));
-        pos_z_slider->setValue((int)(pos.z * 10));
-        pos_x_spin->setValue(pos.x);
-        pos_y_spin->setValue(pos.y);
-        pos_z_spin->setValue(pos.z);
+        pos_x_slider->setValue((int)std::lround(pos_x_mm));
+        pos_y_slider->setValue((int)std::lround(pos_y_mm));
+        pos_z_slider->setValue((int)std::lround(pos_z_mm));
+        pos_x_spin->setValue(pos_x_mm);
+        pos_y_spin->setValue(pos_y_mm);
+        pos_z_spin->setValue(pos_z_mm);
 
         pos_x_slider->blockSignals(false);
         pos_y_slider->blockSignals(false);
@@ -145,7 +150,13 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         pos_y_spin->blockSignals(false);
         pos_z_spin->blockSignals(false);
 
-        // Enable rotation controls - reference points have rotation
+        // Enable position and rotation controls so user can move the reference point
+        if(pos_x_spin) pos_x_spin->setEnabled(true);
+        if(pos_y_spin) pos_y_spin->setEnabled(true);
+        if(pos_z_spin) pos_z_spin->setEnabled(true);
+        if(pos_x_slider) pos_x_slider->setEnabled(true);
+        if(pos_y_slider) pos_y_slider->setEnabled(true);
+        if(pos_z_slider) pos_z_slider->setEnabled(true);
         rot_x_slider->setEnabled(true);
         rot_y_slider->setEnabled(true);
         rot_z_slider->setEnabled(true);
@@ -193,6 +204,12 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     Vector3D pos = {x, y, z};
     ref_point->SetPosition(pos);
 
+    double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+    if(scale_mm < 0.001) scale_mm = 10.0;
+    double x_mm = (double)x * scale_mm;
+    double y_mm = (double)y * scale_mm;
+    double z_mm = (double)z * scale_mm;
+
     pos_x_slider->blockSignals(true);
     pos_y_slider->blockSignals(true);
     pos_z_slider->blockSignals(true);
@@ -200,12 +217,12 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     pos_y_spin->blockSignals(true);
     pos_z_spin->blockSignals(true);
 
-    pos_x_slider->setValue((int)(x * 10));
-    pos_y_slider->setValue((int)(y * 10));
-    pos_z_slider->setValue((int)(z * 10));
-    pos_x_spin->setValue(x);
-    pos_y_spin->setValue(y);
-    pos_z_spin->setValue(z);
+    pos_x_slider->setValue((int)std::lround(x_mm));
+    pos_y_slider->setValue((int)std::lround(y_mm));
+    pos_z_slider->setValue((int)std::lround(z_mm));
+    pos_x_spin->setValue(x_mm);
+    pos_y_spin->setValue(y_mm);
+    pos_z_spin->setValue(z_mm);
 
     pos_x_slider->blockSignals(false);
     pos_y_slider->blockSignals(false);
@@ -256,7 +273,6 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 
     // Update effect origin combo whenever reference points change
     UpdateEffectOriginCombo();
-    UpdateAudioEffectOriginCombo();
 
     // Update ScreenMirror3D reference point dropdowns in effect stack
     for(unsigned int i = 0; i < effect_stack.size(); i++)

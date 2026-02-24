@@ -287,6 +287,22 @@ void OpenRGB3DSpatialTab::UpdateDeviceList()
     LoadDevices();
 }
 
+void OpenRGB3DSpatialTab::on_viewport_controller_selected(int transform_index)
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
+    {
+        on_controller_selected(-1);
+        return;
+    }
+    int list_row = TransformIndexToControllerListRow(transform_index);
+    if(list_row < 0)
+        return;
+    QSignalBlocker block(controller_list);
+    if(controller_list)
+        controller_list->setCurrentRow(list_row);
+    on_controller_selected(list_row);
+}
+
 void OpenRGB3DSpatialTab::on_controller_selected(int index)
 {
     if(controller_list && index >= 0 && index < controller_list->count())
@@ -336,6 +352,19 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
                     SyncDisplayPlaneControls(plane);
                     RefreshDisplayPlaneDetails();
                     if(viewport) viewport->SelectDisplayPlane(plane_index);
+                    // Enable position/rotation so user can move the display plane
+                    if(pos_x_spin) pos_x_spin->setEnabled(true);
+                    if(pos_y_spin) pos_y_spin->setEnabled(true);
+                    if(pos_z_spin) pos_z_spin->setEnabled(true);
+                    if(pos_x_slider) pos_x_slider->setEnabled(true);
+                    if(pos_y_slider) pos_y_slider->setEnabled(true);
+                    if(pos_z_slider) pos_z_slider->setEnabled(true);
+                    if(rot_x_spin) rot_x_spin->setEnabled(true);
+                    if(rot_y_spin) rot_y_spin->setEnabled(true);
+                    if(rot_z_spin) rot_z_spin->setEnabled(true);
+                    if(rot_x_slider) rot_x_slider->setEnabled(true);
+                    if(rot_y_slider) rot_y_slider->setEnabled(true);
+                    if(rot_z_slider) rot_z_slider->setEnabled(true);
                 }
                 return;
             }
@@ -389,17 +418,22 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
             rot_y_slider->blockSignals(true);
             rot_z_slider->blockSignals(true);
 
-            pos_x_spin->setValue(ctrl->transform.position.x);
-            pos_y_spin->setValue(ctrl->transform.position.y);
-            pos_z_spin->setValue(ctrl->transform.position.z);
+            double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+            if(scale_mm < 0.001) scale_mm = 10.0;
+            double pos_x_mm = (double)ctrl->transform.position.x * scale_mm;
+            double pos_y_mm = (double)ctrl->transform.position.y * scale_mm;
+            double pos_z_mm = (double)ctrl->transform.position.z * scale_mm;
+            pos_x_spin->setValue(pos_x_mm);
+            pos_y_spin->setValue(pos_y_mm);
+            pos_z_spin->setValue(pos_z_mm);
             rot_x_spin->setValue(ctrl->transform.rotation.x);
             rot_y_spin->setValue(ctrl->transform.rotation.y);
             rot_z_spin->setValue(ctrl->transform.rotation.z);
 
-            pos_x_slider->setValue((int)(ctrl->transform.position.x * 10));
-            float constrained_y = std::max(ctrl->transform.position.y, (float)0.0f);
-            pos_y_slider->setValue((int)(constrained_y * 10));
-            pos_z_slider->setValue((int)(ctrl->transform.position.z * 10));
+            pos_x_slider->setValue((int)std::lround(pos_x_mm));
+            double constrained_y_mm = std::max(pos_y_mm, 0.0);
+            pos_y_slider->setValue((int)std::lround(constrained_y_mm));
+            pos_z_slider->setValue((int)std::lround(pos_z_mm));
             rot_x_slider->setValue((int)(ctrl->transform.rotation.x));
             rot_y_slider->setValue((int)(ctrl->transform.rotation.y));
             rot_z_slider->setValue((int)(ctrl->transform.rotation.z));
@@ -417,12 +451,34 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
             rot_y_slider->blockSignals(false);
             rot_z_slider->blockSignals(false);
 
-            rot_x_slider->setEnabled(true);
-            rot_y_slider->setEnabled(true);
-            rot_z_slider->setEnabled(true);
+            pos_x_spin->setEnabled(true);
+            pos_y_spin->setEnabled(true);
+            pos_z_spin->setEnabled(true);
+            pos_x_slider->setEnabled(true);
+            pos_y_slider->setEnabled(true);
+            pos_z_slider->setEnabled(true);
             rot_x_spin->setEnabled(true);
             rot_y_spin->setEnabled(true);
             rot_z_spin->setEnabled(true);
+            rot_x_slider->setEnabled(true);
+            rot_y_slider->setEnabled(true);
+            rot_z_slider->setEnabled(true);
+        }
+        else
+        {
+            // Valid controller but some transform widgets missing – still enable any that exist
+            if(pos_x_spin) pos_x_spin->setEnabled(true);
+            if(pos_y_spin) pos_y_spin->setEnabled(true);
+            if(pos_z_spin) pos_z_spin->setEnabled(true);
+            if(pos_x_slider) pos_x_slider->setEnabled(true);
+            if(pos_y_slider) pos_y_slider->setEnabled(true);
+            if(pos_z_slider) pos_z_slider->setEnabled(true);
+            if(rot_x_spin) rot_x_spin->setEnabled(true);
+            if(rot_y_spin) rot_y_spin->setEnabled(true);
+            if(rot_z_spin) rot_z_spin->setEnabled(true);
+            if(rot_x_slider) rot_x_slider->setEnabled(true);
+            if(rot_y_slider) rot_y_slider->setEnabled(true);
+            if(rot_z_slider) rot_z_slider->setEnabled(true);
         }
 
         if(reference_points_list)
@@ -458,6 +514,20 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         {
             apply_spacing_button->setEnabled(true);
         }
+
+        // Re-enable position/rotation at the end so they stay enabled after clearing ref-point selection
+        if(pos_x_spin) pos_x_spin->setEnabled(true);
+        if(pos_y_spin) pos_y_spin->setEnabled(true);
+        if(pos_z_spin) pos_z_spin->setEnabled(true);
+        if(pos_x_slider) pos_x_slider->setEnabled(true);
+        if(pos_y_slider) pos_y_slider->setEnabled(true);
+        if(pos_z_slider) pos_z_slider->setEnabled(true);
+        if(rot_x_spin) rot_x_spin->setEnabled(true);
+        if(rot_y_spin) rot_y_spin->setEnabled(true);
+        if(rot_z_spin) rot_z_spin->setEnabled(true);
+        if(rot_x_slider) rot_x_slider->setEnabled(true);
+        if(rot_y_slider) rot_y_slider->setEnabled(true);
+        if(rot_z_slider) rot_z_slider->setEnabled(true);
     }
     else if(transform_index == -1 || index == -1)
     {
@@ -505,14 +575,19 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         pos_y_slider->blockSignals(true);
         pos_z_slider->blockSignals(true);
 
-        pos_x_spin->setValue(x);
-        pos_y_spin->setValue(y);
-        pos_z_spin->setValue(z);
+        double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+        if(scale_mm < 0.001) scale_mm = 10.0;
+        double x_mm = (double)x * scale_mm;
+        double y_mm = (double)y * scale_mm;
+        double z_mm = (double)z * scale_mm;
+        pos_x_spin->setValue(x_mm);
+        pos_y_spin->setValue(y_mm);
+        pos_z_spin->setValue(z_mm);
 
-        pos_x_slider->setValue((int)(x * 10));
-        float constrained_y = std::max(y, (float)0.0f);
-        pos_y_slider->setValue((int)(constrained_y * 10));
-        pos_z_slider->setValue((int)(z * 10));
+        pos_x_slider->setValue((int)std::lround(x_mm));
+        double constrained_y_mm = std::max(y_mm, 0.0);
+        pos_y_slider->setValue((int)std::lround(constrained_y_mm));
+        pos_z_slider->setValue((int)std::lround(z_mm));
 
         // Unblock signals
         pos_x_spin->blockSignals(false);
@@ -2726,6 +2801,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         if(layout_json["grid"].contains("scale_mm"))
         {
             grid_scale_mm = layout_json["grid"]["scale_mm"].get<float>();
+            if(grid_scale_mm < 0.001f)
+                grid_scale_mm = 10.0f;
             if(grid_scale_spin)
             {
                 grid_scale_spin->blockSignals(true);
@@ -4175,15 +4252,20 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
     }
 
     const Transform3D& transform = plane->GetTransform();
+    double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+    if(scale_mm < 0.001) scale_mm = 10.0;
+    double pos_x_mm = (double)transform.position.x * scale_mm;
+    double pos_y_mm = (double)transform.position.y * scale_mm;
+    double pos_z_mm = (double)transform.position.z * scale_mm;
 
-    if(pos_x_spin) { QSignalBlocker block(pos_x_spin); pos_x_spin->setValue(transform.position.x); }
-    if(pos_x_slider) { QSignalBlocker block(pos_x_slider); pos_x_slider->setValue((int)std::lround(transform.position.x * 10.0f)); }
+    if(pos_x_spin) { QSignalBlocker block(pos_x_spin); pos_x_spin->setValue(pos_x_mm); }
+    if(pos_x_slider) { QSignalBlocker block(pos_x_slider); pos_x_slider->setValue((int)std::lround(pos_x_mm)); }
 
-    if(pos_y_spin) { QSignalBlocker block(pos_y_spin); pos_y_spin->setValue(transform.position.y); }
-    if(pos_y_slider) { QSignalBlocker block(pos_y_slider); pos_y_slider->setValue((int)std::lround(transform.position.y * 10.0f)); }
+    if(pos_y_spin) { QSignalBlocker block(pos_y_spin); pos_y_spin->setValue(pos_y_mm); }
+    if(pos_y_slider) { QSignalBlocker block(pos_y_slider); pos_y_slider->setValue((int)std::lround(pos_y_mm)); }
 
-    if(pos_z_spin) { QSignalBlocker block(pos_z_spin); pos_z_spin->setValue(transform.position.z); }
-    if(pos_z_slider) { QSignalBlocker block(pos_z_slider); pos_z_slider->setValue((int)std::lround(transform.position.z * 10.0f)); }
+    if(pos_z_spin) { QSignalBlocker block(pos_z_spin); pos_z_spin->setValue(pos_z_mm); }
+    if(pos_z_slider) { QSignalBlocker block(pos_z_slider); pos_z_slider->setValue((int)std::lround(pos_z_mm)); }
 
     if(rot_x_spin) { QSignalBlocker block(rot_x_spin); rot_x_spin->setValue(transform.rotation.x); }
     if(rot_x_slider) { QSignalBlocker block(rot_x_slider); rot_x_slider->setValue((int)std::lround(transform.rotation.x)); }

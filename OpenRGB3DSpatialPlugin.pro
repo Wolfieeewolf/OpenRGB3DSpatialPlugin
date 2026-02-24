@@ -185,6 +185,7 @@ HEADERS +=                                                                      
     Effects3D/BeatPulse3D/BeatPulse3D.h                                                         \
     Effects3D/BandScan3D/BandScan3D.h                                                           \
     Effects3D/AudioLevel3D/AudioLevel3D.h                                                       \
+    Effects3D/AudioPulse3D/AudioPulse3D.h                                                       \
     Audio/AudioInputManager.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
     Effects3D/Spiral3D/Spiral3D.h                                                               \
@@ -245,6 +246,7 @@ SOURCES +=                                                                      
     Effects3D/BeatPulse3D/BeatPulse3D.cpp                                                       \
     Effects3D/BandScan3D/BandScan3D.cpp                                                         \
     Effects3D/AudioLevel3D/AudioLevel3D.cpp                                                     \
+    Effects3D/AudioPulse3D/AudioPulse3D.cpp                                                     \
     Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                 \
     Audio/AudioInputManager.cpp                                                                 \
 

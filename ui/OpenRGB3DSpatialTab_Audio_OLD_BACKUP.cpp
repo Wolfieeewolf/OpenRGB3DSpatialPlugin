@@ -188,7 +188,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 
     layout->addStretch();
     parent_layout->addWidget(audio_group);
-    audio_group->setVisible(true);
+    audio_group->setVisible(false);
 }
 
 void OpenRGB3DSpatialTab::on_audio_start_clicked()

@@ -70,6 +70,7 @@ private slots:
     void on_stop_effect_clicked();
 
     void on_controller_selected(int index);
+    void on_viewport_controller_selected(int transform_index);
     void on_controller_position_changed(int index, float x, float y, float z);
     void on_controller_rotation_changed(int index, float x, float y, float z);
 
@@ -389,27 +390,8 @@ private:
     QPushButton*    audio_stop_button = nullptr;
     QLabel*         audio_gain_value_label = nullptr;     // shows gain as e.g. 1.0x
 
-    QComboBox*      audio_bands_combo = nullptr;   // 8/16/32
-
-    // Audio effects section (moved to Audio tab)
-    QComboBox*      audio_effect_combo = nullptr;
-    QComboBox*      audio_effect_zone_combo = nullptr; // includes All Controllers
-    QComboBox*      audio_effect_origin_combo = nullptr; // Room Center + reference points
-    QWidget*        audio_effect_controls_widget = nullptr; // dynamic effect UI (like main Effects tab)
-    QVBoxLayout*    audio_effect_controls_layout = nullptr;
-    SpatialEffect3D* current_audio_effect_ui = nullptr;
-    SpatialEffect3D* running_audio_effect = nullptr; // active instance in the renderer
-    QPushButton*    audio_effect_start_button = nullptr; // start selected audio effect
-    QPushButton*    audio_effect_stop_button = nullptr;  // stop selected audio effect
-
-    // Audio custom effects
-    QGroupBox*      audio_custom_group = nullptr;
-    QListWidget*    audio_custom_list = nullptr;
-    QPushButton*    audio_custom_save_btn = nullptr;
-    QPushButton*    audio_custom_load_btn = nullptr;
-    QPushButton*    audio_custom_delete_btn = nullptr;
-    QPushButton*    audio_custom_add_to_stack_btn = nullptr;
-    QLineEdit*      audio_custom_name_edit = nullptr;
+    QComboBox*      audio_bands_combo = nullptr;
+    QComboBox*      audio_fft_combo = nullptr;
     
     // Frequency Range Effects System
     std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
@@ -464,31 +446,7 @@ private slots:
     void on_audio_stop_clicked();
     void on_audio_level_updated(float level);
     void on_audio_bands_changed(int index);
-    void on_audio_effect_start_clicked();
-    void on_audio_effect_stop_clicked();
-    void SetupAudioEffectUI(int eff_index);
-    void on_audio_effect_origin_changed(int index);
-    void UpdateAudioEffectOriginCombo();
-    void on_audio_effect_zone_changed(int index);
-    void UpdateAudioEffectZoneCombo();
-    void OnAudioEffectParamsChanged();
-
-    // Standard Audio Controls (Hz, smoothing, falloff)
-    void SetupStandardAudioControls(QVBoxLayout* parent_layout);
-    void UpdateAudioPanelVisibility(EffectInstance3D* instance);
-    void on_audio_std_low_changed(double v);
-    void on_audio_std_high_changed(double v);
-    void on_audio_std_smooth_changed(int v);
-    void on_audio_std_falloff_changed(int v);
     void on_audio_fft_changed(int index);
-
-    // Custom audio effects helpers and slots
-    void SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout);
-    void UpdateAudioCustomEffectsList();
-    void on_audio_custom_save_clicked();
-    void on_audio_custom_load_clicked();
-    void on_audio_custom_delete_clicked();
-    void on_audio_custom_add_to_stack_clicked();
     
     // Frequency Range Effects helpers and slots
     void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
@@ -537,18 +495,6 @@ private slots:
 
     void on_monitor_preset_text_edited(const QString& text);
 private:
-    // Audio Standard Controls (data members)
-    QGroupBox*      audio_std_group = nullptr;
-    QDoubleSpinBox* audio_low_spin = nullptr;
-    QDoubleSpinBox* audio_high_spin = nullptr;
-    QSlider*        audio_smooth_slider = nullptr;
-    QSlider*        audio_falloff_slider = nullptr;
-    QComboBox*      audio_fft_combo = nullptr;
-    QLabel*         audio_smooth_value_label = nullptr;   // shows smoothing as percent
-    QLabel*         audio_falloff_value_label = nullptr;  // shows falloff mapped (e.g., 1.00x)
-    std::string GetAudioCustomEffectsDir();
-    std::string GetAudioCustomEffectPath(const std::string& name);
-
     // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
 

@@ -151,104 +151,20 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     zone_row->addWidget(freq_zone_combo, 1);
     details_layout->addLayout(zone_row);
     
-    // Spatial transform group
-    QGroupBox* spatial_group = new QGroupBox("Spatial Transform");
-    QGridLayout* spatial_grid = new QGridLayout(spatial_group);
-    
-    // Position
-    spatial_grid->addWidget(new QLabel("Position X:"), 0, 0);
-    freq_pos_x_spin = new QDoubleSpinBox();
-    freq_pos_x_spin->setRange(-1000.0, 1000.0);
-    freq_pos_x_spin->setDecimals(1);
-    freq_pos_x_spin->setSingleStep(1.0);
-    freq_pos_x_spin->setValue(0.0);
-    connect(freq_pos_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_position_changed(); });
-    spatial_grid->addWidget(freq_pos_x_spin, 0, 1);
-    
-    spatial_grid->addWidget(new QLabel("Y:"), 0, 2);
-    freq_pos_y_spin = new QDoubleSpinBox();
-    freq_pos_y_spin->setRange(-1000.0, 1000.0);
-    freq_pos_y_spin->setDecimals(1);
-    freq_pos_y_spin->setSingleStep(1.0);
-    freq_pos_y_spin->setValue(0.0);
-    connect(freq_pos_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_position_changed(); });
-    spatial_grid->addWidget(freq_pos_y_spin, 0, 3);
-    
-    spatial_grid->addWidget(new QLabel("Z:"), 0, 4);
-    freq_pos_z_spin = new QDoubleSpinBox();
-    freq_pos_z_spin->setRange(-1000.0, 1000.0);
-    freq_pos_z_spin->setDecimals(1);
-    freq_pos_z_spin->setSingleStep(1.0);
-    freq_pos_z_spin->setValue(0.0);
-    connect(freq_pos_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_position_changed(); });
-    spatial_grid->addWidget(freq_pos_z_spin, 0, 5);
-    
-    // Rotation
-    spatial_grid->addWidget(new QLabel("Rotation X:"), 1, 0);
-    freq_rot_x_spin = new QDoubleSpinBox();
-    freq_rot_x_spin->setRange(-360.0, 360.0);
-    freq_rot_x_spin->setDecimals(1);
-    freq_rot_x_spin->setSingleStep(1.0);
-    freq_rot_x_spin->setValue(0.0);
-    connect(freq_rot_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_rotation_changed(); });
-    spatial_grid->addWidget(freq_rot_x_spin, 1, 1);
-    
-    spatial_grid->addWidget(new QLabel("Y:"), 1, 2);
-    freq_rot_y_spin = new QDoubleSpinBox();
-    freq_rot_y_spin->setRange(-360.0, 360.0);
-    freq_rot_y_spin->setDecimals(1);
-    freq_rot_y_spin->setSingleStep(1.0);
-    freq_rot_y_spin->setValue(0.0);
-    connect(freq_rot_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_rotation_changed(); });
-    spatial_grid->addWidget(freq_rot_y_spin, 1, 3);
-    
-    spatial_grid->addWidget(new QLabel("Z:"), 1, 4);
-    freq_rot_z_spin = new QDoubleSpinBox();
-    freq_rot_z_spin->setRange(-360.0, 360.0);
-    freq_rot_z_spin->setDecimals(1);
-    freq_rot_z_spin->setSingleStep(1.0);
-    freq_rot_z_spin->setValue(0.0);
-    connect(freq_rot_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_rotation_changed(); });
-    spatial_grid->addWidget(freq_rot_z_spin, 1, 5);
-    
-    // Scale
-    spatial_grid->addWidget(new QLabel("Scale X:"), 2, 0);
+    // Scale control (simple slider)
+    QHBoxLayout* scale_row = new QHBoxLayout();
+    scale_row->addWidget(new QLabel("Scale:"));
     freq_scale_x_spin = new QDoubleSpinBox();
     freq_scale_x_spin->setRange(0.1, 10.0);
     freq_scale_x_spin->setDecimals(2);
     freq_scale_x_spin->setSingleStep(0.1);
     freq_scale_x_spin->setValue(1.0);
+    freq_scale_x_spin->setSuffix("x");
     connect(freq_scale_x_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, [this](double) { on_freq_scale_changed(); });
-    spatial_grid->addWidget(freq_scale_x_spin, 2, 1);
-    
-    spatial_grid->addWidget(new QLabel("Y:"), 2, 2);
-    freq_scale_y_spin = new QDoubleSpinBox();
-    freq_scale_y_spin->setRange(0.1, 10.0);
-    freq_scale_y_spin->setDecimals(2);
-    freq_scale_y_spin->setSingleStep(0.1);
-    freq_scale_y_spin->setValue(1.0);
-    connect(freq_scale_y_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_scale_changed(); });
-    spatial_grid->addWidget(freq_scale_y_spin, 2, 3);
-    
-    spatial_grid->addWidget(new QLabel("Z:"), 2, 4);
-    freq_scale_z_spin = new QDoubleSpinBox();
-    freq_scale_z_spin->setRange(0.1, 10.0);
-    freq_scale_z_spin->setDecimals(2);
-    freq_scale_z_spin->setSingleStep(0.1);
-    freq_scale_z_spin->setValue(1.0);
-    connect(freq_scale_z_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { on_freq_scale_changed(); });
-    spatial_grid->addWidget(freq_scale_z_spin, 2, 5);
-    
-    details_layout->addWidget(spatial_group);
+    scale_row->addWidget(freq_scale_x_spin);
+    scale_row->addStretch();
+    details_layout->addLayout(scale_row);
     
     // Audio processing controls
     QGroupBox* audio_proc_group = new QGroupBox("Audio Processing");
@@ -279,32 +195,6 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     freq_sensitivity_label->setMinimumWidth(50);
     freq_sensitivity_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     proc_grid->addWidget(freq_sensitivity_label, 1, 2);
-    
-    // Attack
-    proc_grid->addWidget(new QLabel("Attack:"), 2, 0);
-    freq_attack_slider = new QSlider(Qt::Horizontal);
-    freq_attack_slider->setRange(1, 100);  // Maps to 0.01..1.0
-    freq_attack_slider->setValue(5);       // 0.05
-    connect(freq_attack_slider, &QSlider::valueChanged,
-            this, &OpenRGB3DSpatialTab::on_freq_attack_changed);
-    proc_grid->addWidget(freq_attack_slider, 2, 1);
-    freq_attack_label = new QLabel("0.05");
-    freq_attack_label->setMinimumWidth(50);
-    freq_attack_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    proc_grid->addWidget(freq_attack_label, 2, 2);
-    
-    // Decay
-    proc_grid->addWidget(new QLabel("Decay:"), 3, 0);
-    freq_decay_slider = new QSlider(Qt::Horizontal);
-    freq_decay_slider->setRange(1, 100);  // Maps to 0.01..1.0
-    freq_decay_slider->setValue(20);      // 0.20
-    connect(freq_decay_slider, &QSlider::valueChanged,
-            this, &OpenRGB3DSpatialTab::on_freq_decay_changed);
-    proc_grid->addWidget(freq_decay_slider, 3, 1);
-    freq_decay_label = new QLabel("0.20");
-    freq_decay_label->setMinimumWidth(50);
-    freq_decay_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    proc_grid->addWidget(freq_decay_label, 3, 2);
     
     details_layout->addWidget(audio_proc_group);
     

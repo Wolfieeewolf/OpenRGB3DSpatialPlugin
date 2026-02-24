@@ -266,7 +266,7 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
     // Also update the zone dropdowns in effects tab, effect stack tab, and audio tab
     UpdateEffectZoneCombo();
     UpdateStackEffectZoneCombo();
-    UpdateAudioEffectZoneCombo();
+    UpdateFreqZoneCombo();
 }
 
 void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_value)

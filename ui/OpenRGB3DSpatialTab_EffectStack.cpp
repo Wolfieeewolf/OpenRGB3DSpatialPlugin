@@ -179,8 +179,6 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
             }
         }
 
-        UpdateAudioPanelVisibility(nullptr);
-
         if(start_effect_button)
         {
             disconnect(start_effect_button, nullptr, this, nullptr);
@@ -254,7 +252,6 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     }
 
     LoadStackEffectControls(instance);
-    UpdateAudioPanelVisibility(instance);
 
     if(effect_zone_combo)
     {

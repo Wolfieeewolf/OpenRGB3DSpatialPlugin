@@ -185,8 +185,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     // Initialize zone and effect combos
     UpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
     UpdateEffectOriginCombo();      // Initialize Effects tab origin dropdown
-    UpdateAudioEffectZoneCombo();   // Initialize Audio tab zone dropdown
-    UpdateAudioEffectOriginCombo(); // Initialize Audio tab origin dropdown
 
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
@@ -458,7 +456,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     }
     catch(const std::exception&){ /* ignore settings errors */ }
 
-    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::on_controller_selected);
+    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::on_viewport_controller_selected);
     connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::on_controller_position_changed);
     connect(viewport, &LEDViewport3D::ControllerRotationChanged, this, &OpenRGB3DSpatialTab::on_controller_rotation_changed);
     connect(viewport, &LEDViewport3D::ControllerDeleteRequested, this, &OpenRGB3DSpatialTab::on_remove_controller_from_viewport);
@@ -507,7 +505,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_scale_spin->setSingleStep(1.0);
     grid_scale_spin->setValue(grid_scale_mm);
     grid_scale_spin->setSuffix(" mm/unit");
-    grid_scale_spin->setToolTip("One grid unit in mm. Positions × scale = real size (e.g. 10 mm/unit = 1 cm per unit).");
+    grid_scale_spin->setToolTip("Size of one grid unit in mm. Position in grid units × scale = real size in mm (e.g. scale 10 → 10 mm per unit).");
     grid_gl->addWidget(grid_scale_spin, 1, 1, 1, 2);
 
     grid_snap_checkbox = new QCheckBox("Snap positions to grid");
@@ -575,11 +573,11 @@ void OpenRGB3DSpatialTab::SetupUI()
         lo->addWidget(spin, row, col + 1);
     };
 
-    add_room_dim_spin(room_gl, 1, 0, "Width (X):", room_width_spin, manual_room_width, "Left to right");
-    add_room_dim_spin(room_gl, 1, 2, "Height (Y):", room_height_spin, manual_room_height, "Floor to ceiling");
-    add_room_dim_spin(room_gl, 1, 4, "Depth (Z):", room_depth_spin, manual_room_depth, "Front to back");
+    add_room_dim_spin(room_gl, 1, 0, "Width (X, mm):", room_width_spin, manual_room_width, "Left to right, in mm");
+    add_room_dim_spin(room_gl, 1, 2, "Height (Y, mm):", room_height_spin, manual_room_height, "Floor to ceiling, in mm");
+    add_room_dim_spin(room_gl, 1, 4, "Depth (Z, mm):", room_depth_spin, manual_room_depth, "Front to back, in mm");
 
-    QLabel* room_help = new QLabel("Origin is front-left-floor. Used by effects that need room bounds. Positions are in grid units (× Grid scale = mm).");
+    QLabel* room_help = new QLabel("Origin is front-left-floor. Room dimensions and grid scale are in mm. Positions in grid units × scale = mm.");
     room_help->setForegroundRole(QPalette::PlaceholderText);
     room_help->setWordWrap(true);
     room_gl->addWidget(room_help, 2, 0, 1, 6);
@@ -618,7 +616,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     add_grid_slider_row(overlay_gl, 1, 3, 4, 5, "Point size:", 1, 12, 3, "3", "Larger = easier to see points",
         room_grid_point_size_slider, room_grid_point_size_label, [](int v) { return QString::number(v); },
         [this](int v) { if(viewport) viewport->SetRoomGridPointSize((float)v); });
-    add_grid_slider_row(overlay_gl, 2, 0, 1, 2, "Step:", 1, 24, 4, "4", "Grid units between points (1=dense, 24=sparse). Step × scale = mm.",
+    add_grid_slider_row(overlay_gl, 2, 0, 1, 2, "Step:", 1, 24, 4, "4", "Grid units between points (1=dense, 24=sparse). Step × grid scale (mm/unit) = spacing in mm.",
         room_grid_step_slider, room_grid_step_label, [](int v) { return QString::number(v); },
         [this](int v) { if(viewport) viewport->SetRoomGridStep(v); });
 
@@ -689,6 +687,13 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     // Position & Rotation Tab
     QWidget* transform_tab = new QWidget();
+    QVBoxLayout* transform_tab_v = new QVBoxLayout(transform_tab);
+    transform_tab_v->setSpacing(6);
+    QLabel* transform_help = new QLabel("Select an item in the list. Position is in mm (same as Room size in Grid Settings). Rotation in degrees.");
+    transform_help->setWordWrap(true);
+    transform_help->setForegroundRole(QPalette::PlaceholderText);
+    transform_tab_v->addWidget(transform_help);
+
     QHBoxLayout* transform_layout = new QHBoxLayout();
     transform_layout->setSpacing(6);
     transform_layout->setContentsMargins(2, 2, 2, 2);
@@ -701,56 +706,72 @@ void OpenRGB3DSpatialTab::SetupUI()
     {
         position_layout->addWidget(new QLabel(label), row, 0);
         sl = new QSlider(Qt::Horizontal);
-        sl->setRange(-5000, 5000);
+        sl->setRange(-50000, 50000);
         sl->setValue(0);
+        sl->setToolTip("Position in mm (same unit as Room size in Grid Settings).");
         sp = new QDoubleSpinBox();
-        sp->setRange(-500, 500);
-        sp->setDecimals(1);
+        sp->setRange(-50000.0, 50000.0);
+        sp->setDecimals(0);
+        sp->setSingleStep(10.0);
         sp->setMaximumWidth(80);
+        sp->setSuffix(" mm");
+        sp->setToolTip("Position in mm (same unit as Room size in Grid Settings).");
         position_layout->addWidget(sl, row, 1);
         position_layout->addWidget(sp, row, 2);
 
         if(clamp_non_negative)
         {
-            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
-                double pos_value = value / 10.0;
-                if(pos_value < 0.0)
+            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value_mm) {
+                if(value_mm < 0)
                 {
-                    pos_value = 0.0;
                     if(sp) { QSignalBlocker b(sp); sp->setValue(0); }
                     if(sl) { QSignalBlocker b(sl); sl->setValue(0); }
+                    ApplyPositionComponent(axis, 0.0);
+                    return;
                 }
-                else if(sp) { QSignalBlocker b(sp); sp->setValue(pos_value); }
-                ApplyPositionComponent(axis, pos_value);
+                double scale = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+                if(scale < 0.001) scale = 10.0;
+                double grid_units = (double)value_mm / scale;
+                if(sp) { QSignalBlocker b(sp); sp->setValue(value_mm); }
+                ApplyPositionComponent(axis, grid_units);
             });
-            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value) {
-                if(value < 0.0)
+            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value_mm) {
+                if(value_mm < 0.0)
                 {
-                    value = 0.0;
-                    if(sp) { QSignalBlocker b(sp); sp->setValue(value); }
+                    if(sp) { QSignalBlocker b(sp); sp->setValue(0); }
                     if(sl) { QSignalBlocker b(sl); sl->setValue(0); }
+                    ApplyPositionComponent(axis, 0.0);
+                    return;
                 }
-                else if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value * 10.0)); }
-                ApplyPositionComponent(axis, value);
+                double scale = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+                if(scale < 0.001) scale = 10.0;
+                double grid_units = value_mm / scale;
+                if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value_mm)); }
+                ApplyPositionComponent(axis, grid_units);
             });
         }
         else
         {
-            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
-                double pos_value = value / 10.0;
-                if(sp) { QSignalBlocker b(sp); sp->setValue(pos_value); }
-                ApplyPositionComponent(axis, pos_value);
+            connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value_mm) {
+                double scale = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+                if(scale < 0.001) scale = 10.0;
+                double grid_units = (double)value_mm / scale;
+                if(sp) { QSignalBlocker b(sp); sp->setValue(value_mm); }
+                ApplyPositionComponent(axis, grid_units);
             });
-            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value) {
-                if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value * 10.0)); }
-                ApplyPositionComponent(axis, value);
+            connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, sl, sp, axis](double value_mm) {
+                double scale = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
+                if(scale < 0.001) scale = 10.0;
+                double grid_units = value_mm / scale;
+                if(sl) { QSignalBlocker b(sl); sl->setValue((int)std::lround(value_mm)); }
+                ApplyPositionComponent(axis, grid_units);
             });
         }
     };
 
-    add_position_row(0, "Position X:", pos_x_slider, pos_x_spin, 0, false);
-    add_position_row(1, "Position Y:", pos_y_slider, pos_y_spin, 1, true);
-    add_position_row(2, "Position Z:", pos_z_slider, pos_z_spin, 2, false);
+    add_position_row(0, "Position X (mm):", pos_x_slider, pos_x_spin, 0, false);
+    add_position_row(1, "Position Y (mm):", pos_y_slider, pos_y_spin, 1, true);
+    add_position_row(2, "Position Z (mm):", pos_z_slider, pos_z_spin, 2, false);
 
     position_layout->setColumnStretch(1, 1);
 
@@ -764,10 +785,13 @@ void OpenRGB3DSpatialTab::SetupUI()
         sl = new QSlider(Qt::Horizontal);
         sl->setRange(-180, 180);
         sl->setValue(0);
+        sl->setToolTip("Rotation in degrees.");
         sp = new QDoubleSpinBox();
         sp->setRange(-180, 180);
         sp->setDecimals(1);
         sp->setMaximumWidth(80);
+        sp->setSuffix(QString::fromUtf8(" °"));
+        sp->setToolTip("Rotation in degrees.");
         rotation_layout->addWidget(sl, row, 1);
         rotation_layout->addWidget(sp, row, 2);
         connect(sl, &QSlider::valueChanged, [this, sl, sp, axis](int value) {
@@ -781,16 +805,16 @@ void OpenRGB3DSpatialTab::SetupUI()
         });
     };
 
-    add_rotation_row(0, "Rotation X:", rot_x_slider, rot_x_spin, 0);
-    add_rotation_row(1, "Rotation Y:", rot_y_slider, rot_y_spin, 1);
-    add_rotation_row(2, "Rotation Z:", rot_z_slider, rot_z_spin, 2);
+    add_rotation_row(0, "Rotation X (°):", rot_x_slider, rot_x_spin, 0);
+    add_rotation_row(1, "Rotation Y (°):", rot_y_slider, rot_y_spin, 1);
+    add_rotation_row(2, "Rotation Z (°):", rot_z_slider, rot_z_spin, 2);
 
     rotation_layout->setColumnStretch(1, 1);
 
     transform_layout->addLayout(position_layout, 1);
     transform_layout->addLayout(rotation_layout, 1);
 
-    transform_tab->setLayout(transform_layout);
+    transform_tab_v->addLayout(transform_layout);
 
     auto wrap_tab_in_scroll = [](QWidget* content) {
         QScrollArea* sa = new QScrollArea();
@@ -2173,10 +2197,10 @@ void OpenRGB3DSpatialTab::RefreshEffectDisplay()
 void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
 {
     if(!controller_list || !reference_points_list || !viewport) return;
-    int ctrl_row = controller_list->currentRow();
-    if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+    int transform_index = ControllerListRowToTransformIndex(controller_list->currentRow());
+    if(transform_index >= 0 && transform_index < (int)controller_transforms.size())
     {
-        ControllerTransform* transform = controller_transforms[ctrl_row].get();
+        ControllerTransform* transform = controller_transforms[transform_index].get();
         if(transform)
         {
             if(axis == 0) transform->transform.position.x = value;
@@ -2185,6 +2209,7 @@ void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
             ControllerLayout3D::MarkWorldPositionsDirty(transform);
         }
         viewport->NotifyControllerTransformChanged();
+        if(effect_running) RenderEffectStack();
         emit GridLayoutChanged();
         return;
     }
@@ -2220,10 +2245,10 @@ void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
 void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
 {
     if(!controller_list || !reference_points_list || !viewport) return;
-    int ctrl_row = controller_list->currentRow();
-    if(ctrl_row >= 0 && ctrl_row < (int)controller_transforms.size())
+    int transform_index = ControllerListRowToTransformIndex(controller_list->currentRow());
+    if(transform_index >= 0 && transform_index < (int)controller_transforms.size())
     {
-        ControllerTransform* transform = controller_transforms[ctrl_row].get();
+        ControllerTransform* transform = controller_transforms[transform_index].get();
         if(transform)
         {
             if(axis == 0) transform->transform.rotation.x = value;
@@ -2232,6 +2257,7 @@ void OpenRGB3DSpatialTab::ApplyRotationComponent(int axis, double value)
             ControllerLayout3D::MarkWorldPositionsDirty(transform);
         }
         viewport->NotifyControllerTransformChanged();
+        if(effect_running) RenderEffectStack();
         emit GridLayoutChanged();
         return;
     }
