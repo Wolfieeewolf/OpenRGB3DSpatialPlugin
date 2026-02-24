@@ -32,7 +32,7 @@ public:
 
 private:
     void TickFlashes(float time);
-    RGBColor SampleFlashField(float nx, float ny, float nz, float time) const;
+    RGBColor SampleFlashField(float nx, float ny, float nz, float time);
 
     struct Flash
     {

@@ -219,7 +219,7 @@ void DiscoFlash3D::TickFlashes(float time)
         }), flashes.end());
 }
 
-RGBColor DiscoFlash3D::SampleFlashField(float nx, float ny, float nz, float time) const
+RGBColor DiscoFlash3D::SampleFlashField(float nx, float ny, float nz, float time)
 {
     RGBColor result = ToRGBColor(0, 0, 0);
 
