@@ -1,5 +1,3 @@
-# Runs on tag push (e.g. v26.01.30.1). Builds Windows + Linux, then creates GitHub Release with artifacts.
-# Push a tag to trigger: git push origin <tag> (and git push gitlab <tag> for GitLab release).
 name: Create Release
 
 on:
@@ -75,41 +73,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
           if-no-files-found: warn
-
-      - name: Verify artifacts exist
-        run: |
-          echo "Files in current directory:"
-          ls -la
-          echo "Current directory:"
-          pwd
-          echo "GitHub ref: $GITHUB_REF"
-          
-          # Check for DLL files
-          DLL_COUNT=$(find . -name "*.dll" -type f | wc -l)
-          SO_COUNT=$(find . -name "*.so" -type f | wc -l)
-          
-          echo "Found $DLL_COUNT DLL file(s) and $SO_COUNT SO file(s)"
-          
-          if [ "$DLL_COUNT" -eq 0 ] && [ "$SO_COUNT" -eq 0 ]; then
-            echo "ERROR: No artifacts found! Build may have failed."
-            exit 1
-          fi
-          
-          # List all found files
-          echo "DLL files:"
-          find . -name "*.dll" -type f
-          echo "SO files:"
-          find . -name "*.so" -type f
-          
-          echo "Artifacts found successfully!"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -124,100 +93,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Tag to GitLab
+      - name: Push tag to GitLab
         continue-on-error: true
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          
-          # Skip if GITLAB_TOKEN is not set
           if [ -z "$GITLAB_TOKEN" ]; then
-            echo "GITLAB_TOKEN not set, skipping GitLab tag push"
+            echo "GITLAB_TOKEN not set, skipping"
             exit 0
           fi
-          
-          # Push the tag to GitLab
           git remote add gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
           git remote set-url gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
-          
-          git push gitlab ${GITHUB_REF} || {
-            echo "GitLab tag push failed, but continuing..."
-            exit 0
-          }
-
-      - name: Create GitLab Release
-        continue-on-error: true
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          
-          # Skip if GITLAB_TOKEN is not set
-          if [ -z "$GITLAB_TOKEN" ]; then
-            echo "GITLAB_TOKEN not set, skipping GitLab release"
-            exit 0
-          fi
-          
-          echo "Creating GitLab release for version: $VERSION"
-
-          # Create release on GitLab using API
-          RELEASE_RESPONSE=$(curl -s --request POST \
-            --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-            --header "Content-Type: application/json" \
-            --data "{\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"description\":\"Release $VERSION - Built on GitHub Actions\"}" \
-            "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases" || echo "{}")
-          
-          echo "GitLab release response: $RELEASE_RESPONSE"
-
-          # Find and upload Windows DLL
-          DLL_FILE=$(find . -name "*.dll" -type f | head -n 1)
-          if [ ! -z "$DLL_FILE" ] && [ -f "$DLL_FILE" ]; then
-            echo "Uploading Windows DLL: $DLL_FILE"
-            DLL_BASENAME=$(basename "$DLL_FILE")
-            
-            # Upload file to GitLab
-            UPLOAD_RESPONSE=$(curl -s --request POST \
-              --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --form "file=@$DLL_FILE" \
-              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
-            
-            UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
-            if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
-              # Add as release asset link
-              curl -s --request POST \
-                --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-                --header "Content-Type: application/json" \
-                --data "{\"name\":\"$DLL_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$DLL_BASENAME\",\"link_type\":\"package\"}" \
-                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Windows DLL"
-            fi
-          else
-            echo "Warning: No DLL file found to upload"
-          fi
-
-          # Find and upload Linux SO
-          SO_FILE=$(find . -name "*.so" -type f | head -n 1)
-          if [ ! -z "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
-            echo "Uploading Linux SO: $SO_FILE"
-            SO_BASENAME=$(basename "$SO_FILE")
-            
-            # Upload file to GitLab
-            UPLOAD_RESPONSE=$(curl -s --request POST \
-              --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --form "file=@$SO_FILE" \
-              "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/uploads" || echo "{}")
-            
-            UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
-            if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
-              # Add as release asset link
-              curl -s --request POST \
-                --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-                --header "Content-Type: application/json" \
-                --data "{\"name\":\"$SO_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$SO_BASENAME\",\"link_type\":\"package\"}" \
-                "https://gitlab.com/api/v4/projects/wolfieeewolf1%2FOpenRGB3DSpatialPlugin/releases/$VERSION/assets/links" || echo "Failed to link Linux SO"
-            fi
-          else
-            echo "Warning: No SO file found to upload"
-          fi
-          
-          echo "GitLab release process completed"
+          git push gitlab ${GITHUB_REF} || echo "GitLab tag push failed"
