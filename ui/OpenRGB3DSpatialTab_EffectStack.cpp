@@ -196,6 +196,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
             QSignalBlocker blocker(effect_zone_combo);
             effect_zone_combo->setCurrentIndex(0);
         }
+        UpdateAudioPanelVisibility();
         return;
     }
 
@@ -273,6 +274,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     }
 
     UpdateEffectCombo();
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
@@ -318,6 +320,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
 
     // Auto-save effect stack
     SaveEffectStack();
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
