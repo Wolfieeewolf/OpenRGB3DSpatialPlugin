@@ -337,6 +337,7 @@ private:
     QPushButton*                apply_spacing_button;
 
     // Effect configuration
+    QGroupBox*                  effect_config_group;
     QComboBox*                  effect_combo;
     QLabel*                     origin_label;
     QComboBox*                  effect_origin_combo;

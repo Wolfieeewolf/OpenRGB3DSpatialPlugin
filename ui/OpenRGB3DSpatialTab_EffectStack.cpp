@@ -120,6 +120,13 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     }
 
     effect_stack.erase(effect_stack.begin() + current_row);
+
+    if(effect_stack.empty())
+    {
+        if(effect_running) on_stop_effect_clicked();
+        if(effect_config_group) effect_config_group->setVisible(false);
+    }
+
     UpdateEffectStackList();
 
     if(effect_stack.empty())
@@ -158,6 +165,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     if(!effect_stack_list) return;
     if(index < 0 || index >= (int)effect_stack.size())
     {
+        if(effect_config_group) effect_config_group->setVisible(false);
         if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(false);
         if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(false);
         if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(false);
@@ -194,6 +202,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
         return;
     }
 
+    if(effect_config_group) effect_config_group->setVisible(true);
     if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(true);
     if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(true);
     if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(true);

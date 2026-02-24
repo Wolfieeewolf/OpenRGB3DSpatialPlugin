@@ -58,6 +58,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 {
 
     stack_settings_updating = false;
+    effect_config_group = nullptr;
     effect_controls_widget = nullptr;
     effect_controls_layout = nullptr;
     current_effect_ui = nullptr;
@@ -1267,8 +1268,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     detail_layout->setContentsMargins(4, 4, 4, 4);
     detail_layout->setSpacing(6);
 
-    QGroupBox* effect_group = new QGroupBox("Effect Configuration");
-    QVBoxLayout* effect_layout = new QVBoxLayout(effect_group);
+    effect_config_group = new QGroupBox("Effect Configuration");
+    effect_config_group->setVisible(false);
+    QVBoxLayout* effect_layout = new QVBoxLayout(effect_config_group);
     effect_layout->setSpacing(4);
 
     QLabel* effect_label = new QLabel("Effect:");
@@ -1297,7 +1299,7 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
     effect_layout->addWidget(effect_origin_combo);
 
-    stack_effect_type_combo = new QComboBox(effect_group);
+    stack_effect_type_combo = new QComboBox(effect_config_group);
     stack_effect_type_combo->addItem("None", "");
     std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
     for(unsigned int i = 0; i < effect_list.size(); i++)
@@ -1308,7 +1310,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     stack_effect_type_combo->setVisible(false);
     connect(stack_effect_type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_stack_effect_type_changed);
 
-    stack_effect_zone_combo = new QComboBox(effect_group);
+    stack_effect_zone_combo = new QComboBox(effect_config_group);
     stack_effect_zone_combo->addItem("All Controllers", -1);
     stack_effect_zone_combo->setVisible(false);
     connect(stack_effect_zone_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_stack_effect_zone_changed);
@@ -1321,7 +1323,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_controls_widget->setLayout(effect_controls_layout);
     effect_layout->addWidget(effect_controls_widget);
 
-    detail_layout->addWidget(effect_group);
+    detail_layout->addWidget(effect_config_group);
 
     SetupAudioPanel(detail_layout);
 
