@@ -1088,11 +1088,31 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         DisplayPlane3D* plane = display_planes[plane_index].get();
         plane->SetVisible(true);
 
-        // Add to Controllers in 3D Scene list
-        QString name = QString("[Display] ") + QString::fromStdString(plane->GetName());
-        QListWidgetItem* list_item = new QListWidgetItem(name);
+        // Add [Display] entry to Controllers in 3D Scene list
+        QString plane_name = QString::fromStdString(plane->GetName());
+        QListWidgetItem* list_item = new QListWidgetItem(QString("[Display] ") + plane_name);
         list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane->GetId())));
         controller_list->addItem(list_item);
+
+        // Auto-add the linked reference point (display plane centre) right below the plane entry
+        int linked_ref_idx = plane->GetReferencePointIndex();
+        if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_pt = reference_points[linked_ref_idx].get();
+            if(ref_pt && !ref_pt->IsVisible())
+            {
+                // Snap ref point to the plane's centre (transform.position IS the centre)
+                const Transform3D& pt = plane->GetTransform();
+                ref_pt->SetPosition({pt.position.x, pt.position.y, pt.position.z});
+                ref_pt->SetRotation({pt.rotation.x, pt.rotation.y, pt.rotation.z});
+                ref_pt->SetVisible(true);
+
+                QListWidgetItem* ref_item = new QListWidgetItem(
+                    QString("[Ref] ") + QString::fromStdString(ref_pt->GetName()));
+                ref_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, linked_ref_idx)));
+                controller_list->addItem(ref_item);
+            }
+        }
 
         if(viewport)
         {
@@ -1105,8 +1125,8 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         UpdateAvailableItemCombo();
 
         QMessageBox::information(this, "Display Plane Added",
-                                QString("Display plane '%1' added to 3D view!\n\nYou can now position and configure it.")
-                                .arg(QString::fromStdString(plane->GetName())));
+                                QString("Display plane '%1' added to 3D view!\n\nIts reference point has been placed at the plane centre and is listed below it.")
+                                .arg(plane_name));
         RefreshHiddenControllerStates();
         return;
     }
@@ -1256,8 +1276,30 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             int plane_index = FindDisplayPlaneIndexById(object_index);
             if(plane_index >= 0 && plane_index < (int)display_planes.size())
             {
-                display_planes[plane_index]->SetVisible(false);
-                
+                DisplayPlane3D* plane = display_planes[plane_index].get();
+                plane->SetVisible(false);
+
+                // Also hide and remove the linked reference point from the scene list
+                int linked_ref_idx = plane->GetReferencePointIndex();
+                if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
+                {
+                    reference_points[linked_ref_idx]->SetVisible(false);
+                    // Find the ref point entry in controller_list and remove it
+                    for(int r = 0; r < controller_list->count(); r++)
+                    {
+                        QListWidgetItem* it = controller_list->item(r);
+                        if(!it) continue;
+                        QVariant v = it->data(Qt::UserRole);
+                        if(!v.isValid()) continue;
+                        QPair<int,int> meta = v.value<QPair<int,int>>();
+                        if(meta.first == -2 && meta.second == linked_ref_idx)
+                        {
+                            delete controller_list->takeItem(r);
+                            break;
+                        }
+                    }
+                }
+
                 // If the removed plane was selected, clear selection
                 if(current_display_plane_index == plane_index)
                 {
@@ -1274,7 +1316,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
             if(viewport) viewport->update();
             NotifyDisplayPlaneChanged();
             emit GridLayoutChanged();
-            UpdateDisplayPlanesList();  // Update the display planes list to reflect visibility change
+            UpdateDisplayPlanesList();
             UpdateAvailableControllersList();
             UpdateAvailableItemCombo();
             RefreshHiddenControllerStates();
@@ -3233,6 +3275,49 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
+
+    // Rebuild controller_list entries for visible ref points and display planes.
+    // For display planes: add the [Display] entry followed by its linked [Ref] entry.
+    // Standalone visible ref points (not linked to any display plane) are added afterwards.
+    std::vector<bool> ref_added(reference_points.size(), false);
+
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        DisplayPlane3D* plane = display_planes[i].get();
+        if(!plane || !plane->IsVisible()) continue;
+
+        QListWidgetItem* plane_item = new QListWidgetItem(
+            QString("[Display] ") + QString::fromStdString(plane->GetName()));
+        plane_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane->GetId())));
+        controller_list->addItem(plane_item);
+
+        int ref_idx = plane->GetReferencePointIndex();
+        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_pt = reference_points[ref_idx].get();
+            if(ref_pt && ref_pt->IsVisible())
+            {
+                QListWidgetItem* ref_item = new QListWidgetItem(
+                    QString("[Ref] ") + QString::fromStdString(ref_pt->GetName()));
+                ref_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, ref_idx)));
+                controller_list->addItem(ref_item);
+                ref_added[ref_idx] = true;
+            }
+        }
+    }
+
+    // Standalone visible ref points (not belonging to a display plane)
+    for(size_t i = 0; i < reference_points.size(); i++)
+    {
+        if(ref_added[i]) continue;
+        VirtualReferencePoint3D* ref_pt = reference_points[i].get();
+        if(!ref_pt || !ref_pt->IsVisible()) continue;
+
+        QListWidgetItem* ref_item = new QListWidgetItem(
+            QString("[Ref Point] ") + QString::fromStdString(ref_pt->GetName()));
+        ref_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, static_cast<int>(i))));
+        controller_list->addItem(ref_item);
+    }
 
     // Sync display planes to global manager and viewport
     std::vector<DisplayPlane3D*> plane_ptrs;
