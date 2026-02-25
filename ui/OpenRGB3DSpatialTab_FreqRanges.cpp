@@ -1,16 +1,4 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_FreqRanges.cpp                        |
-|                                                           |
-|   Frequency Range Effects UI and rendering                |
-|   implementation for OpenRGB 3D Spatial Plugin            |
-|                                                           |
-|   Multi-band audio effects system allowing independent    |
-|   effects for different frequency ranges                  |
-|                                                           |
-|   Date: 2026-01-27                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"

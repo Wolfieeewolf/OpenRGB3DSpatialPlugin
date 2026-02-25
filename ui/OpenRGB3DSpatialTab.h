@@ -132,7 +132,6 @@ private slots:
     void on_stack_effect_type_changed(int index);
     void on_stack_effect_zone_changed(int index);
     void on_stack_effect_blend_changed(int index);
-    void UpdateAudioPanelVisibility();
 
     // Stack Preset slots
     void on_save_stack_preset_clicked();

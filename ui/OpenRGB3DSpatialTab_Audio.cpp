@@ -1,17 +1,7 @@
-/*---------------------------------------------------------*\
-| OpenRGB3DSpatialTab_Audio.cpp                             |
-|                                                           |
-|   Audio input management and frequency range effects      |
-|                                                           |
-|   Date: 2026-01-27                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
-#include "EffectListManager3D.h"
-#include "EffectInstance3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include <nlohmann/json.hpp>
@@ -159,7 +149,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 
     layout->addStretch();
     parent_layout->addWidget(audio_group);
-    audio_group->setVisible(false); // shown only when an audio effect is selected
 }
 
 void OpenRGB3DSpatialTab::on_audio_start_clicked()
@@ -230,25 +219,3 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
-{
-    bool show_audio = false;
-
-    if(effect_stack_list)
-    {
-        int row = effect_stack_list->currentRow();
-        if(row >= 0 && row < (int)effect_stack.size())
-        {
-            EffectInstance3D* inst = effect_stack[row].get();
-            if(inst && !inst->effect_class_name.empty())
-            {
-                EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(inst->effect_class_name);
-                show_audio = (info.category.compare("Audio") == 0);
-            }
-        }
-    }
-
-    if(audio_panel_group) audio_panel_group->setVisible(show_audio);
-    if(freq_ranges_group) freq_ranges_group->setVisible(show_audio);
-    if(show_audio && effect_config_group) effect_config_group->setVisible(false);
-}
