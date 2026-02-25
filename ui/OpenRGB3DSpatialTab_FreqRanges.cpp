@@ -558,16 +558,17 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
 void OpenRGB3DSpatialTab::ClearFreqRangeEffectUI()
 {
     if(!freq_effect_settings_layout) return;
-    
+
     while(QLayoutItem* item = freq_effect_settings_layout->takeAt(0))
     {
         if(QWidget* widget = item->widget())
         {
+            widget->hide();
             widget->deleteLater();
         }
         delete item;
     }
-    
+
     current_freq_effect_ui = nullptr;
 }
 
