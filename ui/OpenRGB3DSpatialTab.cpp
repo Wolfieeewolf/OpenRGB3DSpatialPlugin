@@ -1905,6 +1905,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     {
         if(item->widget())
         {
+            item->widget()->hide();
             item->widget()->deleteLater();
         }
         delete item;

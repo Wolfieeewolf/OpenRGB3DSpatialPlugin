@@ -400,6 +400,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     {
         if(layout_item->widget())
         {
+            layout_item->widget()->hide();
             layout_item->widget()->deleteLater();
         }
         delete layout_item;
