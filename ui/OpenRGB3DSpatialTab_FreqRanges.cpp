@@ -216,23 +216,25 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
 void OpenRGB3DSpatialTab::UpdateFrequencyRangesList()
 {
     if(!freq_ranges_list) return;
-    
+
     int selected_row = freq_ranges_list->currentRow();
-    
+
+    QSignalBlocker blocker(freq_ranges_list);
+
     freq_ranges_list->clear();
-    
+
     for(size_t i = 0; i < frequency_ranges.size(); i++)
     {
         const FrequencyRangeEffect3D* range = frequency_ranges[i].get();
         if(!range) continue;
-        
-        QString label = QString::fromStdString(range->name) + 
+
+        QString label = QString::fromStdString(range->name) +
                        QString(" (%1-%2 Hz)").arg(range->low_hz, 0, 'f', 0).arg(range->high_hz, 0, 'f', 0);
         if(!range->enabled) label += " [Disabled]";
-        
+
         freq_ranges_list->addItem(label);
     }
-    
+
     if(selected_row >= 0 && selected_row < freq_ranges_list->count())
     {
         freq_ranges_list->setCurrentRow(selected_row);
