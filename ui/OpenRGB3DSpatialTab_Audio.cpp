@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
+#include "EffectListManager3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include <nlohmann/json.hpp>
@@ -149,6 +150,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 
     layout->addStretch();
     parent_layout->addWidget(audio_group);
+    audio_group->setVisible(false);
 }
 
 void OpenRGB3DSpatialTab::on_audio_start_clicked()
@@ -219,3 +221,25 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
     SetPluginSettings(settings);
 }
 
+void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
+{
+    if(!effect_stack_list || !audio_panel_group)
+    {
+        return;
+    }
+
+    int row = effect_stack_list->currentRow();
+    bool show = false;
+
+    if(row >= 0 && row < (int)effect_stack.size())
+    {
+        EffectInstance3D* inst = effect_stack[row].get();
+        if(inst && !inst->effect_class_name.empty())
+        {
+            EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(inst->effect_class_name);
+            show = (info.category == "Audio");
+        }
+    }
+
+    audio_panel_group->setVisible(show);
+}

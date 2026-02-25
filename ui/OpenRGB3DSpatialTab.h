@@ -231,6 +231,7 @@ private:
     // Profiles tab setup
     void SetupProfilesTab(QTabWidget* tab_widget);
     void SetupAudioPanel(QVBoxLayout* parent_layout);
+    void UpdateAudioPanelVisibility();
     void SetupZonesPanel(QVBoxLayout* parent_layout);
     void SetupEffectLibraryPanel(QVBoxLayout* parent_layout);
     void PopulateEffectLibraryCategories();
