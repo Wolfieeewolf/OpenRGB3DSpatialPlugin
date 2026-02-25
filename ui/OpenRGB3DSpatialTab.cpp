@@ -1305,6 +1305,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
     for(unsigned int i = 0; i < effect_list.size(); i++)
     {
+        if(effect_list[i].category == "Audio" && effect_list[i].class_name != "AudioContainer3D")
+        {
+            continue;
+        }
         stack_effect_type_combo->addItem(QString::fromStdString(effect_list[i].ui_name),
                                          QString::fromStdString(effect_list[i].class_name));
     }
@@ -1559,6 +1563,13 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         QString category = QString::fromStdString(effects[i].category);
         if(selected_category.isEmpty() ||
            category.compare(selected_category, Qt::CaseInsensitive) != 0)
+        {
+            continue;
+        }
+        // Individual audio effects are configured per frequency range, not added directly
+        // to the stack. Only the AudioContainer3D placeholder appears in the library.
+        if(category.compare("Audio", Qt::CaseInsensitive) == 0 &&
+           effects[i].class_name != "AudioContainer3D")
         {
             continue;
         }

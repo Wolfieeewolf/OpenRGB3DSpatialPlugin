@@ -163,6 +163,11 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
         {
             continue;
         }
+        // AudioContainer3D is only a stack placeholder; it has no per-range parameters
+        if(reg.class_name == "AudioContainer3D")
+        {
+            continue;
+        }
         combo->addItem(QString::fromStdString(reg.ui_name));
         int row = combo->count() - 1;
         combo->setItemData(row, QString::fromStdString(reg.class_name), kEffectRoleClassName);

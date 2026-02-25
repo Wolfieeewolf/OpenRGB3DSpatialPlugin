@@ -185,6 +185,7 @@ HEADERS +=                                                                      
     Effects3D/BeatPulse3D/BeatPulse3D.h                                                         \
     Effects3D/BandScan3D/BandScan3D.h                                                           \
     Effects3D/AudioLevel3D/AudioLevel3D.h                                                       \
+    Effects3D/AudioContainer3D/AudioContainer3D.h                                               \
     Effects3D/AudioPulse3D/AudioPulse3D.h                                                       \
     Effects3D/FreqFill3D/FreqFill3D.h                                                           \
     Effects3D/FreqRipple3D/FreqRipple3D.h                                                       \
@@ -249,6 +250,7 @@ SOURCES +=                                                                      
     Effects3D/BeatPulse3D/BeatPulse3D.cpp                                                       \
     Effects3D/BandScan3D/BandScan3D.cpp                                                         \
     Effects3D/AudioLevel3D/AudioLevel3D.cpp                                                     \
+    Effects3D/AudioContainer3D/AudioContainer3D.cpp                                             \
     Effects3D/AudioPulse3D/AudioPulse3D.cpp                                                     \
     Effects3D/FreqFill3D/FreqFill3D.cpp                                                         \
     Effects3D/FreqRipple3D/FreqRipple3D.cpp                                                     \
