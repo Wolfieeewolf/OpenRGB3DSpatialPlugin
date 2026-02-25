@@ -190,7 +190,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             if(!slot.effect) continue;
                             const bool use_world_bounds = slot.effect->RequiresWorldSpaceCoordinates() && slot.effect->RequiresWorldSpaceGridBounds();
                             const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
-                            RGBColor effect_color = slot.effect->CalculateColorGrid(px, py, pz, time_val, active_grid);
+                            float spx = px, spy = py, spz = pz;
+                            slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
+                            RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
@@ -311,16 +313,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_x = requires_world ? world_x : room_x;
                         float sample_y = requires_world ? world_y : room_y;
                         float sample_z = requires_world ? world_z : room_z;
-                        // Coordinate selection:
-                        // - World coords: include controller rotation/translation (room-locked field sampling)
-                        // - Room coords: ignore controller rotation (controller-locked sampling)
-                        //
-                        // Normalization (grid bounds) selection:
-                        // - For most room-locked effects, normalize against ROOM-ALIGNED bounds (stable)
-                        // - Some effects (e.g. ambilight/screen) may prefer WORLD bounds
                         const bool use_world_bounds = requires_world && effect->RequiresWorldSpaceGridBounds();
                         const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
@@ -428,6 +424,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     const bool use_world_bounds = requires_world && effect->RequiresWorldSpaceGridBounds();
                     const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
+                    effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                     effect_color = effect->PostProcessColorGrid(effect_color);
 

@@ -79,6 +79,17 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     sharpness_label = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
+
+    // Axis scale defaults
+    scale_x_slider = nullptr;
+    scale_x_label  = nullptr;
+    scale_y_slider = nullptr;
+    scale_y_label  = nullptr;
+    scale_z_slider = nullptr;
+    scale_z_label  = nullptr;
+    effect_scale_x = 100;
+    effect_scale_y = 100;
+    effect_scale_z = 100;
 }
 
 SpatialEffect3D::~SpatialEffect3D()
@@ -216,6 +227,49 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
 
+    // Axis Scale group (per-axis stretch/squash independent of global scale)
+    QGroupBox* axis_scale_group = new QGroupBox("Axis Scale");
+    QVBoxLayout* axis_scale_layout = new QVBoxLayout();
+
+    QHBoxLayout* scale_x_layout = new QHBoxLayout();
+    scale_x_layout->addWidget(new QLabel("Width (X):"));
+    scale_x_slider = new QSlider(Qt::Horizontal);
+    scale_x_slider->setRange(1, 400);
+    scale_x_slider->setValue((int)effect_scale_x);
+    scale_x_slider->setToolTip("Stretch or squash the effect along the X axis (100% = normal)");
+    scale_x_layout->addWidget(scale_x_slider);
+    scale_x_label = new QLabel(QString::number(effect_scale_x) + "%");
+    scale_x_label->setMinimumWidth(45);
+    scale_x_layout->addWidget(scale_x_label);
+    axis_scale_layout->addLayout(scale_x_layout);
+
+    QHBoxLayout* scale_y_layout = new QHBoxLayout();
+    scale_y_layout->addWidget(new QLabel("Height (Y):"));
+    scale_y_slider = new QSlider(Qt::Horizontal);
+    scale_y_slider->setRange(1, 400);
+    scale_y_slider->setValue((int)effect_scale_y);
+    scale_y_slider->setToolTip("Stretch or squash the effect along the Y axis (100% = normal)");
+    scale_y_layout->addWidget(scale_y_slider);
+    scale_y_label = new QLabel(QString::number(effect_scale_y) + "%");
+    scale_y_label->setMinimumWidth(45);
+    scale_y_layout->addWidget(scale_y_label);
+    axis_scale_layout->addLayout(scale_y_layout);
+
+    QHBoxLayout* scale_z_layout = new QHBoxLayout();
+    scale_z_layout->addWidget(new QLabel("Depth (Z):"));
+    scale_z_slider = new QSlider(Qt::Horizontal);
+    scale_z_slider->setRange(1, 400);
+    scale_z_slider->setValue((int)effect_scale_z);
+    scale_z_slider->setToolTip("Stretch or squash the effect along the Z axis (100% = normal)");
+    scale_z_layout->addWidget(scale_z_slider);
+    scale_z_label = new QLabel(QString::number(effect_scale_z) + "%");
+    scale_z_label->setMinimumWidth(45);
+    scale_z_layout->addWidget(scale_z_label);
+    axis_scale_layout->addLayout(scale_z_layout);
+
+    axis_scale_group->setLayout(axis_scale_layout);
+    main_layout->addWidget(axis_scale_group);
+
     // 3D Rotation controls (replaces axis/coverage)
     QGroupBox* rotation_group = new QGroupBox("3D Rotation (around Origin)");
     QVBoxLayout* rotation_layout = new QVBoxLayout();
@@ -290,6 +344,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(rotation_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRotationResetClicked);
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(scale_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(scale_z_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
 
     // Effect control buttons - NOT connected here!
     // The parent tab needs to connect these to its on_start_effect_clicked/on_stop_effect_clicked handlers
@@ -343,8 +400,41 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         sharpness_label->setText(QString::number(value));
         effect_sharpness = value;
     });
+    connect(scale_x_slider, &QSlider::valueChanged, scale_x_label, [this](int value) {
+        scale_x_label->setText(QString::number(value) + "%");
+        effect_scale_x = (unsigned int)value;
+    });
+    connect(scale_y_slider, &QSlider::valueChanged, scale_y_label, [this](int value) {
+        scale_y_label->setText(QString::number(value) + "%");
+        effect_scale_y = (unsigned int)value;
+    });
+    connect(scale_z_slider, &QSlider::valueChanged, scale_z_label, [this](int value) {
+        scale_z_label->setText(QString::number(value) + "%");
+        effect_scale_z = (unsigned int)value;
+    });
 
     AddWidgetToParent(effect_controls_group, parent);
+}
+
+void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
+{
+    if(effect_scale_x == 100 && effect_scale_y == 100 && effect_scale_z == 100)
+    {
+        return;
+    }
+    Vector3D origin = GetEffectOriginGrid(grid);
+    if(effect_scale_x != 100)
+    {
+        x = origin.x + (x - origin.x) * (100.0f / (float)effect_scale_x);
+    }
+    if(effect_scale_y != 100)
+    {
+        y = origin.y + (y - origin.y) * (100.0f / (float)effect_scale_y);
+    }
+    if(effect_scale_z != 100)
+    {
+        z = origin.z + (z - origin.z) * (100.0f / (float)effect_scale_z);
+    }
 }
 
 void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
@@ -1055,6 +1145,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rainbow_mode"] = rainbow_mode;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
+    j["axis_scale_x"] = effect_scale_x;
+    j["axis_scale_y"] = effect_scale_y;
+    j["axis_scale_z"] = effect_scale_z;
     j["rotation_yaw"] = effect_rotation_yaw;
     j["rotation_pitch"] = effect_rotation_pitch;
     j["rotation_roll"] = effect_rotation_roll;
@@ -1104,6 +1197,13 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
         effect_sharpness = settings["sharpness"].get<unsigned int>();
+
+    if(settings.contains("axis_scale_x"))
+        effect_scale_x = std::clamp(settings["axis_scale_x"].get<unsigned int>(), 1u, 400u);
+    if(settings.contains("axis_scale_y"))
+        effect_scale_y = std::clamp(settings["axis_scale_y"].get<unsigned int>(), 1u, 400u);
+    if(settings.contains("axis_scale_z"))
+        effect_scale_z = std::clamp(settings["axis_scale_z"].get<unsigned int>(), 1u, 400u);
     
     if(settings.contains("rotation_yaw"))
         effect_rotation_yaw = settings["rotation_yaw"].get<float>();
@@ -1265,7 +1365,33 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         fps_label->setText(QString::number(effect_fps));
     }
 
-    // Rotation sliders are updated in LoadSettings
+    if(scale_x_slider)
+    {
+        QSignalBlocker blocker(scale_x_slider);
+        scale_x_slider->setValue((int)effect_scale_x);
+    }
+    if(scale_x_label)
+    {
+        scale_x_label->setText(QString::number(effect_scale_x) + "%");
+    }
+    if(scale_y_slider)
+    {
+        QSignalBlocker blocker(scale_y_slider);
+        scale_y_slider->setValue((int)effect_scale_y);
+    }
+    if(scale_y_label)
+    {
+        scale_y_label->setText(QString::number(effect_scale_y) + "%");
+    }
+    if(scale_z_slider)
+    {
+        QSignalBlocker blocker(scale_z_slider);
+        scale_z_slider->setValue((int)effect_scale_z);
+    }
+    if(scale_z_label)
+    {
+        scale_z_label->setText(QString::number(effect_scale_z) + "%");
+    }
 }
 
 void SpatialEffect3D::SetScaleInverted(bool inverted)

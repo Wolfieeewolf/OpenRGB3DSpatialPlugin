@@ -179,6 +179,7 @@ public:
     float GetRotationRoll() const { return effect_rotation_roll; }
 
     RGBColor PostProcessColorGrid(RGBColor color) const;
+    void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     // Most spatial effects should operate in true world space so controller rotation/translation
     // changes their position in the room. Effects that must be controller-local can override.
@@ -218,6 +219,14 @@ protected:
     QLabel*             intensity_label;
     QSlider*            sharpness_slider;     // 0..200 (100 = neutral)
     QLabel*             sharpness_label;
+
+    // Axis scale controls (per-axis stretch/squash)
+    QSlider*            scale_x_slider;       // 1..400 (100 = normal)
+    QLabel*             scale_x_label;
+    QSlider*            scale_y_slider;
+    QLabel*             scale_y_label;
+    QSlider*            scale_z_slider;
+    QLabel*             scale_z_label;
 
     // 3D Rotation controls (replaces axis/coverage)
     QSlider*            rotation_yaw_slider;   // 0-360 degrees, horizontal rotation
@@ -260,6 +269,9 @@ protected:
     // Global shaping params
     unsigned int        effect_intensity;     // 0..200 (100 neutral)
     unsigned int        effect_sharpness;     // 0..200 (100 neutral)
+    unsigned int        effect_scale_x;       // 1..400 (100 = normal width)
+    unsigned int        effect_scale_y;       // 1..400 (100 = normal height)
+    unsigned int        effect_scale_z;       // 1..400 (100 = normal depth)
 
     // 3D Rotation parameters (replaces axis/coverage)
     float               effect_rotation_yaw;   // 0-360 degrees, horizontal rotation around Y axis
