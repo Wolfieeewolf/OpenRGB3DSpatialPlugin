@@ -66,6 +66,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     stop_effect_button = nullptr;
     stack_blend_container = nullptr;
     stack_effect_blend_combo = nullptr;
+    effect_zone_label = nullptr;
     origin_label = nullptr;
     effect_origin_combo = nullptr;
     effect_zone_combo = nullptr;
@@ -1283,8 +1284,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     UpdateEffectCombo();
     effect_layout->addWidget(effect_combo);
 
-    QLabel* zone_label = new QLabel("Zone:");
-    effect_layout->addWidget(zone_label);
+    effect_zone_label = new QLabel("Zone:");
+    effect_layout->addWidget(effect_zone_label);
     effect_zone_combo = new QComboBox();
     PopulateZoneTargetCombo(effect_zone_combo, -1);
     connect(effect_zone_combo, SIGNAL(currentIndexChanged(int)),

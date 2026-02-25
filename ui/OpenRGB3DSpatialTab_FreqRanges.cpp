@@ -537,13 +537,14 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
     }
     
     effect->setParent(freq_effect_settings_widget);
+    effect->CreateCommonEffectControls(freq_effect_settings_widget, false);
     effect->SetupCustomUI(freq_effect_settings_widget);
 
     if(!range->effect_settings.is_null())
     {
         effect->LoadSettings(range->effect_settings);
     }
-    
+
     current_freq_effect_ui = effect;
     connect(effect, &SpatialEffect3D::ParametersChanged, 
             this, &OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged);

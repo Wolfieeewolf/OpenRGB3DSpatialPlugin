@@ -139,7 +139,7 @@ public:
     }
 
     // Common effect controls shared by all effects
-    virtual void CreateCommonEffectControls(QWidget* parent);
+    virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
     virtual void ApplyControlVisibility();      // Apply visibility flags from EffectInfo
 

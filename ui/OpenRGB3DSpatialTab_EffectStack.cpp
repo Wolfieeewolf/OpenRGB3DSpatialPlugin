@@ -481,99 +481,64 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     ui_effect->setParent(effect_controls_widget);
-    ui_effect->CreateCommonEffectControls(effect_controls_widget);
-    ui_effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = ui_effect;
 
-    if(instance->effect_class_name == "ScreenMirror3D")
+    bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
+    QPushButton* direct_start = nullptr;
+    QPushButton* direct_stop  = nullptr;
+
+    if(is_audio)
     {
-        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
-        if(screen_mirror)
-        {
-            screen_mirror->SetReferencePoints(&reference_points);
-            ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
-            screen_mirror->SetRunningEffectForPreview(running_screen);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
-        }
-        
-        // Hide origin dropdown for ScreenMirror3D (each monitor has its own origin)
-        if(effect_controls_layout)
-        {
-            for(int i = 0; i < effect_controls_layout->count(); i++)
-            {
-                QLayoutItem* item = effect_controls_layout->itemAt(i);
-                if(item && item->widget())
-                {
-                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
-                    if(group && group->title() == "Effect Configuration")
-                    {
-                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
-                        if(group_layout)
-                        {
-                            for(int j = 0; j < group_layout->count(); j++)
-                            {
-                                QLayoutItem* group_item = group_layout->itemAt(j);
-                                if(group_item)
-                                {
-                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
-                                    if(label && label->text() == "Origin:")
-                                    {
-                                        label->setVisible(false);
-                                    }
-                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
-                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
-                                    {
-                                        combo->setVisible(false);
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        QWidget* btn_widget = new QWidget(effect_controls_widget);
+        QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
+        btn_layout->setContentsMargins(0, 0, 0, 0);
+
+        direct_start = new QPushButton("Start Effect");
+        direct_start->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
+        direct_stop = new QPushButton("Stop Effect");
+        direct_stop->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
+        direct_stop->setEnabled(false);
+
+        btn_layout->addWidget(direct_start);
+        btn_layout->addWidget(direct_stop);
+        btn_layout->addStretch();
+        effect_controls_layout->addWidget(btn_widget);
+
+        if(effect_zone_label)   effect_zone_label->setVisible(false);
+        if(effect_zone_combo)   effect_zone_combo->setVisible(false);
+        if(origin_label)        origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
     }
     else
     {
-        if(effect_controls_layout)
+        ui_effect->CreateCommonEffectControls(effect_controls_widget);
+        ui_effect->SetupCustomUI(effect_controls_widget);
+
+        if(effect_zone_label) effect_zone_label->setVisible(true);
+        if(effect_zone_combo) effect_zone_combo->setVisible(true);
+
+        if(instance->effect_class_name == "ScreenMirror3D")
         {
-            for(int i = 0; i < effect_controls_layout->count(); i++)
+            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
+            if(screen_mirror)
             {
-                QLayoutItem* item = effect_controls_layout->itemAt(i);
-                if(item && item->widget())
-                {
-                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
-                    if(group && group->title() == "Effect Configuration")
-                    {
-                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
-                        if(group_layout)
-                        {
-                            for(int j = 0; j < group_layout->count(); j++)
-                            {
-                                QLayoutItem* group_item = group_layout->itemAt(j);
-                                if(group_item)
-                                {
-                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
-                                    if(label && label->text() == "Origin:")
-                                    {
-                                        label->setVisible(true);
-                                    }
-                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
-                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
-                                    {
-                                        combo->setVisible(true);
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
+                screen_mirror->SetReferencePoints(&reference_points);
+                ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
+                screen_mirror->SetRunningEffectForPreview(running_screen);
+                connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+                QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+                QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
             }
+            if(origin_label)        origin_label->setVisible(false);
+            if(effect_origin_combo) effect_origin_combo->setVisible(false);
         }
+        else
+        {
+            if(origin_label)        origin_label->setVisible(true);
+            if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        }
+
+        effect_controls_layout->addWidget(ui_effect);
     }
 
     nlohmann::json settings;
@@ -591,8 +556,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         ui_effect->LoadSettings(settings);
     }
 
-    QPushButton* ui_start = ui_effect->GetStartButton();
-    QPushButton* ui_stop  = ui_effect->GetStopButton();
+    QPushButton* ui_start = is_audio ? direct_start : ui_effect->GetStartButton();
+    QPushButton* ui_stop  = is_audio ? direct_stop  : ui_effect->GetStopButton();
 
     if(ui_start)
     {
@@ -642,8 +607,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
 
                 stack_settings_updating = false;
             });
-
-    effect_controls_layout->addWidget(ui_effect);
 
     stack_blend_container = new QWidget(effect_controls_widget);
     QHBoxLayout* blend_layout = new QHBoxLayout(stack_blend_container);

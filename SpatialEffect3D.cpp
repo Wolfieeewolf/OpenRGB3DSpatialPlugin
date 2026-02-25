@@ -85,23 +85,25 @@ SpatialEffect3D::~SpatialEffect3D()
 {
 }
 
-void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent)
+void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_start_stop)
 {
     effect_controls_group = new QGroupBox("Effect Controls");
     QVBoxLayout* main_layout = new QVBoxLayout();
 
-    // Effect control buttons
-    QHBoxLayout* button_layout = new QHBoxLayout();
-    start_effect_button = new QPushButton("Start Effect");
-    start_effect_button->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
-    stop_effect_button = new QPushButton("Stop Effect");
-    stop_effect_button->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
-    stop_effect_button->setEnabled(false);
+    if(include_start_stop)
+    {
+        QHBoxLayout* button_layout = new QHBoxLayout();
+        start_effect_button = new QPushButton("Start Effect");
+        start_effect_button->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
+        stop_effect_button = new QPushButton("Stop Effect");
+        stop_effect_button->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
+        stop_effect_button->setEnabled(false);
 
-    button_layout->addWidget(start_effect_button);
-    button_layout->addWidget(stop_effect_button);
-    button_layout->addStretch();
-    main_layout->addLayout(button_layout);
+        button_layout->addWidget(start_effect_button);
+        button_layout->addWidget(stop_effect_button);
+        button_layout->addStretch();
+        main_layout->addLayout(button_layout);
+    }
 
     // Speed control (logarithmic curve)
     QHBoxLayout* speed_layout = new QHBoxLayout();
