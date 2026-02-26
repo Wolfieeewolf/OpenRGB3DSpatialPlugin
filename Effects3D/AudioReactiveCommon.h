@@ -50,7 +50,6 @@ inline void NormalizeGradient(AudioGradient3D& grad)
     std::sort(grad.stops.begin(), grad.stops.end(), [](const AudioGradientStop3D& a, const AudioGradientStop3D& b){
         return a.position < b.position;
     });
-    // Clamp positions and ensure endpoints exist
     if(grad.stops.front().position > 0.0f || grad.stops.back().position < 1.0f)
     {
         if(grad.stops.front().position > 0.0f)

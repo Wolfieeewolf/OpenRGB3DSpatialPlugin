@@ -384,9 +384,7 @@ private:
     
     QWidget*        freq_range_details = nullptr;
     QLineEdit*      freq_range_name_edit = nullptr;
-    QSpinBox*       freq_low_spin = nullptr;
     QSlider*        freq_low_slider = nullptr;
-    QSpinBox*       freq_high_spin = nullptr;
     QSlider*        freq_high_slider = nullptr;
     QComboBox*      freq_effect_combo = nullptr;
     QComboBox*      freq_zone_combo = nullptr;
@@ -445,7 +443,23 @@ private slots:
     void on_monitor_filter_or_sort_changed(int);
 
     void on_monitor_preset_text_edited(const QString& text);
+
+    /** Room grid overlay: sample effect at (x,y,z) at draw time so overlay matches controller behavior (used for callback path). */
+    RGBColor GetOverlayColorAt(float x, float y, float z) const;
+
 private:
+    /** Stored overlay state for callback-based grid (so audio and all effects sample correctly at draw time). */
+    struct OverlaySlot
+    {
+        SpatialEffect3D* effect = nullptr;
+        int zone_index = -1;
+        BlendMode blend_mode = BlendMode::REPLACE;
+    };
+    std::vector<OverlaySlot> overlay_slots;
+    GridContext3D overlay_room_grid{0, 0, 0, 0, 0, 0, 10.0f};
+    GridContext3D overlay_world_grid{0, 0, 0, 0, 0, 0, 10.0f};
+    float overlay_effect_time = 0.f;
+
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
     bool layout_dirty = false;
     QPushButton* save_layout_btn = nullptr;

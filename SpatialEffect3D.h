@@ -211,6 +211,13 @@ protected:
     QLabel*             rotation_roll_label;
     QPushButton*        rotation_reset_button;
 
+    QSlider*            axis_scale_rot_yaw_slider;
+    QSlider*            axis_scale_rot_pitch_slider;
+    QSlider*            axis_scale_rot_roll_slider;
+    QLabel*             axis_scale_rot_yaw_label;
+    QLabel*             axis_scale_rot_pitch_label;
+    QLabel*             axis_scale_rot_roll_label;
+
     QGroupBox*          color_controls_group;
     QCheckBox*          rainbow_mode_check;
     QWidget*            color_buttons_widget;
@@ -246,6 +253,11 @@ protected:
     float               effect_rotation_pitch;
     float               effect_rotation_roll;
 
+    /** Rotation of the axis-scale frame only (scale is applied in this frame); does not rotate the effect pattern. */
+    float               effect_axis_scale_rotation_yaw;
+    float               effect_axis_scale_rotation_pitch;
+    float               effect_axis_scale_rotation_roll;
+
     ReferenceMode       reference_mode;
     Vector3D            global_reference_point;
     Vector3D            custom_reference_point;
@@ -273,8 +285,10 @@ protected:
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
 
-    Vector3D TransformPointByRotation(float x, float y, float z, 
+    Vector3D TransformPointByRotation(float x, float y, float z,
                                       const Vector3D& origin) const;
+    /** Rotate vector (dx,dy,dz) by yaw/pitch/roll in degrees (same order as effect rotation). Used for axis-scale rotation. */
+    static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
     float ApplySharpness(float value) const;
 
 private slots:

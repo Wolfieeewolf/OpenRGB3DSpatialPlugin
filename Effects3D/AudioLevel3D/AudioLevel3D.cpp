@@ -74,28 +74,6 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        emit ParametersChanged();
-    });
-
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
@@ -173,33 +151,34 @@ RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
     intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
 
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    // Global brightness is applied by PostProcessColorGrid
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f)
+        : GetColorAtPosition(gradient_pos);
     color = ModulateRGBColors(color, user_color);
     return color;
 }
 
 RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
     AudioInputManager* audio = AudioInputManager::instance();
     float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float intensity = EvaluateIntensity(amplitude, time);
 
-    // Apply rotation transformation before calculating positions
-    Vector3D origin = GetEffectOriginGrid(grid);
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    
     float dx = rotated_pos.x - grid.center_x;
     float dy = rotated_pos.y - grid.center_y;
     float dz = rotated_pos.z - grid.center_z;
     float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
-
-    // Use rotated X coordinate for axis position
     float axis_pos = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
 
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
@@ -207,12 +186,11 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
 
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    // Global brightness is applied by PostProcessColorGrid
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f)
+        : GetColorAtPosition(gradient_pos);
     color = ModulateRGBColors(color, user_color);
     return color;
 }

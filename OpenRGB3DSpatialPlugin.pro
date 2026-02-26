@@ -195,6 +195,7 @@ HEADERS +=                                                                      
     Effects3D/Spiral3D/Spiral3D.h                                                               \
     Effects3D/Spin3D/Spin3D.h                                                                   \
     Effects3D/Explosion3D/Explosion3D.h                                                         \
+    Effects3D/Comet3D/Comet3D.h                                                                  \
     Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
     Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
     Effects3D/Rain3D/Rain3D.h                                                                   \
@@ -239,6 +240,7 @@ SOURCES +=                                                                      
     Effects3D/Spiral3D/Spiral3D.cpp                                                             \
     Effects3D/Spin3D/Spin3D.cpp                                                                 \
     Effects3D/Explosion3D/Explosion3D.cpp                                                       \
+    Effects3D/Comet3D/Comet3D.cpp                                                               \
     Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
     Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \
     Effects3D/Rain3D/Rain3D.cpp                                                                 \

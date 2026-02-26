@@ -50,13 +50,12 @@ EffectInfo3D BandScan3D::GetEffectInfo()
     info.default_speed_scale = 10.0f;
     info.default_frequency_scale = 1.0f;
     info.use_size_parameter = false;
-    info.show_speed_control = true; // scan speed
+    info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -68,30 +67,6 @@ void BandScan3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
-
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        RefreshBandRange();
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        RefreshBandRange();
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
@@ -165,9 +140,14 @@ RGBColor BandScan3D::CalculateColor(float x, float y, float z, float time)
 
 RGBColor BandScan3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    EnsureSpectrumCache(time);
-    // Apply rotation transformation before resolving coordinates
     Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    EnsureSpectrumCache(time);
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float axis_pos = ResolveCoordinateNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float height_norm = ResolveHeightNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
@@ -385,13 +365,11 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
 
     float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    // Global brightness is applied by PostProcessColorGrid
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 
     RGBColor modulation = axis_color;
     if(rainbow_mode)
     {
-        // Base class helpers are non-const, so cast is safe for palette queries.
         auto* mutable_self = const_cast<BandScan3D*>(this);
         modulation = mutable_self->GetRainbowColor(scan_phase * 360.0f);
     }

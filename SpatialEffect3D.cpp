@@ -24,6 +24,9 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_rotation_yaw = 0.0f;
     effect_rotation_pitch = 0.0f;
     effect_rotation_roll = 0.0f;
+    effect_axis_scale_rotation_yaw = 0.0f;
+    effect_axis_scale_rotation_pitch = 0.0f;
+    effect_axis_scale_rotation_roll = 0.0f;
 
     reference_mode = REF_MODE_ROOM_CENTER;
     global_reference_point = {0.0f, 0.0f, 0.0f};
@@ -55,6 +58,12 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     rotation_pitch_label = nullptr;
     rotation_roll_label = nullptr;
     rotation_reset_button = nullptr;
+    axis_scale_rot_yaw_slider = nullptr;
+    axis_scale_rot_pitch_slider = nullptr;
+    axis_scale_rot_roll_slider = nullptr;
+    axis_scale_rot_yaw_label = nullptr;
+    axis_scale_rot_pitch_label = nullptr;
+    axis_scale_rot_roll_label = nullptr;
 
     color_controls_group = nullptr;
     rainbow_mode_check = nullptr;
@@ -250,6 +259,42 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_group->setLayout(axis_scale_layout);
     main_layout->addWidget(axis_scale_group);
 
+    QGroupBox* axis_scale_rot_group = new QGroupBox("Axis Scale Rotation");
+    QVBoxLayout* axis_scale_rot_layout = new QVBoxLayout();
+    QHBoxLayout* asr_yaw_layout = new QHBoxLayout();
+    asr_yaw_layout->addWidget(new QLabel("Yaw:"));
+    axis_scale_rot_yaw_slider = new QSlider(Qt::Horizontal);
+    axis_scale_rot_yaw_slider->setRange(-180, 180);
+    axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
+    axis_scale_rot_yaw_slider->setToolTip("Rotate the scale axes (not the effect). Scale is applied in this frame.");
+    axis_scale_rot_yaw_label = new QLabel(QString::number((int)effect_axis_scale_rotation_yaw) + "°");
+    axis_scale_rot_yaw_label->setMinimumWidth(40);
+    asr_yaw_layout->addWidget(axis_scale_rot_yaw_slider);
+    asr_yaw_layout->addWidget(axis_scale_rot_yaw_label);
+    axis_scale_rot_layout->addLayout(asr_yaw_layout);
+    QHBoxLayout* asr_pitch_layout = new QHBoxLayout();
+    asr_pitch_layout->addWidget(new QLabel("Pitch:"));
+    axis_scale_rot_pitch_slider = new QSlider(Qt::Horizontal);
+    axis_scale_rot_pitch_slider->setRange(-180, 180);
+    axis_scale_rot_pitch_slider->setValue((int)effect_axis_scale_rotation_pitch);
+    axis_scale_rot_pitch_label = new QLabel(QString::number((int)effect_axis_scale_rotation_pitch) + "°");
+    axis_scale_rot_pitch_label->setMinimumWidth(40);
+    asr_pitch_layout->addWidget(axis_scale_rot_pitch_slider);
+    asr_pitch_layout->addWidget(axis_scale_rot_pitch_label);
+    axis_scale_rot_layout->addLayout(asr_pitch_layout);
+    QHBoxLayout* asr_roll_layout = new QHBoxLayout();
+    asr_roll_layout->addWidget(new QLabel("Roll:"));
+    axis_scale_rot_roll_slider = new QSlider(Qt::Horizontal);
+    axis_scale_rot_roll_slider->setRange(-180, 180);
+    axis_scale_rot_roll_slider->setValue((int)effect_axis_scale_rotation_roll);
+    axis_scale_rot_roll_label = new QLabel(QString::number((int)effect_axis_scale_rotation_roll) + "°");
+    axis_scale_rot_roll_label->setMinimumWidth(40);
+    asr_roll_layout->addWidget(axis_scale_rot_roll_slider);
+    asr_roll_layout->addWidget(axis_scale_rot_roll_label);
+    axis_scale_rot_layout->addLayout(asr_roll_layout);
+    axis_scale_rot_group->setLayout(axis_scale_rot_layout);
+    main_layout->addWidget(axis_scale_rot_group);
+
     QGroupBox* rotation_group = new QGroupBox("3D Rotation (around Origin)");
     QVBoxLayout* rotation_layout = new QVBoxLayout();
     
@@ -320,6 +365,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_z_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(axis_scale_rot_yaw_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(axis_scale_rot_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(axis_scale_rot_roll_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
 
     ApplyControlVisibility();
 
@@ -335,7 +383,19 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         rotation_roll_label->setText(QString::number(value) + "°");
         effect_rotation_roll = (float)value;
     });
-    
+    connect(axis_scale_rot_yaw_slider, &QSlider::valueChanged, axis_scale_rot_yaw_label, [this](int value) {
+        axis_scale_rot_yaw_label->setText(QString::number(value) + "°");
+        effect_axis_scale_rotation_yaw = (float)value;
+    });
+    connect(axis_scale_rot_pitch_slider, &QSlider::valueChanged, axis_scale_rot_pitch_label, [this](int value) {
+        axis_scale_rot_pitch_label->setText(QString::number(value) + "°");
+        effect_axis_scale_rotation_pitch = (float)value;
+    });
+    connect(axis_scale_rot_roll_slider, &QSlider::valueChanged, axis_scale_rot_roll_label, [this](int value) {
+        axis_scale_rot_roll_label->setText(QString::number(value) + "°");
+        effect_axis_scale_rotation_roll = (float)value;
+    });
+
     connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
         speed_label->setText(QString::number(value));
         effect_speed = value;
@@ -391,18 +451,33 @@ void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridCon
         return;
     }
     Vector3D origin = GetEffectOriginGrid(grid);
-    if(effect_scale_x != 100)
+    float dx = x - origin.x;
+    float dy = y - origin.y;
+    float dz = z - origin.z;
+
+    bool use_axis_scale_rotation = (effect_axis_scale_rotation_yaw != 0.0f || effect_axis_scale_rotation_pitch != 0.0f || effect_axis_scale_rotation_roll != 0.0f);
+    if(use_axis_scale_rotation)
     {
-        x = origin.x + (x - origin.x) * (100.0f / (float)effect_scale_x);
+        Vector3D in_scale_frame = RotateVectorByEuler(dx, dy, dz,
+            -effect_axis_scale_rotation_yaw, -effect_axis_scale_rotation_pitch, -effect_axis_scale_rotation_roll);
+        float sx = (effect_scale_x != 100) ? (100.0f / (float)effect_scale_x) : 1.0f;
+        float sy = (effect_scale_y != 100) ? (100.0f / (float)effect_scale_y) : 1.0f;
+        float sz = (effect_scale_z != 100) ? (100.0f / (float)effect_scale_z) : 1.0f;
+        Vector3D scaled;
+        scaled.x = in_scale_frame.x * sx;
+        scaled.y = in_scale_frame.y * sy;
+        scaled.z = in_scale_frame.z * sz;
+        Vector3D back = RotateVectorByEuler(scaled.x, scaled.y, scaled.z,
+            effect_axis_scale_rotation_yaw, effect_axis_scale_rotation_pitch, effect_axis_scale_rotation_roll);
+        x = origin.x + back.x;
+        y = origin.y + back.y;
+        z = origin.z + back.z;
+        return;
     }
-    if(effect_scale_y != 100)
-    {
-        y = origin.y + (y - origin.y) * (100.0f / (float)effect_scale_y);
-    }
-    if(effect_scale_z != 100)
-    {
-        z = origin.z + (z - origin.z) * (100.0f / (float)effect_scale_z);
-    }
+
+    if(effect_scale_x != 100) x = origin.x + dx * (100.0f / (float)effect_scale_x);
+    if(effect_scale_y != 100) y = origin.y + dy * (100.0f / (float)effect_scale_y);
+    if(effect_scale_z != 100) z = origin.z + dz * (100.0f / (float)effect_scale_z);
 }
 
 void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
@@ -485,7 +560,7 @@ void SpatialEffect3D::CreateColorButton(RGBColor color)
 
     color_buttons.push_back(color_button);
 
-    int insert_pos = color_buttons_layout->count() - 3; // Before +, -, and stretch
+    int insert_pos = color_buttons_layout->count() - 3;
     if(insert_pos < 0) insert_pos = 0;
     color_buttons_layout->insertWidget(insert_pos, color_button);
 }
@@ -506,7 +581,7 @@ RGBColor SpatialEffect3D::GetRainbowColor(float hue)
     hue = std::fmod(hue, 360.0f);
     if(hue < 0) hue += 360.0f;
 
-    float c = 1.0f; // Chroma (since saturation = 1, value = 1)
+    float c = 1.0f;
     float x = c * (1.0f - std::fabs(std::fmod(hue / 60.0f, 2.0f) - 1.0f));
 
     float r, g, b;
@@ -574,7 +649,7 @@ void SpatialEffect3D::OnRainbowModeChanged()
 
 void SpatialEffect3D::OnAddColorClicked()
 {
-    RGBColor new_color = GetRainbowColor(colors.size() * 60.0f); // Space colors around hue wheel
+    RGBColor new_color = GetRainbowColor(colors.size() * 60.0f);
     colors.push_back(new_color);
     CreateColorButton(new_color);
 
@@ -834,6 +909,22 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
     int rr = (int)(r * factor); if(rr > 255) rr = 255;
     int gg = (int)(g * factor); if(gg > 255) gg = 255;
     int bb = (int)(b * factor); if(bb > 255) bb = 255;
+
+    if(effect_sharpness != 100)
+    {
+        float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
+        auto applyGamma = [gamma](int c) {
+            if(c <= 0) return 0;
+            float n = (float)c / 255.0f;
+            n = std::pow(std::max(n, 0.0f), gamma);
+            int out = (int)(n * 255.0f + 0.5f);
+            return out > 255 ? 255 : out;
+        };
+        rr = applyGamma(rr);
+        gg = applyGamma(gg);
+        bb = applyGamma(bb);
+    }
+
     return (bb << 16) | (gg << 8) | rr;
 }
 
@@ -865,6 +956,32 @@ Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, co
     float fz = pz;
 
     return {fx + origin.x, fy + origin.y, fz + origin.z};
+}
+
+Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg)
+{
+    float yaw_rad = yaw_deg * 3.14159265359f / 180.0f;
+    float cos_yaw = cosf(yaw_rad);
+    float sin_yaw = sinf(yaw_rad);
+    float nx = dx * cos_yaw - dz * sin_yaw;
+    float nz = dx * sin_yaw + dz * cos_yaw;
+    float ny = dy;
+
+    float pitch_rad = pitch_deg * 3.14159265359f / 180.0f;
+    float cos_pitch = cosf(pitch_rad);
+    float sin_pitch = sinf(pitch_rad);
+    float py = ny * cos_pitch - nz * sin_pitch;
+    float pz = ny * sin_pitch + nz * cos_pitch;
+    float px = nx;
+
+    float roll_rad = roll_deg * 3.14159265359f / 180.0f;
+    float cos_roll = cosf(roll_rad);
+    float sin_roll = sinf(roll_rad);
+    float fx = px * cos_roll - py * sin_roll;
+    float fy = px * sin_roll + py * cos_roll;
+    float fz = pz;
+
+    return {fx, fy, fz};
 }
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
@@ -1088,6 +1205,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rotation_yaw"] = effect_rotation_yaw;
     j["rotation_pitch"] = effect_rotation_pitch;
     j["rotation_roll"] = effect_rotation_roll;
+    j["axis_scale_rotation_yaw"] = effect_axis_scale_rotation_yaw;
+    j["axis_scale_rotation_pitch"] = effect_axis_scale_rotation_pitch;
+    j["axis_scale_rotation_roll"] = effect_axis_scale_rotation_roll;
 
     nlohmann::json colors_array = nlohmann::json::array();
     for(size_t i = 0; i < colors.size(); i++)
@@ -1151,7 +1271,13 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_rotation_roll = settings["rotation_roll"].get<float>();
     else
         effect_rotation_roll = 0.0f;
-    
+    if(settings.contains("axis_scale_rotation_yaw"))
+        effect_axis_scale_rotation_yaw = std::clamp(settings["axis_scale_rotation_yaw"].get<float>(), -180.0f, 180.0f);
+    if(settings.contains("axis_scale_rotation_pitch"))
+        effect_axis_scale_rotation_pitch = std::clamp(settings["axis_scale_rotation_pitch"].get<float>(), -180.0f, 180.0f);
+    if(settings.contains("axis_scale_rotation_roll"))
+        effect_axis_scale_rotation_roll = std::clamp(settings["axis_scale_rotation_roll"].get<float>(), -180.0f, 180.0f);
+
     if(rotation_yaw_slider)
     {
         rotation_yaw_slider->setValue((int)effect_rotation_yaw);
@@ -1164,6 +1290,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         rotation_roll_slider->setValue((int)effect_rotation_roll);
     }
+    if(axis_scale_rot_yaw_slider)
+        axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
+    if(axis_scale_rot_pitch_slider)
+        axis_scale_rot_pitch_slider->setValue((int)effect_axis_scale_rotation_pitch);
+    if(axis_scale_rot_roll_slider)
+        axis_scale_rot_roll_slider->setValue((int)effect_axis_scale_rotation_roll);
     if(settings.contains("size"))
         effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
     if(settings.contains("scale_value"))

@@ -102,6 +102,10 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , room_grid_overlay_last_nx(-1)
     , room_grid_overlay_last_ny(-1)
     , room_grid_overlay_last_nz(-1)
+    , room_grid_overlay_use_bounds(false)
+    , room_grid_overlay_min_x(0), room_grid_overlay_max_x(0)
+    , room_grid_overlay_min_y(0), room_grid_overlay_max_y(0)
+    , room_grid_overlay_min_z(0), room_grid_overlay_max_z(0)
     , screen_preview_refresh_timer(nullptr)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
@@ -230,7 +234,7 @@ void LEDViewport3D::SetRoomDimensions(float width, float depth, float height, bo
 {
     room_width = width;
     room_depth = depth;
-    room_height = height;  // Note: room_height declared after room_depth in header
+    room_height = height;
     use_manual_room_dimensions = use_manual;
     update();
 }
@@ -1003,13 +1007,41 @@ void LEDViewport3D::DrawRoomBoundary()
     glColor3f(1.0f, 1.0f, 1.0f);
 }
 
+void LEDViewport3D::SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z)
+{
+    room_grid_overlay_use_bounds = true;
+    room_grid_overlay_min_x = min_x;
+    room_grid_overlay_max_x = max_x;
+    room_grid_overlay_min_y = min_y;
+    room_grid_overlay_max_y = max_y;
+    room_grid_overlay_min_z = min_z;
+    room_grid_overlay_max_z = max_z;
+}
+
+void LEDViewport3D::ClearRoomGridOverlayBounds()
+{
+    room_grid_overlay_use_bounds = false;
+}
+
 void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const
 {
-    const GridExtents extents = GetRoomExtents();
     const int step = std::max(1, room_grid_step);
-    if(out_nx) *out_nx = (int)(extents.width_units / (float)step) + 1;
-    if(out_ny) *out_ny = (int)(extents.height_units / (float)step) + 1;
-    if(out_nz) *out_nz = (int)(extents.depth_units / (float)step) + 1;
+    if(room_grid_overlay_use_bounds)
+    {
+        float w = room_grid_overlay_max_x - room_grid_overlay_min_x;
+        float h = room_grid_overlay_max_y - room_grid_overlay_min_y;
+        float d = room_grid_overlay_max_z - room_grid_overlay_min_z;
+        if(out_nx) *out_nx = std::max(1, (int)(w / (float)step) + 1);
+        if(out_ny) *out_ny = std::max(1, (int)(h / (float)step) + 1);
+        if(out_nz) *out_nz = std::max(1, (int)(d / (float)step) + 1);
+    }
+    else
+    {
+        const GridExtents extents = GetRoomExtents();
+        if(out_nx) *out_nx = (int)(extents.width_units / (float)step) + 1;
+        if(out_ny) *out_ny = (int)(extents.height_units / (float)step) + 1;
+        if(out_nz) *out_nz = (int)(extents.depth_units / (float)step) + 1;
+    }
 }
 
 void LEDViewport3D::SetRoomGridColorBuffer(const std::vector<RGBColor>& buf)
@@ -1025,17 +1057,32 @@ void LEDViewport3D::DrawRoomGridOverlay()
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
-    const GridExtents extents = GetRoomExtents();
-    const float max_x = extents.width_units;
-    const float max_y = extents.height_units;
-    const float max_z = extents.depth_units;
-
     const int step = std::max(1, room_grid_step);
-    const int nx = (int)(max_x / (float)step) + 1;
-    const int ny = (int)(max_y / (float)step) + 1;
-    const int nz = (int)(max_z / (float)step) + 1;
+    int nx = 0, ny = 0, nz = 0;
+    GetRoomGridOverlayDimensions(&nx, &ny, &nz);
     const int count = nx * ny * nz;
     if(count <= 0) return;
+
+    float min_x, max_x, min_y, max_y, min_z, max_z;
+    if(room_grid_overlay_use_bounds)
+    {
+        min_x = room_grid_overlay_min_x;
+        max_x = room_grid_overlay_max_x;
+        min_y = room_grid_overlay_min_y;
+        max_y = room_grid_overlay_max_y;
+        min_z = room_grid_overlay_min_z;
+        max_z = room_grid_overlay_max_z;
+    }
+    else
+    {
+        const GridExtents extents = GetRoomExtents();
+        min_x = 0;
+        max_x = extents.width_units;
+        min_y = 0;
+        max_y = extents.height_units;
+        min_z = 0;
+        max_z = extents.depth_units;
+    }
 
     const bool use_buffer = ((int)room_grid_color_buffer.size() == count);
     const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
@@ -1043,7 +1090,10 @@ void LEDViewport3D::DrawRoomGridOverlay()
     const float default_g = 0.6f * room_grid_brightness;
     const float default_b = 0.7f * room_grid_brightness;
 
-    // Rebuild cached positions when layout changes (step or extents)
+    const float span_x = (nx > 1) ? (max_x - min_x) : 0.0f;
+    const float span_y = (ny > 1) ? (max_y - min_y) : 0.0f;
+    const float span_z = (nz > 1) ? (max_z - min_z) : 0.0f;
+
     if(room_grid_overlay_positions.size() != (size_t)(3 * count) ||
        room_grid_overlay_last_nx != nx || room_grid_overlay_last_ny != ny || room_grid_overlay_last_nz != nz)
     {
@@ -1054,13 +1104,13 @@ void LEDViewport3D::DrawRoomGridOverlay()
         float* pos = room_grid_overlay_positions.data();
         for(int ix = 0; ix < nx; ix++)
         {
-            const float x = (float)(ix * step);
+            const float x = (nx > 1) ? (min_x + (float)ix / (float)(nx - 1) * span_x) : min_x;
             for(int iy = 0; iy < ny; iy++)
             {
-                const float y = (float)(iy * step);
+                const float y = (ny > 1) ? (min_y + (float)iy / (float)(ny - 1) * span_y) : min_y;
                 for(int iz = 0; iz < nz; iz++)
                 {
-                    const float z = (float)(iz * step);
+                    const float z = (nz > 1) ? (min_z + (float)iz / (float)(nz - 1) * span_z) : min_z;
                     *pos++ = x;
                     *pos++ = y;
                     *pos++ = z;
@@ -1069,18 +1119,17 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    // Fill color array (from buffer, callback, or default). Same iteration order as positions.
     room_grid_overlay_colors.resize(3 * (size_t)count);
     float* col = room_grid_overlay_colors.data();
     for(int ix = 0; ix < nx; ix++)
     {
-        const float x = (float)(ix * step);
+        const float x = (nx > 1) ? (min_x + (float)ix / (float)(nx - 1) * span_x) : min_x;
         for(int iy = 0; iy < ny; iy++)
         {
-            const float y = (float)(iy * step);
+            const float y = (ny > 1) ? (min_y + (float)iy / (float)(ny - 1) * span_y) : min_y;
             for(int iz = 0; iz < nz; iz++)
             {
-                const float z = (float)(iz * step);
+                const float z = (nz > 1) ? (min_z + (float)iz / (float)(nz - 1) * span_z) : min_z;
                 float r, g, b;
                 if(use_buffer)
                 {

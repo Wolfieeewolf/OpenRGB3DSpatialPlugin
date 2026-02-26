@@ -79,35 +79,21 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     
     QHBoxLayout* low_row = new QHBoxLayout();
     low_row->addWidget(new QLabel("Low Hz:"));
-    freq_low_spin = new QSpinBox();
-    freq_low_spin->setRange(20, 20000);
-    freq_low_spin->setValue(20);
-    connect(freq_low_spin, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &OpenRGB3DSpatialTab::on_freq_low_changed);
-    low_row->addWidget(freq_low_spin);
-    
     freq_low_slider = new QSlider(Qt::Horizontal);
     freq_low_slider->setRange(20, 20000);
     freq_low_slider->setValue(20);
     connect(freq_low_slider, &QSlider::valueChanged,
-            freq_low_spin, &QSpinBox::setValue);
+            this, &OpenRGB3DSpatialTab::on_freq_low_changed);
     low_row->addWidget(freq_low_slider, 1);
     freq_sliders->addLayout(low_row);
-    
+
     QHBoxLayout* high_row = new QHBoxLayout();
     high_row->addWidget(new QLabel("High Hz:"));
-    freq_high_spin = new QSpinBox();
-    freq_high_spin->setRange(20, 20000);
-    freq_high_spin->setValue(200);
-    connect(freq_high_spin, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &OpenRGB3DSpatialTab::on_freq_high_changed);
-    high_row->addWidget(freq_high_spin);
-    
     freq_high_slider = new QSlider(Qt::Horizontal);
     freq_high_slider->setRange(20, 20000);
     freq_high_slider->setValue(200);
     connect(freq_high_slider, &QSlider::valueChanged,
-            freq_high_spin, &QSpinBox::setValue);
+            this, &OpenRGB3DSpatialTab::on_freq_high_changed);
     high_row->addWidget(freq_high_slider, 1);
     freq_sliders->addLayout(high_row);
     
@@ -378,23 +364,16 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         freq_range_enabled_check->blockSignals(false);
     }
     
-    if(freq_low_spin && freq_low_slider)
+    if(freq_low_slider)
     {
-        freq_low_spin->blockSignals(true);
         freq_low_slider->blockSignals(true);
-        freq_low_spin->setValue((int)range->low_hz);
         freq_low_slider->setValue((int)range->low_hz);
-        freq_low_spin->blockSignals(false);
         freq_low_slider->blockSignals(false);
     }
-    
-    if(freq_high_spin && freq_high_slider)
+    if(freq_high_slider)
     {
-        freq_high_spin->blockSignals(true);
         freq_high_slider->blockSignals(true);
-        freq_high_spin->setValue((int)range->high_hz);
         freq_high_slider->setValue((int)range->high_hz);
-        freq_high_spin->blockSignals(false);
         freq_high_slider->blockSignals(false);
     }
     
@@ -706,6 +685,8 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
         if(!effect) continue;
         
         nlohmann::json audio_params = range->effect_settings;
+        audio_params["low_hz"] = (int)range->low_hz;
+        audio_params["high_hz"] = (int)range->high_hz;
         audio_params["audio_level"] = effect_level;
         audio_params["frequency_band_energy"] = raw_level;
         effect->LoadSettings(audio_params);

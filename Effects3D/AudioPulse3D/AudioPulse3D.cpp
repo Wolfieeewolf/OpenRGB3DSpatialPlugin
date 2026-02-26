@@ -71,28 +71,6 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        emit ParametersChanged();
-    });
-
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
@@ -176,12 +154,13 @@ RGBColor AudioPulse3D::CalculateColor(float x, float y, float z, float time)
     float brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
     brightness = std::clamp(brightness, 0.0f, 1.0f);
 
-    RGBColor color = ComposeAudioGradientColor(audio_settings, use_radial ? (1.0f - distance) : 0.5f, intensity);
+    float hue_pos = use_radial ? (1.0f - distance) : 0.5f;
+    RGBColor color = ComposeAudioGradientColor(audio_settings, hue_pos, intensity);
     color = ScaleRGBColor(color, 0.25f + 0.75f * brightness);
 
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(hue_pos * 360.0f + CalculateProgress(time) * 40.0f)
+        : GetColorAtPosition(hue_pos);
     return ModulateRGBColors(color, user_color);
 }
 
@@ -208,9 +187,10 @@ RGBColor AudioPulse3D::CalculateColorGrid(float x, float y, float z, float time,
     RGBColor color = ComposeAudioGradientColor(audio_settings, use_radial ? (1.0f - distance) : 0.5f, intensity);
     color = ScaleRGBColor(color, 0.25f + 0.75f * brightness);
 
+    float hue_pos = use_radial ? (1.0f - distance) : 0.5f;
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(hue_pos * 360.0f + CalculateProgress(time) * 40.0f)
+        : GetColorAtPosition(hue_pos);
     return ModulateRGBColors(color, user_color);
 }
 

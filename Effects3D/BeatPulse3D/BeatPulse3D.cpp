@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// SPDX-License-Identifier: GPL-2.0-only
 
 #include "BeatPulse3D.h"
 #include <algorithm>
@@ -69,28 +68,6 @@ void BeatPulse3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
-
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* smooth_row = new QHBoxLayout();
     smooth_row->addWidget(new QLabel("Smoothing:"));
@@ -170,7 +147,6 @@ RGBColor BeatPulse3D::CalculateColor(float x, float y, float z, float time)
 
     float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
-    // Global brightness is applied by PostProcessColorGrid
     color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color = GetRainbowMode()
@@ -181,6 +157,13 @@ RGBColor BeatPulse3D::CalculateColor(float x, float y, float z, float time)
 
 RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
     AudioInputManager* audio = AudioInputManager::instance();
     float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float intensity = EvaluateIntensity(amplitude, time);
@@ -205,12 +188,11 @@ RGBColor BeatPulse3D::CalculateColorGrid(float x, float y, float z, float time, 
 
     float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
-    // Global brightness is applied by PostProcessColorGrid
     color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(wave_front * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(radial_norm * 360.0f + wave_front * 60.0f)
+        : GetColorAtPosition(radial_norm);
     return ModulateRGBColors(color, user_color);
 }
 

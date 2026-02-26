@@ -39,7 +39,7 @@ EffectInfo3D DiscoFlash3D::GetEffectInfo()
     info.show_scale_control = false;
     info.show_fps_control = false;
     info.show_axis_control = false;
-    info.show_color_controls = false; // uses random hues
+    info.show_color_controls = false;
     return info;
 }
 
@@ -50,28 +50,6 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
-
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* density_row = new QHBoxLayout();
     density_row->addWidget(new QLabel("Density:"));
@@ -184,7 +162,6 @@ void DiscoFlash3D::TickFlashes(float time)
 
     if(onset_hold <= 0.0f && onset_smoothed >= onset_threshold)
     {
-        // Number of flashes to spawn scales with density and audio strength
         float strength = std::clamp(onset_smoothed * audio_settings.peak_boost, 0.0f, 1.0f);
         int count = std::max(1, (int)(flash_density * 12.0f * strength));
 
@@ -250,7 +227,6 @@ RGBColor DiscoFlash3D::SampleFlashField(float nx, float ny, float nz, float time
 RGBColor DiscoFlash3D::CalculateColor(float x, float y, float z, float time)
 {
     TickFlashes(time);
-    // Normalise to [-1,1] roughly (using a 2-unit world)
     return SampleFlashField(x * 0.5f, y * 0.5f, z * 0.5f, time);
 }
 

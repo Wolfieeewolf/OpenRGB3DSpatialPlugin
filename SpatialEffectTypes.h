@@ -31,6 +31,7 @@ enum SpatialEffectType
     SPATIAL_EFFECT_LIGHTNING        = 9,
     SPATIAL_EFFECT_MATRIX           = 10,
     SPATIAL_EFFECT_BOUNCING_BALL    = 11,
+    SPATIAL_EFFECT_COMET            = 12,
 };
 
 enum ReferencePointType

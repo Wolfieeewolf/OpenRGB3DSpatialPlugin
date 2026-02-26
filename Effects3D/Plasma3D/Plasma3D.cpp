@@ -2,7 +2,6 @@
 
 #include "Plasma3D.h"
 
-// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Plasma3D);
 #include <QGridLayout>
 #include <cmath>
@@ -10,22 +9,20 @@ REGISTER_EFFECT_3D(Plasma3D);
 Plasma3D::Plasma3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     pattern_combo = nullptr;
-    pattern_type = 0;        // Default to Classic plasma
+    pattern_type = 0;
     progress = 0.0f;
 
-    // Set default plasma colors
     std::vector<RGBColor> plasma_colors = {
-        0x0000FF00,  // Green (0x00BBGGRR format)
-        0x00FF00FF,  // Magenta/Purple
-        0x00FFFF00   // Yellow
+        0x0000FF00,
+        0x00FF00FF,
+        0x00FFFF00
     };
-    // Only set default colors if none are set yet
     if(GetColors().empty())
     {
         SetColors(plasma_colors);
     }
-    SetFrequency(60);        // Default plasma frequency
-    SetRainbowMode(false);   // Default to custom colors
+    SetFrequency(60);
+    SetRainbowMode(false);
 }
 
 Plasma3D::~Plasma3D()
@@ -35,7 +32,7 @@ Plasma3D::~Plasma3D()
 EffectInfo3D Plasma3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Plasma";
     info.effect_description = "Animated plasma clouds with configurable pattern and speed";
     info.category = "3D Spatial";
@@ -52,19 +49,16 @@ EffectInfo3D Plasma3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    // Standardized parameter scaling
-    info.default_speed_scale = 8.0f;        // (speed/100)² * 8.0 (room-scale motion)
-    info.default_frequency_scale = 8.0f;    // (freq/100)² * 8.0 (larger features)
+    info.default_speed_scale = 8.0f;
+    info.default_frequency_scale = 8.0f;
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls)
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -76,7 +70,6 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(plasma_widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    // Only Plasma-specific control: Pattern Type
     layout->addWidget(new QLabel("Pattern:"), 0, 0);
     pattern_combo = new QComboBox();
     pattern_combo->addItem("Classic");
@@ -89,7 +82,6 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(plasma_widget, parent);
 
-    // Connect signals (only for Plasma-specific controls)
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &Plasma3D::OnPlasmaParameterChanged);
 }
@@ -107,57 +99,37 @@ void Plasma3D::OnPlasmaParameterChanged()
 
 RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 {
-    /*---------------------------------------------------------*\
-    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | One grid unit equals the configured grid scale          |
-    | (default 10mm). LED positions use grid units.           |
-    \*---------------------------------------------------------*/
-
-    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
-
-    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    | Uses standardized boundary helper                        |
-    \*---------------------------------------------------------*/
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
     {
-        return 0x00000000;  // Black - outside effect boundary
+        return 0x00000000;
     }
 
-    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
 
     progress = CalculateProgress(time);
 
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Use rotated coordinates directly for plasma pattern
     float coord1 = rot_rel_x;
     float coord2 = rot_rel_y;
     float coord3 = rot_rel_z;
 
     float plasma_value;
-    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    float scale = actual_frequency * 0.004f / size_multiplier;  // Room-scale features across the space
+    float size_multiplier = GetNormalizedSize();
+    float scale = actual_frequency * 0.004f / size_multiplier;
 
     switch(pattern_type)
     {
-        case 0: // Classic Plasma - Multiple overlapping sine waves
+        case 0:
             {
-                // Create classic plasma with 4-6 overlapping waves
                 plasma_value =
                     sin((coord1 + progress * 2.0f) * scale) +
                     sin((coord2 + progress * 1.7f) * scale * 0.8f) +
@@ -168,7 +140,7 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
             }
             break;
 
-        case 1: // Swirl Plasma - Rotating spiral patterns
+        case 1:
             {
                 float angle = atan2(coord2, coord1);
                 float radius = sqrtf(coord1*coord1 + coord2*coord2);
@@ -182,9 +154,8 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
             }
             break;
 
-        case 2: // Ripple Plasma - Concentric waves
+        case 2:
             {
-                // Use 2D distance in rotated XY plane for ripple effect
                 float dist_from_center = sqrtf(coord1*coord1 + coord2*coord2);
 
                 plasma_value =
@@ -196,10 +167,9 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
             }
             break;
 
-        case 3: // Organic Plasma - Flowing liquid-like patterns
+        case 3:
         default:
             {
-                // Nested sine waves for organic flowing effect
                 float flow1 = sin(coord1 * scale * 0.8f + sin(coord2 * scale * 1.2f + progress) + progress * 0.5f);
                 float flow2 = cos(coord2 * scale * 0.9f + cos(coord3 * scale * 1.1f + progress * 1.3f));
                 float flow3 = sin(coord3 * scale * 0.7f + sin(coord1 * scale * 1.3f + progress * 0.7f));
@@ -211,30 +181,23 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
             break;
     }
 
-    // Normalize to 0-1 range
-    // With 5-6 overlapping waves, range is approximately -6 to +6
     plasma_value = (plasma_value + 6.0f) / 12.0f;
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
-    // Get color using universal base class methods
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        // Rainbow colors that shift with plasma value
         float hue = plasma_value * 360.0f + progress * 60.0f;
         final_color = GetRainbowColor(hue);
     }
     else
     {
-        // Use different colors based on plasma value
         final_color = GetColorAtPosition(plasma_value);
     }
 
-    // Global brightness is applied by PostProcessColorGrid
     return final_color;
 }
 
-// Grid-aware version with room-scale feature sizing
 RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -253,8 +216,6 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.8f / fmax(0.1f, size_multiplier);
 
-    // Normalize coordinates to 0-1 range based on room bounds
-    // This ensures ALL controllers see the same plasma pattern at the same absolute room position
     float norm_x = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
     float norm_y = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
     float norm_z = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
@@ -262,16 +223,11 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     norm_y = fmaxf(0.0f, fminf(1.0f, norm_y));
     norm_z = fmaxf(0.0f, fminf(1.0f, norm_z));
 
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Normalize rotated coordinates to 0-1 range based on room bounds
     float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
     float coord1 = (max_distance > 0.001f) ? ((rot_rel_x + max_distance) / (2.0f * max_distance)) : 0.5f;
     float coord2 = (max_distance > 0.001f) ? ((rot_rel_y + max_distance) / (2.0f * max_distance)) : 0.5f;
@@ -283,7 +239,7 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     float plasma_value;
     switch(pattern_type)
     {
-        case 0: // Classic
+        case 0:
             plasma_value =
                 sin((coord1 + progress * 2.0f) * freq_scale * 10.0f) +
                 sin((coord2 + progress * 1.7f) * freq_scale * 8.0f) +
@@ -292,9 +248,9 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
                 sin(sqrtf(coord1*coord1 + coord2*coord2) * freq_scale * 5.0f + progress * 1.5f) +
                 cos(coord3 * freq_scale * 4.0f + progress * 0.9f);
             break;
-        case 1: // Swirl
+        case 1:
             {
-                float angle = atan2(coord2 - 0.5f, coord1 - 0.5f); // Center at 0.5, 0.5
+                float angle = atan2(coord2 - 0.5f, coord1 - 0.5f);
                 float radius = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
                     sin(angle * 4.0f + radius * freq_scale * 8.0f + progress * 2.0f) +
@@ -304,9 +260,8 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
                     cos((angle * 2.0f + coord3 * freq_scale * 3.0f) + progress * 1.2f);
             }
             break;
-        case 2: // Ripple
+        case 2:
             {
-                // Use 2D distance in rotated XY plane for ripple effect
                 float dist_from_center = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
                     sin(dist_from_center * freq_scale * 10.0f - progress * 3.0f) +
@@ -316,7 +271,7 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
                     cos(coord3 * freq_scale * 5.0f - progress * 0.7f);
             }
             break;
-        case 3: // Organic
+        case 3:
         default:
             {
                 float flow1 = sin(coord1 * freq_scale * 8.0f + sin(coord2 * freq_scale * 12.0f + progress) + progress * 0.5f);
@@ -332,28 +287,24 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
     plasma_value = (plasma_value + 6.0f) / 12.0f;
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
-    // Add depth-based enhancement for immersive 3D feel
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {
         float normalized_dist = fmin(1.0f, radial_distance / max_radius);
-        // Soft distance fade - keeps plasma visible across whole room
         depth_factor = 0.45f + 0.55f * (1.0f - normalized_dist * 0.6f);
     }
 
     RGBColor final_color = GetRainbowMode() ? GetRainbowColor(plasma_value * 360.0f + progress * 60.0f)
                                             : GetColorAtPosition(plasma_value);
-    
-    // Apply depth factor for immersive 3D feel
+
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
     r = (unsigned char)(r * depth_factor);
     g = (unsigned char)(g * depth_factor);
     b = (unsigned char)(b * depth_factor);
-    // Global brightness is applied by PostProcessColorGrid
     return (b << 16) | (g << 8) | r;
 }
 

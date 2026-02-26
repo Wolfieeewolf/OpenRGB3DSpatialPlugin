@@ -51,28 +51,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
         layout = new QVBoxLayout(parent);
     }
 
-    QHBoxLayout* hz_row = new QHBoxLayout();
-    hz_row->addWidget(new QLabel("Low Hz:"));
-    QSpinBox* low_spin = new QSpinBox();
-    low_spin->setRange(1, 20000);
-    low_spin->setValue(audio_settings.low_hz);
-    hz_row->addWidget(low_spin);
-    hz_row->addWidget(new QLabel("High Hz:"));
-    QSpinBox* high_spin = new QSpinBox();
-    high_spin->setRange(1, 20000);
-    high_spin->setValue(audio_settings.high_hz);
-    hz_row->addWidget(high_spin);
-    layout->addLayout(hz_row);
-
-    connect(low_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.low_hz = v;
-        emit ParametersChanged();
-    });
-    connect(high_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        audio_settings.high_hz = v;
-        emit ParametersChanged();
-    });
-
     QHBoxLayout* speed_row = new QHBoxLayout();
     speed_row->addWidget(new QLabel("Expand Speed:"));
     QSlider* speed_slider = new QSlider(Qt::Horizontal);
@@ -188,7 +166,7 @@ void FreqRipple3D::TickRipples(float time)
         r.birth_time = time;
         r.strength   = std::clamp(onset_smoothed * audio_settings.peak_boost, 0.0f, 1.0f);
         ripples.push_back(r);
-        onset_hold = 0.12f; // minimum gap between triggers
+        onset_hold = 0.12f;
     }
 
     ripples.erase(std::remove_if(ripples.begin(), ripples.end(),
@@ -209,7 +187,7 @@ RGBColor FreqRipple3D::ComputeRippleColor(float dist_norm, float time) const
         float age = time - r.birth_time;
         if(age < 0.0f) continue;
 
-        float front = expand_speed * age; // how far the ring front has travelled (grid units)
+        float front = expand_speed * age;
         float ring_dist = std::fabs(dist_norm - front);
         float half_w = std::max(trail_width * 0.5f, 1e-3f);
 
@@ -223,7 +201,6 @@ RGBColor FreqRipple3D::ComputeRippleColor(float dist_norm, float time) const
         RGBColor ring_color = ComposeAudioGradientColor(audio_settings, dist_norm, contribution);
         ring_color = ScaleRGBColor(ring_color, contribution);
 
-        // Additive blend
         int rr = std::clamp((int)(result & 0xFF)         + (int)(ring_color & 0xFF),         0, 255);
         int rg = std::clamp((int)((result >> 8) & 0xFF)  + (int)((ring_color >> 8) & 0xFF),  0, 255);
         int rb = std::clamp((int)((result >> 16) & 0xFF) + (int)((ring_color >> 16) & 0xFF), 0, 255);
@@ -265,8 +242,8 @@ RGBColor FreqRipple3D::CalculateColorGrid(float x, float y, float z, float time,
     RGBColor color = ComputeRippleColor(dist_norm, time);
 
     RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f)
-        : GetColorAtPosition(0.0f);
+        ? GetRainbowColor(dist_norm * 180.0f + CalculateProgress(time) * 50.0f)
+        : GetColorAtPosition(std::min(dist_norm * 0.5f, 1.0f));
     return ModulateRGBColors(color, user_color);
 }
 

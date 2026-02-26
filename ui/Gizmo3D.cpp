@@ -98,9 +98,6 @@ void Gizmo3D::CycleMode()
             break;
     }
 
-    // Ensure gizmo stays centered on target after mode change
-    // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
-    // which calls GetControllerCenter() for proper bounds-based centering
 }
 
 void Gizmo3D::SetPosition(float x, float y, float z)
@@ -857,9 +854,6 @@ void Gizmo3D::ApplyRotation(float delta_x, float delta_y, float delta_z)
         while(target_transform->transform.rotation.z > 360.0f) target_transform->transform.rotation.z -= 360.0f;
         while(target_transform->transform.rotation.z < 0.0f) target_transform->transform.rotation.z += 360.0f;
 
-        // Keep gizmo centered on the controller - rotation doesn't change position
-        // Note: The actual centering will be done by LEDViewport3D::UpdateGizmoPosition()
-        // which calls GetControllerCenter() for proper bounds-based centering
     }
     else if(target_display_plane)
     {
