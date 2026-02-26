@@ -12,6 +12,7 @@
 FreqRipple3D::FreqRipple3D(QWidget* parent)
     : SpatialEffect3D(parent)
 {
+    ripples.reserve(64);
 }
 
 EffectInfo3D FreqRipple3D::GetEffectInfo()

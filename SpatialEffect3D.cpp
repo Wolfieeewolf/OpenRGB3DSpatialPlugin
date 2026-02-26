@@ -912,17 +912,16 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
 
     if(effect_sharpness != 100)
     {
-        float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
-        auto applyGamma = [gamma](int c) {
+        const float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
+        auto apply = [gamma](int c) -> int {
             if(c <= 0) return 0;
-            float n = (float)c / 255.0f;
-            n = std::pow(std::max(n, 0.0f), gamma);
+            float n = std::pow((float)c / 255.0f, gamma);
             int out = (int)(n * 255.0f + 0.5f);
             return out > 255 ? 255 : out;
         };
-        rr = applyGamma(rr);
-        gg = applyGamma(gg);
-        bb = applyGamma(bb);
+        rr = apply(rr);
+        gg = apply(gg);
+        bb = apply(bb);
     }
 
     return (bb << 16) | (gg << 8) | rr;

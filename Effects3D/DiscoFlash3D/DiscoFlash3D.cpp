@@ -169,6 +169,7 @@ void DiscoFlash3D::TickFlashes(float time)
         std::uniform_real_distribution<float> hue_dist(0.0f, 360.0f);
         std::uniform_real_distribution<float> size_dist(0.5f, 1.5f);
 
+        flashes.reserve(flashes.size() + (size_t)count);
         for(int i = 0; i < count; ++i)
         {
             Flash f;

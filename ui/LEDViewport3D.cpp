@@ -1057,7 +1057,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
-    const int step = std::max(1, room_grid_step);
     int nx = 0, ny = 0, nz = 0;
     GetRoomGridOverlayDimensions(&nx, &ny, &nz);
     const int count = nx * ny * nz;

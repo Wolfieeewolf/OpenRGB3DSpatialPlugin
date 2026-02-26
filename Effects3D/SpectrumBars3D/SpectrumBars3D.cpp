@@ -244,8 +244,8 @@ void SpectrumBars3D::EnsureSpectrumCache(float time)
         delta_time = std::max(0.0f, time - last_sample_time);
     }
     last_sample_time = time;
-
-    UpdateSmoothedBands(AudioInputManager::instance()->getBands(), delta_time);
+    AudioInputManager::instance()->getBands(bands_cache);
+    UpdateSmoothedBands(bands_cache, delta_time);
 }
 
 void SpectrumBars3D::UpdateSmoothedBands(const std::vector<float>& spectrum, float /*delta_time*/)

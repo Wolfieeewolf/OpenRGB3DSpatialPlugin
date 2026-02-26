@@ -459,6 +459,7 @@ private:
     GridContext3D overlay_room_grid{0, 0, 0, 0, 0, 0, 10.0f};
     GridContext3D overlay_world_grid{0, 0, 0, 0, 0, 0, 10.0f};
     float overlay_effect_time = 0.f;
+    std::vector<RGBColor> room_grid_overlay_buffer;
 
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
     bool layout_dirty = false;

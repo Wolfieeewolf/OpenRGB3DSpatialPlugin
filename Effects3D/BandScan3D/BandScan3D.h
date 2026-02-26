@@ -47,6 +47,7 @@ private:
     int band_end = -1;
 
     std::vector<float> smoothed_bands;
+    std::vector<float> bands_cache;
     float last_sample_time = std::numeric_limits<float>::lowest();
 };
 

@@ -235,7 +235,8 @@ void BandScan3D::EnsureSpectrumCache(float time)
     }
 
     last_sample_time = time;
-    UpdateSmoothedBands(AudioInputManager::instance()->getBands());
+    AudioInputManager::instance()->getBands(bands_cache);
+    UpdateSmoothedBands(bands_cache);
 }
 
 void BandScan3D::UpdateSmoothedBands(const std::vector<float>& spectrum)

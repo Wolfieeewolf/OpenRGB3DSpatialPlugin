@@ -73,6 +73,7 @@ public:
 
     // Spectrum data (FFT-based), 16 bands log-mapped
     std::vector<float> getBands() const;       // 0..1 per band
+    void getBands(std::vector<float>& out) const; // fill existing buffer, avoids alloc
     float getBassLevel() const;                // approx 20-200 Hz
     float getMidLevel() const;                 // approx 200-2000 Hz
     float getTrebleLevel() const;              // approx 2k-16k Hz

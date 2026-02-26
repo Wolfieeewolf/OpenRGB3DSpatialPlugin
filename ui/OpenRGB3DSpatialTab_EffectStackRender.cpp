@@ -172,7 +172,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
         if(count > 0 && count <= 500000u)
         {
-            std::vector<RGBColor> buf(count);
+            if(room_grid_overlay_buffer.size() != count)
+            {
+                room_grid_overlay_buffer.resize(count);
+            }
             const float time_val = effect_time;
             const float span_x = room_bounds.max_x - room_bounds.min_x;
             const float span_y = room_bounds.max_y - room_bounds.min_y;
@@ -202,12 +205,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
-                        buf[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
+                        room_grid_overlay_buffer[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
                     }
                 }
             }
             viewport->SetRoomGridColorCallback(nullptr);
-            viewport->SetRoomGridColorBuffer(buf);
+            viewport->SetRoomGridColorBuffer(room_grid_overlay_buffer);
         }
     }
 
@@ -297,7 +300,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             Zone3D* zone = zone_manager->GetZone(slot.zone_index);
                             if(zone)
                             {
-                                std::vector<int> zone_controllers = zone->GetControllers();
+                                const std::vector<int>& zone_controllers = zone->GetControllers();
                                 if(std::find(zone_controllers.begin(), zone_controllers.end(), (int)ctrl_idx) != zone_controllers.end())
                                 {
                                     apply_to_this_controller = true;
@@ -309,8 +312,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         {
                             continue;
                         }
-
-                        
 
                         const bool requires_world = effect->RequiresWorldSpaceCoordinates();
                         float sample_x = requires_world ? world_x : room_x;
@@ -400,7 +401,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         Zone3D* zone = zone_manager->GetZone(slot.zone_index);
                         if(zone)
                         {
-                            std::vector<int> zone_controllers = zone->GetControllers();
+                            const std::vector<int>& zone_controllers = zone->GetControllers();
                             if(std::find(zone_controllers.begin(), zone_controllers.end(), (int)ctrl_idx) != zone_controllers.end())
                             {
                                 apply_to_this_controller = true;

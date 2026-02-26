@@ -53,6 +53,7 @@ private:
     int band_end = -1;  // inclusive (-1 = auto to last, auto-calculated from high_hz)
 
     std::vector<float> smoothed_bands;
+    std::vector<float> bands_cache;
     float last_sample_time = std::numeric_limits<float>::lowest();
 };
 

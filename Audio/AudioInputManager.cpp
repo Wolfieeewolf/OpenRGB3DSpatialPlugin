@@ -824,6 +824,12 @@ std::vector<float> AudioInputManager::getBands() const
     return bands16;
 }
 
+void AudioInputManager::getBands(std::vector<float>& out) const
+{
+    QMutexLocker bl(&bands_mutex);
+    out = bands16;
+}
+
 float AudioInputManager::getBassLevel() const
 {
     QMutexLocker bl(&bands_mutex);
