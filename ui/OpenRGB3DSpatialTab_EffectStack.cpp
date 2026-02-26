@@ -348,7 +348,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
-    // Block signals to prevent selection change
     effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
@@ -398,10 +397,11 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     QLayoutItem* layout_item;
     while(effect_controls_layout && (layout_item = effect_controls_layout->takeAt(0)) != nullptr)
     {
-        if(layout_item->widget())
+        if(QWidget* w = layout_item->widget())
         {
-            layout_item->widget()->hide();
-            layout_item->widget()->deleteLater();
+            w->hide();
+            w->setParent(nullptr);
+            delete w;
         }
         delete layout_item;
     }

@@ -39,7 +39,7 @@ EffectInfo3D SpectrumBars3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Spectrum Bars";
-    info.effect_description = "Maps audio spectrum energy across the selected axis";
+    info.effect_description = "Bar graph of spectrum energy along chosen axis";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;

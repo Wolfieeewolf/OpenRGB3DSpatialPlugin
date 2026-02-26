@@ -19,7 +19,6 @@ std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile
     filesystem::path base_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path profiles_dir = base_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "EffectProfiles";
 
-    // Create directory if it doesn't exist
     filesystem::create_directories(profiles_dir);
 
     return (profiles_dir / (profile_name + ".effectprofile.json")).string();
@@ -52,7 +51,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
         profile_json["origin_index"] = effect_origin_combo->currentIndex();
     }
 
-    // Save audio settings (input + currently configured audio effect UI)
     nlohmann::json audio_json;
     int device_index = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
     audio_json["device_index"] = device_index;
@@ -172,7 +170,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             ClearCustomEffectUI();
         }
 
-        // Restore audio settings
         if(profile_json.contains("audio_settings"))
         {
             const nlohmann::json& a = profile_json["audio_settings"];
@@ -283,7 +280,6 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
         return;
     }
 
-    // Scan for .effectprofile.json files
     for(filesystem::directory_iterator entry(profiles_dir); entry != filesystem::directory_iterator(); ++entry)
     {
         if(entry->path().extension() == ".json")
@@ -291,7 +287,6 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
             std::string filename = entry->path().filename().string();
             std::string stem     = entry->path().stem().string();
 
-            // Only show .effectprofile.json files
             if(stem.length() > 14 && stem.substr(stem.length() - 14) == ".effectprofile")
             {
                 std::string profile_name = stem.substr(0, stem.length() - 14);
@@ -387,12 +382,10 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             profile_name = config["auto_load_profile"].get<std::string>();
         }
 
-        // Restore checkbox state
         effect_auto_load_checkbox->blockSignals(true);
         effect_auto_load_checkbox->setChecked(auto_load_enabled);
         effect_auto_load_checkbox->blockSignals(false);
 
-        // Restore profile selection
         if(!profile_name.empty())
         {
             int index = effect_profiles_combo->findText(QString::fromStdString(profile_name));
@@ -404,7 +397,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             }
         }
 
-        // Auto-load if enabled
         if(auto_load_enabled && !profile_name.empty())
         {
             std::string profile_path = GetEffectProfilePath(profile_name);
@@ -424,7 +416,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
 
 void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
 {
-    // Validate that the stack has at least one effect
     if(effect_stack.empty())
     {
         QMessageBox::information(this, "No Effect Selected",
@@ -446,7 +437,6 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
     std::string profile_path = GetEffectProfilePath(profile_name);
     if(profile_path.empty()) return;
 
-    // Check if profile already exists
     if(filesystem::exists(profile_path))
     {
         QMessageBox::StandardButton reply = QMessageBox::question(this, "Overwrite Profile",
@@ -459,13 +449,10 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
         }
     }
 
-    // Save the profile
     SaveEffectProfile(profile_path);
 
-    // Update dropdown
     PopulateEffectProfileDropdown();
 
-    // Select the newly saved profile
     int index = effect_profiles_combo->findText(name);
     if(index >= 0)
     {
@@ -530,7 +517,6 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
         filesystem::remove(profile_path);
     }
 
-    // Update dropdown
     PopulateEffectProfileDropdown();
 
     QMessageBox::information(this, "Success",
@@ -539,6 +525,5 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
 
 void OpenRGB3DSpatialTab::on_effect_profile_changed(int)
 {
-    // Just update the auto-load config when selection changes
     SaveCurrentEffectProfileName();
 }

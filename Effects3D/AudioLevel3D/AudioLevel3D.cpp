@@ -35,7 +35,7 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Audio Level";
-    info.effect_description = "Scales brightness by audio RMS level";
+    info.effect_description = "Brightness follows overall volume (RMS)";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0; // Not used in new system
     info.is_reversible = false;

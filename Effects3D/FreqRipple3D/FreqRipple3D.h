@@ -18,7 +18,7 @@ class FreqRipple3D : public SpatialEffect3D
 public:
     explicit FreqRipple3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("FreqRipple3D", "Freq Ripple", "Audio", [](){ return new FreqRipple3D; })
+    EFFECT_REGISTERER_3D("FreqRipple3D", "Frequency Ripple", "Audio", [](){ return new FreqRipple3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

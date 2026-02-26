@@ -34,7 +34,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "3D Matrix";
-    info.effect_description = "Matrix-style code rain columns";
+    info.effect_description = "Matrix-style falling code columns";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_MATRIX;
     info.is_reversible = true;

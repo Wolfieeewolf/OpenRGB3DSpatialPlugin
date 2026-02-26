@@ -34,8 +34,8 @@ EffectInfo3D FreqFill3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Freq Fill";
-    info.effect_description = "Fills along an axis proportional to audio level (3D VU meter)";
+    info.effect_name = "Frequency Fill";
+    info.effect_description = "Fills room along an axis like a VU meter";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;

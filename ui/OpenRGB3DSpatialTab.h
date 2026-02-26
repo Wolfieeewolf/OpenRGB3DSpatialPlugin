@@ -41,7 +41,6 @@ class QStackedWidget;
 #include "EffectListManager3D.h"
 #include "EffectInstance3D.h"
 #include "StackPreset3D.h"
-// Effect headers are included in the .cpp for registration
 #include "ZoneManager3D.h"
 #include "FrequencyRangeEffect3D.h"
 
@@ -119,13 +118,11 @@ private slots:
     void on_apply_spacing_clicked();
     void UpdateEffectOriginCombo();
 
-    // Effect library slots
     void on_effect_library_category_changed(int index);
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
 
-    // Effect Stack slots
     void on_remove_effect_from_stack_clicked();
     void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
@@ -133,12 +130,10 @@ private slots:
     void on_stack_effect_zone_changed(int index);
     void on_stack_effect_blend_changed(int index);
 
-    // Stack Preset slots
     void on_save_stack_preset_clicked();
     void on_load_stack_preset_clicked();
     void on_delete_stack_preset_clicked();
 
-    // Device list update (called via QMetaObject::invokeMethod)
     void UpdateDeviceList();
 
 private:
@@ -155,7 +150,6 @@ private:
     void PopulateLayoutDropdown();
     void SaveCurrentLayoutName();
     
-    // Dirty flag system
     void SetLayoutDirty(bool dirty = true);
     void ClearLayoutDirty();
     bool IsLayoutDirty() const { return layout_dirty; }
@@ -195,7 +189,6 @@ private:
     void ApplyRotationComponent(int axis, double value);
     void RemoveWidgetFromParentLayout(QWidget* w);
 
-    // Effect Stack helpers
     void SetupEffectStackPanel(QVBoxLayout* parent_layout);
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
@@ -204,7 +197,6 @@ private:
     bool PrepareStackForPlayback();
     void SetControllersToCustomMode(bool& has_valid_controller);
 
-    // Stack Preset helpers
     void LoadStackPresets();
     void SaveStackPresets();
     void UpdateStackPresetsList();
@@ -215,12 +207,10 @@ private:
     void SetPluginSettingsNoSave(const nlohmann::json& settings);
     void RefreshEffectDisplay();
 
-    // Effect Stack persistence
     void SaveEffectStack();
     void LoadEffectStack();
     std::string GetEffectStackPath();
 
-    // Effect Profile helpers
     void SaveEffectProfile(const std::string& filename);
     void LoadEffectProfile(const std::string& filename);
     std::string GetEffectProfilePath(const std::string& profile_name);
@@ -228,7 +218,6 @@ private:
     void SaveCurrentEffectProfileName();
     void TryAutoLoadEffectProfile();
 
-    // Profiles tab setup
     void SetupProfilesTab(QTabWidget* tab_widget);
     void SetupAudioPanel(QVBoxLayout* parent_layout);
     void UpdateAudioPanelVisibility();
@@ -271,7 +260,6 @@ private:
     QSlider*                    rot_y_slider;
     QSlider*                    rot_z_slider;
 
-    // Effect Library
     QComboBox*                  effect_category_combo;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
@@ -295,7 +283,6 @@ private:
     QElapsedTimer               effect_elapsed;
     bool                        stack_settings_updating;
 
-    // Grid (custom dimensions)
     QSpinBox*                   grid_x_spin;
     QSpinBox*                   grid_y_spin;
     QSpinBox*                   grid_z_spin;
@@ -314,7 +301,6 @@ private:
     int                         custom_grid_z;
     float                       grid_scale_mm;
 
-    // Room dimensions (manual)
     QDoubleSpinBox*             room_width_spin;
     QDoubleSpinBox*             room_depth_spin;
     QDoubleSpinBox*             room_height_spin;
@@ -324,19 +310,16 @@ private:
     float                       manual_room_height;
     bool                        use_manual_room_size;
 
-    // LED spacing (add)
     QDoubleSpinBox*             led_spacing_x_spin;
     QDoubleSpinBox*             led_spacing_y_spin;
     QDoubleSpinBox*             led_spacing_z_spin;
     QComboBox*                  led_spacing_preset_combo;
 
-    // LED spacing (edit selected)
     QDoubleSpinBox*             edit_led_spacing_x_spin;
     QDoubleSpinBox*             edit_led_spacing_y_spin;
     QDoubleSpinBox*             edit_led_spacing_z_spin;
     QPushButton*                apply_spacing_button;
 
-    // Effect configuration
     QGroupBox*                  effect_config_group;
     QComboBox*                  effect_combo;
     QLabel*                     effect_zone_label;
@@ -345,7 +328,6 @@ private:
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
 
-    // Reference points
     QListWidget*                reference_points_list;
     QLabel*                     ref_points_empty_label;
     QLineEdit*                  ref_point_name_edit;
@@ -355,7 +337,6 @@ private:
     QPushButton*                remove_ref_point_button;
     RGBColor                    selected_ref_point_color;
 
-    // Zones
     QListWidget*                zones_list;
     QPushButton*                create_zone_button;
     QPushButton*                edit_zone_button;
@@ -367,24 +348,20 @@ private:
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
 
-    // Effect stack
     QListWidget*                effect_stack_list;
     QComboBox*                  stack_effect_type_combo;
     QComboBox*                  stack_effect_zone_combo;
     QComboBox*                  stack_effect_blend_combo;
     QWidget*                    stack_blend_container;
 
-    // Effect stack data
     std::vector<std::unique_ptr<EffectInstance3D>> effect_stack;
     int next_effect_instance_id;
 
-    // Stack presets
     QListWidget*                stack_presets_list;
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
     void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
-    // Audio tab
     QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
     QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
@@ -413,6 +390,7 @@ private:
     QSlider*        freq_high_slider = nullptr;
     QComboBox*      freq_effect_combo = nullptr;
     QComboBox*      freq_zone_combo = nullptr;
+    QComboBox*      freq_origin_combo = nullptr;
     QCheckBox*      freq_range_enabled_check = nullptr;
     
     QWidget*        freq_effect_settings_widget = nullptr;
@@ -431,6 +409,7 @@ private slots:
     void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
     void UpdateFrequencyRangesList();
     void PopulateFreqEffectCombo(QComboBox* combo);
+    void UpdateFreqOriginCombo();
     void UpdateFreqZoneCombo();
     void LoadFreqRangeDetails(FrequencyRangeEffect3D* range);
     void SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, const QString& class_name);
@@ -446,11 +425,11 @@ private slots:
     void on_freq_high_changed(int value);
     void on_freq_effect_changed(int index);
     void on_freq_zone_changed(int index);
+    void on_freq_origin_changed(int index);
     void on_freq_enabled_toggled(bool checked);
     void OnFreqRangeEffectParamsChanged();
-    void RenderFrequencyRangeEffects();
+    void RenderFrequencyRangeEffects(const GridContext3D& room_grid);
 
-    // Display plane management
     void on_display_plane_selected(int index);
     void on_add_display_plane_clicked();
     void on_remove_display_plane_clicked();
@@ -467,14 +446,10 @@ private slots:
 
     void on_monitor_preset_text_edited(const QString& text);
 private:
-    // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
-
-    // Dirty flag tracking
     bool layout_dirty = false;
     QPushButton* save_layout_btn = nullptr;
 
-    // Display planes
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     QListWidget*    display_planes_list = nullptr;
     QLabel*         display_planes_empty_label = nullptr;

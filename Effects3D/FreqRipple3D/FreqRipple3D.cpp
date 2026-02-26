@@ -18,8 +18,8 @@ EffectInfo3D FreqRipple3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Freq Ripple";
-    info.effect_description = "Beat-triggered shockwave that expands outward from origin";
+    info.effect_name = "Frequency Ripple";
+    info.effect_description = "Beat-triggered expanding ring from origin";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;

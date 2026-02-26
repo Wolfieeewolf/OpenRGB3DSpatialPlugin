@@ -14,25 +14,22 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_brightness = 100;
     effect_frequency = 1;
     effect_size = 50;
-    effect_scale = 200;  // Default to 200 (100% of room - whole room coverage)
+    effect_scale = 200;
     scale_inverted = false;
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
     boundary_prevalidated = false;
 
-    // Initialize rotation parameters (replaces axis/coverage)
-    effect_rotation_yaw = 0.0f;   // Default: no rotation
+    effect_rotation_yaw = 0.0f;
     effect_rotation_pitch = 0.0f;
     effect_rotation_roll = 0.0f;
 
-    // Initialize reference point parameters
     reference_mode = REF_MODE_ROOM_CENTER;
     global_reference_point = {0.0f, 0.0f, 0.0f};
     custom_reference_point = {0.0f, 0.0f, 0.0f};
     use_custom_reference = false;
 
-    // Initialize default colors
     colors.push_back(COLOR_RED);
     colors.push_back(COLOR_BLUE);
 
@@ -51,7 +48,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     scale_label = nullptr;
     fps_label = nullptr;
 
-    // Rotation controls
     rotation_yaw_slider = nullptr;
     rotation_pitch_slider = nullptr;
     rotation_roll_slider = nullptr;
@@ -60,7 +56,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     rotation_roll_label = nullptr;
     rotation_reset_button = nullptr;
 
-    // Color controls
     color_controls_group = nullptr;
     rainbow_mode_check = nullptr;
     color_buttons_widget = nullptr;
@@ -68,11 +63,9 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     add_color_button = nullptr;
     remove_color_button = nullptr;
 
-    // Effect control buttons
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 
-    // Shaping defaults
     intensity_slider = nullptr;
     intensity_label = nullptr;
     sharpness_slider = nullptr;
@@ -80,7 +73,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_intensity = 100;
     effect_sharpness = 100;
 
-    // Axis scale defaults
     scale_x_slider = nullptr;
     scale_x_label  = nullptr;
     scale_y_slider = nullptr;
@@ -116,7 +108,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         main_layout->addLayout(button_layout);
     }
 
-    // Speed control (logarithmic curve)
     QHBoxLayout* speed_layout = new QHBoxLayout();
     speed_layout->addWidget(new QLabel("Speed:"));
     speed_slider = new QSlider(Qt::Horizontal);
@@ -129,11 +120,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     speed_layout->addWidget(speed_label);
     main_layout->addLayout(speed_layout);
 
-    // Brightness control
     QHBoxLayout* brightness_layout = new QHBoxLayout();
     brightness_layout->addWidget(new QLabel("Brightness:"));
     brightness_slider = new QSlider(Qt::Horizontal);
-    // Keep brightness at 1..100 to avoid breaking existing math
     brightness_slider->setRange(1, 100);
     brightness_slider->setToolTip("Overall effect brightness (applied after intensity/sharpness)");
     brightness_slider->setValue(effect_brightness);
@@ -143,7 +132,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     brightness_layout->addWidget(brightness_label);
     main_layout->addLayout(brightness_layout);
 
-    // Frequency control
     QHBoxLayout* frequency_layout = new QHBoxLayout();
     frequency_layout->addWidget(new QLabel("Frequency:"));
     frequency_slider = new QSlider(Qt::Horizontal);
@@ -156,11 +144,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     frequency_layout->addWidget(frequency_label);
     main_layout->addLayout(frequency_layout);
 
-    // Size control (pattern density)
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
     size_slider = new QSlider(Qt::Horizontal);
-    // Expand size range for room-scale control
     size_slider->setRange(0, 200);
     size_slider->setValue(effect_size);
     size_slider->setToolTip("Pattern size - controls how tight/spread out the pattern is");
@@ -170,11 +156,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     size_layout->addWidget(size_label);
     main_layout->addLayout(size_layout);
 
-    // Scale control (area coverage)
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
-    // Keep scale wide: 0..250 (0..150% of room)
     scale_slider->setRange(0, 250);
     scale_slider->setValue(effect_scale);
     scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=whole room), 201-250 = 101-150% (beyond room)");
@@ -188,7 +172,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_layout->addWidget(scale_invert_check);
     main_layout->addLayout(scale_layout);
 
-    // FPS limiter
     QHBoxLayout* fps_layout = new QHBoxLayout();
     fps_layout->addWidget(new QLabel("FPS:"));
     fps_slider = new QSlider(Qt::Horizontal);
@@ -201,7 +184,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_layout->addWidget(fps_label);
     main_layout->addLayout(fps_layout);
 
-    // Intensity (global multiplier)
     QHBoxLayout* intensity_layout = new QHBoxLayout();
     intensity_layout->addWidget(new QLabel("Intensity:"));
     intensity_slider = new QSlider(Qt::Horizontal);
@@ -214,7 +196,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     intensity_layout->addWidget(intensity_label);
     main_layout->addLayout(intensity_layout);
 
-    // Sharpness (gamma-like shaping)
     QHBoxLayout* sharpness_layout = new QHBoxLayout();
     sharpness_layout->addWidget(new QLabel("Sharpness:"));
     sharpness_slider = new QSlider(Qt::Horizontal);
@@ -227,7 +208,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
 
-    // Axis Scale group (per-axis stretch/squash independent of global scale)
     QGroupBox* axis_scale_group = new QGroupBox("Axis Scale");
     QVBoxLayout* axis_scale_layout = new QVBoxLayout();
 
@@ -270,11 +250,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_group->setLayout(axis_scale_layout);
     main_layout->addWidget(axis_scale_group);
 
-    // 3D Rotation controls (replaces axis/coverage)
     QGroupBox* rotation_group = new QGroupBox("3D Rotation (around Origin)");
     QVBoxLayout* rotation_layout = new QVBoxLayout();
     
-    // Yaw (horizontal rotation around Y axis)
     QHBoxLayout* yaw_layout = new QHBoxLayout();
     yaw_layout->addWidget(new QLabel("Yaw (Horizontal):"));
     rotation_yaw_slider = new QSlider(Qt::Horizontal);
@@ -287,7 +265,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     yaw_layout->addWidget(rotation_yaw_label);
     rotation_layout->addLayout(yaw_layout);
     
-    // Pitch (vertical rotation around X axis)
     QHBoxLayout* pitch_layout = new QHBoxLayout();
     pitch_layout->addWidget(new QLabel("Pitch (Vertical):"));
     rotation_pitch_slider = new QSlider(Qt::Horizontal);
@@ -300,7 +277,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     pitch_layout->addWidget(rotation_pitch_label);
     rotation_layout->addLayout(pitch_layout);
     
-    // Roll (twist rotation around Z axis)
     QHBoxLayout* roll_layout = new QHBoxLayout();
     roll_layout->addWidget(new QLabel("Roll (Twist):"));
     rotation_roll_slider = new QSlider(Qt::Horizontal);
@@ -313,7 +289,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     roll_layout->addWidget(rotation_roll_label);
     rotation_layout->addLayout(roll_layout);
     
-    // Reset button
     rotation_reset_button = new QPushButton("Reset Rotation");
     rotation_reset_button->setToolTip("Reset all rotations to 0°");
     rotation_layout->addWidget(rotation_reset_button);
@@ -321,13 +296,11 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_group->setLayout(rotation_layout);
     main_layout->addWidget(rotation_group);
 
-    // Color controls
     CreateColorControls();
     main_layout->addWidget(color_controls_group);
 
     effect_controls_group->setLayout(main_layout);
 
-    // Connect signals
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -348,13 +321,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(scale_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_z_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
 
-    // Effect control buttons - NOT connected here!
-    // The parent tab needs to connect these to its on_start_effect_clicked/on_stop_effect_clicked handlers
-    // to actually start the effect timer
-
     ApplyControlVisibility();
 
-    // Update rotation labels when sliders change
     connect(rotation_yaw_slider, &QSlider::valueChanged, rotation_yaw_label, [this](int value) {
         rotation_yaw_label->setText(QString::number(value) + "°");
         effect_rotation_yaw = (float)value;
@@ -437,6 +405,19 @@ void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridCon
     }
 }
 
+void SpatialEffect3D::ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const
+{
+    if(effect_rotation_yaw == 0.0f && effect_rotation_pitch == 0.0f && effect_rotation_roll == 0.0f)
+    {
+        return;
+    }
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rotated = TransformPointByRotation(x, y, z, origin);
+    x = rotated.x;
+    y = rotated.y;
+    z = rotated.z;
+}
+
 void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
 {
     if(w && container && container->layout())
@@ -459,7 +440,6 @@ void SpatialEffect3D::CreateColorControls()
     color_buttons_layout = new QHBoxLayout();
     color_buttons_widget->setLayout(color_buttons_layout);
 
-    // Create initial color buttons
     for(unsigned int i = 0; i < colors.size(); i++)
     {
         CreateColorButton(colors[i]);
@@ -483,7 +463,6 @@ void SpatialEffect3D::CreateColorControls()
     color_layout->addWidget(color_buttons_widget);
     color_controls_group->setLayout(color_layout);
 
-    // Hide color buttons when rainbow mode is enabled
     color_buttons_widget->setVisible(!rainbow_mode);
 
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnRainbowModeChanged);
@@ -506,7 +485,6 @@ void SpatialEffect3D::CreateColorButton(RGBColor color)
 
     color_buttons.push_back(color_button);
 
-    // Insert before the add/remove buttons
     int insert_pos = color_buttons_layout->count() - 3; // Before +, -, and stretch
     if(insert_pos < 0) insert_pos = 0;
     color_buttons_layout->insertWidget(insert_pos, color_button);
@@ -525,7 +503,6 @@ void SpatialEffect3D::RemoveLastColorButton()
 
 RGBColor SpatialEffect3D::GetRainbowColor(float hue)
 {
-    // Convert HSV to RGB (Hue: 0-360, Saturation: 1.0, Value: 1.0)
     hue = std::fmod(hue, 360.0f);
     if(hue < 0) hue += 360.0f;
 
@@ -540,7 +517,7 @@ RGBColor SpatialEffect3D::GetRainbowColor(float hue)
     else if(hue < 300) { r = x; g = 0; b = c; }
     else { r = c; g = 0; b = x; }
 
-    // OpenRGB uses BGR format: 0x00BBGGRR
+    /* OpenRGB BGR: 0x00BBGGRR */
     return ((int)(b * 255) << 16) | ((int)(g * 255) << 8) | (int)(r * 255);
 }
 
@@ -561,7 +538,6 @@ RGBColor SpatialEffect3D::GetColorAtPosition(float position)
         return colors[0];
     }
 
-    // Interpolate between colors
     float scaled_pos = position * (colors.size() - 1);
     int index = (int)scaled_pos;
     float frac = scaled_pos - index;
@@ -574,7 +550,6 @@ RGBColor SpatialEffect3D::GetColorAtPosition(float position)
     RGBColor color1 = colors[index];
     RGBColor color2 = colors[index + 1];
 
-    // Linear interpolation - OpenRGB uses BGR format: 0x00BBGGRR
     int b1 = (color1 >> 16) & 0xFF;
     int g1 = (color1 >> 8) & 0xFF;
     int r1 = color1 & 0xFF;
@@ -587,7 +562,6 @@ RGBColor SpatialEffect3D::GetColorAtPosition(float position)
     int g = (int)(g1 + (g2 - g1) * frac);
     int b = (int)(b1 + (b2 - b1) * frac);
 
-    // Return in BGR format
     return (b << 16) | (g << 8) | r;
 }
 
@@ -600,7 +574,6 @@ void SpatialEffect3D::OnRainbowModeChanged()
 
 void SpatialEffect3D::OnAddColorClicked()
 {
-    // Add a new random color
     RGBColor new_color = GetRainbowColor(colors.size() * 60.0f); // Space colors around hue wheel
     colors.push_back(new_color);
     CreateColorButton(new_color);
@@ -625,14 +598,12 @@ void SpatialEffect3D::OnColorButtonClicked()
     QPushButton* clicked_button = qobject_cast<QPushButton*>(sender());
     if(!clicked_button) return;
 
-    // Find which color button was clicked
     std::vector<QPushButton*>::iterator it = std::find(color_buttons.begin(), color_buttons.end(), clicked_button);
     if(it == color_buttons.end()) return;
 
     int index = std::distance(color_buttons.begin(), it);
     if(index >= (int)colors.size()) return;
 
-    // Open color dialog
     QColorDialog color_dialog;
     QColor current_color = QColor((colors[index] >> 16) & 0xFF,
                                  (colors[index] >> 8) & 0xFF,
@@ -644,7 +615,6 @@ void SpatialEffect3D::OnColorButtonClicked()
         QColor new_color = color_dialog.currentColor();
         colors[index] = (new_color.red() << 16) | (new_color.green() << 8) | new_color.blue();
 
-        // Update button color
         clicked_button->setStyleSheet(QString("background-color: rgb(%1, %2, %3); border: 1px solid #333;")
                                     .arg(new_color.red())
                                     .arg(new_color.green())
@@ -776,37 +746,29 @@ Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
             return custom_reference_point;
         case REF_MODE_ROOM_CENTER:
         default:
-            // Return actual room center from grid context
             return {grid.center_x, grid.center_y, grid.center_z};
     }
 }
 
 float SpatialEffect3D::GetNormalizedSpeed() const
 {
-    // Expanded slider range 0..200 -> map to 0..1 and square for smooth curve
     float normalized = effect_speed / 200.0f;
     return normalized * normalized;
 }
 
 float SpatialEffect3D::GetNormalizedFrequency() const
 {
-    // Expanded slider range 0..200 -> map to 0..1 and square for smooth curve
     float normalized = effect_frequency / 200.0f;
     return normalized * normalized;
 }
 
 float SpatialEffect3D::GetNormalizedSize() const
 {
-    // Expanded size semantics: 0..200 -> 0.0 .. 3.0
-    // At ~70, this yields ~1.05 (near full for many effects); at 100 ~1.5; at 200 ~3.0
     return (effect_size / 200.0f) * 3.0f;
 }
 
 float SpatialEffect3D::GetNormalizedScale() const
 {
-    // New scale mapping: 0-250 slider range
-    // 0-200: Maps to 0-100% of room (each 2 units = 1%)
-    // 201-250: Maps to 101-150% beyond room (each unit = 1%)
     float normalized;
 
     if(effect_scale <= 200)
@@ -860,11 +822,6 @@ float SpatialEffect3D::CalculateProgress(float time) const
 
 RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
 {
-    // Intensity, brightness, gamma// Non-linear intensity curve: 80-90% slider = bright, 90-100% = overkill
-    // Uses power curve: intensity^0.7 * 1.7 gives us:
-    // - 80% (160) = ~1.36x (bright)
-    // - 90% (180) = ~1.47x (bright)
-    // - 100% (200) = ~1.7x (overkill for dialing in)
     float intensity_normalized = effect_intensity / 200.0f;
     float intensity_mul = std::pow(intensity_normalized, 0.7f) * 1.7f;
     float brightness_mul = effect_brightness / 100.0f;
@@ -882,37 +839,31 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
 
 Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, const Vector3D& origin) const
 {
-    // Translate to origin
     float tx = x - origin.x;
     float ty = y - origin.y;
     float tz = z - origin.z;
     
-    // Apply rotations (order: Yaw -> Pitch -> Roll)
-    // Yaw (rotation around Y axis - horizontal)
     float yaw_rad = effect_rotation_yaw * 3.14159265359f / 180.0f;
     float cos_yaw = cosf(yaw_rad);
     float sin_yaw = sinf(yaw_rad);
     float nx = tx * cos_yaw - tz * sin_yaw;
     float nz = tx * sin_yaw + tz * cos_yaw;
-    float ny = ty; // Y unchanged by yaw
-    
-    // Pitch (rotation around X axis - vertical)
+    float ny = ty;
+
     float pitch_rad = effect_rotation_pitch * 3.14159265359f / 180.0f;
     float cos_pitch = cosf(pitch_rad);
     float sin_pitch = sinf(pitch_rad);
     float py = ny * cos_pitch - nz * sin_pitch;
     float pz = ny * sin_pitch + nz * cos_pitch;
-    float px = nx; // X unchanged by pitch
-    
-    // Roll (rotation around Z axis - twist)
+    float px = nx;
+
     float roll_rad = effect_rotation_roll * 3.14159265359f / 180.0f;
     float cos_roll = cosf(roll_rad);
     float sin_roll = sinf(roll_rad);
     float fx = px * cos_roll - py * sin_roll;
     float fy = px * sin_roll + py * cos_roll;
-    float fz = pz; // Z unchanged by roll
-    
-    // Translate back
+    float fz = pz;
+
     return {fx + origin.x, fy + origin.y, fz + origin.z};
 }
 
@@ -922,8 +873,6 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     {
         return true;
     }
-    // Fixed-radius boundary when grid context is not available
-    // Scale slider: 10 (10%) = 1mm radius, 100 (100%) = 10mm, 200 (200%) = 20mm
     float scale_radius = GetNormalizedScale() * 10.0f;
     float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     return distance_from_origin <= scale_radius;
@@ -931,8 +880,6 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    // Calculate room's half-diagonal (center to corner distance)
-    // This is the maximum distance from room center to any corner
     float half_width = grid.width / 2.0f;
     float half_depth = grid.depth / 2.0f;
     float half_height = grid.height / 2.0f;
@@ -949,7 +896,6 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
 
 void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
 {
-    // Empty implementation
 }
 
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
@@ -985,9 +931,6 @@ void SpatialEffect3D::ApplyControlVisibility()
 {
     EffectInfo3D info = GetEffectInfo();
 
-    // Check version to determine if effect uses new visibility system
-    // Version 2+ effects explicitly set visibility flags
-    // Version 0/1 (old) effects default to showing all controls
     bool is_versioned_effect = (info.info_version >= 2);
 
     bool show_speed = is_versioned_effect ? info.show_speed_control : true;
@@ -998,16 +941,12 @@ void SpatialEffect3D::ApplyControlVisibility()
     bool show_fps = is_versioned_effect ? info.show_fps_control : true;
     bool show_colors = is_versioned_effect ? info.show_color_controls : true;
 
-    // Hide/show controls based on effect's declarations
     SetControlGroupVisibility(speed_slider, speed_label, "Speed:", show_speed);
     SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", show_brightness);
     SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", show_frequency);
     SetControlGroupVisibility(size_slider, size_label, "Size:", show_size);
     SetControlGroupVisibility(scale_slider, scale_label, "Scale:", show_scale);
     SetControlGroupVisibility(fps_slider, fps_label, "FPS:", show_fps);
-
-    // Rotation controls are always visible (replaces axis/coverage)
-    // Effects can override if they don't need rotation
 
     if(color_controls_group)
     {
@@ -1017,7 +956,6 @@ void SpatialEffect3D::ApplyControlVisibility()
 
 void SpatialEffect3D::OnParameterChanged()
 {
-    // Use linear speed mapping - effects handle their own speed curves
     if(speed_slider)
     {
         effect_speed = speed_slider->value();
@@ -1135,7 +1073,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
 {
     nlohmann::json j;
 
-    // Save common parameters
     j["speed"] = effect_speed;
     j["brightness"] = effect_brightness;
     j["frequency"] = effect_frequency;
@@ -1152,7 +1089,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rotation_pitch"] = effect_rotation_pitch;
     j["rotation_roll"] = effect_rotation_roll;
 
-    // Save colors
     nlohmann::json colors_array = nlohmann::json::array();
     for(size_t i = 0; i < colors.size(); i++)
     {
@@ -1165,7 +1101,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     }
     j["colors"] = colors_array;
 
-    // Save reference point settings
     j["reference_mode"] = (int)reference_mode;
     j["global_ref_x"] = global_reference_point.x;
     j["global_ref_y"] = global_reference_point.y;
@@ -1180,7 +1115,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
 
 void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 {
-    // Load common parameters
     if(settings.contains("speed"))
         SetSpeed(settings["speed"].get<unsigned int>());
 
@@ -1218,7 +1152,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     else
         effect_rotation_roll = 0.0f;
     
-    // Update UI sliders if they exist
     if(rotation_yaw_slider)
     {
         rotation_yaw_slider->setValue((int)effect_rotation_yaw);
@@ -1239,7 +1172,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         scale_inverted = settings["scale_inverted"].get<bool>();
 
 
-    // Load colors
     if(settings.contains("colors"))
     {
         std::vector<RGBColor> loaded_colors;
@@ -1255,7 +1187,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         SetColors(loaded_colors);
     }
 
-    // Load reference point settings
     if(settings.contains("reference_mode"))
         SetReferenceMode((ReferenceMode)settings["reference_mode"].get<int>());
 
@@ -1280,7 +1211,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("use_custom_ref"))
         SetUseCustomReference(settings["use_custom_ref"].get<bool>());
 
-    // Update UI controls if they exist (block signals to avoid re-entry)
     if(speed_slider)
     {
         QSignalBlocker blocker(speed_slider);

@@ -18,7 +18,7 @@ public:
     ~BandScan3D() override = default;
 
     // Auto-registration hook
-    EFFECT_REGISTERER_3D("BandScan3D", "Band Scan 3D", "Audio", [](){ return new BandScan3D; })
+    EFFECT_REGISTERER_3D("BandScan3D", "Band Scan", "Audio", [](){ return new BandScan3D; })
 
     static std::string const ClassName() { return "BandScan3D"; }
     static std::string const UIName() { return "Band Scan 3D"; }

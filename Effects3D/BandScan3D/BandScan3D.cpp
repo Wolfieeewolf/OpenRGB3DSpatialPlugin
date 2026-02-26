@@ -37,7 +37,7 @@ EffectInfo3D BandScan3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Band Scan";
-    info.effect_description = "Moves a spectrum band highlight across the axis";
+    info.effect_description = "Single moving band of spectrum energy across the room";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;

@@ -1138,7 +1138,7 @@ EffectInfo3D ScreenMirror3D::GetEffectInfo()
     EffectInfo3D info           = {};
     info.info_version           = 2;
     info.effect_name            = "Screen Mirror 3D";
-    info.effect_description     = "Projects screen content onto LEDs using 3D spatial mapping";
+    info.effect_description     = "Maps screen content onto LEDs in 3D space";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_WAVE;
     info.is_reversible          = false;

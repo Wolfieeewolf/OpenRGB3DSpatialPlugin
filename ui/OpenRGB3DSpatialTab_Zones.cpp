@@ -360,8 +360,4 @@ void OpenRGB3DSpatialTab::SaveZones()
 
 void OpenRGB3DSpatialTab::LoadZones()
 {
-    // Zones are automatically loaded as part of the layout JSON
-    // when LoadLayout() is called. This function is kept for
-    // future standalone load functionality if needed.
-    
 }

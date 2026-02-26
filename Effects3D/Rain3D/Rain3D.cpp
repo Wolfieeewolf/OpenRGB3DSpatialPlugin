@@ -28,7 +28,7 @@ EffectInfo3D Rain3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "3D Rain";
-    info.effect_description = "Volumetric rain with wind drift";
+    info.effect_description = "Falling rain with wind drift";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_RAIN;
     info.is_reversible = false;

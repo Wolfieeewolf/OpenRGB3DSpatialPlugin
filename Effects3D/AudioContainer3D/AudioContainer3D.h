@@ -6,11 +6,7 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 
-/*
- * AudioContainer3D - placeholder effect that activates the audio render pipeline.
- * Individual audio effects are configured per frequency range in the Audio panel.
- * This effect renders nothing itself; it just keeps the effect stack timer running.
- */
+/* Placeholder effect: enables audio pipeline; per-range effects are configured in the Audio panel. */
 class AudioContainer3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -22,15 +18,18 @@ public:
 
     EffectInfo3D GetEffectInfo() override
     {
-        EffectInfo3D info;
-        info.info_version         = 2;
-        info.show_speed_control   = false;
+        EffectInfo3D info{};
+        info.info_version            = 2;
+        info.effect_name             = "Audio Effect";
+        info.effect_description      = "Activates the audio rendering pipeline for per-range effects";
+        info.category                = "Audio";
+        info.show_speed_control      = false;
         info.show_brightness_control = false;
-        info.show_frequency_control = false;
-        info.show_size_control    = false;
-        info.show_scale_control   = false;
-        info.show_fps_control     = false;
-        info.show_color_controls  = false;
+        info.show_frequency_control  = false;
+        info.show_size_control       = false;
+        info.show_scale_control      = false;
+        info.show_fps_control        = false;
+        info.show_color_controls     = false;
         return info;
     }
 

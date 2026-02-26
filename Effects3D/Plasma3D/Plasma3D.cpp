@@ -37,7 +37,7 @@ EffectInfo3D Plasma3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Plasma";
-    info.effect_description = "Animated plasma effect with configurable patterns and complexity";
+    info.effect_description = "Animated plasma clouds with configurable pattern and speed";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_PLASMA;
     info.is_reversible = false;

@@ -28,6 +28,7 @@ struct FrequencyRangeEffect3D
     
     std::string                         effect_class_name;
     int                                 zone_index          = -1;
+    int                                 origin_ref_index    = -1;  // -1 = room center, >=0 = reference point index
     
     Vector3D                            position            = {0.0f, 0.0f, 0.0f};
     Vector3D                            rotation            = {0.0f, 0.0f, 0.0f};
@@ -54,6 +55,7 @@ struct FrequencyRangeEffect3D
         j["high_hz"] = high_hz;
         j["effect_class_name"] = effect_class_name;
         j["zone_index"] = zone_index;
+        j["origin_ref_index"] = origin_ref_index;
         j["position"] = {position.x, position.y, position.z};
         j["rotation"] = {rotation.x, rotation.y, rotation.z};
         j["scale"] = {scale.x, scale.y, scale.z};
@@ -74,6 +76,7 @@ struct FrequencyRangeEffect3D
         if(j.contains("high_hz")) high_hz = j["high_hz"].get<float>();
         if(j.contains("effect_class_name")) effect_class_name = j["effect_class_name"].get<std::string>();
         if(j.contains("zone_index")) zone_index = j["zone_index"].get<int>();
+        if(j.contains("origin_ref_index")) origin_ref_index = j["origin_ref_index"].get<int>();
         
         if(j.contains("position") && j["position"].is_array() && j["position"].size() == 3)
         {

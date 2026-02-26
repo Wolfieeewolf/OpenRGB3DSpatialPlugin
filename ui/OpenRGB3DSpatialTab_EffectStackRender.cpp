@@ -79,7 +79,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     
 
-    // effect_time is advanced in on_effect_timer_timeout()
 
     ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
                                                               manual_room_width,
@@ -503,7 +502,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     // Render frequency range effects (additive blend on top of effect stack)
-    RenderFrequencyRangeEffects();
+    RenderFrequencyRangeEffects(room_grid);
     
     if(viewport)
     {

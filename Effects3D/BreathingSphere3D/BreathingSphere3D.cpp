@@ -36,7 +36,7 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Breathing Sphere";
-    info.effect_description = "Pulsing sphere effect with rainbow and custom colors";
+    info.effect_description = "Pulsing sphere with rainbow or custom colors";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_BREATHING_SPHERE;
     info.is_reversible = false;
@@ -56,11 +56,11 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls)
+    // Control visibility (custom "Size" slider used instead of base)
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = true;
-    info.show_size_control = true;
+    info.show_size_control = false;
     info.show_scale_control = true;
     info.show_fps_control = true;
     // Rotation controls are in base class

@@ -18,7 +18,7 @@ class FreqFill3D : public SpatialEffect3D
 public:
     explicit FreqFill3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("FreqFill3D", "Freq Fill", "Audio", [](){ return new FreqFill3D; })
+    EFFECT_REGISTERER_3D("FreqFill3D", "Frequency Fill", "Audio", [](){ return new FreqFill3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

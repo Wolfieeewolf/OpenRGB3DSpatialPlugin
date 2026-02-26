@@ -25,8 +25,8 @@ EffectInfo3D Lightning3D::GetEffectInfo()
 {
     EffectInfo3D info;
     info.info_version = 2;
-    info.effect_name = "3D Plasma Ball";
-    info.effect_description = "Plasma ball with electrical arches emanating from origin";
+    info.effect_name = "Lightning";
+    info.effect_description = "Electric arcs and plasma from origin";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_LIGHTNING;
     info.is_reversible = false;

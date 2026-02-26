@@ -31,7 +31,7 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Explosion";
-    info.effect_description = "Expanding shockwave explosion with multiple wave layers";
+    info.effect_description = "Expanding shockwave from origin";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_EXPLOSION;
     info.is_reversible = false;

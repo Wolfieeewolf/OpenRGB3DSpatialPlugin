@@ -42,7 +42,7 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Spiral";
-    info.effect_description = "Animated spiral pattern with configurable arm count";
+    info.effect_description = "Spiral pattern with configurable arms and gap";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;

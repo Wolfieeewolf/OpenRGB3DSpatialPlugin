@@ -39,7 +39,7 @@ EffectInfo3D BeatPulse3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Beat Pulse";
-    info.effect_description = "Global brightness pulses with bass";
+    info.effect_description = "Whole-room brightness pulses synced to bass";
     info.category = "Audio";
     info.is_reversible = false;
     info.supports_random = false;

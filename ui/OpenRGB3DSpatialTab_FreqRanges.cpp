@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
+#include "VirtualReferencePoint3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include <nlohmann/json.hpp>
@@ -129,7 +130,15 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
             this, &OpenRGB3DSpatialTab::on_freq_zone_changed);
     zone_row->addWidget(freq_zone_combo, 1);
     details_layout->addLayout(zone_row);
-    
+
+    QHBoxLayout* origin_row = new QHBoxLayout();
+    origin_row->addWidget(new QLabel("Origin:"));
+    freq_origin_combo = new QComboBox();
+    UpdateFreqOriginCombo();
+    connect(freq_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_freq_origin_changed);
+    origin_row->addWidget(freq_origin_combo, 1);
+    details_layout->addLayout(origin_row);
     
     freq_effect_settings_widget = new QWidget();
     freq_effect_settings_layout = new QVBoxLayout(freq_effect_settings_widget);
@@ -172,6 +181,27 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
         int row = combo->count() - 1;
         combo->setItemData(row, QString::fromStdString(reg.class_name), kEffectRoleClassName);
     }
+}
+
+void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
+{
+    if(!freq_origin_combo) return;
+
+    freq_origin_combo->blockSignals(true);
+    freq_origin_combo->clear();
+
+    freq_origin_combo->addItem("Room Center", QVariant(-1));
+
+    for(size_t i = 0; i < reference_points.size(); i++)
+    {
+        VirtualReferencePoint3D* ref_point = reference_points[i].get();
+        if(!ref_point) continue;
+        QString name = QString::fromStdString(ref_point->GetName());
+        QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
+        freq_origin_combo->addItem(QString("%1 (%2)").arg(name).arg(type), QVariant((int)i));
+    }
+
+    freq_origin_combo->blockSignals(false);
 }
 
 void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
@@ -396,6 +426,14 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         if(zone_idx >= 0) freq_zone_combo->setCurrentIndex(zone_idx);
         freq_zone_combo->blockSignals(false);
     }
+
+    if(freq_origin_combo)
+    {
+        freq_origin_combo->blockSignals(true);
+        int origin_idx = freq_origin_combo->findData(QVariant(range->origin_ref_index));
+        if(origin_idx >= 0) freq_origin_combo->setCurrentIndex(origin_idx);
+        freq_origin_combo->blockSignals(false);
+    }
     
 }
 
@@ -448,6 +486,10 @@ void OpenRGB3DSpatialTab::on_freq_effect_changed(int index)
     
     QString class_name = freq_effect_combo->itemData(index, kEffectRoleClassName).toString();
     range->effect_class_name = class_name.toStdString();
+
+    // Destroy the running instance so the new effect type takes effect immediately
+    range->effect_instance.reset();
+    range->effect_settings = nlohmann::json();
     
     SetupFreqRangeEffectUI(range, class_name);
     
@@ -466,6 +508,22 @@ void OpenRGB3DSpatialTab::on_freq_zone_changed(int index)
     if(data.isValid())
     {
         range->zone_index = data.toInt();
+        SaveFrequencyRanges();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_freq_origin_changed(int index)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range || !freq_origin_combo) return;
+
+    QVariant data = freq_origin_combo->itemData(index);
+    if(data.isValid())
+    {
+        range->origin_ref_index = data.toInt();
         SaveFrequencyRanges();
     }
 }
@@ -542,10 +600,17 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
         freq_effect_settings_widget->hide();
         return;
     }
-    
-    effect->setParent(freq_effect_settings_widget);
-    effect->CreateCommonEffectControls(freq_effect_settings_widget, false);
-    effect->SetupCustomUI(freq_effect_settings_widget);
+
+    QWidget* ui_wrapper = new QWidget(freq_effect_settings_widget);
+    QVBoxLayout* wrapper_layout = new QVBoxLayout(ui_wrapper);
+    wrapper_layout->setContentsMargins(0, 0, 0, 0);
+    wrapper_layout->setSpacing(4);
+
+    effect->setParent(ui_wrapper);
+    effect->CreateCommonEffectControls(ui_wrapper, false);
+    effect->SetupCustomUI(ui_wrapper);
+
+    freq_effect_settings_layout->addWidget(ui_wrapper);
 
     if(!range->effect_settings.is_null())
     {
@@ -562,6 +627,12 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
 
 void OpenRGB3DSpatialTab::ClearFreqRangeEffectUI()
 {
+    if(current_freq_effect_ui)
+    {
+        disconnect(current_freq_effect_ui, nullptr, this, nullptr);
+        current_freq_effect_ui = nullptr;
+    }
+
     if(!freq_effect_settings_layout) return;
 
     while(QLayoutItem* item = freq_effect_settings_layout->takeAt(0))
@@ -569,12 +640,11 @@ void OpenRGB3DSpatialTab::ClearFreqRangeEffectUI()
         if(QWidget* widget = item->widget())
         {
             widget->hide();
-            widget->deleteLater();
+            widget->setParent(nullptr);
+            delete widget;
         }
         delete item;
     }
-
-    current_freq_effect_ui = nullptr;
 }
 
 void OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged()
@@ -590,7 +660,7 @@ void OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged()
     SaveFrequencyRanges();
 }
 
-void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
+void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_grid)
 {
     if(!AudioInputManager::instance()->isRunning()) return;
     if(controller_transforms.empty()) return;
@@ -630,10 +700,6 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
             {
                 effect->LoadSettings(range->effect_settings);
             }
-
-            effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
-            Vector3D room_center = {0.0f, 0.0f, 0.0f};
-            effect->SetCustomReferencePoint(room_center);
         }
         
         SpatialEffect3D* effect = range->effect_instance.get();
@@ -643,6 +709,20 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
         audio_params["audio_level"] = effect_level;
         audio_params["frequency_band_energy"] = raw_level;
         effect->LoadSettings(audio_params);
+
+        if(range->origin_ref_index >= 0 && range->origin_ref_index < (int)reference_points.size())
+        {
+            VirtualReferencePoint3D* ref_pt = reference_points[range->origin_ref_index].get();
+            if(ref_pt)
+            {
+                effect->SetReferenceMode(REF_MODE_CUSTOM_POINT);
+                effect->SetCustomReferencePoint(ref_pt->GetPosition());
+            }
+        }
+        else
+        {
+            effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
+        }
         
         for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
         {
@@ -684,11 +764,10 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
                     if(!mapping.controller) continue;
                     
                     Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    Vector3D relative_pos;
-                    relative_pos.x = (world_pos.x - range->position.x) / range->scale.x;
-                    relative_pos.y = (world_pos.y - range->position.y) / range->scale.y;
-                    relative_pos.z = (world_pos.z - range->position.z) / range->scale.z;
-                    RGBColor color = effect->CalculateColor(relative_pos.x, relative_pos.y, relative_pos.z, effect_time);
+                    float x = world_pos.x, y = world_pos.y, z = world_pos.z;
+                    effect->ApplyAxisScale(x, y, z, room_grid);
+                    effect->ApplyEffectRotation(x, y, z, room_grid);
+                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
                     unsigned int physical_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
                     if(physical_led_idx < mapping.controller->colors.size())
                     {
@@ -708,11 +787,10 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects()
                 for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
                 {
                     Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    Vector3D relative_pos;
-                    relative_pos.x = (world_pos.x - range->position.x) / range->scale.x;
-                    relative_pos.y = (world_pos.y - range->position.y) / range->scale.y;
-                    relative_pos.z = (world_pos.z - range->position.z) / range->scale.z;
-                    RGBColor color = effect->CalculateColor(relative_pos.x, relative_pos.y, relative_pos.z, effect_time);
+                    float x = world_pos.x, y = world_pos.y, z = world_pos.z;
+                    effect->ApplyAxisScale(x, y, z, room_grid);
+                    effect->ApplyEffectRotation(x, y, z, room_grid);
+                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
                     unsigned int physical_led_idx = ctrl->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
                     if(physical_led_idx < ctrl->colors.size())

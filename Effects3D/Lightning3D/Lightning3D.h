@@ -14,7 +14,7 @@ public:
     explicit Lightning3D(QWidget* parent = nullptr);
     ~Lightning3D();
 
-    EFFECT_REGISTERER_3D("Lightning3D", "3D Lightning", "3D Spatial", [](){return new Lightning3D;});
+    EFFECT_REGISTERER_3D("Lightning3D", "Lightning", "3D Spatial", [](){return new Lightning3D;});
 
     static std::string const ClassName() { return "Lightning3D"; }
     static std::string const UIName() { return "3D Lightning"; }

@@ -17,7 +17,7 @@ public:
     ~BeatPulse3D() override = default;
 
     // Auto-registration hook
-    EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse 3D", "Audio", [](){ return new BeatPulse3D; })
+    EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse", "Audio", [](){ return new BeatPulse3D; })
 
     static std::string const ClassName() { return "BeatPulse3D"; }
     static std::string const UIName() { return "Beat Pulse 3D"; }

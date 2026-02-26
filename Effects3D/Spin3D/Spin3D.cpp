@@ -37,7 +37,7 @@ EffectInfo3D Spin3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Spin";
-    info.effect_description = "Rotating patterns on room surfaces with multiple arm configurations";
+    info.effect_description = "Rotating pattern with configurable arms";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_WAVE;  // Reuse WAVE type for now
     info.is_reversible = true;

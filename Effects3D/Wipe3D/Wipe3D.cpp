@@ -32,7 +32,7 @@ EffectInfo3D Wipe3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;  // Using new standardized system
     info.effect_name = "3D Wipe";
-    info.effect_description = "Progressive sweep effect with configurable thickness and edge shapes";
+    info.effect_description = "Progressive sweep with configurable thickness and edge";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_WIPE;
     info.is_reversible = true;

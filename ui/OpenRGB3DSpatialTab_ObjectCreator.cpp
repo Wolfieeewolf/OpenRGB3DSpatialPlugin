@@ -376,7 +376,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
     current_display_plane_index = -1;
     if(viewport) viewport->SelectDisplayPlane(-1);
 
-    // index may be list row (from controller_list) or transform index (from viewport)
     int transform_index = index;
     if(controller_list && index >= 0 && index < controller_list->count())
     {

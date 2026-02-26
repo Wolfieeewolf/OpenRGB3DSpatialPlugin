@@ -187,6 +187,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     // Initialize zone and effect combos
     UpdateEffectZoneCombo();        // Initialize Effects tab zone dropdown
     UpdateEffectOriginCombo();      // Initialize Effects tab origin dropdown
+    UpdateFreqOriginCombo();        // Initialize frequency range origin dropdown
 
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
@@ -1566,8 +1567,6 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         {
             continue;
         }
-        // Individual audio effects are configured per frequency range, not added directly
-        // to the stack. Only the AudioContainer3D placeholder appears in the library.
         if(category.compare("Audio", Qt::CaseInsensitive) == 0 &&
            effects[i].class_name != "AudioContainer3D")
         {
@@ -1914,10 +1913,11 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     QLayoutItem* item;
     while((item = effect_controls_layout->takeAt(0)) != nullptr)
     {
-        if(item->widget())
+        if(QWidget* w = item->widget())
         {
-            item->widget()->hide();
-            item->widget()->deleteLater();
+            w->hide();
+            w->setParent(nullptr);
+            delete w;
         }
         delete item;
     }

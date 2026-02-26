@@ -96,7 +96,7 @@ EffectInfo3D BouncingBall3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "3D Bouncing Ball";
-    info.effect_description = "Single ball bouncing in room with glow";
+    info.effect_description = "Single ball bouncing in the room with glow";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -118,7 +118,7 @@ EffectInfo3D BouncingBall3D::GetEffectInfo()
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
-    info.show_size_control = true;
+    info.show_size_control = false;  // custom "Ball Size" slider used instead
     info.show_scale_control = true;
     info.show_fps_control = true;
     // Rotation controls are in base class

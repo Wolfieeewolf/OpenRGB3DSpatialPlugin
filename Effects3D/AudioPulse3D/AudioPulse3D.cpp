@@ -35,7 +35,7 @@ EffectInfo3D AudioPulse3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Audio Pulse";
-    info.effect_description = "Whole-room brightness pulse driven by a frequency band";
+    info.effect_description = "Room brightness pulses from a chosen frequency band";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;

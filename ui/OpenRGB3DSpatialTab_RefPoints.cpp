@@ -62,7 +62,6 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
         return;
     }
 
-    // Update display planes: clear or renumber reference_point_index so they stay valid after erase
     for(size_t i = 0; i < display_planes.size(); i++)
     {
         if(!display_planes[i]) continue;
@@ -263,6 +262,7 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     }
 
     UpdateEffectOriginCombo();
+    UpdateFreqOriginCombo();
 
     for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
@@ -289,12 +289,9 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 
 void OpenRGB3DSpatialTab::SaveReferencePoints()
 {
-    // Mark layout as dirty - reference points will be saved when user saves layout profile
     SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::LoadReferencePoints()
 {
-    // Reference points are now loaded as part of the layout JSON
-    // This function is kept for future standalone load functionality if needed
 }

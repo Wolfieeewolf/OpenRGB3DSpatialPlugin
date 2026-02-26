@@ -18,7 +18,7 @@ public:
     ~SpectrumBars3D() override;
 
     // Auto-registration system
-    EFFECT_REGISTERER_3D("SpectrumBars3D", "Spectrum Bars 3D", "Audio", [](){ return new SpectrumBars3D; });
+    EFFECT_REGISTERER_3D("SpectrumBars3D", "Spectrum Bars", "Audio", [](){ return new SpectrumBars3D; });
 
     static std::string const ClassName() { return "SpectrumBars3D"; }
     static std::string const UIName() { return "Spectrum Bars 3D"; }
