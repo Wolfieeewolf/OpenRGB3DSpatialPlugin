@@ -153,6 +153,8 @@ nlohmann::json Comet3D::SaveSettings() const
 void Comet3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("comet_axis")) comet_axis = std::clamp(settings["comet_axis"].get<int>(), 0, 2);
-    if(settings.contains("comet_size")) comet_size = std::clamp(settings["comet_size"].get<float>(), 0.05f, 1.0f);
+    if(settings.contains("comet_axis") && settings["comet_axis"].is_number_integer())
+        comet_axis = std::clamp(settings["comet_axis"].get<int>(), 0, 2);
+    if(settings.contains("comet_size") && settings["comet_size"].is_number())
+        comet_size = std::clamp(settings["comet_size"].get<float>(), 0.05f, 1.0f);
 }
