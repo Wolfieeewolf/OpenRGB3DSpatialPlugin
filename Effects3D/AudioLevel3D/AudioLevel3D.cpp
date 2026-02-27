@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
+#include <QComboBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 
@@ -35,7 +36,7 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = "Audio Level";
-    info.effect_description = "Brightness follows overall volume (RMS)";
+    info.effect_description = "Level drives a 3D fill surface (like a water level) with optional wave on the boundary";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0; // Not used in new system
     info.is_reversible = false;
@@ -43,7 +44,7 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     info.max_speed = 200; // speed can be used for hue cycle if rainbow enabled
     info.min_speed = 0;
     info.user_colors = 1;
-    info.has_custom_settings = false;
+    info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_direction = false;
     info.needs_thickness = false;
@@ -124,6 +125,52 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
+
+    QHBoxLayout* axis_row = new QHBoxLayout();
+    axis_row->addWidget(new QLabel("Fill axis:"));
+    QComboBox* axis_combo = new QComboBox();
+    axis_combo->addItem("X (left → right)", 0);
+    axis_combo->addItem("Y (floor → ceiling)", 1);
+    axis_combo->addItem("Z (front → back)", 2);
+    axis_combo->setCurrentIndex(fill_axis);
+    axis_row->addWidget(axis_combo);
+    layout->addLayout(axis_row);
+    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, axis_combo](int){
+        fill_axis = axis_combo->currentData().toInt();
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* wave_row = new QHBoxLayout();
+    wave_row->addWidget(new QLabel("Boundary wave:"));
+    QSlider* wave_slider = new QSlider(Qt::Horizontal);
+    wave_slider->setRange(0, 25);
+    wave_slider->setValue((int)(wave_amount * 100.0f));
+    QLabel* wave_label = new QLabel(QString::number((int)(wave_amount * 100)) + "%");
+    wave_label->setMinimumWidth(40);
+    wave_row->addWidget(wave_slider);
+    wave_row->addWidget(wave_label);
+    layout->addLayout(wave_row);
+    connect(wave_slider, &QSlider::valueChanged, this, [this, wave_label](int v){
+        wave_amount = v / 100.0f;
+        wave_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* edge_row = new QHBoxLayout();
+    edge_row->addWidget(new QLabel("Edge softness:"));
+    QSlider* edge_slider = new QSlider(Qt::Horizontal);
+    edge_slider->setRange(2, 25);
+    edge_slider->setValue((int)(edge_soft * 100.0f));
+    QLabel* edge_label = new QLabel(QString::number((int)(edge_soft * 100)) + "%");
+    edge_label->setMinimumWidth(40);
+    edge_row->addWidget(edge_slider);
+    edge_row->addWidget(edge_label);
+    layout->addLayout(edge_row);
+    connect(edge_slider, &QSlider::valueChanged, this, [this, edge_label](int v){
+        edge_soft = v / 100.0f;
+        edge_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
 }
 
 void AudioLevel3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -135,29 +182,29 @@ RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
 {
     AudioInputManager* audio = AudioInputManager::instance();
     float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float intensity = EvaluateIntensity(amplitude, time);
+    float fill_level = EvaluateIntensity(amplitude, time);
 
-    // Apply rotation transformation
     Vector3D origin = GetEffectOrigin();
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    
-    float radial_norm = std::clamp(std::sqrt(rotated_pos.x * rotated_pos.x + rotated_pos.y * rotated_pos.y + rotated_pos.z * rotated_pos.z) / 0.75f, 0.0f, 1.0f);
+    float ax = std::clamp(0.5f + rotated_pos.x * 0.5f, 0.0f, 1.0f);
+    float ay = std::clamp(0.5f + rotated_pos.y * 0.5f, 0.0f, 1.0f);
+    float az = std::clamp(0.5f + rotated_pos.z * 0.5f, 0.0f, 1.0f);
+    float axis_pos = (fill_axis == 0) ? ax : ((fill_axis == 1) ? ay : az);
+    float axis_other = (fill_axis == 0) ? ay : ((fill_axis == 1) ? ax : ay);
+    float wave = wave_amount * std::sin(time * 4.0f + axis_other * 6.283185f);
+    float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
+    float edge = std::max(edge_soft, 0.01f);
+    float blend = std::clamp((fill_boundary - axis_pos) / edge + 0.5f, 0.0f, 1.0f);
+    float intensity = blend;
 
-    // Use rotated X coordinate for axis position
-    float axis_pos = std::clamp(0.5f + rotated_pos.x, 0.0f, 1.0f);
-
+    float radial_norm = std::clamp(std::sqrt(rotated_pos.x*rotated_pos.x + rotated_pos.y*rotated_pos.y + rotated_pos.z*rotated_pos.z) / 0.75f, 0.0f, 1.0f);
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
-    float spatial = 0.55f + 0.45f * (1.0f - radial_norm);
-    intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
-
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
-
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f)
         : GetColorAtPosition(gradient_pos);
-    color = ModulateRGBColors(color, user_color);
-    return color;
+    return ModulateRGBColors(color, user_color);
 }
 
 RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -165,34 +212,33 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-    {
         return 0x00000000;
-    }
 
-    AudioInputManager* audio = AudioInputManager::instance();
-    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float intensity = EvaluateIntensity(amplitude, time);
+    float amplitude = AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float fill_level = EvaluateIntensity(amplitude, time);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float dx = rotated_pos.x - grid.center_x;
-    float dy = rotated_pos.y - grid.center_y;
-    float dz = rotated_pos.z - grid.center_z;
+    float ax = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
+    float ay = NormalizeRange(rotated_pos.y, grid.min_y, grid.max_y);
+    float az = NormalizeRange(rotated_pos.z, grid.min_z, grid.max_z);
+    float axis_pos = (fill_axis == 0) ? ax : ((fill_axis == 1) ? ay : az);
+    float axis_other = (fill_axis == 0) ? ay : ((fill_axis == 1) ? ax : ay);
+    float wave = wave_amount * std::sin(time * 4.0f + axis_other * 6.283185f);
+    float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
+    float edge = std::max(edge_soft, 0.01f);
+    float blend = std::clamp((fill_boundary - axis_pos) / edge + 0.5f, 0.0f, 1.0f);
+    float intensity = blend;
+
+    float dx = rotated_pos.x - grid.center_x, dy = rotated_pos.y - grid.center_y, dz = rotated_pos.z - grid.center_z;
     float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
-    float axis_pos = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
-
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
-    float spatial = 0.55f + 0.45f * (1.0f - radial_norm);
-    intensity = std::clamp(intensity * spatial, 0.0f, 1.0f);
-
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
-
     RGBColor user_color = GetRainbowMode()
         ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f)
         : GetColorAtPosition(gradient_pos);
-    color = ModulateRGBColors(color, user_color);
-    return color;
+    return ModulateRGBColors(color, user_color);
 }
 
 // Register effect
@@ -202,6 +248,9 @@ nlohmann::json AudioLevel3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
+    j["fill_axis"] = fill_axis;
+    j["wave_amount"] = wave_amount;
+    j["edge_soft"] = edge_soft;
     return j;
 }
 
@@ -209,6 +258,9 @@ void AudioLevel3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    if(settings.contains("fill_axis"))  fill_axis  = std::clamp(settings["fill_axis"].get<int>(), 0, 2);
+    if(settings.contains("wave_amount")) wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
+    if(settings.contains("edge_soft"))   edge_soft   = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
 }

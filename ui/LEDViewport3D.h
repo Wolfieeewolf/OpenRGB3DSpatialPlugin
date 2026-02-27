@@ -185,6 +185,7 @@ private:
     float                                   room_grid_overlay_min_x, room_grid_overlay_max_x;
     float                                   room_grid_overlay_min_y, room_grid_overlay_max_y;
     float                                   room_grid_overlay_min_z, room_grid_overlay_max_z;
+    bool                                    room_grid_overlay_colors_dirty;  // Copy buffer -> float colors only when set
     std::map<std::string, GLuint>           display_plane_textures;  // Texture IDs per capture source
     QTimer*                                 screen_preview_refresh_timer;
 

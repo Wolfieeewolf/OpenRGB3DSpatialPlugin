@@ -64,6 +64,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     axis_scale_rot_yaw_label = nullptr;
     axis_scale_rot_pitch_label = nullptr;
     axis_scale_rot_roll_label = nullptr;
+    axis_scale_reset_button = nullptr;
+    axis_scale_rot_reset_button = nullptr;
 
     color_controls_group = nullptr;
     rainbow_mode_check = nullptr;
@@ -256,6 +258,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_z_layout->addWidget(scale_z_label);
     axis_scale_layout->addLayout(scale_z_layout);
 
+    axis_scale_reset_button = new QPushButton("Reset to Defaults");
+    axis_scale_reset_button->setToolTip("Reset Width, Height, Depth to 100%");
+    axis_scale_layout->addWidget(axis_scale_reset_button);
+
     axis_scale_group->setLayout(axis_scale_layout);
     main_layout->addWidget(axis_scale_group);
 
@@ -292,6 +298,11 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     asr_roll_layout->addWidget(axis_scale_rot_roll_slider);
     asr_roll_layout->addWidget(axis_scale_rot_roll_label);
     axis_scale_rot_layout->addLayout(asr_roll_layout);
+
+    axis_scale_rot_reset_button = new QPushButton("Reset to Defaults");
+    axis_scale_rot_reset_button->setToolTip("Reset Yaw, Pitch, Roll to 0°");
+    axis_scale_rot_layout->addWidget(axis_scale_rot_reset_button);
+
     axis_scale_rot_group->setLayout(axis_scale_rot_layout);
     main_layout->addWidget(axis_scale_rot_group);
 
@@ -360,6 +371,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(rotation_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_roll_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRotationResetClicked);
+    connect(axis_scale_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAxisScaleResetClicked);
+    connect(axis_scale_rot_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAxisScaleRotationResetClicked);
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -1182,6 +1195,74 @@ void SpatialEffect3D::OnRotationResetClicked()
         rotation_roll_slider->setValue(0);
     }
     
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnAxisScaleResetClicked()
+{
+    effect_scale_x = 100;
+    effect_scale_y = 100;
+    effect_scale_z = 100;
+
+    if(scale_x_slider)
+    {
+        scale_x_slider->setValue(100);
+    }
+    if(scale_y_slider)
+    {
+        scale_y_slider->setValue(100);
+    }
+    if(scale_z_slider)
+    {
+        scale_z_slider->setValue(100);
+    }
+    if(scale_x_label)
+    {
+        scale_x_label->setText("100%");
+    }
+    if(scale_y_label)
+    {
+        scale_y_label->setText("100%");
+    }
+    if(scale_z_label)
+    {
+        scale_z_label->setText("100%");
+    }
+
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::OnAxisScaleRotationResetClicked()
+{
+    effect_axis_scale_rotation_yaw = 0.0f;
+    effect_axis_scale_rotation_pitch = 0.0f;
+    effect_axis_scale_rotation_roll = 0.0f;
+
+    if(axis_scale_rot_yaw_slider)
+    {
+        axis_scale_rot_yaw_slider->setValue(0);
+    }
+    if(axis_scale_rot_pitch_slider)
+    {
+        axis_scale_rot_pitch_slider->setValue(0);
+    }
+    if(axis_scale_rot_roll_slider)
+    {
+        axis_scale_rot_roll_slider->setValue(0);
+    }
+    if(axis_scale_rot_yaw_label)
+    {
+        axis_scale_rot_yaw_label->setText("0°");
+    }
+    if(axis_scale_rot_pitch_label)
+    {
+        axis_scale_rot_pitch_label->setText("0°");
+    }
+    if(axis_scale_rot_roll_label)
+    {
+        axis_scale_rot_roll_label->setText("0°");
+    }
+
     emit ParametersChanged();
 }
 

@@ -202,6 +202,7 @@ protected:
     QLabel*             scale_y_label;
     QSlider*            scale_z_slider;
     QLabel*             scale_z_label;
+    QPushButton*        axis_scale_reset_button;
 
     QSlider*            rotation_yaw_slider;
     QSlider*            rotation_pitch_slider;
@@ -217,6 +218,7 @@ protected:
     QLabel*             axis_scale_rot_yaw_label;
     QLabel*             axis_scale_rot_pitch_label;
     QLabel*             axis_scale_rot_roll_label;
+    QPushButton*        axis_scale_rot_reset_button;
 
     QGroupBox*          color_controls_group;
     QCheckBox*          rainbow_mode_check;
@@ -301,6 +303,8 @@ private slots:
     void OnStopEffectClicked();
     void OnRotationChanged();
     void OnRotationResetClicked();
+    void OnAxisScaleResetClicked();
+    void OnAxisScaleRotationResetClicked();
 
 private:
     void CreateColorControls();

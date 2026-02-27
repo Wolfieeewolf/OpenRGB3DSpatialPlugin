@@ -385,7 +385,9 @@ private:
     QWidget*        freq_range_details = nullptr;
     QLineEdit*      freq_range_name_edit = nullptr;
     QSlider*        freq_low_slider = nullptr;
+    QLabel*         freq_low_label = nullptr;
     QSlider*        freq_high_slider = nullptr;
+    QLabel*         freq_high_label = nullptr;
     QComboBox*      freq_effect_combo = nullptr;
     QComboBox*      freq_zone_combo = nullptr;
     QComboBox*      freq_origin_combo = nullptr;

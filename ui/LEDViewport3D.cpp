@@ -106,6 +106,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , room_grid_overlay_min_x(0), room_grid_overlay_max_x(0)
     , room_grid_overlay_min_y(0), room_grid_overlay_max_y(0)
     , room_grid_overlay_min_z(0), room_grid_overlay_max_z(0)
+    , room_grid_overlay_colors_dirty(true)
     , screen_preview_refresh_timer(nullptr)
     , camera_distance(20.0f)
     , camera_yaw(45.0f)
@@ -1026,27 +1027,41 @@ void LEDViewport3D::ClearRoomGridOverlayBounds()
 void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const
 {
     const int step = std::max(1, room_grid_step);
+    int nx = 1, ny = 1, nz = 1;
     if(room_grid_overlay_use_bounds)
     {
         float w = room_grid_overlay_max_x - room_grid_overlay_min_x;
         float h = room_grid_overlay_max_y - room_grid_overlay_min_y;
         float d = room_grid_overlay_max_z - room_grid_overlay_min_z;
-        if(out_nx) *out_nx = std::max(1, (int)(w / (float)step) + 1);
-        if(out_ny) *out_ny = std::max(1, (int)(h / (float)step) + 1);
-        if(out_nz) *out_nz = std::max(1, (int)(d / (float)step) + 1);
+        nx = std::max(1, (int)(w / (float)step) + 1);
+        ny = std::max(1, (int)(h / (float)step) + 1);
+        nz = std::max(1, (int)(d / (float)step) + 1);
     }
     else
     {
         const GridExtents extents = GetRoomExtents();
-        if(out_nx) *out_nx = (int)(extents.width_units / (float)step) + 1;
-        if(out_ny) *out_ny = (int)(extents.height_units / (float)step) + 1;
-        if(out_nz) *out_nz = (int)(extents.depth_units / (float)step) + 1;
+        nx = (int)(extents.width_units / (float)step) + 1;
+        ny = (int)(extents.height_units / (float)step) + 1;
+        nz = (int)(extents.depth_units / (float)step) + 1;
     }
+    const int max_overlay_points = 35000;
+    int count = nx * ny * nz;
+    if(count > max_overlay_points)
+    {
+        float f = powf((float)max_overlay_points / (float)count, 1.0f / 3.0f);
+        nx = std::max(1, (int)(nx * f));
+        ny = std::max(1, (int)(ny * f));
+        nz = std::max(1, (int)(nz * f));
+    }
+    if(out_nx) *out_nx = nx;
+    if(out_ny) *out_ny = ny;
+    if(out_nz) *out_nz = nz;
 }
 
 void LEDViewport3D::SetRoomGridColorBuffer(const std::vector<RGBColor>& buf)
 {
     room_grid_color_buffer = buf;
+    room_grid_overlay_colors_dirty = true;
     update();
 }
 
@@ -1099,6 +1114,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
         room_grid_overlay_last_nx = nx;
         room_grid_overlay_last_ny = ny;
         room_grid_overlay_last_nz = nz;
+        room_grid_overlay_colors_dirty = true;
         room_grid_overlay_positions.resize(3 * (size_t)count);
         float* pos = room_grid_overlay_positions.data();
         for(int ix = 0; ix < nx; ix++)
@@ -1118,42 +1134,47 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    room_grid_overlay_colors.resize(3 * (size_t)count);
-    float* col = room_grid_overlay_colors.data();
-    for(int ix = 0; ix < nx; ix++)
+    const bool need_color_refill = room_grid_overlay_colors_dirty || room_grid_overlay_colors.size() != (size_t)(3 * count);
+    if(need_color_refill)
     {
-        const float x = (nx > 1) ? (min_x + (float)ix / (float)(nx - 1) * span_x) : min_x;
-        for(int iy = 0; iy < ny; iy++)
+        room_grid_overlay_colors_dirty = false;
+        room_grid_overlay_colors.resize(3 * (size_t)count);
+        float* col = room_grid_overlay_colors.data();
+        for(int ix = 0; ix < nx; ix++)
         {
-            const float y = (ny > 1) ? (min_y + (float)iy / (float)(ny - 1) * span_y) : min_y;
-            for(int iz = 0; iz < nz; iz++)
+            const float x = (nx > 1) ? (min_x + (float)ix / (float)(nx - 1) * span_x) : min_x;
+            for(int iy = 0; iy < ny; iy++)
             {
-                const float z = (nz > 1) ? (min_z + (float)iz / (float)(nz - 1) * span_z) : min_z;
-                float r, g, b;
-                if(use_buffer)
+                const float y = (ny > 1) ? (min_y + (float)iy / (float)(ny - 1) * span_y) : min_y;
+                for(int iz = 0; iz < nz; iz++)
                 {
-                    const size_t idx = (size_t)(ix * ny * nz + iy * nz + iz);
-                    RGBColor c = room_grid_color_buffer[idx];
-                    r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
-                    g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
-                    b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
+                    const float z = (nz > 1) ? (min_z + (float)iz / (float)(nz - 1) * span_z) : min_z;
+                    float r, g, b;
+                    if(use_buffer)
+                    {
+                        const size_t idx = (size_t)(ix * ny * nz + iy * nz + iz);
+                        RGBColor c = room_grid_color_buffer[idx];
+                        r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
+                        g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
+                        b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
+                    }
+                    else if(use_callback)
+                    {
+                        RGBColor c = room_grid_color_callback(x, y, z);
+                        r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
+                        g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
+                        b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
+                    }
+                    else
+                    {
+                        r = default_r;
+                        g = default_g;
+                        b = default_b;
+                    }
+                    *col++ = r;
+                    *col++ = g;
+                    *col++ = b;
                 }
-                else if(use_callback)
-                {
-                    RGBColor c = room_grid_color_callback(x, y, z);
-                    r = (float)RGBGetRValue(c) / 255.0f * room_grid_brightness;
-                    g = (float)RGBGetGValue(c) / 255.0f * room_grid_brightness;
-                    b = (float)RGBGetBValue(c) / 255.0f * room_grid_brightness;
-                }
-                else
-                {
-                    r = default_r;
-                    g = default_g;
-                    b = default_b;
-                }
-                *col++ = r;
-                *col++ = g;
-                *col++ = b;
             }
         }
     }

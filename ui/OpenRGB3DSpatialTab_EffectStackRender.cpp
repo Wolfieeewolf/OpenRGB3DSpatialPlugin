@@ -4,6 +4,9 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "GridSpaceUtils.h"
 #include "EffectInstance3D.h"
+#include "EffectListManager3D.h"
+#include "FrequencyRangeEffect3D.h"
+#include "Audio/AudioInputManager.h"
 #include <set>
 #include <unordered_set>
 #include <algorithm>
@@ -142,7 +145,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         active_effects.push_back(slot);
     }
 
-    if(active_effects.empty())
+    bool has_enabled_freq_ranges = false;
+    for(const std::unique_ptr<FrequencyRangeEffect3D>& range : frequency_ranges)
+    {
+        if(range && range->enabled && !range->effect_class_name.empty())
+        {
+            has_enabled_freq_ranges = true;
+            break;
+        }
+    }
+
+    if(active_effects.empty() && !has_enabled_freq_ranges)
     {
         if(viewport)
         {
@@ -162,7 +175,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    if(viewport && viewport->GetShowRoomGridOverlay())
+    if(viewport && viewport->GetShowRoomGridOverlay() && (active_effects.size() > 0 || has_enabled_freq_ranges))
     {
         viewport->SetRoomGridOverlayBounds(room_bounds.min_x, room_bounds.max_x,
                                            room_bounds.min_y, room_bounds.max_y,
@@ -183,6 +196,51 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             const int denom_x = std::max(nx - 1, 1);
             const int denom_y = std::max(ny - 1, 1);
             const int denom_z = std::max(nz - 1, 1);
+
+            if(has_enabled_freq_ranges && AudioInputManager::instance()->isRunning())
+            {
+                for(const std::unique_ptr<FrequencyRangeEffect3D>& range_ptr : frequency_ranges)
+                {
+                    FrequencyRangeEffect3D* range = range_ptr.get();
+                    if(!range || !range->enabled || range->effect_class_name.empty()) continue;
+                    float raw_level = AudioInputManager::instance()->getBandEnergyHz(range->low_hz, range->high_hz);
+                    if(raw_level > range->current_level)
+                        range->current_level += (raw_level - range->current_level) * range->attack;
+                    else
+                        range->current_level += (raw_level - range->current_level) * range->decay;
+                    range->smoothed_level = range->smoothing * range->smoothed_level +
+                                            (1.0f - range->smoothing) * range->current_level;
+                    float effect_level = std::clamp(range->smoothed_level * range->sensitivity, 0.0f, 1.0f);
+                    if(!range->effect_instance)
+                    {
+                        SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(range->effect_class_name);
+                        if(!effect) continue;
+                        range->effect_instance.reset(effect);
+                        if(!range->effect_settings.is_null())
+                            effect->LoadSettings(range->effect_settings);
+                    }
+                    SpatialEffect3D* effect = range->effect_instance.get();
+                    if(!effect) continue;
+                    nlohmann::json audio_params = range->effect_settings;
+                    audio_params["low_hz"] = (int)range->low_hz;
+                    audio_params["high_hz"] = (int)range->high_hz;
+                    audio_params["audio_level"] = effect_level;
+                    audio_params["frequency_band_energy"] = raw_level;
+                    effect->LoadSettings(audio_params);
+                    if(range->origin_ref_index >= 0 && range->origin_ref_index < (int)reference_points.size())
+                    {
+                        VirtualReferencePoint3D* ref_pt = reference_points[range->origin_ref_index].get();
+                        if(ref_pt)
+                        {
+                            effect->SetReferenceMode(REF_MODE_CUSTOM_POINT);
+                            effect->SetCustomReferencePoint(ref_pt->GetPosition());
+                        }
+                    }
+                    else
+                        effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
+                }
+            }
+
             for(int ix = 0; ix < nx; ix++)
             {
                 const float px = room_bounds.min_x + (float)ix / (float)denom_x * span_x;
@@ -205,6 +263,24 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
+                        if(has_enabled_freq_ranges && AudioInputManager::instance()->isRunning())
+                        {
+                            for(const std::unique_ptr<FrequencyRangeEffect3D>& range : frequency_ranges)
+                            {
+                                if(!range || !range->enabled || !range->effect_instance) continue;
+                                SpatialEffect3D* effect = range->effect_instance.get();
+                                if(!effect) continue;
+                                float spx = px, spy = py, spz = pz;
+                                effect->ApplyAxisScale(spx, spy, spz, room_grid);
+                                effect->ApplyEffectRotation(spx, spy, spz, room_grid);
+                                RGBColor effect_color = effect->CalculateColorGrid(spx, spy, spz, time_val, room_grid);
+                                effect_color = effect->PostProcessColorGrid(effect_color);
+                                int r = std::min(255, (int)RGBGetRValue(final_color) + (int)RGBGetRValue(effect_color));
+                                int g = std::min(255, (int)RGBGetGValue(final_color) + (int)RGBGetGValue(effect_color));
+                                int b = std::min(255, (int)RGBGetBValue(final_color) + (int)RGBGetBValue(effect_color));
+                                final_color = ToRGBColor(r, g, b);
+                            }
+                        }
                         room_grid_overlay_buffer[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
                     }
                 }
@@ -212,6 +288,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             viewport->SetRoomGridColorCallback(nullptr);
             viewport->SetRoomGridColorBuffer(room_grid_overlay_buffer);
         }
+        viewport->update();
     }
 
     std::unordered_set<RGBController*> controllers_managed_by_virtuals;

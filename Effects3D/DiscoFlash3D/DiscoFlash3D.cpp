@@ -151,8 +151,7 @@ void DiscoFlash3D::TickFlashes(float time)
                : std::clamp(time - last_tick_time, 0.0f, 0.1f);
     last_tick_time = time;
 
-    float raw = AudioInputManager::instance()->getBandEnergyHz(
-        (float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float raw = AudioInputManager::instance()->getOnsetLevel();
     onset_smoothed = 0.4f * onset_smoothed + 0.6f * raw;
 
     if(onset_hold > 0.0f)

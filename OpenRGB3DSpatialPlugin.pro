@@ -190,6 +190,7 @@ HEADERS +=                                                                      
     Effects3D/FreqFill3D/FreqFill3D.h                                                           \
     Effects3D/FreqRipple3D/FreqRipple3D.h                                                       \
     Effects3D/DiscoFlash3D/DiscoFlash3D.h                                                       \
+    Effects3D/CubeLayer3D/CubeLayer3D.h                                                       \
     Audio/AudioInputManager.h                                                                   \
     Effects3D/Plasma3D/Plasma3D.h                                                               \
     Effects3D/Spiral3D/Spiral3D.h                                                               \
@@ -203,6 +204,10 @@ HEADERS +=                                                                      
     Effects3D/Lightning3D/Lightning3D.h                                                         \
     Effects3D/Matrix3D/Matrix3D.h                                                               \
     Effects3D/BouncingBall3D/BouncingBall3D.h                                                   \
+    Effects3D/WireframeCube3D/WireframeCube3D.h                                                 \
+    Effects3D/WaveSurface3D/WaveSurface3D.h                                                      \
+    Effects3D/Starfield3D/Starfield3D.h                                                         \
+    Effects3D/Fireworks3D/Fireworks3D.h                                                          \
     Effects3D/ScreenMirror3D/ScreenMirror3D.h                                                   \
 
 SOURCES +=                                                                                      \
@@ -257,7 +262,12 @@ SOURCES +=                                                                      
     Effects3D/FreqFill3D/FreqFill3D.cpp                                                         \
     Effects3D/FreqRipple3D/FreqRipple3D.cpp                                                     \
     Effects3D/DiscoFlash3D/DiscoFlash3D.cpp                                                     \
-    Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                 \
+    Effects3D/CubeLayer3D/CubeLayer3D.cpp                                                      \
+    Effects3D/WireframeCube3D/WireframeCube3D.cpp                                               \
+    Effects3D/WaveSurface3D/WaveSurface3D.cpp                                                  \
+    Effects3D/Starfield3D/Starfield3D.cpp                                                      \
+    Effects3D/Fireworks3D/Fireworks3D.cpp                                                      \
+    Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                \
     Audio/AudioInputManager.cpp                                                                 \
 
 #-----------------------------------------------------------------------------------------------#

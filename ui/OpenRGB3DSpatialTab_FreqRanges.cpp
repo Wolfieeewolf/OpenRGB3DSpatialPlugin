@@ -85,6 +85,9 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     connect(freq_low_slider, &QSlider::valueChanged,
             this, &OpenRGB3DSpatialTab::on_freq_low_changed);
     low_row->addWidget(freq_low_slider, 1);
+    freq_low_label = new QLabel("20 Hz");
+    freq_low_label->setMinimumWidth(52);
+    low_row->addWidget(freq_low_label);
     freq_sliders->addLayout(low_row);
 
     QHBoxLayout* high_row = new QHBoxLayout();
@@ -95,6 +98,9 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     connect(freq_high_slider, &QSlider::valueChanged,
             this, &OpenRGB3DSpatialTab::on_freq_high_changed);
     high_row->addWidget(freq_high_slider, 1);
+    freq_high_label = new QLabel("200 Hz");
+    freq_high_label->setMinimumWidth(52);
+    high_row->addWidget(freq_high_label);
     freq_sliders->addLayout(high_row);
     
     details_layout->addWidget(freq_group);
@@ -376,7 +382,15 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         freq_high_slider->setValue((int)range->high_hz);
         freq_high_slider->blockSignals(false);
     }
-    
+    if(freq_low_label)
+    {
+        freq_low_label->setText(QString::number((int)range->low_hz) + " Hz");
+    }
+    if(freq_high_label)
+    {
+        freq_high_label->setText(QString::number((int)range->high_hz) + " Hz");
+    }
+
     if(freq_effect_combo)
     {
         freq_effect_combo->blockSignals(true);
@@ -438,6 +452,10 @@ void OpenRGB3DSpatialTab::on_freq_low_changed(int value)
     if(!range) return;
     
     range->low_hz = (float)value;
+    if(freq_low_label)
+    {
+        freq_low_label->setText(QString::number(value) + " Hz");
+    }
     UpdateFrequencyRangesList();
     SaveFrequencyRanges();
 }
@@ -451,6 +469,10 @@ void OpenRGB3DSpatialTab::on_freq_high_changed(int value)
     if(!range) return;
     
     range->high_hz = (float)value;
+    if(freq_high_label)
+    {
+        freq_high_label->setText(QString::number(value) + " Hz");
+    }
     UpdateFrequencyRangesList();
     SaveFrequencyRanges();
 }

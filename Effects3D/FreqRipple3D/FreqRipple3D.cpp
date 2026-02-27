@@ -152,8 +152,7 @@ void FreqRipple3D::TickRipples(float time)
                : std::clamp(time - last_tick_time, 0.0f, 0.1f);
     last_tick_time = time;
 
-    float onset_raw = AudioInputManager::instance()->getBandEnergyHz(
-        (float)audio_settings.low_hz, (float)audio_settings.high_hz);
+    float onset_raw = AudioInputManager::instance()->getOnsetLevel();
     onset_smoothed = 0.5f * onset_smoothed + 0.5f * onset_raw;
 
     if(onset_hold > 0.0f)

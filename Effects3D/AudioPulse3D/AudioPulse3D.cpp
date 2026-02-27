@@ -129,6 +129,15 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
     layout->addWidget(radial_check);
+
+    QCheckBox* breath_check = new QCheckBox("Breathing (radius grows with level)");
+    breath_check->setChecked(radius_grows_with_level);
+    breath_check->setToolTip("Quiet = center only; loud = fill room");
+    connect(breath_check, &QCheckBox::toggled, this, [this](bool checked){
+        radius_grows_with_level = checked;
+        emit ParametersChanged();
+    });
+    layout->addWidget(breath_check);
 }
 
 void AudioPulse3D::UpdateParams(SpatialEffectParams& /*params*/)
@@ -151,7 +160,17 @@ RGBColor AudioPulse3D::CalculateColor(float x, float y, float z, float time)
         distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / 0.75f, 0.0f, 1.0f);
     }
 
-    float brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
+    float brightness;
+    if(use_radial && radius_grows_with_level)
+    {
+        float effective_radius = 0.25f + 0.75f * intensity;
+        float fade = (distance <= effective_radius) ? 1.0f : std::max(0.0f, 1.0f - (distance - effective_radius) / 0.35f);
+        brightness = intensity * fade;
+    }
+    else
+    {
+        brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
+    }
     brightness = std::clamp(brightness, 0.0f, 1.0f);
 
     float hue_pos = use_radial ? (1.0f - distance) : 0.5f;
@@ -181,7 +200,17 @@ RGBColor AudioPulse3D::CalculateColorGrid(float x, float y, float z, float time,
         distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 1.0f);
     }
 
-    float brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
+    float brightness;
+    if(use_radial && radius_grows_with_level)
+    {
+        float effective_radius = 0.25f + 0.75f * intensity;
+        float fade = (distance <= effective_radius) ? 1.0f : std::max(0.0f, 1.0f - (distance - effective_radius) / 0.35f);
+        brightness = intensity * fade;
+    }
+    else
+    {
+        brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
+    }
     brightness = std::clamp(brightness, 0.0f, 1.0f);
 
     RGBColor color = ComposeAudioGradientColor(audio_settings, use_radial ? (1.0f - distance) : 0.5f, intensity);
@@ -199,6 +228,7 @@ nlohmann::json AudioPulse3D::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["use_radial"] = use_radial;
+    j["radius_grows_with_level"] = radius_grows_with_level;
     return j;
 }
 
@@ -206,10 +236,8 @@ void AudioPulse3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("use_radial"))
-    {
-        use_radial = settings["use_radial"].get<bool>();
-    }
+    if(settings.contains("use_radial")) use_radial = settings["use_radial"].get<bool>();
+    if(settings.contains("radius_grows_with_level")) radius_grows_with_level = settings["radius_grows_with_level"].get<bool>();
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
 }
