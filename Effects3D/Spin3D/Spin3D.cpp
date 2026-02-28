@@ -22,9 +22,9 @@ Spin3D::Spin3D(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
 
     std::vector<RGBColor> default_colors;
-    default_colors.push_back(0x000000FF);  // Red
-    default_colors.push_back(0x0000FF00);  // Green
-    default_colors.push_back(0x00FF0000);  // Blue
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
 }
 
@@ -35,11 +35,11 @@ Spin3D::~Spin3D()
 EffectInfo3D Spin3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Spin";
     info.effect_description = "Rotating pattern with configurable arms";
     info.category = "3D Spatial";
-    info.effect_type = SPATIAL_EFFECT_WAVE;  // Reuse WAVE type for now
+    info.effect_type = SPATIAL_EFFECT_WAVE;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -121,7 +121,6 @@ float Spin3D::Clamp01(float value)
     return value;
 }
 
-// Grid-aware version with room-relative fades and radii
 RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -136,8 +135,6 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
 
     progress = CalculateProgress(time);
 
-    // Apply rotation transformation to LED position
-    // This rotates the effect pattern around the origin
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
@@ -153,7 +150,6 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
         radial_fade = 0.35f + 0.65f * (1.0f - normalized_dist * 0.6f);
     }
     
-    // Calculate spin pattern with arms
     unsigned int arms = (num_arms == 0U) ? 1U : num_arms;
     float spin_angle = angle * (float)arms - progress;
     float period = 6.28318f / (float)arms;
@@ -163,10 +159,8 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
         arm_position += period;
     }
     
-    // Enhanced blade with smoother gradient and glow
     float blade_width = 0.4f * period;
     float blade_core = (arm_position < blade_width) ? (1.0f - (arm_position / blade_width)) : 0.0f;
-    // Add glow effect for smoother, more immersive look
     float blade_glow = 0.0f;
     if(arm_position < blade_width * 1.5f)
     {
@@ -175,7 +169,6 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
     }
     float blade = fmin(1.0f, blade_core + blade_glow);
     
-    // Add subtle ambient glow for whole-room presence
     float ambient = 0.08f * radial_fade;
     
     float intensity = blade * radial_fade + ambient;
@@ -195,7 +188,6 @@ RGBColor Spin3D::CalculateColorGrid(float x, float y, float z, float time, const
 nlohmann::json Spin3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    // Rotation is saved in base class
     j["num_arms"] = num_arms;
     return j;
 }

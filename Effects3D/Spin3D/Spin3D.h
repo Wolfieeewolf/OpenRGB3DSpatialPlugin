@@ -23,7 +23,6 @@ public:
     static std::string const ClassName() { return "Spin3D"; }
     static std::string const UIName() { return "3D Spin"; }
 
-    // Pure virtual implementations
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;

@@ -42,8 +42,8 @@ EffectInfo3D Tornado3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 25.0f;  // rotation speed
-    info.default_frequency_scale = 6.0f;  // twist density
+    info.default_speed_scale = 25.0f;
+    info.default_frequency_scale = 6.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -52,7 +52,6 @@ EffectInfo3D Tornado3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -130,58 +129,42 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     float size_m = GetNormalizedSize();
     float progress = CalculateProgress(time);
 
-    // Apply rotation transformation to LED position
-    // This rotates the effect pattern around the origin
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Room-aware height and radius scaling
-    // Use rotated Y coordinate for tornado height (tornado rises along rotated Y-axis)
     float axial = 0.0f;
     if(grid.height > 0.001f)
     {
-        // Normalize rotated Y position to room height
         axial = (rot_rel_y + grid.height * 0.5f) / grid.height;
     }
     axial = fmaxf(0.0f, fminf(1.0f, axial));
     
-    // Map normalized axial position to tornado height range
     float height_center = 0.5f;
-    float height_range_val = (tornado_height / 500.0f) * 0.5f; // 0 to 0.5 range
+    float height_range_val = (tornado_height / 500.0f) * 0.5f;
     float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
-    float base_radius = 0.5f * fmin(grid.width, grid.depth); // half of min horizontal span
-    // core_radius (20..300) maps to ~4%..60% of base, grows with height
+    float base_radius = 0.5f * fmin(grid.width, grid.depth);
     float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
     float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m;
 
-    // Swirl angle depends on height and time (twist)
-    // Use rotated coordinates for tornado swirl
-    // Tornado rotates around rotated Y-axis (vertical after rotation)
-    float a = atan2f(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
-    float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
-    float along = rot_rel_y;  // Height along rotated Y-axis
+    float a = atan2f(rot_rel_z, rot_rel_x);
+    float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
+    float along = rot_rel_y;
     float swirl = a + along * (0.015f * freq) - time * speed * 0.25f;
 
-    // Distance to the funnel wall (ring)
     float ring = fabsf(rad - funnel_radius);
-    // Thickness scales with room size to remain visible
     float thickness_base = (grid.width + grid.depth) * 0.01f;
     float ring_thickness = thickness_base * (0.6f + 1.2f * size_m);
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 
-    // Enhanced azimuthal banding with multiple harmonics for richer visuals
     float arms = 4.0f + 4.0f * size_m;
     float band = 0.5f * (1.0f + cosf(swirl * arms));
-    // Add secondary harmonic for more complex pattern
     float band2 = 0.2f * (1.0f + cosf(swirl * arms * 2.0f + progress));
     band = fmin(1.0f, band + band2);
 
-    // Vertical fade outside active height (using normalized axial position)
     float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range_val + 0.001f));
     
-    // Add subtle radial glow for whole-room presence
     float radial_glow = 0.15f * (1.0f - fmin(1.0f, rad / (funnel_radius * 3.0f)));
 
     float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade + radial_glow;
@@ -201,7 +184,6 @@ RGBColor Tornado3D::CalculateColorGrid(float x, float y, float z, float time, co
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     r = (unsigned char)(r * intensity);
     g = (unsigned char)(g * intensity);
     b = (unsigned char)(b * intensity);

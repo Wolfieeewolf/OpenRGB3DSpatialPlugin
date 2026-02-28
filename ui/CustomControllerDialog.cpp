@@ -45,7 +45,6 @@ void CustomControllerDialog::SetupUI()
     help_label->setContentsMargins(0, 0, 0, 6);
     main_layout->addWidget(help_label);
 
-    // Step 1: Name & Grid
     QGroupBox* step1_group = new QGroupBox("Step 1: Name & Grid");
     QVBoxLayout* step1_layout = new QVBoxLayout(step1_group);
     QHBoxLayout* name_layout = new QHBoxLayout();
@@ -101,7 +100,6 @@ void CustomControllerDialog::SetupUI()
     step1_layout->addLayout(dim_layout);
     main_layout->addWidget(step1_group);
 
-    // Step 2: Assign LEDs
     QGroupBox* step2_group = new QGroupBox("Step 2: Assign LEDs");
     QHBoxLayout* content_layout = new QHBoxLayout(step2_group);
 
@@ -176,7 +174,6 @@ void CustomControllerDialog::SetupUI()
     QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
     QGridLayout* transform_grid = new QGridLayout();
 
-    // Lock transform checkbox
     lock_transform_checkbox = new QCheckBox("Lock Effect Direction (preview-only)");
     lock_transform_checkbox->setChecked(false);
     lock_transform_checkbox->setToolTip("Keeps preview effect flowing left-to-right. Disables transforms or treats them as preview-only.");
@@ -186,7 +183,6 @@ void CustomControllerDialog::SetupUI()
     QLabel* rotate_label = new QLabel("Rotate Grid:");
     transform_grid->addWidget(rotate_label, 1, 0, 1, 4);
 
-    // Rotation slider with spinbox
     QLabel* angle_label = new QLabel("Angle:");
     transform_grid->addWidget(angle_label, 2, 0);
 
@@ -207,15 +203,12 @@ void CustomControllerDialog::SetupUI()
     rotate_angle_spin->setEnabled(false);
     transform_grid->addWidget(rotate_angle_spin, 2, 3);
 
-    // Connect slider and spinbox
     connect(rotate_angle_slider, &QSlider::valueChanged, rotate_angle_spin, &QSpinBox::setValue);
     connect(rotate_angle_spin, QOverload<int>::of(&QSpinBox::valueChanged), rotate_angle_slider, &QSlider::setValue);
 
-    // Connect to real-time rotation handler
     connect(rotate_angle_slider, &QSlider::valueChanged, this, &CustomControllerDialog::on_rotation_angle_changed);
     connect(rotate_angle_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_rotation_angle_changed);
 
-    // Quick rotation presets
     QLabel* presets_label = new QLabel("Quick Presets:");
     transform_grid->addWidget(presets_label, 3, 0, 1, 4);
 
@@ -247,7 +240,6 @@ void CustomControllerDialog::SetupUI()
     connect(flip_vertical_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_vertical);
     transform_grid->addWidget(flip_vertical_button, 6, 2, 1, 2);
 
-    // Apply Preview Remap button (shown when Lock is ON)
     apply_preview_button = new QPushButton("Apply Preview Remap");
     apply_preview_button->setToolTip("Commit current preview remap to the mapping");
     apply_preview_button->setEnabled(false);
@@ -319,7 +311,6 @@ void CustomControllerDialog::on_allow_reuse_toggled(bool)
 void CustomControllerDialog::UpdateItemCombo()
 {
     if(!resource_manager) return;
-    // Preserve current selection where possible
     int prev_index = item_combo->currentIndex();
     int prev_data = item_combo->currentData().isValid() ? item_combo->currentData().toInt() : -9999;
 
@@ -377,7 +368,6 @@ void CustomControllerDialog::UpdateItemCombo()
         }
     }
 
-    // Try to restore previous selection
     int restore_index = -1;
     for(int i = 0; i < item_combo->count(); i++)
     {
@@ -597,7 +587,6 @@ void CustomControllerDialog::UpdateGridDisplay()
                     }
                 }
 
-                // Create tooltip with all mapped LEDs
                 QString tooltip_text;
                 if(cell_mappings.size() == 1)
                 {
@@ -609,13 +598,11 @@ void CustomControllerDialog::UpdateGridDisplay()
                     }
                     else if(mapping.granularity == 0)
                     {
-                        // Whole device assignment
                         tooltip_text = QString("Assigned: %1 (Whole Device)")
                                        .arg(QString::fromStdString(mapping.controller->name));
                     }
                     else if(mapping.granularity == 1)
                     {
-                        // Zone assignment
                         QString zone_name = "Unknown Zone";
                         if(mapping.zone_idx < mapping.controller->zones.size())
                         {
@@ -626,7 +613,6 @@ void CustomControllerDialog::UpdateGridDisplay()
                     }
                     else if(mapping.granularity == 2)
                     {
-                        // LED assignment
                         QString led_name = "Unknown LED";
                         unsigned int global_led_idx = 0;
                         if(mapping.zone_idx < mapping.controller->zones.size())
@@ -649,7 +635,7 @@ void CustomControllerDialog::UpdateGridDisplay()
                 else
                 {
                     tooltip_text = QString("Multiple LEDs (%1):\n").arg(cell_mappings.size());
-                    for(size_t i = 0; i < cell_mappings.size() && i < 5; i++) // Limit to 5 for readability
+                    for(size_t i = 0; i < cell_mappings.size() && i < 5; i++)
                     {
                         const GridLEDMapping& mapping = cell_mappings[i];
                         if(!mapping.controller)
@@ -692,7 +678,6 @@ void CustomControllerDialog::UpdateGridDisplay()
 
                 item->setToolTip(tooltip_text);
 
-                // Add indicator based on number of LEDs
                 if(cell_mappings.size() == 1)
                 {
                     item->setText(QString(QChar(0x25CF)));
@@ -713,22 +698,18 @@ void CustomControllerDialog::UpdateGridDisplay()
                 item->setToolTip("Empty - click to assign");
             }
 
-            // Check if this cell is currently selected
             bool isSelected = (i == selected_row && j == selected_col);
 
             if(isSelected)
             {
-                // Mix the LED color with selection blue for visual feedback
-                QColor selection_color = QColor(100, 150, 255); // Light blue selection
+                QColor selection_color = QColor(100, 150, 255);
                 QColor blended_color;
                 if(cell_mappings.empty())
                 {
-                    // For empty cells, use pure selection color
                     blended_color = selection_color;
                 }
                 else
                 {
-                    // Blend LED color with selection color (70% selection, 30% LED color)
                     blended_color = QColor(
                         static_cast<int>(selection_color.red() * 0.7 + cell_color.red() * 0.3),
                         static_cast<int>(selection_color.green() * 0.7 + cell_color.green() * 0.3),
@@ -737,7 +718,6 @@ void CustomControllerDialog::UpdateGridDisplay()
                 }
                 item->setBackground(QBrush(blended_color));
 
-                // Update text color for selected cell
                 QColor text_color = (blended_color.red() + blended_color.green() + blended_color.blue() > 382) ?
                                    Qt::black : Qt::white;
                 item->setForeground(QBrush(text_color));
@@ -746,7 +726,6 @@ void CustomControllerDialog::UpdateGridDisplay()
             {
                 item->setBackground(QBrush(cell_color));
 
-                // Set text color for non-selected cells
                 if(!cell_mappings.empty())
                 {
                     QColor text_color = (cell_color.red() + cell_color.green() + cell_color.blue() > 382) ?
@@ -784,7 +763,6 @@ void CustomControllerDialog::UpdateCellInfo()
                     .arg(selected_row)
                     .arg(current_layer);
 
-    // Count all mappings for this cell
     std::vector<GridLEDMapping> cell_mappings;
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
@@ -807,13 +785,11 @@ void CustomControllerDialog::UpdateCellInfo()
         }
         else if(mapping.granularity == 0)
         {
-            // Whole device assignment
             info += QString(" - Assigned: %1 (Whole Device)")
                     .arg(QString::fromStdString(mapping.controller->name));
         }
         else if(mapping.granularity == 1)
         {
-            // Zone assignment
             QString zone_name = "Unknown Zone";
             if(mapping.zone_idx < mapping.controller->zones.size())
             {
@@ -824,7 +800,6 @@ void CustomControllerDialog::UpdateCellInfo()
         }
         else if(mapping.granularity == 2)
         {
-            // LED assignment
             QString led_name = "Unknown LED";
             unsigned int global_led_idx = 0;
             if(mapping.zone_idx < mapping.controller->zones.size())
@@ -900,7 +875,6 @@ void CustomControllerDialog::on_assign_clicked()
 
     if(granularity == 0)
     {
-        // Whole device: lay out all LEDs in a line starting at selected cell
         int grid_w = width_spin->value();
         int grid_h = height_spin->value();
 
@@ -916,7 +890,6 @@ void CustomControllerDialog::on_assign_clicked()
             if(y >= grid_h)
                 break;
 
-            // Clear any existing mapping at target cell
             for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
             {
                 if(it->x == x && it->y == y && it->z == current_layer)
@@ -932,7 +905,7 @@ void CustomControllerDialog::on_assign_clicked()
             mapping.controller = controller;
             mapping.zone_idx = positions[p].zone_idx;
             mapping.led_idx = positions[p].led_idx;
-            mapping.granularity = 0; // Whole device selection
+            mapping.granularity = 0;
             led_mappings.push_back(mapping);
 
             placed++;
@@ -947,14 +920,12 @@ void CustomControllerDialog::on_assign_clicked()
     }
     else if(granularity == 1)
     {
-        // Zone: lay out all LEDs in the zone in a line starting at selected cell
         int grid_w = width_spin->value();
         int grid_h = height_spin->value();
 
         int start_x = selected_col;
         int start_y = selected_row;
 
-        // Collect zone LEDs in order
         std::vector<std::pair<unsigned,int>> zone_leds; zone_leds.reserve(positions.size());
         for(unsigned int p = 0; p < positions.size(); p++)
         {
@@ -973,7 +944,6 @@ void CustomControllerDialog::on_assign_clicked()
             if(y >= grid_h)
                 break;
 
-            // Clear existing mapping at target cell
             for(std::vector<GridLEDMapping>::iterator it = led_mappings.begin(); it != led_mappings.end();)
             {
                 if(it->x == x && it->y == y && it->z == current_layer)
@@ -989,7 +959,7 @@ void CustomControllerDialog::on_assign_clicked()
             mapping.controller = controller;
             mapping.zone_idx = zone_leds[idx].first;
             mapping.led_idx = zone_leds[idx].second;
-            mapping.granularity = 1; // Zone selection
+            mapping.granularity = 1;
             led_mappings.push_back(mapping);
 
             placed++;
@@ -1006,7 +976,6 @@ void CustomControllerDialog::on_assign_clicked()
     {
         for(unsigned int p = 0; p < positions.size(); p++)
         {
-            // Add bounds checking before accessing zones array
             if(positions[p].zone_idx >= controller->zones.size())
                 continue;
 
@@ -1020,13 +989,12 @@ void CustomControllerDialog::on_assign_clicked()
                 mapping.controller = controller;
                 mapping.zone_idx = positions[p].zone_idx;
                 mapping.led_idx = positions[p].led_idx;
-                mapping.granularity = 2; // LED
+                mapping.granularity = 2;
                 led_mappings.push_back(mapping);
             }
         }
     }
 
-    // Keep preview in sync if locked
     if(transform_locked)
     {
         preview_led_mappings = led_mappings;
@@ -1265,7 +1233,6 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
                                                spacing_z_spin->maximum()));
     }
 
-    // Infer granularity for existing mappings that might not have it set
     InferMappingGranularity();
     UpdateGridDisplay();
 }
@@ -1323,7 +1290,7 @@ QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller)
 {
     if(!controller || controller->colors.empty()) return QColor(128, 128, 128);
 
-    unsigned long long total_r = 0, total_g = 0, total_b = 0;  // Use larger type to prevent overflow
+    unsigned long long total_r = 0, total_g = 0, total_b = 0;
 
     for(unsigned int i = 0; i < controller->colors.size(); i++)
     {
@@ -1436,7 +1403,6 @@ void CustomControllerDialog::UpdateGridColors()
 
             if(!cell_mappings.empty())
             {
-                // Calculate color (same logic as UpdateGridDisplay)
                 if(cell_mappings.size() == 1)
                 {
                     cell_color = GetMappingColor(cell_mappings[0]);
@@ -1462,12 +1428,10 @@ void CustomControllerDialog::UpdateGridColors()
                 }
             }
 
-            // Check if this cell is currently selected
             bool isSelected = (i == selected_row && j == selected_col);
 
             if(isSelected)
             {
-                // Mix the LED color with selection blue for visual feedback
                 QColor selection_color = QColor(100, 150, 255);
                 QColor blended_color;
                 if(cell_mappings.empty())
@@ -1516,11 +1480,9 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 
     if(locked)
     {
-        // Lock the current layout: snapshot both original and preview mappings
         original_led_mappings = led_mappings;
         preview_led_mappings = led_mappings;
 
-        // Disable free-angle rotation; allow preview remap via 180/Flips; disable 90/270 (dimension swap)
         rotate_angle_slider->setEnabled(false);
         rotate_angle_spin->setEnabled(false);
         rotate_angle_slider->setToolTip("Disabled while effect direction is locked");
@@ -1534,7 +1496,6 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 
         if(apply_preview_button)  apply_preview_button->setEnabled(true);
 
-        // Reset angle to 0
         rotate_angle_slider->blockSignals(true);
         rotate_angle_spin->blockSignals(true);
         rotate_angle_slider->setValue(0);
@@ -1544,7 +1505,6 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
     }
     else
     {
-        // Unlock - re-enable rotation/flip controls
         rotate_angle_slider->setEnabled(true);
         rotate_angle_spin->setEnabled(true);
         rotate_angle_slider->setToolTip("");
@@ -1557,7 +1517,6 @@ void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 
         if(apply_preview_button)  apply_preview_button->setEnabled(false);
 
-        // Clear snapshots
         original_led_mappings.clear();
         preview_led_mappings.clear();
     }
@@ -1575,13 +1534,11 @@ void CustomControllerDialog::on_rotation_angle_changed(int angle)
     float cos_angle = std::cos(angle_radians);
     float sin_angle = std::sin(angle_radians);
 
-    // Calculate center of ORIGINAL grid
     int orig_width = width_spin->value();
     int orig_height = height_spin->value();
     float center_x = (orig_width - 1) / 2.0f;
     float center_y = (orig_height - 1) / 2.0f;
 
-    // Calculate new positions and determine required grid size
     std::vector<std::pair<int, int>> new_positions;
     new_positions.reserve(original_led_mappings.size());
 
@@ -1590,32 +1547,26 @@ void CustomControllerDialog::on_rotation_angle_changed(int angle)
 
     for(unsigned int i = 0; i < original_led_mappings.size(); i++)
     {
-        // Translate to origin (using ORIGINAL positions)
         float x = original_led_mappings[i].x - center_x;
         float y = original_led_mappings[i].y - center_y;
 
-        // Rotate
         float rotated_x = x * cos_angle - y * sin_angle;
         float rotated_y = x * sin_angle + y * cos_angle;
 
-        // Translate back and round to nearest grid position
         int new_x = (int)std::round(rotated_x + center_x);
         int new_y = (int)std::round(rotated_y + center_y);
 
         new_positions.push_back(std::make_pair(new_x, new_y));
 
-        // Track bounds
         min_x = std::min(min_x, new_x);
         max_x = std::max(max_x, new_x);
         min_y = std::min(min_y, new_y);
         max_y = std::max(max_y, new_y);
     }
 
-    // Calculate required grid size
     int required_width = max_x - min_x + 1;
     int required_height = max_y - min_y + 1;
 
-    // Auto-expand grid if needed
     bool grid_changed = false;
     if(required_width > orig_width)
     {
@@ -1632,16 +1583,14 @@ void CustomControllerDialog::on_rotation_angle_changed(int angle)
         grid_changed = true;
     }
 
-    // Shift positions if any went negative
     int shift_x = (min_x < 0) ? -min_x : 0;
     int shift_y = (min_y < 0) ? -min_y : 0;
 
-    // Apply new positions to current mappings
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
         led_mappings[i].x = new_positions[i].first + shift_x;
         led_mappings[i].y = new_positions[i].second + shift_y;
-        led_mappings[i].z = original_led_mappings[i].z;  // Preserve Z
+        led_mappings[i].z = original_led_mappings[i].z;
     }
 
     if(grid_changed)
@@ -1670,7 +1619,6 @@ void CustomControllerDialog::on_rotate_grid_90()
     }
     else
     {
-        // Rotate 90° clockwise: (x, y) -> (y, width - 1 - x)
         for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
             int old_x = led_mappings[i].x;
@@ -1679,7 +1627,6 @@ void CustomControllerDialog::on_rotate_grid_90()
             led_mappings[i].y = width - 1 - old_x;
         }
 
-        // Swap width and height
         width_spin->blockSignals(true);
         height_spin->blockSignals(true);
         width_spin->setValue(height);
@@ -1740,7 +1687,6 @@ void CustomControllerDialog::on_rotate_grid_270()
     }
     else
     {
-        // Rotate 270° clockwise (= 90° counter-clockwise): (x, y) -> (height - 1 - y, x)
         for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
             int old_x = led_mappings[i].x;
@@ -1749,7 +1695,6 @@ void CustomControllerDialog::on_rotate_grid_270()
             led_mappings[i].y = old_x;
         }
 
-        // Swap width and height
         width_spin->blockSignals(true);
         height_spin->blockSignals(true);
         width_spin->setValue(height);
@@ -1831,7 +1776,6 @@ void CustomControllerDialog::on_apply_preview_remap_clicked()
         return;
     }
 
-    // Commit preview into actual mappings
     led_mappings = preview_led_mappings;
     UpdateGridDisplay();
 }

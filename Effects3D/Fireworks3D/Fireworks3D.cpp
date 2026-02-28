@@ -165,7 +165,6 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
     float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
     if(half < 1e-5f) half = 1.0f;
     float speed_scale = GetScaledSpeed() * 0.015f;
-    // Cap sigma so huge particle size doesn't make every LED sample every particle (avoids slowdown)
     float sigma = std::max(particle_size * half, 5.0f);
     const float sigma_cap = half * 0.4f;
     if(sigma > sigma_cap) sigma = sigma_cap;
@@ -176,7 +175,6 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
     int n_sim = std::max(1, std::min(5, num_simultaneous));
     int type = std::max(0, std::min(firework_type, TYPE_COUNT - 1));
 
-    // Per-frame particle cache for FPS (compute positions once per frame)
     if(particle_cache.empty() || fabsf(time - particle_cache_time) > 0.001f)
     {
         particle_cache.clear();
@@ -185,7 +183,7 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
         if(type == TYPE_ROMAN_CANDLE) cycle = 4.0f;
         if(type == TYPE_FOUNTAIN) cycle = 3.0f;
         const float gravity_base = -0.95f * speed_scale * half * grav_mult;
-        const float decay_coeff = 6.0f * decay_mult;  // Strong decay so burst clears before next
+        const float decay_coeff = 6.0f * decay_mult;
 
         for(int launch = 0; launch < n_sim; launch++)
         {
@@ -349,7 +347,6 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
     }
-    // Clamp sums to 1 so additive blend keeps burst colors (rainbow/picker) instead of blowing to white
     sum_r = std::min(1.0f, sum_r);
     sum_g = std::min(1.0f, sum_g);
     sum_b = std::min(1.0f, sum_b);

@@ -17,16 +17,16 @@ BreathingSphere3D::BreathingSphere3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     size_slider = nullptr;
     size_label = nullptr;
-    sphere_size = 120;   // Larger default for room-scale
+    sphere_size = 120;
     progress = 0.0f;
 
     SetFrequency(50);
     SetRainbowMode(true);
 
     std::vector<RGBColor> default_colors;
-    default_colors.push_back(0x000000FF);  // Red (0x00BBGGRR format)
-    default_colors.push_back(0x0000FF00);  // Green
-    default_colors.push_back(0x00FF0000);  // Blue
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
 }
 
@@ -39,7 +39,7 @@ BreathingSphere3D::~BreathingSphere3D()
 EffectInfo3D BreathingSphere3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Breathing Sphere";
     info.effect_description = "Pulsing sphere with rainbow or custom colors";
     info.category = "3D Spatial";
@@ -57,7 +57,7 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     info.needs_frequency = true;
 
     info.default_speed_scale = 20.0f;
-    info.default_frequency_scale = 100.0f;  // (freq/100)² * 100
+    info.default_frequency_scale = 100.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
@@ -137,7 +137,6 @@ RGBColor BreathingSphere3D::CalculateColor(float, float, float, float)
 |   SPDX-License-Identifier: GPL-2.0-only                   |
 \*---------------------------------------------------------*/
 
-// Grid-aware version with radius proportional to room size
 RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -164,19 +163,16 @@ RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float 
 
     float size_multiplier = GetNormalizedSize();
     float half_diag = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
-    // Sphere base radius spans a large portion of the room, scales with slider
-    float base_scale = 0.15f + (sphere_size / 200.0f) * 0.55f; // ~15%..70% of half-diagonal
+    float base_scale = 0.15f + (sphere_size / 200.0f) * 0.55f;
     float sphere_radius = half_diag * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * actual_frequency * 0.2f));
 
     float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     
-    // Enhanced sphere with core, glow, and ripple layers for immersive 3D effect
     float core_intensity = 1.0f - smoothstep(0.0f, sphere_radius * 0.7f, distance);
     float glow_intensity = 0.5f * (1.0f - smoothstep(sphere_radius * 0.7f, sphere_radius * 1.3f, distance));
     float ripple = 0.3f * sinf(distance * (actual_frequency / (half_diag + 0.001f)) * 1.5f - progress * 2.0f);
-    ripple = (ripple + 1.0f) * 0.5f; // Normalize ripple to 0-1
+    ripple = (ripple + 1.0f) * 0.5f;
     
-    // Add subtle ambient glow for whole-room presence
     float ambient = 0.1f * (1.0f - smoothstep(0.0f, sphere_radius * 2.0f, distance));
     
     float sphere_intensity = core_intensity + glow_intensity + ripple * 0.4f + ambient;
@@ -187,7 +183,6 @@ RGBColor BreathingSphere3D::CalculateColorGrid(float x, float y, float z, float 
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     r = (unsigned char)(r * sphere_intensity);
     g = (unsigned char)(g * sphere_intensity);
     b = (unsigned char)(b * sphere_intensity);

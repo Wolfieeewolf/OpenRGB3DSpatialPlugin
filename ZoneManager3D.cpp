@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| ZoneManager3D.cpp                                         |
-|                                                           |
-|   Manages zones for effect targeting                     |
-|                                                           |
-|   Date: 2025-10-03                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "ZoneManager3D.h"
 #include <algorithm>
@@ -145,7 +136,6 @@ void ZoneManager3D::FromJSON(const nlohmann::json& json)
             }
             catch(const std::exception&)
             {
-                // Skip invalid zone entries
             }
         }
     }

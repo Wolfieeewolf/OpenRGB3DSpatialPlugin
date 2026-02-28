@@ -14,15 +14,15 @@
 
 struct CaptureSourceInfo
 {
-    std::string     id;                 // Unique identifier for this monitor
-    std::string     name;               // Display name (e.g., "\\.\DISPLAY1")
-    std::string     device_name;        // Friendly name if available
-    int             width;              // Native resolution width
-    int             height;             // Native resolution height
-    int             x;                  // Position in virtual screen space
-    int             y;                  // Position in virtual screen space
-    bool            is_primary;         // Is this the primary display?
-    bool            is_available;       // Can we capture from this source?
+    std::string     id;
+    std::string     name;
+    std::string     device_name;
+    int             width;
+    int             height;
+    int             x;
+    int             y;
+    bool            is_primary;
+    bool            is_available;
 };
 
 /**
@@ -30,12 +30,12 @@ struct CaptureSourceInfo
  */
 struct CapturedFrame
 {
-    std::vector<uint8_t>    data;           // RGBA pixel data (downscaled)
-    int                     width;          // Frame width
-    int                     height;         // Frame height
-    uint64_t                frame_id;       // Monotonic frame counter
-    uint64_t                timestamp_ms;   // Capture timestamp
-    bool                    valid;          // Is this frame valid?
+    std::vector<uint8_t>    data;
+    int                     width;
+    int                     height;
+    uint64_t                frame_id;
+    uint64_t                timestamp_ms;
+    bool                    valid;
 
     CapturedFrame()
         : width(0), height(0), frame_id(0), timestamp_ms(0), valid(false)
@@ -68,7 +68,6 @@ private:
     ScreenCaptureManager();
     ~ScreenCaptureManager();
 
-    // Prevent copying
     ScreenCaptureManager(const ScreenCaptureManager&) = delete;
     ScreenCaptureManager& operator=(const ScreenCaptureManager&) = delete;
 

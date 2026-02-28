@@ -140,15 +140,11 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     tab_widget->insertTab(0, profiles_scroll, "Profiles");
 }
 
-//==============================================================================
-// Dirty Flag System
-//==============================================================================
-
 void OpenRGB3DSpatialTab::SetLayoutDirty(bool dirty)
 {
     if(layout_dirty == dirty)
     {
-        return; // No change
+        return;
     }
     
     layout_dirty = dirty;
@@ -178,7 +174,7 @@ bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
 {
     if(!layout_dirty)
     {
-        return true; // No changes, proceed
+        return true;
     }
     
     QMessageBox msgBox;
@@ -195,14 +191,14 @@ bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
     {
         case QMessageBox::Save:
             on_quick_save_layout_clicked();
-            return !layout_dirty; // Return true if save succeeded (dirty cleared)
+            return !layout_dirty;
             
         case QMessageBox::Discard:
-            return true; // User chose to discard changes
+            return true;
             
         case QMessageBox::Cancel:
         default:
-            return false; // User cancelled the operation
+            return false;
     }
 }
 

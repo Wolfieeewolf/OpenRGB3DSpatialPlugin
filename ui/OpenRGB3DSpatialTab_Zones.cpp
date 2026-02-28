@@ -11,7 +11,6 @@
 #include <QLabel>
 #include <QVariant>
 
-// Zone Management
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
     if(!zone_manager) return;
@@ -40,7 +39,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     QLabel* label = new QLabel(QString("Select controllers to add to zone '%1':").arg(zone_name));
     layout->addWidget(label);
 
-    // Create checkboxes for each controller
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
@@ -93,7 +91,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
         UpdateZonesList();
         SaveZones();
-        SetLayoutDirty(); // Mark layout as modified
+        SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Created",
                                 QString("Zone '%1' created with %2 controller(s).")
@@ -122,7 +120,6 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
     QString zone_name = QString::fromStdString(zone->GetName());
 
-    // Show dialog to modify controller selection
     QDialog dialog(this);
     dialog.setWindowTitle(QString("Edit Zone: %1").arg(zone_name));
     QVBoxLayout* layout = new QVBoxLayout();
@@ -130,7 +127,6 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
     QLabel* label = new QLabel(QString("Select controllers for zone '%1':").arg(zone_name));
     layout->addWidget(label);
 
-    // Create checkboxes for each controller
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
@@ -185,7 +181,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
         UpdateZonesList();
         SaveZones();
-        SetLayoutDirty(); // Mark layout as modified
+        SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Updated",
                                 QString("Zone '%1' now has %2 controller(s).")
@@ -221,7 +217,7 @@ void OpenRGB3DSpatialTab::on_delete_zone_clicked()
         zone_manager->DeleteZone(selected_idx);
         UpdateZonesList();
         SaveZones();
-        SetLayoutDirty(); // Mark layout as modified
+        SetLayoutDirty();
     }
 }
 
@@ -254,7 +250,6 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
         }
     }
 
-    // Also update the zone dropdowns in effects tab, effect stack tab, and audio tab
     UpdateEffectZoneCombo();
     UpdateStackEffectZoneCombo();
     UpdateFreqZoneCombo();

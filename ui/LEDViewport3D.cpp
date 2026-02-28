@@ -1795,7 +1795,7 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
 
     if(discriminant < 0.0f)
     {
-        return false; // No intersection
+        return false;
     }
 
     float sqrt_discriminant = sqrtf(discriminant);
@@ -1813,7 +1813,7 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
         return true;
     }
 
-    return false; // Both intersections behind the ray origin
+    return false;
 }
 
 int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
@@ -1862,7 +1862,7 @@ int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
 
     int closest_ref_point = -1;
     float closest_distance = FLT_MAX;
-    const float sphere_radius = 0.3f; // Match the radius used in DrawReferencePoints
+    const float sphere_radius = 0.3f;
 
     for(unsigned int i = 0; i < reference_points->size(); i++)
     {
@@ -1915,9 +1915,9 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
     float size_y = max_bounds.y - min_bounds.y;
     float size_z = max_bounds.z - min_bounds.z;
 
-    float min_dimension = 0.2f;  // Minimum box dimension
+    float min_dimension = 0.2f;
 
-    if(size_x < 0.001f)  // Essentially zero
+    if(size_x < 0.001f)
     {
         float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
         min_bounds.x = center_x - min_dimension;
@@ -2201,7 +2201,7 @@ void LEDViewport3D::AddControllerToSelection(int index)
     }
 
     selected_controller_indices.push_back(index);
-    selected_controller_idx = index; // Keep primary selection for gizmo
+    selected_controller_idx = index;
 }
 
 void LEDViewport3D::RemoveControllerFromSelection(int index)
@@ -2367,9 +2367,9 @@ void LEDViewport3D::DrawUserFigure()
 
             if(is_selected)
             {
-                glDisable(GL_DEPTH_TEST); // Make sure selection box is always visible
+                glDisable(GL_DEPTH_TEST);
                 float box_size = head_radius * 1.5f;
-                glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow
+                glColor3f(1.0f, 1.0f, 0.0f);
                 glLineWidth(3.0f);
 
                 glBegin(GL_LINES);
@@ -2389,7 +2389,7 @@ void LEDViewport3D::DrawUserFigure()
                 glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
                 glEnd();
 
-                glEnable(GL_DEPTH_TEST); // Re-enable depth test
+                glEnable(GL_DEPTH_TEST);
             }
 
             glLineWidth(1.0f);
@@ -2457,7 +2457,7 @@ void LEDViewport3D::DrawReferencePoints()
 
         if(is_selected)
         {
-            glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow for selection
+            glColor3f(1.0f, 1.0f, 0.0f);
             glLineWidth(4.0f);
         }
         else
@@ -2476,35 +2476,31 @@ void LEDViewport3D::DrawReferencePoints()
         }
         glEnd();
 
-        // Draw selection box when selected
         if(is_selected)
         {
-            glDisable(GL_DEPTH_TEST); // Make sure selection box is always visible
+            glDisable(GL_DEPTH_TEST);
             float box_size = sphere_radius * 1.5f;
-            glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow
+            glColor3f(1.0f, 1.0f, 0.0f);
             glLineWidth(3.0f);
 
             glBegin(GL_LINES);
-            // Bottom square
             glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
             glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
             glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
             glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
 
-            // Top square
             glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
             glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
             glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
             glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
 
-            // Vertical edges
             glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
             glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
             glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
             glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, box_size, box_size);
             glEnd();
 
-            glEnable(GL_DEPTH_TEST); // Re-enable depth test
+            glEnable(GL_DEPTH_TEST);
         }
 
         glLineWidth(1.0f);

@@ -29,11 +29,9 @@
 #pragma comment(lib, "Mmdevapi.lib")
 #endif
 
-// Math constant for MSVC where M_PI may be undefined
 static constexpr float PI_F = 3.14159265358979323846f;
 
 #ifdef _WIN32
-// Minimal WASAPI capturer (loopback or capture)
 class AudioInputManager::WasapiCapturer
 {
 public:
@@ -50,7 +48,6 @@ public:
 private:
     void run()
     {
-        // COM must be initialized in this thread
         HRESULT coinithr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         IMMDeviceEnumerator* enumerator = nullptr;
         IMMDevice* device = nullptr;
@@ -93,7 +90,6 @@ private:
         }
         const int channels = mix->nChannels;
         manager->setSampleRate((int)mix->nSamplesPerSec);
-        // Set channel info for diagnostics
         manager->channel_count = channels;
         manager->channel_levels.assign(channels, 0.0f);
         manager->channel_names.clear();
@@ -167,7 +163,6 @@ private:
             }
             else if(isPCM && bitsPerSample >= 24)
             {
-                // Treat as 32-bit container and scale from int32
                 const int32_t* s32 = reinterpret_cast<const int32_t*>(data);
                 for(UINT32 i=0;i<frames;i++)
                 {
@@ -183,7 +178,6 @@ private:
                         }
                     }
                     double acc = (double)sum / (double)std::max(1, channels);
-                    // scale from 32-bit to 16-bit
                     int v = (int)(acc / 2147483648.0 * 32767.0);
                     if(v > 32767) v = 32767; if(v < -32768) v = -32768;
                     mono[i] = (int16_t)v;
@@ -191,7 +185,6 @@ private:
             }
             else
             {
-                // Fallback: treat bytes as 16-bit
                 const int16_t* s = reinterpret_cast<const int16_t*>(data);
                 for(UINT32 i=0;i<frames;i++)
                 {
@@ -262,7 +255,7 @@ AudioInputManager* AudioInputManager::instance()
 AudioInputManager::AudioInputManager(QObject* parent)
     : QObject(parent)
 {
-    level_timer.setInterval(33); // ~30Hz UI updates
+    level_timer.setInterval(33);
     connect(&level_timer, &QTimer::timeout, this, &AudioInputManager::onLevelTick);
     sample_buffer.reserve(fft_size * 4);
     bands16.assign(16, 0.0f);
@@ -277,7 +270,6 @@ QStringList AudioInputManager::listInputDevices()
     device_ids.clear();
     device_is_loopback.clear();
     IMMDeviceEnumerator* enumerator = nullptr;
-    // Ensure COM initialized for enumeration
     HRESULT coinithr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), (void**)&enumerator);
@@ -286,7 +278,6 @@ QStringList AudioInputManager::listInputDevices()
         if(SUCCEEDED(coinithr)) CoUninitialize();
         return names;
     }
-    // Render devices as loopback sources
     IMMDeviceCollection* coll = nullptr;
     hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &coll);
     if(SUCCEEDED(hr) && coll)
@@ -315,7 +306,6 @@ QStringList AudioInputManager::listInputDevices()
         }
         coll->Release();
     }
-    // Capture devices
     coll = nullptr;
     hr = enumerator->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &coll);
     if(SUCCEEDED(hr) && coll)
@@ -365,7 +355,6 @@ void AudioInputManager::setDeviceByIndex(int index)
         selected_index = index;
         was_running = running;
     }
-    // Release mutex before calling stop()/start() to avoid deadlock
     if(was_running)
     {
         stop();
@@ -393,7 +382,6 @@ void AudioInputManager::start()
     level_timer.start();
     return;
 #else
-    // Non-Windows not implemented
     running = true;
     resetAutoLevel();
     level_timer.start();
@@ -471,18 +459,14 @@ void AudioInputManager::setBandsCount(int bands)
 
 void AudioInputManager::setFFTSize(int n)
 {
-    // Accept common sizes 512..8192 and coerce to power-of-two
     if(n < 512) n = 512;
     if(n > 8192) n = 8192;
-    // Round to nearest power of two
-    int p = 1; while(p < n) p <<= 1; // next power
-    // choose closer of previous and next powers
+    int p = 1; while(p < n) p <<= 1;
     int prev = p >> 1; if(prev < 512) prev = 512;
     int chosen = (p - n) < (n - prev) ? p : prev;
     if(chosen < 512) chosen = 512; if(chosen > 8192) chosen = 8192;
     if(chosen == fft_size) return;
     fft_size = chosen;
-    // Reset analysis buffers so new size takes effect cleanly
     sample_buffer.clear();
     window.clear();
     prev_mags.clear();
@@ -505,7 +489,6 @@ int AudioInputManager::getBandsCount() const
 
 void AudioInputManager::processBuffer(const char* data, int bytes)
 {
-    // Compute RMS of 16-bit mono PCM
     if(bytes <= 0) return;
 
     int16_t const* samples = reinterpret_cast<const int16_t*>(data);
@@ -515,13 +498,12 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
     double sum = 0.0;
     for(int i = 0; i < count; i++)
     {
-        double s = samples[i] / 32768.0; // -1..1
+        double s = samples[i] / 32768.0;
         sum += s * s;
         sample_buffer.push_back((float)s);
     }
     double rms = std::sqrt(sum / std::max(1, count));
 
-    // Apply simple soft clip and gain
     double val = rms * gain;
 
     if(auto_level_enabled)
@@ -581,17 +563,14 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
 
     if(val > 1.0) val = 1.0;
 
-    // EMA smoothing
     float prev = current_level.load();
     float out = (float)(ema_smoothing * prev + (1.0 - ema_smoothing) * val);
     if(out < 0.0f) out = 0.0f; if(out > 1.0f) out = 1.0f;
     current_level.store(out);
 
-    // When enough samples accumulated, compute spectrum
     if((int)sample_buffer.size() >= fft_size)
     {
         computeSpectrum();
-        // keep last fft_size samples as overlap (50%)
         int keep = fft_size / 2;
         if(keep < 1) keep = 1;
         if((int)sample_buffer.size() > keep)
@@ -622,7 +601,7 @@ void AudioInputManager::updateChannelLevels(const std::vector<float>& levels)
     {
         if(i >= channel_levels.size())
         {
-            break; // Safety check - should not happen due to resize above
+            break;
         }
         double value = (double)levels[i] * (double)gain;
         double normalized = (value - auto_level_floor) / (double)range;
@@ -649,7 +628,6 @@ void AudioInputManager::onLevelTick()
 void AudioInputManager::FeedPCM16(const int16_t* samples, int count)
 {
     if(!samples || count <= 0) return;
-    // Reuse processing path
     processBuffer(reinterpret_cast<const char*>(samples), count * (int)sizeof(int16_t));
 }
 
@@ -666,7 +644,6 @@ void AudioInputManager::ensureWindow()
 static void fft_cooley_tukey(std::vector<std::complex<float>>& a)
 {
     const size_t n = a.size();
-    // bit-reverse
     size_t j = 0;
     for(size_t i = 1; i < n; i++)
     {
@@ -698,7 +675,6 @@ void AudioInputManager::computeSpectrum()
 {
     ensureWindow();
     if((int)sample_buffer.size() < fft_size) return;
-    // Take last fft_size samples
     std::vector<std::complex<float>> buf(fft_size);
     int start = (int)sample_buffer.size() - fft_size;
     for(int i = 0; i < fft_size; i++)
@@ -707,7 +683,6 @@ void AudioInputManager::computeSpectrum()
         buf[i] = std::complex<float>(s, 0.0f);
     }
     fft_cooley_tukey(buf);
-    // Magnitude spectrum (first half)
     int n2 = fft_size / 2;
     std::vector<float> mags(n2);
     for(int i = 0; i < n2; i++)
@@ -716,15 +691,12 @@ void AudioInputManager::computeSpectrum()
         mags[i] = m;
     }
 
-    // Map to N log bands between ~bin resolution and Nyquist
     float fs = (float)sample_rate_hz;
-    // Smallest meaningful frequency is one FFT bin (skip DC at bin 0)
     float bin_min = (fft_size > 0) ? (fs / (float)fft_size) : 1.0f;
     float f_min = std::max(1.0f, bin_min);
     float f_max = fs * 0.5f;
     if(f_max <= f_min || f_max < 0.001f)
     {
-        // Invalid frequency range, return early
         return;
     }
     std::vector<float> newBands(bands_count, 0.0f);
@@ -741,12 +713,9 @@ void AudioInputManager::computeSpectrum()
         float accum = 0.0f; int cnt = 0;
         for(int i = i0; i < i1; i++) { accum += mags[i]; cnt++; }
         float v = (cnt > 0) ? (accum / cnt) : 0.0f;
-        // log-like companding and normalization
         v = std::log10(1.0f + 9.0f * v);
-        // smooth with EMA per band
         newBands[b] = v;
     }
-    // Normalize rough range 0..1
     float maxv = 1e-6f;
     for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
     {
@@ -761,7 +730,6 @@ void AudioInputManager::computeSpectrum()
         newBands[band_index] = std::min(1.0f, newBands[band_index] / maxv);
     }
 
-    // Store with smoothing
     {
         QMutexLocker bl(&bands_mutex);
         if((int)bands16.size() != bands_count) bands16.assign(bands_count, 0.0f);
@@ -769,7 +737,6 @@ void AudioInputManager::computeSpectrum()
         {
             bands16[b] = ema_smoothing * bands16[b] + (1.0f - ema_smoothing) * newBands[b];
         }
-        // Aggregate bass/mid/treble using crossovers
         float log_ratio = std::log(f_max / f_min);
         float bass_norm = 0.0f;
         if(std::abs(log_ratio) > 1e-6f)
@@ -803,7 +770,6 @@ void AudioInputManager::computeSpectrum()
 
         updateVisualizerBuckets(mags, f_min, f_max);
 
-        // Onset detection via spectral flux (half-wave rectified diff of magnitudes)
         if(prev_mags.size() != mags.size()) prev_mags.assign(mags.size(), 0.0f);
         double flux = 0.0;
         for(size_t mag_index = 0; mag_index < mags.size(); mag_index++)
@@ -812,7 +778,6 @@ void AudioInputManager::computeSpectrum()
             if(diff > 0) flux += diff;
         }
         prev_mags = mags;
-        // Normalize flux and smooth
         double nf = std::log10(1.0 + 9.0 * flux);
         onset_level = (float)(0.6 * onset_level + 0.4 * std::min(1.0, nf));
     }

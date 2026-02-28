@@ -86,7 +86,6 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
         }
     }
 
-    // Center all positions at 0,0,0
     if(!positions.empty())
     {
         float min_x = positions[0].local_position.x;
@@ -127,8 +126,6 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
 {
     std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y);
 
-    // Now scale positions based on LED spacing and grid scale
-    // Formula: grid_position = led_spacing_mm / grid_scale_mm
     float scale_x = (spacing_mm_x > 0.001f) ? MMToGridUnits(spacing_mm_x, grid_scale_mm) : 1.0f;
     float scale_y = (spacing_mm_y > 0.001f) ? MMToGridUnits(spacing_mm_y, grid_scale_mm) : 1.0f;
     float scale_z = (spacing_mm_z > 0.001f) ? MMToGridUnits(spacing_mm_z, grid_scale_mm) : 1.0f;
@@ -166,9 +163,6 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         return;
     }
 
-    // Compute local-space bounding box center so world positions match viewport centering
-    // The viewport renders controllers centered on their local bounds before applying the
-    // controller transform. To ensure effects use the same world positions, we center here too.
     Vector3D local_min = {0.0f, 0.0f, 0.0f};
     Vector3D local_max = {0.0f, 0.0f, 0.0f};
     bool have_bounds = false;
@@ -199,15 +193,12 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         local_center.z = (local_min.z + local_max.z) * 0.5f;
     }
 
-    // Pre-compute rotation matrix once per controller
     float rotation_matrix[9];
     Geometry3D::ComputeRotationMatrix(ctrl_transform->transform.rotation, rotation_matrix);
 
-    // Update world position for each LED
     for(unsigned int i = 0; i < ctrl_transform->led_positions.size(); i++)
     {
         LEDPosition3D* led_pos = &ctrl_transform->led_positions[i];
-        // Center local position so rotation/translation match viewport rendering
         Vector3D local = {
             led_pos->local_position.x - local_center.x,
             led_pos->local_position.y - local_center.y,
@@ -216,13 +207,10 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
 
         Vector3D rotated = Geometry3D::RotateVector(local, rotation_matrix);
 
-        // Apply translation for display/world coordinates (used by viewport, ambilight, etc.)
         led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
 
-        // Store a room-aligned position that ignores controller rotation so
-        // global room effects (wipes, waves, etc.) remain axis-locked.
         led_pos->room_position.x = local.x + ctrl_transform->transform.position.x;
         led_pos->room_position.y = local.y + ctrl_transform->transform.position.y;
         led_pos->room_position.z = local.z + ctrl_transform->transform.position.z;
@@ -241,7 +229,6 @@ void ControllerLayout3D::MarkWorldPositionsDirty(ControllerTransform* ctrl_trans
     ctrl_transform->world_positions_dirty = true;
 }
 
-// SpatialHash Implementation
 ControllerLayout3D::SpatialHash::SpatialHash(float cell_size)
     : cell_size(cell_size)
 {
@@ -254,8 +241,6 @@ void ControllerLayout3D::SpatialHash::Clear()
 
 int64_t ControllerLayout3D::SpatialHash::HashCell(int x, int y, int z) const
 {
-    // Cantor pairing function for 3D
-    // Combine x,y,z into unique 64-bit hash
     int64_t hash = (int64_t)x;
     hash = hash * 73856093;
     hash ^= (int64_t)y * 19349663;
@@ -312,7 +297,6 @@ std::vector<LEDPosition3D*> ControllerLayout3D::SpatialHash::QueryRadius(float x
 {
     std::vector<LEDPosition3D*> results;
 
-    // Calculate cell range to check
     int min_cx = (int)floorf((x - radius) / cell_size);
     int max_cx = (int)floorf((x + radius) / cell_size);
     int min_cy = (int)floorf((y - radius) / cell_size);
@@ -322,7 +306,6 @@ std::vector<LEDPosition3D*> ControllerLayout3D::SpatialHash::QueryRadius(float x
 
     float radius_sq = radius * radius;
 
-    // Check all cells within range
     for(int cx = min_cx; cx <= max_cx; cx++)
     {
         for(int cy = min_cy; cy <= max_cy; cy++)
@@ -333,7 +316,6 @@ std::vector<LEDPosition3D*> ControllerLayout3D::SpatialHash::QueryRadius(float x
                 std::unordered_map<int64_t, SpatialCell>::iterator it = grid.find(hash);
                 if(it == grid.end()) continue;
 
-                // Check each LED in cell
                 for(unsigned int i = 0; i < it->second.leds.size(); i++)
                 {
                     LEDPosition3D* led = it->second.leds[i];
@@ -361,9 +343,8 @@ LEDPosition3D* ControllerLayout3D::SpatialHash::FindNearest(float x, float y, fl
     int cx, cy, cz;
     GetCellCoords(x, y, z, cx, cy, cz);
 
-    // Start with current cell and expand if needed
     int search_radius = 0;
-    const int max_search_radius = 10; // Limit search to avoid infinite loop
+    const int max_search_radius = 10;
 
     while(!nearest && search_radius <= max_search_radius)
     {
@@ -373,7 +354,6 @@ LEDPosition3D* ControllerLayout3D::SpatialHash::FindNearest(float x, float y, fl
             {
                 for(int dz = -search_radius; dz <= search_radius; dz++)
                 {
-                    // Only check cells on the current shell (not already checked)
                     if(search_radius > 0 &&
                        abs(dx) != search_radius &&
                        abs(dy) != search_radius &&
@@ -386,7 +366,6 @@ LEDPosition3D* ControllerLayout3D::SpatialHash::FindNearest(float x, float y, fl
                     std::unordered_map<int64_t, SpatialCell>::iterator it = grid.find(hash);
                     if(it == grid.end()) continue;
 
-                    // Check each LED in cell
                     for(unsigned int i = 0; i < it->second.leds.size(); i++)
                     {
                         LEDPosition3D* led = it->second.leds[i];

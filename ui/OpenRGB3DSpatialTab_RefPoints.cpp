@@ -32,7 +32,7 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
     std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, 0.0f, 0.0f, 0.0f);
     ref_point->SetDisplayColor(selected_ref_point_color);
-    ref_point->SetVisible(false);  // Not visible until added to viewport
+    ref_point->SetVisible(false);
 
     reference_points.push_back(std::move(ref_point));
 
@@ -40,7 +40,7 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
     UpdateAvailableControllersList();
     SelectAvailableControllerEntry(-2, ref_index);
     UpdateReferencePointsList();
-    SaveReferencePoints(); // Mark layout as dirty
+    SaveReferencePoints();
 
     ref_point_name_edit->clear();
     ref_point_type_combo->setCurrentIndex(0);
@@ -80,7 +80,7 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
 
     reference_points.erase(reference_points.begin() + index);
     UpdateReferencePointsList();
-    SaveReferencePoints(); // Mark layout as dirty
+    SaveReferencePoints();
     if(viewport) viewport->update();
     UpdateAvailableControllersList();
 }
@@ -250,7 +250,7 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     for(size_t i = 0; i < reference_points.size(); i++)
     {
         const std::unique_ptr<VirtualReferencePoint3D>& ref_point = reference_points[i];
-        if(!ref_point) continue; // Skip null pointers
+        if(!ref_point) continue;
 
         QString item_text = QString::fromStdString(ref_point->GetName());
         reference_points_list->addItem(item_text);

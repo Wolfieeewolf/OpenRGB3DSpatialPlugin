@@ -28,7 +28,7 @@ struct FrequencyRangeEffect3D
     
     std::string                         effect_class_name;
     int                                 zone_index          = -1;
-    int                                 origin_ref_index    = -1;  // -1 = room center, >=0 = reference point index
+    int                                 origin_ref_index    = -1;
     
     Vector3D                            position            = {0.0f, 0.0f, 0.0f};
     Vector3D                            rotation            = {0.0f, 0.0f, 0.0f};

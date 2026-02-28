@@ -22,10 +22,10 @@ Matrix3D::Matrix3D(QWidget* parent) : SpatialEffect3D(parent)
     char_spacing_label = nullptr;
     density = 60;
     trail = 50;
-    char_height = 15;  // Default character height
-    char_gap = 15;     // Default gap size
-    char_variation = 60; // Default variation
-    char_spacing = 10; // Default spacing (denser stream)
+    char_height = 15;
+    char_gap = 15;
+    char_variation = 60;
+    char_spacing = 10;
     SetRainbowMode(false);
 }
 
@@ -49,7 +49,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    info.default_speed_scale = 30.0f;  // Increased for better responsiveness (was 15.0f)
+    info.default_speed_scale = 30.0f;
     info.default_frequency_scale = 8.0f;
     info.use_size_parameter = true;
 
@@ -59,7 +59,6 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -195,17 +194,14 @@ float Matrix3D::ComputeFaceIntensity(int face,
                                      float size_normalized,
                                      float speed_scale) const
 {
-    // Early return if grid is invalid to prevent crashes
     if(grid.min_x >= grid.max_x || grid.min_y >= grid.max_y || grid.min_z >= grid.max_z)
     {
-        return 0.0f; // Invalid grid, return no intensity
+        return 0.0f;
     }
-    
-    // Validate all input parameters to prevent crashes
+
     if(column_spacing < 0.001f) column_spacing = 0.001f;
     if(size_normalized < 0.001f) size_normalized = 0.001f;
     if(size_normalized > 10.0f) size_normalized = 10.0f;
-    // Clamp time and coordinates to reasonable ranges
     if(time < -100000.0f || time > 100000.0f) time = 0.0f;
     if(x < -10000.0f || x > 10000.0f) x = 0.0f;
     if(y < -10000.0f || y > 10000.0f) y = 0.0f;
@@ -220,210 +216,162 @@ float Matrix3D::ComputeFaceIntensity(int face,
 
     switch(face)
     {
-        case 0: // Left wall - code falls top to bottom (Y axis)
-            u = z;  // Horizontal position along wall
-            v = y;  // Vertical position (top to bottom)
-            axis_value = y;  // Code falls along Y
-            axis_min = grid.min_y;  // Bottom
-            axis_max = grid.max_y;  // Top
+        case 0:
+            u = z;
+            v = y;
+            axis_value = y;
+            axis_min = grid.min_y;
+            axis_max = grid.max_y;
             face_distance = fabsf(x - grid.min_x);
             break;
-        case 1: // Right wall - code falls top to bottom (Y axis)
-            u = z;  // Horizontal position along wall
-            v = y;  // Vertical position (top to bottom)
-            axis_value = y;  // Code falls along Y
-            axis_min = grid.min_y;  // Bottom
-            axis_max = grid.max_y;  // Top
+        case 1:
+            u = z;
+            v = y;
+            axis_value = y;
+            axis_min = grid.min_y;
+            axis_max = grid.max_y;
             face_distance = fabsf(x - grid.max_x);
             break;
-        case 2: // Front wall - code falls top to bottom (Y axis)
-            u = x;  // Horizontal position along wall
-            v = y;  // Vertical position (top to bottom)
-            axis_value = y;  // Code falls along Y
-            axis_min = grid.min_y;  // Bottom
-            axis_max = grid.max_y;  // Top
+        case 2:
+            u = x;
+            v = y;
+            axis_value = y;
+            axis_min = grid.min_y;
+            axis_max = grid.max_y;
             face_distance = fabsf(z - grid.min_z);
             break;
-        case 3: // Back wall - code falls top to bottom (Y axis)
-            u = x;  // Horizontal position along wall
-            v = y;  // Vertical position (top to bottom)
-            axis_value = y;  // Code falls along Y
-            axis_min = grid.min_y;  // Bottom
-            axis_max = grid.max_y;  // Top
+        case 3:
+            u = x;
+            v = y;
+            axis_value = y;
+            axis_min = grid.min_y;
+            axis_max = grid.max_y;
             face_distance = fabsf(z - grid.max_z);
             break;
-        case 4: // Floor - code moves toward viewer (Z axis, from back to front)
-            u = x;  // Horizontal position
-            v = z;  // Depth position (back to front)
-            axis_value = z;  // Code moves along Z toward viewer
-            axis_min = grid.min_z;  // Back
-            axis_max = grid.max_z;  // Front (toward viewer)
+        case 4:
+            u = x;
+            v = z;
+            axis_value = z;
+            axis_min = grid.min_z;
+            axis_max = grid.max_z;
             face_distance = fabsf(z - grid.min_z);
             break;
-        case 5: // Ceiling - code moves toward viewer (Z axis, from back to front)
+        case 5:
         default:
-            u = x;  // Horizontal position
-            v = z;  // Depth position (back to front)
-            axis_value = z;  // Code moves along Z toward viewer
-            axis_min = grid.min_z;  // Back
-            axis_max = grid.max_z;  // Front (toward viewer)
+            u = x;
+            v = z;
+            axis_value = z;
+            axis_min = grid.min_z;
+            axis_max = grid.max_z;
             face_distance = fabsf(z - grid.max_z);
             break;
     }
 
-    // Safety check for column_spacing
     if(column_spacing < 0.001f) column_spacing = 0.001f;
-    
-    // Validate u and v before division to prevent NaN/Inf issues
+
     if(u < -10000.0f || u > 10000.0f) u = 0.0f;
     if(v < -10000.0f || v > 10000.0f) v = 0.0f;
     
-    // Calculate column indices with safety checks
     float col_u_float = u / column_spacing;
     float col_v_float = v / column_spacing;
-    // Clamp before floorf to prevent overflow
     col_u_float = fmax(-1000.0f, fmin(1000.0f, col_u_float));
     col_v_float = fmax(-1000.0f, fmin(1000.0f, col_v_float));
     
     int column_u = (int)floorf(col_u_float);
     int column_v = (int)floorf(col_v_float);
-    // Final clamp to prevent integer overflow
     column_u = (column_u < -1000) ? -1000 : (column_u > 1000 ? 1000 : column_u);
     column_v = (column_v < -1000) ? -1000 : (column_v > 1000 ? 1000 : column_v);
-    // Fix operator precedence: use parentheses for clarity and correctness
     int column_id = (column_u * 73856093) ^ (column_v * 19349663);
 
     float offset = ((column_id & 255) / 255.0f) * 10.0f;
-    offset = fmax(0.0f, fmin(10.0f, offset)); // Clamp offset
-    
-    // Read and validate all member variables at once to prevent race conditions
-    // These are simple integer reads which should be atomic on most platforms
+    offset = fmax(0.0f, fmin(10.0f, offset));
+
     unsigned int local_char_spacing = char_spacing;
     unsigned int local_char_height = char_height;
     unsigned int local_char_gap = char_gap;
     unsigned int local_char_variation = char_variation;
     unsigned int local_trail = trail;
     
-    // Validate all member variables with safe defaults
     unsigned int safe_char_spacing = (local_char_spacing >= 1 && local_char_spacing <= 50) ? local_char_spacing : 10;
     unsigned int safe_char_height = (local_char_height >= 5 && local_char_height <= 50) ? local_char_height : 15;
     unsigned int safe_char_gap = (local_char_gap <= 50) ? local_char_gap : 15;
     unsigned int safe_char_variation = (local_char_variation <= 100) ? local_char_variation : 60;
     
-    // Character height scales with size and user setting
-    // Increased base range for better visibility (was 0.05-0.30, now 0.10-0.50)
-    float char_height_base = 0.10f + (safe_char_height / 50.0f) * 0.40f; // 0.10 to 0.50 base
+    float char_height_base = 0.10f + (safe_char_height / 50.0f) * 0.40f;
     float char_height_actual = char_height_base * size_normalized;
     
-    // Safety check: prevent division by zero and clamp to reasonable range
     if(char_height_actual < 0.001f) char_height_actual = 0.001f;
     if(char_height_actual > 10.0f) char_height_actual = 10.0f;
-    
-    // Character spacing in the continuous stream (lower = denser)
-    float spacing_factor = safe_char_spacing / 50.0f; // 0.02 to 1.0
-    float char_spacing_actual = char_height_actual * (0.5f + spacing_factor * 1.5f); // Spacing between character centers
-    
-    // Safety check: prevent division by zero and clamp to reasonable range
+
+    float spacing_factor = safe_char_spacing / 50.0f;
+    float char_spacing_actual = char_height_actual * (0.5f + spacing_factor * 1.5f);
+
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     if(char_spacing_actual > 20.0f) char_spacing_actual = 20.0f;
     
-    // Gap size as percentage of character height
-    float gap_ratio = safe_char_gap / 100.0f; // 0.0 to 0.5 (gap can be up to 50% of char height)
-    gap_ratio = fmax(0.0f, fmin(0.5f, gap_ratio)); // Clamp to 0-0.5
-    float char_body_ratio = 1.0f - gap_ratio; // Rest is character body
-    
-    // Continuous endless stream: like rain - characters fall continuously without gaps
-    // For walls (faces 0-3): code falls from top (axis_max) to bottom (axis_min)
-    // For floor/ceiling (faces 4-5): code moves from back (axis_min) to front (axis_max) toward viewer
-    
-    // Safety checks
+    float gap_ratio = safe_char_gap / 100.0f;
+    gap_ratio = fmax(0.0f, fmin(0.5f, gap_ratio));
+    float char_body_ratio = 1.0f - gap_ratio;
+
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
-    if(char_spacing_actual > 100.0f) char_spacing_actual = 100.0f; // Reasonable upper limit
-    
-    // Wrap time to prevent overflow - use a very long period (24 hours) to avoid visible restarts
-    // Safety check: ensure time is valid before fmodf
+    if(char_spacing_actual > 100.0f) char_spacing_actual = 100.0f;
+
     float safe_time_for_wrap = fmax(-1000000.0f, fmin(1000000.0f, time));
-    const float wrap_period = 86400.0f; // 24 hours in seconds
+    const float wrap_period = 86400.0f;
     float wrapped_time = fmodf(safe_time_for_wrap, wrap_period);
     if(wrapped_time < 0.0f) wrapped_time += wrap_period;
-    // Final validation
     if(wrapped_time < 0.0f || wrapped_time >= wrap_period) wrapped_time = 0.0f;
-    
-    float fall_speed = fmax(0.1f, fmin(100.0f, speed_scale)); // Clamp speed to reasonable range
-    float safe_offset = fmax(-100.0f, fmin(100.0f, offset)); // Clamp offset
-    
-    // Calculate stream time with wrapped time
+
+    float fall_speed = fmax(0.1f, fmin(100.0f, speed_scale));
+    float safe_offset = fmax(-100.0f, fmin(100.0f, offset));
+
     float stream_time = wrapped_time * fall_speed + safe_offset;
-    
-    // Validate axis values to prevent crashes
+
     if(axis_min > axis_max)
     {
-        // Invalid axis range, swap them
         float temp = axis_min;
         axis_min = axis_max;
         axis_max = temp;
     }
     if(axis_max - axis_min < 0.001f)
     {
-        // Very small or zero range, use defaults
         axis_min = 0.0f;
         axis_max = 1.0f;
     }
-    
-    // Clamp axis_value to valid range
+
     axis_value = fmax(axis_min - 10.0f, fmin(axis_max + 10.0f, axis_value));
-    
-    // Calculate position along the axis
+
     float position_along_axis;
-    if(face >= 4) // Floor or ceiling
+    if(face >= 4)
     {
-        // Code moves from back to front (toward viewer)
         position_along_axis = axis_value - axis_min;
     }
-    else // Walls
+    else
     {
-        // Code falls from top to bottom
         position_along_axis = axis_max - axis_value;
     }
-    
-    // Clamp position_along_axis to prevent overflow
+
     position_along_axis = fmax(-1000.0f, fmin(1000.0f, position_along_axis));
-    
-    // Clamp stream_time to prevent overflow
     stream_time = fmax(-10000.0f, fmin(10000.0f, stream_time));
-    
-    // Calculate stream position: position minus time-based movement
-    // This creates continuous falling/moving effect
+
     float stream_pos = position_along_axis - stream_time;
-    
-    // Clamp stream_pos before modulo to prevent issues
+
     stream_pos = fmax(-10000.0f, fmin(10000.0f, stream_pos));
-    
-    // Use modulo to create seamless, continuous wrapping
-    // This ensures characters appear at regular intervals with no gaps
-    // Safety check for char_spacing_actual before modulo
+
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     if(char_spacing_actual > 100.0f) char_spacing_actual = 100.0f;
-    
-    // Validate stream_pos before fmodf to prevent NaN/Inf issues
+
     if(stream_pos < -100000.0f || stream_pos > 100000.0f) stream_pos = 0.0f;
-    
-    // Use fabsf to ensure positive value for fmodf, then adjust
+
     float abs_stream_pos = fabsf(stream_pos);
     abs_stream_pos = fmodf(abs_stream_pos, char_spacing_actual);
     stream_pos = abs_stream_pos;
-    // Final clamp
     stream_pos = fmax(0.0f, fmin(char_spacing_actual - 0.0001f, stream_pos));
-    
-    // Normalized position within the character spacing unit (0 to 1)
-    // Safety check before division
+
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     float char_local = stream_pos / char_spacing_actual;
     char_local = fmax(0.0f, fmin(1.0f, char_local));
-    
-    // Calculate which character "slot" we're in (for variation and trail calculations)
-    // Calculate this before the modulo for accurate trail distance
-    // Safety check before division
+
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
     float char_index_value = (position_along_axis - stream_time) / char_spacing_actual;
     char_index_value = fmax(-10000.0f, fmin(10000.0f, char_index_value));
@@ -431,64 +379,51 @@ float Matrix3D::ComputeFaceIntensity(int face,
     char_index = fmax(-1000.0f, fmin(1000.0f, char_index));
     
     float intensity = 0.0f;
-    
-    // Check if we're within a character (character occupies first portion of spacing unit)
-    float char_portion = char_height_actual / char_spacing_actual; // What portion of spacing is character
-    if(char_portion > 1.0f) char_portion = 1.0f; // Clamp to max 1.0
-    if(char_portion < 0.001f) char_portion = 0.001f; // Safety check
-    
+
+    float char_portion = char_height_actual / char_spacing_actual;
+    if(char_portion > 1.0f) char_portion = 1.0f;
+    if(char_portion < 0.001f) char_portion = 0.001f;
+
     if(char_local < char_portion && char_portion > 0.001f)
     {
-        // We're within a character - determine if body or gap
-        float char_internal = char_local / char_portion; // Position within character (0-1)
-        char_internal = fmax(0.0f, fmin(1.0f, char_internal)); // Clamp to 0-1
-        
+        float char_internal = char_local / char_portion;
+        char_internal = fmax(0.0f, fmin(1.0f, char_internal));
+
         if(char_internal < char_body_ratio)
         {
-            // Character body - full brightness
             intensity = 1.0f;
         }
         else
         {
-            // Character gap - dim
             intensity = 0.2f;
         }
-        
-        // Add character variation (some characters brighter/dimmer)
+
         int safe_char_index = (int)fmax(-10000.0f, fmin(10000.0f, char_index));
         float char_seed = (float)(safe_char_index * 131 + column_id);
-        float variation_amount = safe_char_variation / 100.0f; // 0.0 to 1.0
-        variation_amount = fmax(0.0f, fmin(1.0f, variation_amount)); // Clamp
+        float variation_amount = safe_char_variation / 100.0f;
+        variation_amount = fmax(0.0f, fmin(1.0f, variation_amount));
         
         if(variation_amount > 0.01f)
         {
-            // Safety check for char_seed before fmodf
             float safe_char_seed = fmax(-1000000.0f, fmin(1000000.0f, char_seed * 0.1f));
             float char_brightness = 0.5f + 0.5f * fmodf(safe_char_seed, 1.0f) * variation_amount;
-            char_brightness = fmax(0.0f, fmin(1.0f, char_brightness)); // Clamp
+            char_brightness = fmax(0.0f, fmin(1.0f, char_brightness));
             intensity *= char_brightness;
         }
-        
-        // Fade based on trail length (visible distance in the continuous stream)
-        // For a continuous stream, we fade based on how many character slots behind we are
-        // This creates a trailing fade effect while maintaining continuity
-        unsigned int safe_trail = (local_trail <= 100) ? local_trail : 50; // Validate trail
-        float trail_char_count = 3.0f + (safe_trail / 100.0f) * 12.0f; // 3-15 characters visible
-        trail_char_count = fmax(1.0f, fmin(1000.0f, trail_char_count)); // Safety check with upper limit
-        
-        // Calculate distance in character slots (positive = behind wavefront, negative = ahead)
-        // For continuous stream, we show characters in a repeating pattern
-        // Trail fade applies to characters that are many slots behind
-        // Clamp char_index before using fabsf
+
+        unsigned int safe_trail = (local_trail <= 100) ? local_trail : 50;
+        float trail_char_count = 3.0f + (safe_trail / 100.0f) * 12.0f;
+        trail_char_count = fmax(1.0f, fmin(1000.0f, trail_char_count));
+
         float safe_char_index_float = fmax(-10000.0f, fmin(10000.0f, char_index));
         float slots_behind = fabsf(safe_char_index_float);
-        slots_behind = fmax(0.0f, fmin(10000.0f, slots_behind)); // Clamp to prevent overflow
+        slots_behind = fmax(0.0f, fmin(10000.0f, slots_behind));
         
         if(slots_behind > trail_char_count && trail_char_count > 0.001f)
         {
             float fade_start = trail_char_count;
             float fade_end = trail_char_count * 2.0f;
-            fade_end = fmax(fade_start + 0.001f, fmin(2000.0f, fade_end)); // Clamp fade_end
+            fade_end = fmax(fade_start + 0.001f, fmin(2000.0f, fade_end));
             
             if(slots_behind < fade_end && fade_end > fade_start)
             {
@@ -502,56 +437,41 @@ float Matrix3D::ComputeFaceIntensity(int face,
             }
             else if(slots_behind >= fade_end)
             {
-                intensity = 0.0f; // Too far behind, fade to zero
+                intensity = 0.0f;
             }
         }
     }
-    
-    // Add gap variation (some columns have gaps)
-    // Safety check: ensure column_id is valid
+
     int safe_column_id = column_id;
-    if(safe_column_id < 0) safe_column_id = -safe_column_id; // Make positive
+    if(safe_column_id < 0) safe_column_id = -safe_column_id;
     float gap = fmodf((float)((safe_column_id >> 8) & 1023), 10.0f) / 10.0f;
-    gap = fmax(0.0f, fmin(1.0f, gap)); // Clamp to valid range
+    gap = fmax(0.0f, fmin(1.0f, gap));
     float gap_factor = 0.6f + 0.4f * (gap > 0.3f ? 1.0f : gap * 3.33f);
     gap_factor = fmax(0.0f, fmin(1.0f, gap_factor));
     intensity *= gap_factor;
 
-    // Enhanced face falloff - much softer to work on devices anywhere in room
-    // Devices positioned away from room boundaries will still show the Matrix effect
-    // Clamp face_distance to prevent expf overflow
     face_distance = fmax(0.0f, fmin(1000.0f, face_distance));
-    // Validate face_distance is not NaN or Inf
-    if(face_distance != face_distance) face_distance = 0.0f; // NaN check
+    if(face_distance != face_distance) face_distance = 0.0f;
     float exp_arg = -face_distance * 0.5f;
-    exp_arg = fmax(-100.0f, fmin(100.0f, exp_arg)); // Clamp exp argument to prevent overflow
-    // Validate exp_arg before expf
-    if(exp_arg != exp_arg) exp_arg = 0.0f; // NaN check
+    exp_arg = fmax(-100.0f, fmin(100.0f, exp_arg));
+    if(exp_arg != exp_arg) exp_arg = 0.0f;
     float face_falloff = 0.3f + 0.7f * expf(exp_arg);
-    // Validate result
-    if(face_falloff != face_falloff || face_falloff < 0.0f) face_falloff = 0.3f; // NaN or negative check
+    if(face_falloff != face_falloff || face_falloff < 0.0f) face_falloff = 0.3f;
     face_falloff = fmax(0.0f, fmin(1.0f, face_falloff));
-    
-    // Add ambient glow for whole-room Matrix presence including devices
+
     float ambient = 0.1f * (1.0f - fmin(1.0f, face_distance * 0.05f));
     ambient = fmax(0.0f, fmin(1.0f, ambient));
 
-    // Apply face falloff and ambient
     intensity = intensity * face_falloff + ambient;
-    
-    // Validate intensity is not NaN or Inf before final operations
+
     if(intensity != intensity || intensity < -1000.0f || intensity > 1000.0f)
     {
-        intensity = 0.0f; // Reset to safe value if invalid
+        intensity = 0.0f;
     }
-    
-    // Clamp intensity to valid range before final operations
+
     intensity = fmax(0.0f, fmin(10.0f, intensity));
-    
-    // Increase brightness multiplier for better visibility (was 1.6, now 2.0)
     intensity *= 2.0f;
-    
-    // Final validation and clamp to 0-1 range
+
     if(intensity != intensity || intensity < 0.0f) intensity = 0.0f;
     if(intensity > 1.0f) intensity = 1.0f;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
@@ -560,30 +480,20 @@ float Matrix3D::ComputeFaceIntensity(int face,
 
 RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Matrix-style rain on surfaces (room walls/floor/ceiling and device surfaces)
-    // Walls: code falls top to bottom (Y axis)
-    // Floor/Ceiling: code moves toward viewer (Z axis)
-    // Devices: effect works based on which surface face they're closest to
     float speed = GetScaledSpeed();
     float size_m = GetNormalizedSize();
 
-    // Column spacing: higher density -> smaller spacing
-    float col_spacing = 1.0f + (100.0f - density) * 0.04f; // 1..5 units
+    float col_spacing = 1.0f + (100.0f - density) * 0.04f;
 
     float intensity = 0.0f;
-    
-    // Check all room faces (walls, floor, ceiling)
-    // This also works for devices positioned in the room - the effect will apply
-    // based on which surface face the LED is closest to, matching the device's orientation
+
     for(int face_index = 0; face_index < 6; ++face_index)
     {
         float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
         intensity = fmax(intensity, face_value);
     }
 
-    // Matrix-green color
     unsigned char r = 0;
-    // Global brightness is applied by PostProcessColorGrid
     unsigned char g = (unsigned char)(255 * intensity);
     unsigned char b = 0;
     return (b << 16) | (g << 8) | r;

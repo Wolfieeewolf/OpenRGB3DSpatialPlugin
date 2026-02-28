@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| VirtualController3D.cpp                                   |
-|                                                           |
-|   Virtual controller for custom 3D LED layouts           |
-|                                                           |
-|   Date: 2025-09-24                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "VirtualController3D.h"
 #include "GridSpaceUtils.h"
@@ -99,7 +90,6 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
 {
     std::vector<LEDPosition3D> positions;
 
-    // Calculate scale factors based on LED spacing and grid scale
     float scale_x = (spacing_mm_x > 0.001f) ? MMToGridUnits(spacing_mm_x, grid_scale_mm) : 1.0f;
     float scale_y = (spacing_mm_y > 0.001f) ? MMToGridUnits(spacing_mm_y, grid_scale_mm) : 1.0f;
     float scale_z = (spacing_mm_z > 0.001f) ? MMToGridUnits(spacing_mm_z, grid_scale_mm) : 1.0f;
@@ -121,11 +111,9 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
             continue;
         }
 
-        // Builder axes: X = horizontal, Y = vertical (height), Z = layers (depth)
-        // World axes in viewport: X = width (left-right), Y = height (floor-to-ceiling), Z = depth (front-to-back)
         pos.local_position.x = (float)led_mappings[i].x * scale_x;
-        pos.local_position.y = (float)led_mappings[i].y * scale_y; // height/up/down
-        pos.local_position.z = (float)led_mappings[i].z * scale_z; // depth/front/back
+        pos.local_position.y = (float)led_mappings[i].y * scale_y;
+        pos.local_position.z = (float)led_mappings[i].z * scale_z;
         pos.world_position = pos.local_position;
         pos.room_position = pos.local_position;
         pos.preview_color = 0x00FFFFFF;
@@ -181,7 +169,6 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
     int height = j["height"];
     int depth = j["depth"];
 
-    // Load spacing (with defaults for older files)
     float spacing_x = j.contains("spacing_mm_x") ? j["spacing_mm_x"].get<float>() : 10.0f;
     float spacing_y = j.contains("spacing_mm_y") ? j["spacing_mm_y"].get<float>() : 10.0f;
     float spacing_z = j.contains("spacing_mm_z") ? j["spacing_mm_z"].get<float>() : 10.0f;

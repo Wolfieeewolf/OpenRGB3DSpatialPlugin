@@ -291,7 +291,6 @@ private:
     };
     std::unordered_map<std::string, FrameHistory> capture_history;
 
-    // Temporal smoothing per LED (simple exponential moving average)
     struct LEDKey
     {
         int x;

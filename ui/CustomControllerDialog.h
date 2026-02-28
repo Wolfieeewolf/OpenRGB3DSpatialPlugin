@@ -30,7 +30,7 @@ struct GridLEDMapping
     RGBController* controller;
     unsigned int zone_idx;
     unsigned int led_idx;
-    int granularity; // 0=whole device, 1=zone, 2=LED
+    int granularity;
 };
 
 class ColorComboDelegate : public QStyledItemDelegate
@@ -88,7 +88,6 @@ private slots:
     void on_save_clicked();
     void refresh_colors();
 
-    // LED Layout Transform slots
     void on_lock_transform_toggled(bool locked);
     void on_rotation_angle_changed(int angle);
     void on_rotate_grid_90();
@@ -140,7 +139,6 @@ private:
     QPushButton*    remove_from_grid_button;
     QPushButton*    save_button;
 
-    // LED Layout Transform controls
     QCheckBox*      lock_transform_checkbox;
     QSlider*        rotate_angle_slider;
     QSpinBox*       rotate_angle_spin;
@@ -154,9 +152,9 @@ private:
     QTimer*         color_refresh_timer;
 
     std::vector<GridLEDMapping> led_mappings;
-    std::vector<GridLEDMapping> original_led_mappings;  // Locked original positions
-    std::vector<GridLEDMapping> preview_led_mappings;    // Preview-only mappings when locked
-    bool transform_locked;  // Whether we've locked the original layout
+    std::vector<GridLEDMapping> original_led_mappings;
+    std::vector<GridLEDMapping> preview_led_mappings;
+    bool transform_locked;
     int current_layer;
     int selected_row;
     int selected_col;

@@ -68,7 +68,7 @@ void OpenRGB3DSpatialTab::LoadStackPresets()
     }
 
     UpdateStackPresetsList();
-    UpdateEffectCombo();  // Add presets to Effects tab dropdown
+    UpdateEffectCombo();
 }
 
 void OpenRGB3DSpatialTab::SaveStackPresets()

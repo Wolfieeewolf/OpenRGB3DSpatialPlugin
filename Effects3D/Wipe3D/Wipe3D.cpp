@@ -137,20 +137,19 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
     position = (position + 100.0f) / 200.0f;
     position = fmax(0.0f, fmin(1.0f, position));
 
-    // Calculate wipe edge with thickness
     float edge_distance = fabs(position - progress);
     float thickness_factor = wipe_thickness / 100.0f;
 
     float intensity;
     switch(edge_shape)
     {
-        case 0: // Round
+        case 0:
             intensity = 1.0f - smoothstep(0.0f, thickness_factor, edge_distance);
             break;
         case 1:
             intensity = edge_distance < thickness_factor * 0.5f ? 1.0f : 0.0f;
             break;
-        case 2: // Square
+        case 2:
         default:
             intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
             break;
@@ -167,7 +166,6 @@ RGBColor Wipe3D::CalculateColor(float x, float y, float z, float time)
         final_color = GetColorAtPosition(progress);
     }
 
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
@@ -226,7 +224,7 @@ RGBColor Wipe3D::CalculateColorGrid(float x, float y, float z, float time, const
         case 1:
             intensity = edge_distance < thickness_factor * 0.5f ? 1.0f : 0.0f;
             break;
-        case 2: // Square
+        case 2:
         default:
             intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
             break;

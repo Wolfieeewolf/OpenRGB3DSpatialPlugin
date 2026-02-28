@@ -70,7 +70,7 @@ private:
     std::string     capture_source_id;
     std::string     capture_label;
     std::string     monitor_preset_id;
-    int             reference_point_index;  // Index into reference_points vector (-1 = none)
+    int             reference_point_index;
 
     static int      next_id;
 };
