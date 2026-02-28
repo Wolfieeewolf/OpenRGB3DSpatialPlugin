@@ -94,6 +94,7 @@ private slots:
     void on_export_custom_controller_clicked();
     void on_edit_custom_controller_clicked();
     void on_delete_custom_controller_clicked();
+    void on_custom_controller_selection_changed(int row);
     void on_add_ref_point_clicked();
     void on_remove_ref_point_clicked();
     void on_ref_point_selected(int index);
@@ -240,6 +241,9 @@ private:
     QListWidget*                available_controllers_list;
     QListWidget*                custom_controllers_list;
     QLabel*                     custom_controllers_empty_label;
+    QPushButton*                export_custom_controller_btn;
+    QPushButton*                edit_custom_controller_btn;
+    QPushButton*                delete_custom_controller_btn;
     QLabel*                     object_creator_status_label;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;

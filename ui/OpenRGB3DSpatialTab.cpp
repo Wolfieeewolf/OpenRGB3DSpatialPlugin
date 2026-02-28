@@ -929,6 +929,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     custom_controllers_list->setMinimumHeight(150);
     custom_controllers_list->setToolTip("Select a custom controller to edit or export");
     custom_layout->addWidget(custom_controllers_list);
+    connect(custom_controllers_list, &QListWidget::currentRowChanged, this, &OpenRGB3DSpatialTab::on_custom_controller_selection_changed);
 
     custom_controllers_empty_label = new QLabel("No custom controllers yet. Create one or import from file.");
     custom_controllers_empty_label->setWordWrap(true);
@@ -951,20 +952,23 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(import_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
     custom_io_layout->addWidget(import_button);
 
-    QPushButton* export_button = new QPushButton("Export");
-    export_button->setToolTip("Export selected custom controller to file");
-    connect(export_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
-    custom_io_layout->addWidget(export_button);
+    export_custom_controller_btn = new QPushButton("Export");
+    export_custom_controller_btn->setToolTip("Export selected custom controller to file");
+    export_custom_controller_btn->setEnabled(false);
+    connect(export_custom_controller_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
+    custom_io_layout->addWidget(export_custom_controller_btn);
 
-    QPushButton* edit_button = new QPushButton("Edit");
-    edit_button->setToolTip("Edit selected custom controller");
-    connect(edit_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
-    custom_io_layout->addWidget(edit_button);
+    edit_custom_controller_btn = new QPushButton("Edit");
+    edit_custom_controller_btn->setToolTip("Edit selected custom controller");
+    edit_custom_controller_btn->setEnabled(false);
+    connect(edit_custom_controller_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
+    custom_io_layout->addWidget(edit_custom_controller_btn);
 
-    QPushButton* delete_custom_button = new QPushButton("Delete");
-    delete_custom_button->setToolTip("Remove selected custom controller from library (remove from 3D scene first if in use)");
-    connect(delete_custom_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_custom_controller_clicked);
-    custom_io_layout->addWidget(delete_custom_button);
+    delete_custom_controller_btn = new QPushButton("Delete");
+    delete_custom_controller_btn->setToolTip("Remove selected custom controller from library (remove from 3D scene first if in use)");
+    delete_custom_controller_btn->setEnabled(false);
+    connect(delete_custom_controller_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_delete_custom_controller_clicked);
+    custom_io_layout->addWidget(delete_custom_controller_btn);
 
     custom_layout->addLayout(custom_io_layout);
     custom_layout->addStretch();

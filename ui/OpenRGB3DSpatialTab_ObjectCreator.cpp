@@ -225,6 +225,16 @@ void OpenRGB3DSpatialTab::UpdateCustomControllersList()
     {
         custom_controllers_empty_label->setVisible(custom_controllers_list->count() == 0);
     }
+
+    on_custom_controller_selection_changed(custom_controllers_list->currentRow());
+}
+
+void OpenRGB3DSpatialTab::on_custom_controller_selection_changed(int row)
+{
+    const bool has_selection = (row >= 0);
+    if(edit_custom_controller_btn)   edit_custom_controller_btn->setEnabled(has_selection);
+    if(export_custom_controller_btn) export_custom_controller_btn->setEnabled(has_selection);
+    if(delete_custom_controller_btn) delete_custom_controller_btn->setEnabled(has_selection);
 }
 
 int OpenRGB3DSpatialTab::FindAvailableControllerRow(int type_code, int object_index) const

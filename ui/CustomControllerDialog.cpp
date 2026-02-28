@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <climits>
 #include <functional>
+#include <set>
+#include <tuple>
 
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
@@ -38,14 +40,17 @@ void CustomControllerDialog::SetupUI()
     main_layout->setSpacing(10);
 
     QLabel* help_label = new QLabel(
-        "Step 1: Enter a name and set grid dimensions (width, height, depth) and LED spacing.\n"
-        "Step 2: Select a physical controller and an item (device/zone/LED), click a grid cell, then click \"Assign to Selected Cell\" or double-click the cell. Use the layer tabs for 3D depth.");
+        "1. Name and grid size (width x height x depth). 2. Pick a device/zone/LED, then click or double-click a cell to assign. Use layer tabs for depth.");
     help_label->setWordWrap(true);
     help_label->setStyleSheet("color: gray; font-size: small;");
     help_label->setContentsMargins(0, 0, 0, 6);
     main_layout->addWidget(help_label);
 
-    QGroupBox* step1_group = new QGroupBox("Step 1: Name & Grid");
+    summary_label = new QLabel("Assigned: 0 cells");
+    summary_label->setStyleSheet("font-weight: bold;");
+    main_layout->addWidget(summary_label);
+
+    QGroupBox* step1_group = new QGroupBox(tr("Name & Grid"));
     QVBoxLayout* step1_layout = new QVBoxLayout(step1_group);
     QHBoxLayout* name_layout = new QHBoxLayout();
     name_layout->addWidget(new QLabel("Controller Name:"));
@@ -59,21 +64,21 @@ void CustomControllerDialog::SetupUI()
     width_spin = new QSpinBox();
     width_spin->setRange(1, 200);
     width_spin->setValue(10);
-    connect(width_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
+    connect(width_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
     dim_layout->addWidget(width_spin, 0, 1);
 
     dim_layout->addWidget(new QLabel("Height:"), 0, 2);
     height_spin = new QSpinBox();
     height_spin->setRange(1, 200);
     height_spin->setValue(10);
-    connect(height_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
+    connect(height_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
     dim_layout->addWidget(height_spin, 0, 3);
 
     dim_layout->addWidget(new QLabel("Depth:"), 0, 4);
     depth_spin = new QSpinBox();
     depth_spin->setRange(1, 200);
     depth_spin->setValue(1);
-    connect(depth_spin, SIGNAL(valueChanged(int)), this, SLOT(on_dimension_changed()));
+    connect(depth_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
     dim_layout->addWidget(depth_spin, 0, 5);
 
     dim_layout->addWidget(new QLabel("Spacing X:"), 1, 0);
@@ -100,7 +105,7 @@ void CustomControllerDialog::SetupUI()
     step1_layout->addLayout(dim_layout);
     main_layout->addWidget(step1_group);
 
-    QGroupBox* step2_group = new QGroupBox("Step 2: Assign LEDs");
+    QGroupBox* step2_group = new QGroupBox(tr("Assign LEDs"));
     QHBoxLayout* content_layout = new QHBoxLayout(step2_group);
 
     QGroupBox* left_group = new QGroupBox("Available Controllers");
@@ -116,19 +121,19 @@ void CustomControllerDialog::SetupUI()
     granularity_combo->addItem("Whole Device");
     granularity_combo->addItem("Zone");
     granularity_combo->addItem("LED");
-    connect(granularity_combo, SIGNAL(currentIndexChanged(int)), this, SLOT(on_granularity_changed(int)));
+    connect(granularity_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CustomControllerDialog::on_granularity_changed);
     granularity_layout->addWidget(granularity_combo);
     left_layout->addLayout(granularity_layout);
-
-    allow_reuse_checkbox = new QCheckBox("Allow reusing same zone/LED in multiple cells");
-    allow_reuse_checkbox->setChecked(false);
-    allow_reuse_checkbox->setToolTip("When checked, the same device/zone/LED can be assigned to multiple grid cells (e.g. for strips repeated in layout).");
-    connect(allow_reuse_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_allow_reuse_toggled);
-    left_layout->addWidget(allow_reuse_checkbox);
 
     item_combo = new QComboBox();
     item_combo->setItemDelegate(new ColorComboDelegate(this));
     left_layout->addWidget(item_combo);
+
+    allow_reuse_checkbox = new QCheckBox(tr("Allow reusing same zone/LED in multiple cells"));
+    allow_reuse_checkbox->setChecked(false);
+    allow_reuse_checkbox->setToolTip(tr("When checked, the same device/zone/LED can be assigned to multiple grid cells (e.g. for strips repeated in layout)."));
+    connect(allow_reuse_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_allow_reuse_toggled);
+    left_layout->addWidget(allow_reuse_checkbox);
 
     assign_button = new QPushButton("Assign to Selected Cell");
     connect(assign_button, &QPushButton::clicked, this, &CustomControllerDialog::on_assign_clicked);
@@ -138,7 +143,8 @@ void CustomControllerDialog::SetupUI()
     connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
     left_layout->addWidget(clear_button);
 
-    remove_from_grid_button = new QPushButton("Remove All LEDs from Grid");
+    remove_from_grid_button = new QPushButton(tr("Clear Grid"));
+    remove_from_grid_button->setToolTip(tr("Remove every LED assignment from the entire grid."));
     connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
     left_layout->addWidget(remove_from_grid_button);
 
@@ -148,7 +154,7 @@ void CustomControllerDialog::SetupUI()
     QVBoxLayout* right_layout = new QVBoxLayout();
 
     layer_tabs = new QTabWidget();
-    connect(layer_tabs, SIGNAL(currentChanged(int)), this, SLOT(on_layer_tab_changed(int)));
+    connect(layer_tabs, QOverload<int>::of(&QTabWidget::currentChanged), this, &CustomControllerDialog::on_layer_tab_changed);
 
     QWidget* first_tab = new QWidget();
     QVBoxLayout* first_tab_layout = new QVBoxLayout(first_tab);
@@ -171,12 +177,12 @@ void CustomControllerDialog::SetupUI()
     cell_info_label = new QLabel("Click a cell to select it");
     right_layout->addWidget(cell_info_label);
 
-    QGroupBox* transform_group = new QGroupBox("Transform Grid Layout");
+    transform_group = new QGroupBox(tr("Transform Grid Layout"));
     QGridLayout* transform_grid = new QGridLayout();
 
-    lock_transform_checkbox = new QCheckBox("Lock Effect Direction (preview-only)");
+    lock_transform_checkbox = new QCheckBox("Lock layout for rotate/flip");
     lock_transform_checkbox->setChecked(false);
-    lock_transform_checkbox->setToolTip("Keeps preview effect flowing left-to-right. Disables transforms or treats them as preview-only.");
+    lock_transform_checkbox->setToolTip("Lock the current mapping so you can rotate or flip the grid; then click Apply Preview Remap to save.");
     connect(lock_transform_checkbox, &QCheckBox::toggled, this, &CustomControllerDialog::on_lock_transform_toggled);
     transform_grid->addWidget(lock_transform_checkbox, 0, 0, 1, 4);
 
@@ -246,7 +252,7 @@ void CustomControllerDialog::SetupUI()
     connect(apply_preview_button, &QPushButton::clicked, this, &CustomControllerDialog::on_apply_preview_remap_clicked);
     transform_grid->addWidget(apply_preview_button, 7, 0, 1, 4);
 
-    QLabel* transform_help = new QLabel("Lock freezes the current layout so effects keep flowing left-to-right; rotate or flip, then click Apply Preview Remap to commit.");
+    QLabel* transform_help = new QLabel("Use when your physical strip order doesn't match the grid. Lock -> rotate or flip -> Apply Preview Remap to commit.");
     transform_help->setWordWrap(true);
     transform_help->setStyleSheet("color: gray; font-size: small;");
     transform_help->setContentsMargins(0, 4, 0, 0);
@@ -590,88 +596,18 @@ void CustomControllerDialog::UpdateGridDisplay()
                 QString tooltip_text;
                 if(cell_mappings.size() == 1)
                 {
-                    const GridLEDMapping& mapping = cell_mappings[0];
-
-                    if(!mapping.controller)
-                    {
-                        tooltip_text = "Unknown device (not found on this system)";
-                    }
-                    else if(mapping.granularity == 0)
-                    {
-                        tooltip_text = QString("Assigned: %1 (Whole Device)")
-                                       .arg(QString::fromStdString(mapping.controller->name));
-                    }
-                    else if(mapping.granularity == 1)
-                    {
-                        QString zone_name = "Unknown Zone";
-                        if(mapping.zone_idx < mapping.controller->zones.size())
-                        {
-                            zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
-                        }
-                        tooltip_text = QString("Assigned: %1\nZone: %2")
-                                       .arg(QString::fromStdString(mapping.controller->name), zone_name);
-                    }
-                    else if(mapping.granularity == 2)
-                    {
-                        QString led_name = "Unknown LED";
-                        unsigned int global_led_idx = 0;
-                        if(mapping.zone_idx < mapping.controller->zones.size())
-                        {
-                            global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                            if(global_led_idx < mapping.controller->leds.size())
-                            {
-                                led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
-                            }
-                        }
-                        tooltip_text = QString("Assigned: %1\nLED: %2")
-                                       .arg(QString::fromStdString(mapping.controller->name), led_name);
-                    }
-                    else
-                    {
-                        tooltip_text = QString("Assigned: %1 (Unknown type)")
-                                       .arg(QString::fromStdString(mapping.controller->name));
-                    }
+                    tooltip_text = GetMappingDescription(cell_mappings[0]);
                 }
                 else
                 {
-                    tooltip_text = QString("Multiple LEDs (%1):\n").arg(cell_mappings.size());
+                    tooltip_text = tr("Multiple LEDs (%1):\n").arg(cell_mappings.size());
                     for(size_t i = 0; i < cell_mappings.size() && i < 5; i++)
                     {
-                        const GridLEDMapping& mapping = cell_mappings[i];
-                        if(!mapping.controller)
-                        {
-                            tooltip_text += QString(QChar(0x2022)) + " Unknown device (not found on this system)\n";
-                            continue;
-                        }
-
-                        QString assignment_type;
-                        if(mapping.granularity == 0)
-                        {
-                            assignment_type = " (Whole Device)";
-                        }
-                        else if(mapping.granularity == 1 && mapping.zone_idx < mapping.controller->zones.size())
-                        {
-                            assignment_type = QString(" [Zone: %1]").arg(QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name));
-                        }
-                        else if(mapping.granularity == 2)
-                        {
-                            unsigned int global_led_idx = 0;
-                            if(mapping.zone_idx < mapping.controller->zones.size())
-                            {
-                                global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                                if(global_led_idx < mapping.controller->leds.size())
-                                {
-                                    assignment_type = QString(" [LED: %1]").arg(QString::fromStdString(mapping.controller->leds[global_led_idx].name));
-                                }
-                            }
-                        }
-
-                        tooltip_text += QString(QChar(0x2022)) + QString(" %1%2\n")
-                                       .arg(QString::fromStdString(mapping.controller->name), assignment_type);
+                        tooltip_text += QString(QChar(0x2022)) + " " + GetMappingDescription(cell_mappings[i]) + "\n";
                     }
                     if(cell_mappings.size() > 5)
                     {
-                        tooltip_text += QString("... and %1 more").arg(cell_mappings.size() - 5);
+                        tooltip_text += tr("... and %1 more").arg(cell_mappings.size() - 5);
                     }
                 }
 
@@ -739,6 +675,23 @@ void CustomControllerDialog::UpdateGridDisplay()
     }
 
     ApplyGridTableHeaderStyle();
+    UpdateSummaryLabel();
+}
+
+void CustomControllerDialog::UpdateSummaryLabel()
+{
+    const std::vector<GridLEDMapping>& mappings_ref = transform_locked ? preview_led_mappings : led_mappings;
+    std::set<std::tuple<int, int, int>> cells;
+    for(const GridLEDMapping& m : mappings_ref)
+    {
+        cells.insert(std::make_tuple(m.x, m.y, m.z));
+    }
+    summary_label->setText(tr("Assigned: %1 cells").arg(cells.size()));
+
+    if(transform_group)
+    {
+        transform_group->setVisible(!mappings_ref.empty());
+    }
 }
 
 void CustomControllerDialog::ApplyGridTableHeaderStyle()
@@ -763,12 +716,13 @@ void CustomControllerDialog::UpdateCellInfo()
                     .arg(selected_row)
                     .arg(current_layer);
 
+    const std::vector<GridLEDMapping>& mappings_ref = transform_locked ? preview_led_mappings : led_mappings;
     std::vector<GridLEDMapping> cell_mappings;
-    for(unsigned int i = 0; i < led_mappings.size(); i++)
+    for(unsigned int i = 0; i < mappings_ref.size(); i++)
     {
-        if(led_mappings[i].x == selected_col && led_mappings[i].y == selected_row && led_mappings[i].z == current_layer)
+        if(mappings_ref[i].x == selected_col && mappings_ref[i].y == selected_row && mappings_ref[i].z == current_layer)
         {
-            cell_mappings.push_back(led_mappings[i]);
+            cell_mappings.push_back(mappings_ref[i]);
         }
     }
 
@@ -778,49 +732,11 @@ void CustomControllerDialog::UpdateCellInfo()
     }
     else if(cell_mappings.size() == 1)
     {
-        const GridLEDMapping& mapping = cell_mappings[0];
-        if(!mapping.controller)
-        {
-            info += " - Unknown device (not found on this system)";
-        }
-        else if(mapping.granularity == 0)
-        {
-            info += QString(" - Assigned: %1 (Whole Device)")
-                    .arg(QString::fromStdString(mapping.controller->name));
-        }
-        else if(mapping.granularity == 1)
-        {
-            QString zone_name = "Unknown Zone";
-            if(mapping.zone_idx < mapping.controller->zones.size())
-            {
-                zone_name = QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name);
-            }
-            info += QString(" - Assigned: %1, Zone: %2")
-                    .arg(QString::fromStdString(mapping.controller->name), zone_name);
-        }
-        else if(mapping.granularity == 2)
-        {
-            QString led_name = "Unknown LED";
-            unsigned int global_led_idx = 0;
-            if(mapping.zone_idx < mapping.controller->zones.size())
-            {
-                global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                if(global_led_idx < mapping.controller->leds.size())
-                {
-                    led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
-                }
-            }
-            info += QString(" - Assigned: %1, LED: %2")
-                    .arg(QString::fromStdString(mapping.controller->name), led_name);
-        }
-        else
-        {
-            info += QString(" - Assigned: %1").arg(QString::fromStdString(mapping.controller->name));
-        }
+        info += " - " + GetMappingDescription(cell_mappings[0]);
     }
     else
     {
-        info += QString(" - Multiple LEDs (%1)").arg(cell_mappings.size());
+        info += tr(" - Multiple LEDs (%1)").arg(cell_mappings.size());
     }
 
     cell_info_label->setText(info);
@@ -1038,9 +954,9 @@ void CustomControllerDialog::on_remove_all_leds_clicked()
         return;
     }
 
-    int reply = QMessageBox::question(this, "Remove All LEDs",
-                                      QString("Are you sure you want to remove all %1 LED(s) from the grid?").arg(led_mappings.size()),
-                                      QMessageBox::Yes | QMessageBox::No);
+    int reply = QMessageBox::question(this, tr("Clear Grid"),
+                                      tr("Remove every LED assignment from the grid? (%1 assignment(s) will be cleared.)").arg(led_mappings.size()),
+                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if(reply == QMessageBox::Yes)
     {
@@ -1201,6 +1117,7 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
                                                     float spacing_y_mm,
                                                     float spacing_z_mm)
 {
+    setWindowTitle(tr("Edit Custom 3D Controller"));
     name_edit->setText(QString::fromStdString(name));
     width_spin->setValue(width);
     height_spin->setValue(height);
@@ -1322,6 +1239,34 @@ QColor CustomControllerDialog::GetMappingColor(const GridLEDMapping& mapping)
         return QColor(128, 128, 128);
 
     return RGBToQColor(mapping.controller->colors[global_led_idx]);
+}
+
+QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapping) const
+{
+    if(!mapping.controller)
+        return tr("Unknown device (not found on this system)");
+    QString name = QString::fromStdString(mapping.controller->name);
+    if(mapping.granularity == 0)
+        return tr("Assigned: %1 (Whole Device)").arg(name);
+    if(mapping.granularity == 1)
+    {
+        QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
+            ? QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name)
+            : tr("Unknown Zone");
+        return tr("Assigned: %1, Zone: %2").arg(name, zone_name);
+    }
+    if(mapping.granularity == 2)
+    {
+        QString led_name = tr("Unknown LED");
+        if(mapping.zone_idx < mapping.controller->zones.size())
+        {
+            unsigned int global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+            if(global_led_idx < mapping.controller->leds.size())
+                led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+        }
+        return tr("Assigned: %1, LED: %2").arg(name, led_name);
+    }
+    return tr("Assigned: %1").arg(name);
 }
 
 void CustomControllerDialog::InferMappingGranularity()
