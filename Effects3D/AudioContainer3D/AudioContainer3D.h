@@ -6,7 +6,6 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 
-/* Placeholder effect: enables audio pipeline; per-range effects are configured in the Audio panel. */
 class AudioContainer3D : public SpatialEffect3D
 {
     Q_OBJECT

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DiscoFlash3D.h"
+#include "EffectHelpers.h"
 #include <cmath>
 #include <algorithm>
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
+#include <QComboBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 
@@ -50,6 +52,19 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
+
+    QHBoxLayout* mode_row = new QHBoxLayout();
+    mode_row->addWidget(new QLabel("Mode:"));
+    QComboBox* mode_combo = new QComboBox();
+    mode_combo->addItem("Beat (audio)");
+    mode_combo->addItem("Sparkle (time)");
+    mode_combo->setCurrentIndex(std::max(0, std::min(flash_mode, MODE_COUNT - 1)));
+    mode_row->addWidget(mode_combo);
+    layout->addLayout(mode_row);
+    connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
+        flash_mode = std::max(0, std::min(idx, MODE_COUNT - 1));
+        emit ParametersChanged();
+    });
 
     QHBoxLayout* density_row = new QHBoxLayout();
     density_row->addWidget(new QLabel("Density:"));
@@ -143,6 +158,8 @@ void DiscoFlash3D::UpdateParams(SpatialEffectParams& /*params*/)
 
 void DiscoFlash3D::TickFlashes(float time)
 {
+    if(flash_mode == MODE_SPARKLE)
+        return;
     if(std::fabs(time - last_tick_time) < 1e-4f)
     {
         return;
@@ -232,6 +249,29 @@ RGBColor DiscoFlash3D::CalculateColor(float x, float y, float z, float time)
 
 RGBColor DiscoFlash3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    int mode = std::max(0, std::min(flash_mode, MODE_COUNT - 1));
+    if(mode == MODE_SPARKLE)
+    {
+        float nx = (grid.width  > 1e-5f) ? (x - grid.center_x) / (grid.width  * 0.5f) : 0.0f;
+        float ny = (grid.height > 1e-5f) ? (y - grid.center_y) / (grid.height * 0.5f) : 0.0f;
+        float nz = (grid.depth  > 1e-5f) ? (z - grid.center_z) / (grid.depth  * 0.5f) : 0.0f;
+        unsigned int h = (unsigned int)((nx * 1000 + ny * 2000 + nz * 3000) * 1000);
+        h = h * 73856093u ^ (unsigned int)(time * 100) * 19349663u;
+        h = (h << 13) ^ h;
+        float sparkle = ((h & 0xFFFFu) / 65535.0f);
+        float phase = fmodf(time * (3.0f + sparkle * 5.0f) + sparkle * 6.28f, 6.28f);
+        float intensity = (phase < 1.0f) ? (0.3f + 0.7f * phase) : (phase > 5.28f) ? (1.0f - (phase - 5.28f)) : 1.0f;
+        intensity = std::max(0.0f, std::min(1.0f, intensity));
+        if(intensity < 0.01f) return ToRGBColor(0, 0, 0);
+        float hue = fmodf(sparkle * 360.0f + time * 50.0f, 360.0f);
+        if(hue < 0.0f) hue += 360.0f;
+        RGBColor c = GetRainbowColor(hue);
+        unsigned char r = (unsigned char)((c & 0xFF) * intensity);
+        unsigned char g = (unsigned char)(((c >> 8) & 0xFF) * intensity);
+        unsigned char b = (unsigned char)(((c >> 16) & 0xFF) * intensity);
+        return (RGBColor)((b << 16) | (g << 8) | r);
+    }
+
     TickFlashes(time);
 
     float nx = (grid.width  > 1e-5f) ? (x - grid.center_x) / (grid.width  * 0.5f) : 0.0f;
@@ -249,6 +289,7 @@ nlohmann::json DiscoFlash3D::SaveSettings() const
     j["flash_density"]    = flash_density;
     j["flash_size"]       = flash_size;
     j["onset_threshold"]  = onset_threshold;
+    j["flash_mode"]       = flash_mode;
     return j;
 }
 
@@ -260,6 +301,8 @@ void DiscoFlash3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("flash_density"))    flash_density    = settings["flash_density"].get<float>();
     if(settings.contains("flash_size"))       flash_size       = settings["flash_size"].get<float>();
     if(settings.contains("onset_threshold"))  onset_threshold  = settings["onset_threshold"].get<float>();
+    if(settings.contains("flash_mode") && settings["flash_mode"].is_number_integer())
+        flash_mode = std::max(0, std::min(settings["flash_mode"].get<int>(), MODE_COUNT - 1));
     flashes.clear();
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;

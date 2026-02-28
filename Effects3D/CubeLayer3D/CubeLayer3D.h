@@ -35,7 +35,6 @@ private:
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
-    int layer_axis = 1;
     float layer_thickness = 0.12f;
 };
 

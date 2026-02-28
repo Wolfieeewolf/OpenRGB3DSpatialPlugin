@@ -38,10 +38,10 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     info.effect_name = "Audio Level";
     info.effect_description = "Level drives a 3D fill surface (like a water level) with optional wave on the boundary";
     info.category = "Audio";
-    info.effect_type = (SpatialEffectType)0; // Not used in new system
+    info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;
-    info.max_speed = 200; // speed can be used for hue cycle if rainbow enabled
+    info.max_speed = 200;
     info.min_speed = 0;
     info.user_colors = 1;
     info.has_custom_settings = true;
@@ -55,8 +55,7 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     info.default_frequency_scale = 1.0f;
     info.use_size_parameter = false;
 
-    // Hide unused base controls
-    info.show_speed_control = true;         // allow hue cycle when rainbow
+    info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
@@ -64,6 +63,7 @@ EffectInfo3D AudioLevel3D::GetEffectInfo()
     info.show_fps_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.show_path_axis_control = true;
     return info;
 }
 
@@ -126,20 +126,6 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    QHBoxLayout* axis_row = new QHBoxLayout();
-    axis_row->addWidget(new QLabel("Fill axis:"));
-    QComboBox* axis_combo = new QComboBox();
-    axis_combo->addItem("X (left → right)", 0);
-    axis_combo->addItem("Y (floor → ceiling)", 1);
-    axis_combo->addItem("Z (front → back)", 2);
-    axis_combo->setCurrentIndex(fill_axis);
-    axis_row->addWidget(axis_combo);
-    layout->addLayout(axis_row);
-    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, axis_combo](int){
-        fill_axis = axis_combo->currentData().toInt();
-        emit ParametersChanged();
-    });
-
     QHBoxLayout* wave_row = new QHBoxLayout();
     wave_row->addWidget(new QLabel("Boundary wave:"));
     QSlider* wave_slider = new QSlider(Qt::Horizontal);
@@ -175,7 +161,6 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
 
 void AudioLevel3D::UpdateParams(SpatialEffectParams& /*params*/)
 {
-    // No special param mapping required
 }
 
 RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
@@ -189,8 +174,9 @@ RGBColor AudioLevel3D::CalculateColor(float x, float y, float z, float time)
     float ax = std::clamp(0.5f + rotated_pos.x * 0.5f, 0.0f, 1.0f);
     float ay = std::clamp(0.5f + rotated_pos.y * 0.5f, 0.0f, 1.0f);
     float az = std::clamp(0.5f + rotated_pos.z * 0.5f, 0.0f, 1.0f);
-    float axis_pos = (fill_axis == 0) ? ax : ((fill_axis == 1) ? ay : az);
-    float axis_other = (fill_axis == 0) ? ay : ((fill_axis == 1) ? ax : ay);
+    int fax = GetPathAxis();
+    float axis_pos = (fax == 0) ? ax : ((fax == 1) ? ay : az);
+    float axis_other = (fax == 0) ? ay : ((fax == 1) ? ax : ay);
     float wave = wave_amount * std::sin(time * 4.0f + axis_other * 6.283185f);
     float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
     float edge = std::max(edge_soft, 0.01f);
@@ -221,8 +207,9 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     float ax = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
     float ay = NormalizeRange(rotated_pos.y, grid.min_y, grid.max_y);
     float az = NormalizeRange(rotated_pos.z, grid.min_z, grid.max_z);
-    float axis_pos = (fill_axis == 0) ? ax : ((fill_axis == 1) ? ay : az);
-    float axis_other = (fill_axis == 0) ? ay : ((fill_axis == 1) ? ax : ay);
+    int fax = GetPathAxis();
+    float axis_pos = (fax == 0) ? ax : ((fax == 1) ? ay : az);
+    float axis_other = (fax == 0) ? ay : ((fax == 1) ? ax : ay);
     float wave = wave_amount * std::sin(time * 4.0f + axis_other * 6.283185f);
     float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
     float edge = std::max(edge_soft, 0.01f);
@@ -241,14 +228,12 @@ RGBColor AudioLevel3D::CalculateColorGrid(float x, float y, float z, float time,
     return ModulateRGBColors(color, user_color);
 }
 
-// Register effect
 REGISTER_EFFECT_3D(AudioLevel3D)
 
 nlohmann::json AudioLevel3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    j["fill_axis"] = fill_axis;
     j["wave_amount"] = wave_amount;
     j["edge_soft"] = edge_soft;
     return j;
@@ -258,7 +243,6 @@ void AudioLevel3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("fill_axis"))  fill_axis  = std::clamp(settings["fill_axis"].get<int>(), 0, 2);
     if(settings.contains("wave_amount")) wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
     if(settings.contains("edge_soft"))   edge_soft   = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     smoothed = 0.0f;

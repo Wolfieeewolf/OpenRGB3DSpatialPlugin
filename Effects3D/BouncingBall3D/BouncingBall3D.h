@@ -25,7 +25,6 @@ public:
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
@@ -39,9 +38,9 @@ private:
     QLabel* elasticity_label;
     QSlider* count_slider;
     QLabel* count_label;
-    unsigned int ball_size;   // radius factor
-    unsigned int elasticity;  // 10..100
-    unsigned int ball_count;  // number of balls (1..50)
+    unsigned int ball_size;
+    unsigned int elasticity;
+    unsigned int ball_count;
 };
 
 #endif

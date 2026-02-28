@@ -24,11 +24,14 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
+    enum WaveStyle { STYLE_SINUS = 0, STYLE_RADIAL, STYLE_LINEAR, STYLE_PACIFICA, STYLE_GRADIENT, STYLE_COUNT };
+    static const char* WaveStyleName(int s);
+
+    int wave_style = STYLE_SINUS;
     float surface_thickness = 0.08f;
-    float wave_frequency = 1.0f;   // Ripples (0.3–3)
-    float wave_amplitude = 1.0f;   // Height scale (0.2–2)
-    float wave_travel_speed = 0.5f;  // How fast wave moves across (0–2)
-    float wave_direction_deg = 0.0f;  // Direction of travel in XZ (0–360)
+    float wave_frequency = 1.0f;
+    float wave_amplitude = 1.0f;
+    float wave_direction_deg = 0.0f;
 };
 
 #endif

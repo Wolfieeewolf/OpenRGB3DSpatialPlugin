@@ -462,7 +462,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
         }
         else
         {
-            // Valid controller but some transform widgets missing – still enable any that exist
             if(pos_x_spin) pos_x_spin->setEnabled(true);
             if(pos_y_spin) pos_y_spin->setEnabled(true);
             if(pos_z_spin) pos_z_spin->setEnabled(true);
@@ -510,7 +509,6 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
             apply_spacing_button->setEnabled(true);
         }
 
-        // Re-enable position/rotation at the end so they stay enabled after clearing ref-point selection
         if(pos_x_spin) pos_x_spin->setEnabled(true);
         if(pos_y_spin) pos_y_spin->setEnabled(true);
         if(pos_z_spin) pos_z_spin->setEnabled(true);
@@ -562,7 +560,6 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
         SetLayoutDirty();
 
-        // Block signals to prevent feedback loops
         pos_x_spin->blockSignals(true);
         pos_y_spin->blockSignals(true);
         pos_z_spin->blockSignals(true);
@@ -609,7 +606,6 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
         SetLayoutDirty();
 
-        // Block signals to prevent feedback loops
         rot_x_spin->blockSignals(true);
         rot_y_spin->blockSignals(true);
         rot_z_spin->blockSignals(true);
@@ -1299,7 +1295,6 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         }
     }
 
-    // Handle regular controllers (in controller_transforms): selected_row is list row
     int transform_index = ControllerListRowToTransformIndex(selected_row);
     if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
     {
@@ -1393,7 +1388,6 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
 
     RegenerateLEDPositions(ctrl);
 
-    // Mark world positions dirty so effects and viewport can recompute
     ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
 
     if(viewport)
@@ -1667,7 +1661,6 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         }
     }
 
-    // Category key (in JSON) -> display label. Matches OpenRGB device types (https://openrgb.org/devices.html) plus a few extras.
     static const std::vector<std::pair<std::string, QString>> kPresetCategories = {
         {"graphics_cards", QObject::tr("Graphics Cards")},
         {"motherboards", QObject::tr("Motherboards")},
@@ -2238,7 +2231,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                             if(virtual_controllers[j]->GetName() == ctrl_name)
                             {
                                 VirtualController3D* to_remove = virtual_controllers[j].get();
-                                // Remove any controller_transforms in the scene that reference this virtual controller (avoid dangling pointer)
                                 std::vector<int> transform_indices_to_remove;
                                 for(size_t ti = 0; ti < controller_transforms.size(); ti++)
                                 {
@@ -2247,7 +2239,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                                         transform_indices_to_remove.push_back(static_cast<int>(ti));
                                     }
                                 }
-                                // Build row index for each transform (list order: transforms have no UserRole, then ref points -2, display -3)
                                 std::vector<int> row_for_transform(controller_transforms.size(), -1);
                                 int transform_count = 0;
                                 if(controller_list)
@@ -2261,7 +2252,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                                         }
                                     }
                                 }
-                                // Remove list rows from high to low so indices don't shift
                                 std::vector<int> rows_to_remove;
                                 for(int ti : transform_indices_to_remove)
                                 {
@@ -2275,7 +2265,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                                 {
                                     delete controller_list->takeItem(row);
                                 }
-                                // Erase transforms from high index first
                                 std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
                                 for(int ti : transform_indices_to_remove)
                                 {
@@ -2471,7 +2460,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             }
         }
 
-        // Keep pointer to old instance so we can retarget any viewport transforms
         VirtualController3D* old_ptr = virtual_controllers[list_row].get();
 
         virtual_controllers[list_row] = std::make_unique<VirtualController3D>(
@@ -2485,7 +2473,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             dialog.GetSpacingZ()
         );
 
-        // Update any transforms in the viewport that referenced the old custom controller
         VirtualController3D* new_ptr = virtual_controllers[list_row].get();
         for(size_t i = 0; i < controller_transforms.size(); i++)
         {
@@ -2493,11 +2480,9 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             if(t && t->virtual_controller == old_ptr)
             {
                 t->virtual_controller = new_ptr;
-                // Regenerate LED positions from the updated mapping and spacing
                 t->led_positions = new_ptr->GenerateLEDPositions(grid_scale_mm);
                 ControllerLayout3D::MarkWorldPositionsDirty(t);
 
-                // Update controller list item text to reflect the new name
                 int list_row = TransformIndexToControllerListRow(static_cast<int>(i));
                 if(controller_list && list_row >= 0)
                 {
@@ -2697,7 +2682,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
 
 
-        // Granularity (-1=virtual, 0=device, 1=zone, 2=LED)
         controller_json["granularity"] = ct->granularity;
         controller_json["item_idx"] = ct->item_idx;
 
@@ -2791,7 +2775,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         if(grid_snap_checkbox) grid_snap_checkbox->setChecked(grid_snap_enabled);
         if(viewport) viewport->SetGridSnapEnabled(grid_snap_enabled);
 
-        // Load grid scale if available (default to 10mm for older layouts)
         if(layout_json["grid"].contains("scale_mm"))
         {
             grid_scale_mm = layout_json["grid"]["scale_mm"].get<float>();
@@ -2918,7 +2901,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             ctrl_transform->virtual_controller = nullptr;
             ctrl_transform->hidden_by_virtual = false;
 
-            // Load LED spacing first (needed for position generation)
             if(controller_json.contains("led_spacing_mm"))
             {
                 ctrl_transform->led_spacing_mm_x = controller_json["led_spacing_mm"]["x"].get<float>();
@@ -2939,7 +2921,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
             else
             {
-                // Default for older files: -1 for virtual, 0 for physical
                 ctrl_transform->granularity = is_virtual ? -1 : 0;
                 ctrl_transform->item_idx = 0;
             }
@@ -2997,8 +2978,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     }
                 }
 
-                // Validate/infer granularity from loaded LED positions (FAILSAFE)
-                // This corrects any corrupted or mismatched granularity data
                 if(ctrl_transform->led_positions.size() > 0)
                 {
                     int original_granularity = ctrl_transform->granularity;
@@ -3052,15 +3031,12 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         }
                         else
                         {
-                            // LEDs from multiple zones - this is corrupted data!
-                            // Best we can do is treat as whole device and regenerate
                             LOG_WARNING("[OpenRGB3DSpatialPlugin] CORRUPTED DATA for '%s': has %d LEDs from multiple zones with granularity=%d. Treating as Whole Device and will regenerate on next change.",
                                         controller->name.c_str(),
                                         (int)ctrl_transform->led_positions.size(),
                                         original_granularity);
                             ctrl_transform->granularity = 0;
                             ctrl_transform->item_idx = 0;
-                            // Keep the loaded LED positions for now, but they'll be regenerated on next change
                         }
                     }
 
@@ -3081,7 +3057,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
             ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
 
-            // Save values before moving ctrl_transform
             unsigned int display_color = ctrl_transform->display_color;
             int granularity = ctrl_transform->granularity;
             int item_idx = ctrl_transform->item_idx;
@@ -3128,7 +3103,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
                 else
                 {
-                    // Fallback for old files without granularity
                     name = QString::fromStdString(controller->name);
                     if(led_positions_size < controller->leds.size())
                     {
@@ -3182,7 +3156,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             std::unique_ptr<DisplayPlane3D> plane = DisplayPlane3D::FromJson(planes_array[i]);
             if(plane)
             {
-                // Clamp reference_point_index to valid range (file may be from different layout)
                 int ref_idx = plane->GetReferencePointIndex();
                 if(ref_idx < 0 || ref_idx >= ref_count)
                 {
@@ -3191,7 +3164,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 display_planes.push_back(std::move(plane));
             }
         }
-        // Post-load pass: ensure every display plane has a valid reference_point_index
         for(size_t i = 0; i < display_planes.size(); i++)
         {
             if(!display_planes[i]) continue;
@@ -3205,7 +3177,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     UpdateDisplayPlanesList();
     RefreshDisplayPlaneDetails();
 
-    // Rebuild scene list: display planes first (each followed by their linked ref), then standalone ref points.
     std::vector<bool> ref_added(reference_points.size(), false);
 
     for(size_t i = 0; i < display_planes.size(); i++)
@@ -3278,7 +3249,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         }
         else
         {
-            // Old layout file without zones - just initialize empty
             
             zone_manager->ClearAllZones();
             UpdateZonesList();
@@ -3528,7 +3498,6 @@ void OpenRGB3DSpatialTab::SaveCustomControllers()
                 if(file.fail() || file.bad())
                 {
                     LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write custom controller: %s", filepath.c_str());
-                    // Don't show error dialog here - too noisy during auto-save
                 }
             }
             catch(const std::exception& e)
@@ -3626,10 +3595,8 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
             return true;
         }
 
-        // Fallback: check by LED positions (for older data or edge cases)
         if(granularity == 0)
         {
-            // Check if this is whole device by comparing LED count
             if(ct->granularity == 0)
             {
                 return true;
@@ -3637,7 +3604,6 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         }
         else if(granularity == 1)
         {
-            // Check if any LED from this zone is in the controller
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
                 if(ct->led_positions[j].zone_idx == (unsigned int)item_idx)
@@ -3648,7 +3614,6 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         }
         else if(granularity == 2)
         {
-            // Check if this specific LED is in the controller
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
                 unsigned int global_led_idx = controller->zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
@@ -3697,12 +3662,10 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
 
     if(transform->virtual_controller)
     {
-        // Virtual controller
         transform->led_positions = transform->virtual_controller->GenerateLEDPositions(grid_scale_mm);
     }
     else if(transform->controller)
     {
-        // Physical controller - regenerate with spacing and respect granularity
         std::vector<LEDPosition3D> all_positions = ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(
             transform->controller,
             custom_grid_x, custom_grid_y,
@@ -3713,12 +3676,10 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
 
         if(transform->granularity == 0)
         {
-            // Whole device - use all positions
             transform->led_positions = all_positions;
         }
         else if(transform->granularity == 1)
         {
-            // Zone - filter to specific zone
             for(unsigned int i = 0; i < all_positions.size(); i++)
             {
                 if(all_positions[i].zone_idx == (unsigned int)transform->item_idx)
@@ -3729,7 +3690,6 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         }
         else if(transform->granularity == 2)
         {
-            // LED - filter to specific LED
             for(unsigned int i = 0; i < all_positions.size(); i++)
             {
                 unsigned int global_led_idx = transform->controller->zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
@@ -4299,7 +4259,6 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
         QSignalBlocker block(display_plane_capture_combo);
         std::string current_source = plane->GetCaptureSourceId();
 
-        // Try to find and select the current source
         int index = -1;
         for(int i = 0; i < display_plane_capture_combo->count(); i++)
         {
@@ -4316,14 +4275,12 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
         }
         else if(!current_source.empty())
         {
-            // Source not in list, but plane has one configured - add it as custom entry
             display_plane_capture_combo->addItem(QString::fromStdString(current_source) + " (custom)",
                                                   QString::fromStdString(current_source));
             display_plane_capture_combo->setCurrentIndex(display_plane_capture_combo->count() - 1);
         }
         else
         {
-            // No source configured, select "(None)"
             display_plane_capture_combo->setCurrentIndex(0);
         }
     }
@@ -4378,7 +4335,6 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         }
     }
     
-    // Set selection before unblocking signals so the selection handler fires
     if(desired_index >= 0 && desired_index < (int)display_planes.size())
     {
         display_planes_list->setCurrentRow(desired_index);
@@ -4395,8 +4351,6 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         display_planes_empty_label->setVisible(display_planes_list->count() == 0);
     }
 
-    // Update remove button state - should be enabled if a plane is selected
-    // This will be updated by RefreshDisplayPlaneDetails() below
 
     if(display_planes.empty())
     {
@@ -4406,17 +4360,14 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         return;
     }
 
-    // Selection was set above while signals were blocked, now update state
     if(desired_index >= 0 && desired_index < (int)display_planes.size())
     {
         current_display_plane_index = desired_index;
-        // Manually trigger selection handler since we blocked signals
         on_display_plane_selected(desired_index);
     }
     else
     {
         current_display_plane_index = -1;
-        // Manually trigger selection handler to clear controls
         on_display_plane_selected(-1);
     }
 }
@@ -4509,7 +4460,6 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         QSignalBlocker block(display_plane_capture_combo);
         std::string current_source = plane->GetCaptureSourceId();
 
-        // Try to find and select the current source
         int index = -1;
         for(int i = 0; i < display_plane_capture_combo->count(); i++)
         {
@@ -4526,14 +4476,12 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
         }
         else if(!current_source.empty())
         {
-            // Source not in list, but plane has one configured - add it as custom entry
             display_plane_capture_combo->addItem(QString::fromStdString(current_source) + " (custom)",
                                                   QString::fromStdString(current_source));
             display_plane_capture_combo->setCurrentIndex(display_plane_capture_combo->count() - 1);
         }
         else
         {
-            // No source configured, select "(None)"
             display_plane_capture_combo->setCurrentIndex(0);
         }
     }
@@ -4553,7 +4501,6 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
         viewport->NotifyDisplayPlaneChanged();
     }
 
-    // Sync display planes to global manager for effects to access
     std::vector<DisplayPlane3D*> plane_ptrs;
     for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
     {
@@ -4570,7 +4517,6 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
 
 void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
 {
-    // Validate index - if invalid but we have planes, re-assert selection so tab/click doesn't grey out the form
     if(index < 0 || index >= (int)display_planes.size())
     {
         if(!display_planes.empty() && display_planes_list)
@@ -4646,8 +4592,6 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->GetTransform().position.z = room_depth_units * 0.5f;
     plane->SetVisible(false);  // Not visible until added to viewport
 
-    // Automatically create a reference point for this display plane
-    // This makes ambilight effects work better by radiating from the screen position
     std::string ref_point_name = full_name + " Reference";
     Vector3D plane_pos = plane->GetTransform().position;
     std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(
@@ -4664,7 +4608,6 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     reference_points.push_back(std::move(ref_point));
     plane->SetReferencePointIndex(ref_point_index);
     
-    // Update the reference point's rotation to match the display plane
     if(ref_point_index >= 0 && ref_point_index < (int)reference_points.size())
     {
         VirtualReferencePoint3D* ref_pt = reference_points[ref_point_index].get();
@@ -4676,13 +4619,10 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
 
     display_planes.push_back(std::move(plane));
     
-    // Mark layout as dirty
     SetLayoutDirty();
 
     int new_plane_id = display_planes.back() ? display_planes.back()->GetId() : -1;
 
-    // Set selection index and update UI (UpdateAvailableControllersList will add new plane to available list)
-    // UpdateDisplayPlanesList will handle selection and trigger on_display_plane_selected
     current_display_plane_index = (int)display_planes.size() - 1;
     UpdateDisplayPlanesList();
     NotifyDisplayPlaneChanged();  // Sync to DisplayPlaneManager and viewport so effects see the new plane
@@ -4699,8 +4639,6 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
         SelectAvailableControllerEntry(-3, new_plane_id);
     }
 
-    // Re-assert display plane selection and form state so the new plane is selected and editable
-    // (other updates or the message box can clear selection on some platforms)
     current_display_plane_index = (int)display_planes.size() - 1;
     if(display_planes_list && current_display_plane_index >= 0)
     {
@@ -4801,20 +4739,16 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
         return;
     }
 
-    // Block controller_list signals during removal to avoid re-entrant currentRowChanged
-    // (takeItem/delete can change selection and trigger on_controller_selected → lockup)
     QSignalBlocker block_controller(controller_list);
 
     int removed_plane_id = display_planes[current_display_plane_index]->GetId();
     
-    // Also remove the associated reference point if it exists
     DisplayPlane3D* plane_to_remove = display_planes[current_display_plane_index].get();
     if(plane_to_remove)
     {
         int ref_point_index = plane_to_remove->GetReferencePointIndex();
         if(ref_point_index >= 0 && ref_point_index < (int)reference_points.size())
         {
-            // Update other display planes: clear or renumber reference_point_index before erase
             for(size_t i = 0; i < display_planes.size(); i++)
             {
                 if(!display_planes[i]) continue;
@@ -4836,10 +4770,8 @@ void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
 
     display_planes.erase(display_planes.begin() + current_display_plane_index);
     
-    // Mark layout as dirty
     SetLayoutDirty();
     
-    // Adjust selection index
     if(current_display_plane_index >= (int)display_planes.size())
     {
         current_display_plane_index = (int)display_planes.size() - 1;
@@ -5139,7 +5071,6 @@ void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
         double z;
     };
 
-    // Presets: 0 = custom (no change)
     static const Preset presets[] = {
         {0.0, 0.0, 0.0},      // Custom / unchanged
         {10.0, 0.0, 0.0},     // Dense strip
@@ -5170,7 +5101,6 @@ void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)
     set_spin_value(led_spacing_y_spin, preset.y);
     set_spin_value(led_spacing_z_spin, preset.z);
 
-    // Mirror presets to edit controls so the currently selected controller can adopt them quickly.
     set_spin_value(edit_led_spacing_x_spin, preset.x);
     set_spin_value(edit_led_spacing_y_spin, preset.y);
     set_spin_value(edit_led_spacing_z_spin, preset.z);

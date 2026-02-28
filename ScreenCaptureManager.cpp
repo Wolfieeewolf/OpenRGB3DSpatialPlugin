@@ -578,7 +578,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         {
             if(!use_dxgi)
             {
-                auto now = std::chrono::steady_clock::now();
+                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
                 if(now - last_dxgi_retry >= dxgi_retry_interval)
                 {
                     last_dxgi_retry = now;

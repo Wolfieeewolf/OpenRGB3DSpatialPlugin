@@ -36,7 +36,7 @@ private:
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
     bool use_radial = true;
-    bool radius_grows_with_level = true;  // breathing: lit area expands with volume
+    bool radius_grows_with_level = true;
 };
 
 #endif

@@ -30,7 +30,9 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
-    int comet_axis = 1;
+    enum CometMode { MODE_COMET = 0, MODE_CHASE, MODE_MARQUEE, MODE_COUNT };
+    static const char* ModeName(int m);
+    int comet_mode = MODE_COMET;
     float comet_size = 0.25f;
 };
 

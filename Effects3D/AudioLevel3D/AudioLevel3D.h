@@ -36,9 +36,8 @@ private:
     float EvaluateIntensity(float amplitude, float time);
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
-    int fill_axis = 1;       // 0=X, 1=Y, 2=Z – axis along which level "fills"
-    float wave_amount = 0.06f;  // boundary wave amplitude 0..1
-    float edge_soft = 0.08f;    // soft edge width 0..1
+    float wave_amount = 0.06f;
+    float edge_soft = 0.08f;
 };
 
 #endif // AUDIOLEVEL3D_H

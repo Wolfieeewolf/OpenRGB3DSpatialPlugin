@@ -11,8 +11,6 @@
 #include <limits>
 #include <random>
 
-// Beat-triggered disco: each beat assigns random positions a random hue that
-// flashes and decays. Works on any surface for a chaotic disco floor/wall effect.
 class DiscoFlash3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -38,9 +36,9 @@ private:
     struct Flash
     {
         float birth_time;
-        float hue;          // 0..360
-        float nx, ny, nz;   // normalised position in unit cube
-        float size;         // radius in normalised space
+        float hue;
+        float nx, ny, nz;
+        float size;
     };
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
@@ -50,10 +48,13 @@ private:
     float onset_smoothed = 0.0f;
     float onset_hold = 0.0f;
 
-    float flash_decay   = 3.5f;  // per second
-    float flash_density = 0.35f; // fraction: controls how many flashes fire per beat
-    float flash_size    = 0.25f; // normalised radius
+    float flash_decay = 3.5f;
+    float flash_density = 0.35f;
+    float flash_size = 0.25f;
     float onset_threshold = 0.5f;
+
+    enum Mode { MODE_BEAT = 0, MODE_SPARKLE, MODE_COUNT };
+    int flash_mode = MODE_BEAT;
 
     std::mt19937 rng{42};
 };

@@ -137,7 +137,7 @@ void Fireworks3D::SetupCustomUI(QWidget* parent)
     row++;
     layout->addWidget(new QLabel("Decay speed:"), row, 0);
     QSlider* decay_slider = new QSlider(Qt::Horizontal);
-    decay_slider->setRange(50, 400);
+    decay_slider->setRange(50, 600);
     decay_slider->setValue((int)(decay_speed * 100.0f));
     QLabel* decay_label = new QLabel(QString::number(decay_speed, 'f', 1));
     decay_label->setMinimumWidth(36);
@@ -165,11 +165,14 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
     float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
     if(half < 1e-5f) half = 1.0f;
     float speed_scale = GetScaledSpeed() * 0.015f;
+    // Cap sigma so huge particle size doesn't make every LED sample every particle (avoids slowdown)
     float sigma = std::max(particle_size * half, 5.0f);
+    const float sigma_cap = half * 0.4f;
+    if(sigma > sigma_cap) sigma = sigma_cap;
     float sigma_sq = sigma * sigma;
     const float d2_cutoff = 9.0f * sigma_sq;
     float grav_mult = std::max(0.0f, std::min(2.0f, gravity_strength));
-    float decay_mult = std::max(0.5f, std::min(4.0f, decay_speed));
+    float decay_mult = std::max(0.5f, std::min(6.0f, decay_speed));
     int n_sim = std::max(1, std::min(5, num_simultaneous));
     int type = std::max(0, std::min(firework_type, TYPE_COUNT - 1));
 
@@ -181,8 +184,8 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
         float cycle = CYCLE_DURATION;
         if(type == TYPE_ROMAN_CANDLE) cycle = 4.0f;
         if(type == TYPE_FOUNTAIN) cycle = 3.0f;
-        const float gravity_base = -0.95f * speed_scale * half * grav_mult;  // Stronger gravity
-        const float decay_coeff = 3.5f * decay_mult;  // Faster drop-off
+        const float gravity_base = -0.95f * speed_scale * half * grav_mult;
+        const float decay_coeff = 6.0f * decay_mult;  // Strong decay so burst clears before next
 
         for(int launch = 0; launch < n_sim; launch++)
         {
@@ -346,11 +349,13 @@ RGBColor Fireworks3D::CalculateColorGrid(float x, float y, float z, float time, 
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
     }
-
-    float scale = 1.2f;
-    int r_ = std::min(255, std::max(0, (int)(sum_r * scale * 255.0f)));
-    int g_ = std::min(255, std::max(0, (int)(sum_g * scale * 255.0f)));
-    int b_ = std::min(255, std::max(0, (int)(sum_b * scale * 255.0f)));
+    // Clamp sums to 1 so additive blend keeps burst colors (rainbow/picker) instead of blowing to white
+    sum_r = std::min(1.0f, sum_r);
+    sum_g = std::min(1.0f, sum_g);
+    sum_b = std::min(1.0f, sum_b);
+    int r_ = std::min(255, std::max(0, (int)(sum_r * 255.0f)));
+    int g_ = std::min(255, std::max(0, (int)(sum_g * 255.0f)));
+    int b_ = std::min(255, std::max(0, (int)(sum_b * 255.0f)));
     return (RGBColor)((b_ << 16) | (g_ << 8) | r_);
 }
 
@@ -380,5 +385,5 @@ void Fireworks3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("gravity_strength") && settings["gravity_strength"].is_number())
         gravity_strength = std::max(0.0f, std::min(2.0f, settings["gravity_strength"].get<float>()));
     if(settings.contains("decay_speed") && settings["decay_speed"].is_number())
-        decay_speed = std::max(0.5f, std::min(4.0f, settings["decay_speed"].get<float>()));
+        decay_speed = std::max(0.5f, std::min(6.0f, settings["decay_speed"].get<float>()));
 }

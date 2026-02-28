@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Spin3D.h"
-
-// Register this effect with the effect manager
-REGISTER_EFFECT_3D(Spin3D);
 #include <QGridLayout>
+#include <algorithm>
 #include <cmath>
+
+REGISTER_EFFECT_3D(Spin3D);
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -52,16 +52,13 @@ EffectInfo3D Spin3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = false;
 
-    // Standardized parameter scaling
-    // Room-scale rotation defaults: faster spin, broader patterns
-    info.default_speed_scale = 25.0f;       // (speed/100)² * 25
+    info.default_speed_scale = 25.0f;
     info.default_frequency_scale = 6.0f;
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls except frequency)
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = true;     // Show standard frequency control
+    info.show_frequency_control = false;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
@@ -89,9 +86,6 @@ void Spin3D::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(spin_widget, parent);
 
     connect(arms_slider, &QSlider::valueChanged, this, &Spin3D::OnSpinParameterChanged);
-    connect(arms_slider, &QSlider::valueChanged, arms_label, [this](int value) {
-        arms_label->setText(QString::number(value));
-    });
 }
 
 void Spin3D::UpdateParams(SpatialEffectParams& params)
@@ -209,7 +203,8 @@ nlohmann::json Spin3D::SaveSettings() const
 void Spin3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("num_arms")) num_arms = settings["num_arms"];
+    if(settings.contains("num_arms") && settings["num_arms"].is_number_integer())
+        num_arms = std::max(1, std::min(8, settings["num_arms"].get<int>()));
 
     if(arms_slider) arms_slider->setValue(num_arms);
 }

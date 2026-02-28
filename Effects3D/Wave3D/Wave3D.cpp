@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wave3D.h"
-
-
-// Register this effect with the effect manager
-REGISTER_EFFECT_3D(Wave3D);
 #include <QGridLayout>
 #include <algorithm>
 #include <cmath>
@@ -13,31 +9,28 @@ REGISTER_EFFECT_3D(Wave3D);
 #define M_PI 3.14159265358979323846
 #endif
 
+REGISTER_EFFECT_3D(Wave3D);
+
 Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     shape_combo = nullptr;
-    shape_type = 0;      // Circles
+    shape_type = 0;
     progress = 0.0f;
-
-    // Initialize with default colors using base class method
-    SetFrequency(50);    // Default frequency like RadialRainbow slider2
-    SetRainbowMode(true); // Default to rainbow like RadialRainbow
-
+    SetFrequency(50);
+    SetRainbowMode(true);
     std::vector<RGBColor> default_colors;
-    default_colors.push_back(0x000000FF);  // Red (0x00BBGGRR format)
-    default_colors.push_back(0x0000FF00);  // Green
-    default_colors.push_back(0x00FF0000);  // Blue
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
 }
 
-Wave3D::~Wave3D()
-{
-}
+Wave3D::~Wave3D() {}
 
 EffectInfo3D Wave3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Wave";
     info.effect_description = "Wave pattern with configurable direction and speed";
     info.category = "3D Spatial";
@@ -53,20 +46,15 @@ EffectInfo3D Wave3D::GetEffectInfo()
     info.needs_thickness = false;
     info.needs_arms = false;
     info.needs_frequency = true;
-
-    // Standardized parameter scaling
-    info.default_speed_scale = 400.0f;      // Normalized speed (0.0-1.0) * 400.0
-    info.default_frequency_scale = 10.0f;   // Normalized frequency (0.0-1.0) * 10.0
+    info.default_speed_scale = 400.0f;
+    info.default_frequency_scale = 10.0f;
     info.use_size_parameter = true;
-
-    // Control visibility (show all controls)
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -74,23 +62,18 @@ EffectInfo3D Wave3D::GetEffectInfo()
 
 void Wave3D::SetupCustomUI(QWidget* parent)
 {
-    // Create Wave-specific controls (base has axis/speed/etc)
     QWidget* wave_widget = new QWidget();
     QGridLayout* layout = new QGridLayout(wave_widget);
     layout->setContentsMargins(0, 0, 0, 0);
-
-    // Row 0: Shape (like RadialRainbow)
     layout->addWidget(new QLabel("Shape:"), 0, 0);
     shape_combo = new QComboBox();
     shape_combo->addItem("Circles");
     shape_combo->addItem("Squares");
+    shape_combo->addItem("Lines");
+    shape_combo->addItem("Diagonal");
     shape_combo->setCurrentIndex(shape_type);
     layout->addWidget(shape_combo, 0, 1);
-
-    // Add to parent layout
     AddWidgetToParent(wave_widget, parent);
-
-    // Connect signals
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wave3D::OnWaveParameterChanged);
 }
 
@@ -101,222 +84,108 @@ void Wave3D::UpdateParams(SpatialEffectParams& params)
 
 void Wave3D::OnWaveParameterChanged()
 {
-    // Update internal parameters
     if(shape_combo) shape_type = shape_combo->currentIndex();
-
-    // Emit parameter change signal
     emit ParametersChanged();
 }
 
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
 {
-    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
-
-    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    | Uses standardized boundary helper                        |
-    \*---------------------------------------------------------*/
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
     {
-        return 0x00000000;  // Black - outside effect boundary
+        return 0x00000000;
     }
 
-    /*---------------------------------------------------------*\
-    | Use standardized parameter helpers                       |
-    | These apply the correct curves and scaling automatically |
-    \*---------------------------------------------------------*/
     float actual_frequency = GetScaledFrequency();
-
-    // Update progress for animation using universal helper
     progress = CalculateProgress(time);
-
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
-
-    /*---------------------------------------------------------*\
-    | Calculate wave based on rotated coordinates             |
-    | Wave propagates along rotated X-axis by default         |
-    \*---------------------------------------------------------*/
     float wave_value = 0.0f;
-    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0 (affects spatial frequency)
-    float freq_scale = actual_frequency * 0.1f / size_multiplier;  // Larger size = more spread out
+    float size_multiplier = GetNormalizedSize();
+    float freq_scale = actual_frequency * 0.1f / size_multiplier;
     float position = 0.0f;
-
-    /*---------------------------------------------------------*\
-    | For radial waves, use distance from origin              |
-    | For directional waves, use rotated X coordinate         |
-    \*---------------------------------------------------------*/
-    if(shape_type == 0)  // Radial (Sphere)
-    {
+    if(shape_type == 0)
         position = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    }
-    else  // Directional (use rotated X-axis)
-    {
+    else if(shape_type == 1)
         position = rot_rel_x;
-    }
+    else if(shape_type == 2)
+        position = rot_rel_y;
+    else
+        position = rot_rel_x + rot_rel_z;
 
     wave_value = sin(position * freq_scale - progress);
-
-    // Convert wave to hue (0-360 degrees)
     float hue = (wave_value + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
-
-    // Get color based on mode
     RGBColor final_color;
-
     if(GetRainbowMode())
-    {
         final_color = GetRainbowColor(hue);
-    }
     else
-    {
-        // Use custom colors with position-based selection
-        float position = hue / 360.0f;
-        final_color = GetColorAtPosition(position);
-    }
-
-    // Global brightness is applied by PostProcessColorGrid
+        final_color = GetColorAtPosition(hue / 360.0f);
     return final_color;
 }
 
 RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    /*---------------------------------------------------------*\
-    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | One grid unit equals the configured grid scale          |
-    | (default 10mm). GridContext3D uses the same units.      |
-    \*---------------------------------------------------------*/
-
-    /*---------------------------------------------------------*\
-    | Get effect origin using grid-aware helper               |
-    | Automatically uses grid.center for room center mode     |
-    \*---------------------------------------------------------*/
     Vector3D origin = GetEffectOriginGrid(grid);
-
-    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
-
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    | Uses room-aware boundary checking                        |
-    \*---------------------------------------------------------*/
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-    {
-        return 0x00000000;  // Black - outside effect boundary
-    }
+        return 0x00000000;
 
-    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
-
-    // Update progress for animation
     progress = CalculateProgress(time);
-
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
-
-    /*---------------------------------------------------------*\
-    | Calculate wave based on rotated coordinates             |
-    | IMPORTANT: Normalize position to 0-1 for consistent     |
-    | wave density regardless of room size                     |
-    \*---------------------------------------------------------*/
     float wave_value = 0.0f;
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.1f / size_multiplier;
     float normalized_position = 0.0f;
-
-    /*---------------------------------------------------------*\
-    | For radial waves, use distance from origin              |
-    | For directional waves, use rotated X coordinate         |
-    \*---------------------------------------------------------*/
-    if(shape_type == 0)  // Radial (Sphere)
+    if(shape_type == 0)
     {
         float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
         float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
-        if(max_radius > 0.001f)
-        {
-            normalized_position = radial_distance / max_radius;
-        }
-        else
-        {
-            normalized_position = 0.0f;
-        }
+        normalized_position = (max_radius > 0.001f) ? (radial_distance / max_radius) : 0.0f;
     }
-    else  // Directional (use rotated X-axis)
+    else if(shape_type == 1)
+        normalized_position = (grid.width > 0.001f) ? ((rot_rel_x + grid.width * 0.5f) / grid.width) : 0.0f;
+    else if(shape_type == 2)
+        normalized_position = (grid.height > 0.001f) ? ((rot_rel_y + grid.height * 0.5f) / grid.height) : 0.0f;
+    else
     {
-        if(grid.width > 0.001f)
-        {
-            // Normalize rotated X position against room width
-            normalized_position = (rot_rel_x + grid.width * 0.5f) / grid.width;
-        }
-        else
-        {
-            normalized_position = 0.0f;
-        }
+        float diag = rot_rel_x + rot_rel_z;
+        float max_d = grid.width + grid.depth;
+        normalized_position = (max_d > 0.001f) ? ((diag + max_d * 0.5f) / max_d) : 0.0f;
     }
-
-    // Clamp to valid range [0, 1] to avoid NaNs/inf propagating into sin()
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
-
-    // Use normalized position (0-1) directly - it's already normalized across the entire room
-    // This ensures ALL controllers see the same wave pattern at the same absolute room position
-    // freq_scale already accounts for frequency, so we don't need room-size scaling
     wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
-
-    // Add depth-based enhancement for 3D immersion
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {
-        // Soft distance fade - keeps effect visible across whole room
         float normalized_dist = fmin(1.0f, radial_distance / max_radius);
-        depth_factor = 0.4f + 0.6f * (1.0f - normalized_dist * 0.7f); // Gentle fade, never fully black
+        depth_factor = 0.4f + 0.6f * (1.0f - normalized_dist * 0.7f);
     }
-
-    // Enhance wave with secondary harmonics for richer visuals
     float wave_enhanced = wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale * 20.0f - progress * 1.5f);
     wave_enhanced = fmax(-1.0f, fmin(1.0f, wave_enhanced));
-
-    // Convert wave to hue (0-360 degrees)
     float hue = (wave_enhanced + 1.0f) * 180.0f;
     hue = fmod(hue, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
-
-    // Get color based on mode
     RGBColor final_color;
-
     if(GetRainbowMode())
-    {
         final_color = GetRainbowColor(hue);
-    }
     else
-    {
-        float color_position = hue / 360.0f;
-        final_color = GetColorAtPosition(color_position);
-    }
-
-    // Apply depth factor for immersive 3D feel
+        final_color = GetColorAtPosition(hue / 360.0f);
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
@@ -336,12 +205,10 @@ nlohmann::json Wave3D::SaveSettings() const
 void Wave3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("shape_type"))
+    if(settings.contains("shape_type") && settings["shape_type"].is_number_integer())
     {
-        shape_type = settings["shape_type"].get<int>();
+        shape_type = std::max(0, std::min(3, settings["shape_type"].get<int>()));
         if(shape_combo)
-        {
             shape_combo->setCurrentIndex(shape_type);
-        }
     }
 }

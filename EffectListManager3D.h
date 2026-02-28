@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| EffectListManager3D.h                                     |
-|                                                           |
-|   Manages registered 3D spatial effects                  |
-|                                                           |
-|   Date: 2025-10-01                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef EFFECTLISTMANAGER3D_H
 #define EFFECTLISTMANAGER3D_H
@@ -47,7 +38,7 @@ public:
         reg.category = category;
         reg.constructor = constructor;
 
-        auto existing = effects.find(class_name);
+        std::map<std::string, EffectRegistration3D>::iterator existing = effects.find(class_name);
         if(existing != effects.end())
         {
             existing->second = reg;
@@ -60,9 +51,14 @@ public:
 
     SpatialEffect3D* CreateEffect(const std::string& class_name)
     {
-        if(effects.find(class_name) != effects.end())
+        std::string resolved = class_name;
+        if(class_name == "Comet3D" || class_name == "ZigZag3D" || class_name == "Visor3D")
+            resolved = "TravelingLight3D";
+        else if(class_name == "CrossingBeams3D" || class_name == "RotatingBeam3D")
+            resolved = "Beam3D";
+        if(effects.find(resolved) != effects.end())
         {
-            return effects[class_name].constructor();
+            return effects[resolved].constructor();
         }
         return nullptr;
     }
@@ -77,7 +73,7 @@ public:
         std::vector<EffectRegistration3D> result;
         for(size_t i = 0; i < effect_order.size(); i++)
         {
-            auto it = effects.find(effect_order[i]);
+            std::map<std::string, EffectRegistration3D>::const_iterator it = effects.find(effect_order[i]);
             if(it != effects.end())
             {
                 result.push_back(it->second);

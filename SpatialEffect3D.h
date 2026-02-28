@@ -89,6 +89,10 @@ struct EffectInfo3D
     bool                show_fps_control;
     bool                show_axis_control;
     bool                show_color_controls;
+    bool                show_surface_control = true;
+    bool                show_path_axis_control = false;
+    bool                show_plane_control = false;
+    bool                show_position_offset_control = true;
 };
 
 class SpatialEffect3D : public QWidget
@@ -129,7 +133,7 @@ public:
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
-    virtual void ApplyControlVisibility();      // Apply visibility flags from EffectInfo
+    virtual void ApplyControlVisibility();
 
 
     virtual void SetEffectEnabled(bool enabled) { effect_enabled = enabled; }
@@ -149,6 +153,11 @@ public:
     virtual unsigned int GetFrequency() const;
 
     virtual void SetReferenceMode(ReferenceMode mode);
+    virtual int GetPathAxis() const { return effect_path_axis; }
+    virtual int GetPlane() const { return effect_plane; }
+    virtual int GetSurfaceMask() const { return effect_surface_mask; }
+    Vector3D GetReferencePointGrid(const GridContext3D& grid) const;
+    bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
     virtual ReferenceMode GetReferenceMode() const;
     virtual void SetGlobalReferencePoint(const Vector3D& point);
     virtual Vector3D GetGlobalReferencePoint() const;
@@ -255,10 +264,30 @@ protected:
     float               effect_rotation_pitch;
     float               effect_rotation_roll;
 
-    /** Rotation of the axis-scale frame only (scale is applied in this frame); does not rotate the effect pattern. */
     float               effect_axis_scale_rotation_yaw;
     float               effect_axis_scale_rotation_pitch;
     float               effect_axis_scale_rotation_roll;
+
+    int                 effect_path_axis;
+    int                 effect_plane;
+    int                 effect_surface_mask;
+
+    int                 effect_offset_x;
+    int                 effect_offset_y;
+    int                 effect_offset_z;
+
+    QGroupBox*          position_offset_group;
+    QSlider*            offset_x_slider;
+    QSlider*            offset_y_slider;
+    QSlider*            offset_z_slider;
+    QLabel*             offset_x_label;
+    QLabel*             offset_y_label;
+    QLabel*             offset_z_label;
+
+    QGroupBox*          surfaces_group;
+    QGroupBox*          path_plane_group;
+    QComboBox*          path_axis_combo;
+    QComboBox*          plane_combo;
 
     ReferenceMode       reference_mode;
     Vector3D            global_reference_point;
@@ -289,7 +318,6 @@ protected:
 
     Vector3D TransformPointByRotation(float x, float y, float z,
                                       const Vector3D& origin) const;
-    /** Rotate vector (dx,dy,dz) by yaw/pitch/roll in degrees (same order as effect rotation). Used for axis-scale rotation. */
     static Vector3D RotateVectorByEuler(float dx, float dy, float dz, float yaw_deg, float pitch_deg, float roll_deg);
     float ApplySharpness(float value) const;
 

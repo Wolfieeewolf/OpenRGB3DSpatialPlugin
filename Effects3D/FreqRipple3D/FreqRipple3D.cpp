@@ -25,15 +25,15 @@ EffectInfo3D FreqRipple3D::GetEffectInfo()
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;
-    info.max_speed = 0;
-    info.min_speed = 0;
+    info.max_speed = 200;
+    info.min_speed = 1;
     info.user_colors = 2;
     info.has_custom_settings = true;
     info.needs_3d_origin = true;
-    info.default_speed_scale = 1.0f;
+    info.default_speed_scale = 4.0f;
     info.default_frequency_scale = 1.0f;
     info.use_size_parameter = false;
-    info.show_speed_control = false;
+    info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
@@ -51,23 +51,6 @@ void FreqRipple3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
-
-    QHBoxLayout* speed_row = new QHBoxLayout();
-    speed_row->addWidget(new QLabel("Expand Speed:"));
-    QSlider* speed_slider = new QSlider(Qt::Horizontal);
-    speed_slider->setRange(20, 400);
-    speed_slider->setValue((int)(expand_speed * 100.0f));
-    QLabel* speed_label = new QLabel(QString::number(expand_speed, 'f', 1));
-    speed_label->setMinimumWidth(36);
-    speed_row->addWidget(speed_slider);
-    speed_row->addWidget(speed_label);
-    layout->addLayout(speed_row);
-
-    connect(speed_slider, &QSlider::valueChanged, this, [this, speed_label](int v){
-        expand_speed = v / 100.0f;
-        speed_label->setText(QString::number(expand_speed, 'f', 1));
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* width_row = new QHBoxLayout();
     width_row->addWidget(new QLabel("Ring Width:"));
@@ -187,7 +170,8 @@ RGBColor FreqRipple3D::ComputeRippleColor(float dist_norm, float time) const
         float age = time - r.birth_time;
         if(age < 0.0f) continue;
 
-        float front = expand_speed * age;
+        float expand = 0.2f + GetScaledSpeed() * 0.95f;
+        float front = expand * age;
         float ring_dist = std::fabs(dist_norm - front);
         float half_w = std::max(trail_width * 0.5f, 1e-3f);
 
@@ -251,7 +235,6 @@ nlohmann::json FreqRipple3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    j["expand_speed"]     = expand_speed;
     j["trail_width"]      = trail_width;
     j["decay_rate"]       = decay_rate;
     j["onset_threshold"]  = onset_threshold;
@@ -262,7 +245,6 @@ void FreqRipple3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("expand_speed"))    expand_speed    = settings["expand_speed"].get<float>();
     if(settings.contains("trail_width"))     trail_width     = settings["trail_width"].get<float>();
     if(settings.contains("decay_rate"))      decay_rate      = settings["decay_rate"].get<float>();
     if(settings.contains("onset_threshold")) onset_threshold = settings["onset_threshold"].get<float>();

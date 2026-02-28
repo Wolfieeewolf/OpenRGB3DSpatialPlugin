@@ -371,7 +371,7 @@ RGBColor BandScan3D::ComposeColor(float axis_pos, float height_norm, float radia
     RGBColor modulation = axis_color;
     if(rainbow_mode)
     {
-        auto* mutable_self = const_cast<BandScan3D*>(this);
+        BandScan3D* mutable_self = const_cast<BandScan3D*>(this);
         modulation = mutable_self->GetRainbowColor(scan_phase * 360.0f);
     }
 

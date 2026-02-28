@@ -76,6 +76,8 @@ void Plasma3D::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Swirl");
     pattern_combo->addItem("Ripple");
     pattern_combo->addItem("Organic");
+    pattern_combo->addItem("Noise");
+    pattern_combo->addItem("CubeFire");
     pattern_combo->setCurrentIndex(pattern_type);
     pattern_combo->setToolTip("Plasma pattern variant");
     layout->addWidget(pattern_combo, 0, 1);
@@ -168,7 +170,6 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
             break;
 
         case 3:
-        default:
             {
                 float flow1 = sin(coord1 * scale * 0.8f + sin(coord2 * scale * 1.2f + progress) + progress * 0.5f);
                 float flow2 = cos(coord2 * scale * 0.9f + cos(coord3 * scale * 1.1f + progress * 1.3f));
@@ -178,6 +179,30 @@ RGBColor Plasma3D::CalculateColor(float x, float y, float z, float time)
 
                 plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
             }
+            break;
+
+        case 4:
+            {
+                float n1 = sin((coord1 + progress * 0.5f) * scale * 4.0f) * sin((coord2 + progress * 0.3f) * scale * 5.2f) * sin((coord3 + progress * 0.7f) * scale * 3.1f);
+                float n2 = sin((coord1 * 2.3f + coord2 + progress) * scale * 2.0f) * cos((coord2 * 1.7f + coord3 + progress * 1.2f) * scale * 2.5f);
+                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * scale * 1.5f + progress * 2.0f);
+                plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
+            }
+            break;
+
+        case 5:
+            {
+                float r = sqrtf(coord1*coord1 + coord2*coord2 + coord3*coord3);
+                plasma_value =
+                    sin(r * scale * 3.0f - progress * 2.0f) +
+                    sin((coord1 + coord2) * scale * 2.0f + progress * 1.5f) * 0.6f +
+                    cos((coord2 + coord3) * scale * 1.8f - progress * 1.2f) * 0.5f +
+                    sin(coord3 * scale * 2.5f + progress * 0.8f) * 0.4f;
+            }
+            break;
+
+        default:
+            plasma_value = 0.5f;
             break;
     }
 
@@ -272,7 +297,6 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
             }
             break;
         case 3:
-        default:
             {
                 float flow1 = sin(coord1 * freq_scale * 8.0f + sin(coord2 * freq_scale * 12.0f + progress) + progress * 0.5f);
                 float flow2 = cos(coord2 * freq_scale * 9.0f + cos(coord3 * freq_scale * 11.0f + progress * 1.3f));
@@ -281,6 +305,27 @@ RGBColor Plasma3D::CalculateColorGrid(float x, float y, float z, float time, con
                 float flow5 = sin((coord2 + coord3) * freq_scale * 5.0f + cos(progress * 1.8f));
                 plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
             }
+            break;
+        case 4:
+            {
+                float n1 = sin((coord1 + progress * 0.5f) * freq_scale * 40.0f) * sin((coord2 + progress * 0.3f) * freq_scale * 52.0f) * sin((coord3 + progress * 0.7f) * freq_scale * 31.0f);
+                float n2 = sin((coord1 * 2.3f + coord2 + progress) * freq_scale * 20.0f) * cos((coord2 * 1.7f + coord3 + progress * 1.2f) * freq_scale * 25.0f);
+                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * freq_scale * 15.0f + progress * 2.0f);
+                plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
+            }
+            break;
+        case 5:
+            {
+                float r = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f));
+                plasma_value =
+                    sin(r * freq_scale * 30.0f - progress * 2.0f) +
+                    sin((coord1 + coord2) * freq_scale * 20.0f + progress * 1.5f) * 0.6f +
+                    cos((coord2 + coord3) * freq_scale * 18.0f - progress * 1.2f) * 0.5f +
+                    sin(coord3 * freq_scale * 25.0f + progress * 0.8f) * 0.4f;
+            }
+            break;
+        default:
+            plasma_value = 0.5f;
             break;
     }
 
@@ -318,7 +363,8 @@ nlohmann::json Plasma3D::SaveSettings() const
 void Plasma3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("pattern_type")) pattern_type = settings["pattern_type"];
+    if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
+        pattern_type = std::max(0, std::min(settings["pattern_type"].get<int>(), 5));
 
     if(pattern_combo) pattern_combo->setCurrentIndex(pattern_type);
 }

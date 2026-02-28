@@ -9,9 +9,6 @@
 #include "Effects3D/AudioReactiveCommon.h"
 #include <limits>
 
-// Fills the room along a chosen axis proportional to audio level.
-// Below the fill level = lit, above = dark. Acts as a 3D VU meter.
-// Works on any surface: floor strips, wall matrices, keyboards.
 class FreqFill3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -37,8 +34,7 @@ private:
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
 
-    int fill_axis = 1;      // 0=X, 1=Y, 2=Z
-    float edge_width = 0.08f; // soft edge as fraction of axis range
+    float edge_width = 0.08f;
 };
 
 #endif

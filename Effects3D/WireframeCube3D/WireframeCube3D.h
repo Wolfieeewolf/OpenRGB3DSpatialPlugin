@@ -31,7 +31,6 @@ private:
     float thickness = 0.08f;
     float line_brightness = 1.0f;
 
-    // Cache rotated corners once per frame for FPS
     float cube_cache_time = -1e9f;
     float cube_corners[8][3];
     float cached_angle_deg = 0.0f;

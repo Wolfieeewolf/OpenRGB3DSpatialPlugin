@@ -119,7 +119,6 @@ RGBColor WireframeCube3D::CalculateColorGrid(float x, float y, float z, float ti
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    // Cache rotated cube corners once per frame (major FPS win)
     if(fabsf(time - cube_cache_time) > 0.001f)
     {
         cube_cache_time = time;

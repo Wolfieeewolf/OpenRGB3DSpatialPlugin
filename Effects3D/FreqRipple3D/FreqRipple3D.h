@@ -10,8 +10,6 @@
 #include <vector>
 #include <limits>
 
-// On each beat/onset, fires a radial shockwave from the origin that expands
-// outward through the room. Multiple ripples can be in flight simultaneously.
 class FreqRipple3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -36,8 +34,8 @@ private:
 
     struct Ripple
     {
-        float birth_time;   // effect_time when fired
-        float strength;     // 0..1 intensity at birth
+        float birth_time;
+        float strength;
     };
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
@@ -45,11 +43,10 @@ private:
 
     float last_tick_time = std::numeric_limits<float>::lowest();
     float onset_smoothed = 0.0f;
-    float onset_hold = 0.0f;    // prevents re-firing immediately after a trigger
+    float onset_hold = 0.0f;
 
-    float expand_speed = 1.2f;  // grid units per second
-    float trail_width  = 0.18f; // normalized width of the ripple ring
-    float decay_rate   = 2.0f;  // how quickly the ripple fades (per second)
+    float trail_width  = 0.18f;
+    float decay_rate   = 2.0f;
     float onset_threshold = 0.55f;
 };
 

@@ -33,7 +33,7 @@ private:
     int firework_type = TYPE_SINGLE;
     int num_simultaneous = 2;
     float gravity_strength = 1.0f;
-    float decay_speed = 1.8f;   // Default higher so fireworks drop off quicker (0.5–4)
+    float decay_speed = 2.8f;
     static constexpr float CYCLE_DURATION = 5.0f;
     static constexpr float MISSILE_DURATION = 1.0f;
 

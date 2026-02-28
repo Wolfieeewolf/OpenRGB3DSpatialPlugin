@@ -55,7 +55,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
 
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = true;
+    info.show_frequency_control = false;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;

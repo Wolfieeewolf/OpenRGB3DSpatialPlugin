@@ -85,9 +85,9 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , grid_z(10)
     , grid_snap_enabled(false)
     , grid_scale_mm(10.0f)
-    , room_width(1000.0f)          // Default: 1000 mm
-    , room_depth(1000.0f)          // Default: 1000 mm
-    , room_height(1000.0f)         // Default: 1000 mm
+    , room_width(1000.0f)
+    , room_depth(1000.0f)
+    , room_height(1000.0f)
     , use_manual_room_dimensions(false)
     , reference_points(nullptr)
     , display_planes(nullptr)
@@ -289,7 +289,6 @@ void LEDViewport3D::UpdateGizmoPosition()
 
 void LEDViewport3D::NotifyControllerTransformChanged()
 {
-    // Mark world positions as dirty for the selected controller
     if(!controller_transforms) return;
     if(selected_controller_idx >= 0 && selected_controller_idx < (int)controller_transforms->size())
     {
@@ -339,14 +338,12 @@ void LEDViewport3D::paintGL()
     DrawAxes();
     DrawRoomBoundary();
 
-    // Update textures before drawing display planes
     if(show_screen_preview && !show_test_pattern)
     {
         UpdateDisplayPlaneTextures();
     }
     else
     {
-        // Clear textures when preview is disabled to free memory
         ClearDisplayPlaneTextures();
     }
 
@@ -397,7 +394,6 @@ void LEDViewport3D::resizeGL(int w, int h)
 
     glMatrixMode(GL_MODELVIEW);
 
-    // Keep gizmo aware of current viewport size for any screen/world helpers
     gizmo.SetViewportSize(w, h);
 }
 
@@ -417,7 +413,6 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 
     if(event->button() == Qt::LeftButton)
     {
-        // Check gizmo first (if something is selected)
         bool has_controller_selected = (selected_controller_idx >= 0 && controller_transforms &&
                                         selected_controller_idx < (int)controller_transforms->size());
         bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&
@@ -436,18 +431,14 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
-        // Check if clicking on a reference point first (priority over controllers)
         int picked_ref_point = PickReferencePoint(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_ref_point >= 0)
         {
-            // Clear controller selection only
             selected_controller_indices.clear();
             selected_controller_idx = -1;
 
-            // Set reference point selection
             selected_ref_point_idx = picked_ref_point;
 
-            // Set gizmo to target the reference point
             if(reference_points && picked_ref_point < (int)reference_points->size())
             {
                 VirtualReferencePoint3D* ref_point = (*reference_points)[picked_ref_point].get();
@@ -461,11 +452,10 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             return;
         }
 
-        // Check if clicking on a controller
         int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_controller >= 0)
         {
-            selected_ref_point_idx = -1; // Deselect reference point
+            selected_ref_point_idx = -1;
             if(event->modifiers() & Qt::ControlModifier)
             {
                 if(IsControllerSelected(picked_controller))
@@ -498,18 +488,15 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
-        // Start grab mode (will decide on release if it was a click or drag)
         dragging_grab = true;
         return;
     }
     else if(event->button() == Qt::MiddleButton)
     {
-        // Middle mouse = Vertical pan (up/down camera movement)
         dragging_pan = true;
     }
     else if(event->button() == Qt::RightButton)
     {
-        // Right mouse = Rotate
         dragging_rotate = true;
     }
 }
@@ -586,31 +573,24 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     }
     else
     {
-        // Trigger repaint so hover highlighting updates
         update();
     }
 
     if(dragging_grab)
     {
-        // Grab mode: slide the grid like grabbing and dragging the floor
         float grab_sensitivity = 0.003f * camera_distance;
 
-        // Calculate camera right and forward vectors (in XZ plane only - parallel to ground)
         float yaw_rad = camera_yaw * M_PI / 180.0f;
 
-        // Right vector (perpendicular to view, in XZ plane)
         float right_x = -sinf(yaw_rad);
         float right_z = cosf(yaw_rad);
 
-        // Forward vector (view direction projected onto XZ plane)
         float forward_x = cosf(yaw_rad);
         float forward_z = sinf(yaw_rad);
 
-        // Horizontal drag = slide left/right (swapped for natural feel)
         camera_target_x += right_x * delta.x() * grab_sensitivity;
         camera_target_z += right_z * delta.x() * grab_sensitivity;
 
-        // Vertical drag = slide forward/back on the ground plane (inverted)
         camera_target_x -= forward_x * delta.y() * grab_sensitivity;
         camera_target_z -= forward_z * delta.y() * grab_sensitivity;
 
@@ -618,12 +598,10 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     }
     else if(dragging_rotate)
     {
-        // Unity-style rotation: smooth and responsive
         float orbit_sensitivity = 0.3f;
-        camera_yaw += delta.x() * orbit_sensitivity;  // Swapped back
-        camera_pitch += delta.y() * orbit_sensitivity;  // Inverted up/down
+        camera_yaw += delta.x() * orbit_sensitivity;
+        camera_pitch += delta.y() * orbit_sensitivity;
 
-        // Clamp pitch to avoid gimbal lock
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
 
@@ -631,28 +609,23 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     }
     else if(dragging_pan)
     {
-        // Blender-style panning: scales with distance for consistent feel
         float pan_sensitivity = 0.002f * camera_distance;
 
-        // Calculate camera right and up vectors
         float yaw_rad = camera_yaw * M_PI / 180.0f;
         float pitch_rad = camera_pitch * M_PI / 180.0f;
 
-        // Right vector (perpendicular to view direction, in XZ plane)
         float right_x = -sinf(yaw_rad);
         float right_z = cosf(yaw_rad);
 
-        // Up vector (camera's up direction in world space)
         float up_x = cosf(yaw_rad) * sinf(pitch_rad);
         float up_y = cosf(pitch_rad);
         float up_z = sinf(yaw_rad) * sinf(pitch_rad);
 
-        // Pan the camera target
         camera_target_x += right_x * delta.x() * pan_sensitivity;
         camera_target_z += right_z * delta.x() * pan_sensitivity;
-        camera_target_x -= up_x * delta.y() * pan_sensitivity;  // Swapped back
-        camera_target_y -= up_y * delta.y() * pan_sensitivity;  // Swapped back
-        camera_target_z -= up_z * delta.y() * pan_sensitivity;  // Swapped back
+        camera_target_x -= up_x * delta.y() * pan_sensitivity;
+        camera_target_y -= up_y * delta.y() * pan_sensitivity;
+        camera_target_z -= up_z * delta.y() * pan_sensitivity;
 
         update();
     }
@@ -662,20 +635,16 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 {
-    // Handle grab mode release - check if it was a click or drag
     if(dragging_grab && event->button() == Qt::LeftButton)
     {
-        // Calculate distance moved
         QPoint delta = event->pos() - click_start_pos;
         float distance = sqrtf(delta.x() * delta.x() + delta.y() * delta.y());
 
-        // If barely moved (< 3 pixels), treat as click for selection
         if(distance < 3.0f)
         {
             int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
             if(picked_controller >= 0)
             {
-                // Select the controller
                 ClearSelection();
                 AddControllerToSelection(picked_controller);
                 SelectController(picked_controller);
@@ -698,15 +667,12 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
                 }
             }
         }
-        // else: was a drag, camera already moved
     }
-    // Handle middle-click selection
     else if(event->button() == Qt::MiddleButton)
     {
         int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
         if(picked_controller >= 0)
         {
-            // Select the controller
             ClearSelection();
             AddControllerToSelection(picked_controller);
             SelectController(picked_controller);
@@ -722,7 +688,6 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
             }
             else
             {
-                // Clicked empty space - deselect
                 ClearSelection();
                 SelectDisplayPlane(-1);
                 emit ControllerSelected(-1);
@@ -740,16 +705,11 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 
 void LEDViewport3D::wheelEvent(QWheelEvent *event)
 {
-    // Blender-style zoom: exponential scaling for smooth zoom at all distances
     float delta = event->angleDelta().y() / 120.0f;
-
-    // Use percentage-based zoom for consistent feel
-    // Each scroll step zooms by 10% of current distance
     float zoom_factor = 1.0f - (delta * 0.1f);
 
     camera_distance *= zoom_factor;
 
-    // Clamp to reasonable bounds
     if(camera_distance < 1.0f) camera_distance = 1.0f;
     if(camera_distance > 500.0f) camera_distance = 500.0f;
 
@@ -760,7 +720,6 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
 {
     if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
-        // Delete the selected controller with confirmation
         if(selected_controller_idx >= 0 && controller_transforms &&
            selected_controller_idx < (int)controller_transforms->size())
         {
@@ -907,7 +866,6 @@ void LEDViewport3D::DrawAxes()
     glVertex3f(-0.15f, 2.7f, 0.0f);
     glEnd();
 
-    // Z Axis arrow (Blue - Back Wall direction)
     glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_TRIANGLES);
     glVertex3f(0.0f, 0.0f, 3.0f);
@@ -927,7 +885,6 @@ void LEDViewport3D::DrawAxisLabels()
     QFont font("Arial", 10, QFont::Bold);
     painter.setFont(font);
 
-    // Get 3D positions and project to 2D screen coordinates
     GLdouble modelview[16], projection[16];
     GLint viewport[4];
     glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
@@ -1179,7 +1136,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    // Single batched draw instead of N glColor3f/glVertex3f
     glPointSize(room_grid_point_size);
     glVertexPointer(3, GL_FLOAT, 0, room_grid_overlay_positions.data());
     glColorPointer(3, GL_FLOAT, 0, room_grid_overlay_colors.data());
@@ -1232,13 +1188,10 @@ void LEDViewport3D::DrawDisplayPlanes()
         float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
 
-        // Check per-monitor test pattern setting
-        // For now, use global flag (will be enhanced to check per-monitor via effect instance)
         bool plane_test_pattern = show_test_pattern;
         
         if(plane_test_pattern)
         {
-            // Draw test pattern: 4 quadrants (Red, Green, Blue, Yellow)
             Vector3D center;
             center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
             center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
@@ -1261,7 +1214,6 @@ void LEDViewport3D::DrawDisplayPlanes()
             mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
             mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
 
-            // Bottom-left quadrant: RED
             glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
             glBegin(GL_QUADS);
             glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
@@ -1270,7 +1222,6 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(mid_left.x, mid_left.y, mid_left.z);
             glEnd();
 
-            // Bottom-right quadrant: GREEN
             glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
             glBegin(GL_QUADS);
             glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
@@ -1279,7 +1230,6 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(center.x, center.y, center.z);
             glEnd();
 
-            // Top-right quadrant: BLUE
             glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
             glBegin(GL_QUADS);
             glVertex3f(center.x, center.y, center.z);
@@ -1288,7 +1238,6 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(mid_top.x, mid_top.y, mid_top.z);
             glEnd();
 
-            // Top-left quadrant: YELLOW
             glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
             glBegin(GL_QUADS);
             glVertex3f(mid_left.x, mid_left.y, mid_left.z);
@@ -1297,13 +1246,10 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
             glEnd();
         }
-        // Check per-monitor screen preview setting
-        // For now, use global flag (will be enhanced to check per-monitor via effect instance)
         bool plane_screen_preview = show_screen_preview;
         
         if(plane_screen_preview)
         {
-            // Try to get texture for this plane's capture source
             std::string source_id = plane_ptr->GetCaptureSourceId();
             GLuint texture_id = 0;
             bool has_texture = false;
@@ -1320,22 +1266,17 @@ void LEDViewport3D::DrawDisplayPlanes()
 
             if(has_texture)
             {
-                // Draw textured quad showing live screen capture
                 glEnable(GL_TEXTURE_2D);
                 glBindTexture(GL_TEXTURE_2D, texture_id);
                 glColor4f(1.0f, 1.0f, 1.0f, 0.85f);
 
                 glBegin(GL_QUADS);
-                // Bottom-left corner (UV: 0, 1) - flipped V to correct upside-down capture
                 glTexCoord2f(0.0f, 1.0f);
                 glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
-                // Bottom-right corner (UV: 1, 1)
                 glTexCoord2f(1.0f, 1.0f);
                 glVertex3f(world_corners[1].x, world_corners[1].y, world_corners[1].z);
-                // Top-right corner (UV: 1, 0)
                 glTexCoord2f(1.0f, 0.0f);
                 glVertex3f(world_corners[2].x, world_corners[2].y, world_corners[2].z);
-                // Top-left corner (UV: 0, 0)
                 glTexCoord2f(0.0f, 0.0f);
                 glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
                 glEnd();
@@ -1345,8 +1286,6 @@ void LEDViewport3D::DrawDisplayPlanes()
             }
             else
             {
-                // Fallback: Show 4 quadrants with distinct solid colors to visualize orientation
-                // This helps verify screen capture mapping is correct when no texture is available
                 Vector3D center;
                 center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
                 center.y = (world_corners[0].y + world_corners[2].y) * 0.5f;
@@ -1369,7 +1308,6 @@ void LEDViewport3D::DrawDisplayPlanes()
                 mid_right.y = (world_corners[1].y + world_corners[2].y) * 0.5f;
                 mid_right.z = (world_corners[1].z + world_corners[2].z) * 0.5f;
 
-                // Bottom-left quadrant: RED
                 glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
                 glBegin(GL_QUADS);
                 glVertex3f(world_corners[0].x, world_corners[0].y, world_corners[0].z);
@@ -1378,7 +1316,6 @@ void LEDViewport3D::DrawDisplayPlanes()
                 glVertex3f(mid_left.x, mid_left.y, mid_left.z);
                 glEnd();
 
-                // Bottom-right quadrant: GREEN
                 glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
                 glBegin(GL_QUADS);
                 glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
@@ -1387,7 +1324,6 @@ void LEDViewport3D::DrawDisplayPlanes()
                 glVertex3f(center.x, center.y, center.z);
                 glEnd();
 
-                // Top-right quadrant: BLUE
                 glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
                 glBegin(GL_QUADS);
                 glVertex3f(center.x, center.y, center.z);
@@ -1396,7 +1332,6 @@ void LEDViewport3D::DrawDisplayPlanes()
                 glVertex3f(mid_top.x, mid_top.y, mid_top.z);
                 glEnd();
 
-                // Top-left quadrant: YELLOW
                 glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
                 glBegin(GL_QUADS);
                 glVertex3f(mid_left.x, mid_left.y, mid_left.z);
@@ -1451,17 +1386,14 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         std::string source_id = plane->GetCaptureSourceId();
         if(source_id.empty()) continue;
 
-        // Start capture if not already running
         if(!capture_mgr.IsCapturing(source_id))
         {
             capture_mgr.StartCapture(source_id);
         }
 
-        // Get latest frame from capture manager
         std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
         if(!frame || !frame->valid || frame->data.empty()) continue;
 
-        // Check if we already have a texture for this source
         GLuint texture_id = 0;
         std::map<std::string, GLuint>::iterator texture_it = display_plane_textures.find(source_id);
         if(texture_it != display_plane_textures.end())
@@ -1470,12 +1402,10 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         }
         else
         {
-            // Create new texture
             glGenTextures(1, &texture_id);
             display_plane_textures[source_id] = texture_id;
         }
 
-        // Update texture with frame data
         glBindTexture(GL_TEXTURE_2D, texture_id);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame->width, frame->height,
                      0, GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
@@ -1489,7 +1419,6 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
 
 void LEDViewport3D::ClearDisplayPlaneTextures()
 {
-    // Delete all textures and clear the map
     for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
         it != display_plane_textures.end(); ++it)
     {
@@ -1538,17 +1467,17 @@ void LEDViewport3D::DrawControllers()
 
         if(is_primary)
         {
-            glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow for primary selection
+            glColor3f(1.0f, 1.0f, 0.0f);
             glLineWidth(3.0f);
         }
         else if(is_selected)
         {
-            glColor3f(1.0f, 0.8f, 0.0f); // Orange for secondary selections
+            glColor3f(1.0f, 0.8f, 0.0f);
             glLineWidth(2.0f);
         }
         else
         {
-            glColor3f(0.3f, 0.3f, 0.3f); // Gray for unselected controllers
+            glColor3f(0.3f, 0.3f, 0.3f);
             glLineWidth(1.0f);
         }
 
@@ -1571,7 +1500,6 @@ void LEDViewport3D::DrawControllers()
 
         glEnd();
 
-        // Top indicator sphere (green = up, red = down)
         float top_y = max_bounds.y;
         float center_x = (min_bounds.x + max_bounds.x) * 0.5f;
         float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
@@ -1581,7 +1509,6 @@ void LEDViewport3D::DrawControllers()
         glPushMatrix();
         glTranslatef(center_x, top_y, center_z);
 
-        // Draw half sphere (top green, bottom red)
         for(int i = 0; i < sphere_segments / 2; i++)
         {
             float lat0 = M_PI * (0.0f + (float)i / sphere_segments);
@@ -1598,7 +1525,6 @@ void LEDViewport3D::DrawControllers()
                 float x = cosf(lng);
                 float z = sinf(lng);
 
-                // Top half = Green (correct orientation)
                 glColor3f(0.0f, 1.0f, 0.0f);
                 glVertex3f(x * r0, y0, z * r0);
                 glVertex3f(x * r1, y1, z * r1);
@@ -1606,7 +1532,6 @@ void LEDViewport3D::DrawControllers()
             glEnd();
         }
 
-        // Draw bottom half (red - wrong orientation indicator)
         for(int i = sphere_segments / 2; i < sphere_segments; i++)
         {
             float lat0 = M_PI * (0.0f + (float)i / sphere_segments);
@@ -1623,7 +1548,6 @@ void LEDViewport3D::DrawControllers()
                 float x = cosf(lng);
                 float z = sinf(lng);
 
-                // Bottom half = Red (needs rotation)
                 glColor3f(1.0f, 0.0f, 0.0f);
                 glVertex3f(x * r0, y0, z * r0);
                 glVertex3f(x * r1, y1, z * r1);
@@ -1684,7 +1608,6 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
     }
     else
     {
-        // For physical controllers, map each LEDPosition3D to the controller's global LED index
         for(size_t i = 0; i < ctrl->led_positions.size(); i++)
         {
             const LEDPosition3D& pos = ctrl->led_positions[i];
@@ -1729,10 +1652,8 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     GLdouble near_x, near_y, near_z;
     GLdouble far_x, far_y, far_z;
 
-    // Convert mouse Y to OpenGL coordinates (flip Y axis)
     int gl_mouse_y = viewport[3] - mouse_y;
 
-    // Convert to GLdouble arrays
     GLdouble mv[16], proj[16];
     GLint vp[4];
     for(int i = 0; i < 16; i++)
@@ -1745,7 +1666,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
         vp[i] = (GLint)viewport[i];
     }
 
-    // Unproject near and far plane
     gluUnProject((GLdouble)mouse_x, (GLdouble)gl_mouse_y, 0.0,
                  mv, proj, vp,
                  &near_x, &near_y, &near_z);
@@ -1754,7 +1674,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
                  mv, proj, vp,
                  &far_x, &far_y, &far_z);
 
-    // Create ray
     float ray_origin[3] = { (float)near_x, (float)near_y, (float)near_z };
     float ray_direction[3] = {
         (float)(far_x - near_x),
@@ -1762,7 +1681,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
         (float)(far_z - near_z)
     };
 
-    // Normalize direction
     float length = sqrtf(ray_direction[0] * ray_direction[0] +
                         ray_direction[1] * ray_direction[1] +
                         ray_direction[2] * ray_direction[2]);
@@ -1784,14 +1702,12 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
         Vector3D min_bounds, max_bounds;
         CalculateControllerBounds(ctrl, min_bounds, max_bounds);
 
-        // Calculate center offset to match DrawControllers rendering
         Vector3D center_offset = {
             -(min_bounds.x + max_bounds.x) * 0.5f,
             -(min_bounds.y + max_bounds.y) * 0.5f,
             -(min_bounds.z + max_bounds.z) * 0.5f
         };
 
-        // Transform local bounds to world space (matching draw transform order)
         Vector3D world_min = {
             ctrl->transform.position.x + center_offset.x + min_bounds.x,
             ctrl->transform.position.y + center_offset.y + min_bounds.y,
@@ -1803,7 +1719,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
             ctrl->transform.position.z + center_offset.z + max_bounds.z
         };
 
-        // Ensure min < max (swap if needed)
         if(world_min.x > world_max.x) { float temp = world_min.x; world_min.x = world_max.x; world_max.x = temp; }
         if(world_min.y > world_max.y) { float temp = world_min.y; world_min.y = world_max.y; world_max.y = temp; }
         if(world_min.z > world_max.z) { float temp = world_min.z; world_min.z = world_max.z; world_max.z = temp; }
@@ -1811,8 +1726,6 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
         float distance;
         if(RayBoxIntersect(ray_origin, ray_direction, world_min, world_max, distance))
         {
-            // Prefer closer objects - distance-based priority
-            // This helps when multiple boxes overlap or are aligned
             if(distance < closest_distance)
             {
                 closest_distance = distance;
@@ -1862,14 +1775,12 @@ bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
 bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[3],
                                        const Vector3D& sphere_center, float sphere_radius, float& distance)
 {
-    // Calculate vector from ray origin to sphere center
     float oc[3] = {
         ray_origin[0] - sphere_center.x,
         ray_origin[1] - sphere_center.y,
         ray_origin[2] - sphere_center.z
     };
 
-    // Quadratic equation coefficients: at^2 + bt + c = 0
     float a = ray_direction[0] * ray_direction[0] +
               ray_direction[1] * ray_direction[1] +
               ray_direction[2] * ray_direction[2];
@@ -1880,7 +1791,6 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
 
     float c = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - sphere_radius * sphere_radius;
 
-    // Calculate discriminant
     float discriminant = b * b - 4.0f * a * c;
 
     if(discriminant < 0.0f)
@@ -1888,12 +1798,10 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
         return false; // No intersection
     }
 
-    // Calculate the two possible intersection distances
     float sqrt_discriminant = sqrtf(discriminant);
     float t1 = (-b - sqrt_discriminant) / (2.0f * a);
     float t2 = (-b + sqrt_discriminant) / (2.0f * a);
 
-    // Use the closest positive intersection
     if(t1 > 0.0f)
     {
         distance = t1;
@@ -1920,7 +1828,6 @@ int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glGetIntegerv(GL_VIEWPORT, viewport);
 
-    // Use gluUnProject for proper ray generation
     GLdouble near_x, near_y, near_z;
     GLdouble far_x, far_y, far_z;
 
@@ -1946,7 +1853,6 @@ int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
                  mv, proj, vp,
                  &far_x, &far_y, &far_z);
 
-    // Create ray
     float ray_origin[3] = { (float)near_x, (float)near_y, (float)near_z };
     float ray_direction[3] = {
         (float)(far_x - near_x),
@@ -1954,7 +1860,6 @@ int LEDViewport3D::PickReferencePoint(int mouse_x, int mouse_y)
         (float)(far_z - near_z)
     };
 
-    // Find closest reference point
     int closest_ref_point = -1;
     float closest_distance = FLT_MAX;
     const float sphere_radius = 0.3f; // Match the radius used in DrawReferencePoints
@@ -2006,12 +1911,10 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
         if(pos.z > max_bounds.z) max_bounds.z = pos.z;
     }
 
-    // Check if this is a single point (1x1x1 or all LEDs at same position)
     float size_x = max_bounds.x - min_bounds.x;
     float size_y = max_bounds.y - min_bounds.y;
     float size_z = max_bounds.z - min_bounds.z;
 
-    // For degenerate boxes (single point or very thin), create a minimum sized box
     float min_dimension = 0.2f;  // Minimum box dimension
 
     if(size_x < 0.001f)  // Essentially zero
@@ -2033,7 +1936,6 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
         max_bounds.z = center_z + min_dimension;
     }
 
-    // Small padding for visual clarity (tighter now)
     float padding = 0.1f;
     min_bounds.x -= padding;
     min_bounds.y -= padding;
@@ -2367,7 +2269,6 @@ void LEDViewport3D::SelectDisplayPlane(int index)
     {
         selected_display_plane_idx = -1;
 
-        // Only clear the gizmo target if nothing else is currently selected.
         if(selected_controller_idx < 0 && selected_ref_point_idx < 0)
         {
             gizmo.SetTarget((DisplayPlane3D*)nullptr);
@@ -2409,7 +2310,6 @@ void LEDViewport3D::NotifyDisplayPlaneChanged()
 
 void LEDViewport3D::DrawUserFigure()
 {
-    // Find and draw User type reference point with smiley face
     if(!reference_points) return;
 
     for(size_t idx = 0; idx < reference_points->size(); idx++)
@@ -2438,7 +2338,6 @@ void LEDViewport3D::DrawUserFigure()
             glColor3f(r, g, b);
             glLineWidth(2.0f);
 
-            // Draw head circle
             glBegin(GL_LINE_LOOP);
             for(int i = 0; i < segments; i++)
             {
@@ -2449,14 +2348,12 @@ void LEDViewport3D::DrawUserFigure()
             }
             glEnd();
 
-            // Draw eyes
             glPointSize(6.0f);
             glBegin(GL_POINTS);
             glVertex3f(-0.15f, 0.1f, 0.0f);
             glVertex3f(0.15f, 0.1f, 0.0f);
             glEnd();
 
-            // Draw smile
             glBegin(GL_LINE_STRIP);
             for(int i = 0; i <= 10; i++)
             {
@@ -2468,7 +2365,6 @@ void LEDViewport3D::DrawUserFigure()
             }
             glEnd();
 
-            // Draw selection box when selected
             if(is_selected)
             {
                 glDisable(GL_DEPTH_TEST); // Make sure selection box is always visible
@@ -2477,19 +2373,16 @@ void LEDViewport3D::DrawUserFigure()
                 glLineWidth(3.0f);
 
                 glBegin(GL_LINES);
-                // Bottom square
                 glVertex3f(-box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, -box_size);
                 glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, -box_size, box_size);
                 glVertex3f(box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, box_size);
                 glVertex3f(-box_size, -box_size, box_size); glVertex3f(-box_size, -box_size, -box_size);
 
-                // Top square
                 glVertex3f(-box_size, box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
                 glVertex3f(box_size, box_size, -box_size); glVertex3f(box_size, box_size, box_size);
                 glVertex3f(box_size, box_size, box_size); glVertex3f(-box_size, box_size, box_size);
                 glVertex3f(-box_size, box_size, box_size); glVertex3f(-box_size, box_size, -box_size);
 
-                // Vertical edges
                 glVertex3f(-box_size, -box_size, -box_size); glVertex3f(-box_size, box_size, -box_size);
                 glVertex3f(box_size, -box_size, -box_size); glVertex3f(box_size, box_size, -box_size);
                 glVertex3f(box_size, -box_size, box_size); glVertex3f(box_size, box_size, box_size);
@@ -2503,7 +2396,6 @@ void LEDViewport3D::DrawUserFigure()
             glPointSize(1.0f);
             glPopMatrix();
 
-            // Only draw the first User type reference point
             break;
         }
     }
@@ -2522,7 +2414,6 @@ void LEDViewport3D::DrawReferencePoints()
         VirtualReferencePoint3D* ref_point = (*reference_points)[idx].get();
         if(!ref_point->IsVisible()) continue;
 
-        // Skip User type - drawn as smiley face in DrawUserFigure()
         if(ref_point->GetType() == REF_POINT_USER) continue;
 
         bool is_selected = ((int)idx == selected_ref_point_idx);
@@ -2541,7 +2432,6 @@ void LEDViewport3D::DrawReferencePoints()
         glRotatef(rot.y, 0.0f, 1.0f, 0.0f);
         glRotatef(rot.z, 0.0f, 0.0f, 1.0f);
 
-        // Draw filled sphere
         glColor3f(r, g, b);
         for(int i = 0; i < rings; i++)
         {
@@ -2565,7 +2455,6 @@ void LEDViewport3D::DrawReferencePoints()
             glEnd();
         }
 
-        // Draw outline - brighter and thicker if selected
         if(is_selected)
         {
             glColor3f(1.0f, 1.0f, 0.0f); // Bright yellow for selection

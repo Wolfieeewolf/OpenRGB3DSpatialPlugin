@@ -6,12 +6,25 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
+#include <QComboBox>
 
 REGISTER_EFFECT_3D(WaveSurface3D);
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+const char* WaveSurface3D::WaveStyleName(int s)
+{
+    switch(s) {
+    case STYLE_SINUS: return "Sinus (Mega-Cube)";
+    case STYLE_RADIAL: return "Radial (concentric)";
+    case STYLE_LINEAR: return "Linear (flat wave)";
+    case STYLE_PACIFICA: return "Pacifica (ocean)";
+    case STYLE_GRADIENT: return "Gradient wave";
+    default: return "Sinus";
+    }
+}
 
 WaveSurface3D::WaveSurface3D(QWidget* parent) : SpatialEffect3D(parent) {}
 
@@ -50,6 +63,16 @@ void WaveSurface3D::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
     int row = 0;
+    layout->addWidget(new QLabel("Wave style:"), row, 0);
+    QComboBox* style_combo = new QComboBox();
+    for(int s = 0; s < STYLE_COUNT; s++) style_combo->addItem(WaveStyleName(s));
+    style_combo->setCurrentIndex(std::max(0, std::min(wave_style, STYLE_COUNT - 1)));
+    layout->addWidget(style_combo, row, 1, 1, 2);
+    connect(style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
+        wave_style = std::max(0, std::min(idx, STYLE_COUNT - 1));
+        emit ParametersChanged();
+    });
+    row++;
     layout->addWidget(new QLabel("Surface thickness:"), row, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(2, 100);
@@ -89,20 +112,6 @@ void WaveSurface3D::SetupCustomUI(QWidget* parent)
     connect(amp_slider, &QSlider::valueChanged, this, [this, amp_label](int v){
         wave_amplitude = v / 100.0f;
         if(amp_label) amp_label->setText(QString::number(v) + "%");
-        emit ParametersChanged();
-    });
-    row++;
-    layout->addWidget(new QLabel("Wave travel speed:"), row, 0);
-    QSlider* travel_slider = new QSlider(Qt::Horizontal);
-    travel_slider->setRange(0, 200);
-    travel_slider->setValue((int)(wave_travel_speed * 100.0f));
-    QLabel* travel_label = new QLabel(QString::number(wave_travel_speed, 'f', 2));
-    travel_label->setMinimumWidth(36);
-    layout->addWidget(travel_slider, row, 1);
-    layout->addWidget(travel_label, row, 2);
-    connect(travel_slider, &QSlider::valueChanged, this, [this, travel_label](int v){
-        wave_travel_speed = v / 100.0f;
-        if(travel_label) travel_label->setText(QString::number(wave_travel_speed, 'f', 2));
         emit ParametersChanged();
     });
     row++;
@@ -148,9 +157,29 @@ RGBColor WaveSurface3D::CalculateColorGrid(float x, float y, float z, float time
     float amp = std::max(0.2f, std::min(2.0f, wave_amplitude));
     float dir_rad = wave_direction_deg * (float)(M_PI / 180.0);
     float wave_pos = (float)(cos(dir_rad) * lx + sin(dir_rad) * lz);
-    // Traveling wave: phase moves along wave_pos over time (surface moves in direction)
-    float travel = wave_travel_speed * time * (float)(2.0 * M_PI);
-    float surface_y = amp * sinf(phase + freq * r + wave_pos * 2.0f + travel);
+    float travel = phase;
+
+    float surface_y;
+    int style = std::max(0, std::min(wave_style, STYLE_COUNT - 1));
+    switch(style)
+    {
+    case STYLE_RADIAL:
+        surface_y = amp * sinf(phase + freq * r * 3.0f + travel);
+        break;
+    case STYLE_LINEAR:
+        surface_y = amp * sinf(phase + freq * wave_pos * 4.0f + travel);
+        break;
+    case STYLE_PACIFICA:
+        surface_y = amp * (sinf(phase + freq * r + travel) * 0.5f + sinf(phase * 0.7f + freq * r * 1.5f + travel * 1.2f) * 0.3f + sinf(phase * 0.5f + r * 2.0f + travel * 0.8f) * 0.2f);
+        break;
+    case STYLE_GRADIENT:
+        surface_y = amp * (0.5f + 0.5f * sinf(phase + freq * r + wave_pos * 2.0f + travel));
+        break;
+    case STYLE_SINUS:
+    default:
+        surface_y = amp * sinf(phase + freq * r + wave_pos * 2.0f + travel);
+        break;
+    }
     float d = fabsf(ly - surface_y);
     float sigma = std::max(surface_thickness, 0.02f);
     const float d_cutoff = 3.0f * sigma * std::max(1.0f, amp);
@@ -171,10 +200,10 @@ RGBColor WaveSurface3D::CalculateColorGrid(float x, float y, float z, float time
 nlohmann::json WaveSurface3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["wave_style"] = wave_style;
     j["surface_thickness"] = surface_thickness;
     j["wave_frequency"] = wave_frequency;
     j["wave_amplitude"] = wave_amplitude;
-    j["wave_travel_speed"] = wave_travel_speed;
     j["wave_direction_deg"] = wave_direction_deg;
     return j;
 }
@@ -182,14 +211,14 @@ nlohmann::json WaveSurface3D::SaveSettings() const
 void WaveSurface3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("wave_style") && settings["wave_style"].is_number_integer())
+        wave_style = std::max(0, std::min(settings["wave_style"].get<int>(), STYLE_COUNT - 1));
     if(settings.contains("surface_thickness") && settings["surface_thickness"].is_number())
     { float v = settings["surface_thickness"].get<float>(); surface_thickness = std::max(0.02f, std::min(1.0f, v)); }
     if(settings.contains("wave_frequency") && settings["wave_frequency"].is_number())
     { float v = settings["wave_frequency"].get<float>(); wave_frequency = std::max(0.2f, std::min(4.0f, v)); }
     if(settings.contains("wave_amplitude") && settings["wave_amplitude"].is_number())
     { float v = settings["wave_amplitude"].get<float>(); wave_amplitude = std::max(0.2f, std::min(2.0f, v)); }
-    if(settings.contains("wave_travel_speed") && settings["wave_travel_speed"].is_number())
-    { float v = settings["wave_travel_speed"].get<float>(); wave_travel_speed = std::max(0.0f, std::min(2.0f, v)); }
     if(settings.contains("wave_direction_deg") && settings["wave_direction_deg"].is_number())
     { float v = settings["wave_direction_deg"].get<float>(); wave_direction_deg = fmodf(v + 360.0f, 360.0f); }
 }

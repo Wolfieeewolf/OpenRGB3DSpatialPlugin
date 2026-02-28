@@ -25,12 +25,13 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
+    enum Mode { MODE_STARFIELD = 0, MODE_TWINKLE, MODE_COUNT };
+    static const char* ModeName(int m);
+    int mode = MODE_STARFIELD;
     int num_stars = 70;
     float star_size = 0.06f;
     float drift_amount = 0.0f;
     float twinkle_speed = 0.0f;
-    float star_speed_mult = 1.0f;
-    // Cache rotated star positions once per frame (major FPS win)
     float star_cache_time = -1e9f;
     int star_cache_count = 0;
     std::vector<Vector3D> star_positions_cached;

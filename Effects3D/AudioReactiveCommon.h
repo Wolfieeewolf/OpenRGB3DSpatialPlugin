@@ -11,8 +11,8 @@
 
 struct AudioGradientStop3D
 {
-    float position;   // 0..1
-    RGBColor color;   // 0x00BBGGRR
+    float position;
+    RGBColor color;
 };
 
 struct AudioGradient3D

@@ -46,19 +46,16 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    // Standardized parameter scaling
-    info.default_speed_scale = 35.0f;       // (speed/100)² * 35 (room-scale expansion)
-    info.default_frequency_scale = 60.0f;   // (freq/100)² * 60 (less fine noise)
+    info.default_speed_scale = 35.0f;
+    info.default_frequency_scale = 60.0f;
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls)
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;

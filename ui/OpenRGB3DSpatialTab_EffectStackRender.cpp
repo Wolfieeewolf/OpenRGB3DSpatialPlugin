@@ -260,6 +260,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
                             RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
+                            if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
+                                effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
@@ -274,6 +276,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 effect->ApplyAxisScale(spx, spy, spz, room_grid);
                                 effect->ApplyEffectRotation(spx, spy, spz, room_grid);
                                 RGBColor effect_color = effect->CalculateColorGrid(spx, spy, spz, time_val, room_grid);
+                                if(!effect->IsPointOnActiveSurface(spx, spy, spz, room_grid))
+                                    effect_color = 0x00000000;
                                 effect_color = effect->PostProcessColorGrid(effect_color);
                                 int r = std::min(255, (int)RGBGetRValue(final_color) + (int)RGBGetRValue(effect_color));
                                 int g = std::min(255, (int)RGBGetGValue(final_color) + (int)RGBGetGValue(effect_color));
@@ -326,7 +330,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
         ControllerLayout3D::UpdateWorldPositions(transform);
 
-        // Handle virtual controllers
         if(transform->virtual_controller && !transform->controller)
         {
             VirtualController3D* virtual_ctrl = transform->virtual_controller;
@@ -400,6 +403,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                        if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
+                            effect_color = 0x00000000;
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
@@ -501,6 +506,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                     RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                    if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
+                        effect_color = 0x00000000;
                     effect_color = effect->PostProcessColorGrid(effect_color);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);
@@ -589,6 +596,8 @@ RGBColor OpenRGB3DSpatialTab::GetOverlayColorAt(float x, float y, float z) const
         slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
         slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
         RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, overlay_effect_time, active_grid);
+        if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
+            effect_color = 0x00000000;
         effect_color = slot.effect->PostProcessColorGrid(effect_color);
         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
     }

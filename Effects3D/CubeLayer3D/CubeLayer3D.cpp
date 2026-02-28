@@ -68,6 +68,7 @@ EffectInfo3D CubeLayer3D::GetEffectInfo()
     info.show_fps_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.show_path_axis_control = true;
     return info;
 }
 
@@ -76,20 +77,6 @@ void CubeLayer3D::SetupCustomUI(QWidget* parent)
     QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(parent->layout());
     if(!layout)
         layout = new QVBoxLayout(parent);
-
-    QHBoxLayout* axis_row = new QHBoxLayout();
-    axis_row->addWidget(new QLabel("Layer axis:"));
-    QComboBox* axis_combo = new QComboBox();
-    axis_combo->addItem("X (left → right)", 0);
-    axis_combo->addItem("Y (floor → ceiling)", 1);
-    axis_combo->addItem("Z (front → back)", 2);
-    axis_combo->setCurrentIndex(layer_axis);
-    axis_row->addWidget(axis_combo);
-    layout->addLayout(axis_row);
-    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, axis_combo](int){
-        layer_axis = axis_combo->currentData().toInt();
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* thick_row = new QHBoxLayout();
     thick_row->addWidget(new QLabel("Layer thickness:"));
@@ -152,7 +139,7 @@ RGBColor CubeLayer3D::CalculateColor(float x, float y, float z, float time)
 
     Vector3D origin = GetEffectOrigin();
     Vector3D r = TransformPointByRotation(x, y, z, origin);
-    float axis_pos = AxisPosition(layer_axis, r.x, r.y, r.z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+    float axis_pos = AxisPosition(GetPathAxis(), r.x, r.y, r.z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
     float sigma = std::max(layer_thickness, 0.02f);
     float d = (axis_pos - layer_pos) / sigma;
     float intensity = std::exp(-d * d * 0.5f);
@@ -179,7 +166,7 @@ RGBColor CubeLayer3D::CalculateColorGrid(float x, float y, float z, float time, 
     float layer_pos = EvaluateIntensity(amplitude, time);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float axis_pos = AxisPosition(layer_axis, rotated_pos.x, rotated_pos.y, rotated_pos.z,
+    float axis_pos = AxisPosition(GetPathAxis(), rotated_pos.x, rotated_pos.y, rotated_pos.z,
                                    grid.min_x, grid.max_x,
                                    grid.min_y, grid.max_y,
                                    grid.min_z, grid.max_z);
@@ -201,7 +188,6 @@ nlohmann::json CubeLayer3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    j["layer_axis"] = layer_axis;
     j["layer_thickness"] = layer_thickness;
     return j;
 }
@@ -210,7 +196,6 @@ void CubeLayer3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("layer_axis")) layer_axis = std::clamp(settings["layer_axis"].get<int>(), 0, 2);
     if(settings.contains("layer_thickness")) layer_thickness = std::clamp(settings["layer_thickness"].get<float>(), 0.03f, 0.5f);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();

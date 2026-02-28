@@ -57,7 +57,6 @@ public:
     explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
-    /** Current grid scale (mm per unit) used by viewport and effects for consistent math. */
     float GetGridScaleMM() const { return grid_scale_mm; }
 
 signals:
@@ -162,9 +161,7 @@ private:
     int  FindDisplayPlaneIndexById(int plane_id) const;
     void RemoveDisplayPlaneControllerEntries(int plane_id);
     void RemoveReferencePointControllerEntries(int removed_index);
-    /** Maps controller_list row to controller_transforms index; -1 if that row is not a transform. */
     int  ControllerListRowToTransformIndex(int row) const;
-    /** Maps controller_transforms index to controller_list row; -1 if not found. */
     int  TransformIndexToControllerListRow(int transform_index) const;
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
@@ -364,11 +361,11 @@ private:
 
     QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
-    QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
+    QSlider*        audio_gain_slider = nullptr;
     QProgressBar*   audio_level_bar = nullptr;
     QPushButton*    audio_start_button = nullptr;
     QPushButton*    audio_stop_button = nullptr;
-    QLabel*         audio_gain_value_label = nullptr;     // shows gain as e.g. 1.0x
+    QLabel*         audio_gain_value_label = nullptr;
 
     QComboBox*      audio_bands_combo = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
@@ -446,11 +443,9 @@ private slots:
 
     void on_monitor_preset_text_edited(const QString& text);
 
-    /** Room grid overlay: sample effect at (x,y,z) at draw time so overlay matches controller behavior (used for callback path). */
     RGBColor GetOverlayColorAt(float x, float y, float z) const;
 
 private:
-    /** Stored overlay state for callback-based grid (so audio and all effects sample correctly at draw time). */
     struct OverlaySlot
     {
         SpatialEffect3D* effect = nullptr;
@@ -481,7 +476,6 @@ private:
     int             current_display_plane_index = -1;
 
     void UpdateDisplayPlanesList();
-    /** Update only the current display plane list item label (name + dimensions); avoids full repopulate + selection chain. */
     void UpdateCurrentDisplayPlaneListItemLabel();
     void RefreshDisplayPlaneDetails();
     DisplayPlane3D* GetSelectedDisplayPlane();
@@ -492,11 +486,8 @@ private:
     void PopulateMonitorPresetCombo();
     int  FindAvailableControllerRow(int type_code, int object_index) const;
     void SelectAvailableControllerEntry(int type_code, int object_index);
-    /** Add a custom controller (by virtual_controllers index) to the 3D scene. Returns true if added. */
     bool AddCustomControllerToScene(int virtual_controller_index);
-    /** Add a temporary preview of the current dialog state to the 3D viewport. Removed on ClearCustomControllerPreview(). */
     void AddCustomControllerPreview(CustomControllerDialog* dialog);
-    /** Remove the temporary custom controller preview from the viewport, if any. */
     void ClearCustomControllerPreview();
     void ClearMonitorPresetSelectionIfManualEdit();
 

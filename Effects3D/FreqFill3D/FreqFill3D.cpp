@@ -56,6 +56,7 @@ EffectInfo3D FreqFill3D::GetEffectInfo()
     info.show_fps_control = false;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.show_path_axis_control = true;
     return info;
 }
 
@@ -66,21 +67,6 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
     {
         layout = new QVBoxLayout(parent);
     }
-
-    QHBoxLayout* axis_row = new QHBoxLayout();
-    axis_row->addWidget(new QLabel("Fill Axis:"));
-    QComboBox* axis_combo = new QComboBox();
-    axis_combo->addItem("X (left → right)", 0);
-    axis_combo->addItem("Y (floor → ceiling)", 1);
-    axis_combo->addItem("Z (front → back)", 2);
-    axis_combo->setCurrentIndex(fill_axis);
-    axis_row->addWidget(axis_combo);
-    layout->addLayout(axis_row);
-
-    connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, axis_combo](int){
-        fill_axis = axis_combo->currentData().toInt();
-        emit ParametersChanged();
-    });
 
     QHBoxLayout* edge_row = new QHBoxLayout();
     edge_row->addWidget(new QLabel("Edge Width:"));
@@ -161,7 +147,7 @@ RGBColor FreqFill3D::CalculateColor(float x, float y, float z, float time)
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float fill_level = EvaluateIntensity(amplitude, time);
 
-    float pos = AxisPosition(fill_axis, x, y, z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+    float pos = AxisPosition(GetPathAxis(), x, y, z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
 
     float edge = std::max(edge_width, 1e-3f);
     float blend = std::clamp((fill_level - pos) / edge + 0.5f, 0.0f, 1.0f);
@@ -181,7 +167,7 @@ RGBColor FreqFill3D::CalculateColorGrid(float x, float y, float z, float time, c
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float fill_level = EvaluateIntensity(amplitude, time);
 
-    float pos = AxisPosition(fill_axis, x, y, z,
+    float pos = AxisPosition(GetPathAxis(), x, y, z,
                              grid.min_x, grid.max_x,
                              grid.min_y, grid.max_y,
                              grid.min_z, grid.max_z);
@@ -202,7 +188,6 @@ nlohmann::json FreqFill3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    j["fill_axis"] = fill_axis;
     j["edge_width"] = edge_width;
     return j;
 }
@@ -211,7 +196,6 @@ void FreqFill3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("fill_axis"))  fill_axis  = settings["fill_axis"].get<int>();
     if(settings.contains("edge_width")) edge_width = settings["edge_width"].get<float>();
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();

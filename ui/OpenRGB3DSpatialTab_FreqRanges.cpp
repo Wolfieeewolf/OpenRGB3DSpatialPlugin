@@ -140,7 +140,7 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     details_layout->addStretch();
     
     freq_layout->addWidget(freq_range_details);
-    freq_range_details->setVisible(false);  // Hidden until range selected
+    freq_range_details->setVisible(false);
     
     parent_layout->addWidget(freq_ranges_group);
     
@@ -164,7 +164,6 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
         {
             continue;
         }
-        // AudioContainer3D is only a stack placeholder; it has no per-range parameters
         if(reg.class_name == "AudioContainer3D")
         {
             continue;
@@ -488,7 +487,6 @@ void OpenRGB3DSpatialTab::on_freq_effect_changed(int index)
     QString class_name = freq_effect_combo->itemData(index, kEffectRoleClassName).toString();
     range->effect_class_name = class_name.toStdString();
 
-    // Destroy the running instance so the new effect type takes effect immediately
     range->effect_instance.reset();
     range->effect_settings = nlohmann::json();
     
@@ -771,10 +769,11 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     effect->ApplyAxisScale(x, y, z, room_grid);
                     effect->ApplyEffectRotation(x, y, z, room_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
+                    if(!effect->IsPointOnActiveSurface(x, y, z, room_grid))
+                        color = 0x00000000;
                     unsigned int physical_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
                     if(physical_led_idx < mapping.controller->colors.size())
                     {
-                        // Blend with existing color (additive)
                         RGBColor existing = mapping.controller->colors[physical_led_idx];
                         int r = std::min(255, (int)RGBGetRValue(existing) + (int)RGBGetRValue(color));
                         int g = std::min(255, (int)RGBGetGValue(existing) + (int)RGBGetGValue(color));
@@ -794,11 +793,12 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     effect->ApplyAxisScale(x, y, z, room_grid);
                     effect->ApplyEffectRotation(x, y, z, room_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
+                    if(!effect->IsPointOnActiveSurface(x, y, z, room_grid))
+                        color = 0x00000000;
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
                     unsigned int physical_led_idx = ctrl->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
                     if(physical_led_idx < ctrl->colors.size())
                     {
-                        // Blend with existing color (additive)
                         RGBColor existing = ctrl->colors[physical_led_idx];
                         int r = std::min(255, (int)RGBGetRValue(existing) + (int)RGBGetRValue(color));
                         int g = std::min(255, (int)RGBGetGValue(existing) + (int)RGBGetGValue(color));

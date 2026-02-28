@@ -65,11 +65,11 @@ void CalculateBouncingBall(float& pos_x, float& pos_y, float& pos_z,
 
 float HashFloat01(unsigned int seed)
 {
-    unsigned int value = seed ^ 0x27d4eb2d;
+    unsigned int value = seed ^ 0x27D4EB2D;
     value = (value ^ 61U) ^ (value >> 16U);
     value = value + (value << 3U);
     value = value ^ (value >> 4U);
-    value = value * 0x27d4eb2d;
+    value = value * 0x27D4EB2D;
     value = value ^ (value >> 15U);
     return (value & 0xFFFFU) / 65535.0f;
 }

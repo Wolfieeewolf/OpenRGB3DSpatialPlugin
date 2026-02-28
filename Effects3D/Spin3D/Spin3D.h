@@ -18,7 +18,6 @@ public:
     explicit Spin3D(QWidget* parent = nullptr);
     ~Spin3D();
 
-    // Auto-registration system
     EFFECT_REGISTERER_3D("Spin3D", "3D Spin", "3D Spatial", [](){return new Spin3D;});
 
     static std::string const ClassName() { return "Spin3D"; }
@@ -31,7 +30,6 @@ public:
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
@@ -39,11 +37,8 @@ private slots:
     void OnSpinParameterChanged();
 
 private:
-    // Spin-specific controls
-    QSlider*        arms_slider;        // Number of spinning arms
+    QSlider*        arms_slider;
     QLabel*         arms_label;
-
-    // Spin-specific parameters
     unsigned int    num_arms;
     float           progress;
 

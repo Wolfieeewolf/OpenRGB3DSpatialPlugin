@@ -25,17 +25,14 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         return;
     }
 
-    // Check if zone already exists
     if(zone_manager->ZoneExists(zone_name.toStdString()))
     {
         QMessageBox::warning(this, "Zone Exists", "A zone with this name already exists.");
         return;
     }
 
-    // Create the zone
     Zone3D* zone = zone_manager->CreateZone(zone_name.toStdString());
 
-    // Show dialog to select controllers
     QDialog dialog(this);
     dialog.setWindowTitle("Select Controllers for Zone");
     QVBoxLayout* layout = new QVBoxLayout();
@@ -72,7 +69,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         checkboxes.push_back(checkbox);
     }
 
-    // OK/Cancel buttons
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* ok_button = new QPushButton("OK");
     QPushButton* cancel_button = new QPushButton("Cancel");
@@ -87,7 +83,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        // Add selected controllers to zone
         for(size_t i = 0; i < checkboxes.size(); i++)
         {
             if(checkboxes[i]->isChecked())
@@ -106,7 +101,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     }
     else
     {
-        // User cancelled - delete the zone
         zone_manager->DeleteZone(zone_name.toStdString());
     }
 }
@@ -161,13 +155,11 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         }
 
         QCheckBox* checkbox = new QCheckBox(name);
-        // Check if this controller is already in the zone
         checkbox->setChecked(zone->ContainsController((int)i));
         layout->addWidget(checkbox);
         checkboxes.push_back(checkbox);
     }
 
-    // OK/Cancel buttons
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* ok_button = new QPushButton("OK");
     QPushButton* cancel_button = new QPushButton("Cancel");
@@ -182,7 +174,6 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        // Update zone with selected controllers
         zone->ClearControllers();
         for(size_t i = 0; i < checkboxes.size(); i++)
         {
@@ -354,7 +345,6 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::SaveZones()
 {
-    // Mark layout as dirty - zones will be saved when user saves layout profile
     SetLayoutDirty();
 }
 

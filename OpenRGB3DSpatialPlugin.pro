@@ -196,18 +196,25 @@ HEADERS +=                                                                      
     Effects3D/Spiral3D/Spiral3D.h                                                               \
     Effects3D/Spin3D/Spin3D.h                                                                   \
     Effects3D/Explosion3D/Explosion3D.h                                                         \
-    Effects3D/Comet3D/Comet3D.h                                                                  \
+    Effects3D/TravelingLight3D/TravelingLight3D.h                                                 \
     Effects3D/BreathingSphere3D/BreathingSphere3D.h                                             \
     Effects3D/DNAHelix3D/DNAHelix3D.h                                                           \
-    Effects3D/Rain3D/Rain3D.h                                                                   \
     Effects3D/Tornado3D/Tornado3D.h                                                             \
     Effects3D/Lightning3D/Lightning3D.h                                                         \
     Effects3D/Matrix3D/Matrix3D.h                                                               \
     Effects3D/BouncingBall3D/BouncingBall3D.h                                                   \
     Effects3D/WireframeCube3D/WireframeCube3D.h                                                 \
     Effects3D/WaveSurface3D/WaveSurface3D.h                                                      \
+    Effects3D/PulseRing3D/PulseRing3D.h                                                         \
+    Effects3D/SurfaceAmbient3D/SurfaceAmbient3D.h                                               \
     Effects3D/Starfield3D/Starfield3D.h                                                         \
     Effects3D/Fireworks3D/Fireworks3D.h                                                          \
+    Effects3D/Bubbles3D/Bubbles3D.h                                                              \
+    Effects3D/ColorWheel3D/ColorWheel3D.h                                                       \
+    Effects3D/Beam3D/Beam3D.h                                                                    \
+    Effects3D/MovingPanes3D/MovingPanes3D.h                                                     \
+    Effects3D/Sunrise3D/Sunrise3D.h                                                              \
+    Effects3D/SkyLightning3D/SkyLightning3D.h                                                     \
     Effects3D/ScreenMirror3D/ScreenMirror3D.h                                                   \
 
 SOURCES +=                                                                                      \
@@ -245,10 +252,9 @@ SOURCES +=                                                                      
     Effects3D/Spiral3D/Spiral3D.cpp                                                             \
     Effects3D/Spin3D/Spin3D.cpp                                                                 \
     Effects3D/Explosion3D/Explosion3D.cpp                                                       \
-    Effects3D/Comet3D/Comet3D.cpp                                                               \
+    Effects3D/TravelingLight3D/TravelingLight3D.cpp                                              \
     Effects3D/BreathingSphere3D/BreathingSphere3D.cpp                                           \
     Effects3D/DNAHelix3D/DNAHelix3D.cpp                                                         \
-    Effects3D/Rain3D/Rain3D.cpp                                                                 \
     Effects3D/Tornado3D/Tornado3D.cpp                                                           \
     Effects3D/Lightning3D/Lightning3D.cpp                                                       \
     Effects3D/Matrix3D/Matrix3D.cpp                                                             \
@@ -265,8 +271,16 @@ SOURCES +=                                                                      
     Effects3D/CubeLayer3D/CubeLayer3D.cpp                                                      \
     Effects3D/WireframeCube3D/WireframeCube3D.cpp                                               \
     Effects3D/WaveSurface3D/WaveSurface3D.cpp                                                  \
+    Effects3D/PulseRing3D/PulseRing3D.cpp                                                      \
+    Effects3D/SurfaceAmbient3D/SurfaceAmbient3D.cpp                                             \
     Effects3D/Starfield3D/Starfield3D.cpp                                                      \
     Effects3D/Fireworks3D/Fireworks3D.cpp                                                      \
+    Effects3D/Bubbles3D/Bubbles3D.cpp                                                          \
+    Effects3D/ColorWheel3D/ColorWheel3D.cpp                                                     \
+    Effects3D/Beam3D/Beam3D.cpp                                                                 \
+    Effects3D/MovingPanes3D/MovingPanes3D.cpp                                                  \
+    Effects3D/Sunrise3D/Sunrise3D.cpp                                                         \
+    Effects3D/SkyLightning3D/SkyLightning3D.cpp                                                 \
     Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                \
     Audio/AudioInputManager.cpp                                                                 \
 
