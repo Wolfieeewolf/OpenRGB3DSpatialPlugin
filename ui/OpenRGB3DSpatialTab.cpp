@@ -200,13 +200,15 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
-    if(viewport)
+    SaveEffectStack();
+    try
     {
-        float dist, yaw, pitch, tx, ty, tz;
-        viewport->GetCamera(dist, yaw, pitch, tx, ty, tz);
-        try
+        /* Persist all plugin UI state to OpenRGB settings so it survives close/reopen */
+        nlohmann::json settings = GetPluginSettings();
+        if(viewport)
         {
-            nlohmann::json settings = GetPluginSettings();
+            float dist, yaw, pitch, tx, ty, tz;
+            viewport->GetCamera(dist, yaw, pitch, tx, ty, tz);
             settings["Camera"]["Distance"] = dist;
             settings["Camera"]["Yaw"] = yaw;
             settings["Camera"]["Pitch"] = pitch;
@@ -217,10 +219,29 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
             settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
             settings["RoomGrid"]["PointSize"] = viewport->GetRoomGridPointSize();
             settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
-            SetPluginSettingsNoSave(settings);
+            settings["Grid"]["SnapEnabled"] = viewport->IsGridSnapEnabled();
         }
-        catch(const std::exception&){}
+        settings["Grid"]["X"] = custom_grid_x;
+        settings["Grid"]["Y"] = custom_grid_y;
+        settings["Grid"]["Z"] = custom_grid_z;
+        settings["Grid"]["ScaleMM"] = grid_scale_mm;
+        settings["Room"]["UseManual"] = use_manual_room_size;
+        settings["Room"]["WidthMM"] = manual_room_width;
+        settings["Room"]["HeightMM"] = manual_room_height;
+        settings["Room"]["DepthMM"] = manual_room_depth;
+        if(led_spacing_x_spin && led_spacing_y_spin && led_spacing_z_spin)
+        {
+            settings["LEDSpacing"]["X"] = led_spacing_x_spin->value();
+            settings["LEDSpacing"]["Y"] = led_spacing_y_spin->value();
+            settings["LEDSpacing"]["Z"] = led_spacing_z_spin->value();
+        }
+        if(layout_profiles_combo && layout_profiles_combo->currentIndex() >= 0)
+            settings["SelectedProfile"] = layout_profiles_combo->currentText().toStdString();
+        if(auto_load_checkbox)
+            settings["AutoLoadEnabled"] = auto_load_checkbox->isChecked();
+        SetPluginSettings(settings);
     }
+    catch(const std::exception&){}
 
     if(auto_load_timer)
     {
@@ -335,6 +356,19 @@ void OpenRGB3DSpatialTab::SetupUI()
     led_spacing_z_spin->setToolTip("Depth spacing between LEDs (front/back)");
     spacing_layout->addLayout(spacing_z_row);
 
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        if(settings.contains("LEDSpacing"))
+        {
+            const nlohmann::json& s = settings["LEDSpacing"];
+            if(led_spacing_x_spin) led_spacing_x_spin->setValue(std::max(0.0, std::min(1000.0, (double)s.value("X", 10.0))));
+            if(led_spacing_y_spin) led_spacing_y_spin->setValue(std::max(0.0, std::min(1000.0, (double)s.value("Y", 0.0))));
+            if(led_spacing_z_spin) led_spacing_z_spin->setValue(std::max(0.0, std::min(1000.0, (double)s.value("Z", 0.0))));
+        }
+    }
+    catch(const std::exception&) {}
+
     available_layout->addLayout(spacing_layout);
 
     QHBoxLayout* add_remove_layout = new QHBoxLayout();
@@ -419,6 +453,28 @@ void OpenRGB3DSpatialTab::SetupUI()
     controls_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     middle_panel->addWidget(controls_label);
 
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        if(settings.contains("Grid"))
+        {
+            const nlohmann::json& g = settings["Grid"];
+            custom_grid_x = std::max(1, std::min(100, (int)g.value("X", custom_grid_x)));
+            custom_grid_y = std::max(1, std::min(100, (int)g.value("Y", custom_grid_y)));
+            custom_grid_z = std::max(1, std::min(100, (int)g.value("Z", custom_grid_z)));
+            grid_scale_mm = (float)std::max(0.1, std::min(1000.0, (double)g.value("ScaleMM", grid_scale_mm)));
+        }
+        if(settings.contains("Room"))
+        {
+            const nlohmann::json& r = settings["Room"];
+            use_manual_room_size = r.value("UseManual", use_manual_room_size);
+            manual_room_width  = (float)r.value("WidthMM", manual_room_width);
+            manual_room_height = (float)r.value("HeightMM", manual_room_height);
+            manual_room_depth  = (float)r.value("DepthMM", manual_room_depth);
+        }
+    }
+    catch(const std::exception&) {}
+
     viewport = new LEDViewport3D();
     viewport->SetControllerTransforms(&controller_transforms);
     viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
@@ -442,6 +498,8 @@ void OpenRGB3DSpatialTab::SetupUI()
             float tz   = cam.value("TargetZ", 0.0f);
             viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
         }
+        if(settings.contains("Grid") && settings["Grid"].contains("SnapEnabled"))
+            viewport->SetGridSnapEnabled(settings["Grid"]["SnapEnabled"].get<bool>());
     }
     catch(const std::exception&) {}
 
@@ -497,6 +555,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     grid_snap_checkbox = new QCheckBox("Snap positions to grid");
     grid_snap_checkbox->setToolTip("When moving controllers, snap to grid intersections.");
+    if(viewport) grid_snap_checkbox->setChecked(viewport->IsGridSnapEnabled());
     grid_gl->addWidget(grid_snap_checkbox, 1, 3, 1, 2);
 
     selection_info_label = new QLabel("No selection");

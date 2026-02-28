@@ -105,6 +105,8 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 
     UpdateStackEffectZoneCombo();
     LoadStackPresets();
+    LoadEffectStack();
+    UpdateEffectStackList();
 }
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
