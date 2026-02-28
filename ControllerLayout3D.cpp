@@ -25,18 +25,18 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     std::vector<LEDPosition3D> positions;
     if(!controller) return positions;
 
-    std::size_t zone_count = controller->GetZoneCount();
+    std::size_t zone_count = controller->zones.size();
     unsigned int total_leds = 0;
     for(std::size_t zone_idx = 0; zone_idx < zone_count; zone_idx++)
     {
-        total_leds += controller->GetZoneLEDsCount((unsigned int)zone_idx);
+        total_leds += controller->zones[zone_idx].leds_count;
     }
 
     unsigned int global_led_idx = 0;
     for(std::size_t zone_idx = 0; zone_idx < zone_count; zone_idx++)
     {
-        unsigned int zone_leds_count = controller->GetZoneLEDsCount((unsigned int)zone_idx);
-        zone_type current_zone_type = controller->GetZoneType((unsigned int)zone_idx);
+        unsigned int zone_leds_count = controller->zones[zone_idx].leds_count;
+        zone_type current_zone_type = controller->zones[zone_idx].type;
 
         for(unsigned int led_idx = 0; led_idx < zone_leds_count; led_idx++)
         {
@@ -53,16 +53,17 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
 
             int x_pos, y_pos, z_pos;
 
-            if(controller->GetDeviceType() == DEVICE_TYPE_LEDSTRIP)
+            if(controller->type == DEVICE_TYPE_LEDSTRIP)
             {
                 x_pos = mapping_idx;
                 y_pos = 0;
                 z_pos = 0;
             }
-            else if(controller->GetDeviceType() == DEVICE_TYPE_KEYBOARD &&
+            else if(controller->type == DEVICE_TYPE_KEYBOARD &&
                     current_zone_type == ZONE_TYPE_MATRIX)
             {
-                unsigned int matrix_width = controller->GetZoneMatrixMapWidth((unsigned int)zone_idx);
+                unsigned int matrix_width = (controller->zones[zone_idx].matrix_map != nullptr)
+                    ? controller->zones[zone_idx].matrix_map->width : 0;
                 if(matrix_width > 0)
                 {
                     x_pos = led_idx % matrix_width;

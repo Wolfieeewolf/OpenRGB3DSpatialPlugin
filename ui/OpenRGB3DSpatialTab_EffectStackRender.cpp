@@ -417,8 +417,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     continue;
                 }
 
-                std::size_t zone_count = mapping.controller->GetZoneCount();
-                std::size_t led_count = mapping.controller->GetLEDCount();
+                std::size_t zone_count = mapping.controller->zones.size();
+                std::size_t led_count = mapping.controller->leds.size();
                 if(zone_count == 0 || led_count == 0)
                 {
                     continue;
@@ -426,11 +426,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 if(mapping.zone_idx < zone_count)
                 {
-                    unsigned int zone_start = mapping.controller->GetZoneStartIndex(mapping.zone_idx);
+                    unsigned int zone_start = mapping.controller->zones[mapping.zone_idx].start_idx;
                     unsigned int led_global_idx = zone_start + mapping.led_idx;
                     if(led_global_idx < led_count)
                     {
-                        mapping.controller->SetColor(led_global_idx, final_color);
+                        mapping.controller->SetLED(led_global_idx, final_color);
                     }
                 }
             }
@@ -443,8 +443,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 continue;
             }
 
-            std::size_t zone_count = controller->GetZoneCount();
-            std::size_t led_count = controller->GetLEDCount();
+            std::size_t zone_count = controller->zones.size();
+            std::size_t led_count = controller->leds.size();
             if(zone_count == 0 || led_count == 0)
             {
                 continue;
@@ -462,12 +462,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_y = world_pos.y;
                 float world_z = world_pos.z;
 
-                if(led_position.zone_idx >= controller->GetZoneCount())
+                if(led_position.zone_idx >= controller->zones.size())
                 {
                     continue;
                 }
 
-                unsigned int zone_start = controller->GetZoneStartIndex(led_position.zone_idx);
+                unsigned int zone_start = controller->zones[led_position.zone_idx].start_idx;
                 unsigned int led_global_idx = zone_start + led_position.led_idx;
 
                 RGBColor final_color = ToRGBColor(0, 0, 0);
@@ -496,10 +496,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                     else if(zone_manager && slot.zone_index >= 0)
                     {
-                        Zone3D* zone = zone_manager->GetZone(slot.zone_index);
-                        if(zone)
+                        Zone3D* z = zone_manager->GetZone(slot.zone_index);
+                        if(z)
                         {
-                            const std::vector<int>& zone_controllers = zone->GetControllers();
+                            const std::vector<int>& zone_controllers = z->GetControllers();
                             if(std::find(zone_controllers.begin(), zone_controllers.end(), (int)ctrl_idx) != zone_controllers.end())
                             {
                                 apply_to_this_controller = true;
@@ -533,7 +533,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 if(led_global_idx < led_count)
                 {
-                    controller->SetColor(led_global_idx, final_color);
+                    controller->SetLED(led_global_idx, final_color);
                 }
             }
         }

@@ -30,7 +30,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         return;
     }
 
-    Zone3D* zone = zone_manager->CreateZone(zone_name.toStdString());
+    Zone3D* zone3d = zone_manager->CreateZone(zone_name.toStdString());
 
     QDialog dialog(this);
     dialog.setWindowTitle("Select Controllers for Zone");
@@ -52,7 +52,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         else if(ctrl->controller)
         {
             name = QString::fromStdString(ctrl->controller->GetName());
-            std::size_t zone_count = ctrl->controller->GetZoneCount();
+            std::size_t zone_count = ctrl->controller->zones.size();
             if(ctrl->granularity == 1 && ctrl->item_idx < (int)zone_count)
             {
                 name += " - " + QString::fromStdString(ctrl->controller->GetZoneName((unsigned int)ctrl->item_idx));
@@ -94,7 +94,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         SaveZones();
         SetLayoutDirty();
 
-        QMessageBox::information(this, "Zone Created",
+        QMessageBox::information(this, tr("Zone Created"),
                                 QString("Zone '%1' created with %2 controller(s).")
                                 .arg(zone_name).arg(zone3d->GetControllerCount()));
     }
@@ -141,7 +141,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         else if(ctrl->controller)
         {
             name = QString::fromStdString(ctrl->controller->GetName());
-            std::size_t zone_count = ctrl->controller->GetZoneCount();
+            std::size_t zone_count = ctrl->controller->zones.size();
             if(ctrl->granularity == 1 && ctrl->item_idx < (int)zone_count)
             {
                 name += " - " + QString::fromStdString(ctrl->controller->GetZoneName((unsigned int)ctrl->item_idx));
@@ -153,7 +153,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         }
 
         QCheckBox* checkbox = new QCheckBox(name);
-        checkbox->setChecked(zone->ContainsController((int)i));
+        checkbox->setChecked(zone3d->ContainsController((int)i));
         layout->addWidget(checkbox);
         checkboxes.push_back(checkbox);
     }
@@ -172,12 +172,12 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        zone->ClearControllers();
+        zone3d->ClearControllers();
         for(size_t i = 0; i < checkboxes.size(); i++)
         {
             if(checkboxes[i]->isChecked())
             {
-                zone->AddController((int)i);
+                zone3d->AddController((int)i);
             }
         }
 
@@ -185,7 +185,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         SaveZones();
         SetLayoutDirty();
 
-        QMessageBox::information(this, "Zone Updated",
+        QMessageBox::information(this, tr("Zone Updated"),
                                 QString("Zone '%1' now has %2 controller(s).")
                                 .arg(zone_name).arg(zone3d->GetControllerCount()));
     }

@@ -374,7 +374,22 @@ private:
 
     QComboBox*      audio_bands_combo = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
-    
+
+    QComboBox*      audio_effect_combo = nullptr;
+    QComboBox*      audio_effect_zone_combo = nullptr;
+    QWidget*        audio_effect_controls_widget = nullptr;
+    QVBoxLayout*    audio_effect_controls_layout = nullptr;
+    SpatialEffect3D* current_audio_effect_ui = nullptr;
+    QPushButton*    audio_effect_start_button = nullptr;
+    QPushButton*    audio_effect_stop_button = nullptr;
+    QGroupBox*      audio_std_group = nullptr;
+    SpatialEffect3D* running_audio_effect = nullptr;
+    QSpinBox*       audio_low_spin = nullptr;
+    QSpinBox*       audio_high_spin = nullptr;
+    QSlider*        audio_smooth_slider = nullptr;
+    QSlider*        audio_falloff_slider = nullptr;
+    QComboBox*      audio_effect_origin_combo = nullptr;
+
     std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
     int             next_freq_range_id = 1;
     
@@ -407,7 +422,14 @@ private slots:
     void on_audio_level_updated(float level);
     void on_audio_bands_changed(int index);
     void on_audio_fft_changed(int index);
-    
+    void on_audio_effect_start_clicked();
+    void on_audio_effect_stop_clicked();
+    void on_audio_effect_origin_changed(int index);
+    void SetupAudioEffectUI(int eff_index);
+    void OnAudioEffectParamsChanged();
+    void UpdateAudioEffectOriginCombo();
+    void UpdateAudioEffectZoneCombo();
+
     void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
     void UpdateFrequencyRangesList();
     void PopulateFreqEffectCombo(QComboBox* combo);

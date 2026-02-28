@@ -848,7 +848,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         }
         else if(granularity == 1)
         {
-            std::size_t zone_count = controller->GetZoneCount();
+            std::size_t zone_count = controller->zones.size();
             for(std::size_t i = 0; i < zone_count; i++)
             {
                 if(!IsItemInScene(controller, granularity, (unsigned int)i))
@@ -859,7 +859,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         }
         else if(granularity == 2)
         {
-            std::size_t led_count = controller->GetLEDCount();
+            std::size_t led_count = controller->leds.size();
             for(std::size_t i = 0; i < led_count; i++)
             {
                 if(!IsItemInScene(controller, granularity, (unsigned int)i))
@@ -1146,7 +1146,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     }
     else if(granularity == 1)
     {
-        std::size_t zone_count = controller->GetZoneCount();
+        std::size_t zone_count = controller->zones.size();
         if(item_row >= (int)zone_count)
         {
             return;
@@ -1171,7 +1171,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     }
     else if(granularity == 2)
     {
-        std::size_t led_count = controller->GetLEDCount();
+        std::size_t led_count = controller->leds.size();
         if(item_row >= (int)led_count)
         {
             return;
@@ -1184,7 +1184,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
-            unsigned int zone_start = controller->GetZoneStartIndex(all_positions[i].zone_idx);
+            unsigned int zone_start = controller->zones[all_positions[i].zone_idx].start_idx;
             unsigned int global_led_idx = zone_start + all_positions[i].led_idx;
             if(global_led_idx == (unsigned int)item_row)
             {
@@ -2006,7 +2006,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         if(!vendor.empty()) t += vendor + " ";
         if(!serial.empty()) t += serial + " ";
         if(!version.empty()) t += version + " ";
-        t += device_type_to_str(c->GetDeviceType());
+        t += device_type_to_str(c->type);
         return QString::fromStdString(t).toLower();
     };
 
@@ -3018,10 +3018,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             ctrl_transform->granularity = 2;
                             unsigned int zone_idx = ctrl_transform->led_positions[0].zone_idx;
                             unsigned int led_idx = ctrl_transform->led_positions[0].led_idx;
-                            std::size_t zone_count = controller->GetZoneCount();
+                            std::size_t zone_count = controller->zones.size();
                             if(zone_idx < zone_count)
                             {
-                                ctrl_transform->item_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
+                                ctrl_transform->item_idx = controller->zones[zone_idx].start_idx + led_idx;
                             }
                         }
                     }
@@ -3098,8 +3098,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             }
             else
             {
-                std::size_t zone_count = controller->GetZoneCount();
-                std::size_t led_count = controller->GetLEDCount();
+                std::size_t zone_count = controller->zones.size();
+                std::size_t led_count = controller->leds.size();
                 if(granularity == 0)
                 {
                     name = QString("[Device] ") + QString::fromStdString(controller->GetName());
@@ -3127,7 +3127,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     {
                         if(led_positions_size == 1)
                         {
-                            unsigned int zone_start = controller->GetZoneStartIndex(first_zone_idx);
+                            unsigned int zone_start = controller->zones[first_zone_idx].start_idx;
                             unsigned int led_global_idx = zone_start + first_led_idx;
                             name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->GetLEDName(led_global_idx));
                         }
@@ -3635,7 +3635,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                unsigned int zone_start = controller->GetZoneStartIndex(ct->led_positions[j].zone_idx);
+                unsigned int zone_start = controller->zones[ct->led_positions[j].zone_idx].start_idx;
                 unsigned int global_led_idx = zone_start + ct->led_positions[j].led_idx;
                 if(global_led_idx == (unsigned int)item_idx)
                 {
@@ -3649,7 +3649,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
 
 int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 {
-    std::size_t zone_count = controller->GetZoneCount();
+    std::size_t zone_count = controller->zones.size();
     int unassigned_count = 0;
     for(std::size_t i = 0; i < zone_count; i++)
     {
@@ -3663,7 +3663,7 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 
 int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
 {
-    int total_leds = (int)controller->GetLEDCount();
+    int total_leds = (int)controller->leds.size();
     int assigned_leds = 0;
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
@@ -3713,7 +3713,7 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         {
             for(unsigned int i = 0; i < all_positions.size(); i++)
             {
-                unsigned int zone_start = transform->controller->GetZoneStartIndex(all_positions[i].zone_idx);
+                unsigned int zone_start = transform->controller->zones[all_positions[i].zone_idx].start_idx;
                 unsigned int global_led_idx = zone_start + all_positions[i].led_idx;
                 if(global_led_idx == (unsigned int)transform->item_idx)
                 {

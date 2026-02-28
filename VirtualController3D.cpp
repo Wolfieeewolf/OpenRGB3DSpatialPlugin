@@ -49,7 +49,7 @@ std::string ControllerSearchText(RGBController* c)
     if(!vendor.empty()) t += vendor + " ";
     if(!serial.empty()) t += serial + " ";
     if(!version.empty()) t += version + " ";
-    t += device_type_to_str(c->GetDeviceType());
+    t += device_type_to_str(c->type);
     return ToLower(t);
 }
 
@@ -57,8 +57,8 @@ bool ControllerMatchesPreset(RGBController* c, const std::string& ctrl_name, con
                              const std::string& preset_model, const std::string& preset_brand,
                              const std::string& preset_brand_model, bool match_location)
 {
-    std::string c_name = c->GetName();
-    std::string c_location = c->GetLocation();
+    std::string c_name = c->name;
+    std::string c_location = c->location;
     
     if(ControllerNameMatches(ctrl_name, c_name))
         return !match_location || ctrl_location.empty() || c_location == ctrl_location;
@@ -116,7 +116,7 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
 
-        if(pos.zone_idx >= pos.controller->GetZoneCount())
+        if(pos.zone_idx >= pos.controller->zones.size())
         {
             continue;
         }

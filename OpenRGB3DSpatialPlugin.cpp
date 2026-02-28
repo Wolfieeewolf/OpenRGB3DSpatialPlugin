@@ -38,13 +38,13 @@ QWidget* OpenRGB3DSpatialPlugin::GetWidget()
         return nullptr;
     }
 
-    RMPointer->WaitForDetection();
+    RMPointer->WaitForDeviceDetection();
 
     ui = new OpenRGB3DSpatialTab(RMPointer);
 
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    RMPointer->RegisterResourceManagerCallback(DeviceListChangedCallback, ui);
+    RMPointer->RegisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
 
     return ui;
 }
@@ -58,103 +58,17 @@ void OpenRGB3DSpatialPlugin::Unload()
 {
     if(RMPointer && ui != nullptr)
     {
-        RMPointer->UnregisterResourceManagerCallback(DeviceListChangedCallback, ui);
+        RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
     }
 
     ui = nullptr;
 }
 
-void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o, unsigned int update_reason)
+void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
 {
     if(!o)
     {
         return;
     }
-
-    // Only update on device list changes
-    if(update_reason == RESOURCEMANAGER_UPDATE_REASON_DEVICE_LIST_UPDATED)
-    {
-        QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
-    }
-}
-
-void OpenRGB3DSpatialPlugin::OnProfileAboutToLoad()
-{
-    /*---------------------------------------------------------*\
-    | Called before a profile is loaded. Plugin can prepare     |
-    | for incoming profile data (e.g. clear current state).     |
-    \*---------------------------------------------------------*/
-}
-
-void OpenRGB3DSpatialPlugin::OnProfileLoad(nlohmann::json profile_data)
-{
-    /*---------------------------------------------------------*\
-    | Called when a profile is loaded. The plugin's saved       |
-    | state from OnProfileSave() is passed in profile_data.     |
-    | Load layout, effect stack, and all plugin state.          |
-    \*---------------------------------------------------------*/
-    if(!ui || profile_data.is_null() || !profile_data.contains("3DSpatialPlugin"))
-    {
-        return;
-    }
-
-    try
-    {
-        const nlohmann::json& plugin_data = profile_data["3DSpatialPlugin"];
-        
-        /*-------------------------------------------------*\
-        | Load layout from profile data if present          |
-        \*-------------------------------------------------*/
-        if(plugin_data.contains("layout"))
-        {
-            ui->LoadLayoutFromJSON(plugin_data["layout"]);
-        }
-    }
-    catch(const std::exception& e)
-    {
-        // Log error but don't crash
-        (void)e;
-    }
-}
-
-nlohmann::json OpenRGB3DSpatialPlugin::OnProfileSave()
-{
-    /*---------------------------------------------------------*\
-    | Called when a profile is saved. Return a JSON object      |
-    | containing all plugin state that should be saved with     |
-    | the profile (layout, effect stack, settings, etc.).       |
-    \*---------------------------------------------------------*/
-    nlohmann::json plugin_data;
-    
-    if(!ui)
-    {
-        return plugin_data;
-    }
-
-    try
-    {
-        /*-------------------------------------------------*\
-        | Save current layout state                         |
-        \*-------------------------------------------------*/
-        plugin_data["3DSpatialPlugin"]["layout"] = ui->ExportLayoutToJSON();
-    }
-    catch(const std::exception& e)
-    {
-        // Log error but return what we have
-        (void)e;
-    }
-
-    return plugin_data;
-}
-
-unsigned char* OpenRGB3DSpatialPlugin::OnSDKCommand(unsigned int pkt_id, unsigned char* pkt_data, unsigned int* pkt_size)
-{
-    /*---------------------------------------------------------*\
-    | Handle custom SDK commands for this plugin. Not currently |
-    | used, but required by API v5.                             |
-    \*---------------------------------------------------------*/
-    (void)pkt_id;
-    (void)pkt_data;
-    *pkt_size = 0;
-    return nullptr;
+    QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
 }

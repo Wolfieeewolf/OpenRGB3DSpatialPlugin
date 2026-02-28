@@ -5,7 +5,9 @@
 #include "EffectListManager3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
+#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
 #include <nlohmann/json.hpp>
+#include <set>
 
 void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 {
@@ -267,29 +269,6 @@ void OpenRGB3DSpatialTab::on_audio_effect_stop_clicked()
     if(audio_effect_stop_button) audio_effect_stop_button->setEnabled(false);
 }
 
- 
-
-void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
-{
-    AudioInputManager::instance()->setDeviceByIndex(index);
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioDeviceIndex"] = index;
-    SetPluginSettings(settings);
-}
-
-void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
-{
-    float g = std::max(0.1f, std::min(10.0f, value / 10.0f));
-    AudioInputManager::instance()->setGain(g);
-    if(audio_gain_value_label)
-    {
-        audio_gain_value_label->setText(QString::number(g, 'f', (g < 10.0f ? 1 : 0)) + "x");
-    }
-    nlohmann::json settings = GetPluginSettings();
-    settings["AudioGain"] = value;
-    SetPluginSettings(settings);
-}
-
 void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
 {
     if(!audio_effect_controls_widget || !audio_effect_controls_layout) return;
@@ -371,6 +350,24 @@ void OpenRGB3DSpatialTab::SetupAudioEffectUI(int eff_index)
     audio_effect_controls_widget->update();
 }
 
+void OpenRGB3DSpatialTab::OnAudioEffectParamsChanged()
+{
+    if(!audio_std_group || !current_audio_effect_ui) return;
+    nlohmann::json s = current_audio_effect_ui->SaveSettings();
+    if(audio_low_spin && s.contains("low_hz")) audio_low_spin->setValue(s["low_hz"].get<int>());
+    if(audio_high_spin && s.contains("high_hz")) audio_high_spin->setValue(s["high_hz"].get<int>());
+    if(audio_smooth_slider && s.contains("smoothing"))
+    {
+        int sv = (int)std::round(std::max(0.0f, std::min(0.99f, s["smoothing"].get<float>())) * 100.0f);
+        audio_smooth_slider->setValue(sv);
+    }
+    if(audio_falloff_slider && s.contains("falloff"))
+    {
+        int fv = (int)std::round(std::max(0.2f, std::min(5.0f, s["falloff"].get<float>())) * 100.0f);
+        audio_falloff_slider->setValue(fv);
+    }
+}
+
 void OpenRGB3DSpatialTab::UpdateAudioEffectOriginCombo()
 {
     if(!audio_effect_origin_combo) return;
@@ -410,10 +407,10 @@ void OpenRGB3DSpatialTab::UpdateAudioEffectZoneCombo()
     {
         for(int i = 0; i < zone_manager->GetZoneCount(); i++)
         {
-            Zone3D* zone = zone_manager->GetZone(i);
-            if(zone)
+            Zone3D* z = zone_manager->GetZone(i);
+            if(z)
             {
-                QString zone_name = QString::fromStdString(zone->GetName());
+                QString zone_name = QString::fromStdString(z->GetName());
                 audio_effect_zone_combo->addItem(zone_name, QVariant(i));
             }
         }

@@ -35,15 +35,11 @@ public:
     virtual QWidget*            GetWidget()                                                         override;
     virtual QMenu*              GetTrayMenu()                                                       override;
     virtual void                Unload()                                                            override;
-    virtual void                OnProfileAboutToLoad()                                              override;
-    virtual void                OnProfileLoad(nlohmann::json profile_data)                          override;
-    virtual nlohmann::json      OnProfileSave()                                                     override;
-    virtual unsigned char*      OnSDKCommand(unsigned int pkt_id, unsigned char * pkt_data, unsigned int *pkt_size)      override;
 
     static ResourceManagerInterface* RMPointer;
 
 private:
-    static void                 DeviceListChangedCallback(void* ptr, unsigned int update_reason);
+    static void                 DeviceListChangedCallback(void* ptr);
 
     OpenRGB3DSpatialTab*        ui;
 };
