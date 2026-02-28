@@ -42,11 +42,10 @@ struct LEDPosition3D
     unsigned int    led_idx;
     Vector3D        local_position;
     Vector3D        world_position;
-    Vector3D        room_position;   // World position without controller rotation (used for room-aligned effects)
-    RGBColor        preview_color;  // Used for viewport preview rendering
+    Vector3D        room_position;
+    RGBColor        preview_color;
 };
 
-// Forward declaration
 class VirtualController3D;
 
 struct ControllerTransform
@@ -65,7 +64,7 @@ struct ControllerTransform
 
     /** Granularity: 0=whole device, 1=zone, 2=LED (physical controllers only). */
     int                 granularity;
-    int                 item_idx;  // Zone or LED index based on granularity
+    int                 item_idx;
 
     /** True when transform changed; world positions need recompute. */
     bool                world_positions_dirty;

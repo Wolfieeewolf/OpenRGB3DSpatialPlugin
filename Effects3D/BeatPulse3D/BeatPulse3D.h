@@ -8,6 +8,7 @@
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
 #include <limits>
+#include <vector>
 
 class BeatPulse3D : public SpatialEffect3D
 {
@@ -16,33 +17,41 @@ public:
     explicit BeatPulse3D(QWidget* parent = nullptr);
     ~BeatPulse3D() override = default;
 
-    // Auto-registration hook
-    EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse 3D", "Audio", [](){ return new BeatPulse3D; })
+    EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse", "Audio", [](){ return new BeatPulse3D; })
 
     static std::string const ClassName() { return "BeatPulse3D"; }
     static std::string const UIName() { return "Beat Pulse 3D"; }
 
-    // SpatialEffect3D overrides
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    bool RequiresWorldSpaceCoordinates() const override { return false; }
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
-    /*---------------------------------------------------------*\
-    | Audio-specific parameters                                |
-    | (Controlled by standard Audio Controls panel)           |
-    \*---------------------------------------------------------*/
+    struct BeatPulse
+    {
+        float birth_time = 0.0f;
+        float strength   = 0.0f;
+    };
+    void TickPulses(float time);
+    float SamplePulseField(float radial_norm, float height_norm, float time) const;
+
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
     float EvaluateIntensity(float amplitude, float time);
     float envelope = 0.0f;
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
+
+    std::vector<BeatPulse> pulses;
+    float onset_smoothed = 0.0f;
+    float onset_hold = 0.0f;
+    float onset_threshold = 0.35f;
+    float last_tick_time = std::numeric_limits<float>::lowest();
 };
 
 #endif // BEATPULSE3D_H

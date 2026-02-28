@@ -120,6 +120,13 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     }
 
     effect_stack.erase(effect_stack.begin() + current_row);
+
+    if(effect_stack.empty())
+    {
+        if(effect_running) on_stop_effect_clicked();
+        if(effect_config_group) effect_config_group->setVisible(false);
+    }
+
     UpdateEffectStackList();
 
     if(effect_stack.empty())
@@ -145,17 +152,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
         return;
     }
 
-    // Toggle enabled state
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->enabled = !instance->enabled;
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Restore selection
     effect_stack_list->setCurrentRow(current_row);
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -164,6 +165,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     if(!effect_stack_list) return;
     if(index < 0 || index >= (int)effect_stack.size())
     {
+        if(effect_config_group) effect_config_group->setVisible(false);
         if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(false);
         if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(false);
         if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(false);
@@ -178,8 +180,6 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
                 effect_combo->setCurrentIndex(-1);
             }
         }
-
-        UpdateAudioPanelVisibility(nullptr);
 
         if(start_effect_button)
         {
@@ -198,9 +198,11 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
             QSignalBlocker blocker(effect_zone_combo);
             effect_zone_combo->setCurrentIndex(0);
         }
+        UpdateAudioPanelVisibility();
         return;
     }
 
+    if(effect_config_group) effect_config_group->setVisible(true);
     if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(true);
     if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(true);
     if(stack_effect_blend_combo) stack_effect_blend_combo->setEnabled(true);
@@ -254,7 +256,6 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     }
 
     LoadStackEffectControls(instance);
-    UpdateAudioPanelVisibility(instance);
 
     if(effect_zone_combo)
     {
@@ -276,6 +277,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     }
 
     UpdateEffectCombo();
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
@@ -289,38 +291,26 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     QString class_name = stack_effect_type_combo->currentData().toString();
     QString ui_name = stack_effect_type_combo->currentText();
 
-    // If "None" is selected, clear the effect
     if(class_name.isEmpty())
     {
-        
         instance->effect.reset();
         instance->effect_class_name = "";
         instance->name = "None";
 
-        // Update list display
         UpdateEffectStackList();
-
-        // Clear effect controls
         LoadStackEffectControls(instance);
-
-        // Auto-save effect stack
         SaveEffectStack();
         return;
     }
 
-    // Clear old effect and store new class name
     instance->effect.reset();
     instance->effect_class_name = class_name.toStdString();
     instance->name              = ui_name.toStdString();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Reload effect controls (will create effect if needed)
     LoadStackEffectControls(instance);
-
-    // Auto-save effect stack
     SaveEffectStack();
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
@@ -333,10 +323,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = stack_effect_zone_combo->currentData().toInt();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -352,10 +339,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->blend_mode = (BlendMode)stack_effect_blend_combo->currentData().toInt();
 
-    // Update list display
     UpdateEffectStackList();
-
-    // Auto-save effect stack
     SaveEffectStack();
 }
 
@@ -364,7 +348,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
-    // Block signals to prevent selection change
     effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
@@ -379,7 +362,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         effect_stack_list->addItem(item);
     }
 
-    // Restore selection
     if(current_row >= 0 && current_row < (int)effect_stack.size())
     {
         effect_stack_list->setCurrentRow(current_row);
@@ -415,9 +397,11 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     QLayoutItem* layout_item;
     while(effect_controls_layout && (layout_item = effect_controls_layout->takeAt(0)) != nullptr)
     {
-        if(layout_item->widget())
+        if(QWidget* w = layout_item->widget())
         {
-            layout_item->widget()->deleteLater();
+            w->hide();
+            w->setParent(nullptr);
+            delete w;
         }
         delete layout_item;
     }
@@ -498,102 +482,64 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     ui_effect->setParent(effect_controls_widget);
-    ui_effect->CreateCommonEffectControls(effect_controls_widget);
-    ui_effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = ui_effect;
 
-    // Set reference points for ScreenMirror3D UI effect
-    if(instance->effect_class_name == "ScreenMirror3D")
+    bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
+    QPushButton* direct_start = nullptr;
+    QPushButton* direct_stop  = nullptr;
+
+    if(is_audio)
     {
-        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
-        if(screen_mirror)
-        {
-            screen_mirror->SetReferencePoints(&reference_points);
-            ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
-            screen_mirror->SetRunningEffectForPreview(running_screen);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
-        }
-        
-        // Hide origin dropdown for ScreenMirror3D (each monitor has its own origin)
-        // Find the widgets through the layout hierarchy
-        if(effect_controls_layout)
-        {
-            for(int i = 0; i < effect_controls_layout->count(); i++)
-            {
-                QLayoutItem* item = effect_controls_layout->itemAt(i);
-                if(item && item->widget())
-                {
-                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
-                    if(group && group->title() == "Effect Configuration")
-                    {
-                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
-                        if(group_layout)
-                        {
-                            for(int j = 0; j < group_layout->count(); j++)
-                            {
-                                QLayoutItem* group_item = group_layout->itemAt(j);
-                                if(group_item)
-                                {
-                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
-                                    if(label && label->text() == "Origin:")
-                                    {
-                                        label->setVisible(false);
-                                    }
-                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
-                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
-                                    {
-                                        combo->setVisible(false);
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        QWidget* btn_widget = new QWidget(effect_controls_widget);
+        QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
+        btn_layout->setContentsMargins(0, 0, 0, 0);
+
+        direct_start = new QPushButton("Start Effect");
+        direct_start->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
+        direct_stop = new QPushButton("Stop Effect");
+        direct_stop->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
+        direct_stop->setEnabled(false);
+
+        btn_layout->addWidget(direct_start);
+        btn_layout->addWidget(direct_stop);
+        btn_layout->addStretch();
+        effect_controls_layout->addWidget(btn_widget);
+
+        if(effect_zone_label)   effect_zone_label->setVisible(false);
+        if(effect_zone_combo)   effect_zone_combo->setVisible(false);
+        if(origin_label)        origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
     }
     else
     {
-        // Show origin dropdown for other effects
-        if(effect_controls_layout)
+        ui_effect->CreateCommonEffectControls(effect_controls_widget);
+        ui_effect->SetupCustomUI(effect_controls_widget);
+
+        if(effect_zone_label) effect_zone_label->setVisible(true);
+        if(effect_zone_combo) effect_zone_combo->setVisible(true);
+
+        if(instance->effect_class_name == "ScreenMirror3D")
         {
-            for(int i = 0; i < effect_controls_layout->count(); i++)
+            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
+            if(screen_mirror)
             {
-                QLayoutItem* item = effect_controls_layout->itemAt(i);
-                if(item && item->widget())
-                {
-                    QGroupBox* group = qobject_cast<QGroupBox*>(item->widget());
-                    if(group && group->title() == "Effect Configuration")
-                    {
-                        QVBoxLayout* group_layout = qobject_cast<QVBoxLayout*>(group->layout());
-                        if(group_layout)
-                        {
-                            for(int j = 0; j < group_layout->count(); j++)
-                            {
-                                QLayoutItem* group_item = group_layout->itemAt(j);
-                                if(group_item)
-                                {
-                                    QLabel* label = qobject_cast<QLabel*>(group_item->widget());
-                                    if(label && label->text() == "Origin:")
-                                    {
-                                        label->setVisible(true);
-                                    }
-                                    QComboBox* combo = qobject_cast<QComboBox*>(group_item->widget());
-                                    if(combo && combo->count() > 0 && combo->itemData(0).toInt() == -1)
-                                    {
-                                        combo->setVisible(true);
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
+                screen_mirror->SetReferencePoints(&reference_points);
+                ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
+                screen_mirror->SetRunningEffectForPreview(running_screen);
+                connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+                QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+                QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
             }
+            if(origin_label)        origin_label->setVisible(false);
+            if(effect_origin_combo) effect_origin_combo->setVisible(false);
         }
+        else
+        {
+            if(origin_label)        origin_label->setVisible(true);
+            if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        }
+
+        effect_controls_layout->addWidget(ui_effect);
     }
 
     nlohmann::json settings;
@@ -611,8 +557,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         ui_effect->LoadSettings(settings);
     }
 
-    QPushButton* ui_start = ui_effect->GetStartButton();
-    QPushButton* ui_stop  = ui_effect->GetStopButton();
+    QPushButton* ui_start = is_audio ? direct_start : ui_effect->GetStartButton();
+    QPushButton* ui_stop  = is_audio ? direct_stop  : ui_effect->GetStopButton();
 
     if(ui_start)
     {
@@ -662,8 +608,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
 
                 stack_settings_updating = false;
             });
-
-    effect_controls_layout->addWidget(ui_effect);
 
     stack_blend_container = new QWidget(effect_controls_widget);
     QHBoxLayout* blend_layout = new QHBoxLayout(stack_blend_container);

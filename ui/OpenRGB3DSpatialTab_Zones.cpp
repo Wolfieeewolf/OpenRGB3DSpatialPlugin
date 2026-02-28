@@ -11,7 +11,6 @@
 #include <QLabel>
 #include <QVariant>
 
-// Zone Management
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
     if(!zone_manager) return;
@@ -25,17 +24,14 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         return;
     }
 
-    // Check if zone already exists
     if(zone_manager->ZoneExists(zone_name.toStdString()))
     {
         QMessageBox::warning(this, "Zone Exists", "A zone with this name already exists.");
         return;
     }
 
-    // Create the zone
-    Zone3D* zone3d = zone_manager->CreateZone(zone_name.toStdString());
+    Zone3D* zone = zone_manager->CreateZone(zone_name.toStdString());
 
-    // Show dialog to select controllers
     QDialog dialog(this);
     dialog.setWindowTitle("Select Controllers for Zone");
     QVBoxLayout* layout = new QVBoxLayout();
@@ -43,7 +39,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     QLabel* label = new QLabel(QString("Select controllers to add to zone '%1':").arg(zone_name));
     layout->addWidget(label);
 
-    // Create checkboxes for each controller
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
@@ -73,7 +68,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
         checkboxes.push_back(checkbox);
     }
 
-    // OK/Cancel buttons
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* ok_button = new QPushButton("OK");
     QPushButton* cancel_button = new QPushButton("Cancel");
@@ -88,7 +82,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        // Add selected controllers to zone
         for(size_t i = 0; i < checkboxes.size(); i++)
         {
             if(checkboxes[i]->isChecked())
@@ -99,6 +92,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Created",
                                 QString("Zone '%1' created with %2 controller(s).")
@@ -106,7 +100,6 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     }
     else
     {
-        // User cancelled - delete the zone
         zone_manager->DeleteZone(zone_name.toStdString());
     }
 }
@@ -128,7 +121,6 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
     QString zone_name = QString::fromStdString(zone3d->GetName());
 
-    // Show dialog to modify controller selection
     QDialog dialog(this);
     dialog.setWindowTitle(QString("Edit Zone: %1").arg(zone_name));
     QVBoxLayout* layout = new QVBoxLayout();
@@ -136,7 +128,6 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
     QLabel* label = new QLabel(QString("Select controllers for zone '%1':").arg(zone_name));
     layout->addWidget(label);
 
-    // Create checkboxes for each controller
     std::vector<QCheckBox*> checkboxes;
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
@@ -162,13 +153,11 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
         }
 
         QCheckBox* checkbox = new QCheckBox(name);
-        // Check if this controller is already in the zone
-        checkbox->setChecked(zone3d->ContainsController((int)i));
+        checkbox->setChecked(zone->ContainsController((int)i));
         layout->addWidget(checkbox);
         checkboxes.push_back(checkbox);
     }
 
-    // OK/Cancel buttons
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* ok_button = new QPushButton("OK");
     QPushButton* cancel_button = new QPushButton("Cancel");
@@ -183,18 +172,18 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 
     if(dialog.exec() == QDialog::Accepted)
     {
-        // Update zone with selected controllers
-        zone3d->ClearControllers();
+        zone->ClearControllers();
         for(size_t i = 0; i < checkboxes.size(); i++)
         {
             if(checkboxes[i]->isChecked())
             {
-                zone3d->AddController((int)i);
+                zone->AddController((int)i);
             }
         }
 
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Updated",
                                 QString("Zone '%1' now has %2 controller(s).")
@@ -230,6 +219,7 @@ void OpenRGB3DSpatialTab::on_delete_zone_clicked()
         zone_manager->DeleteZone(selected_idx);
         UpdateZonesList();
         SaveZones();
+        SetLayoutDirty();
     }
 }
 
@@ -262,10 +252,9 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
         }
     }
 
-    // Also update the zone dropdowns in effects tab, effect stack tab, and audio tab
     UpdateEffectZoneCombo();
     UpdateStackEffectZoneCombo();
-    UpdateAudioEffectZoneCombo();
+    UpdateFreqZoneCombo();
 }
 
 void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_value)
@@ -353,16 +342,9 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::SaveZones()
 {
-    // Zones are automatically saved as part of the layout JSON
-    // when SaveLayout() is called. This function is kept for
-    // future standalone save functionality if needed.
-    
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::LoadZones()
 {
-    // Zones are automatically loaded as part of the layout JSON
-    // when LoadLayout() is called. This function is kept for
-    // future standalone load functionality if needed.
-    
 }

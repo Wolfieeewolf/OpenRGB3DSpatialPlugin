@@ -41,8 +41,8 @@ class QStackedWidget;
 #include "EffectListManager3D.h"
 #include "EffectInstance3D.h"
 #include "StackPreset3D.h"
-// Effect headers are included in the .cpp for registration
 #include "ZoneManager3D.h"
+#include "FrequencyRangeEffect3D.h"
 
 namespace Ui
 {
@@ -57,7 +57,6 @@ public:
     explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
-    /** Current grid scale (mm per unit) used by viewport and effects for consistent math. */
     float GetGridScaleMM() const { return grid_scale_mm; }
     
     /** Export current layout state to JSON (for OpenRGB profile integration) */
@@ -75,6 +74,7 @@ private slots:
     void on_stop_effect_clicked();
 
     void on_controller_selected(int index);
+    void on_viewport_controller_selected(int transform_index);
     void on_controller_position_changed(int index, float x, float y, float z);
     void on_controller_rotation_changed(int index, float x, float y, float z);
 
@@ -123,13 +123,11 @@ private slots:
     void on_apply_spacing_clicked();
     void UpdateEffectOriginCombo();
 
-    // Effect library slots
     void on_effect_library_category_changed(int index);
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
 
-    // Effect Stack slots
     void on_remove_effect_from_stack_clicked();
     void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
@@ -137,12 +135,10 @@ private slots:
     void on_stack_effect_zone_changed(int index);
     void on_stack_effect_blend_changed(int index);
 
-    // Stack Preset slots
     void on_save_stack_preset_clicked();
     void on_load_stack_preset_clicked();
     void on_delete_stack_preset_clicked();
 
-    // Device list update (called via QMetaObject::invokeMethod)
     void UpdateDeviceList();
 
 private:
@@ -157,8 +153,7 @@ private:
     void TryAutoLoadLayout();
     void PopulateLayoutDropdown();
     void SaveCurrentLayoutName();
-    
-    // Dirty flag system
+
     void SetLayoutDirty(bool dirty = true);
     void ClearLayoutDirty();
     bool IsLayoutDirty() const { return layout_dirty; }
@@ -171,9 +166,7 @@ private:
     int  FindDisplayPlaneIndexById(int plane_id) const;
     void RemoveDisplayPlaneControllerEntries(int plane_id);
     void RemoveReferencePointControllerEntries(int removed_index);
-    /** Maps controller_list row to controller_transforms index; -1 if that row is not a transform. */
     int  ControllerListRowToTransformIndex(int row) const;
-    /** Maps controller_transforms index to controller_list row; -1 if not found. */
     int  TransformIndexToControllerListRow(int transform_index) const;
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
@@ -198,7 +191,6 @@ private:
     void ApplyRotationComponent(int axis, double value);
     void RemoveWidgetFromParentLayout(QWidget* w);
 
-    // Effect Stack helpers
     void SetupEffectStackPanel(QVBoxLayout* parent_layout);
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
@@ -207,7 +199,6 @@ private:
     bool PrepareStackForPlayback();
     void SetControllersToCustomMode(bool& has_valid_controller);
 
-    // Stack Preset helpers
     void LoadStackPresets();
     void SaveStackPresets();
     void UpdateStackPresetsList();
@@ -218,12 +209,10 @@ private:
     void SetPluginSettingsNoSave(const nlohmann::json& settings);
     void RefreshEffectDisplay();
 
-    // Effect Stack persistence
     void SaveEffectStack();
     void LoadEffectStack();
     std::string GetEffectStackPath();
 
-    // Effect Profile helpers
     void SaveEffectProfile(const std::string& filename);
     void LoadEffectProfile(const std::string& filename);
     std::string GetEffectProfilePath(const std::string& profile_name);
@@ -231,9 +220,9 @@ private:
     void SaveCurrentEffectProfileName();
     void TryAutoLoadEffectProfile();
 
-    // Profiles tab setup
     void SetupProfilesTab(QTabWidget* tab_widget);
     void SetupAudioPanel(QVBoxLayout* parent_layout);
+    void UpdateAudioPanelVisibility();
     void SetupZonesPanel(QVBoxLayout* parent_layout);
     void SetupEffectLibraryPanel(QVBoxLayout* parent_layout);
     void PopulateEffectLibraryCategories();
@@ -273,7 +262,6 @@ private:
     QSlider*                    rot_y_slider;
     QSlider*                    rot_z_slider;
 
-    // Effect Library
     QComboBox*                  effect_category_combo;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
@@ -297,7 +285,6 @@ private:
     QElapsedTimer               effect_elapsed;
     bool                        stack_settings_updating;
 
-    // Grid (custom dimensions)
     QSpinBox*                   grid_x_spin;
     QSpinBox*                   grid_y_spin;
     QSpinBox*                   grid_z_spin;
@@ -316,7 +303,6 @@ private:
     int                         custom_grid_z;
     float                       grid_scale_mm;
 
-    // Room dimensions (manual)
     QDoubleSpinBox*             room_width_spin;
     QDoubleSpinBox*             room_depth_spin;
     QDoubleSpinBox*             room_height_spin;
@@ -326,26 +312,24 @@ private:
     float                       manual_room_height;
     bool                        use_manual_room_size;
 
-    // LED spacing (add)
     QDoubleSpinBox*             led_spacing_x_spin;
     QDoubleSpinBox*             led_spacing_y_spin;
     QDoubleSpinBox*             led_spacing_z_spin;
     QComboBox*                  led_spacing_preset_combo;
 
-    // LED spacing (edit selected)
     QDoubleSpinBox*             edit_led_spacing_x_spin;
     QDoubleSpinBox*             edit_led_spacing_y_spin;
     QDoubleSpinBox*             edit_led_spacing_z_spin;
     QPushButton*                apply_spacing_button;
 
-    // Effect configuration
+    QGroupBox*                  effect_config_group;
     QComboBox*                  effect_combo;
+    QLabel*                     effect_zone_label;
     QLabel*                     origin_label;
     QComboBox*                  effect_origin_combo;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
 
-    // Reference points
     QListWidget*                reference_points_list;
     QLabel*                     ref_points_empty_label;
     QLineEdit*                  ref_point_name_edit;
@@ -355,7 +339,6 @@ private:
     QPushButton*                remove_ref_point_button;
     RGBColor                    selected_ref_point_color;
 
-    // Zones
     QListWidget*                zones_list;
     QPushButton*                create_zone_button;
     QPushButton*                edit_zone_button;
@@ -367,53 +350,54 @@ private:
     std::vector<std::unique_ptr<VirtualReferencePoint3D>> reference_points;
     std::unique_ptr<ZoneManager3D> zone_manager;
 
-    // Effect stack
     QListWidget*                effect_stack_list;
     QComboBox*                  stack_effect_type_combo;
     QComboBox*                  stack_effect_zone_combo;
     QComboBox*                  stack_effect_blend_combo;
     QWidget*                    stack_blend_container;
 
-    // Effect stack data
     std::vector<std::unique_ptr<EffectInstance3D>> effect_stack;
     int next_effect_instance_id;
 
-    // Stack presets
     QListWidget*                stack_presets_list;
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
 
     void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
-    // Audio tab
     QGroupBox*      audio_panel_group = nullptr;
     QComboBox*      audio_device_combo = nullptr;
-    QSlider*        audio_gain_slider = nullptr;   // 1..100 maps to 0.1..10.0
+    QSlider*        audio_gain_slider = nullptr;
     QProgressBar*   audio_level_bar = nullptr;
     QPushButton*    audio_start_button = nullptr;
     QPushButton*    audio_stop_button = nullptr;
-    QLabel*         audio_gain_value_label = nullptr;     // shows gain as e.g. 1.0x
+    QLabel*         audio_gain_value_label = nullptr;
 
-    QComboBox*      audio_bands_combo = nullptr;   // 8/16/32
-
-    // Audio effects section (moved to Audio tab)
-    QComboBox*      audio_effect_combo = nullptr;
-    QComboBox*      audio_effect_zone_combo = nullptr; // includes All Controllers
-    QComboBox*      audio_effect_origin_combo = nullptr; // Room Center + reference points
-    QWidget*        audio_effect_controls_widget = nullptr; // dynamic effect UI (like main Effects tab)
-    QVBoxLayout*    audio_effect_controls_layout = nullptr;
-    SpatialEffect3D* current_audio_effect_ui = nullptr;
-    SpatialEffect3D* running_audio_effect = nullptr; // active instance in the renderer
-    QPushButton*    audio_effect_start_button = nullptr; // start selected audio effect
-    QPushButton*    audio_effect_stop_button = nullptr;  // stop selected audio effect
-
-    // Audio custom effects
-    QGroupBox*      audio_custom_group = nullptr;
-    QListWidget*    audio_custom_list = nullptr;
-    QPushButton*    audio_custom_save_btn = nullptr;
-    QPushButton*    audio_custom_load_btn = nullptr;
-    QPushButton*    audio_custom_delete_btn = nullptr;
-    QPushButton*    audio_custom_add_to_stack_btn = nullptr;
-    QLineEdit*      audio_custom_name_edit = nullptr;
+    QComboBox*      audio_bands_combo = nullptr;
+    QComboBox*      audio_fft_combo = nullptr;
+    
+    std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
+    int             next_freq_range_id = 1;
+    
+    QGroupBox*      freq_ranges_group = nullptr;
+    QListWidget*    freq_ranges_list = nullptr;
+    QPushButton*    add_freq_range_btn = nullptr;
+    QPushButton*    remove_freq_range_btn = nullptr;
+    QPushButton*    duplicate_freq_range_btn = nullptr;
+    
+    QWidget*        freq_range_details = nullptr;
+    QLineEdit*      freq_range_name_edit = nullptr;
+    QSlider*        freq_low_slider = nullptr;
+    QLabel*         freq_low_label = nullptr;
+    QSlider*        freq_high_slider = nullptr;
+    QLabel*         freq_high_label = nullptr;
+    QComboBox*      freq_effect_combo = nullptr;
+    QComboBox*      freq_zone_combo = nullptr;
+    QComboBox*      freq_origin_combo = nullptr;
+    QCheckBox*      freq_range_enabled_check = nullptr;
+    
+    QWidget*        freq_effect_settings_widget = nullptr;
+    QVBoxLayout*    freq_effect_settings_layout = nullptr;
+    SpatialEffect3D* current_freq_effect_ui = nullptr;
 
 private slots:
     void on_audio_device_changed(int index);
@@ -422,33 +406,32 @@ private slots:
     void on_audio_stop_clicked();
     void on_audio_level_updated(float level);
     void on_audio_bands_changed(int index);
-    void on_audio_effect_start_clicked();
-    void on_audio_effect_stop_clicked();
-    void SetupAudioEffectUI(int eff_index);
-    void on_audio_effect_origin_changed(int index);
-    void UpdateAudioEffectOriginCombo();
-    void on_audio_effect_zone_changed(int index);
-    void UpdateAudioEffectZoneCombo();
-    void OnAudioEffectParamsChanged();
-
-    // Standard Audio Controls (Hz, smoothing, falloff)
-    void SetupStandardAudioControls(QVBoxLayout* parent_layout);
-    void UpdateAudioPanelVisibility(EffectInstance3D* instance);
-    void on_audio_std_low_changed(double v);
-    void on_audio_std_high_changed(double v);
-    void on_audio_std_smooth_changed(int v);
-    void on_audio_std_falloff_changed(int v);
     void on_audio_fft_changed(int index);
+    
+    void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
+    void UpdateFrequencyRangesList();
+    void PopulateFreqEffectCombo(QComboBox* combo);
+    void UpdateFreqOriginCombo();
+    void UpdateFreqZoneCombo();
+    void LoadFreqRangeDetails(FrequencyRangeEffect3D* range);
+    void SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, const QString& class_name);
+    void ClearFreqRangeEffectUI();
+    void SaveFrequencyRanges();
+    void LoadFrequencyRanges();
+    void on_add_freq_range_clicked();
+    void on_remove_freq_range_clicked();
+    void on_duplicate_freq_range_clicked();
+    void on_freq_range_selected(int row);
+    void on_freq_range_name_changed(const QString& text);
+    void on_freq_low_changed(int value);
+    void on_freq_high_changed(int value);
+    void on_freq_effect_changed(int index);
+    void on_freq_zone_changed(int index);
+    void on_freq_origin_changed(int index);
+    void on_freq_enabled_toggled(bool checked);
+    void OnFreqRangeEffectParamsChanged();
+    void RenderFrequencyRangeEffects(const GridContext3D& room_grid);
 
-    // Custom audio effects helpers and slots
-    void SetupAudioCustomEffectsUI(QVBoxLayout* parent_layout);
-    void UpdateAudioCustomEffectsList();
-    void on_audio_custom_save_clicked();
-    void on_audio_custom_load_clicked();
-    void on_audio_custom_delete_clicked();
-    void on_audio_custom_add_to_stack_clicked();
-
-    // Display plane management
     void on_display_plane_selected(int index);
     void on_add_display_plane_clicked();
     void on_remove_display_plane_clicked();
@@ -465,27 +448,25 @@ private slots:
 
     void on_monitor_preset_text_edited(const QString& text);
 
+    RGBColor GetOverlayColorAt(float x, float y, float z) const;
+
 private:
-    // Audio Standard Controls (data members)
-    QGroupBox*      audio_std_group = nullptr;
-    QDoubleSpinBox* audio_low_spin = nullptr;
-    QDoubleSpinBox* audio_high_spin = nullptr;
-    QSlider*        audio_smooth_slider = nullptr;
-    QSlider*        audio_falloff_slider = nullptr;
-    QComboBox*      audio_fft_combo = nullptr;
-    QLabel*         audio_smooth_value_label = nullptr;   // shows smoothing as percent
-    QLabel*         audio_falloff_value_label = nullptr;  // shows falloff mapped (e.g., 1.00x)
-    std::string GetAudioCustomEffectsDir();
-    std::string GetAudioCustomEffectPath(const std::string& name);
+    struct OverlaySlot
+    {
+        SpatialEffect3D* effect = nullptr;
+        int zone_index = -1;
+        BlendMode blend_mode = BlendMode::REPLACE;
+    };
+    std::vector<OverlaySlot> overlay_slots;
+    GridContext3D overlay_room_grid{0, 0, 0, 0, 0, 0, 10.0f};
+    GridContext3D overlay_world_grid{0, 0, 0, 0, 0, 0, 10.0f};
+    float overlay_effect_time = 0.f;
+    std::vector<RGBColor> room_grid_overlay_buffer;
 
-    // SDK callback listeners
     std::vector<std::pair<void (*)(void*), void*>> grid_layout_callbacks;
-
-    // Dirty flag tracking
     bool layout_dirty = false;
     QPushButton* save_layout_btn = nullptr;
 
-    // Display planes
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     QListWidget*    display_planes_list = nullptr;
     QLabel*         display_planes_empty_label = nullptr;
@@ -500,7 +481,6 @@ private:
     int             current_display_plane_index = -1;
 
     void UpdateDisplayPlanesList();
-    /** Update only the current display plane list item label (name + dimensions); avoids full repopulate + selection chain. */
     void UpdateCurrentDisplayPlaneListItemLabel();
     void RefreshDisplayPlaneDetails();
     DisplayPlane3D* GetSelectedDisplayPlane();
@@ -511,11 +491,8 @@ private:
     void PopulateMonitorPresetCombo();
     int  FindAvailableControllerRow(int type_code, int object_index) const;
     void SelectAvailableControllerEntry(int type_code, int object_index);
-    /** Add a custom controller (by virtual_controllers index) to the 3D scene. Returns true if added. */
     bool AddCustomControllerToScene(int virtual_controller_index);
-    /** Add a temporary preview of the current dialog state to the 3D viewport. Removed on ClearCustomControllerPreview(). */
     void AddCustomControllerPreview(CustomControllerDialog* dialog);
-    /** Remove the temporary custom controller preview from the viewport, if any. */
     void ClearCustomControllerPreview();
     void ClearMonitorPresetSelectionIfManualEdit();
 

@@ -24,21 +24,16 @@
 #include <atomic>
 #include <vector>
 
-// No Qt Multimedia dependency; using WASAPI directly on Windows
-
 class AudioInputManager : public QObject
 {
     Q_OBJECT
 public:
     static AudioInputManager* instance();
 
-    // Device management (Windows: returns both loopback outputs and capture inputs)
-    QStringList listInputDevices(); // Human-readable names (outputs have "(Loopback)")
+    QStringList listInputDevices();
     int defaultDeviceIndex() const;
     void setDeviceByIndex(int index);
-    // Windows: unified device list; non-Windows returns empty list
 
-    // Capture control
     void start();
     void stop();
     bool isRunning() const { return running; }
@@ -47,12 +42,11 @@ public:
     void setCaptureSource(CaptureSource) {}
     CaptureSource captureSource() const { return CaptureSource::InputDevice; }
 
-    // Processing params
-    void setGain(float g);          // 0.05 .. 40.0
-    void setSmoothing(float s);     // 0.0 .. 0.99 (EMA)
-    void setBandsCount(int bands);  // 8, 16, 32
+    void setGain(float g);
+    void setSmoothing(float s);
+    void setBandsCount(int bands);
     void setCrossovers(float bass_upper_hz, float mid_upper_hz);
-    void setFFTSize(int n);         // 512..8192 power-of-two
+    void setFFTSize(int n);
     int  getFFTSize() const { return fft_size; }
     int  getBandsCount() const;
     float getBassUpperHz() const { return xover_bass_upper; }
@@ -60,25 +54,22 @@ public:
     void setSampleRate(int sr) { if(sr > 0) sample_rate_hz = sr; }
     int  getSampleRate() const { return sample_rate_hz; }
 
-    // Output
-    float level() const { return current_level.load(); } // 0..1
+    float level() const { return current_level.load(); }
 
-    // Automatic level normalization
     void setAutoLevelEnabled(bool enabled);
     bool isAutoLevelEnabled() const { return auto_level_enabled; }
     void resetAutoLevel();
 
-    // Feed external PCM16 samples (for WASAPI loopback)
     void FeedPCM16(const int16_t* samples, int count);
 
-    // Spectrum data (FFT-based), 16 bands log-mapped
-    std::vector<float> getBands() const;       // 0..1 per band
-    float getBassLevel() const;                // approx 20-200 Hz
-    float getMidLevel() const;                 // approx 200-2000 Hz
-    float getTrebleLevel() const;              // approx 2k-16k Hz
-    float getOnsetLevel() const;               // spectral onset strength 0..1
-    float getBandEnergyHz(float low_hz, float high_hz) const; // 0..1 avg across bands in Hz range
-    // Channel diagnostics
+    std::vector<float> getBands() const;
+    void getBands(std::vector<float>& out) const;
+    float getBassLevel() const;
+    float getMidLevel() const;
+    float getTrebleLevel() const;
+    float getOnsetLevel() const;
+    float getBandEnergyHz(float low_hz, float high_hz) const;
+
     int getChannelCount() const {
 #ifdef _WIN32
         return channel_count;
@@ -104,8 +95,8 @@ public:
 
     struct SpectrumSnapshot
     {
-        std::vector<float> bins;   // Current magnitude 0..1
-        std::vector<float> peaks;  // Peak hold 0..1
+        std::vector<float> bins;
+        std::vector<float> peaks;
         float min_frequency_hz = 0.0f;
         float max_frequency_hz = 0.0f;
     };
@@ -143,23 +134,22 @@ private:
 
     bool running = false;
 
-    QTimer level_timer; // emits LevelUpdated at UI rate
+    QTimer level_timer;
 
-    // FFT / Spectrum
-    int fft_size = 1024;                // power of two
-    int sample_rate_hz = 48000;         // updated by capturer
-    std::vector<float> sample_buffer;   // mono float samples
-    std::vector<float> window;          // Hann window
+    int fft_size = 1024;
+    int sample_rate_hz = 48000;
+    std::vector<float> sample_buffer;
+    std::vector<float> window;
     mutable QMutex bands_mutex;
-    std::vector<float> bands16;         // N-band log spectrum (size=bands_count)
+    std::vector<float> bands16;
     float bass_level = 0.0f;
     float mid_level = 0.0f;
     float treble_level = 0.0f;
     float onset_level = 0.0f;
     std::vector<float> prev_mags;
     int bands_count = 16;
-    float xover_bass_upper = 200.0f;    // Hz
-    float xover_mid_upper  = 2000.0f;   // Hz
+    float xover_bass_upper = 200.0f;
+    float xover_mid_upper  = 2000.0f;
 
     std::vector<float> visualizer_bins;
     std::vector<float> visualizer_peaks;
@@ -174,15 +164,13 @@ private:
 #ifdef _WIN32
     class WasapiCapturer;
     WasapiCapturer* capturer = nullptr;
-    // Unified device list
     QStringList device_names;
     std::vector<QString> device_ids;
     std::vector<bool> device_is_loopback;
-    // Channel info
     int channel_count = 0;
     unsigned int channel_mask = 0;
     QStringList channel_names;
-    std::vector<float> channel_levels; // smoothed 0..1 per channel
+    std::vector<float> channel_levels;
 #endif
 };
 

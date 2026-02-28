@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Zone3D.cpp                                                |
-|                                                           |
-|   Simple grouping of controllers for effect targeting    |
-|                                                           |
-|   Date: 2025-10-03                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only               |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "Zone3D.h"
 #include <algorithm>
@@ -28,7 +19,6 @@ void Zone3D::SetName(const std::string& name)
 
 void Zone3D::AddController(int controller_idx)
 {
-    // Don't add duplicates
     if(!ContainsController(controller_idx))
     {
         controller_indices.push_back(controller_idx);

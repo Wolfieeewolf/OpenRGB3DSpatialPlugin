@@ -19,7 +19,6 @@
 #include <string>
 #include "ScreenCaptureManager.h"
 
-// Forward declarations
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
 struct CaptureSourceInfo;
@@ -34,14 +33,12 @@ public:
     explicit ScreenMirror3D(QWidget* parent = nullptr);
     ~ScreenMirror3D();
 
-    // Auto-registration system
     EFFECT_REGISTERER_3D("ScreenMirror3D", "Screen Mirror 3D", "Ambilight", [](){return new ScreenMirror3D;});
 
     static std::string const ClassName() { return "ScreenMirror3D"; }
     static std::string const UIName() { return "Screen Mirror 3D"; }
-    static void ForceLink() {}  // Dummy to force linker inclusion
+    static void ForceLink() {}
 
-    // Pure virtual implementations
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
@@ -50,30 +47,24 @@ public:
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
 
-    /** Set grid scale (mm/unit) so ambilight preview uses same math as viewport. Tab calls this when grid scale changes. */
     void SetGridScaleMM(float mm);
-
-    /** When set, ambilight preview uses this effect's CalculateColorGrid so the preview matches what the running effect outputs to LEDs. Tab sets this when displaying the effect. */
     void SetRunningEffectForPreview(ScreenMirror3D* source);
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-    // Reference Points Access
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void RefreshReferencePointDropdowns();
     void RefreshMonitorStatus();
 
-    // Capture zone: a rectangular area on the screen (UV coordinates 0-1)
     struct CaptureZone
     {
-        float u_min;      // Left edge (0.0 = left, 1.0 = right)
-        float u_max;      // Right edge
-        float v_min;      // Bottom edge (0.0 = bottom, 1.0 = top)
-        float v_max;      // Top edge
-        bool enabled;      // Is this zone active?
-        std::string name;  // Optional name for the zone
+        float u_min;
+        float u_max;
+        float v_min;
+        float v_max;
+        bool enabled;
+        std::string name;
         
         CaptureZone()
             : u_min(0.0f)
@@ -104,7 +95,6 @@ signals:
     void TestPatternChanged(bool enabled);
     
 public:
-    // Methods for viewport to check per-monitor preview settings
     bool ShouldShowTestPattern(const std::string& plane_name) const;
     bool ShouldShowScreenPreview(const std::string& plane_name) const;
 
@@ -117,37 +107,32 @@ private:
     struct MonitorSettings
     {
         bool enabled;
-        
-        // Global Reach / Scale
-        float scale;                    // Scale/reach multiplier (0-2.0)
-        bool scale_inverted;            // Invert scale falloff
-        
-        // Calibration
-        float smoothing_time_ms;        // Temporal smoothing (0-500ms)
-        float brightness_multiplier;    // Brightness multiplier (0-200%)
-        float brightness_threshold;     // Minimum brightness to trigger (0-1020; at max ambilight nearly off)
-        float black_bar_letterbox_percent;   // Crop top+bottom (0-50%). Content V = [letterbox/100, 1-letterbox/100]
-        float black_bar_pillarbox_percent;   // Crop left+right (0-50%). Content U = [pillarbox/100, 1-pillarbox/100]
-        
-        // Light & Motion
-        float edge_softness;            // Edge softness (0-100%)
-        float blend;                    // Blend percentage (0-100%)
-        float propagation_speed_mm_per_ms;  // Wave intensity 0-800 (0=off, higher=bigger wave)
-        float wave_decay_ms;            // Wave decay time (0-20000ms)
-        float wave_time_to_edge_sec;    // 0=use intensity; 0.5-30 = time (s) for wave to reach farthest LED
-        float falloff_curve_exponent;   // 0.5-2.0: softer to sharper falloff (100%=linear)
-        float front_back_balance;       // -100..+100: favor front(+) or back(-) LEDs
-        float left_right_balance;       // -100..+100: favor right(+) or left(-) LEDs
-        float top_bottom_balance;       // -100..+100: favor top(+) or bottom(-) LEDs
-        
+
+        float scale;
+        bool scale_inverted;
+
+        float smoothing_time_ms;
+        float brightness_multiplier;
+        float brightness_threshold;
+        float black_bar_letterbox_percent;
+        float black_bar_pillarbox_percent;
+
+        float edge_softness;
+        float blend;
+        float propagation_speed_mm_per_ms;
+        float wave_decay_ms;
+        float wave_time_to_edge_sec;
+        float falloff_curve_exponent;
+        float front_back_balance;
+        float left_right_balance;
+        float top_bottom_balance;
+
         int reference_point_index;
-        
-        // Preview settings
-        bool show_test_pattern;      // Show test pattern for this monitor
-        bool show_test_pattern_pulse;  // Pulse test pattern (for tuning wave intensity/decay)
-        bool show_screen_preview;    // Show screen preview for this monitor
-        
-        // Multiple independent capture zones
+
+        bool show_test_pattern;
+        bool show_test_pattern_pulse;
+        bool show_screen_preview;
+
         std::vector<CaptureZone> capture_zones;
 
         QGroupBox* group_box;
@@ -193,7 +178,7 @@ private:
         MonitorSettings()
             : enabled(true)
             , scale(1.0f)
-            , scale_inverted(true)  // Invert scale falloff by default
+            , scale_inverted(true)
             , smoothing_time_ms(50.0f)
             , brightness_multiplier(1.0f)
             , brightness_threshold(0.0f)
@@ -201,7 +186,7 @@ private:
             , black_bar_pillarbox_percent(0.0f)
             , edge_softness(30.0f)
             , blend(50.0f)
-            , propagation_speed_mm_per_ms(0.0f)   // 0 = no wave (instant 3D ambilight); use sliders to add wave
+            , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)
             , falloff_curve_exponent(1.0f)
@@ -252,7 +237,6 @@ private:
             , add_zone_button(nullptr)
             , ambilight_preview_3d(nullptr)
         {
-            // Default: one zone covering the entire screen
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
     };
@@ -263,11 +247,9 @@ private:
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
     void UpdateAmbilightPreviews();
 
-    // Capture quality (effect-level)
-    int                 capture_quality;       // 0=Low 320x180 .. 5=1080p, 6=1440p, 7=4K
+    int                 capture_quality;
     QComboBox*          capture_quality_combo;
 
-    // UI Controls
     QSlider*            global_scale_slider;
     QLabel*             global_scale_label;
     QSlider*            smoothing_time_slider;
@@ -285,35 +267,30 @@ private:
     QLabel*             monitor_help_label;
     QGroupBox*          monitors_container;
     QTimer*             ambilight_preview_timer;
-    QVBoxLayout*        monitors_layout;        // Layout for monitor settings
+    QVBoxLayout*        monitors_layout;
     std::map<std::string, MonitorSettings> monitor_settings;
 
-    float               grid_scale_mm_;         // Same as viewport for consistent preview/effect math
-
-    /** When non-null, UpdateAmbilightPreviews uses this effect's CalculateColorGrid so the preview matches the running effect's LED output. */
+    float               grid_scale_mm_;
     ScreenMirror3D*     source_effect_for_preview_;
 
-    // Effect parameters
     bool                        show_test_pattern;
 
-    // Reference points (pointer to main tab's vector)
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
 
     struct FrameHistory
     {
         std::deque<std::shared_ptr<CapturedFrame>> frames;
-        float cached_avg_frame_time_ms;  // Cached frame rate to avoid recalculating
-        uint64_t last_frame_rate_update; // Timestamp of last frame rate calculation
-        
+        float cached_avg_frame_time_ms;
+        uint64_t last_frame_rate_update;
+
         FrameHistory()
-            : cached_avg_frame_time_ms(16.67f)  // Default 60fps
+            : cached_avg_frame_time_ms(16.67f)
             , last_frame_rate_update(0)
         {
         }
     };
     std::unordered_map<std::string, FrameHistory> capture_history;
 
-    // Temporal smoothing per LED (simple exponential moving average)
     struct LEDKey
     {
         int x;
@@ -333,23 +310,18 @@ private:
         float r, g, b;
         uint64_t last_update_ms;
     };
-    std::map<LEDKey, LEDState> led_states;  // Key by quantized LED position
+    std::map<LEDKey, LEDState> led_states;
 
-    // Helpers
     bool ResolveReferencePoint(int index, Vector3D& out) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     std::shared_ptr<CapturedFrame> GetFrameForDelay(const std::string& capture_id, float delay_ms) const;
     float GetHistoryRetentionMs() const;
     LEDKey MakeLEDKey(float x, float y, float z) const;
 
-    /** Internal: single-point color with optional pre-filled frame cache (nullptr = fetch per plane).
-        If pre_fetched_planes != nullptr, use it instead of GetDisplayPlanes() (batch optimization). */
     RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
                                        const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
                                        const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr);
-    /** Build current frame per capture_id for batch sampling. Call once per batch. */
     void BuildFrameCache(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* out_cache);
-    /** Batch version: pre-fetches frames once, then computes color per position. Use for ambilight preview. */
     void CalculateColorGridBatch(const std::vector<Vector3D>& positions, float time, const GridContext3D& grid,
                                 std::vector<RGBColor>& out);
 };

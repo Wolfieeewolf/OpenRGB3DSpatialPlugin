@@ -8,22 +8,17 @@ REGISTER_EFFECT_3D(BouncingBall3D);
 
 namespace
 {
-// Calculate ball position with proper gravity-based bouncing physics
-// Returns position and velocity after bouncing
 void CalculateBouncingBall(float& pos_x, float& pos_y, float& pos_z,
                           float& vel_x, float& vel_y, float& vel_z,
                           float dt, float gravity, float elasticity,
                           float xmin, float xmax, float ymin, float ymax, float zmin, float zmax)
 {
-    // Apply gravity to Y velocity
     vel_y -= gravity * dt;
     
-    // Update positions
     pos_x += vel_x * dt;
     pos_y += vel_y * dt;
     pos_z += vel_z * dt;
     
-    // Bounce off walls with energy loss (elasticity)
     if(pos_x <= xmin)
     {
         pos_x = xmin;
@@ -39,10 +34,9 @@ void CalculateBouncingBall(float& pos_x, float& pos_y, float& pos_z,
     {
         pos_y = ymin;
         vel_y = -vel_y * elasticity;
-        // Prevent getting stuck on floor
         if(fabsf(vel_y) < 0.01f && pos_y <= ymin + 0.01f)
         {
-            vel_y = 0.5f; // Small upward push
+            vel_y = 0.5f;
         }
     }
     else if(pos_y >= ymax)
@@ -65,11 +59,11 @@ void CalculateBouncingBall(float& pos_x, float& pos_y, float& pos_z,
 
 float HashFloat01(unsigned int seed)
 {
-    unsigned int value = seed ^ 0x27d4eb2d;
+    unsigned int value = seed ^ 0x27D4EB2D;
     value = (value ^ 61U) ^ (value >> 16U);
     value = value + (value << 3U);
     value = value ^ (value >> 4U);
-    value = value * 0x27d4eb2d;
+    value = value * 0x27D4EB2D;
     value = value ^ (value >> 15U);
     return (value & 0xFFFFU) / 65535.0f;
 }
@@ -96,7 +90,7 @@ EffectInfo3D BouncingBall3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "3D Bouncing Ball";
-    info.effect_description = "Single ball bouncing in room with glow";
+    info.effect_description = "Single ball bouncing in the room with glow";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -111,17 +105,16 @@ EffectInfo3D BouncingBall3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = false;
 
-    info.default_speed_scale = 10.0f; // motion speed
+    info.default_speed_scale = 10.0f;
     info.default_frequency_scale = 1.0f;
     info.use_size_parameter = true;
 
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
-    info.show_size_control = true;
+    info.show_size_control = false;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
     return info;
 }
@@ -201,16 +194,13 @@ RGBColor BouncingBall3D::CalculateColor(float, float, float, float)
 
 RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Multi-ball physics-based bouncing with gravity
     float speed = GetScaledSpeed();
-    float e = fmax(0.1f, elasticity / 100.0f); // 0.1..1.0 elasticity (energy retention)
+    float e = fmax(0.1f, elasticity / 100.0f);
 
-    // Ball radius scales with room size for visibility across any room
     float size_m = GetNormalizedSize();
     float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
     float R = room_avg * (0.002f + (ball_size / 150.0f) * 0.28f) * size_m;
 
-    // Bounding box with ball radius padding
     float xmin = grid.min_x + R;
     float xmax = grid.max_x - R;
     float ymin = grid.min_y + R;
@@ -218,28 +208,22 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     float zmin = grid.min_z + R;
     float zmax = grid.max_z - R;
 
-    // Gravity strength (scales with room size and speed)
     float gravity = room_avg * 0.8f * (0.3f + speed * 0.02f);
 
     float max_intensity = 0.0f;
-    float hue_for_max = 120.0f; // matrix-green base hue
+    float hue_for_max = 120.0f;
 
     unsigned int N = ball_count == 0 ? 1u : ball_count;
     for(unsigned int k = 0; k < N; k++)
     {
-        // Initial positions pseudo-random within room (start higher up for better bouncing)
         float p0x = xmin + HashFloat01(k * 131U) * (xmax - xmin);
-        float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f; // Start in upper half
+        float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f;
         float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
 
-        // Initial velocity - mostly horizontal with some upward component
         float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
-        float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f); // Upward initial velocity
+        float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f);
         float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
 
-        // Simulate physics step-by-step to current time
-        // Wrap time to prevent simulation cutoff (keeps ball moving indefinitely)
-        // Use a 20-second cycle to keep simulation bounded while maintaining motion
         float wrapped_time = fmodf(time, 20.0f);
         
         float pos_x = p0x;
@@ -249,14 +233,11 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
         float vel_y = v0y;
         float vel_z = v0z;
 
-        // Time step - balance between accuracy and performance
         float dt = 0.08f;
         float sim_time = 0.0f;
         int max_steps = (int)(wrapped_time / dt) + 1;
-        // With wrapped time, max_steps is always <= 250 (20s / 0.08s), limit for safety
         if(max_steps > 250) max_steps = 250;
 
-        // Run physics simulation
         for(int step = 0; step < max_steps && sim_time < wrapped_time; step++)
         {
             float step_dt = fminf(dt, wrapped_time - sim_time);
@@ -266,37 +247,29 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
             sim_time += step_dt;
         }
 
-        // Final ball position
         float bx = pos_x;
         float by = pos_y;
         float bz = pos_z;
 
-        // Distance from LED to ball center
         float dx = (x - bx);
         float dy = (y - by);
         float dz = (z - bz);
         float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-        // Enhanced glow with larger, brighter particles for sparse LEDs
-        // Make balls more visible on disconnected LED strips
-        float core_radius = R * 0.8f; // Larger core
-        float glow_radius = R * 2.0f; // Much larger glow for sparse LEDs
+        float core_radius = R * 0.8f;
+        float glow_radius = R * 2.0f;
         float core_glow = fmax(0.0f, 1.0f - dist / (core_radius + 0.001f));
-        float outer_glow = 0.7f * fmax(0.0f, 1.0f - dist / (glow_radius + 0.001f)); // Brighter outer glow
-        float intensity = powf(core_glow, 0.9f) + outer_glow; // Softer core falloff
-        // Ensure minimum visibility for whole-room presence on sparse LEDs
+        float outer_glow = 0.7f * fmax(0.0f, 1.0f - dist / (glow_radius + 0.001f));
+        float intensity = powf(core_glow, 0.9f) + outer_glow;
         if(intensity < 0.05f && dist <= glow_radius) intensity = 0.05f;
         
-        // Increase brightness by 60% (multiply by 1.6)
         intensity *= 1.6f;
 
-        // Clamp intensity before comparison
         intensity = fmax(0.0f, fmin(1.0f, intensity));
         
         if(intensity > max_intensity)
         {
             max_intensity = intensity;
-            // Hue per-ball from velocity direction/time
             float hue = fmodf((atan2f(vel_z, vel_x) * 57.2958f) + time * 20.0f, 360.0f);
             hue_for_max = hue;
         }
@@ -306,7 +279,6 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     r = (unsigned char)(r * max_intensity);
     g = (unsigned char)(g * max_intensity);
     b = (unsigned char)(b * max_intensity);

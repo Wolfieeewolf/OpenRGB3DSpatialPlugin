@@ -2,7 +2,6 @@
 
 #include "Spiral3D.h"
 
-// Register this effect with the effect manager
 REGISTER_EFFECT_3D(Spiral3D);
 #include <QGridLayout>
 #include <cmath>
@@ -19,8 +18,8 @@ Spiral3D::Spiral3D(QWidget* parent) : SpatialEffect3D(parent)
     gap_slider = nullptr;
     gap_label = nullptr;
     num_arms = 3;
-    pattern_type = 0;   // Default to Smooth
-    gap_size = 30;      // Default gap size
+    pattern_type = 0;
+    gap_size = 30;
     progress = 0.0f;
 
     SetFrequency(50);
@@ -40,9 +39,9 @@ Spiral3D::~Spiral3D()
 EffectInfo3D Spiral3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Spiral";
-    info.effect_description = "Animated spiral pattern with configurable arm count";
+    info.effect_description = "Spiral pattern with configurable arms and gap";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;
@@ -57,20 +56,16 @@ EffectInfo3D Spiral3D::GetEffectInfo()
     info.needs_arms = true;
     info.needs_frequency = false;
 
-    // Standardized parameter scaling
-    // Room-scale spirals: larger arms and slower spatial twist by default
-    info.default_speed_scale = 35.0f;       // (speed/100)² * 35 (clear rotation at mid speeds)
-    info.default_frequency_scale = 40.0f;   // fewer twists/kinks across the room
+    info.default_speed_scale = 35.0f;
+    info.default_frequency_scale = 40.0f;
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls except frequency - has custom)
     info.show_speed_control = true;
     info.show_brightness_control = true;
-    info.show_frequency_control = true;     // Show standard frequency control
+    info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -87,6 +82,9 @@ void Spiral3D::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Smooth Spiral");
     pattern_combo->addItem("Pinwheel");
     pattern_combo->addItem("Sharp Blades");
+    pattern_combo->addItem("Swirl Circles");
+    pattern_combo->addItem("Hypnotic");
+    pattern_combo->addItem("Simple Spin");
     pattern_combo->setCurrentIndex(pattern_type);
     pattern_combo->setToolTip("Spiral pattern style");
     layout->addWidget(pattern_combo, 0, 1);
@@ -147,64 +145,39 @@ void Spiral3D::OnSpiralParameterChanged()
 
 RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
 {
-    /*---------------------------------------------------------*\
-    | NOTE: All coordinates (x, y, z) are in GRID UNITS       |
-    | One grid unit equals the configured grid scale          |
-    | (default 10mm). LED positions use grid units.           |
-    \*---------------------------------------------------------*/
-
-    // Get effect origin (room center or user head position)
     Vector3D origin = GetEffectOrigin();
-
-    // Calculate position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Check if LED is within scaled effect radius             |
-    | Uses standardized boundary helper                        |
-    \*---------------------------------------------------------*/
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
     {
-        return 0x00000000;  // Black - outside effect boundary
+        return 0x00000000;
     }
 
-    // Use standardized parameter helpers
     float actual_frequency = GetScaledFrequency();
-
     progress = CalculateProgress(time);
-    float size_multiplier = GetNormalizedSize();  // 0.1 to 2.0
-    // Room-scale: reduce spatial frequency to expand arm spacing
+    float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.003f / size_multiplier;
 
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Calculate spiral based on rotated coordinates            |
-    | Spiral rotates around rotated Y-axis by default         |
-    \*---------------------------------------------------------*/
-    float radius = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
-    float angle = atan2(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
-    float twist_coord = rot_rel_y;  // Height along rotated Y-axis
+    float radius = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
+    float angle = atan2(rot_rel_z, rot_rel_x);
+    float twist_coord = rot_rel_y;
 
     float z_twist = twist_coord * 0.3f;
     float spiral_angle = angle * num_arms + radius * freq_scale + z_twist - progress;
 
-    // Calculate intensity based on pattern type
     float spiral_value;
     float gap_factor = gap_size / 100.0f;
 
     switch(pattern_type)
     {
-        case 0: // Smooth Spiral - Original smooth flowing spiral
+        case 0:
             spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(twist_coord * freq_scale + progress * 0.7f));
             {
                 float secondary_spiral = cos(spiral_angle * 0.5f + twist_coord * freq_scale * 1.5f + progress * 1.2f) * 0.3f;
@@ -214,36 +187,27 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
             spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             break;
 
-        case 1: // Pinwheel - Distinct blades with dark gaps
+        case 1:
             {
-                // Normalize angle to 0-2π range per arm
                 float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
                 if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
 
-                // Calculate blade width (inverse of gap)
                 float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
-
-                // Sharp edges for distinct blades
                 if(arm_angle < blade_width)
                 {
-                    // Inside blade - smooth gradient
                     float blade_position = arm_angle / blade_width;
-                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);  // Peak in middle
+                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);
                 }
                 else
                 {
-                    // In gap - completely dark
                     spiral_value = 0.0f;
                 }
-
-                // Add radial gradient for depth
                 float radial_fade = 1.0f - exp(-radius * freq_scale * 0.5f);
                 spiral_value *= radial_fade;
             }
             break;
 
-        case 2: // Sharp Blades - Very defined, laser-like arms
-        default:
+        case 2:
             {
                 float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
                 if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
@@ -252,29 +216,58 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
 
                 if(arm_angle < blade_width)
                 {
-                    // Sharp peak in center with quick falloff
                     float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
-                    spiral_value = 1.0f - blade_position * blade_position;  // Sharp peak
+                    spiral_value = 1.0f - blade_position * blade_position;
                 }
                 else
                 {
                     spiral_value = 0.0f;
                 }
 
-                // Add pulsing energy along blades
                 float energy_pulse = 0.2f * sin(radius * freq_scale * 2.0f - progress * 2.0f);
                 spiral_value = fmax(0.0f, spiral_value + energy_pulse);
             }
             break;
+
+        case 3:
+            {
+                float circle_angle = angle + progress * 2.0f;
+                float ring_phase = radius * freq_scale * 8.0f * num_arms - circle_angle * num_arms;
+                spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - radius * freq_scale * 0.15f);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+
+        case 4:
+            {
+                float hyp_angle = angle - progress * 3.0f;
+                float hyp_radius = radius * freq_scale * 4.0f;
+                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress * 2.0f) * cos(twist_coord * freq_scale + progress);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 5:
+            {
+                float period = 6.28318f / (float)num_arms;
+                float arm_angle = fmod(spiral_angle, period);
+                if(arm_angle < 0.0f) arm_angle += period;
+                float blade_width = 0.4f * period;
+                float blade_core = (arm_angle < blade_width) ? (1.0f - arm_angle / blade_width) : 0.0f;
+                float blade_glow = (arm_angle < blade_width * 1.5f) ? 0.3f * (1.0f - fabsf(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f)) : 0.0f;
+                spiral_value = fmin(1.0f, blade_core + blade_glow);
+                float radial_fade = 0.35f + 0.65f * (1.0f - fmin(1.0f, radius * 0.5f) * 0.6f);
+                spiral_value = spiral_value * radial_fade + 0.08f * radial_fade;
+            }
+            break;
+        default:
+            spiral_value = 0.5f;
+            break;
     }
 
-    // Get color based on spiral value and position
     RGBColor final_color;
 
-    // For pinwheel modes, color each arm differently
-    if((pattern_type == 1 || pattern_type == 2) && !GetRainbowMode())
+    if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
     {
-        // Determine which arm we're on
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), num_arms);
         if(arm_index < 0) arm_index += num_arms;
         float color_position = arm_index / num_arms;
@@ -283,13 +276,11 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     }
     else if(GetRainbowMode())
     {
-        // Rainbow mode - smooth color transition
-        float hue = spiral_angle * 57.2958f + progress * 20.0f;  // Convert radians to degrees
+        float hue = spiral_angle * 57.2958f + progress * 20.0f;
         final_color = GetRainbowColor(hue);
     }
     else
     {
-        // Smooth gradient based on spiral value
         final_color = GetColorAtPosition(spiral_value);
     }
 
@@ -300,7 +291,6 @@ RGBColor Spiral3D::CalculateColor(float x, float y, float z, float time)
     return (b << 16) | (g << 8) | r;
 }
 
-// Grid-aware version with room-sized spirals
 RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -319,29 +309,17 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = actual_frequency * 0.15f / fmax(0.1f, size_multiplier);
 
-    /*---------------------------------------------------------*\
-    | Apply rotation transformation to LED position            |
-    | This rotates the effect pattern around the origin       |
-    \*---------------------------------------------------------*/
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    /*---------------------------------------------------------*\
-    | Calculate spiral based on rotated coordinates            |
-    | Spiral rotates around rotated Y-axis by default         |
-    \*---------------------------------------------------------*/
-    float radius = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);  // Radius in rotated XZ plane
-    float angle = atan2(rot_rel_z, rot_rel_x);  // Angle in rotated XZ plane
-
-    // Normalize radius and twist coordinate consistently against room bounds
-    // This ensures ALL controllers see the same spiral pattern at the same absolute room position
+    float radius = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
+    float angle = atan2(rot_rel_z, rot_rel_x);
     float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
     float norm_radius = (max_distance > 0.001f) ? (radius / max_distance) : 0.0f;
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
-    
-    // Normalize twist coordinate (height along rotated Y-axis)
+
     float norm_twist = 0.0f;
     if(grid.height > 0.001f)
     {
@@ -357,13 +335,13 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
 
     switch(pattern_type)
     {
-        case 0: // Smooth
+        case 0:
             spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale * 3.0f + progress * 0.7f));
             spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale * 4.5f + progress * 1.2f);
             spiral_value = (spiral_value + 1.5f) / 3.0f;
             spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             break;
-        case 1: // Pinwheel
+        case 1:
             {
                 float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
                 if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
@@ -377,13 +355,11 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
                 {
                     spiral_value = 0.0f;
                 }
-                // Enhanced radial fade with softer falloff for whole-room feel
                 float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (actual_frequency * 0.8f)));
-                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade; // Add subtle ambient
+                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade;
             }
             break;
-        case 2: // Sharp Blades
-        default:
+        case 2:
             {
                 float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
                 if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
@@ -399,16 +375,51 @@ RGBColor Spiral3D::CalculateColorGrid(float x, float y, float z, float time, con
                 }
                 float energy_pulse = 0.2f * sin(norm_radius * (actual_frequency * 1.2f) - progress * 2.0f);
                 spiral_value = fmax(0.0f, spiral_value + energy_pulse);
-                
-                // Enhanced radial fade for whole-room presence
                 float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (actual_frequency * 0.8f)));
                 spiral_value *= radial_fade;
             }
             break;
+        case 3:
+            {
+                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress * 2.0f;
+                float ring_phase = norm_radius * (actual_frequency * 8.0f) * num_arms - circle_angle * num_arms;
+                spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - norm_radius * 0.3f);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 4:
+            {
+                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress * 3.0f;
+                float hyp_radius = norm_radius * (actual_frequency * 4.0f);
+                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress * 2.0f) * cos(norm_twist * freq_scale * 3.0f + progress);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 5:
+            {
+                float period = 6.28318f / (float)num_arms;
+                float arm_angle = fmod(spiral_angle, period);
+                if(arm_angle < 0.0f) arm_angle += period;
+                float blade_width = 0.4f * period;
+                float blade_core = (arm_angle < blade_width) ? (1.0f - arm_angle / blade_width) : 0.0f;
+                float blade_glow = 0.0f;
+                if(arm_angle < blade_width * 1.5f)
+                {
+                    float glow_dist = fabsf(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    blade_glow = 0.3f * (1.0f - glow_dist);
+                }
+                spiral_value = fmin(1.0f, blade_core + blade_glow);
+                float radial_fade = 0.35f + 0.65f * (1.0f - fmin(1.0f, norm_radius) * 0.6f);
+                spiral_value = spiral_value * radial_fade + 0.08f * radial_fade;
+            }
+            break;
+        default:
+            spiral_value = 0.5f;
+            break;
     }
 
     RGBColor final_color;
-    if((pattern_type == 1 || pattern_type == 2) && !GetRainbowMode())
+    if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
     {
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
         if(arm_index < 0) arm_index += num_arms;
@@ -450,9 +461,9 @@ void Spiral3D::LoadSettings(const nlohmann::json& settings)
             arms_slider->setValue(num_arms);
         }
     }
-    if(settings.contains("pattern_type"))
+    if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
     {
-        pattern_type = settings["pattern_type"].get<int>();
+        pattern_type = std::max(0, std::min(settings["pattern_type"].get<int>(), 5));
         if(pattern_combo)
         {
             pattern_combo->setCurrentIndex(pattern_type);

@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| SpatialEffectTypes.h                                      |
-|                                                           |
-|   Common types for 3D spatial effects                    |
-|                                                           |
-|   Date: 2025-09-27                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef SPATIALEFFECTTYPES_H
 #define SPATIALEFFECTTYPES_H
@@ -31,61 +22,72 @@ enum SpatialEffectType
     SPATIAL_EFFECT_LIGHTNING        = 9,
     SPATIAL_EFFECT_MATRIX           = 10,
     SPATIAL_EFFECT_BOUNCING_BALL    = 11,
+    SPATIAL_EFFECT_COMET            = 12,
+    SPATIAL_EFFECT_SKY_LIGHTNING    = 13,
 };
 
 enum ReferencePointType
 {
-    REF_POINT_USER          = 0,    // User position (green stick figure)
-    REF_POINT_MONITOR       = 1,    // Monitor/screen
-    REF_POINT_CHAIR         = 2,    // Chair
-    REF_POINT_DESK          = 3,    // Desk
-    REF_POINT_SPEAKER_LEFT  = 4,    // Left speaker
-    REF_POINT_SPEAKER_RIGHT = 5,    // Right speaker
-    REF_POINT_DOOR          = 6,    // Room door
-    REF_POINT_WINDOW        = 7,    // Window
-    REF_POINT_BED           = 8,    // Bed
-    REF_POINT_TV            = 9,    // TV
-    REF_POINT_CUSTOM        = 10    // Custom user-defined
+    REF_POINT_USER          = 0,
+    REF_POINT_MONITOR       = 1,
+    REF_POINT_CHAIR         = 2,
+    REF_POINT_DESK          = 3,
+    REF_POINT_SPEAKER_LEFT  = 4,
+    REF_POINT_SPEAKER_RIGHT = 5,
+    REF_POINT_DOOR          = 6,
+    REF_POINT_WINDOW        = 7,
+    REF_POINT_BED           = 8,
+    REF_POINT_TV            = 9,
+    REF_POINT_CUSTOM        = 10
 };
 
 class VirtualReferencePoint3D;
 
 struct UserPosition3D
 {
-    float x;                        // User X position in grid
-    float y;                        // User Y position in grid
-    float z;                        // User Z position in grid
-    bool visible;                   // Show/hide stick figure
+    float x;
+    float y;
+    float z;
+    bool visible;
 
     UserPosition3D() : x(0.0f), y(0.0f), z(0.0f), visible(true) {}
     UserPosition3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_), visible(true) {}
 };
 
-/** Where effects originate in 3D space. */
 enum ReferenceMode
 {
-    REF_MODE_ROOM_CENTER    = 0,    // Default: Effects use room center (0,0,0)
-    REF_MODE_USER_POSITION  = 1,    // Effects use user head position as origin
-    REF_MODE_CUSTOM_POINT   = 2     // Effect-specific custom reference point (future)
+    REF_MODE_ROOM_CENTER    = 0,
+    REF_MODE_USER_POSITION  = 1,
+    REF_MODE_CUSTOM_POINT   = 2
 };
 
 enum EffectAxis
 {
-    AXIS_X              = 0,    // Left to Right (width)
-    AXIS_Y              = 1,    // Bottom to Top (height, Y-up)
-    AXIS_Z              = 2,    // Front to Back (depth)
-    AXIS_RADIAL         = 3,    // Outward from center
-    AXIS_CUSTOM         = 4     // Custom direction vector
+    AXIS_X      = 0,
+    AXIS_Y      = 1,
+    AXIS_Z      = 2,
+    AXIS_RADIAL = 3,
+    AXIS_CUSTOM = 4
 };
 
-/** Multi-reference point effect config. */
+enum SurfaceMask
+{
+    SURF_FLOOR   = 1,
+    SURF_CEIL    = 2,
+    SURF_WALL_XM = 4,
+    SURF_WALL_XP = 8,
+    SURF_WALL_ZM = 16,
+    SURF_WALL_ZP = 32,
+    SURF_ALL     = 63
+};
+
 struct MultiPointConfig
 {
-    std::vector<int>    reference_point_ids;    // IDs of reference points to use
-    int                 primary_point_id;       // Main reference point
-    int                 secondary_point_id;     // Secondary reference point (for dual-point effects)
-    bool                use_all_points;         // Use all selected points simultaneously
-    float               point_influence;        // How much each point affects the effect (0.0-1.0)
+    std::vector<int>    reference_point_ids;
+    int                 primary_point_id;
+    int                 secondary_point_id;
+    bool                use_all_points;
+    float               point_influence;
 
     MultiPointConfig() : primary_point_id(-1), secondary_point_id(-1), use_all_points(false), point_influence(1.0f) {}
 };
@@ -100,23 +102,23 @@ struct SpatialEffectParams
     bool                use_gradient;
 
     EffectAxis          axis;
-    bool                reverse;            // Reverse direction
-    Vector3D            direction;          // Custom direction vector (for AXIS_CUSTOM)
+    bool                reverse;
+    Vector3D            direction;
 
     MultiPointConfig    multi_points;
 
     Vector3D            scale_3d;
-    Vector3D            origin;             // Center point for effect (custom coordinates)
-    Rotation3D          rotation;           // Rotation around each axis
+    Vector3D            origin;
+    Rotation3D          rotation;
 
     float               thickness;
-    float               intensity;          // For effect intensity
-    float               falloff;            // Distance falloff factor
-    unsigned int        num_arms;           // For spiral, star effects
-    unsigned int        frequency;          // For wave frequency
-    bool                mirror_x;           // Mirror across X axis
-    bool                mirror_y;           // Mirror across Y axis
-    bool                mirror_z;           // Mirror across Z axis
+    float               intensity;
+    float               falloff;
+    unsigned int        num_arms;
+    unsigned int        frequency;
+    bool                mirror_x;
+    bool                mirror_y;
+    bool                mirror_z;
 };
 
 #endif

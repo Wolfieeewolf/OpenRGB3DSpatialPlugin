@@ -20,18 +20,18 @@ Explosion3D::Explosion3D(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
 
     std::vector<RGBColor> default_colors;
-    default_colors.push_back(0x000000FF);  // Red (0x00BBGGRR format)
-    default_colors.push_back(0x0000FFFF);  // Yellow
-    default_colors.push_back(0x00FF0000);  // Blue
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FFFF);
+    default_colors.push_back(0x00FF0000);
     SetColors(default_colors);
 }
 
 EffectInfo3D Explosion3D::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;  // Using new standardized system
+    info.info_version = 2;
     info.effect_name = "3D Explosion";
-    info.effect_description = "Expanding shockwave explosion with multiple wave layers";
+    info.effect_description = "Expanding shockwave from origin";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_EXPLOSION;
     info.is_reversible = false;
@@ -46,19 +46,16 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.needs_arms = false;
     info.needs_frequency = true;
 
-    // Standardized parameter scaling
-    info.default_speed_scale = 35.0f;       // (speed/100)² * 35 (room-scale expansion)
-    info.default_frequency_scale = 60.0f;   // (freq/100)² * 60 (less fine noise)
+    info.default_speed_scale = 35.0f;
+    info.default_frequency_scale = 60.0f;
     info.use_size_parameter = true;
 
-    // Control visibility (show all controls)
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_fps_control = true;
-    // Rotation controls are in base class
     info.show_color_controls = true;
 
     return info;
@@ -139,18 +136,14 @@ void Explosion3D::LoadSettings(const nlohmann::json& settings)
     if(type_combo) type_combo->setCurrentIndex(explosion_type);
 }
 
-// Grid-aware version using real room center and room-relative boundary
 RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    // Origin based on reference mode (room center/user/custom)
     Vector3D origin = GetEffectOriginGrid(grid);
 
-    // Position relative to origin
     float rel_x = x - origin.x;
     float rel_y = y - origin.y;
     float rel_z = z - origin.z;
 
-    // Respect room-relative boundary via scale slider and room size
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
     {
         return 0x00000000;
@@ -171,26 +164,21 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    // Use radial distance from origin in rotated space
     float distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
 
-    // Type-specific distance shaping (Land Mine flattens vertical component)
     if(explosion_type == 2)
     {
         float vz = rot_rel_z * 0.35f;
         distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + vz*vz);
     }
 
-    // Room-scale expansion: base radius and wave thickness
     float explosion_radius = progress * (explosion_intensity * 0.25f) * size_multiplier;
     float wave_thickness = (8.0f + explosion_intensity * 0.08f) * size_multiplier;
-    // Nuke: much larger radius and thicker wave
     if(explosion_type == 1)
     {
         explosion_radius *= 1.8f;
         wave_thickness   *= 1.5f;
     }
-    // Wall Bounce: ping-pong radius between center and walls
     if(explosion_type == 4)
     {
         float max_extent = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
@@ -200,18 +188,15 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
         explosion_radius = (t <= period) ? t : (2.0f * period - t);
     }
 
-    // Enhanced primary wave with better falloff
     float primary_wave = 1.0f - smoothstep(explosion_radius - wave_thickness, explosion_radius + wave_thickness, distance);
-    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.08f); // Softer falloff
+    primary_wave *= exp(-fabs(distance - explosion_radius) * 0.08f);
 
     float secondary_radius = explosion_radius * 0.7f;
     float secondary_wave = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
-    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.12f) * 0.7f; // Enhanced secondary
+    secondary_wave *= exp(-fabs(distance - secondary_radius) * 0.12f) * 0.7f;
 
-    // Enhanced shock detail with multiple harmonics
     float shock_detail = 0.25f * sinf(distance * freq_scale * 8.0f - progress * 4.0f);
     float shock_detail2 = 0.15f * sinf(distance * freq_scale * 12.0f - progress * 6.0f);
-    // Bomb: add directional lobes
     if(explosion_type == 3)
     {
         float ang = atan2f(rot_rel_y, rot_rel_x);
@@ -219,12 +204,11 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
         shock_detail *= lobe_factor;
         shock_detail2 *= lobe_factor;
     }
-    shock_detail = (shock_detail + shock_detail2) * expf(-distance * 0.08f); // Softer falloff
+    shock_detail = (shock_detail + shock_detail2) * expf(-distance * 0.08f);
 
     float explosion_intensity_final = primary_wave + secondary_wave + shock_detail;
     explosion_intensity_final = fmax(0.0f, fmin(1.0f, explosion_intensity_final));
 
-    // Enhanced core with glow
     if(distance < explosion_radius * 0.3f)
     {
         float core_intensity = 1.0f - (distance / (explosion_radius * 0.3f));
@@ -232,7 +216,6 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
         explosion_intensity_final = fmax(explosion_intensity_final, core_intensity * 0.85f + core_glow);
     }
     
-    // Add subtle ambient for whole-room presence
     float ambient = 0.1f * (1.0f - fmin(1.0f, distance / (explosion_radius * 2.0f)));
     explosion_intensity_final = fmin(1.0f, explosion_intensity_final + ambient);
 
@@ -245,7 +228,6 @@ RGBColor Explosion3D::CalculateColorGrid(float x, float y, float z, float time, 
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
 
-    // Apply intensity (global brightness is applied by PostProcessColorGrid)
     r = (unsigned char)(r * explosion_intensity_final);
     g = (unsigned char)(g * explosion_intensity_final);
     b = (unsigned char)(b * explosion_intensity_final);

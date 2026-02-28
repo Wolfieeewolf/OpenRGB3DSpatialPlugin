@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| StackPreset3D.cpp                                         |
-|                                                           |
-|   Stack preset implementation                            |
-|                                                           |
-|   Date: 2025-10-05                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "StackPreset3D.h"
 
@@ -58,11 +49,9 @@ std::unique_ptr<StackPreset3D> StackPreset3D::CreateFromStack(
     std::unique_ptr<StackPreset3D> preset = std::make_unique<StackPreset3D>();
     preset->name = preset_name;
 
-    // Deep copy each effect instance
     for(unsigned int i = 0; i < stack.size(); i++)
     {
         if(!stack[i]) continue;
-        // Convert to JSON and back to create a deep copy
         nlohmann::json instance_json = stack[i]->ToJson();
         std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
         if(copied_instance)

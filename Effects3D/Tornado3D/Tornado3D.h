@@ -25,7 +25,6 @@ public:
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
@@ -37,8 +36,8 @@ private:
     QLabel* core_radius_label;
     QSlider* height_slider;
     QLabel* height_label;
-    unsigned int core_radius; // 10..300 grid units * 0.01
-    unsigned int tornado_height; // 50..500 grid units * 0.01
+    unsigned int core_radius;
+    unsigned int tornado_height;
 };
 
 #endif

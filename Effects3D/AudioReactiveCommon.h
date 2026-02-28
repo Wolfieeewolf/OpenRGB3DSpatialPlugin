@@ -11,8 +11,8 @@
 
 struct AudioGradientStop3D
 {
-    float position;   // 0..1
-    RGBColor color;   // 0x00BBGGRR
+    float position;
+    RGBColor color;
 };
 
 struct AudioGradient3D
@@ -50,7 +50,6 @@ inline void NormalizeGradient(AudioGradient3D& grad)
     std::sort(grad.stops.begin(), grad.stops.end(), [](const AudioGradientStop3D& a, const AudioGradientStop3D& b){
         return a.position < b.position;
     });
-    // Clamp positions and ensure endpoints exist
     if(grad.stops.front().position > 0.0f || grad.stops.back().position < 1.0f)
     {
         if(grad.stops.front().position > 0.0f)
@@ -187,11 +186,11 @@ inline void NormalizeAudioReactiveSettings(AudioReactiveSettings3D& cfg)
 inline void AudioGradientSaveToJson(nlohmann::json& j, const std::string& key, const AudioGradient3D& grad)
 {
     nlohmann::json arr = nlohmann::json::array();
-    for(const AudioGradientStop3D& stop : grad.stops)
+    for(size_t i = 0; i < grad.stops.size(); i++)
     {
         nlohmann::json entry;
-        entry["position"] = stop.position;
-        entry["color"] = stop.color;
+        entry["position"] = grad.stops[i].position;
+        entry["color"] = grad.stops[i].color;
         arr.push_back(entry);
     }
     j[key] = arr;
@@ -209,8 +208,9 @@ inline void AudioGradientLoadFromJson(AudioGradient3D& grad, const nlohmann::jso
         return;
     }
     grad.stops.clear();
-    for(const nlohmann::json& entry : arr)
+    for(size_t i = 0; i < arr.size(); i++)
     {
+        const nlohmann::json& entry = arr[i];
         if(!entry.contains("position") || !entry.contains("color"))
         {
             continue;

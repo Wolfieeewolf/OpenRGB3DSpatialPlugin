@@ -47,7 +47,7 @@ public:
     ~Gizmo3D();
 
     void SetMode(GizmoMode mode);
-    void CycleMode(); // Cycle through all modes when center is clicked
+    void CycleMode();
     void SetPosition(float x, float y, float z);
     void SetTarget(ControllerTransform* target);
     void SetTarget(VirtualReferencePoint3D* target);
@@ -135,18 +135,15 @@ private:
     bool                   grid_snap_enabled;
     float                  grid_size;
 
-    // Axis drag
     float                  drag_axis_t0;
     float                  drag_axis_dir[3];
-    // Freeroam drag (ray-plane)
     float                  drag_plane_normal[3];
     float                  drag_start_world[3];
-    bool                   center_press_pending; // center pressed, waiting to decide click vs drag
-    // Rotation drag (angle on ring plane)
+    bool                   center_press_pending;
     float                  rot_plane_normal[3];
     float                  rot_u[3];
     float                  rot_v[3];
-    float                  rot_angle0; // radians
+    float                  rot_angle0;
 };
 
 #endif

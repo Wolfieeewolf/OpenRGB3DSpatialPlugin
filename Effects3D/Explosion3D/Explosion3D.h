@@ -18,20 +18,17 @@ public:
     explicit Explosion3D(QWidget* parent = nullptr);
     ~Explosion3D() override = default;
 
-    // Auto-registration hook
     EFFECT_REGISTERER_3D("Explosion3D", "3D Explosion", "3D Spatial", [](){ return new Explosion3D; });
 
     static std::string const ClassName() { return "Explosion3D"; }
     static std::string const UIName() { return "3D Explosion"; }
 
-    // SpatialEffect3D overrides
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
-    // Settings persistence
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
@@ -39,15 +36,13 @@ private slots:
     void OnExplosionParameterChanged();
 
 private:
-    // UI controls
     QSlider*        intensity_slider;
     QLabel*         intensity_label;
-    QComboBox*      type_combo;           // Explosion type selector
+    QComboBox*      type_combo;
 
-    // Explosion-specific parameters (frequency, rainbow, colors handled by base)
     unsigned int    explosion_intensity;
     float           progress;
-    int             explosion_type;       // 0=Standard,1=Nuke,2=Land Mine,3=Bomb,4=Wall Bounce
+    int             explosion_type;
 };
 
 #endif

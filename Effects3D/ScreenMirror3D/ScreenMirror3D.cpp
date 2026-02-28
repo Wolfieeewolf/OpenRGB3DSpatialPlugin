@@ -47,15 +47,12 @@ REGISTER_EFFECT_3D(ScreenMirror3D);
 #define M_PI 3.14159265358979323846
 #endif
 
-// Cube in preview (same grid units as viewport). Display plane centered with at least 5 grid units buffer to cube face.
 static const int   PREVIEW_BUFFER_GRID_UNITS = 5;
-static const float PREVIEW_CUBE_HALF_GRID_UNITS = 20.0f;  // 40×40×40 cube so display + buffer fits inside
-// Grid resolution: 11 points per axis -> full 3D grid inside and on cube; step = 40/10 = 4 grid units.
+static const float PREVIEW_CUBE_HALF_GRID_UNITS = 20.0f;
 static const int   PREVIEW_GRID_RES = 11;
-static const int   PREVIEW_LED_COUNT_VOLUME = PREVIEW_GRID_RES * PREVIEW_GRID_RES * PREVIEW_GRID_RES;  // 11×11×11
+static const int   PREVIEW_LED_COUNT_VOLUME = PREVIEW_GRID_RES * PREVIEW_GRID_RES * PREVIEW_GRID_RES;
 static const float DISPLAY_PREVIEW_SCALE = 0.5f;
 
-// Same transform as LEDViewport3D so display plane and LEDs match viewport orientation.
 static Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
 {
     Vector3D scaled = {
@@ -91,17 +88,17 @@ static Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform
 class AmbilightPreview3DWidget : public QOpenGLWidget, protected QOpenGLFunctions
 {
 public:
-    static const int PREVIEW_LED_COUNT = PREVIEW_LED_COUNT_VOLUME;  // 11×11×11 full grid (surface + interior)
+    static const int PREVIEW_LED_COUNT = PREVIEW_LED_COUNT_VOLUME;
 
     DisplayPlane3D* display_plane = nullptr;
-    float grid_scale_mm_ = 10.0f;  // Same as viewport so math matches (MMToGridUnits, etc.)
+    float grid_scale_mm_ = 10.0f;
     std::vector<Vector3D> positions;
     std::vector<Vector3D> box_corners_world;
     std::vector<RGBColor> colors;
 
     float cam_azimuth = 0.75f;
     float cam_elevation = 0.45f;
-    float cam_zoom = 1.0f;  // Scroll wheel: >1 zoom in, <1 zoom out
+    float cam_zoom = 1.0f;
     QPoint last_mouse_pos;
     bool dragging = false;
 
@@ -144,7 +141,7 @@ public:
         setToolTip("Live ambilight preview: LED grid around display plane. Drag to rotate, scroll to zoom.");
         pulse_animation_timer = new QTimer(this);
         connect(pulse_animation_timer, &QTimer::timeout, this, [this]() { tickPulseAnimation(); });
-        pulse_animation_timer->start(33);  // ~30fps so center quad and LED dots visibly pulse
+        pulse_animation_timer->start(33);
     }
 
     void SetDisplayPlane(DisplayPlane3D* plane)
@@ -161,11 +158,10 @@ public:
         if(!display_plane) return;
 
         const Transform3D& t = display_plane->GetTransform();
-        float half = PREVIEW_CUBE_HALF_GRID_UNITS;  // 40×40×40 cube, display + PREVIEW_BUFFER_GRID_UNITS inside
+        float half = PREVIEW_CUBE_HALF_GRID_UNITS;
         const int res = PREVIEW_GRID_RES;
         float step = (2.0f * half) / (float)(res - 1);
 
-        // Cube outline (8 corners) for wireframe
         Vector3D local_corners[8] = {
             {-half, -half, -half}, { half, -half, -half}, { half,  half, -half}, {-half,  half, -half},
             {-half, -half,  half}, { half, -half,  half}, { half,  half,  half}, {-half,  half,  half}
@@ -177,7 +173,6 @@ public:
             positions.push_back(TransformLocalToWorld(Vector3D{lx, ly, lz}, t));
         };
 
-        // Full 3D grid: LEDs inside the cube and on all 6 faces (so interior is visible when rotating)
         for(int ix = 0; ix < res; ix++)
             for(int iy = 0; iy < res; iy++)
                 for(int iz = 0; iz < res; iz++)
@@ -320,7 +315,6 @@ protected:
                   cx, cy, cz,
                   0.0f, 1.0f, 0.0f);
 
-        // Cube outline (40×40×40)
         glColor3f(0.35f, 0.38f, 0.45f);
         glLineWidth(1.5f);
         glBegin(GL_LINES);
@@ -334,7 +328,6 @@ protected:
         }
         glEnd();
 
-        // Display plane quad (smaller, centered): screen preview, test pattern, or test pulse
         if(display_plane)
         {
             const Transform3D& t = display_plane->GetTransform();
@@ -357,7 +350,6 @@ protected:
                 display_texture_id = 0;
             }
 
-            // Prefer pulse over static test pattern in UI so "Pulse (for tuning wave)" is visible when enabled
             if(show_pulse)
             {
                 float t_sec = (float)QDateTime::currentMSecsSinceEpoch() / 1000.0f;
@@ -486,7 +478,6 @@ protected:
             glEnd();
         }
 
-        // LEDs as small dots; draw back-to-front so interior points are visible (not hidden by depth)
         std::vector<int> order(positions.size());
         for(size_t i = 0; i < positions.size(); i++)
             order[i] = (int)i;
@@ -495,7 +486,7 @@ protected:
             const Vector3D& pb = positions[b];
             float da = (pa.x - camera_x) * (pa.x - camera_x) + (pa.y - camera_y) * (pa.y - camera_y) + (pa.z - camera_z) * (pa.z - camera_z);
             float db = (pb.x - camera_x) * (pb.x - camera_x) + (pb.y - camera_y) * (pb.y - camera_y) + (pb.z - camera_z) * (pb.z - camera_z);
-            return da > db;  // far first
+            return da > db;
         });
         glEnable(GL_POINT_SMOOTH);
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
@@ -631,7 +622,6 @@ protected:
         painter.setBrush(QBrush(QColor(30, 30, 30)));
         painter.drawRect(rect);
         
-        // Draw test pattern or screen preview if enabled
         bool show_test = show_test_pattern_ptr && *show_test_pattern_ptr;
         bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr && !show_test;
         
@@ -640,16 +630,12 @@ protected:
             int center_x = rect.left() + rect.width() / 2;
             int center_y = rect.top() + rect.height() / 2;
             
-            // Bottom-left quadrant: RED
             painter.fillRect(QRect(rect.left(), center_y, center_x - rect.left(), rect.bottom() - center_y), QColor(255, 0, 0, 200));
             
-            // Bottom-right quadrant: GREEN
             painter.fillRect(QRect(center_x, center_y, rect.right() - center_x, rect.bottom() - center_y), QColor(0, 255, 0, 200));
             
-            // Top-right quadrant: BLUE
             painter.fillRect(QRect(center_x, rect.top(), rect.right() - center_x, center_y - rect.top()), QColor(0, 0, 255, 200));
             
-            // Top-left quadrant: YELLOW
             painter.fillRect(QRect(rect.left(), rect.top(), center_x - rect.left(), center_y - rect.top()), QColor(255, 255, 0, 200));
         }
         else if(show_preview && display_plane)
@@ -809,8 +795,8 @@ protected:
             
             int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
             int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max)); // v_max=top
-            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min)); // v_min=bottom
+            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
+            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
             
             QPoint corners[4] = {
                 QPoint(zone_left, zone_top),
@@ -842,8 +828,8 @@ protected:
             
             int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
             int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max)); // v_max=top
-            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min)); // v_min=bottom
+            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
+            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
             
             QRect zone_rect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top);
             if(zone_rect.contains(pos))
@@ -852,7 +838,6 @@ protected:
                 dragging = true;
                 drag_handle = MoveZone;
                 drag_start_pos = pos;
-                // Always use the CURRENT zone state from the vector (not the const reference)
                 drag_start_zone = (*capture_zones)[i];
                 update();
                 return;
@@ -908,8 +893,8 @@ protected:
                 
                 int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
                 int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-                int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max)); // v_max=top
-                int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min)); // v_min=bottom
+                int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
+                int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
                 
                 QPoint corners[4] = {
                     QPoint(zone_left, zone_top),
@@ -969,7 +954,6 @@ protected:
             float new_v_min = drag_start_zone.v_min + delta_v;
             float new_v_max = drag_start_zone.v_max + delta_v;
             
-            // Clamp to screen bounds
             if(new_u_min < 0.0f) { new_u_max -= new_u_min; new_u_min = 0.0f; }
             if(new_u_max > 1.0f) { new_u_min -= (new_u_max - 1.0f); new_u_max = 1.0f; }
             if(new_v_min < 0.0f) { new_v_max -= new_v_min; new_v_min = 0.0f; }
@@ -1132,13 +1116,12 @@ ScreenMirror3D::~ScreenMirror3D()
     StopCaptureIfNeeded();
 }
 
-// Effect Info
 EffectInfo3D ScreenMirror3D::GetEffectInfo()
 {
     EffectInfo3D info           = {};
     info.info_version           = 2;
     info.effect_name            = "Screen Mirror 3D";
-    info.effect_description     = "Projects screen content onto LEDs using 3D spatial mapping";
+    info.effect_description     = "Maps screen content onto LEDs in 3D space";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_WAVE;
     info.is_reversible          = false;
@@ -1154,22 +1137,13 @@ EffectInfo3D ScreenMirror3D::GetEffectInfo()
     info.needs_frequency        = false;
     info.use_size_parameter     = false;
     
-    // Hide base class controls that don't apply to screen mirroring
-    // Screen mirroring uses screen colors, not effect colors
     info.show_color_controls    = false;
-    // Speed doesn't make sense - screen mirroring is real-time
     info.show_speed_control     = false;
-    // Brightness is handled by custom "Intensity" control
     info.show_brightness_control = false;
-    // Frequency doesn't apply to screen mirroring
     info.show_frequency_control = false;
-    // Size doesn't apply - coverage is controlled by per-monitor scale
     info.show_size_control      = false;
-    // Scale is handled by custom "Global Reach" controls
     info.show_scale_control     = false;
-    // FPS is not user-configurable for screen mirroring
     info.show_fps_control       = false;
-    // Axis control doesn't apply - each monitor has its own orientation
     info.show_axis_control      = false;
 
     return info;
@@ -1253,7 +1227,6 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
         ScreenCaptureManager::Instance().SetDownscaleResolution(w, h);
     });
 
-    // Per-Monitor Settings
     monitors_container = new QGroupBox("Per-Monitor Balance");
     monitors_layout = new QVBoxLayout();
     monitors_layout->setSpacing(6);
@@ -1306,17 +1279,15 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
     RefreshMonitorStatus();
     main_layout->addStretch();
 
-    // Add container to parent's layout
     AddWidgetToParent(container, parent);
 
-    // Start capturing from all configured monitors
     StartCaptureIfNeeded();
 
     if(!ambilight_preview_timer)
     {
         ambilight_preview_timer = new QTimer(this);
         connect(ambilight_preview_timer, &QTimer::timeout, this, &ScreenMirror3D::UpdateAmbilightPreviews);
-        ambilight_preview_timer->start(33);  // ~30fps so pulse animation is visibly smooth in UI
+        ambilight_preview_timer->start(33);
         QTimer::singleShot(0, this, &ScreenMirror3D::UpdateAmbilightPreviews);
     }
 
@@ -1391,7 +1362,6 @@ namespace
             return 0.0f;
         }
 
-        // 100% = full room; 101-200% = beyond room (full brightness)
         if(coverage >= 0.999f)
         {
             return 1.0f;
@@ -1400,7 +1370,7 @@ namespace
         float normalized_distance = std::clamp(distance_mm / std::max(max_distance_mm, 1.0f), 0.0f, 1.0f);
         float exp_val = std::clamp(curve_exponent, 0.25f, 4.0f);
         normalized_distance = powf(normalized_distance, exp_val);
-        float boundary = std::max(0.0f, 1.0f - coverage);  // coverage 0-1: boundary = 1 to 0
+        float boundary = std::max(0.0f, 1.0f - coverage);
         if(boundary <= 0.0005f)
         {
             return 1.0f;
@@ -1451,19 +1421,19 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         DisplayPlane3D* plane;
         Geometry3D::PlaneProjection proj;
         std::shared_ptr<CapturedFrame> frame;
-        std::shared_ptr<CapturedFrame> frame_blend;  // Optional second frame for sub-frame wave blend
-        float blend_t;                               // 0=use frame only, 1=use frame_blend only; in between = blend
-        float weight; // How much this monitor contributes (0-1)
-        float blend;  // Blend percentage for this monitor (0-100)
+        std::shared_ptr<CapturedFrame> frame_blend;
+        float blend_t;
+        float weight;
+        float blend;
         float delay_ms;
         uint64_t sample_timestamp;
-        float brightness_multiplier;  // Per-monitor brightness
-        float brightness_threshold;   // Per-monitor threshold
-        float black_bar_letterbox_percent;   // Crop top+bottom (0-50%)
-        float black_bar_pillarbox_percent;   // Crop left+right (0-50%)
-        float smoothing_time_ms;     // Per-monitor smoothing
-        bool use_test_pattern;       // Per-monitor test pattern
-        bool use_test_pattern_pulse; // Pulse test pattern (for tuning wave)
+        float brightness_multiplier;
+        float brightness_threshold;
+        float black_bar_letterbox_percent;
+        float black_bar_pillarbox_percent;
+        float smoothing_time_ms;
+        bool use_test_pattern;
+        bool use_test_pattern_pulse;
     };
 
     std::vector<MonitorContribution> contributions;
@@ -1521,7 +1491,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             continue;
         }
 
-        // Check if this monitor uses test pattern or test pulse (no capture required)
         bool monitor_test_pattern = mon_settings.show_test_pattern || mon_settings.show_test_pattern_pulse;
         
         std::string capture_id = plane->GetCaptureSourceId();
@@ -1616,9 +1585,8 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         proj.u = u;
         proj.v = v;
 
-        // Global reach: 0-100% = room fill (coverage 0-1), 101-300% = beyond room (extended range)
         float monitor_scale = std::clamp(mon_settings.scale, 0.0f, 3.0f);
-        float coverage = monitor_scale;  // 100% slider → scale 1.0 → full room; 300% → scale 3.0 → extreme
+        float coverage = monitor_scale;
         float curve_exp = std::clamp(mon_settings.falloff_curve_exponent, 0.5f, 2.0f);
         float distance_falloff = 0.0f;
 
@@ -1641,8 +1609,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             }
         }
 
-        // Wave effect: 0 = no wave (instant). Time-to-edge (s) overrides intensity when > 0.
-        // Otherwise: propagation_speed 1-800 → speed so delay = distance / speed (extended range).
         std::shared_ptr<CapturedFrame> sampling_frame = frame;
         std::shared_ptr<CapturedFrame> sampling_frame_blend;
         float sampling_blend_t = 0.0f;
@@ -1661,7 +1627,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         else if(use_wave && mon_settings.propagation_speed_mm_per_ms > 0.001f)
         {
             float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 800.0f);
-            speed_mm_per_ms = 800.0f - strength + 1.0f;  // strength 1 → fast (subtle), 800 → very slow (extreme wave)
+            speed_mm_per_ms = 800.0f - strength + 1.0f;
             delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
             delay_ms = std::clamp(delay_ms, 0.0f, 15000.0f);
         }
@@ -1688,7 +1654,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
                 FrameHistory& history = history_it->second;
                 const std::deque<std::shared_ptr<CapturedFrame>>& frames = history.frames;
                 
-                // Stable frame rate estimate to avoid wave trail flashing (DXGI can have irregular timestamps).
                 float avg_frame_time_ms = history.cached_avg_frame_time_ms > 0.0f
                     ? history.cached_avg_frame_time_ms : 16.67f;
                 uint64_t latest_timestamp = frames.back()->timestamp_ms;
@@ -1789,7 +1754,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
 
         float weight = distance_falloff * wave_envelope;
 
-        // Directional balance: favor front/back, left/right, or top/bottom LEDs (plane-local axes)
         float ref_max_units = reference_max_distance_mm / std::max(scale_mm, 0.001f);
         if(ref_max_units > 0.001f && (std::fabs(mon_settings.front_back_balance) > 0.5f || std::fabs(mon_settings.left_right_balance) > 0.5f || std::fabs(mon_settings.top_bottom_balance) > 0.5f))
         {
@@ -1910,7 +1874,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
 
         if(contrib.use_test_pattern_pulse)
         {
-            // Pulse with color cycle (R→G→B) so wave propagation is visible on LEDs
             float pulse = 0.5f + 0.5f * sinf(time * 2.0f);
             int color_cycle = ((int)floorf(time)) % 3;
             float rf = 0.0f, gf = 0.0f, bf = 0.0f;
@@ -1923,7 +1886,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         }
         else if(contrib.use_test_pattern)
         {
-            // Quadrant test pattern (R/G/B/Y) — outputs to LEDs
             float clamped_u = std::clamp(sample_u, 0.0f, 1.0f);
             float clamped_v = std::clamp(sample_v, 0.0f, 1.0f);
 
@@ -2002,15 +1964,14 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
                 b = (1.0f - t) * b + t * b2;
             }
 
-            // Brightness threshold: dim or suppress pixels below the luminance cutoff (0-255).
             if(contrib.brightness_threshold > 0.0f)
             {
                 float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
-                float thr = std::min(255.0f, contrib.brightness_threshold * (255.0f / 1020.0f));  // slider 0-1020 → effective 0-255
+                float thr = std::min(255.0f, contrib.brightness_threshold * (255.0f / 1020.0f));
                 if(luminance <= thr)
                 {
                     float t = (thr <= 0.0f) ? 1.0f : std::max(0.0f, luminance / thr);
-                    t = t * t;  // Quadratic falloff so effect is obvious
+                    t = t * t;
                     contrib.weight *= t;
                     r *= t;
                     g *= t;
@@ -2019,7 +1980,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             }
         }
 
-        // Apply brightness multiplier to all modes (live, test pattern, pulse) so brightness slider affects them
         r *= contrib.brightness_multiplier;
         g *= contrib.brightness_multiplier;
         b *= contrib.brightness_multiplier;
@@ -2071,7 +2031,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         LEDState& state = led_states[key];
 
         std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-        // steady_clock doesn't have an epoch, use duration since a fixed point
         static std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
         uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
         uint64_t sample_time_ms = latest_timestamp ? latest_timestamp : now_ms;
@@ -2088,7 +2047,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             uint64_t dt_ms_u64 = (sample_time_ms > state.last_update_ms) ? (sample_time_ms - state.last_update_ms) : 0;
             if(dt_ms_u64 == 0)
             {
-                dt_ms_u64 = 16; // assume ~60 FPS
+                dt_ms_u64 = 16;
             }
             float dt = (float)dt_ms_u64;
             float tau = max_smoothing_time;
@@ -2393,11 +2352,11 @@ void ScreenMirror3D::SyncMonitorSettingsToUI(MonitorSettings& msettings)
 void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 {
     static const float default_scale = 1.0f;
-    static const bool default_scale_inverted = true;  // Inverted falloff by default (closer = dimmer, farther = brighter)
+    static const bool default_scale_inverted = true;
     static const float default_smoothing_time_ms = 50.0f;
     static const float default_brightness_multiplier = 1.0f;
     static const float default_brightness_threshold = 0.0f;
-    static const float default_propagation_speed_mm_per_ms = 0.0f;  // 0 = no wave (instant ambilight)
+    static const float default_propagation_speed_mm_per_ms = 0.0f;
     static const float default_wave_decay_ms = 0.0f;
     static const float default_wave_time_to_edge_sec = 0.0f;
     static const float default_falloff_curve_exponent = 1.0f;
@@ -2428,7 +2387,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             std::map<std::string, MonitorSettings>::iterator existing_it = monitor_settings.find(monitor_name);
             bool had_existing = (existing_it != monitor_settings.end());
             
-            // Store UI widget pointers BEFORE any operations (they will be preserved)
             QGroupBox* existing_group_box = nullptr;
             QComboBox* existing_ref_point_combo = nullptr;
             QSlider* existing_scale_slider = nullptr;
@@ -2470,7 +2428,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 
             if(had_existing)
             {
-                // Preserve UI widgets from existing settings
                 existing_group_box = existing_it->second.group_box;
                 existing_ref_point_combo = existing_it->second.ref_point_combo;
                 existing_scale_slider = existing_it->second.scale_slider;
@@ -2510,7 +2467,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             }
             else
             {
-                // Create new settings (no UI widgets to preserve)
                 monitor_settings[monitor_name] = MonitorSettings();
                 existing_it = monitor_settings.find(monitor_name);
             }
@@ -2591,7 +2547,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             
             if(mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
 
-            // Clamp all per-monitor settings to valid ranges
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
@@ -2708,7 +2663,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 
 void ScreenMirror3D::OnParameterChanged()
 {
-    // Update per-monitor settings (convert slider values to float)
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -2740,7 +2694,6 @@ void ScreenMirror3D::OnParameterChanged()
         if(settings.test_pattern_check) settings.show_test_pattern = settings.test_pattern_check->isChecked();
         if(settings.test_pattern_pulse_check) settings.show_test_pattern_pulse = settings.test_pattern_pulse_check->isChecked();
         if(settings.screen_preview_check) settings.show_screen_preview = settings.screen_preview_check->isChecked();
-        // When enabling pulse or test pattern, ensure monitor is checked so it contributes to preview and LEDs
         if((settings.show_test_pattern || settings.show_test_pattern_pulse) && settings.group_box && !settings.group_box->isChecked())
         {
             QSignalBlocker block(settings.group_box);
@@ -2748,14 +2701,12 @@ void ScreenMirror3D::OnParameterChanged()
             settings.enabled = true;
         }
         
-        // Update capture-area preview if test pattern or screen preview changed
         if((old_test_pattern != settings.show_test_pattern || old_screen_preview != settings.show_screen_preview) 
            && settings.capture_area_preview)
         {
             settings.capture_area_preview->update();
         }
 
-        // Enable ambilight preview when pulse or test pattern is on (so it animates even without capture source)
         if(settings.ambilight_preview_3d)
         {
             AmbilightPreview3DWidget* ambi_w = dynamic_cast<AmbilightPreview3DWidget*>(settings.ambilight_preview_3d);
@@ -2776,7 +2727,6 @@ void ScreenMirror3D::OnParameterChanged()
     RefreshMonitorStatus();
     RefreshReferencePointDropdowns();
 
-    // Real-time preview: update ambilight 3D (test pattern/pulse + LED colors) so sliders take effect immediately
     UpdateAmbilightPreviews();
     
     emit ParametersChanged();
@@ -2812,7 +2762,6 @@ void ScreenMirror3D::OnTestPatternChanged()
     }
     emit TestPatternChanged(any_enabled);
     
-    // Update all preview widgets when test pattern changes
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -2893,7 +2842,6 @@ void ScreenMirror3D::RefreshReferencePointDropdowns()
         ref_point_indices.push_back((int)i);
     }
 
-    // Update all combo boxes with pre-built list
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -2984,7 +2932,7 @@ void ScreenMirror3D::AddFrameToHistory(const std::string& capture_id, const std:
         history.frames.pop_front();
     }
 
-    const size_t max_frames = 180; // ~3 seconds at 60fps
+    const size_t max_frames = 180;
     if(history.frames.size() > max_frames)
     {
         history.frames.pop_front();
@@ -3024,8 +2972,7 @@ std::shared_ptr<CapturedFrame> ScreenMirror3D::GetFrameForDelay(const std::strin
 
 float ScreenMirror3D::GetHistoryRetentionMs() const
 {
-    // Calculate maximum retention needed across all monitors
-    float max_retention = 600.0f; // Minimum retention
+    float max_retention = 600.0f;
     
     for(std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
         it != monitor_settings.end();
@@ -3082,7 +3029,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     }
     settings.group_box = new QGroupBox(display_name);
     settings.group_box->setCheckable(true);
-    // Allow enabled when no capture if test pattern/pulse is on (for wave tuning)
     settings.group_box->setChecked(settings.enabled && (has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse));
     settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse);
     if(has_capture_source)
@@ -3100,7 +3046,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     main_layout->setContentsMargins(8, 4, 8, 4);
     main_layout->setSpacing(8);
 
-    // ---- Reach & Falloff ----
     QGroupBox* reach_group = new QGroupBox("Reach & Falloff");
     QFormLayout* reach_form = new QFormLayout(reach_group);
     reach_form->setContentsMargins(8, 12, 8, 8);
@@ -3136,7 +3081,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* falloff_curve_layout = new QHBoxLayout(falloff_curve_widget);
     falloff_curve_layout->setContentsMargins(0, 0, 0, 0);
     settings.falloff_curve_slider = new QSlider(Qt::Horizontal);
-    settings.falloff_curve_slider->setRange(50, 200);  // 50%=softer, 100%=linear, 200%=sharper
+    settings.falloff_curve_slider->setRange(50, 200);
     settings.falloff_curve_slider->setValue((int)(settings.falloff_curve_exponent * 100.0f));
     settings.falloff_curve_slider->setEnabled(has_capture_source);
     settings.falloff_curve_slider->setTickPosition(QSlider::TicksBelow);
@@ -3184,7 +3129,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(reach_group);
 
-    // ---- Wall / direction focus ----
     QGroupBox* direction_group = new QGroupBox("Wall / Direction Focus");
     QFormLayout* direction_form = new QFormLayout(direction_group);
     direction_form->setContentsMargins(8, 12, 8, 8);
@@ -3235,7 +3179,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     direction_form->addRow("Top/Bottom:", top_bottom_widget);
     main_layout->addWidget(direction_group);
 
-    // ---- Brightness ----
     QGroupBox* brightness_group = new QGroupBox("Brightness");
     QFormLayout* brightness_form = new QFormLayout(brightness_group);
     brightness_form->setContentsMargins(8, 12, 8, 8);
@@ -3282,7 +3225,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(brightness_group);
 
-    // ---- Wave ----
     QGroupBox* wave_group = new QGroupBox("Wave");
     QFormLayout* wave_form = new QFormLayout(wave_group);
     wave_form->setContentsMargins(8, 12, 8, 8);
@@ -3331,7 +3273,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* wave_time_layout = new QHBoxLayout(wave_time_to_edge_widget);
     wave_time_layout->setContentsMargins(0, 0, 0, 0);
     settings.wave_time_to_edge_slider = new QSlider(Qt::Horizontal);
-    settings.wave_time_to_edge_slider->setRange(0, 300);  // 0=off, 5=0.5s, 50=5s, 300=30s
+    settings.wave_time_to_edge_slider->setRange(0, 300);
     settings.wave_time_to_edge_slider->setValue((int)(settings.wave_time_to_edge_sec * 10.0f));
     settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
     settings.wave_time_to_edge_slider->setTickPosition(QSlider::TicksBelow);
@@ -3349,7 +3291,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(wave_group);
 
-    // ---- Black Bars ----
     QGroupBox* blackbars_group = new QGroupBox("Black Bars (Crop)");
     QFormLayout* blackbars_form = new QFormLayout(blackbars_group);
     blackbars_form->setContentsMargins(8, 12, 8, 8);
@@ -3396,7 +3337,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(blackbars_group);
 
-    // ---- Blend & Smoothing ----
     QGroupBox* blend_group = new QGroupBox("Blend & Smoothing");
     QFormLayout* blend_form = new QFormLayout(blend_group);
     blend_form->setContentsMargins(8, 12, 8, 8);
@@ -3443,13 +3383,12 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(blend_group);
 
-    // ---- Preview & Test ----
     QGroupBox* preview_group = new QGroupBox("Preview & Test");
     QFormLayout* preview_form = new QFormLayout(preview_group);
     preview_form->setContentsMargins(8, 12, 8, 8);
 
     settings.test_pattern_check = new QCheckBox("Show Test Pattern");
-    settings.test_pattern_check->setEnabled(true);  // allow test pattern/pulse without capture for tuning
+    settings.test_pattern_check->setEnabled(true);
     settings.test_pattern_check->setChecked(settings.show_test_pattern);
     settings.test_pattern_check->setToolTip("Display a fixed color quadrant pattern for calibration.");
     connect(settings.test_pattern_check,
@@ -3464,7 +3403,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     preview_form->addRow("Test Pattern:", settings.test_pattern_check);
 
     settings.test_pattern_pulse_check = new QCheckBox("Pulse (for tuning wave)");
-    settings.test_pattern_pulse_check->setEnabled(true);  // allow pulse without capture for wave tuning
+    settings.test_pattern_pulse_check->setEnabled(true);
     settings.test_pattern_pulse_check->setChecked(settings.show_test_pattern_pulse);
     settings.test_pattern_pulse_check->setToolTip("Pulsing color cycle to tune wave intensity and decay.");
     connect(settings.test_pattern_pulse_check,
@@ -3497,11 +3436,9 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
 
     main_layout->addWidget(preview_group);
 
-    // ---- Capture Zones ----
     QGroupBox* zones_group = new QGroupBox("Capture Zones");
     QVBoxLayout* zones_layout = new QVBoxLayout();
 
-    // Add Zone button (full width)
     settings.add_zone_button = new QPushButton("Add Capture Zone");
     settings.add_zone_button->setEnabled(has_capture_source);
     settings.add_zone_button->setToolTip("Add a new capture zone that can be positioned anywhere on the screen.");
@@ -3514,7 +3451,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     });
     zones_layout->addWidget(settings.add_zone_button);
 
-    // Display plane (capture area) and ambilight 3D preview side by side
     QHBoxLayout* previews_row = new QHBoxLayout();
     previews_row->setSpacing(12);
 
@@ -3566,8 +3502,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     settings.group_box->setLayout(main_layout);
     monitors_layout->addWidget(settings.group_box);
     
-    // Don't call RefreshReferencePointDropdowns here - it will be called after SetReferencePoints
-    // The combo box will be populated when reference_points is set and RefreshReferencePointDropdowns is called
 }
 
 void ScreenMirror3D::StartCaptureIfNeeded()
@@ -3579,7 +3513,6 @@ void ScreenMirror3D::StartCaptureIfNeeded()
         capture_mgr.Initialize();
     }
 
-    // Apply current capture quality (resolution) so all captures use it
     int w = 320, h = 180;
     int q = std::clamp(capture_quality, 0, 7);
     if(q == 1) { w = 480; h = 270; }
@@ -3700,7 +3633,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
     int total_count = 0;
     int active_count = 0;
     
-    // Update existing monitor group boxes to reflect current capture source status
     for(unsigned int plane_index = 0; plane_index < planes.size(); plane_index++)
     {
         DisplayPlane3D* plane = planes[plane_index];
@@ -3748,7 +3680,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
                 display_name += " (No Capture Source)";
             }
             settings.group_box->setTitle(display_name);
-            // Allow enabling monitor for test pattern/pulse even without capture (for wave tuning)
             bool can_use_test_or_pulse = settings.show_test_pattern || settings.show_test_pattern_pulse;
             settings.group_box->setEnabled(has_capture_source || can_use_test_or_pulse);
             
@@ -3767,7 +3698,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
             if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
             if(settings.softness_slider) settings.softness_slider->setEnabled(has_capture_source);
             if(settings.blend_slider) settings.blend_slider->setEnabled(has_capture_source);
-            // Enable/disable all per-monitor controls
             if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
             if(settings.scale_invert_check) settings.scale_invert_check->setEnabled(has_capture_source);
             if(settings.smoothing_time_slider) settings.smoothing_time_slider->setEnabled(has_capture_source);
@@ -3785,7 +3715,7 @@ void ScreenMirror3D::RefreshMonitorStatus()
             if(settings.left_right_balance_slider) settings.left_right_balance_slider->setEnabled(has_capture_source);
             if(settings.top_bottom_balance_slider) settings.top_bottom_balance_slider->setEnabled(has_capture_source);
             if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
-            if(settings.test_pattern_check) settings.test_pattern_check->setEnabled(true);  // allow test/pulse without capture for tuning
+            if(settings.test_pattern_check) settings.test_pattern_check->setEnabled(true);
             if(settings.test_pattern_pulse_check) settings.test_pattern_pulse_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_area_preview)
@@ -3807,7 +3737,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
                 settings.add_zone_button->setEnabled(has_capture_source);
             }
             
-            // Only uncheck when no capture and not using test pattern/pulse (so pulse can drive UI + LEDs without capture)
             if(!has_capture_source && !can_use_test_or_pulse && settings.group_box->isChecked())
             {
                 settings.group_box->setChecked(false);
@@ -3830,7 +3759,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
     }
     monitor_status_label->setText(status_text);
 
-    // Update or create help label
     QWidget* parent = monitor_status_label->parentWidget();
     if(parent)
     {

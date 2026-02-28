@@ -1,69 +1,15 @@
-#-----------------------------------------------------------#
-# .gitlab-ci.yml                                            #
-#                                                           #
-#   OpenRGB3DSpatialPlugin GitLab CI Configuration         #
-#                                                           #
-#   This file is part of the OpenRGB3DSpatialPlugin        #
-#   SPDX-License-Identifier: GPL-2.0-only                 #
-#-----------------------------------------------------------#
-
 stages:
-  - sync
   - build
   - release
 
 variables:
   GIT_DEPTH: 0
 
-#-----------------------------------------------------------#
-# Sync to GitHub (mirror code and tags)                    #
-#-----------------------------------------------------------#
-sync-to-github:
-  stage: sync
-  image: alpine/git:latest
-  before_script:
-    - apk add --no-cache git
-  script:
-    - |
-      # Skip if GITHUB_TOKEN is not set
-      if [ -z "$GITHUB_TOKEN" ]; then
-        echo "GITHUB_TOKEN not set, skipping GitHub sync"
-        exit 0
-      fi
-      
-      # Configure git
-      git config user.name "GitLab CI"
-      git config user.email "gitlab-ci@gitlab.com"
-      
-      # Add GitHub remote
-      git remote add github https://${GITHUB_TOKEN}@github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
-      git remote set-url github https://${GITHUB_TOKEN}@github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin.git
-      
-      # Fetch all refs from GitHub
-      git fetch github --prune
-      
-      # Push branch to GitHub
-      if [ "$CI_COMMIT_REF_NAME" = "master" ]; then
-        git push github HEAD:master --force || echo "GitHub branch push failed"
-      fi
-      
-      # Push all tags to GitHub
-      git push github --tags --force || echo "GitHub tag push failed"
-  only:
-    - master
-    - tags
-  when: on_success
-
-#-----------------------------------------------------------#
-# Windows Build                                             #
-#-----------------------------------------------------------#
 build-windows:
   stage: build
   tags:
     - windows
     - shared-windows
-  before_script:
-    - echo "Building on Windows runner"
   script:
     - call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
     - qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
@@ -77,9 +23,6 @@ build-windows:
     - tags
     - merge_requests
 
-#-----------------------------------------------------------#
-# Linux Build                                               #
-#-----------------------------------------------------------#
 build-linux:
   stage: build
   image: ubuntu:22.04
@@ -98,211 +41,19 @@ build-linux:
     - tags
     - merge_requests
 
-#-----------------------------------------------------------#
-# Release (creates GitLab release with artifacts)          #
-#-----------------------------------------------------------#
 release:
   stage: release
-  image: curlimages/curl:latest
-  dependencies:
-    - build-windows
-    - build-linux
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
     - job: build-windows
       artifacts: true
     - job: build-linux
       artifacts: true
-  variables:
-    GITLAB_TOKEN: $GITLAB_TOKEN
   script:
-    - |
-      # Check for artifacts from GitLab build jobs
-      echo "Checking for build artifacts from GitLab CI..."
-      if [ -f "release/OpenRGB3DSpatialPlugin.dll" ]; then
-        echo "✓ Windows DLL artifact found from GitLab build"
-      else
-        echo "⚠ Warning: Windows DLL artifact not found from GitLab build"
-        echo "Note: GitHub Actions builds are uploaded to GitLab releases separately"
-      fi
-      
-      if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
-        echo "✓ Linux SO artifact found from GitLab build"
-      else
-        echo "⚠ Warning: Linux SO artifact not found from GitLab build"
-        echo "Note: GitHub Actions builds are uploaded to GitLab releases separately"
-      fi
-    - |
-      VERSION=${CI_COMMIT_TAG#v}
-      if [ -z "$VERSION" ]; then
-        VERSION=${CI_COMMIT_REF_NAME#v}
-      fi
-      
-      echo "Creating release for version: $CI_COMMIT_TAG"
-      
-      # Use GITLAB_TOKEN if available, otherwise fall back to CI_JOB_TOKEN
-      if [ ! -z "$GITLAB_TOKEN" ]; then
-        AUTH_TOKEN="$GITLAB_TOKEN"
-      else
-        AUTH_TOKEN="${CI_JOB_TOKEN}"
-      fi
-      
-      # Create release on GitLab
-      RELEASE_RESPONSE=$(curl -s --request POST \
-        --header "PRIVATE-TOKEN: ${AUTH_TOKEN}" \
-        --header "Content-Type: application/json" \
-        --data "{\"tag_name\":\"${CI_COMMIT_TAG}\",\"name\":\"${CI_COMMIT_TAG}\",\"description\":\"Release ${CI_COMMIT_TAG} - Built on GitLab CI\"}" \
-        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" || echo "{}")
-      
-      echo "Release creation response: $RELEASE_RESPONSE"
-      
-      # Find and upload Windows DLL
-      DLL_FILE=$(find . -name "*.dll" -type f | head -n 1)
-      if [ ! -z "$DLL_FILE" ] && [ -f "$DLL_FILE" ]; then
-        echo "Uploading Windows DLL: $DLL_FILE"
-        DLL_BASENAME=$(basename "$DLL_FILE")
-        
-        # Upload file to GitLab
-        UPLOAD_RESPONSE=$(curl -s --request POST \
-          --header "PRIVATE-TOKEN: ${AUTH_TOKEN}" \
-          --form "file=@$DLL_FILE" \
-          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/uploads" || echo "{}")
-        
-        echo "Upload response: $UPLOAD_RESPONSE"
-        
-        UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
-        if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
-          # Add as release asset link with proper filepath
-          LINK_RESPONSE=$(curl -s --request POST \
-            --header "PRIVATE-TOKEN: ${AUTH_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data "{\"name\":\"$DLL_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$DLL_BASENAME\",\"link_type\":\"package\"}" \
-            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links" || echo "{}")
-          
-          echo "Link response: $LINK_RESPONSE"
-        else
-          echo "Failed to extract upload URL from response"
-        fi
-      else
-        echo "Warning: No DLL file found to upload"
-      fi
-      
-      # Find and upload Linux SO
-      SO_FILE=$(find . -name "*.so" -type f | head -n 1)
-      if [ ! -z "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
-        echo "Uploading Linux SO: $SO_FILE"
-        SO_BASENAME=$(basename "$SO_FILE")
-        
-        # Upload file to GitLab
-        UPLOAD_RESPONSE=$(curl -s --request POST \
-          --header "PRIVATE-TOKEN: ${AUTH_TOKEN}" \
-          --form "file=@$SO_FILE" \
-          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/uploads" || echo "{}")
-        
-        echo "Upload response: $UPLOAD_RESPONSE"
-        
-        UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || echo "")
-        if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
-          # Add as release asset link with proper filepath
-          LINK_RESPONSE=$(curl -s --request POST \
-            --header "PRIVATE-TOKEN: ${AUTH_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data "{\"name\":\"$SO_BASENAME\",\"url\":\"https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin$UPLOAD_URL\",\"filepath\":\"/$SO_BASENAME\",\"link_type\":\"package\"}" \
-            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links" || echo "{}")
-          
-          echo "Link response: $LINK_RESPONSE"
-        else
-          echo "Failed to extract upload URL from response"
-        fi
-      else
-        echo "Warning: No SO file found to upload"
-      fi
-      
-      # Create GitHub release if GITHUB_TOKEN is set
-      if [ ! -z "$GITHUB_TOKEN" ]; then
-        echo "Creating GitHub release for version: $CI_COMMIT_TAG"
-        
-        # Download artifacts from build jobs
-        if [ -f "release/OpenRGB3DSpatialPlugin.dll" ]; then
-          DLL_FILE="release/OpenRGB3DSpatialPlugin.dll"
-        else
-          DLL_FILE=""
-        fi
-        
-        if [ -f "libOpenRGB3DSpatialPlugin.so" ]; then
-          SO_FILE="libOpenRGB3DSpatialPlugin.so"
-        else
-          SO_FILE=""
-        fi
-        
-        # Create release using GitHub API
-        RELEASE_RESPONSE=$(curl -s --request POST \
-          --header "Authorization: token ${GITHUB_TOKEN}" \
-          --header "Accept: application/vnd.github.v3+json" \
-          --data "{\"tag_name\":\"${CI_COMMIT_TAG}\",\"name\":\"${CI_COMMIT_TAG}\",\"body\":\"Release ${CI_COMMIT_TAG} - Built on GitLab CI\"}" \
-          "https://api.github.com/repos/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases" || echo "{}")
-        
-        echo "GitHub release response: $RELEASE_RESPONSE"
-        
-        # Check if release was created (might already exist)
-        RELEASE_ID=$(echo "$RELEASE_RESPONSE" | grep -o '"id":[0-9]*' | cut -d':' -f2 || echo "")
-        
-        if [ -z "$RELEASE_ID" ]; then
-          # Release might already exist, try to get it
-          EXISTING_RELEASE=$(curl -s --request GET \
-            --header "Authorization: token ${GITHUB_TOKEN}" \
-            --header "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/Wolfieeewolf/OpenRGB3DSpatialPlugin/releases/tags/${CI_COMMIT_TAG}" || echo "{}")
-          
-          RELEASE_ID=$(echo "$EXISTING_RELEASE" | grep -o '"id":[0-9]*' | cut -d':' -f2 || echo "")
-          UPLOAD_URL=$(echo "$EXISTING_RELEASE" | grep -o '"upload_url":"[^"]*"' | cut -d'"' -f4 | sed 's/{?name,label}//' || echo "")
-        else
-          UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | grep -o '"upload_url":"[^"]*"' | cut -d'"' -f4 | sed 's/{?name,label}//' || echo "")
-        fi
-        
-        if [ ! -z "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
-          # Upload Windows DLL
-          if [ ! -z "$DLL_FILE" ] && [ -f "$DLL_FILE" ]; then
-            echo "Uploading Windows DLL to GitHub: $DLL_FILE"
-            DLL_BASENAME=$(basename "$DLL_FILE")
-            UPLOAD_RESULT=$(curl -s -w "\nHTTP_CODE:%{http_code}" --request POST \
-              --header "Authorization: token ${GITHUB_TOKEN}" \
-              --header "Content-Type: application/octet-stream" \
-              --data-binary "@${DLL_FILE}" \
-              "${UPLOAD_URL}?name=${DLL_BASENAME}")
-            
-            HTTP_CODE=$(echo "$UPLOAD_RESULT" | grep "HTTP_CODE:" | cut -d':' -f2)
-            if [ "$HTTP_CODE" = "201" ]; then
-              echo "Successfully uploaded Windows DLL to GitHub"
-            else
-              echo "Failed to upload DLL to GitHub (HTTP $HTTP_CODE)"
-              echo "Response: $UPLOAD_RESULT"
-            fi
-          fi
-          
-          # Upload Linux SO
-          if [ ! -z "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
-            echo "Uploading Linux SO to GitHub: $SO_FILE"
-            SO_BASENAME=$(basename "$SO_FILE")
-            UPLOAD_RESULT=$(curl -s -w "\nHTTP_CODE:%{http_code}" --request POST \
-              --header "Authorization: token ${GITHUB_TOKEN}" \
-              --header "Content-Type: application/octet-stream" \
-              --data-binary "@${SO_FILE}" \
-              "${UPLOAD_URL}?name=${SO_BASENAME}")
-            
-            HTTP_CODE=$(echo "$UPLOAD_RESULT" | grep "HTTP_CODE:" | cut -d':' -f2)
-            if [ "$HTTP_CODE" = "201" ]; then
-              echo "Successfully uploaded Linux SO to GitHub"
-            else
-              echo "Failed to upload SO to GitHub (HTTP $HTTP_CODE)"
-              echo "Response: $UPLOAD_RESULT"
-            fi
-          fi
-        else
-          echo "Warning: Could not get upload URL for GitHub release"
-        fi
-      else
-        echo "GITHUB_TOKEN not set, skipping GitHub release creation"
-      fi
+    - echo "Creating GitLab release for $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: $CI_COMMIT_TAG
+    description: "Release $CI_COMMIT_TAG"
   only:
     - tags
-  when: on_success

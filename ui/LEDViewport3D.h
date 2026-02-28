@@ -38,7 +38,6 @@ public:
     void SetGridSnapEnabled(bool enabled);
     bool IsGridSnapEnabled() const { return grid_snap_enabled; }
     void SetRoomDimensions(float width, float depth, float height, bool use_manual);
-    // Set physical millimeters represented by one grid unit (default 10mm)
     void SetGridScaleMM(float mm_per_unit) { grid_scale_mm = (mm_per_unit > 0.001f) ? mm_per_unit : 10.0f; }
     void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
@@ -48,7 +47,6 @@ public:
     void SetShowTestPattern(bool show) { show_test_pattern = show; update(); }
     void ClearDisplayPlaneTextures();
 
-    /** Fill the room with a grid of lit points (virtual LEDs) so you can see the full room and distinguish real vs virtual LEDs. */
     void SetShowRoomGridOverlay(bool show) { show_room_grid_overlay = show; update(); }
     void SetRoomGridBrightness(float brightness) { room_grid_brightness = std::max(0.0f, std::min(1.0f, brightness)); update(); }
     void SetRoomGridPointSize(float size) { room_grid_point_size = std::max(0.5f, std::min(12.0f, size)); update(); }
@@ -57,14 +55,12 @@ public:
     float GetRoomGridBrightness() const { return room_grid_brightness; }
     float GetRoomGridPointSize() const { return room_grid_point_size; }
     int GetRoomGridStep() const { return room_grid_step; }
-    /** Layout for overlay: same as DrawRoomGridOverlay iteration (ix, iy, iz). Tab uses this to fill SetRoomGridColorBuffer. */
     void GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const;
-    /** Optional: precomputed colors (size must match nx*ny*nz from GetRoomGridOverlayDimensions). Faster than per-point callback. */
+    void SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
+    void ClearRoomGridOverlayBounds();
     void SetRoomGridColorBuffer(const std::vector<RGBColor>& buf);
-    /** Optional: when set, overlay points use this to show effect output (fallback if no buffer). Cleared when effect stops. */
     void SetRoomGridColorCallback(std::function<RGBColor(float x, float y, float z)> cb) { room_grid_color_callback = std::move(cb); update(); }
 
-    // Camera persistence helpers
     void SetCamera(float distance, float yaw, float pitch,
                    float target_x, float target_y, float target_z)
     {
@@ -152,12 +148,10 @@ private:
     int                                                  selected_controller_idx;
     std::vector<int>                                     selected_controller_indices;
 
-    // Grid dimensions for proper bounds and visualization
     int     grid_x;
     int     grid_y;
     int     grid_z;
     bool    grid_snap_enabled;
-    // Millimeters per grid unit used for converting manual room dimensions to grid units
     float   grid_scale_mm;
 
     float   room_width;
@@ -171,18 +165,23 @@ private:
     int                                     selected_ref_point_idx;
     bool                                    show_screen_preview;
     bool                                    show_test_pattern;
-    bool                                    show_room_grid_overlay;   // Fill room with grid points as "virtual LEDs"
-    float                                   room_grid_brightness;     // 0-1 for overlay points (so real LEDs stand out)
-    float                                   room_grid_point_size;     // Point size for overlay (1-12)
-    int                                     room_grid_step;            // Grid units between overlay points (1=dense, 24=sparse); affects CPU/GPU load
-    std::vector<RGBColor>                   room_grid_color_buffer;     // Precomputed colors from tab (faster than callback)
-    std::function<RGBColor(float, float, float)> room_grid_color_callback;  // Fallback when no buffer
-    std::vector<float>                      room_grid_overlay_positions; // Cached x,y,z per point (3*N), invalidated when step/extents change
-    std::vector<float>                      room_grid_overlay_colors;    // R,G,B per point (3*N), filled each frame
+    bool                                    show_room_grid_overlay;
+    float                                   room_grid_brightness;
+    float                                   room_grid_point_size;
+    int                                     room_grid_step;
+    std::vector<RGBColor>                   room_grid_color_buffer;
+    std::function<RGBColor(float, float, float)> room_grid_color_callback;
+    std::vector<float>                      room_grid_overlay_positions;
+    std::vector<float>                      room_grid_overlay_colors;
     int                                     room_grid_overlay_last_nx;
     int                                     room_grid_overlay_last_ny;
     int                                     room_grid_overlay_last_nz;
-    std::map<std::string, GLuint>           display_plane_textures;  // Texture IDs per capture source
+    bool                                    room_grid_overlay_use_bounds;
+    float                                   room_grid_overlay_min_x, room_grid_overlay_max_x;
+    float                                   room_grid_overlay_min_y, room_grid_overlay_max_y;
+    float                                   room_grid_overlay_min_z, room_grid_overlay_max_z;
+    bool                                    room_grid_overlay_colors_dirty;
+    std::map<std::string, GLuint>           display_plane_textures;
     QTimer*                                 screen_preview_refresh_timer;
 
     float   camera_distance;

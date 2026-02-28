@@ -16,11 +16,11 @@ namespace Geometry3D
      */
     struct PlaneProjection
     {
-        float   u;              // Horizontal coordinate on plane [0,1]
-        float   v;              // Vertical coordinate on plane [0,1]
-        float   distance;       // Distance from point to plane (mm)
-        bool    is_in_front;    // Is the point in front of the plane?
-        bool    is_valid;       // Is this projection valid?
+        float   u;
+        float   v;
+        float   distance;
+        bool    is_in_front;
+        bool    is_valid;
     };
 
     /**
@@ -39,7 +39,6 @@ namespace Geometry3D
         float cy = cosf(ry), sy = sinf(ry);
         float cz = cosf(rz), sz = sinf(rz);
 
-        // XYZ Euler rotation matrix
         matrix[0] = cy * cz;
         matrix[1] = -cy * sz;
         matrix[2] = sy;
@@ -91,49 +90,39 @@ namespace Geometry3D
 
         const Transform3D& transform = plane.GetTransform();
 
-        // Compute rotation matrix for the plane
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
 
-        // Plane normal is local +Z axis after rotation
         Vector3D plane_normal;
         plane_normal.x = rotation_matrix[2];
         plane_normal.y = rotation_matrix[5];
         plane_normal.z = rotation_matrix[8];
 
-        // Vector from plane center to LED
         Vector3D to_led;
         to_led.x = led_position.x - transform.position.x;
         to_led.y = led_position.y - transform.position.y;
         to_led.z = led_position.z - transform.position.z;
 
-        // Distance from LED to plane (signed, positive = in front)
         float dot = to_led.x * plane_normal.x + to_led.y * plane_normal.y + to_led.z * plane_normal.z;
 
-        // Use full 3D distance for ambilight falloff, not just perpendicular distance
         result.distance = sqrtf(to_led.x * to_led.x + to_led.y * to_led.y + to_led.z * to_led.z);
         result.is_in_front = (dot > 0.0f);
 
-        // Project LED onto plane (find intersection of LED-to-plane perpendicular)
         Vector3D point_on_plane;
         point_on_plane.x = led_position.x - plane_normal.x * dot;
         point_on_plane.y = led_position.y - plane_normal.y * dot;
         point_on_plane.z = led_position.z - plane_normal.z * dot;
 
-        // Transform point to plane's local space
         Vector3D relative;
         relative.x = point_on_plane.x - transform.position.x;
         relative.y = point_on_plane.y - transform.position.y;
         relative.z = point_on_plane.z - transform.position.z;
 
-        // Inverse rotate (transpose of rotation matrix for orthonormal matrix)
         Vector3D local;
         local.x = rotation_matrix[0] * relative.x + rotation_matrix[3] * relative.y + rotation_matrix[6] * relative.z;
         local.y = rotation_matrix[1] * relative.x + rotation_matrix[4] * relative.y + rotation_matrix[7] * relative.z;
         local.z = rotation_matrix[2] * relative.x + rotation_matrix[5] * relative.y + rotation_matrix[8] * relative.z;
 
-        // Convert to UV coordinates [0,1]
-        // Plane extends from [-width/2, +width/2] in X and [-height/2, +height/2] in Y
         float width_mm = plane.GetWidthMM();
         float height_mm = plane.GetHeightMM();
         if (width_mm <= 0.0f || height_mm <= 0.0f)
@@ -144,9 +133,6 @@ namespace Geometry3D
         float half_height = height_mm * 0.5f;
         result.u = (local.x + half_width) / width_mm;
         result.v = (local.y + half_height) / height_mm;
-
-        // UV coordinates are correct as-is for transparent screen viewing
-        // LEDs behind screen naturally see mirrored view (like looking through glass)
 
         result.is_valid = true;
         return result;
@@ -174,29 +160,21 @@ namespace Geometry3D
 
         const Transform3D& transform = plane.GetTransform();
 
-        // Compute rotation matrix for the plane
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
 
-        // Plane normal is local +Z axis after rotation (pointing toward viewer/LED)
         Vector3D plane_normal;
         plane_normal.x = rotation_matrix[2];
         plane_normal.y = rotation_matrix[5];
         plane_normal.z = rotation_matrix[8];
 
-        // Ray-plane intersection
-        // Ray: P(t) = led_position + t * view_direction
-        // Plane: dot(P - plane_center, plane_normal) = 0
-        // Solve: dot(led_position + t*view_direction - plane_center, plane_normal) = 0
-
         float denominator = view_direction.x * plane_normal.x +
                            view_direction.y * plane_normal.y +
                            view_direction.z * plane_normal.z;
 
-        // Check if ray is parallel to plane
         if (fabsf(denominator) < 0.0001f)
         {
-            return result; // No intersection
+            return result;
         }
 
         Vector3D to_plane;
@@ -210,35 +188,29 @@ namespace Geometry3D
 
         float t = numerator / denominator;
 
-        // Check if intersection is behind the LED (negative t)
         if (t < 0.0f)
         {
-            return result; // Intersection is behind the LED
+            return result;
         }
 
-        // Calculate intersection point
         Vector3D intersection;
         intersection.x = led_position.x + view_direction.x * t;
         intersection.y = led_position.y + view_direction.y * t;
         intersection.z = led_position.z + view_direction.z * t;
 
-        // Distance from LED to intersection
         result.distance = t;
         result.is_in_front = true;
 
-        // Transform intersection point to plane's local space
         Vector3D relative;
         relative.x = intersection.x - transform.position.x;
         relative.y = intersection.y - transform.position.y;
         relative.z = intersection.z - transform.position.z;
 
-        // Inverse rotate (transpose of rotation matrix for orthonormal matrix)
         Vector3D local;
         local.x = rotation_matrix[0] * relative.x + rotation_matrix[3] * relative.y + rotation_matrix[6] * relative.z;
         local.y = rotation_matrix[1] * relative.x + rotation_matrix[4] * relative.y + rotation_matrix[7] * relative.z;
         local.z = rotation_matrix[2] * relative.x + rotation_matrix[5] * relative.y + rotation_matrix[8] * relative.z;
 
-        // Convert to UV coordinates [0,1]
         float width_mm = plane.GetWidthMM();
         float height_mm = plane.GetHeightMM();
         if (width_mm <= 0.0f || height_mm <= 0.0f)
@@ -272,27 +244,22 @@ namespace Geometry3D
             return 1.0f;
         }
 
-        // Calculate feather width (default 30% of range)
         float feather_width = max_range * (feather_percent / 100.0f);
         float core_range = max_range - feather_width;
 
-        // Full brightness in core range
         if (distance <= core_range)
         {
             return 1.0f;
         }
 
-        // Completely dark beyond max range
         if (distance >= max_range)
         {
             return 0.0f;
         }
 
-        // Smooth feathered transition using smoothstep
         float t = (distance - core_range) / feather_width;
         t = fmaxf(0.0f, fminf(1.0f, t));
 
-        // Smoothstep for natural fade (creates that "fluffy" edge)
         float fade = 1.0f - (t * t * (3.0f - 2.0f * t));
 
         return fade;
@@ -317,34 +284,28 @@ namespace Geometry3D
     {
         const Transform3D& transform = plane.GetTransform();
 
-        // Compute rotation matrix for the plane
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
 
-        // Plane normal is local +Z axis (pointing away from screen)
         Vector3D plane_normal;
         plane_normal.x = rotation_matrix[2];
         plane_normal.y = rotation_matrix[5];
         plane_normal.z = rotation_matrix[8];
 
-        // Vector from plane center to LED
         Vector3D to_led;
         to_led.x = led_position.x - transform.position.x;
         to_led.y = led_position.y - transform.position.y;
         to_led.z = led_position.z - transform.position.z;
 
-        // Normalize to_led
         float led_dist = sqrtf(to_led.x * to_led.x + to_led.y * to_led.y + to_led.z * to_led.z);
-        if (led_dist < 0.001f) return 1.0f; // LED at plane center
+        if (led_dist < 0.001f) return 1.0f;
 
         to_led.x /= led_dist;
         to_led.y /= led_dist;
         to_led.z /= led_dist;
 
-        // Compute angle between LED direction and plane normal
         float dot_normal = to_led.x * plane_normal.x + to_led.y * plane_normal.y + to_led.z * plane_normal.z;
 
-        // Get plane's right and up vectors
         Vector3D plane_right;
         plane_right.x = rotation_matrix[0];
         plane_right.y = rotation_matrix[3];
@@ -355,20 +316,15 @@ namespace Geometry3D
         plane_up.y = rotation_matrix[4];
         plane_up.z = rotation_matrix[7];
 
-        // Project LED direction onto horizontal and vertical axes
         float dot_right = to_led.x * plane_right.x + to_led.y * plane_right.y + to_led.z * plane_right.z;
         float dot_up = to_led.x * plane_up.x + to_led.y * plane_up.y + to_led.z * plane_up.z;
 
-        // Calculate horizontal angle (left/right)
-        // Use fabsf(dot_normal) to treat behind-screen LEDs symmetrically
         float horizontal_angle = atan2f(fabsf(dot_right), fabsf(dot_normal) + 0.001f);
-        horizontal_angle = horizontal_angle * 180.0f / 3.14159265359f; // Convert to degrees
+        horizontal_angle = horizontal_angle * 180.0f / 3.14159265359f;
 
-        // Calculate vertical angle (up/down)
         float vertical_angle = atan2f(fabsf(dot_up), fabsf(dot_normal) + 0.001f);
-        vertical_angle = vertical_angle * 180.0f / 3.14159265359f; // Convert to degrees
+        vertical_angle = vertical_angle * 180.0f / 3.14159265359f;
 
-        // Compute falloff based on how much LED exceeds wrap angles
         float h_falloff = 1.0f;
         if (horizontal_angle > horizontal_wrap_angle)
         {
@@ -383,7 +339,6 @@ namespace Geometry3D
             v_falloff = expf(-overshoot * wrap_strength * 2.0f);
         }
 
-        // Combine both falloffs (multiplicative)
         return h_falloff * v_falloff;
     }
 
@@ -415,10 +370,8 @@ namespace Geometry3D
 
         const Transform3D& transform = plane.GetTransform();
 
-        // ===== DISTANCE CALCULATION (for falloff) =====
         if (user_position)
         {
-            // Distance from user to LED (in grid units)
             Vector3D user_to_led;
             user_to_led.x = led_position.x - user_position->x;
             user_to_led.y = led_position.y - user_position->y;
@@ -427,7 +380,6 @@ namespace Geometry3D
         }
         else
         {
-            // Distance from screen center to LED (in grid units)
             Vector3D screen_to_led;
             screen_to_led.x = led_position.x - transform.position.x;
             screen_to_led.y = led_position.y - transform.position.y;
@@ -435,52 +387,32 @@ namespace Geometry3D
             result.distance = sqrtf(screen_to_led.x * screen_to_led.x + screen_to_led.y * screen_to_led.y + screen_to_led.z * screen_to_led.z);
         }
 
-        // Convert distance from grid units to millimeters for falloff calculation
         result.distance = GridUnitsToMM(result.distance, grid_scale_mm);
 
-        // ===== ROTATION-AWARE UV MAPPING =====
-        // Transform LED from world space to screen's local coordinate system
-        // This handles screens at ANY orientation (tilted, rotated, angled, etc.)
-
-        // Calculate LED's offset from screen center in world space (grid units)
-        // World space uses Y-up: X = left->right, Y = floor->ceiling, Z = front->back
         Vector3D world_offset;
         world_offset.x = led_position.x - transform.position.x;
         world_offset.y = led_position.y - transform.position.y;
         world_offset.z = led_position.z - transform.position.z;
 
-        // Calculate rotation matrix for the screen (columns are the rotated basis vectors)
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
 
-        Vector3D plane_right  = { rotation_matrix[0], rotation_matrix[3], rotation_matrix[6] }; // local +X
-        Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] }; // local +Y (historic Y-up)
-        Vector3D plane_normal = { rotation_matrix[2], rotation_matrix[5], rotation_matrix[8] }; // local +Z (screen normal)
+        Vector3D plane_right  = { rotation_matrix[0], rotation_matrix[3], rotation_matrix[6] };
+        Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] };
+        Vector3D plane_normal = { rotation_matrix[2], rotation_matrix[5], rotation_matrix[8] };
 
-        // Transform world offset to screen local axes via dot products (inverse rotation)
         Vector3D local_offset;
         local_offset.x = world_offset.x * plane_right.x  + world_offset.y * plane_right.y  + world_offset.z * plane_right.z;
         local_offset.y = world_offset.x * plane_up.x     + world_offset.y * plane_up.y     + world_offset.z * plane_up.z;
         local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
 
-        // Remap to screen-friendly axes:
-        //  - local_offset.x : horizontal (left -> right across panel)
-        //  - local_offset.z : vertical   (bottom -> top across panel)
-        //  - local_offset.y : depth w.r.t. panel normal (front/back)
         std::swap(local_offset.y, local_offset.z);
 
-        // In screen's local space:
-        // local X = left(-) to right(+) across screen surface
-        // local Y = behind(-) to front(+) perpendicular to screen
-        // local Z = bottom(-) to top(+) on screen surface
         result.is_in_front = (local_offset.y < 0.0f);
 
-        // Convert screen dimensions from millimeters to grid units
         float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
         float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
 
-        // Map local offset to UV coordinates [0, 1]
-        // LED at screen center (local 0,0,0) → UV (0.5, 0.5)
         if (screen_width_units <= 0.0f || screen_height_units <= 0.0f)
         {
             result.is_valid = false;
@@ -489,13 +421,11 @@ namespace Geometry3D
         result.u = (local_offset.x + screen_width_units * 0.5f) / screen_width_units;
         result.v = (local_offset.z + screen_height_units * 0.5f) / screen_height_units;
 
-        // Clamp UV to valid range [0, 1]; LEDs outside screen sample the nearest edge
         if (result.u < 0.0f) result.u = 0.0f;
         if (result.u > 1.0f) result.u = 1.0f;
         if (result.v < 0.0f) result.v = 0.0f;
         if (result.v > 1.0f) result.v = 1.0f;
 
-        // Apply edge sampling inset if requested (pulls sampling in from absolute edges)
         float inset = edge_zone_depth;
         if(inset > 0.0f)
         {
@@ -514,7 +444,6 @@ namespace Geometry3D
             }
         }
 
-        // Reject NaN/Inf so consumers get a valid projection or none
         if (std::isnan(result.u) || std::isnan(result.v) || !std::isfinite(result.u) || !std::isfinite(result.v))
         {
             result.is_valid = false;
@@ -542,8 +471,6 @@ namespace Geometry3D
         {
             return ToRGBColor(0, 0, 0);
         }
-        // Clamp UV to valid range for ambilight edge extension
-        // LEDs outside screen bounds sample the nearest edge pixel
         if (u < 0.0f) u = 0.0f;
         if (u > 1.0f) u = 1.0f;
         if (v < 0.0f) v = 0.0f;
@@ -554,7 +481,6 @@ namespace Geometry3D
 
         if (!use_bilinear)
         {
-            // Nearest neighbor
             int ix = (int)(x + 0.5f);
             int iy = (int)(y + 0.5f);
             int index = (iy * frame_width + ix) * 4;
@@ -566,7 +492,6 @@ namespace Geometry3D
         }
         else
         {
-            // Bilinear filtering
             int x0 = (int)x;
             int y0 = (int)y;
             int x1 = (x0 + 1 < frame_width) ? x0 + 1 : x0;
@@ -627,7 +552,7 @@ namespace Geometry3D
 
         switch (edge)
         {
-        case 0: // Top
+        case 0:
         {
             int band_height = (int)(frame_height * band_thickness);
             if (band_height < 1) band_height = 1;
@@ -645,7 +570,7 @@ namespace Geometry3D
             }
             break;
         }
-        case 1: // Right
+        case 1:
         {
             int band_width = (int)(frame_width * band_thickness);
             if (band_width < 1) band_width = 1;
@@ -663,7 +588,7 @@ namespace Geometry3D
             }
             break;
         }
-        case 2: // Bottom
+        case 2:
         {
             int band_height = (int)(frame_height * band_thickness);
             if (band_height < 1) band_height = 1;
@@ -681,7 +606,7 @@ namespace Geometry3D
             }
             break;
         }
-        case 3: // Left
+        case 3:
         {
             int band_width = (int)(frame_width * band_thickness);
             if (band_width < 1) band_width = 1;

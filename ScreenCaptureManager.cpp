@@ -19,7 +19,6 @@
     extern QPixmap qt_pixmapFromWinHBITMAP(HBITMAP bitmap, int format = 0);
 #endif
 
-// Singleton access
 ScreenCaptureManager& ScreenCaptureManager::Instance()
 {
     static ScreenCaptureManager instance;
@@ -63,7 +62,6 @@ void ScreenCaptureManager::Shutdown()
         return;
     }
 
-    // Stop all capture threads
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         for(std::map<std::string, std::atomic<bool>>::iterator it = capture_active.begin();
@@ -129,7 +127,6 @@ std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
 
 bool ScreenCaptureManager::StartCapture(const std::string& source_id)
 {
-    // Check if source exists
     {
         std::lock_guard<std::mutex> lock(sources_mutex);
         if(sources.find(source_id) == sources.end())
@@ -143,7 +140,7 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         if(capture_active.find(source_id) != capture_active.end() &&
             capture_active[source_id].load())
         {
-            return true; // Already running
+            return true;
         }
     }
 
@@ -153,7 +150,6 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
         return false;
     }
 
-    // Launch capture thread
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         capture_active[source_id].store(true);
@@ -165,7 +161,6 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
 
 void ScreenCaptureManager::StopCapture(const std::string& source_id)
 {
-    // Signal thread to stop
     {
         std::lock_guard<std::mutex> lock(threads_mutex);
         std::map<std::string, std::atomic<bool>>::iterator active_it = capture_active.find(source_id);
@@ -222,8 +217,6 @@ void ScreenCaptureManager::SetTargetFPS(int fps)
 
 bool ScreenCaptureManager::InitializePlatform()
 {
-    // Platform data will be created per-capture-source
-    // Nothing to initialize globally for DXGI
     return true;
 }
 
@@ -260,7 +253,6 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
 
 bool ScreenCaptureManager::StartCapturePlatform(const std::string& source_id)
 {
-    // Extract screen index from source_id (format: "screen_N")
     size_t underscore_pos = source_id.find('_');
     if(underscore_pos == std::string::npos)
     {
@@ -284,7 +276,6 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-// Helper function to capture screen using GDI BitBlt
 static QPixmap GrabScreen(QScreen* screen)
 {
     if(!screen) return QPixmap();
@@ -541,7 +532,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                         size_t need = (size_t)dxgi_state.width * dxgi_state.height * 4;
                         if(dxgi_rgba_buffer.size() < need)
                             dxgi_rgba_buffer.resize(need);
-                        // Desktop Duplication API returns B8G8R8A8; convert to RGBA for consumers.
                         const uint8_t* src = (const uint8_t*)mapped.pData;
                         uint8_t* dst = dxgi_rgba_buffer.data();
                         const UINT row_pitch_skip = mapped.RowPitch - dxgi_state.width * 4;
@@ -578,7 +568,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         {
             if(!use_dxgi)
             {
-                auto now = std::chrono::steady_clock::now();
+                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
                 if(now - last_dxgi_retry >= dxgi_retry_interval)
                 {
                     last_dxgi_retry = now;
@@ -611,7 +601,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         frame->width = image.width();
         frame->height = image.height();
         frame->data.resize(frame->width * frame->height * 4);
-        // Copy row-by-row: QImage may have bytesPerLine() > width*4 (alignment padding).
         const int line_bytes = frame->width * 4;
         const int src_stride = image.bytesPerLine();
         const uint8_t* src = image.constBits();

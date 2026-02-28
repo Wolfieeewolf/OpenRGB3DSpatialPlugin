@@ -19,7 +19,6 @@ std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile
     filesystem::path base_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path profiles_dir = base_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "EffectProfiles";
 
-    // Create directory if it doesn't exist
     filesystem::create_directories(profiles_dir);
 
     return (profiles_dir / (profile_name + ".effectprofile.json")).string();
@@ -52,7 +51,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
         profile_json["origin_index"] = effect_origin_combo->currentIndex();
     }
 
-    // Save audio settings (input + currently configured audio effect UI)
     nlohmann::json audio_json;
     int device_index = (audio_device_combo ? audio_device_combo->currentIndex() : -1);
     audio_json["device_index"] = device_index;
@@ -61,45 +59,10 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
         : std::string();
     audio_json["gain_slider"] = (audio_gain_slider ? audio_gain_slider->value() : 10);
     audio_json["bands_count"] = (audio_bands_combo ? audio_bands_combo->currentText().toInt() : 16);
-    audio_json["low_hz"] = (audio_low_spin ? (int)audio_low_spin->value() : 60);
-    audio_json["high_hz"] = (audio_high_spin ? (int)audio_high_spin->value() : 200);
-    audio_json["smoothing_slider"] = (audio_smooth_slider ? audio_smooth_slider->value() : 60);
-    audio_json["falloff_slider"] = (audio_falloff_slider ? audio_falloff_slider->value() : 100);
     audio_json["fft_index"] = (audio_fft_combo ? audio_fft_combo->currentIndex() : -1);
     audio_json["fft_value"] = (audio_fft_combo && audio_fft_combo->currentIndex() >= 0)
         ? audio_fft_combo->currentText().toInt()
         : 1024;
-
-    if(audio_effect_combo && audio_effect_combo->currentIndex() > 0)
-    {
-        int idx = audio_effect_combo->currentIndex();
-        QString class_name = audio_effect_combo->itemData(idx, kEffectRoleClassName).toString();
-        if(!class_name.isEmpty())
-        {
-            audio_json["active_effect_class"] = class_name.toStdString();
-            audio_json["active_effect_index"] = idx;
-        }
-
-        if(audio_effect_zone_combo)
-        {
-            QVariant zone_data = audio_effect_zone_combo->itemData(audio_effect_zone_combo->currentIndex());
-            audio_json["active_effect_zone"] = zone_data.isValid() ? zone_data.toInt() : -1;
-        }
-
-        if(audio_effect_origin_combo)
-        {
-            audio_json["active_effect_origin"] = audio_effect_origin_combo->currentIndex();
-        }
-
-        if(current_audio_effect_ui)
-        {
-            nlohmann::json audio_effect_settings = current_audio_effect_ui->SaveSettings();
-            if(!audio_effect_settings.is_null())
-            {
-                audio_json["active_effect_settings"] = audio_effect_settings;
-            }
-        }
-    }
 
     profile_json["audio_settings"] = audio_json;
 
@@ -207,7 +170,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             ClearCustomEffectUI();
         }
 
-        // Restore audio settings
         if(profile_json.contains("audio_settings"))
         {
             const nlohmann::json& a = profile_json["audio_settings"];
@@ -260,32 +222,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                 }
             }
 
-            if(a.contains("low_hz") && audio_low_spin)
-            {
-                QSignalBlocker blocker(audio_low_spin);
-                audio_low_spin->setValue(a["low_hz"].get<int>());
-            }
-            if(a.contains("high_hz") && audio_high_spin)
-            {
-                QSignalBlocker blocker(audio_high_spin);
-                audio_high_spin->setValue(a["high_hz"].get<int>());
-            }
-
-            if(a.contains("smoothing_slider") && audio_smooth_slider)
-            {
-                int sv = std::max(0, std::min(99, a["smoothing_slider"].get<int>()));
-                QSignalBlocker blocker(audio_smooth_slider);
-                audio_smooth_slider->setValue(sv);
-            }
-
-            if(a.contains("falloff_slider") && audio_falloff_slider)
-            {
-                int fv = std::max(20, std::min(500, a["falloff_slider"].get<int>()));
-                QSignalBlocker blocker(audio_falloff_slider);
-                audio_falloff_slider->setValue(fv);
-            }
-
-                if(a.contains("fft_index") && audio_fft_combo)
+            if(a.contains("fft_index") && audio_fft_combo)
                 {
                     int fi = a["fft_index"].get<int>();
                     if(fi >= 0 && fi < audio_fft_combo->count())
@@ -309,52 +246,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                             on_audio_fft_changed(idx);
                         }
                     }
-            }
-
-            // Re-apply derived controls after silent updates
-            if(audio_low_spin) on_audio_std_low_changed(audio_low_spin->value());
-            if(audio_smooth_slider) on_audio_std_smooth_changed(audio_smooth_slider->value());
-            if(audio_falloff_slider) on_audio_std_falloff_changed(audio_falloff_slider->value());
-
-            if(audio_effect_combo && a.contains("active_effect_class"))
-            {
-                QString active_class = QString::fromStdString(a["active_effect_class"].get<std::string>());
-                int active_idx = audio_effect_combo->findData(active_class, kEffectRoleClassName);
-                if(active_idx > 0)
-                {
-                    audio_effect_combo->blockSignals(true);
-                    audio_effect_combo->setCurrentIndex(active_idx);
-                    audio_effect_combo->blockSignals(false);
-                    SetupAudioEffectUI(active_idx);
-                }
-
-                if(audio_effect_zone_combo && a.contains("active_effect_zone"))
-                {
-                    int zone_value = a["active_effect_zone"].get<int>();
-                    int zone_idx = audio_effect_zone_combo->findData(zone_value);
-                    if(zone_idx >= 0)
-                    {
-                        QSignalBlocker blocker(audio_effect_zone_combo);
-                        audio_effect_zone_combo->setCurrentIndex(zone_idx);
-                    }
-                    on_audio_effect_zone_changed(audio_effect_zone_combo->currentIndex());
-                }
-
-                if(audio_effect_origin_combo && a.contains("active_effect_origin"))
-                {
-                    int origin_idx = a["active_effect_origin"].get<int>();
-                    if(origin_idx >= 0 && origin_idx < audio_effect_origin_combo->count())
-                    {
-                        QSignalBlocker blocker(audio_effect_origin_combo);
-                        audio_effect_origin_combo->setCurrentIndex(origin_idx);
-                    }
-                    on_audio_effect_origin_changed(audio_effect_origin_combo->currentIndex());
-                }
-
-                if(a.contains("active_effect_settings") && current_audio_effect_ui)
-                {
-                    current_audio_effect_ui->LoadSettings(a["active_effect_settings"]);
-                }
             }
         }
 
@@ -389,7 +280,6 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
         return;
     }
 
-    // Scan for .effectprofile.json files
     for(filesystem::directory_iterator entry(profiles_dir); entry != filesystem::directory_iterator(); ++entry)
     {
         if(entry->path().extension() == ".json")
@@ -397,7 +287,6 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
             std::string filename = entry->path().filename().string();
             std::string stem     = entry->path().stem().string();
 
-            // Only show .effectprofile.json files
             if(stem.length() > 14 && stem.substr(stem.length() - 14) == ".effectprofile")
             {
                 std::string profile_name = stem.substr(0, stem.length() - 14);
@@ -493,12 +382,10 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             profile_name = config["auto_load_profile"].get<std::string>();
         }
 
-        // Restore checkbox state
         effect_auto_load_checkbox->blockSignals(true);
         effect_auto_load_checkbox->setChecked(auto_load_enabled);
         effect_auto_load_checkbox->blockSignals(false);
 
-        // Restore profile selection
         if(!profile_name.empty())
         {
             int index = effect_profiles_combo->findText(QString::fromStdString(profile_name));
@@ -510,7 +397,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             }
         }
 
-        // Auto-load if enabled
         if(auto_load_enabled && !profile_name.empty())
         {
             std::string profile_path = GetEffectProfilePath(profile_name);
@@ -530,7 +416,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
 
 void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
 {
-    // Validate that the stack has at least one effect
     if(effect_stack.empty())
     {
         QMessageBox::information(this, "No Effect Selected",
@@ -552,7 +437,6 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
     std::string profile_path = GetEffectProfilePath(profile_name);
     if(profile_path.empty()) return;
 
-    // Check if profile already exists
     if(filesystem::exists(profile_path))
     {
         QMessageBox::StandardButton reply = QMessageBox::question(this, "Overwrite Profile",
@@ -565,13 +449,10 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
         }
     }
 
-    // Save the profile
     SaveEffectProfile(profile_path);
 
-    // Update dropdown
     PopulateEffectProfileDropdown();
 
-    // Select the newly saved profile
     int index = effect_profiles_combo->findText(name);
     if(index >= 0)
     {
@@ -636,7 +517,6 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
         filesystem::remove(profile_path);
     }
 
-    // Update dropdown
     PopulateEffectProfileDropdown();
 
     QMessageBox::information(this, "Success",
@@ -645,6 +525,5 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
 
 void OpenRGB3DSpatialTab::on_effect_profile_changed(int)
 {
-    // Just update the auto-load config when selection changes
     SaveCurrentEffectProfileName();
 }
