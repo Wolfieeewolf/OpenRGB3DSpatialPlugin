@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include "LogManager.h"
 #include "filesystem.h"
@@ -102,6 +101,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     {
         nlohmann::json profile_json = nlohmann::json::parse(json_str.toStdString());
 
+        LoadStackEffectControls(nullptr);
         effect_stack.clear();
 
         bool has_stack_array = profile_json.contains("stack") && profile_json["stack"].is_array();
@@ -118,28 +118,47 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             }
         }
 
-        UpdateEffectStackList();
-
         int desired_index = -1;
         if(profile_json.contains("selected_stack_index"))
         {
             desired_index = profile_json["selected_stack_index"].get<int>();
         }
+        if(desired_index < 0 || desired_index >= (int)effect_stack.size())
+        {
+            desired_index = effect_stack.empty() ? -1 : 0;
+        }
 
         if(effect_stack_list)
         {
-            if(desired_index >= 0 && desired_index < (int)effect_stack.size())
+            effect_stack_list->blockSignals(true);
+        }
+        UpdateEffectStackList();
+        if(!effect_stack.empty() && desired_index >= 0 && desired_index < (int)effect_stack.size())
+        {
+            EffectInstance3D* instance = effect_stack[desired_index].get();
+            LoadStackEffectControls(instance);
+            if(effect_zone_combo)
             {
-                effect_stack_list->setCurrentRow(desired_index);
+                QSignalBlocker zb(effect_zone_combo);
+                int zi = effect_zone_combo->findData(instance->zone_index);
+                if(zi >= 0) effect_zone_combo->setCurrentIndex(zi);
             }
-            else if(!effect_stack.empty())
+            if(effect_combo && desired_index < effect_combo->count())
             {
-                effect_stack_list->setCurrentRow(0);
+                QSignalBlocker cb(effect_combo);
+                effect_combo->setCurrentIndex(desired_index);
             }
-            else
-            {
-                effect_stack_list->setCurrentRow(-1);
-            }
+            UpdateEffectCombo();
+            UpdateAudioPanelVisibility();
+        }
+        else
+        {
+            ClearCustomEffectUI();
+        }
+        if(effect_stack_list)
+        {
+            effect_stack_list->setCurrentRow(desired_index);
+            effect_stack_list->blockSignals(false);
         }
 
         if(effect_origin_combo && profile_json.contains("origin_index"))
@@ -149,25 +168,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             {
                 effect_origin_combo->setCurrentIndex(origin_idx);
             }
-        }
-
-        if(!effect_stack.empty())
-        {
-            int current_row = effect_stack_list ? effect_stack_list->currentRow() : 0;
-            if(current_row < 0 || current_row >= (int)effect_stack.size())
-            {
-                current_row = 0;
-                if(effect_stack_list)
-                {
-                    effect_stack_list->setCurrentRow(current_row);
-                }
-            }
-            EffectInstance3D* instance = (current_row >= 0 && current_row < (int)effect_stack.size()) ? effect_stack[current_row].get() : nullptr;
-            LoadStackEffectControls(instance);
-        }
-        else
-        {
-            ClearCustomEffectUI();
         }
 
         if(profile_json.contains("audio_settings"))

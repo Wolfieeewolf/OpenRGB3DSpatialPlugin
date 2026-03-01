@@ -709,6 +709,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
 
         if(start_effect_button) start_effect_button->setEnabled(false);
         if(stop_effect_button) stop_effect_button->setEnabled(true);
+        UpdateStartStopAllButtons();
         return;
     }
 
@@ -752,6 +753,26 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
     }
     if(start_effect_button) start_effect_button->setEnabled(true);
     if(stop_effect_button) stop_effect_button->setEnabled(false);
+    UpdateStartStopAllButtons();
+    RenderEffectStack();
+}
+
+void OpenRGB3DSpatialTab::on_start_all_effects_clicked()
+{
+    on_start_effect_clicked();
+}
+
+void OpenRGB3DSpatialTab::on_stop_all_effects_clicked()
+{
+    on_stop_effect_clicked();
+}
+
+void OpenRGB3DSpatialTab::UpdateStartStopAllButtons()
+{
+    if(start_all_effects_btn)
+        start_all_effects_btn->setEnabled(!effect_running);
+    if(stop_all_effects_btn)
+        stop_all_effects_btn->setEnabled(effect_running);
 }
 
 void OpenRGB3DSpatialTab::on_effect_updated()

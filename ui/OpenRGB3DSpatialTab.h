@@ -119,10 +119,14 @@ private slots:
     void UpdateEffectOriginCombo();
 
     void on_effect_library_category_changed(int index);
+    void on_effect_library_search_changed(const QString& text);
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
 
+    void on_start_all_effects_clicked();
+    void on_stop_all_effects_clicked();
+    void UpdateStartStopAllButtons();
     void on_remove_effect_from_stack_clicked();
     void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
@@ -262,12 +266,15 @@ private:
     QSlider*                    rot_z_slider;
 
     QComboBox*                  effect_category_combo;
+    QLineEdit*                  effect_library_search;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
 
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
     QPushButton*                stop_effect_button;
+    QPushButton*                start_all_effects_btn;
+    QPushButton*                stop_all_effects_btn;
 
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;

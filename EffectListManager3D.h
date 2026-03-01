@@ -7,6 +7,7 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <algorithm>
 
 class SpatialEffect3D;
 
@@ -89,6 +90,26 @@ public:
             return effects.at(class_name);
         }
         return EffectRegistration3D();
+    }
+
+    /** Returns effects grouped by category, each category's effects sorted by ui_name (like OpenRGB Effects plugin). */
+    std::map<std::string, std::vector<EffectRegistration3D>> GetCategorizedEffects() const
+    {
+        std::map<std::string, std::vector<EffectRegistration3D>> result;
+        for(size_t i = 0; i < effect_order.size(); i++)
+        {
+            std::map<std::string, EffectRegistration3D>::const_iterator it = effects.find(effect_order[i]);
+            if(it != effects.end())
+            {
+                result[it->second.category].push_back(it->second);
+            }
+        }
+        for(auto& pair : result)
+        {
+            std::sort(pair.second.begin(), pair.second.end(),
+                      [](const EffectRegistration3D& a, const EffectRegistration3D& b) { return a.ui_name < b.ui_name; });
+        }
+        return result;
     }
 
 private:

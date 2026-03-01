@@ -1163,8 +1163,9 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
         return true;
     }
     float scale_radius = GetNormalizedScale() * 10.0f;
-    float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    return distance_from_origin <= scale_radius;
+    float scale_radius_sq = scale_radius * scale_radius;
+    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
+    return dist_sq <= scale_radius_sq;
 }
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
@@ -1172,15 +1173,13 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
     float half_width = grid.width / 2.0f;
     float half_depth = grid.depth / 2.0f;
     float half_height = grid.height / 2.0f;
-    float max_distance_from_center = sqrt(half_width * half_width +
-                                         half_depth * half_depth +
-                                         half_height * half_height);
+    float max_dist_sq = half_width * half_width + half_depth * half_depth + half_height * half_height;
 
     float scale_percentage = GetNormalizedScale();
-    float scale_radius = max_distance_from_center * scale_percentage;
+    float scale_radius_sq = max_dist_sq * scale_percentage * scale_percentage;
 
-    float distance_from_origin = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
-    return distance_from_origin <= scale_radius;
+    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
+    return dist_sq <= scale_radius_sq;
 }
 
 bool SpatialEffect3D::IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const

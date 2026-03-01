@@ -5,6 +5,13 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include <vector>
+
+struct CachedBall3D
+{
+    float px, py, pz;
+    float vx, vy, vz;
+};
 
 class BouncingBall3D : public SpatialEffect3D
 {
@@ -41,6 +48,10 @@ private:
     unsigned int ball_size;
     unsigned int elasticity;
     unsigned int ball_count;
+
+    float ball_cache_time = -1e9f;
+    float ball_cache_grid_hash = 0.0f;
+    std::vector<CachedBall3D> ball_positions_cached;
 };
 
 #endif

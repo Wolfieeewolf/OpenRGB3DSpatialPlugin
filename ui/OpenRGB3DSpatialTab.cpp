@@ -64,6 +64,8 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     current_effect_ui = nullptr;
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
+    start_all_effects_btn = nullptr;
+    stop_all_effects_btn = nullptr;
     stack_blend_container = nullptr;
     stack_effect_blend_combo = nullptr;
     effect_zone_label = nullptr;
@@ -71,6 +73,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_origin_combo = nullptr;
     effect_zone_combo = nullptr;
     effect_category_combo = nullptr;
+    effect_library_search = nullptr;
     effect_library_list = nullptr;
     effect_library_add_button = nullptr;
     effect_combo = nullptr;
@@ -1355,6 +1358,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_controls_widget->setLayout(effect_controls_layout);
     effect_layout->addWidget(effect_controls_widget);
 
+    LoadStackPresets();
+    LoadEffectStack();
+    UpdateEffectStackList();
+    if(!effect_stack.empty() && effect_stack_list)
+    {
+        effect_stack_list->setCurrentRow(0);
+    }
+    UpdateStartStopAllButtons();
+
     detail_layout->addWidget(effect_config_group);
 
     SetupAudioPanel(detail_layout);
@@ -1410,6 +1422,12 @@ void OpenRGB3DSpatialTab::SetupEffectLibraryPanel(QVBoxLayout* parent_layout)
     connect(effect_category_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_library_category_changed);
     library_layout->addWidget(effect_category_combo);
 
+    effect_library_search = new QLineEdit();
+    effect_library_search->setPlaceholderText(tr("Search effects..."));
+    effect_library_search->setClearButtonEnabled(true);
+    connect(effect_library_search, &QLineEdit::textChanged, this, &OpenRGB3DSpatialTab::on_effect_library_search_changed);
+    library_layout->addWidget(effect_library_search);
+
     effect_library_list = new QListWidget();
     effect_library_list->setSelectionMode(QAbstractItemView::SingleSelection);
     effect_library_list->setMinimumHeight(160);
@@ -1441,28 +1459,12 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
 
     effect_category_combo->blockSignals(true);
     effect_category_combo->clear();
-    effect_category_combo->addItem("Select Category", QVariant());
+    effect_category_combo->addItem(tr("Select Category"), QVariant());
 
-    std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
-    std::vector<std::string> categories;
-    for(unsigned int i = 0; i < effects.size(); i++)
+    std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    for(const auto& entry : categorized)
     {
-        const std::string& category = effects[i].category;
-        bool exists = false;
-        for(unsigned int j = 0; j < categories.size(); j++)
-        {
-            if(categories[j] == category)
-            {
-                exists = true;
-                break;
-            }
-        }
-        if(!exists)
-        {
-            categories.push_back(category);
-            effect_category_combo->addItem(QString::fromStdString(category),
-                                           QString::fromStdString(category));
-        }
+        effect_category_combo->addItem(QString::fromStdString(entry.first), QString::fromStdString(entry.first));
     }
     effect_category_combo->blockSignals(false);
     effect_category_combo->setCurrentIndex(0);
@@ -1581,31 +1583,43 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     }
 
     QString selected_category = category_data.toString();
+    QString search = effect_library_search ? effect_library_search->text().trimmed() : QString();
 
-    std::vector<EffectRegistration3D> effects = EffectListManager3D::get()->GetAllEffects();
-    for(unsigned int i = 0; i < effects.size(); i++)
+    std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
+    auto cat_it = categorized.find(selected_category.toStdString());
+    if(cat_it == categorized.end())
     {
-        QString category = QString::fromStdString(effects[i].category);
-        if(selected_category.isEmpty() ||
-           category.compare(selected_category, Qt::CaseInsensitive) != 0)
+        effect_library_list->blockSignals(false);
+        on_effect_library_selection_changed(-1);
+        return;
+    }
+
+    const std::vector<EffectRegistration3D>& effects = cat_it->second;
+    for(const EffectRegistration3D& reg : effects)
+    {
+        if(selected_category.compare("Audio", Qt::CaseInsensitive) == 0 && reg.class_name != "AudioContainer3D")
         {
             continue;
         }
-        if(category.compare("Audio", Qt::CaseInsensitive) == 0 &&
-           effects[i].class_name != "AudioContainer3D")
+        if(!search.isEmpty() && !QString::fromStdString(reg.ui_name).contains(search, Qt::CaseInsensitive))
         {
             continue;
         }
-        QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(effects[i].ui_name));
-        item->setToolTip(QString("Category: %1").arg(category));
-        item->setData(Qt::UserRole, QString::fromStdString(effects[i].class_name));
-        item->setData(Qt::UserRole + 1, category);
+        QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(reg.ui_name));
+        item->setToolTip(QString("Category: %1").arg(selected_category));
+        item->setData(Qt::UserRole, QString::fromStdString(reg.class_name));
+        item->setData(Qt::UserRole + 1, selected_category);
         effect_library_list->addItem(item);
     }
 
     effect_library_list->blockSignals(false);
     effect_library_list->setCurrentRow(-1);
     on_effect_library_selection_changed(-1);
+}
+
+void OpenRGB3DSpatialTab::on_effect_library_search_changed(const QString&)
+{
+    PopulateEffectLibrary();
 }
 
 void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
@@ -1635,10 +1649,36 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     }
 
     effect_stack.push_back(std::move(instance));
-    UpdateEffectStackList();
+    const int new_index = (int)effect_stack.size() - 1;
+
     if(effect_stack_list)
     {
-        effect_stack_list->setCurrentRow((int)effect_stack.size() - 1);
+        effect_stack_list->blockSignals(true);
+    }
+    UpdateEffectStackList();
+    EffectInstance3D* new_instance = effect_stack[new_index].get();
+    if(new_instance)
+    {
+        LoadStackEffectControls(new_instance);
+        if(effect_zone_combo)
+        {
+            QSignalBlocker zb(effect_zone_combo);
+            int zone_combo_index = effect_zone_combo->findData(new_instance->zone_index);
+            if(zone_combo_index >= 0)
+                effect_zone_combo->setCurrentIndex(zone_combo_index);
+        }
+        if(effect_combo && new_index < effect_combo->count())
+        {
+            QSignalBlocker cb(effect_combo);
+            effect_combo->setCurrentIndex(new_index);
+        }
+        UpdateEffectCombo();
+        UpdateAudioPanelVisibility();
+    }
+    if(effect_stack_list)
+    {
+        effect_stack_list->setCurrentRow(new_index);
+        effect_stack_list->blockSignals(false);
     }
     if(effect_timer && !effect_timer->isActive())
     {
@@ -1646,10 +1686,6 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     }
     SaveEffectStack();
 }
-
-
-
-
 
 void OpenRGB3DSpatialTab::on_effect_type_changed(int index)
 {
@@ -1911,10 +1947,6 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     start_effect_button = nullptr;
     stop_effect_button = nullptr;
 
-    if(!effect_controls_layout)
-    {
-        return;
-    }
     QLayoutItem* item;
     while((item = effect_controls_layout->takeAt(0)) != nullptr)
     {
@@ -1922,7 +1954,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         {
             w->hide();
             w->setParent(nullptr);
-            delete w;
+            w->deleteLater();
         }
         delete item;
     }

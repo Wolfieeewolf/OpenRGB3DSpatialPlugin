@@ -210,67 +210,85 @@ RGBColor BouncingBall3D::CalculateColorGrid(float x, float y, float z, float tim
 
     float gravity = room_avg * 0.8f * (0.3f + speed * 0.02f);
 
-    float max_intensity = 0.0f;
-    float hue_for_max = 120.0f;
-
     unsigned int N = ball_count == 0 ? 1u : ball_count;
-    for(unsigned int k = 0; k < N; k++)
-    {
-        float p0x = xmin + HashFloat01(k * 131U) * (xmax - xmin);
-        float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f;
-        float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
 
-        float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
-        float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f);
-        float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
+    float grid_hash = grid.min_x + grid.max_x * 31.0f + grid.min_y * 31.0f*31.0f + grid.max_y * 31.0f*31.0f*31.0f;
+    if(ball_positions_cached.size() != N || fabsf(time - ball_cache_time) > 0.001f || fabsf(grid_hash - ball_cache_grid_hash) > 0.01f)
+    {
+        ball_cache_time = time;
+        ball_cache_grid_hash = grid_hash;
+        ball_positions_cached.resize(N);
 
         float wrapped_time = fmodf(time, 20.0f);
-        
-        float pos_x = p0x;
-        float pos_y = p0y;
-        float pos_z = p0z;
-        float vel_x = v0x;
-        float vel_y = v0y;
-        float vel_z = v0z;
-
         float dt = 0.08f;
-        float sim_time = 0.0f;
         int max_steps = (int)(wrapped_time / dt) + 1;
         if(max_steps > 250) max_steps = 250;
 
-        for(int step = 0; step < max_steps && sim_time < wrapped_time; step++)
+        for(unsigned int k = 0; k < N; k++)
         {
-            float step_dt = fminf(dt, wrapped_time - sim_time);
-            CalculateBouncingBall(pos_x, pos_y, pos_z, vel_x, vel_y, vel_z,
-                                step_dt, gravity, e,
-                                xmin, xmax, ymin, ymax, zmin, zmax);
-            sim_time += step_dt;
+            float p0x = xmin + HashFloat01(k * 131U) * (xmax - xmin);
+            float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f;
+            float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
+
+            float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
+            float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f);
+            float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
+
+            float pos_x = p0x;
+            float pos_y = p0y;
+            float pos_z = p0z;
+            float vel_x = v0x;
+            float vel_y = v0y;
+            float vel_z = v0z;
+
+            float sim_time = 0.0f;
+            for(int step = 0; step < max_steps && sim_time < wrapped_time; step++)
+            {
+                float step_dt = fminf(dt, wrapped_time - sim_time);
+                CalculateBouncingBall(pos_x, pos_y, pos_z, vel_x, vel_y, vel_z,
+                                    step_dt, gravity, e,
+                                    xmin, xmax, ymin, ymax, zmin, zmax);
+                sim_time += step_dt;
+            }
+
+            ball_positions_cached[k].px = pos_x;
+            ball_positions_cached[k].py = pos_y;
+            ball_positions_cached[k].pz = pos_z;
+            ball_positions_cached[k].vx = vel_x;
+            ball_positions_cached[k].vy = vel_y;
+            ball_positions_cached[k].vz = vel_z;
         }
+    }
 
-        float bx = pos_x;
-        float by = pos_y;
-        float bz = pos_z;
+    float glow_radius = R * 2.0f;
+    float glow_radius_sq = glow_radius * glow_radius;
+    float core_radius = R * 0.8f;
 
-        float dx = (x - bx);
-        float dy = (y - by);
-        float dz = (z - bz);
-        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+    float max_intensity = 0.0f;
+    float hue_for_max = 120.0f;
 
-        float core_radius = R * 0.8f;
-        float glow_radius = R * 2.0f;
+    for(unsigned int k = 0; k < N; k++)
+    {
+        const CachedBall3D& ball = ball_positions_cached[k];
+        float dx = (x - ball.px);
+        float dy = (y - ball.py);
+        float dz = (z - ball.pz);
+        float dist_sq = dx*dx + dy*dy + dz*dz;
+        if(dist_sq > glow_radius_sq) continue;
+
+        float dist = sqrtf(dist_sq);
         float core_glow = fmax(0.0f, 1.0f - dist / (core_radius + 0.001f));
         float outer_glow = 0.7f * fmax(0.0f, 1.0f - dist / (glow_radius + 0.001f));
         float intensity = powf(core_glow, 0.9f) + outer_glow;
-        if(intensity < 0.05f && dist <= glow_radius) intensity = 0.05f;
-        
-        intensity *= 1.6f;
+        if(intensity < 0.05f) intensity = 0.05f;
 
+        intensity *= 1.6f;
         intensity = fmax(0.0f, fmin(1.0f, intensity));
-        
+
         if(intensity > max_intensity)
         {
             max_intensity = intensity;
-            float hue = fmodf((atan2f(vel_z, vel_x) * 57.2958f) + time * 20.0f, 360.0f);
+            float hue = fmodf((atan2f(ball.vz, ball.vx) * 57.2958f) + time * 20.0f, 360.0f);
             hue_for_max = hue;
         }
     }

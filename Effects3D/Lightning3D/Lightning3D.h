@@ -60,6 +60,8 @@ private:
     float           cache_time;
     float           cache_grid_hash;
     std::vector<PlasmaArc3D> cached_arches;
+    float           arc_aabb_min_x = 0, arc_aabb_min_y = 0, arc_aabb_min_z = 0;
+    float           arc_aabb_max_x = 0, arc_aabb_max_y = 0, arc_aabb_max_z = 0;
 };
 
 #endif

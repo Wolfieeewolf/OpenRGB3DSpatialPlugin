@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include "LogManager.h"
 #include "filesystem.h"
@@ -29,9 +28,14 @@ void OpenRGB3DSpatialTab::SaveEffectStack()
 
     for(unsigned int i = 0; i < effect_stack.size(); i++)
     {
-        if(effect_stack[i])
+        if(!effect_stack[i]) continue;
+        try
         {
             j["effects"].push_back(effect_stack[i]->ToJson());
+        }
+        catch(const std::exception& e)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to serialize effect %u: %s", (unsigned)i, e.what());
         }
     }
 
@@ -67,7 +71,6 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
 
     if(!filesystem::exists(stack_path))
     {
-        
         return;
     }
 
@@ -84,6 +87,7 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
         file >> j;
         file.close();
 
+        LoadStackEffectControls(nullptr);
         effect_stack.clear();
 
         if(j.contains("effects") && j["effects"].is_array())
@@ -98,13 +102,6 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
                 }
             }
         }
-
-        if(!effect_stack.empty() && effect_stack_list)
-        {
-            effect_stack_list->setCurrentRow(0);
-        }
-
-        
     }
     catch(const std::exception& e)
     {

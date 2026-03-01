@@ -35,6 +35,8 @@ private:
     float star_cache_time = -1e9f;
     int star_cache_count = 0;
     std::vector<Vector3D> star_positions_cached;
+    float star_aabb_min_x = 0, star_aabb_min_y = 0, star_aabb_min_z = 0;
+    float star_aabb_max_x = 0, star_aabb_max_y = 0, star_aabb_max_z = 0;
 };
 
 #endif

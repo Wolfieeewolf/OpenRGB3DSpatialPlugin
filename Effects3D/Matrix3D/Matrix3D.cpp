@@ -267,6 +267,10 @@ float Matrix3D::ComputeFaceIntensity(int face,
             break;
     }
 
+    float room_extent = (grid.width + grid.height + grid.depth) / 3.0f;
+    if(room_extent > 0.001f && face_distance > room_extent * 0.5f)
+        return 0.0f;
+
     if(column_spacing < 0.001f) column_spacing = 0.001f;
 
     if(u < -10000.0f || u > 10000.0f) u = 0.0f;
