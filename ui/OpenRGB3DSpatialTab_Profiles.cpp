@@ -2,6 +2,9 @@
 
 
 #include "OpenRGB3DSpatialTab.h"
+#include "filesystem.h"
+#include <QDesktopServices>
+#include <QUrl>
 #include <QPalette>
 #include <QScrollArea>
 #include <QFrame>
@@ -80,21 +83,23 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     effect_layout->setSpacing(4);
     effect_layout->setContentsMargins(2, 4, 2, 4);
 
-    QLabel* effect_label = new QLabel("Save/Load single effect configurations from Effects tab:");
+    QLabel* effect_label = new QLabel("Save/Load single effect configurations. Select profile in the Run panel (left).");
     effect_label->setWordWrap(true);
     effect_label->setForegroundRole(QPalette::PlaceholderText);
     effect_layout->addWidget(effect_label);
 
-    QHBoxLayout* effect_combo_layout = new QHBoxLayout();
-    effect_combo_layout->setSpacing(4);
-    effect_combo_layout->addWidget(new QLabel("Profile:"));
-
-    effect_profiles_combo = new QComboBox();
-    effect_profiles_combo->setMinimumWidth(200);
-    connect(effect_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_profile_changed);
-    effect_combo_layout->addWidget(effect_profiles_combo);
-    effect_combo_layout->addStretch();
-    effect_layout->addLayout(effect_combo_layout);
+    if(!effect_profiles_combo)
+    {
+        QHBoxLayout* effect_combo_layout = new QHBoxLayout();
+        effect_combo_layout->setSpacing(4);
+        effect_combo_layout->addWidget(new QLabel("Profile:"));
+        effect_profiles_combo = new QComboBox();
+        effect_profiles_combo->setMinimumWidth(200);
+        connect(effect_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_profile_changed);
+        effect_combo_layout->addWidget(effect_profiles_combo);
+        effect_combo_layout->addStretch();
+        effect_layout->addLayout(effect_combo_layout);
+    }
 
     QHBoxLayout* effect_buttons = new QHBoxLayout();
     effect_buttons->setSpacing(6);
@@ -120,11 +125,20 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     effect_layout->addLayout(effect_buttons);
 
-    effect_auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
-    effect_auto_load_checkbox->setToolTip("Automatically load this effect configuration when OpenRGB starts");
-    connect(effect_auto_load_checkbox, &QCheckBox::toggled,
-            this, &OpenRGB3DSpatialTab::SaveCurrentEffectProfileName);
-    effect_layout->addWidget(effect_auto_load_checkbox);
+    if(!effect_auto_load_checkbox)
+    {
+        effect_auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
+        effect_auto_load_checkbox->setToolTip("Automatically load this effect configuration when OpenRGB starts");
+        connect(effect_auto_load_checkbox, &QCheckBox::toggled,
+                this, &OpenRGB3DSpatialTab::SaveCurrentEffectProfileName);
+        effect_layout->addWidget(effect_auto_load_checkbox);
+    }
+
+    QPushButton* open_config_btn = new QPushButton("Open plugin config folder");
+    open_config_btn->setToolTip("Open the folder where layout profiles, effect profiles, and custom controllers are stored");
+    connect(open_config_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_open_config_folder_clicked);
+    effect_layout->addWidget(open_config_btn);
 
     profiles_layout->addWidget(effect_group);
 
@@ -168,6 +182,18 @@ void OpenRGB3DSpatialTab::SetLayoutDirty(bool dirty)
 void OpenRGB3DSpatialTab::ClearLayoutDirty()
 {
     SetLayoutDirty(false);
+}
+
+void OpenRGB3DSpatialTab::on_open_config_folder_clicked()
+{
+    if(!resource_manager)
+    {
+        return;
+    }
+    filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
+    filesystem::path plugin_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin";
+    filesystem::create_directories(plugin_dir);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(plugin_dir.string())));
 }
 
 bool OpenRGB3DSpatialTab::PromptSaveIfDirty()

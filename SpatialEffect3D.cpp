@@ -240,15 +240,16 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
 
-    QGroupBox* axis_scale_group = new QGroupBox("Axis Scale");
+    QGroupBox* axis_scale_group = new QGroupBox("Effect scale (X / Y / Z %)");
+    axis_scale_group->setToolTip("Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.");
     QVBoxLayout* axis_scale_layout = new QVBoxLayout();
 
     QHBoxLayout* scale_x_layout = new QHBoxLayout();
-    scale_x_layout->addWidget(new QLabel("Width (X):"));
+    scale_x_layout->addWidget(new QLabel("X:"));
     scale_x_slider = new QSlider(Qt::Horizontal);
     scale_x_slider->setRange(1, 400);
     scale_x_slider->setValue((int)effect_scale_x);
-    scale_x_slider->setToolTip("Stretch or squash the effect along the X axis (100% = normal)");
+    scale_x_slider->setToolTip("Effect scale along X (left ↔ right). 100% = normal.");
     scale_x_layout->addWidget(scale_x_slider);
     scale_x_label = new QLabel(QString::number(effect_scale_x) + "%");
     scale_x_label->setMinimumWidth(45);
@@ -256,11 +257,11 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_layout->addLayout(scale_x_layout);
 
     QHBoxLayout* scale_y_layout = new QHBoxLayout();
-    scale_y_layout->addWidget(new QLabel("Height (Y):"));
+    scale_y_layout->addWidget(new QLabel("Y:"));
     scale_y_slider = new QSlider(Qt::Horizontal);
     scale_y_slider->setRange(1, 400);
     scale_y_slider->setValue((int)effect_scale_y);
-    scale_y_slider->setToolTip("Stretch or squash the effect along the Y axis (100% = normal)");
+    scale_y_slider->setToolTip("Effect scale along Y (floor ↔ ceiling). 100% = normal.");
     scale_y_layout->addWidget(scale_y_slider);
     scale_y_label = new QLabel(QString::number(effect_scale_y) + "%");
     scale_y_label->setMinimumWidth(45);
@@ -268,32 +269,33 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_layout->addLayout(scale_y_layout);
 
     QHBoxLayout* scale_z_layout = new QHBoxLayout();
-    scale_z_layout->addWidget(new QLabel("Depth (Z):"));
+    scale_z_layout->addWidget(new QLabel("Z:"));
     scale_z_slider = new QSlider(Qt::Horizontal);
     scale_z_slider->setRange(1, 400);
     scale_z_slider->setValue((int)effect_scale_z);
-    scale_z_slider->setToolTip("Stretch or squash the effect along the Z axis (100% = normal)");
+    scale_z_slider->setToolTip("Effect scale along Z (front ↔ back). 100% = normal.");
     scale_z_layout->addWidget(scale_z_slider);
     scale_z_label = new QLabel(QString::number(effect_scale_z) + "%");
     scale_z_label->setMinimumWidth(45);
     scale_z_layout->addWidget(scale_z_label);
     axis_scale_layout->addLayout(scale_z_layout);
 
-    axis_scale_reset_button = new QPushButton("Reset to Defaults");
-    axis_scale_reset_button->setToolTip("Reset Width, Height, Depth to 100%");
+    axis_scale_reset_button = new QPushButton("Reset to defaults");
+    axis_scale_reset_button->setToolTip("Reset effect scale X, Y, Z to 100%");
     axis_scale_layout->addWidget(axis_scale_reset_button);
 
     axis_scale_group->setLayout(axis_scale_layout);
     main_layout->addWidget(axis_scale_group);
 
-    QGroupBox* axis_scale_rot_group = new QGroupBox("Axis Scale Rotation");
+    QGroupBox* axis_scale_rot_group = new QGroupBox("Effect scale rotation (°)");
+    axis_scale_rot_group->setToolTip("Rotate the direction of the effect scale axes. Scale (X/Y/Z) is applied in this orientation. Different from effect rotation below.");
     QVBoxLayout* axis_scale_rot_layout = new QVBoxLayout();
     QHBoxLayout* asr_yaw_layout = new QHBoxLayout();
     asr_yaw_layout->addWidget(new QLabel("Yaw:"));
     axis_scale_rot_yaw_slider = new QSlider(Qt::Horizontal);
     axis_scale_rot_yaw_slider->setRange(-180, 180);
     axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
-    axis_scale_rot_yaw_slider->setToolTip("Rotate the scale axes (not the effect). Scale is applied in this frame.");
+    axis_scale_rot_yaw_slider->setToolTip("Yaw: rotate scale axes horizontally. Scale is applied in this frame.");
     axis_scale_rot_yaw_label = new QLabel(QString::number((int)effect_axis_scale_rotation_yaw) + "°");
     axis_scale_rot_yaw_label->setMinimumWidth(40);
     asr_yaw_layout->addWidget(axis_scale_rot_yaw_slider);
@@ -320,50 +322,51 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     asr_roll_layout->addWidget(axis_scale_rot_roll_label);
     axis_scale_rot_layout->addLayout(asr_roll_layout);
 
-    axis_scale_rot_reset_button = new QPushButton("Reset to Defaults");
-    axis_scale_rot_reset_button->setToolTip("Reset Yaw, Pitch, Roll to 0°");
+    axis_scale_rot_reset_button = new QPushButton("Reset to defaults");
+    axis_scale_rot_reset_button->setToolTip("Reset effect scale rotation (yaw, pitch, roll) to 0°");
     axis_scale_rot_layout->addWidget(axis_scale_rot_reset_button);
 
     axis_scale_rot_group->setLayout(axis_scale_rot_layout);
     main_layout->addWidget(axis_scale_rot_group);
 
-    position_offset_group = new QGroupBox("Position Offset");
+    position_offset_group = new QGroupBox("Effect position offset (%)");
+    position_offset_group->setToolTip("Offset the effect center from its origin (Room Center or reference point). Percent of half-room size. Does not move scene objects or the camera.");
     QVBoxLayout* offset_layout = new QVBoxLayout();
     QHBoxLayout* offset_x_layout = new QHBoxLayout();
-    offset_x_layout->addWidget(new QLabel("X (left ↔ right):"));
+    offset_x_layout->addWidget(new QLabel("X:"));
     offset_x_slider = new QSlider(Qt::Horizontal);
     offset_x_slider->setRange(-100, 100);
     offset_x_slider->setValue(effect_offset_x);
-    offset_x_slider->setToolTip("Move effect left (-) or right (+) as % of half-room width");
+    offset_x_slider->setToolTip("Effect offset left (-) or right (+) as % of half-room width");
     offset_x_layout->addWidget(offset_x_slider);
     offset_x_label = new QLabel(QString::number(effect_offset_x) + "%");
     offset_x_label->setMinimumWidth(45);
     offset_x_layout->addWidget(offset_x_label);
     offset_layout->addLayout(offset_x_layout);
     QHBoxLayout* offset_y_layout = new QHBoxLayout();
-    offset_y_layout->addWidget(new QLabel("Y (down ↔ up):"));
+    offset_y_layout->addWidget(new QLabel("Y:"));
     offset_y_slider = new QSlider(Qt::Horizontal);
     offset_y_slider->setRange(-100, 100);
     offset_y_slider->setValue(effect_offset_y);
-    offset_y_slider->setToolTip("Move effect down (-) or up (+) as % of half-room height");
+    offset_y_slider->setToolTip("Effect offset down (-) or up (+) as % of half-room height");
     offset_y_layout->addWidget(offset_y_slider);
     offset_y_label = new QLabel(QString::number(effect_offset_y) + "%");
     offset_y_label->setMinimumWidth(45);
     offset_y_layout->addWidget(offset_y_label);
     offset_layout->addLayout(offset_y_layout);
     QHBoxLayout* offset_z_layout = new QHBoxLayout();
-    offset_z_layout->addWidget(new QLabel("Z (front ↔ back):"));
+    offset_z_layout->addWidget(new QLabel("Z:"));
     offset_z_slider = new QSlider(Qt::Horizontal);
     offset_z_slider->setRange(-100, 100);
     offset_z_slider->setValue(effect_offset_z);
-    offset_z_slider->setToolTip("Move effect forward (-) or back (+) as % of half-room depth");
+    offset_z_slider->setToolTip("Effect offset forward (-) or back (+) as % of half-room depth");
     offset_z_layout->addWidget(offset_z_slider);
     offset_z_label = new QLabel(QString::number(effect_offset_z) + "%");
     offset_z_label->setMinimumWidth(45);
     offset_z_layout->addWidget(offset_z_label);
     offset_layout->addLayout(offset_z_layout);
-    QPushButton* offset_reset_btn = new QPushButton("Reset to Center");
-    offset_reset_btn->setToolTip("Set X, Y, Z offset to 0%");
+    QPushButton* offset_reset_btn = new QPushButton("Reset to center");
+    offset_reset_btn->setToolTip("Set effect position offset X, Y, Z to 0%");
     offset_layout->addWidget(offset_reset_btn);
     connect(offset_reset_btn, &QPushButton::clicked, this, [this](){
         effect_offset_x = effect_offset_y = effect_offset_z = 0;
@@ -378,15 +381,16 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     position_offset_group->setLayout(offset_layout);
     main_layout->addWidget(position_offset_group);
 
-    QGroupBox* rotation_group = new QGroupBox("3D Rotation (around Origin)");
+    QGroupBox* rotation_group = new QGroupBox("Effect rotation (°)");
+    rotation_group->setToolTip("Rotate the effect around its center (origin). Does not move the camera or scene objects.");
     QVBoxLayout* rotation_layout = new QVBoxLayout();
     
     QHBoxLayout* yaw_layout = new QHBoxLayout();
-    yaw_layout->addWidget(new QLabel("Yaw (Horizontal):"));
+    yaw_layout->addWidget(new QLabel("Yaw:"));
     rotation_yaw_slider = new QSlider(Qt::Horizontal);
     rotation_yaw_slider->setRange(0, 360);
     rotation_yaw_slider->setValue((int)effect_rotation_yaw);
-    rotation_yaw_slider->setToolTip("Horizontal rotation around Y axis (0-360°)");
+    rotation_yaw_slider->setToolTip("Effect rotation around Y (horizontal). 0–360°.");
     rotation_yaw_label = new QLabel(QString::number((int)effect_rotation_yaw) + "°");
     rotation_yaw_label->setMinimumWidth(50);
     yaw_layout->addWidget(rotation_yaw_slider);
@@ -394,11 +398,11 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_layout->addLayout(yaw_layout);
     
     QHBoxLayout* pitch_layout = new QHBoxLayout();
-    pitch_layout->addWidget(new QLabel("Pitch (Vertical):"));
+    pitch_layout->addWidget(new QLabel("Pitch:"));
     rotation_pitch_slider = new QSlider(Qt::Horizontal);
     rotation_pitch_slider->setRange(0, 360);
     rotation_pitch_slider->setValue((int)effect_rotation_pitch);
-    rotation_pitch_slider->setToolTip("Vertical rotation around X axis (0-360°)");
+    rotation_pitch_slider->setToolTip("Effect rotation around X (vertical). 0–360°.");
     rotation_pitch_label = new QLabel(QString::number((int)effect_rotation_pitch) + "°");
     rotation_pitch_label->setMinimumWidth(50);
     pitch_layout->addWidget(rotation_pitch_slider);
@@ -406,25 +410,26 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_layout->addLayout(pitch_layout);
     
     QHBoxLayout* roll_layout = new QHBoxLayout();
-    roll_layout->addWidget(new QLabel("Roll (Twist):"));
+    roll_layout->addWidget(new QLabel("Roll:"));
     rotation_roll_slider = new QSlider(Qt::Horizontal);
     rotation_roll_slider->setRange(0, 360);
     rotation_roll_slider->setValue((int)effect_rotation_roll);
-    rotation_roll_slider->setToolTip("Twist rotation around Z axis (0-360°)");
+    rotation_roll_slider->setToolTip("Effect rotation around Z (twist). 0–360°.");
     rotation_roll_label = new QLabel(QString::number((int)effect_rotation_roll) + "°");
     rotation_roll_label->setMinimumWidth(50);
     roll_layout->addWidget(rotation_roll_slider);
     roll_layout->addWidget(rotation_roll_label);
     rotation_layout->addLayout(roll_layout);
     
-    rotation_reset_button = new QPushButton("Reset Rotation");
-    rotation_reset_button->setToolTip("Reset all rotations to 0°");
+    rotation_reset_button = new QPushButton("Reset rotation");
+    rotation_reset_button->setToolTip("Reset effect rotation (yaw, pitch, roll) to 0°");
     rotation_layout->addWidget(rotation_reset_button);
     
     rotation_group->setLayout(rotation_layout);
     main_layout->addWidget(rotation_group);
 
-    path_plane_group = new QGroupBox("Path / Plane");
+    path_plane_group = new QGroupBox("Effect path / plane");
+    path_plane_group->setToolTip("Direction and plane for this effect (e.g. wave direction, rotation plane). Not the camera or scene layout.");
     QVBoxLayout* path_plane_layout = new QVBoxLayout();
     QHBoxLayout* path_axis_row = new QHBoxLayout();
     path_axis_row->addWidget(new QLabel("Axis (X/Y/Z):"));

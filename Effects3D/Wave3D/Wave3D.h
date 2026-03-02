@@ -16,10 +16,10 @@ public:
     explicit Wave3D(QWidget* parent = nullptr);
     ~Wave3D();
 
-    EFFECT_REGISTERER_3D("Wave3D", "3D Wave", "3D Spatial", [](){return new Wave3D;});
+    EFFECT_REGISTERER_3D("Wave3D", "Wave", "3D Spatial", [](){return new Wave3D;});
 
     static std::string const ClassName() { return "Wave3D"; }
-    static std::string const UIName() { return "3D Wave"; }
+    static std::string const UIName() { return "Wave"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

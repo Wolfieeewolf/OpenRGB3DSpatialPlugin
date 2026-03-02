@@ -20,7 +20,7 @@ public:
     EFFECT_REGISTERER_3D("BeatPulse3D", "Beat Pulse", "Audio", [](){ return new BeatPulse3D; })
 
     static std::string const ClassName() { return "BeatPulse3D"; }
-    static std::string const UIName() { return "Beat Pulse 3D"; }
+    static std::string const UIName() { return "Beat Pulse"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

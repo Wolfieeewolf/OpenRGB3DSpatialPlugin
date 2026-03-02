@@ -19,7 +19,7 @@ public:
     EFFECT_REGISTERER_3D("AudioLevel3D", "Audio Level", "Audio", [](){ return new AudioLevel3D; })
 
     static std::string const ClassName() { return "AudioLevel3D"; }
-    static std::string const UIName() { return "Audio Level 3D"; }
+    static std::string const UIName() { return "Audio Level"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

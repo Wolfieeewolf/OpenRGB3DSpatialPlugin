@@ -19,10 +19,10 @@ class Bubbles3D : public SpatialEffect3D
 public:
     explicit Bubbles3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Bubbles3D", "3D Bubbles", "3D Spatial", [](){ return new Bubbles3D; });
+    EFFECT_REGISTERER_3D("Bubbles3D", "Bubbles", "3D Spatial", [](){ return new Bubbles3D; });
 
     static std::string const ClassName() { return "Bubbles3D"; }
-    static std::string const UIName() { return "3D Bubbles"; }
+    static std::string const UIName() { return "Bubbles"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

@@ -191,10 +191,11 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     UpdateEffectOriginCombo();
     UpdateFreqOriginCombo();
 
+    const int kStartupDelayMs = 2000;  /* Defer auto-load so device detection and other plugins can settle */
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
     connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
-    auto_load_timer->start(2000);
+    auto_load_timer->start(kStartupDelayMs);
 
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::PreciseTimer);
@@ -266,13 +267,49 @@ void OpenRGB3DSpatialTab::SetupUI()
     root_layout->setContentsMargins(0, 0, 0, 0);
     root_layout->setSpacing(0);
 
-    QTabWidget* main_tabs = new QTabWidget();
-    root_layout->addWidget(main_tabs);
+    QSplitter* main_splitter = new QSplitter(Qt::Horizontal);
+    main_splitter->setChildrenCollapsible(false);
+    main_splitter->setHandleWidth(6);
 
-    QWidget* setup_tab = new QWidget();
-    QHBoxLayout* main_layout = new QHBoxLayout(setup_tab);
-    main_layout->setSpacing(6);
-    main_layout->setContentsMargins(4, 4, 4, 4);
+    const int kLeftPanelMinWidth = 280;
+    QTabWidget* left_mode_tabs = new QTabWidget();
+    left_mode_tabs->setTabPosition(QTabWidget::West);
+    left_mode_tabs->setMinimumWidth(kLeftPanelMinWidth);
+    left_mode_tabs->setMaximumWidth(420);
+
+    QScrollArea* run_scroll = new QScrollArea();
+    run_scroll->setWidgetResizable(true);
+    run_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    run_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    run_scroll->setMinimumWidth(kLeftPanelMinWidth);
+
+    QWidget* run_content = new QWidget();
+    run_content->setMinimumWidth(kLeftPanelMinWidth);
+    QVBoxLayout* run_layout = new QVBoxLayout(run_content);
+    run_layout->setContentsMargins(4, 4, 12, 4);
+    run_layout->setSpacing(6);
+
+    QHBoxLayout* profile_row = new QHBoxLayout();
+    profile_row->setSpacing(4);
+    profile_row->addWidget(new QLabel("Profile:"));
+    effect_profiles_combo = new QComboBox();
+    effect_profiles_combo->setMinimumWidth(160);
+    connect(effect_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_profile_changed);
+    profile_row->addWidget(effect_profiles_combo);
+    run_layout->addLayout(profile_row);
+
+    effect_auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
+    effect_auto_load_checkbox->setToolTip("Automatically load this effect configuration when OpenRGB starts");
+    connect(effect_auto_load_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::SaveCurrentEffectProfileName);
+    run_layout->addWidget(effect_auto_load_checkbox);
+
+    SetupEffectLibraryPanel(run_layout);
+    SetupEffectStackPanel(run_layout);
+    SetupZonesPanel(run_layout);
+    run_layout->addStretch();
+
+    run_scroll->setWidget(run_content);
+    left_mode_tabs->addTab(run_scroll, "Run");
 
     QScrollArea* left_scroll = new QScrollArea();
     left_scroll->setWidgetResizable(true);
@@ -445,13 +482,15 @@ void OpenRGB3DSpatialTab::SetupUI()
     left_panel->addStretch();
 
     left_scroll->setWidget(left_content);
-    main_layout->addWidget(left_scroll, 1);
+    left_mode_tabs->addTab(left_scroll, "Setup");
+    main_splitter->addWidget(left_mode_tabs);
 
-    QVBoxLayout* middle_panel = new QVBoxLayout();
+    QWidget* center_widget = new QWidget();
+    QVBoxLayout* middle_panel = new QVBoxLayout(center_widget);
     middle_panel->setSpacing(3);
     middle_panel->setContentsMargins(0, 0, 0, 0);
 
-    QLabel* controls_label = new QLabel("Camera: Right mouse = Rotate | Left drag = Pan | Scroll = Zoom | Left click = Select/Move objects");
+    QLabel* controls_label = new QLabel("View (camera only – does not change effect or layout): Right mouse = Rotate view | Left drag = Pan | Scroll = Zoom | Left click = Select/Move objects");
     controls_label->setWordWrap(true);
     controls_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     middle_panel->addWidget(controls_label);
@@ -516,6 +555,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
     middle_panel->addWidget(viewport, 1);
 
+    /* Right panel when "Setup" is selected on the left. First tab = scene object position/rotation. */
     QTabWidget* settings_tabs = new QTabWidget();
 
     QWidget* grid_settings_tab = new QWidget();
@@ -733,7 +773,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     QWidget* transform_tab = new QWidget();
     QVBoxLayout* transform_tab_v = new QVBoxLayout(transform_tab);
     transform_tab_v->setSpacing(6);
-    QLabel* transform_help = new QLabel("Select an item in the list. Position is in mm (same as Room size in Grid Settings). Rotation in degrees.");
+    QLabel* transform_help = new QLabel("Moves the selected controller, reference point, or display plane in the room (your layout). Does not change the camera view. Position in mm (same as Room size in Grid Settings). Rotation in degrees.");
     transform_help->setWordWrap(true);
     transform_help->setForegroundRole(QPalette::PlaceholderText);
     transform_tab_v->addWidget(transform_help);
@@ -742,7 +782,9 @@ void OpenRGB3DSpatialTab::SetupUI()
     transform_layout->setSpacing(6);
     transform_layout->setContentsMargins(2, 2, 2, 2);
 
-    QGridLayout* position_layout = new QGridLayout();
+    QGroupBox* position_group = new QGroupBox("Scene object position (mm)");
+    position_group->setToolTip("Where the selected controller, reference point, or display plane sits in the room. Not the camera.");
+    QGridLayout* position_layout = new QGridLayout(position_group);
     position_layout->setSpacing(3);
     position_layout->setContentsMargins(0, 0, 0, 0);
 
@@ -813,13 +855,15 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
     };
 
-    add_position_row(0, "Position X (mm):", pos_x_slider, pos_x_spin, 0, false);
-    add_position_row(1, "Position Y (mm):", pos_y_slider, pos_y_spin, 1, true);
-    add_position_row(2, "Position Z (mm):", pos_z_slider, pos_z_spin, 2, false);
+    add_position_row(0, "X:", pos_x_slider, pos_x_spin, 0, false);
+    add_position_row(1, "Y:", pos_y_slider, pos_y_spin, 1, true);
+    add_position_row(2, "Z:", pos_z_slider, pos_z_spin, 2, false);
 
     position_layout->setColumnStretch(1, 1);
 
-    QGridLayout* rotation_layout = new QGridLayout();
+    QGroupBox* rotation_group = new QGroupBox("Scene object rotation (°)");
+    rotation_group->setToolTip("Orientation of the selected controller, reference point, or display plane in the room. Not the camera view.");
+    QGridLayout* rotation_layout = new QGridLayout(rotation_group);
     rotation_layout->setSpacing(3);
     rotation_layout->setContentsMargins(0, 0, 0, 0);
 
@@ -849,14 +893,14 @@ void OpenRGB3DSpatialTab::SetupUI()
         });
     };
 
-    add_rotation_row(0, "Rotation X (°):", rot_x_slider, rot_x_spin, 0);
-    add_rotation_row(1, "Rotation Y (°):", rot_y_slider, rot_y_spin, 1);
-    add_rotation_row(2, "Rotation Z (°):", rot_z_slider, rot_z_spin, 2);
+    add_rotation_row(0, "X:", rot_x_slider, rot_x_spin, 0);
+    add_rotation_row(1, "Y:", rot_y_slider, rot_y_spin, 1);
+    add_rotation_row(2, "Z:", rot_z_slider, rot_z_spin, 2);
 
     rotation_layout->setColumnStretch(1, 1);
 
-    transform_layout->addLayout(position_layout, 1);
-    transform_layout->addLayout(rotation_layout, 1);
+    transform_layout->addWidget(position_group, 1);
+    transform_layout->addWidget(rotation_group, 1);
 
     transform_tab_v->addLayout(transform_layout);
 
@@ -869,7 +913,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         return sa;
     };
 
-    settings_tabs->addTab(wrap_tab_in_scroll(transform_tab), "Position & Rotation");
+    settings_tabs->addTab(wrap_tab_in_scroll(transform_tab), "Scene object: position & rotation");
     settings_tabs->addTab(wrap_tab_in_scroll(grid_settings_tab), "Grid Settings");
 
     QWidget* object_creator_tab = new QWidget();
@@ -1043,7 +1087,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     color_layout->addStretch();
     ref_points_layout->addLayout(color_layout);
 
-    QLabel* help_label = new QLabel("Select a reference point to move it with the Position & Rotation controls and 3D gizmo.");
+    QLabel* help_label = new QLabel("Select a reference point to move it with the \"Scene object: position & rotation\" tab and 3D gizmo.");
     help_label->setForegroundRole(QPalette::PlaceholderText);
     help_label->setWordWrap(true);
     ref_points_layout->addWidget(help_label);
@@ -1254,40 +1298,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     const int kSettingsTabsMinHeight = 320;
     settings_tabs->setMinimumHeight(kSettingsTabsMinHeight);
     settings_tabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    middle_panel->addWidget(settings_tabs, 0, Qt::AlignTop);
 
-    main_layout->addLayout(middle_panel, 3);
-
-    QWidget* effects_tab = new QWidget();
-    QVBoxLayout* effects_tab_layout = new QVBoxLayout(effects_tab);
-    effects_tab_layout->setContentsMargins(4, 4, 4, 4);
-    effects_tab_layout->setSpacing(6);
-
-    const int kLeftPaneMinWidth = 320;
-    QSplitter* effects_splitter = new QSplitter(Qt::Horizontal);
-    effects_splitter->setChildrenCollapsible(false);
-    effects_splitter->setHandleWidth(6);
-    effects_tab_layout->addWidget(effects_splitter);
-
-    QScrollArea* browser_scroll = new QScrollArea();
-    browser_scroll->setWidgetResizable(true);
-    browser_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    browser_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    browser_scroll->setMinimumWidth(kLeftPaneMinWidth);
-
-    QWidget* browser_content = new QWidget();
-    browser_content->setMinimumWidth(kLeftPaneMinWidth);
-    QVBoxLayout* browser_layout = new QVBoxLayout(browser_content);
-    browser_layout->setContentsMargins(4, 4, 12, 4);
-    browser_layout->setSpacing(6);
-
-    SetupEffectLibraryPanel(browser_layout);
-    SetupEffectStackPanel(browser_layout);
-    SetupZonesPanel(browser_layout);
-    browser_layout->addStretch();
-
-    browser_scroll->setWidget(browser_content);
-    effects_splitter->addWidget(browser_scroll);
+    main_splitter->addWidget(center_widget);
 
     QScrollArea* effects_detail_scroll = new QScrollArea();
     effects_detail_scroll->setWidgetResizable(true);
@@ -1299,7 +1311,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     detail_layout->setContentsMargins(4, 4, 4, 4);
     detail_layout->setSpacing(6);
 
-    effect_config_group = new QGroupBox("Effect Configuration");
+    effect_config_group = new QGroupBox("Layer settings");
     effect_config_group->setVisible(false);
     QVBoxLayout* effect_layout = new QVBoxLayout(effect_config_group);
     effect_layout->setSpacing(4);
@@ -1322,9 +1334,11 @@ void OpenRGB3DSpatialTab::SetupUI()
             this, SLOT(on_effect_zone_changed(int)));
     effect_layout->addWidget(effect_zone_combo);
 
-    origin_label = new QLabel("Origin:");
+    origin_label = new QLabel("Effect center:");
+    origin_label->setToolTip("Origin/reference point for this effect (e.g. Room Center or a reference point). Does not move the camera or scene objects.");
     effect_layout->addWidget(origin_label);
     effect_origin_combo = new QComboBox();
+    effect_origin_combo->setToolTip("Where the effect is centered. Room Center or a reference point.");
     effect_origin_combo->addItem("Room Center", QVariant(-1));
     connect(effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
@@ -1373,37 +1387,22 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     detail_layout->addStretch();
     effect_controls_widget->updateGeometry();
-    effects_tab->updateGeometry();
 
     effects_detail_scroll->setWidget(detail_content);
-    effects_splitter->addWidget(effects_detail_scroll);
-    effects_splitter->setStretchFactor(0, 1);
-    effects_splitter->setStretchFactor(1, 3);
-    QList<int> initial_sizes;
-    initial_sizes << kLeftPaneMinWidth << kLeftPaneMinWidth * 3;
-    effects_splitter->setSizes(initial_sizes);
 
-    connect(effects_splitter, &QSplitter::splitterMoved, this,
-            [effects_splitter, kLeftPaneMinWidth](int, int)
-            {
-                QList<int> sizes = effects_splitter->sizes();
-                if(sizes.size() < 2)
-                {
-                    return;
-                }
+    QStackedWidget* right_stacked = new QStackedWidget();
+    right_stacked->addWidget(effects_detail_scroll);
+    right_stacked->addWidget(settings_tabs);
+    connect(left_mode_tabs, QOverload<int>::of(&QTabWidget::currentChanged), right_stacked, &QStackedWidget::setCurrentIndex);
+    right_stacked->setCurrentIndex(left_mode_tabs->currentIndex());
 
-                if(sizes[0] < kLeftPaneMinWidth)
-                {
-                    int total = sizes[0] + sizes[1];
-                    sizes[0] = kLeftPaneMinWidth;
-                    sizes[1] = std::max(1, total - kLeftPaneMinWidth);
-                    effects_splitter->setSizes(sizes);
-                }
-            });
+    main_splitter->addWidget(right_stacked);
 
-    main_tabs->addTab(effects_tab, "Effects / Presets");
-    main_tabs->addTab(setup_tab, "Setup / Grid");
+    QList<int> splitter_sizes;
+    splitter_sizes << kLeftPanelMinWidth << 400 << 320;
+    main_splitter->setSizes(splitter_sizes);
 
+    root_layout->addWidget(main_splitter);
     setLayout(root_layout);
 }
 

@@ -33,10 +33,10 @@ public:
     explicit ScreenMirror3D(QWidget* parent = nullptr);
     ~ScreenMirror3D();
 
-    EFFECT_REGISTERER_3D("ScreenMirror3D", "Screen Mirror 3D", "Ambilight", [](){return new ScreenMirror3D;});
+    EFFECT_REGISTERER_3D("ScreenMirror3D", "Screen Mirror", "Ambilight", [](){return new ScreenMirror3D;});
 
     static std::string const ClassName() { return "ScreenMirror3D"; }
-    static std::string const UIName() { return "Screen Mirror 3D"; }
+    static std::string const UIName() { return "Screen Mirror"; }
     static void ForceLink() {}
 
     EffectInfo3D GetEffectInfo() override;

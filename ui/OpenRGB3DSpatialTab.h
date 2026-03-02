@@ -88,6 +88,7 @@ private slots:
     void on_load_effect_profile_clicked();
     void on_delete_effect_profile_clicked();
     void on_effect_profile_changed(int index);
+    void on_open_config_folder_clicked();
     void on_create_custom_controller_clicked();
     void on_add_from_preset_clicked();
     void on_import_custom_controller_clicked();

@@ -390,7 +390,8 @@ void LEDViewport3D::resizeGL(int w, int h)
     glLoadIdentity();
 
     float aspect = (float)w / (float)h;
-    gluPerspective(45.0, aspect, 0.1, 1000.0);
+    /* Far plane must be at least as large as max camera distance (50000) so the grid and scene stay visible when zoomed out. */
+    gluPerspective(45.0, aspect, 0.1, 100000.0);
 
     glMatrixMode(GL_MODELVIEW);
 
@@ -711,7 +712,7 @@ void LEDViewport3D::wheelEvent(QWheelEvent *event)
     camera_distance *= zoom_factor;
 
     if(camera_distance < 1.0f) camera_distance = 1.0f;
-    if(camera_distance > 500.0f) camera_distance = 500.0f;
+    if(camera_distance > 50000.0f) camera_distance = 50000.0f;
 
     update();
 }

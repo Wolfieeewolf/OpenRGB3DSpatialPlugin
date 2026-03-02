@@ -32,7 +32,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     QWidget* active_tab = new QWidget();
     QVBoxLayout* active_layout = new QVBoxLayout(active_tab);
 
-    QLabel* list_label = new QLabel("Active Effect Stack");
+    QLabel* list_label = new QLabel("Layers");
     QFont list_font = list_label->font();
     list_font.setBold(true);
     list_label->setFont(list_font);
@@ -68,7 +68,8 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 
     button_layout->addStretch();
 
-    QPushButton* remove_effect_btn = new QPushButton("- Remove Effect");
+    QPushButton* remove_effect_btn = new QPushButton("Remove layer");
+    remove_effect_btn->setToolTip(tr("Remove the selected layer from the stack."));
     connect(remove_effect_btn, &QPushButton::clicked,
             this, &OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked);
     button_layout->addWidget(remove_effect_btn);

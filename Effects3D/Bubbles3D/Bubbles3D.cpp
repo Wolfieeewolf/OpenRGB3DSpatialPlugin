@@ -31,7 +31,7 @@ EffectInfo3D Bubbles3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "3D Bubbles";
+    info.effect_name = "Bubbles";
     info.effect_description = "Rising expanding spheres (like OpenRGB Bubbles) – bubbles spawn from floor and rise";
     info.category = "3D Spatial";
     info.effect_type = (SpatialEffectType)0;

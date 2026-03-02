@@ -69,7 +69,7 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
     }
 
     QHBoxLayout* edge_row = new QHBoxLayout();
-    edge_row->addWidget(new QLabel("Edge Width:"));
+    edge_row->addWidget(new QLabel("Edge width:"));
     QSlider* edge_slider = new QSlider(Qt::Horizontal);
     edge_slider->setRange(0, 40);
     edge_slider->setValue((int)(edge_width * 100.0f));
@@ -103,7 +103,7 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
     });
 
     QHBoxLayout* boost_row = new QHBoxLayout();
-    boost_row->addWidget(new QLabel("Peak Boost:"));
+    boost_row->addWidget(new QLabel("Peak boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 400);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));

@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QSignalBlocker>
+#include <QRegularExpression>
 #include <fstream>
 #include <algorithm>
 #include <cmath>
@@ -100,6 +101,24 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     try
     {
         nlohmann::json profile_json = nlohmann::json::parse(json_str.toStdString());
+
+        const int kSupportedVersion = 3;
+        if(!profile_json.contains("version") || !profile_json["version"].is_number_integer())
+        {
+            QMessageBox::critical(this, "Invalid Profile",
+                "This effect profile has no version number and cannot be loaded.");
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile missing version: %s", filename.c_str());
+            return;
+        }
+        int version = profile_json["version"].get<int>();
+        if(version < 1 || version > kSupportedVersion)
+        {
+            QMessageBox::critical(this, "Unsupported Profile",
+                QString("This effect profile has version %1. This plugin supports version 1–%2 only.")
+                    .arg(version).arg(kSupportedVersion));
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d: %s", version, filename.c_str());
+            return;
+        }
 
         LoadStackEffectControls(nullptr);
         effect_stack.clear();
@@ -425,11 +444,19 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
 
     bool ok;
     QString name = QInputDialog::getText(this, "Save Effect Profile",
-                                        "Enter profile name:", QLineEdit::Normal,
-                                        "", &ok);
+                                        "Enter profile name (letters, numbers, underscore, hyphen, period only):",
+                                        QLineEdit::Normal, "", &ok);
 
     if(!ok || name.isEmpty())
     {
+        return;
+    }
+
+    QRegularExpression safe_name("^[\\w\\-\\.]+$");
+    if(!safe_name.match(name).hasMatch())
+    {
+        QMessageBox::warning(this, "Invalid Profile Name",
+            "Profile name may only contain letters, numbers, underscore (_), hyphen (-), and period (.).");
         return;
     }
 
