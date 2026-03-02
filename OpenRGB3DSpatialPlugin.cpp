@@ -45,6 +45,7 @@ QWidget* OpenRGB3DSpatialPlugin::GetWidget()
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     RMPointer->RegisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+    RMPointer->RegisterDetectionProgressCallback(DetectionProgressCallback, ui);
 
     return ui;
 }
@@ -59,6 +60,7 @@ void OpenRGB3DSpatialPlugin::Unload()
     if(RMPointer && ui != nullptr)
     {
         RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
+        RMPointer->UnregisterDetectionProgressCallback(DetectionProgressCallback, ui);
     }
 
     ui = nullptr;
@@ -66,7 +68,27 @@ void OpenRGB3DSpatialPlugin::Unload()
 
 void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
 {
-    if(!o)
+    if(!o || !RMPointer)
+    {
+        return;
+    }
+
+    if(RMPointer->GetDetectionPercent() != 100)
+    {
+        return;
+    }
+
+    QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
+}
+
+void OpenRGB3DSpatialPlugin::DetectionProgressCallback(void* o)
+{
+    if(!o || !RMPointer)
+    {
+        return;
+    }
+
+    if(RMPointer->GetDetectionPercent() != 100)
     {
         return;
     }

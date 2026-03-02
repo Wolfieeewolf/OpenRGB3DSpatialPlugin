@@ -17,7 +17,7 @@
 /*---------------------------------------------------------*\
 | Effect Registration Macro                                |
 | Usage in header:                                         |
-|   EFFECT_REGISTERER_3D("Wave3D", "3D Wave",             |
+|   EFFECT_REGISTERER_3D("Wave3D", "Wave",                |
 |                        "3D Spatial", [](){return new Wave3D;}) |
 \*---------------------------------------------------------*/
 #define EFFECT_REGISTERER_3D(_classname, _ui_name, _category, _constructor) \

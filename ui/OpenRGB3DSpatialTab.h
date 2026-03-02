@@ -94,12 +94,14 @@ private slots:
     void on_load_effect_profile_clicked();
     void on_delete_effect_profile_clicked();
     void on_effect_profile_changed(int index);
+    void on_open_config_folder_clicked();
     void on_create_custom_controller_clicked();
     void on_add_from_preset_clicked();
     void on_import_custom_controller_clicked();
     void on_export_custom_controller_clicked();
     void on_edit_custom_controller_clicked();
     void on_delete_custom_controller_clicked();
+    void on_custom_controller_selection_changed(int row);
     void on_add_ref_point_clicked();
     void on_remove_ref_point_clicked();
     void on_ref_point_selected(int index);
@@ -124,10 +126,14 @@ private slots:
     void UpdateEffectOriginCombo();
 
     void on_effect_library_category_changed(int index);
+    void on_effect_library_search_changed(const QString& text);
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
 
+    void on_start_all_effects_clicked();
+    void on_stop_all_effects_clicked();
+    void UpdateStartStopAllButtons();
     void on_remove_effect_from_stack_clicked();
     void on_effect_stack_item_double_clicked(QListWidgetItem* item);
     void on_effect_stack_selection_changed(int index);
@@ -245,6 +251,9 @@ private:
     QListWidget*                available_controllers_list;
     QListWidget*                custom_controllers_list;
     QLabel*                     custom_controllers_empty_label;
+    QPushButton*                export_custom_controller_btn;
+    QPushButton*                edit_custom_controller_btn;
+    QPushButton*                delete_custom_controller_btn;
     QLabel*                     object_creator_status_label;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;
@@ -263,12 +272,15 @@ private:
     QSlider*                    rot_z_slider;
 
     QComboBox*                  effect_category_combo;
+    QLineEdit*                  effect_library_search;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
 
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
     QPushButton*                stop_effect_button;
+    QPushButton*                start_all_effects_btn;
+    QPushButton*                stop_all_effects_btn;
 
     QWidget*                    custom_effect_container;
     SpatialEffect3D*            current_effect_ui;

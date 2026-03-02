@@ -20,7 +20,7 @@ public:
     EFFECT_REGISTERER_3D("SpectrumBars3D", "Spectrum Bars", "Audio", [](){ return new SpectrumBars3D; });
 
     static std::string const ClassName() { return "SpectrumBars3D"; }
-    static std::string const UIName() { return "Spectrum Bars 3D"; }
+    static std::string const UIName() { return "Spectrum Bars"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

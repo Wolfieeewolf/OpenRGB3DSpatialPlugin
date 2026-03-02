@@ -18,6 +18,7 @@
 #include <QTimer>
 #include <QSlider>
 #include <QCheckBox>
+#include <QGroupBox>
 #include <vector>
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
@@ -102,6 +103,7 @@ private:
     void ApplyGridTableHeaderStyle();
     void UpdateItemCombo();
     void UpdateGridDisplay();
+    void UpdateSummaryLabel();
     void UpdateGridColors();
     void UpdateCellInfo();
     void RebuildLayerTabs();
@@ -110,6 +112,7 @@ private:
     QColor GetAverageZoneColor(RGBController* controller, unsigned int zone_idx);
     QColor GetAverageDeviceColor(RGBController* controller);
     QColor GetMappingColor(const GridLEDMapping& mapping);
+    QString GetMappingDescription(const GridLEDMapping& mapping) const;
     static QColor RGBToQColor(unsigned int rgb_value);
     void InferMappingGranularity();
 
@@ -133,12 +136,14 @@ private:
 
     QTableWidget*   grid_table;
     QLabel*         cell_info_label;
+    QLabel*         summary_label;
 
     QPushButton*    assign_button;
     QPushButton*    clear_button;
     QPushButton*    remove_from_grid_button;
     QPushButton*    save_button;
 
+    QGroupBox*      transform_group = nullptr;
     QCheckBox*      lock_transform_checkbox;
     QSlider*        rotate_angle_slider;
     QSpinBox*       rotate_angle_spin;

@@ -136,7 +136,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         active_effects.push_back(slot);
     }
 
-    if(active_effects.empty() && current_effect_ui)
+    if(active_effects.empty() && current_effect_ui && effect_running)
     {
         RenderEffectSlot slot;
         slot.effect = current_effect_ui;
@@ -157,11 +157,83 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(active_effects.empty() && !has_enabled_freq_ranges)
     {
+        const RGBColor black = 0x00000000;
+        std::unordered_set<RGBController*> controllers_to_update;
+        std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+        for(const std::unique_ptr<ControllerTransform>& t : controller_transforms)
+        {
+            if(!t || !t->virtual_controller) continue;
+            for(const GridLEDMapping& m : t->virtual_controller->GetMappings())
+            {
+                if(m.controller) controllers_managed_by_virtuals.insert(m.controller);
+            }
+        }
+
+        for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+        {
+            ControllerTransform* transform = transform_ptr.get();
+            if(!transform) continue;
+            if(transform->hidden_by_virtual) continue;
+            if(transform->controller &&
+               controllers_managed_by_virtuals.find(transform->controller) != controllers_managed_by_virtuals.end())
+                continue;
+
+            if(transform->virtual_controller && !transform->controller)
+            {
+                VirtualController3D* virtual_ctrl = transform->virtual_controller;
+                const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+                for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
+                {
+                    if(mapping_idx >= transform->led_positions.size()) continue;
+                    const GridLEDMapping& mapping = mappings[mapping_idx];
+                    transform->led_positions[mapping_idx].preview_color = black;
+                    if(mapping.controller && !mapping.controller->zones.empty() && !mapping.controller->colors.empty() &&
+                       mapping.zone_idx < mapping.controller->zones.size())
+                    {
+                        unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
+                        if(led_global_idx < mapping.controller->colors.size())
+                            mapping.controller->colors[led_global_idx] = black;
+                        controllers_to_update.insert(mapping.controller);
+                    }
+                }
+                continue;
+            }
+
+            RGBController* controller = transform->controller;
+            if(!controller || controller->zones.empty() || controller->colors.empty()) continue;
+
+            for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
+            {
+                LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
+                led_position.preview_color = black;
+                if(led_position.zone_idx >= controller->zones.size()) continue;
+                unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
+                if(led_global_idx < controller->colors.size())
+                    controller->colors[led_global_idx] = black;
+            }
+            controllers_to_update.insert(controller);
+        }
+
+        for(RGBController* ctrl : controllers_to_update)
+        {
+            if(ctrl) ctrl->UpdateLEDs();
+        }
+
         if(viewport)
         {
+            viewport->UpdateColors();
             viewport->ClearRoomGridOverlayBounds();
             viewport->SetRoomGridColorCallback(nullptr);
-            viewport->SetRoomGridColorBuffer(std::vector<RGBColor>());
+            int nx = 0, ny = 0, nz = 0;
+            viewport->GetRoomGridOverlayDimensions(&nx, &ny, &nz);
+            const size_t grid_count = (size_t)nx * (size_t)ny * (size_t)nz;
+            if(grid_count > 0 && grid_count <= 500000u)
+            {
+                std::vector<RGBColor> black_grid(grid_count, black);
+                viewport->SetRoomGridColorBuffer(black_grid);
+            }
+            else
+                viewport->SetRoomGridColorBuffer(std::vector<RGBColor>());
         }
         return;
     }

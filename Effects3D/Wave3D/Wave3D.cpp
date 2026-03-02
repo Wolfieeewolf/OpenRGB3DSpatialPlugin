@@ -31,7 +31,7 @@ EffectInfo3D Wave3D::GetEffectInfo()
 {
     EffectInfo3D info;
     info.info_version = 2;
-    info.effect_name = "3D Wave";
+    info.effect_name = "Wave";
     info.effect_description = "Wave pattern with configurable direction and speed";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_WAVE;

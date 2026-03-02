@@ -154,6 +154,9 @@ RGBColor Starfield3D::CalculateColorGrid(float x, float y, float z, float time, 
         star_cache_count = n_stars;
         star_positions_cached.resize(n_stars);
         float drift = std::max(0.0f, std::min(1.0f, drift_amount));
+        float margin = 3.0f * sigma * half;
+        float min_x = 1e9f, min_y = 1e9f, min_z = 1e9f;
+        float max_x = -1e9f, max_y = -1e9f, max_z = -1e9f;
         for(int i = 0; i < n_stars; i++)
         {
             float sx = hash_float((unsigned int)i, 1u);
@@ -163,9 +166,21 @@ RGBColor Starfield3D::CalculateColorGrid(float x, float y, float z, float time, 
             float sx_d = sx + drift * 0.3f * sinf(time * 2.0f + (float)i * 0.1f);
             float sy_d = sy + drift * 0.3f * cosf(time * 1.7f + (float)i * 0.07f);
             Vector3D star_local{sx_d * half + origin.x, sy_d * half + origin.y, sz * half + origin.z};
-            star_positions_cached[i] = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
+            Vector3D rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
+            star_positions_cached[i] = rot;
+            if(rot.x < min_x) min_x = rot.x; if(rot.x > max_x) max_x = rot.x;
+            if(rot.y < min_y) min_y = rot.y; if(rot.y > max_y) max_y = rot.y;
+            if(rot.z < min_z) min_z = rot.z; if(rot.z > max_z) max_z = rot.z;
         }
+        star_aabb_min_x = min_x - margin; star_aabb_max_x = max_x + margin;
+        star_aabb_min_y = min_y - margin; star_aabb_max_y = max_y + margin;
+        star_aabb_min_z = min_z - margin; star_aabb_max_z = max_z + margin;
     }
+
+    if(x < star_aabb_min_x || x > star_aabb_max_x ||
+       y < star_aabb_min_y || y > star_aabb_max_y ||
+       z < star_aabb_min_z || z > star_aabb_max_z)
+        return 0x00000000;
 
     float sum_r = 0.0f, sum_g = 0.0f, sum_b = 0.0f;
     float sum_intensity = 0.0f;

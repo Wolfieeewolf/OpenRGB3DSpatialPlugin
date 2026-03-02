@@ -40,6 +40,7 @@ public:
 
 private:
     static void                 DeviceListChangedCallback(void* ptr);
+    static void                 DetectionProgressCallback(void* ptr);
 
     OpenRGB3DSpatialTab*        ui;
 };

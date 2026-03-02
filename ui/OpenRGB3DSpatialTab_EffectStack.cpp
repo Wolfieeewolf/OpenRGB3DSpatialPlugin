@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
 #include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
@@ -15,6 +14,7 @@
 #include <QTabWidget>
 #include <QAbstractItemView>
 #include <QHBoxLayout>
+#include <QPointer>
 
 void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 {
@@ -32,7 +32,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     QWidget* active_tab = new QWidget();
     QVBoxLayout* active_layout = new QVBoxLayout(active_tab);
 
-    QLabel* list_label = new QLabel("Active Effect Stack");
+    QLabel* list_label = new QLabel("Layers");
     QFont list_font = list_label->font();
     list_font.setBold(true);
     list_label->setFont(list_font);
@@ -52,9 +52,24 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     active_layout->addWidget(effect_stack_list);
 
     QHBoxLayout* button_layout = new QHBoxLayout();
+
+    start_all_effects_btn = new QPushButton(tr("Start all"));
+    start_all_effects_btn->setToolTip(tr("Start the effect stack (all enabled layers)."));
+    connect(start_all_effects_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_start_all_effects_clicked);
+    button_layout->addWidget(start_all_effects_btn);
+
+    stop_all_effects_btn = new QPushButton(tr("Stop all"));
+    stop_all_effects_btn->setToolTip(tr("Stop the effect stack."));
+    stop_all_effects_btn->setEnabled(false);
+    connect(stop_all_effects_btn, &QPushButton::clicked,
+            this, &OpenRGB3DSpatialTab::on_stop_all_effects_clicked);
+    button_layout->addWidget(stop_all_effects_btn);
+
     button_layout->addStretch();
 
-    QPushButton* remove_effect_btn = new QPushButton("- Remove Effect");
+    QPushButton* remove_effect_btn = new QPushButton("Remove layer");
+    remove_effect_btn->setToolTip(tr("Remove the selected layer from the stack."));
     connect(remove_effect_btn, &QPushButton::clicked,
             this, &OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked);
     button_layout->addWidget(remove_effect_btn);
@@ -104,7 +119,6 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     parent_layout->addWidget(stack_group);
 
     UpdateStackEffectZoneCombo();
-    LoadStackPresets();
 }
 
 void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
@@ -117,6 +131,11 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
         QMessageBox::information(this, "No Effect Selected",
                                 "Please select an effect to remove from the stack.");
         return;
+    }
+
+    if(effect_stack_list->currentRow() == current_row)
+    {
+        LoadStackEffectControls(nullptr);
     }
 
     effect_stack.erase(effect_stack.begin() + current_row);
@@ -140,6 +159,9 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     }
 
     SaveEffectStack();
+
+    if(effect_running)
+        RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
@@ -401,7 +423,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         {
             w->hide();
             w->setParent(nullptr);
-            delete w;
+            w->deleteLater();
         }
         delete layout_item;
     }
@@ -581,11 +603,24 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         stop_effect_button->setEnabled(effect_running);
     }
 
-    SpatialEffect3D* captured_ui = ui_effect;
+    QPointer<SpatialEffect3D> captured_ui(ui_effect);
     connect(ui_effect, &SpatialEffect3D::ParametersChanged, this,
             [this, instance, captured_ui]()
             {
-                if(!instance || !captured_ui)
+                if(!instance || captured_ui.isNull())
+                {
+                    return;
+                }
+                bool still_in_stack = false;
+                for(const std::unique_ptr<EffectInstance3D>& p : effect_stack)
+                {
+                    if(p.get() == instance)
+                    {
+                        still_in_stack = true;
+                        break;
+                    }
+                }
+                if(!still_in_stack)
                 {
                     return;
                 }

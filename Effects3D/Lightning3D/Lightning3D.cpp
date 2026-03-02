@@ -176,6 +176,9 @@ void Lightning3D::UpdateArchCache(float time, const GridContext3D& grid)
     float arch_duration = (0.35f + 0.25f / (float)std::max(1u, strike_rate)) / std::max(0.3f, speed_factor);
     int max_arches = (int)branches;
 
+    float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
+    float margin = room_avg * 0.15f;
+
     for(int i = 0; i < max_arches; i++)
     {
         float phase = 0.1f + 0.85f * (float)i / (float)std::max(1, max_arches);
@@ -188,6 +191,24 @@ void Lightning3D::UpdateArchCache(float time, const GridContext3D& grid)
         arc.duration = arch_duration;
         arc.seed = (unsigned int)(i * 7919 + (int)(time * 100.0f));
         cached_arches.push_back(arc);
+    }
+
+    if(!cached_arches.empty())
+    {
+        float min_x = origin.x, min_y = origin.y, min_z = origin.z;
+        float max_x = origin.x, max_y = origin.y, max_z = origin.z;
+        for(const PlasmaArc3D& arc : cached_arches)
+        {
+            if(arc.start.x < min_x) min_x = arc.start.x; if(arc.start.x > max_x) max_x = arc.start.x;
+            if(arc.start.y < min_y) min_y = arc.start.y; if(arc.start.y > max_y) max_y = arc.start.y;
+            if(arc.start.z < min_z) min_z = arc.start.z; if(arc.start.z > max_z) max_z = arc.start.z;
+            if(arc.end.x < min_x) min_x = arc.end.x; if(arc.end.x > max_x) max_x = arc.end.x;
+            if(arc.end.y < min_y) min_y = arc.end.y; if(arc.end.y > max_y) max_y = arc.end.y;
+            if(arc.end.z < min_z) min_z = arc.end.z; if(arc.end.z > max_z) max_z = arc.end.z;
+        }
+        arc_aabb_min_x = min_x - margin; arc_aabb_max_x = max_x + margin;
+        arc_aabb_min_y = min_y - margin; arc_aabb_max_y = max_y + margin;
+        arc_aabb_min_z = min_z - margin; arc_aabb_max_z = max_z + margin;
     }
 }
 
@@ -224,6 +245,12 @@ RGBColor Lightning3D::CalculateColorGrid(float x, float y, float z, float time, 
     float arc_intensity = 0.0f;
     RGBColor arc_color = GetRainbowMode() ? GetRainbowColor(220.0f) : GetColorAtPosition(0.5f);
 
+    bool in_arc_aabb = (cached_arches.empty()) ||
+        (x >= arc_aabb_min_x && x <= arc_aabb_max_x &&
+         y >= arc_aabb_min_y && y <= arc_aabb_max_y &&
+         z >= arc_aabb_min_z && z <= arc_aabb_max_z);
+
+    if(in_arc_aabb)
     for(size_t i = 0; i < cached_arches.size(); i++)
     {
         const PlasmaArc3D& arc = cached_arches[i];

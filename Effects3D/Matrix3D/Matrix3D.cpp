@@ -33,7 +33,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
 {
     EffectInfo3D info;
     info.info_version = 2;
-    info.effect_name = "3D Matrix";
+    info.effect_name = "Matrix";
     info.effect_description = "Matrix-style falling code columns";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_MATRIX;
@@ -79,7 +79,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     density_label->setMinimumWidth(30);
     layout->addWidget(density_label, 0, 2);
 
-    layout->addWidget(new QLabel("Trail Length:"), 1, 0);
+    layout->addWidget(new QLabel("Trail length:"), 1, 0);
     trail_slider = new QSlider(Qt::Horizontal);
     trail_slider->setRange(10, 100);
     trail_slider->setValue(trail);
@@ -89,7 +89,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     trail_label->setMinimumWidth(30);
     layout->addWidget(trail_label, 1, 2);
 
-    layout->addWidget(new QLabel("Char Height:"), 2, 0);
+    layout->addWidget(new QLabel("Char height:"), 2, 0);
     char_height_slider = new QSlider(Qt::Horizontal);
     char_height_slider->setRange(5, 50);
     char_height_slider->setValue(char_height);
@@ -99,7 +99,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     char_height_label->setMinimumWidth(30);
     layout->addWidget(char_height_label, 2, 2);
 
-    layout->addWidget(new QLabel("Char Gap:"), 3, 0);
+    layout->addWidget(new QLabel("Char gap:"), 3, 0);
     char_gap_slider = new QSlider(Qt::Horizontal);
     char_gap_slider->setRange(0, 50);
     char_gap_slider->setValue(char_gap);
@@ -109,7 +109,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     char_gap_label->setMinimumWidth(30);
     layout->addWidget(char_gap_label, 3, 2);
 
-    layout->addWidget(new QLabel("Char Variation:"), 4, 0);
+    layout->addWidget(new QLabel("Char variation:"), 4, 0);
     char_variation_slider = new QSlider(Qt::Horizontal);
     char_variation_slider->setRange(0, 100);
     char_variation_slider->setValue(char_variation);
@@ -119,7 +119,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     char_variation_label->setMinimumWidth(30);
     layout->addWidget(char_variation_label, 4, 2);
 
-    layout->addWidget(new QLabel("Char Spacing:"), 5, 0);
+    layout->addWidget(new QLabel("Char spacing:"), 5, 0);
     char_spacing_slider = new QSlider(Qt::Horizontal);
     char_spacing_slider->setRange(1, 50);
     char_spacing_slider->setValue(char_spacing);
@@ -266,6 +266,10 @@ float Matrix3D::ComputeFaceIntensity(int face,
             face_distance = fabsf(z - grid.max_z);
             break;
     }
+
+    float room_extent = (grid.width + grid.height + grid.depth) / 3.0f;
+    if(room_extent > 0.001f && face_distance > room_extent * 0.5f)
+        return 0.0f;
 
     if(column_spacing < 0.001f) column_spacing = 0.001f;
 

@@ -5,6 +5,12 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include <vector>
+
+struct BubbleCenter3D
+{
+    float cx, cy, cz, radius;
+};
 
 class Bubbles3D : public SpatialEffect3D
 {
@@ -13,10 +19,10 @@ class Bubbles3D : public SpatialEffect3D
 public:
     explicit Bubbles3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Bubbles3D", "3D Bubbles", "3D Spatial", [](){ return new Bubbles3D; });
+    EFFECT_REGISTERER_3D("Bubbles3D", "Bubbles", "3D Spatial", [](){ return new Bubbles3D; });
 
     static std::string const ClassName() { return "Bubbles3D"; }
-    static std::string const UIName() { return "3D Bubbles"; }
+    static std::string const UIName() { return "Bubbles"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -33,6 +39,8 @@ private:
     float rise_speed = 0.5f;
     float spawn_interval = 0.8f;
     float max_radius = 1.0f;
+    float bubble_cache_time = -1e9f;
+    std::vector<BubbleCenter3D> bubble_centers_cached;
 };
 
 #endif

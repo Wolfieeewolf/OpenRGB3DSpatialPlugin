@@ -18,10 +18,10 @@ public:
     explicit Explosion3D(QWidget* parent = nullptr);
     ~Explosion3D() override = default;
 
-    EFFECT_REGISTERER_3D("Explosion3D", "3D Explosion", "3D Spatial", [](){ return new Explosion3D; });
+    EFFECT_REGISTERER_3D("Explosion3D", "Explosion", "3D Spatial", [](){ return new Explosion3D; });
 
     static std::string const ClassName() { return "Explosion3D"; }
-    static std::string const UIName() { return "3D Explosion"; }
+    static std::string const UIName() { return "Explosion"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

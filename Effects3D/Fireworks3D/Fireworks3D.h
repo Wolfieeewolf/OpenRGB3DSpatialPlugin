@@ -40,6 +40,8 @@ private:
     struct CachedParticle { float px, py, pz; float decay; float hue; };
     float particle_cache_time = -1e9f;
     std::vector<CachedParticle> particle_cache;
+    float particle_aabb_min_x = 0, particle_aabb_min_y = 0, particle_aabb_min_z = 0;
+    float particle_aabb_max_x = 0, particle_aabb_max_y = 0, particle_aabb_max_z = 0;
 };
 
 #endif

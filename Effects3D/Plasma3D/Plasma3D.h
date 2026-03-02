@@ -17,10 +17,10 @@ public:
     explicit Plasma3D(QWidget* parent = nullptr);
     ~Plasma3D();
 
-    EFFECT_REGISTERER_3D("Plasma3D", "3D Plasma", "3D Spatial", [](){return new Plasma3D;});
+    EFFECT_REGISTERER_3D("Plasma3D", "Plasma", "3D Spatial", [](){return new Plasma3D;});
 
     static std::string const ClassName() { return "Plasma3D"; }
-    static std::string const UIName() { return "3D Plasma"; }
+    static std::string const UIName() { return "Plasma"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

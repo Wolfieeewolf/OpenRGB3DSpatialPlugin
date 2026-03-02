@@ -31,7 +31,7 @@ EffectInfo3D Bubbles3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "3D Bubbles";
+    info.effect_name = "Bubbles";
     info.effect_description = "Rising expanding spheres (like OpenRGB Bubbles) – bubbles spawn from floor and rise";
     info.category = "3D Spatial";
     info.effect_type = (SpatialEffectType)0;
@@ -143,25 +143,35 @@ RGBColor Bubbles3D::CalculateColorGrid(float x, float y, float z, float time, co
     float interval = std::max(0.3f, std::min(2.0f, spawn_interval));
     float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * half;
 
+    if(bubble_centers_cached.size() != (size_t)n_bub || fabsf(time - bubble_cache_time) > 0.001f)
+    {
+        bubble_cache_time = time;
+        bubble_centers_cached.resize(n_bub);
+        for(int i = 0; i < n_bub; i++)
+        {
+            float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
+            float radius = (phase / interval) * max_r * 0.4f;
+            float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * half * 0.6f;
+            float cy = origin.y - half * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, half * 2.0f) - half;
+            float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * half * 0.6f;
+            bubble_centers_cached[i] = {cx, cy, cz, radius};
+        }
+    }
+
     float max_intensity = 0.0f;
     float best_hue = 0.0f;
 
     for(int i = 0; i < n_bub; i++)
     {
-        float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
-        float radius = (phase / interval) * max_r * 0.4f;
-        float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * half * 0.6f;
-        float cy = origin.y - half * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, half * 2.0f) - half;
-        float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * half * 0.6f;
-
-        float dx = x - cx;
-        float dy = y - cy;
-        float dz = z - cz;
+        const BubbleCenter3D& b = bubble_centers_cached[i];
+        float dx = x - b.cx;
+        float dy = y - b.cy;
+        float dz = z - b.cz;
         float dist_sq = dx*dx + dy*dy + dz*dz;
-        float far = radius + thick * 4.0f;
+        float far = b.radius + thick * 4.0f;
         if(dist_sq > far * far) continue;
         float dist = sqrtf(dist_sq);
-        float shallow = fabsf(dist - radius) / thick;
+        float shallow = fabsf(dist - b.radius) / thick;
         float value = (shallow < 0.01f) ? 1.0f : 1.0f / (1.0f + shallow * shallow);
         value = fmaxf(0.0f, fminf(1.0f, value));
 

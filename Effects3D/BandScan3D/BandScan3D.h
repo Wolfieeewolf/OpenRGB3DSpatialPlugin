@@ -20,7 +20,7 @@ public:
     EFFECT_REGISTERER_3D("BandScan3D", "Band Scan", "Audio", [](){ return new BandScan3D; })
 
     static std::string const ClassName() { return "BandScan3D"; }
-    static std::string const UIName() { return "Band Scan 3D"; }
+    static std::string const UIName() { return "Band Scan"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
