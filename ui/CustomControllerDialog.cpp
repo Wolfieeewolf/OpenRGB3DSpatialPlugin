@@ -1252,13 +1252,13 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
 {
     if(!mapping.controller)
         return tr("Unknown device (not found on this system)");
-    QString name = QString::fromStdString(mapping.controller->name);
+    QString name = QString::fromStdString(mapping.controller->GetName());
     if(mapping.granularity == 0)
         return tr("Assigned: %1 (Whole Device)").arg(name);
     if(mapping.granularity == 1)
     {
         QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
-            ? QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name)
+            ? QString::fromStdString(mapping.controller->GetZoneName((unsigned int)mapping.zone_idx))
             : tr("Unknown Zone");
         return tr("Assigned: %1, Zone: %2").arg(name, zone_name);
     }
@@ -1269,7 +1269,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
         {
             unsigned int global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
             if(global_led_idx < mapping.controller->leds.size())
-                led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+                led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
         }
         return tr("Assigned: %1, LED: %2").arg(name, led_name);
     }

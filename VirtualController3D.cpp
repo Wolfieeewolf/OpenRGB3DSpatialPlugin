@@ -57,8 +57,8 @@ bool ControllerMatchesPreset(RGBController* c, const std::string& ctrl_name, con
                              const std::string& preset_model, const std::string& preset_brand,
                              const std::string& preset_brand_model, bool match_location)
 {
-    std::string c_name = c->name;
-    std::string c_location = c->location;
+    std::string c_name = c->GetName();
+    std::string c_location = c->GetLocation();
     
     if(ControllerNameMatches(ctrl_name, c_name))
         return !match_location || ctrl_location.empty() || c_location == ctrl_location;
