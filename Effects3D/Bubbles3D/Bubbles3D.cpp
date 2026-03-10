@@ -64,7 +64,7 @@ void Bubbles3D::SetupCustomUI(QWidget* parent)
     int row = 0;
     layout->addWidget(new QLabel("Max bubbles:"), row, 0);
     QSlider* max_slider = new QSlider(Qt::Horizontal);
-    max_slider->setRange(4, 30);
+    max_slider->setRange(4, 100);
     max_slider->setValue(max_bubbles);
     QLabel* max_label = new QLabel(QString::number(max_bubbles));
     max_label->setMinimumWidth(36);

@@ -7,6 +7,7 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include <QComboBox>
 #include <limits>
 
 class CubeLayer3D : public SpatialEffect3D
@@ -31,11 +32,14 @@ private:
     float EvaluateIntensity(float amplitude, float time);
     static float AxisPosition(int axis, float x, float y, float z,
                               float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
+    float smoothstep(float edge0, float edge1, float x) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
     float layer_thickness = 0.12f;
+    int layer_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
+    QComboBox* layer_edge_combo = nullptr;
 };
 
 #endif

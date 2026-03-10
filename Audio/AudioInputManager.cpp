@@ -258,7 +258,7 @@ AudioInputManager::AudioInputManager(QObject* parent)
     level_timer.setInterval(33);
     connect(&level_timer, &QTimer::timeout, this, &AudioInputManager::onLevelTick);
     sample_buffer.reserve(fft_size * 4);
-    bands16.assign(16, 0.0f);
+    bands16.assign(bands_count, 0.0f);
     resetAutoLevel();
 }
 
@@ -415,7 +415,7 @@ void AudioInputManager::stop()
 void AudioInputManager::setGain(float g)
 {
     if(g < 0.05f) g = 0.05f;
-    if(g > 40.0f) g = 40.0f;
+    if(g > 100.0f) g = 100.0f;
     gain = g;
 }
 
@@ -453,6 +453,7 @@ void AudioInputManager::setBandsCount(int bands)
 {
     if(bands != 8 && bands != 16 && bands != 32) bands = 16;
     bands_count = bands;
+    band_peak_smoothed.assign(bands_count, 0.1f);
     QMutexLocker bl(&bands_mutex);
     bands16.assign(bands_count, 0.0f);
 }
@@ -467,6 +468,7 @@ void AudioInputManager::setFFTSize(int n)
     if(chosen < 512) chosen = 512; if(chosen > 8192) chosen = 8192;
     if(chosen == fft_size) return;
     fft_size = chosen;
+    band_peak_smoothed.assign(bands_count, 0.1f);
     sample_buffer.clear();
     window.clear();
     prev_mags.clear();
@@ -499,12 +501,17 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
     for(int i = 0; i < count; i++)
     {
         double s = samples[i] / 32768.0;
-        sum += s * s;
-        sample_buffer.push_back((float)s);
+        float scaled = (float)(s * gain);
+        /* Soft-limit so FFT never sees clipping; safe to use high gain (e.g. low Windows volume) */
+        float limited = (std::abs(scaled) >= 1.0f) ? (scaled > 0 ? 1.0f : -1.0f)
+                       : (float)std::tanh((double)scaled);
+        sample_buffer.push_back(limited);
+        double d = (double)limited;
+        sum += d * d;
     }
     double rms = std::sqrt(sum / std::max(1, count));
-
-    double val = rms * gain;
+    /* Level meter uses RMS of the already-gained (and limited) signal */
+    double val = rms;
 
     if(auto_level_enabled)
     {
@@ -699,6 +706,11 @@ void AudioInputManager::computeSpectrum()
     {
         return;
     }
+    float eq_copy[EQ_BANDS];
+    {
+        QMutexLocker bl(&bands_mutex);
+        for(int i = 0; i < EQ_BANDS; i++) eq_copy[i] = eq_gain[i];
+    }
     std::vector<float> newBands(bands_count, 0.0f);
     for(int b = 0; b < bands_count; b++)
     {
@@ -713,21 +725,26 @@ void AudioInputManager::computeSpectrum()
         float accum = 0.0f; int cnt = 0;
         for(int i = i0; i < i1; i++) { accum += mags[i]; cnt++; }
         float v = (cnt > 0) ? (accum / cnt) : 0.0f;
-        v = std::log10(1.0f + 9.0f * v);
-        newBands[b] = v;
+        /* Effects Plugin uses 0.5*log10(1.1*x)+0.9*x (mostly linear) so low levels still show; we do similar */
+        float log_part = 0.4f * std::log10(1.0f + 9.0f * v);
+        float linear_part = 0.6f * std::min(v, 1.0f);
+        v = std::min(1.0f, std::max(0.0f, log_part + linear_part));
+        newBands[b] = v * eq_copy[std::min(b, EQ_BANDS - 1)];
     }
-    float maxv = 1e-6f;
+    /* Per-band peak so each band can peak independently (bass, mids, treble all show) */
+    const float band_peak_decay = 0.994f;
+    if((int)band_peak_smoothed.size() != bands_count)
+    {
+        band_peak_smoothed.assign(bands_count, 0.1f);
+    }
     for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
     {
-        float value = newBands[band_index];
-        if(value > maxv)
-        {
-            maxv = value;
-        }
-    }
-    for(int band_index = 0; band_index < (int)newBands.size(); band_index++)
-    {
-        newBands[band_index] = std::min(1.0f, newBands[band_index] / maxv);
+        float v = newBands[band_index];
+        float peak = band_peak_smoothed[band_index];
+        peak = std::max(v, peak * band_peak_decay);
+        if(peak < 1e-6f) peak = 1e-6f;
+        band_peak_smoothed[band_index] = peak;
+        newBands[band_index] = std::min(1.0f, v / peak);
     }
 
     {
@@ -869,6 +886,67 @@ float AudioInputManager::getBandEnergyHz(float low_hz, float high_hz) const
     return (cnt>0) ? std::min(1.0f, sum / (float)cnt) : 0.0f;
 }
 
+float AudioInputManager::getBandEnergyHzWithGain(float low_hz, float high_hz, const float* band_gain_16) const
+{
+    QMutexLocker bl(&bands_mutex);
+    if(bands16.empty() || sample_rate_hz <= 0 || !band_gain_16) return 0.0f;
+    float fs = (float)sample_rate_hz;
+    if(fft_size <= 0 || fs <= 0.0f) return 0.0f;
+    float bin_min = fs / (float)fft_size;
+    float f_min = std::max(1.0f, bin_min);
+    float f_max = fs * 0.5f;
+    if(f_max <= f_min || f_max < 0.001f) return 0.0f;
+    if(high_hz <= low_hz) high_hz = low_hz + 1.0f;
+    float clamped_low = low_hz;
+    if(clamped_low < f_min) clamped_low = f_min;
+    if(clamped_low > f_max) clamped_low = f_max;
+    float log_ratio = std::log(f_max / f_min);
+    float low_norm = (std::abs(log_ratio) > 1e-6f) ? (std::log(clamped_low / f_min) / log_ratio) : 0.0f;
+    int i0 = (int)std::floor(low_norm * (int)bands16.size());
+    if(i0 < 0) i0 = 0;
+    if(i0 > (int)bands16.size() - 1) i0 = (int)bands16.size() - 1;
+    float clamped_high = high_hz;
+    if(clamped_high < f_min) clamped_high = f_min;
+    if(clamped_high > f_max) clamped_high = f_max;
+    float high_norm = (std::abs(log_ratio) > 1e-6f) ? (std::log(clamped_high / f_min) / log_ratio) : 0.0f;
+    int i1 = (int)std::floor(high_norm * (int)bands16.size());
+    if(i1 < 0) i1 = 0;
+    if(i1 > (int)bands16.size() - 1) i1 = (int)bands16.size() - 1;
+    if(i1 < i0) std::swap(i0, i1);
+    if(i1 == i0) i1 = std::min(i0 + 1, (int)bands16.size() - 1);
+    float sum = 0.0f;
+    int cnt = 0;
+    for(int i = i0; i <= i1; ++i)
+    {
+        int g = std::min(i, 15);
+        float gv = band_gain_16[g];
+        sum += bands16[i] * std::max(0.0f, gv);
+        cnt++;
+    }
+    return (cnt > 0) ? std::min(1.0f, sum / (float)cnt) : 0.0f;
+}
+
+void AudioInputManager::setEqGain(int band_index, float gain)
+{
+    if(band_index < 0 || band_index >= EQ_BANDS) return;
+    QMutexLocker bl(&bands_mutex);
+    eq_gain[band_index] = std::max(0.0f, std::min(2.0f, gain));
+}
+
+float AudioInputManager::getEqGain(int band_index) const
+{
+    if(band_index < 0 || band_index >= EQ_BANDS) return 1.0f;
+    QMutexLocker bl(&bands_mutex);
+    return eq_gain[band_index];
+}
+
+void AudioInputManager::resetEq()
+{
+    QMutexLocker bl(&bands_mutex);
+    for(int i = 0; i < EQ_BANDS; i++)
+        eq_gain[i] = 1.0f;
+}
+
 AudioInputManager::SpectrumSnapshot AudioInputManager::getSpectrumSnapshot(int target_bins) const
 {
     SpectrumSnapshot snapshot;
@@ -978,11 +1056,10 @@ void AudioInputManager::updateVisualizerBuckets(const std::vector<float>& mags, 
             count++;
         }
         float value = (count > 0) ? (accum / (float)count) : 0.0f;
-        value = std::log10(1.0f + 9.0f * value);
-        if(value < 0.0f) value = 0.0f;
-        if(value > 1.0f) value = 1.0f;
+        float log_part = 0.4f * std::log10(1.0f + 9.0f * value);
+        float linear_part = 0.6f * std::min(value, 1.0f);
+        value = std::min(1.0f, std::max(0.0f, log_part + linear_part));
 
-        visualizer_bins[i] = value;
         if(visualizer_peaks[i] < value)
         {
             visualizer_peaks[i] = value;
@@ -995,6 +1072,9 @@ void AudioInputManager::updateVisualizerBuckets(const std::vector<float>& mags, 
                 visualizer_peaks[i] = visualizer_floor;
             }
         }
+        /* Per-bin normalize so highs can peak too (not just bass) */
+        float peak = std::max(visualizer_peaks[i], visualizer_floor);
+        visualizer_bins[i] = std::min(1.0f, value / peak);
     }
 
     visualizer_min_hz = low;

@@ -14,7 +14,12 @@ REGISTER_EFFECT_3D(Wave3D);
 Wave3D::Wave3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     shape_combo = nullptr;
+    edge_shape_combo = nullptr;
+    thickness_slider = nullptr;
+    thickness_label = nullptr;
     shape_type = 0;
+    edge_shape = 0;
+    wave_thickness = 30;
     progress = 0.0f;
     SetFrequency(50);
     SetRainbowMode(true);
@@ -73,8 +78,30 @@ void Wave3D::SetupCustomUI(QWidget* parent)
     shape_combo->addItem("Diagonal");
     shape_combo->setCurrentIndex(shape_type);
     layout->addWidget(shape_combo, 0, 1);
+    layout->addWidget(new QLabel("Edge:"), 1, 0);
+    edge_shape_combo = new QComboBox();
+    edge_shape_combo->addItem("Round");
+    edge_shape_combo->addItem("Sharp");
+    edge_shape_combo->addItem("Square");
+    edge_shape_combo->setCurrentIndex(std::clamp(edge_shape, 0, 2));
+    edge_shape_combo->setToolTip("Wave edge profile: Round = soft, Sharp = hard, Square = hard band.");
+    layout->addWidget(edge_shape_combo, 1, 1);
+    layout->addWidget(new QLabel("Thickness:"), 2, 0);
+    thickness_slider = new QSlider(Qt::Horizontal);
+    thickness_slider->setRange(5, 100);
+    thickness_slider->setValue(wave_thickness);
+    thickness_slider->setToolTip("Wave band thickness (higher = wider band).");
+    layout->addWidget(thickness_slider, 2, 1);
+    thickness_label = new QLabel(QString::number(wave_thickness));
+    layout->addWidget(thickness_label, 2, 2);
     AddWidgetToParent(wave_widget, parent);
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wave3D::OnWaveParameterChanged);
+    connect(edge_shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Wave3D::OnWaveParameterChanged);
+    connect(thickness_slider, &QSlider::valueChanged, this, [this](int v) {
+        wave_thickness = v;
+        if(thickness_label) thickness_label->setText(QString::number(wave_thickness));
+        emit ParametersChanged();
+    });
 }
 
 void Wave3D::UpdateParams(SpatialEffectParams& params)
@@ -85,7 +112,16 @@ void Wave3D::UpdateParams(SpatialEffectParams& params)
 void Wave3D::OnWaveParameterChanged()
 {
     if(shape_combo) shape_type = shape_combo->currentIndex();
+    if(edge_shape_combo) edge_shape = std::clamp(edge_shape_combo->currentIndex(), 0, 2);
+    if(thickness_slider) wave_thickness = thickness_slider->value();
     emit ParametersChanged();
+}
+
+float Wave3D::smoothstep(float edge0, float edge1, float x) const
+{
+    float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
 }
 
 RGBColor Wave3D::CalculateColor(float x, float y, float z, float time)
@@ -189,9 +225,27 @@ RGBColor Wave3D::CalculateColorGrid(float x, float y, float z, float time, const
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
-    r = (unsigned char)(r * depth_factor);
-    g = (unsigned char)(g * depth_factor);
-    b = (unsigned char)(b * depth_factor);
+
+    float edge_distance = 1.0f - wave_enhanced;
+    edge_distance = std::max(0.0f, edge_distance);
+    float thickness_factor = wave_thickness / 100.0f;
+    float intensity = 1.0f;
+    switch(edge_shape)
+    {
+    case 0:
+        intensity = 1.0f - smoothstep(0.0f, thickness_factor, edge_distance);
+        break;
+    case 1:
+        intensity = edge_distance < thickness_factor * 0.5f ? 1.0f : 0.0f;
+        break;
+    case 2:
+    default:
+        intensity = edge_distance < thickness_factor ? 1.0f : 0.0f;
+        break;
+    }
+    r = (unsigned char)(r * depth_factor * intensity);
+    g = (unsigned char)(g * depth_factor * intensity);
+    b = (unsigned char)(b * depth_factor * intensity);
     return (b << 16) | (g << 8) | r;
 }
 
@@ -199,6 +253,8 @@ nlohmann::json Wave3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["shape_type"] = shape_type;
+    j["edge_shape"] = edge_shape;
+    j["wave_thickness"] = wave_thickness;
     return j;
 }
 
@@ -210,5 +266,16 @@ void Wave3D::LoadSettings(const nlohmann::json& settings)
         shape_type = std::max(0, std::min(3, settings["shape_type"].get<int>()));
         if(shape_combo)
             shape_combo->setCurrentIndex(shape_type);
+    }
+    if(settings.contains("edge_shape"))
+        edge_shape = std::clamp(settings["edge_shape"].get<int>(), 0, 2);
+    if(settings.contains("wave_thickness"))
+        wave_thickness = std::clamp(settings["wave_thickness"].get<int>(), 5, 100);
+    if(edge_shape_combo)
+        edge_shape_combo->setCurrentIndex(edge_shape);
+    if(thickness_slider)
+    {
+        thickness_slider->setValue(wave_thickness);
+        if(thickness_label) thickness_label->setText(QString::number(wave_thickness));
     }
 }

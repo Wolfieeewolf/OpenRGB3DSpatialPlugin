@@ -52,7 +52,7 @@ EffectInfo3D FreqFill3D::GetEffectInfo()
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
-    info.show_scale_control = false;
+    info.show_scale_control = true;
     info.show_fps_control = false;
     info.show_axis_control = false;
     info.show_color_controls = true;
@@ -71,7 +71,7 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* edge_row = new QHBoxLayout();
     edge_row->addWidget(new QLabel("Edge width:"));
     QSlider* edge_slider = new QSlider(Qt::Horizontal);
-    edge_slider->setRange(0, 40);
+    edge_slider->setRange(0, 100);
     edge_slider->setValue((int)(edge_width * 100.0f));
     QLabel* edge_label = new QLabel(QString::number((int)(edge_width * 100)) + "%");
     edge_label->setMinimumWidth(40);
@@ -105,7 +105,7 @@ void FreqFill3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

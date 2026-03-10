@@ -57,7 +57,7 @@ void RotatingBeam3D::SetupCustomUI(QWidget* parent)
     int row = 0;
     layout->addWidget(new QLabel("Beam width:"), row, 0);
     QSlider* width_slider = new QSlider(Qt::Horizontal);
-    width_slider->setRange(5, 50);
+    width_slider->setRange(5, 200);
     width_slider->setValue((int)(beam_width * 100.0f));
     QLabel* width_label = new QLabel(QString::number((int)(beam_width * 100)) + "%");
     width_label->setMinimumWidth(36);

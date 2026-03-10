@@ -42,6 +42,7 @@ private:
     RGBColor ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
+    float roll_speed = 0.0f;  /* 0 = no roll; >0 = phase advance per second for color/bar position */
     int band_start = 0;
     int band_end = -1;
 

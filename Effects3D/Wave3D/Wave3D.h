@@ -35,8 +35,15 @@ private slots:
 
 private:
     QComboBox* shape_combo;
+    QComboBox* edge_shape_combo;
+    QSlider* thickness_slider;
+    QLabel* thickness_label;
     int shape_type;
+    int edge_shape;       /* 0=Round, 1=Sharp, 2=Square */
+    int wave_thickness;   /* 5..100 */
     float progress;
+
+    float smoothstep(float edge0, float edge1, float x) const;
 };
 
 #endif

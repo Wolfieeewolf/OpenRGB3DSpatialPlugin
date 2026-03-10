@@ -14,7 +14,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_speed = 1;
     effect_brightness = 100;
     effect_frequency = 1;
-    effect_size = 50;
+    effect_size = 100;
     effect_scale = 200;
     scale_inverted = false;
     effect_fps = 30;
@@ -82,8 +82,17 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     intensity_label = nullptr;
     sharpness_slider = nullptr;
     sharpness_label = nullptr;
+    edge_shape_group = nullptr;
+    edge_profile_combo = nullptr;
+    edge_thickness_slider = nullptr;
+    edge_thickness_label = nullptr;
+    glow_level_slider = nullptr;
+    glow_level_label = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
+    effect_edge_profile = 2;   /* Round default */
+    effect_edge_thickness = 50;
+    effect_glow_level = 15;
 
     scale_x_slider = nullptr;
     scale_x_label  = nullptr;
@@ -191,9 +200,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
     scale_slider = new QSlider(Qt::Horizontal);
-    scale_slider->setRange(0, 250);
+    scale_slider->setRange(0, 300);
     scale_slider->setValue(effect_scale);
-    scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=whole room), 201-250 = 101-150% (beyond room)");
+    scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=fill grid), 201-300 = 101-200% (beyond room)");
     scale_layout->addWidget(scale_slider);
     scale_label = new QLabel(QString::number(effect_scale));
     scale_label->setMinimumWidth(30);
@@ -239,6 +248,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_label->setMinimumWidth(30);
     sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
+
+    /* Edge & shape is not shown globally; effects that need it (e.g. Wipe, Wave, CubeLayer) add their own Edge shape + Thickness in custom UI. */
 
     QGroupBox* axis_scale_group = new QGroupBox("Effect scale (X / Y / Z %)");
     axis_scale_group->setToolTip("Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.");
@@ -1105,6 +1116,72 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
     return (bb << 16) | (gg << 8) | rr;
 }
 
+static float smoothstep_edge(float edge0, float edge1, float x)
+{
+    float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float SpatialEffect3D::ApplyEdgeToIntensity(float normalized_dist) const
+{
+    /* normalized_dist: 0 = inside, 1 = at scale edge, >1 = outside */
+    float thick = 0.05f + 0.45f * (effect_edge_thickness / 100.0f);
+    float glow = 0.15f * (effect_glow_level / 100.0f);
+    int profile = std::clamp(effect_edge_profile, 0, 4);
+
+    float mult = 0.0f;
+    switch(profile)
+    {
+    case 0: /* Sharp */
+        mult = (normalized_dist < 1.0f) ? 1.0f : 0.0f;
+        break;
+    case 1: /* Square */
+        mult = (normalized_dist <= 1.0f) ? 1.0f : 0.0f;
+        break;
+    case 2: /* Round */
+        mult = 1.0f - smoothstep_edge(1.0f - thick, 1.0f, normalized_dist);
+        break;
+    case 3: /* Smooth */
+        mult = 1.0f - smoothstep_edge(1.0f - thick * 1.5f, 1.0f + thick * 0.5f, normalized_dist);
+        break;
+    case 4: /* Sharpen */
+        {
+            float margin = 0.08f * (1.0f - effect_edge_thickness / 100.0f);
+            mult = (normalized_dist < 1.0f - margin) ? 1.0f : (1.0f - smoothstep_edge(1.0f - margin, 1.0f, normalized_dist));
+        }
+        break;
+    default:
+        mult = (normalized_dist < 1.0f) ? 1.0f : 0.0f;
+        break;
+    }
+    /* Glow beyond edge */
+    if(normalized_dist > 1.0f && glow > 0.0f)
+    {
+        float fall = std::exp(-(normalized_dist - 1.0f) * 2.5f);
+        mult = std::max(mult, glow * fall);
+    }
+    return std::clamp(mult, 0.0f, 1.0f);
+}
+
+float SpatialEffect3D::GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
+{
+    float half_w = grid.width * 0.5f;
+    float half_h = grid.height * 0.5f;
+    float half_d = grid.depth * 0.5f;
+    float max_dist_sq = half_w * half_w + half_h * half_h + half_d * half_d;
+    if(max_dist_sq < 1e-10f) return 1.0f;
+
+    float scale_pct = GetNormalizedScale();
+    float scale_radius_sq = max_dist_sq * scale_pct * scale_pct;
+    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
+    float dist = std::sqrt(std::max(0.0f, dist_sq));
+    float radius = std::sqrt(std::max(1e-10f, scale_radius_sq));
+    float normalized_dist = radius > 1e-10f ? (dist / radius) : 0.0f;
+
+    return ApplyEdgeToIntensity(normalized_dist);
+}
+
 Vector3D SpatialEffect3D::TransformPointByRotation(float x, float y, float z, const Vector3D& origin) const
 {
     float tx = x - origin.x;
@@ -1335,6 +1412,10 @@ void SpatialEffect3D::OnParameterChanged()
             sharpness_label->setText(QString::number(effect_sharpness));
         }
     }
+    if(edge_profile_combo)
+    {
+        effect_edge_profile = std::clamp(edge_profile_combo->currentIndex(), 0, 4);
+    }
     if(offset_x_slider) effect_offset_x = offset_x_slider->value();
     if(offset_y_slider) effect_offset_y = offset_y_slider->value();
     if(offset_z_slider) effect_offset_z = offset_z_slider->value();
@@ -1476,6 +1557,9 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rainbow_mode"] = rainbow_mode;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
+    j["edge_profile"] = effect_edge_profile;
+    j["edge_thickness"] = effect_edge_thickness;
+    j["glow_level"] = effect_glow_level;
     j["axis_scale_x"] = effect_scale_x;
     j["axis_scale_y"] = effect_scale_y;
     j["axis_scale_z"] = effect_scale_z;
@@ -1535,6 +1619,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
         effect_sharpness = settings["sharpness"].get<unsigned int>();
+    if(settings.contains("edge_profile"))
+        effect_edge_profile = std::clamp(settings["edge_profile"].get<int>(), 0, 4);
+    if(settings.contains("edge_thickness"))
+        effect_edge_thickness = std::clamp(settings["edge_thickness"].get<unsigned int>(), 0u, 100u);
+    if(settings.contains("glow_level"))
+        effect_glow_level = std::clamp(settings["glow_level"].get<unsigned int>(), 0u, 100u);
 
     if(settings.contains("axis_scale_x"))
         effect_scale_x = std::clamp(settings["axis_scale_x"].get<unsigned int>(), 1u, 400u);
@@ -1583,7 +1673,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("size"))
         effect_size = std::clamp(settings["size"].get<unsigned int>(), 0u, 200u);
     if(settings.contains("scale_value"))
-        effect_scale = std::clamp(settings["scale_value"].get<unsigned int>(), 0u, 250u);
+        effect_scale = std::clamp(settings["scale_value"].get<unsigned int>(), 0u, 300u);
     if(settings.contains("scale_inverted"))
         scale_inverted = settings["scale_inverted"].get<bool>();
 
@@ -1717,6 +1807,25 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         QSignalBlocker blocker(sharpness_slider);
         sharpness_slider->setValue(effect_sharpness);
     }
+    if(edge_profile_combo)
+    {
+        QSignalBlocker blocker(edge_profile_combo);
+        edge_profile_combo->setCurrentIndex(std::clamp(effect_edge_profile, 0, 4));
+    }
+    if(edge_thickness_slider)
+    {
+        QSignalBlocker blocker(edge_thickness_slider);
+        edge_thickness_slider->setValue((int)effect_edge_thickness);
+    }
+    if(edge_thickness_label)
+        edge_thickness_label->setText(QString::number(effect_edge_thickness) + "%");
+    if(glow_level_slider)
+    {
+        QSignalBlocker blocker(glow_level_slider);
+        glow_level_slider->setValue((int)effect_glow_level);
+    }
+    if(glow_level_label)
+        glow_level_label->setText(QString::number(effect_glow_level) + "%");
 
     if(size_slider)
     {

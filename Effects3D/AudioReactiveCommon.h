@@ -128,7 +128,7 @@ inline AudioReactiveSettings3D MakeDefaultAudioReactiveSettings3D(int low, int h
     AudioReactiveSettings3D cfg;
     cfg.low_hz = low;
     cfg.high_hz = high;
-    cfg.smoothing = 0.6f;
+    cfg.smoothing = 0.35f;
     cfg.falloff = 1.0f;
     cfg.foreground = MakeDefaultForegroundGradient();
     cfg.background = MakeDefaultBackgroundGradient();
@@ -175,9 +175,9 @@ inline void NormalizeAudioReactiveSettings(AudioReactiveSettings3D& cfg)
     {
         cfg.peak_boost = 0.5f;
     }
-    if(cfg.peak_boost > 4.0f)
+    if(cfg.peak_boost > 5.0f)
     {
-        cfg.peak_boost = 4.0f;
+        cfg.peak_boost = 5.0f;
     }
     NormalizeGradient(cfg.foreground);
     NormalizeGradient(cfg.background);

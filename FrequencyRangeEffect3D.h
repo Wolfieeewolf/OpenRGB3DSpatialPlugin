@@ -41,6 +41,10 @@ struct FrequencyRangeEffect3D
     float                               attack              = 0.05f;
     float                               decay               = 0.2f;
     
+    static constexpr int EQ_BANDS = 16;
+    float                               eq_gain[EQ_BANDS]   = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                                               1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+    
     std::unique_ptr<SpatialEffect3D>    effect_instance;
     float                               current_level       = 0.0f;
     float                               smoothed_level      = 0.0f;
@@ -64,6 +68,8 @@ struct FrequencyRangeEffect3D
         j["sensitivity"] = sensitivity;
         j["attack"] = attack;
         j["decay"] = decay;
+        j["eq"] = nlohmann::json::array();
+        for(int i = 0; i < EQ_BANDS; i++) j["eq"].push_back(eq_gain[i]);
         return j;
     }
     
@@ -104,6 +110,12 @@ struct FrequencyRangeEffect3D
         if(j.contains("sensitivity")) sensitivity = j["sensitivity"].get<float>();
         if(j.contains("attack")) attack = j["attack"].get<float>();
         if(j.contains("decay")) decay = j["decay"].get<float>();
+        if(j.contains("eq") && j["eq"].is_array())
+        {
+            auto& arr = j["eq"];
+            for(size_t i = 0; i < (size_t)EQ_BANDS && i < arr.size(); i++)
+                eq_gain[i] = std::max(0.0f, std::min(2.0f, arr[i].get<float>()));
+        }
         
         current_level   = 0.0f;
         smoothed_level  = 0.0f;

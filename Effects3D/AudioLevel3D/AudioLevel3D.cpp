@@ -112,7 +112,7 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -129,7 +129,7 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* wave_row = new QHBoxLayout();
     wave_row->addWidget(new QLabel("Boundary wave:"));
     QSlider* wave_slider = new QSlider(Qt::Horizontal);
-    wave_slider->setRange(0, 25);
+    wave_slider->setRange(0, 100);
     wave_slider->setValue((int)(wave_amount * 100.0f));
     QLabel* wave_label = new QLabel(QString::number((int)(wave_amount * 100)) + "%");
     wave_label->setMinimumWidth(40);
@@ -145,7 +145,7 @@ void AudioLevel3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* edge_row = new QHBoxLayout();
     edge_row->addWidget(new QLabel("Edge softness:"));
     QSlider* edge_slider = new QSlider(Qt::Horizontal);
-    edge_slider->setRange(2, 25);
+    edge_slider->setRange(2, 100);
     edge_slider->setValue((int)(edge_soft * 100.0f));
     QLabel* edge_label = new QLabel(QString::number((int)(edge_soft * 100)) + "%");
     edge_label->setMinimumWidth(40);

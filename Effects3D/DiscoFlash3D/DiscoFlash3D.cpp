@@ -38,7 +38,7 @@ EffectInfo3D DiscoFlash3D::GetEffectInfo()
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
-    info.show_scale_control = false;
+    info.show_scale_control = true;
     info.show_fps_control = false;
     info.show_axis_control = false;
     info.show_color_controls = false;
@@ -86,7 +86,7 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* size_row = new QHBoxLayout();
     size_row->addWidget(new QLabel("Flash Size:"));
     QSlider* size_slider = new QSlider(Qt::Horizontal);
-    size_slider->setRange(3, 60);
+    size_slider->setRange(5, 200);
     size_slider->setValue((int)(flash_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(flash_size * 100)) + "%");
     size_label->setMinimumWidth(40);
@@ -120,7 +120,7 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* thresh_row = new QHBoxLayout();
     thresh_row->addWidget(new QLabel("Threshold:"));
     QSlider* thresh_slider = new QSlider(Qt::Horizontal);
-    thresh_slider->setRange(10, 95);
+    thresh_slider->setRange(0, 95);
     thresh_slider->setValue((int)(onset_threshold * 100.0f));
     QLabel* thresh_label = new QLabel(QString::number((int)(onset_threshold * 100)) + "%");
     thresh_label->setMinimumWidth(40);
@@ -137,7 +137,7 @@ void DiscoFlash3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

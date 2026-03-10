@@ -2,6 +2,7 @@
 
 #include "Matrix3D.h"
 #include <QGridLayout>
+#include <algorithm>
 #include <cmath>
 
 REGISTER_EFFECT_3D(Matrix3D);
@@ -20,13 +21,18 @@ Matrix3D::Matrix3D(QWidget* parent) : SpatialEffect3D(parent)
     char_variation_label = nullptr;
     char_spacing_slider = nullptr;
     char_spacing_label = nullptr;
+    head_brightness_slider = nullptr;
+    head_brightness_label = nullptr;
     density = 60;
     trail = 50;
     char_height = 15;
     char_gap = 15;
     char_variation = 60;
     char_spacing = 10;
+    head_brightness = 35;
     SetRainbowMode(false);
+    if(GetColors().empty())
+        SetColors({ 0x0000FF00 });  /* default green for classic matrix look */
 }
 
 EffectInfo3D Matrix3D::GetEffectInfo()
@@ -34,7 +40,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "Matrix";
-    info.effect_description = "Matrix-style falling code columns";
+    info.effect_description = "Matrix-style digital rain on all surfaces. Use effect colors or Rainbow for custom/rainbow matrix; Head brightness sets how white the leading character is.";
     info.category = "3D Spatial";
     info.effect_type = SPATIAL_EFFECT_MATRIX;
     info.is_reversible = true;
@@ -69,65 +75,75 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0,0,0,0);
 
-    layout->addWidget(new QLabel("Density:"), 0, 0);
+    layout->addWidget(new QLabel("Density (%):"), 0, 0);
     density_slider = new QSlider(Qt::Horizontal);
     density_slider->setRange(10, 100);
     density_slider->setValue(density);
-    density_slider->setToolTip("Column density (higher = more columns)");
+    density_slider->setToolTip("Column density: higher = more columns (more matrix rain)");
     layout->addWidget(density_slider, 0, 1);
-    density_label = new QLabel(QString::number(density));
-    density_label->setMinimumWidth(30);
+    density_label = new QLabel(QString::number(density) + "%");
+    density_label->setMinimumWidth(36);
     layout->addWidget(density_label, 0, 2);
 
-    layout->addWidget(new QLabel("Trail length:"), 1, 0);
+    layout->addWidget(new QLabel("Trail (%):"), 1, 0);
     trail_slider = new QSlider(Qt::Horizontal);
     trail_slider->setRange(10, 100);
     trail_slider->setValue(trail);
-    trail_slider->setToolTip("Trail length (higher = longer trails)");
+    trail_slider->setToolTip("Trail length: higher = longer fading tail behind each character");
     layout->addWidget(trail_slider, 1, 1);
-    trail_label = new QLabel(QString::number(trail));
-    trail_label->setMinimumWidth(30);
+    trail_label = new QLabel(QString::number(trail) + "%");
+    trail_label->setMinimumWidth(36);
     layout->addWidget(trail_label, 1, 2);
 
-    layout->addWidget(new QLabel("Char height:"), 2, 0);
+    layout->addWidget(new QLabel("Char height (%):"), 2, 0);
     char_height_slider = new QSlider(Qt::Horizontal);
-    char_height_slider->setRange(5, 50);
+    char_height_slider->setRange(5, 100);
     char_height_slider->setValue(char_height);
-    char_height_slider->setToolTip("Character height (higher = taller characters)");
+    char_height_slider->setToolTip("Character height: higher = taller glyphs in the stream");
     layout->addWidget(char_height_slider, 2, 1);
-    char_height_label = new QLabel(QString::number(char_height));
-    char_height_label->setMinimumWidth(30);
+    char_height_label = new QLabel(QString::number(char_height) + "%");
+    char_height_label->setMinimumWidth(36);
     layout->addWidget(char_height_label, 2, 2);
 
-    layout->addWidget(new QLabel("Char gap:"), 3, 0);
+    layout->addWidget(new QLabel("Char gap (%):"), 3, 0);
     char_gap_slider = new QSlider(Qt::Horizontal);
-    char_gap_slider->setRange(0, 50);
+    char_gap_slider->setRange(0, 100);
     char_gap_slider->setValue(char_gap);
-    char_gap_slider->setToolTip("Gap between characters (higher = larger gaps)");
+    char_gap_slider->setToolTip("Gap between characters in a column: higher = more space");
     layout->addWidget(char_gap_slider, 3, 1);
-    char_gap_label = new QLabel(QString::number(char_gap));
-    char_gap_label->setMinimumWidth(30);
+    char_gap_label = new QLabel(QString::number(char_gap) + "%");
+    char_gap_label->setMinimumWidth(36);
     layout->addWidget(char_gap_label, 3, 2);
 
-    layout->addWidget(new QLabel("Char variation:"), 4, 0);
+    layout->addWidget(new QLabel("Variation (%):"), 4, 0);
     char_variation_slider = new QSlider(Qt::Horizontal);
     char_variation_slider->setRange(0, 100);
     char_variation_slider->setValue(char_variation);
-    char_variation_slider->setToolTip("Character brightness variation (higher = more variation)");
+    char_variation_slider->setToolTip("Brightness variation: higher = more random bright/dim characters");
     layout->addWidget(char_variation_slider, 4, 1);
-    char_variation_label = new QLabel(QString::number(char_variation));
-    char_variation_label->setMinimumWidth(30);
+    char_variation_label = new QLabel(QString::number(char_variation) + "%");
+    char_variation_label->setMinimumWidth(36);
     layout->addWidget(char_variation_label, 4, 2);
 
-    layout->addWidget(new QLabel("Char spacing:"), 5, 0);
+    layout->addWidget(new QLabel("Spacing (%):"), 5, 0);
     char_spacing_slider = new QSlider(Qt::Horizontal);
-    char_spacing_slider->setRange(1, 50);
+    char_spacing_slider->setRange(1, 100);
     char_spacing_slider->setValue(char_spacing);
-    char_spacing_slider->setToolTip("Character spacing in stream (lower = denser, continuous stream)");
+    char_spacing_slider->setToolTip("Vertical spacing in stream: lower = denser flow, higher = more spread out");
     layout->addWidget(char_spacing_slider, 5, 1);
-    char_spacing_label = new QLabel(QString::number(char_spacing));
-    char_spacing_label->setMinimumWidth(30);
+    char_spacing_label = new QLabel(QString::number(char_spacing) + "%");
+    char_spacing_label->setMinimumWidth(36);
     layout->addWidget(char_spacing_label, 5, 2);
+
+    layout->addWidget(new QLabel("Head brightness (%):"), 6, 0);
+    head_brightness_slider = new QSlider(Qt::Horizontal);
+    head_brightness_slider->setRange(0, 100);
+    head_brightness_slider->setValue((int)head_brightness);
+    head_brightness_slider->setToolTip("How much the leading character is whitish (0 = no white, 100 = full white tip). Only the very first LED is affected.");
+    layout->addWidget(head_brightness_slider, 6, 1);
+    head_brightness_label = new QLabel(QString::number(head_brightness) + "%");
+    head_brightness_label->setMinimumWidth(36);
+    layout->addWidget(head_brightness_label, 6, 2);
 
     AddWidgetToParent(w, parent);
 
@@ -137,6 +153,7 @@ void Matrix3D::SetupCustomUI(QWidget* parent)
     connect(char_gap_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
     connect(char_variation_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
     connect(char_spacing_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
+    connect(head_brightness_slider, &QSlider::valueChanged, this, &Matrix3D::OnMatrixParameterChanged);
 }
 
 void Matrix3D::UpdateParams(SpatialEffectParams& params)
@@ -149,32 +166,37 @@ void Matrix3D::OnMatrixParameterChanged()
     if(density_slider)
     {
         density = density_slider->value();
-        if(density_label) density_label->setText(QString::number(density));
+        if(density_label) density_label->setText(QString::number(density) + "%");
     }
     if(trail_slider)
     {
         trail = trail_slider->value();
-        if(trail_label) trail_label->setText(QString::number(trail));
+        if(trail_label) trail_label->setText(QString::number(trail) + "%");
     }
     if(char_height_slider)
     {
         char_height = char_height_slider->value();
-        if(char_height_label) char_height_label->setText(QString::number(char_height));
+        if(char_height_label) char_height_label->setText(QString::number(char_height) + "%");
     }
     if(char_gap_slider)
     {
         char_gap = char_gap_slider->value();
-        if(char_gap_label) char_gap_label->setText(QString::number(char_gap));
+        if(char_gap_label) char_gap_label->setText(QString::number(char_gap) + "%");
     }
     if(char_variation_slider)
     {
         char_variation = char_variation_slider->value();
-        if(char_variation_label) char_variation_label->setText(QString::number(char_variation));
+        if(char_variation_label) char_variation_label->setText(QString::number(char_variation) + "%");
     }
     if(char_spacing_slider)
     {
         char_spacing = char_spacing_slider->value();
-        if(char_spacing_label) char_spacing_label->setText(QString::number(char_spacing));
+        if(char_spacing_label) char_spacing_label->setText(QString::number(char_spacing) + "%");
+    }
+    if(head_brightness_slider)
+    {
+        head_brightness = (unsigned int)std::clamp(head_brightness_slider->value(), 0, 100);
+        if(head_brightness_label) head_brightness_label->setText(QString::number(head_brightness) + "%");
     }
     emit ParametersChanged();
 }
@@ -192,8 +214,10 @@ float Matrix3D::ComputeFaceIntensity(int face,
                                      const GridContext3D& grid,
                                      float column_spacing,
                                      float size_normalized,
-                                     float speed_scale) const
+                                     float speed_scale,
+                                     float* out_head) const
 {
+    if(out_head) *out_head = 0.0f;
     if(grid.min_x >= grid.max_x || grid.min_y >= grid.max_y || grid.min_z >= grid.max_z)
     {
         return 0.0f;
@@ -249,26 +273,29 @@ float Matrix3D::ComputeFaceIntensity(int face,
             face_distance = fabsf(z - grid.max_z);
             break;
         case 4:
+            /* Floor (y = min_y): stream along z, distance from floor */
             u = x;
             v = z;
             axis_value = z;
             axis_min = grid.min_z;
             axis_max = grid.max_z;
-            face_distance = fabsf(z - grid.min_z);
+            face_distance = fabsf(y - grid.min_y);
             break;
         case 5:
         default:
+            /* Ceiling (y = max_y): stream along z, distance from ceiling */
             u = x;
             v = z;
             axis_value = z;
             axis_min = grid.min_z;
             axis_max = grid.max_z;
-            face_distance = fabsf(z - grid.max_z);
+            face_distance = fabsf(y - grid.max_y);
             break;
     }
 
+    /* Let matrix rain extend into the room so it feels on everything (walls, floor, ceiling, and volume) */
     float room_extent = (grid.width + grid.height + grid.depth) / 3.0f;
-    if(room_extent > 0.001f && face_distance > room_extent * 0.5f)
+    if(room_extent > 0.001f && face_distance > room_extent * 0.75f)
         return 0.0f;
 
     if(column_spacing < 0.001f) column_spacing = 0.001f;
@@ -296,18 +323,18 @@ float Matrix3D::ComputeFaceIntensity(int face,
     unsigned int local_char_variation = char_variation;
     unsigned int local_trail = trail;
     
-    unsigned int safe_char_spacing = (local_char_spacing >= 1 && local_char_spacing <= 50) ? local_char_spacing : 10;
-    unsigned int safe_char_height = (local_char_height >= 5 && local_char_height <= 50) ? local_char_height : 15;
-    unsigned int safe_char_gap = (local_char_gap <= 50) ? local_char_gap : 15;
+    unsigned int safe_char_spacing = (local_char_spacing >= 1 && local_char_spacing <= 100) ? local_char_spacing : 10;
+    unsigned int safe_char_height = (local_char_height >= 5 && local_char_height <= 100) ? local_char_height : 15;
+    unsigned int safe_char_gap = (local_char_gap <= 100) ? local_char_gap : 15;
     unsigned int safe_char_variation = (local_char_variation <= 100) ? local_char_variation : 60;
     
-    float char_height_base = 0.10f + (safe_char_height / 50.0f) * 0.40f;
+    float char_height_base = 0.10f + (safe_char_height / 100.0f) * 0.40f;
     float char_height_actual = char_height_base * size_normalized;
     
     if(char_height_actual < 0.001f) char_height_actual = 0.001f;
     if(char_height_actual > 10.0f) char_height_actual = 10.0f;
 
-    float spacing_factor = safe_char_spacing / 50.0f;
+    float spacing_factor = safe_char_spacing / 100.0f;
     float char_spacing_actual = char_height_actual * (0.5f + spacing_factor * 1.5f);
 
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
@@ -358,7 +385,8 @@ float Matrix3D::ComputeFaceIntensity(int face,
     position_along_axis = fmax(-1000.0f, fmin(1000.0f, position_along_axis));
     stream_time = fmax(-10000.0f, fmin(10000.0f, stream_time));
 
-    float stream_pos = position_along_axis - stream_time;
+    /* Fall downward: front of stream moves toward smaller position_along_axis on walls (high Y -> low Y) */
+    float stream_pos = stream_time - position_along_axis;
 
     stream_pos = fmax(-10000.0f, fmin(10000.0f, stream_pos));
 
@@ -377,7 +405,7 @@ float Matrix3D::ComputeFaceIntensity(int face,
     char_local = fmax(0.0f, fmin(1.0f, char_local));
 
     if(char_spacing_actual < 0.001f) char_spacing_actual = 0.001f;
-    float char_index_value = (position_along_axis - stream_time) / char_spacing_actual;
+    float char_index_value = (stream_time - position_along_axis) / char_spacing_actual;
     char_index_value = fmax(-10000.0f, fmin(10000.0f, char_index_value));
     float char_index = floorf(char_index_value);
     char_index = fmax(-1000.0f, fmin(1000.0f, char_index));
@@ -396,6 +424,9 @@ float Matrix3D::ComputeFaceIntensity(int face,
         if(char_internal < char_body_ratio)
         {
             intensity = 1.0f;
+            /* Only the very first LED (leading edge) is the "head" – smooth blend so it’s not all white */
+            if(out_head && char_internal < 0.1f)
+                *out_head = 1.0f - char_internal / 0.1f;
         }
         else
         {
@@ -490,16 +521,37 @@ RGBColor Matrix3D::CalculateColorGrid(float x, float y, float z, float time, con
     float col_spacing = 1.0f + (100.0f - density) * 0.04f;
 
     float intensity = 0.0f;
+    float head = 0.0f;
 
     for(int face_index = 0; face_index < 6; ++face_index)
     {
-        float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed);
-        intensity = fmax(intensity, face_value);
+        float face_head = 0.0f;
+        float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed, &face_head);
+        if(face_value > intensity)
+        {
+            intensity = face_value;
+            head = face_head;
+        }
     }
 
-    unsigned char r = 0;
-    unsigned char g = (unsigned char)(255 * intensity);
-    unsigned char b = 0;
+    /* Trail uses effect colors (green default) or rainbow when enabled */
+    float color_pos = fmodf(time * 0.02f + (float)(((int)(x * 31 + y * 17 + z * 7) % 1000)) / 1000.0f, 1.0f);
+    if(color_pos < 0.0f) color_pos += 1.0f;
+    RGBColor trail_color = GetColorAtPosition(color_pos);
+    unsigned char tr = (unsigned char)(trail_color & 0xFF);
+    unsigned char tg = (unsigned char)((trail_color >> 8) & 0xFF);
+    unsigned char tb = (unsigned char)((trail_color >> 16) & 0xFF);
+    float bright = intensity;
+    tr = (unsigned char)(tr * bright);
+    tg = (unsigned char)(tg * bright);
+    tb = (unsigned char)(tb * bright);
+
+    /* Only the very first LED is whitish; blend with trail based on head brightness slider */
+    float head_strength = head * (head_brightness / 100.0f);
+    head_strength = std::min(1.0f, std::max(0.0f, head_strength));
+    unsigned char r = (unsigned char)(tr * (1.0f - head_strength) + 255 * head_strength);
+    unsigned char g = (unsigned char)(tg * (1.0f - head_strength) + 255 * head_strength);
+    unsigned char b = (unsigned char)(tb * (1.0f - head_strength) + 255 * head_strength);
     return (b << 16) | (g << 8) | r;
 }
 
@@ -512,6 +564,7 @@ nlohmann::json Matrix3D::SaveSettings() const
     j["char_gap"] = char_gap;
     j["char_variation"] = char_variation;
     j["char_spacing"] = char_spacing;
+    j["head_brightness"] = head_brightness;
     return j;
 }
 
@@ -524,11 +577,13 @@ void Matrix3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("char_gap")) char_gap = settings["char_gap"];
     if(settings.contains("char_variation")) char_variation = settings["char_variation"];
     if(settings.contains("char_spacing")) char_spacing = settings["char_spacing"];
+    if(settings.contains("head_brightness")) head_brightness = std::clamp(settings["head_brightness"].get<unsigned int>(), 0u, 100u);
 
-    if(density_slider) density_slider->setValue(density);
-    if(trail_slider) trail_slider->setValue(trail);
-    if(char_height_slider) char_height_slider->setValue(char_height);
-    if(char_gap_slider) char_gap_slider->setValue(char_gap);
-    if(char_variation_slider) char_variation_slider->setValue(char_variation);
-    if(char_spacing_slider) char_spacing_slider->setValue(char_spacing);
+    if(density_slider) { density_slider->setValue(density); if(density_label) density_label->setText(QString::number(density) + "%"); }
+    if(trail_slider) { trail_slider->setValue(trail); if(trail_label) trail_label->setText(QString::number(trail) + "%"); }
+    if(char_height_slider) { char_height_slider->setValue(char_height); if(char_height_label) char_height_label->setText(QString::number(char_height) + "%"); }
+    if(char_gap_slider) { char_gap_slider->setValue(char_gap); if(char_gap_label) char_gap_label->setText(QString::number(char_gap) + "%"); }
+    if(char_variation_slider) { char_variation_slider->setValue(char_variation); if(char_variation_label) char_variation_label->setText(QString::number(char_variation) + "%"); }
+    if(char_spacing_slider) { char_spacing_slider->setValue(char_spacing); if(char_spacing_label) char_spacing_label->setText(QString::number(char_spacing) + "%"); }
+    if(head_brightness_slider) { head_brightness_slider->setValue((int)head_brightness); if(head_brightness_label) head_brightness_label->setText(QString::number(head_brightness) + "%"); }
 }

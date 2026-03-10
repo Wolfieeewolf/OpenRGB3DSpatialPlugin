@@ -94,7 +94,7 @@ void SpectrumBars3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* falloff_row = new QHBoxLayout();
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
-    falloff_slider->setRange(20, 500);
+    falloff_slider->setRange(20, 800);
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -111,7 +111,7 @@ void SpectrumBars3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -122,6 +122,22 @@ void SpectrumBars3D::SetupCustomUI(QWidget* parent)
     connect(boost_slider, &QSlider::valueChanged, this, [this, boost_label](int v){
         audio_settings.peak_boost = v / 100.0f;
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* roll_row = new QHBoxLayout();
+    roll_row->addWidget(new QLabel("Roll speed:"));
+    QSlider* roll_slider = new QSlider(Qt::Horizontal);
+    roll_slider->setRange(0, 200);
+    roll_slider->setValue((int)(roll_speed * 100.0f));
+    QLabel* roll_label = new QLabel(QString::number(roll_speed, 'f', 2));
+    roll_label->setMinimumWidth(36);
+    roll_row->addWidget(roll_slider);
+    roll_row->addWidget(roll_label);
+    layout->addLayout(roll_row);
+    connect(roll_slider, &QSlider::valueChanged, this, [this, roll_label](int v){
+        roll_speed = v / 100.0f;
+        roll_label->setText(QString::number(roll_speed, 'f', 2));
         emit ParametersChanged();
     });
 }
@@ -167,6 +183,7 @@ nlohmann::json SpectrumBars3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
+    j["roll_speed"] = roll_speed;
     return j;
 }
 
@@ -174,6 +191,7 @@ void SpectrumBars3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    if(settings.contains("roll_speed")) roll_speed = settings["roll_speed"].get<float>();
 
     RefreshBandRange();
     last_sample_time = std::numeric_limits<float>::lowest();
@@ -330,14 +348,20 @@ float SpectrumBars3D::ResolveRadialNormalized(const GridContext3D* grid, float x
 RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const
 {
     (void)brightness;
+    float axis_pos_rolled = axis_pos;
+    if(roll_speed > 1e-6f)
+    {
+        axis_pos_rolled = std::fmod(axis_pos + time * roll_speed, 1.0f);
+        if(axis_pos_rolled < 0.0f) axis_pos_rolled += 1.0f;
+    }
     if(smoothed_bands.empty())
     {
-        RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
+        RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos_rolled, 0.0f);
         return ModulateRGBColors(base, user_color);
     }
 
     int count = static_cast<int>(smoothed_bands.size());
-    float scaled = axis_pos * count;
+    float scaled = axis_pos_rolled * count;
     int idx_local = std::clamp(static_cast<int>(std::floor(scaled)), 0, count - 1);
     int idx_next = std::min(idx_local + 1, count - 1);
     float frac = scaled - std::floor(scaled);
@@ -345,12 +369,12 @@ RGBColor SpectrumBars3D::ComposeColor(float axis_pos, float height_norm, float r
 
     float height_profile = std::pow(std::clamp(height_norm, 0.0f, 1.0f), 1.6f);
     float radial_profile = std::clamp(1.0f - radial_norm, 0.0f, 1.0f);
-    float sweep = 0.7f + 0.3f * std::sin((CalculateProgress(time) + axis_pos) * 6.2831853f);
+    float sweep = 0.7f + 0.3f * std::sin((CalculateProgress(time) + axis_pos_rolled) * 6.2831853f);
     float energy = band_value * height_profile * (0.5f + 0.5f * radial_profile) * sweep;
     energy = std::clamp(energy, 0.0f, 1.0f);
     float intensity = ApplyAudioIntensity(energy, audio_settings);
 
-    float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos;
+    float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos_rolled;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 

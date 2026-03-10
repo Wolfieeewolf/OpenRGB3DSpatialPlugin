@@ -160,8 +160,8 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
 
     SaveEffectStack();
 
-    if(effect_running)
-        RenderEffectStack();
+    /* Always refresh so grid/overlay clear or re-render immediately (fixes stale overlay after remove) */
+    RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)

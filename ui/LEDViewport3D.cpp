@@ -1058,9 +1058,10 @@ void LEDViewport3D::DrawRoomGridOverlay()
 
     const bool use_buffer = ((int)room_grid_color_buffer.size() == count);
     const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
-    const float default_r = 0.4f * room_grid_brightness;
-    const float default_g = 0.6f * room_grid_brightness;
-    const float default_b = 0.7f * room_grid_brightness;
+    /* No buffer/callback: show black so overlay doesn't tint the view until effects run */
+    const float default_r = 0.0f;
+    const float default_g = 0.0f;
+    const float default_b = 0.0f;
 
     const float span_x = (nx > 1) ? (max_x - min_x) : 0.0f;
     const float span_y = (ny > 1) ? (max_y - min_y) : 0.0f;

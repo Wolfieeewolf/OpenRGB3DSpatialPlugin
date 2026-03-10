@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "SpatialEffect3D.h"
 #include "Audio/AudioInputManager.h"
 #include "VirtualReferencePoint3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
+#include "RGBController.h"
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QFile>
 #include <QTextStream>
 #include <QGroupBox>
 #include <QFormLayout>
+#include <QToolTip>
 
 void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout)
 {
@@ -84,6 +88,7 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     freq_low_slider->setValue(20);
     connect(freq_low_slider, &QSlider::valueChanged,
             this, &OpenRGB3DSpatialTab::on_freq_low_changed);
+    connect(freq_low_slider, &QSlider::sliderMoved, [](int v) { QToolTip::showText(QCursor::pos(), QString("%1 Hz").arg(v), nullptr); });
     low_row->addWidget(freq_low_slider, 1);
     freq_low_label = new QLabel("20 Hz");
     freq_low_label->setMinimumWidth(52);
@@ -97,11 +102,26 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     freq_high_slider->setValue(200);
     connect(freq_high_slider, &QSlider::valueChanged,
             this, &OpenRGB3DSpatialTab::on_freq_high_changed);
+    connect(freq_high_slider, &QSlider::sliderMoved, [](int v) { QToolTip::showText(QCursor::pos(), QString("%1 Hz").arg(v), nullptr); });
     high_row->addWidget(freq_high_slider, 1);
     freq_high_label = new QLabel("200 Hz");
     freq_high_label->setMinimumWidth(52);
     high_row->addWidget(freq_high_label);
     freq_sliders->addLayout(high_row);
+
+    QHBoxLayout* preset_row = new QHBoxLayout();
+    preset_row->addWidget(new QLabel("Presets:"));
+    QPushButton* preset_bass_btn = new QPushButton("Bass (20–200 Hz)");
+    QPushButton* preset_mids_btn = new QPushButton("Mids (200–2k Hz)");
+    QPushButton* preset_highs_btn = new QPushButton("Highs (2k–20k Hz)");
+    connect(preset_bass_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_freq_preset_bass_clicked);
+    connect(preset_mids_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_freq_preset_mids_clicked);
+    connect(preset_highs_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_freq_preset_highs_clicked);
+    preset_row->addWidget(preset_bass_btn);
+    preset_row->addWidget(preset_mids_btn);
+    preset_row->addWidget(preset_highs_btn);
+    preset_row->addStretch();
+    freq_sliders->addLayout(preset_row);
     
     details_layout->addWidget(freq_group);
     
@@ -131,6 +151,55 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
             this, &OpenRGB3DSpatialTab::on_freq_origin_changed);
     origin_row->addWidget(freq_origin_combo, 1);
     details_layout->addLayout(origin_row);
+
+    QGroupBox* response_group = new QGroupBox("Response (smoothing & sensitivity)");
+    QVBoxLayout* response_layout = new QVBoxLayout(response_group);
+    auto addSliderRow = [&response_layout](const QString& label, QSlider*& slider, QLabel*& valueLabel, int minVal, int maxVal, int defaultVal) {
+        QHBoxLayout* row = new QHBoxLayout();
+        row->addWidget(new QLabel(label));
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(minVal, maxVal);
+        slider->setValue(defaultVal);
+        row->addWidget(slider, 1);
+        valueLabel = new QLabel(QString::number(defaultVal));
+        valueLabel->setMinimumWidth(36);
+        row->addWidget(valueLabel);
+        response_layout->addLayout(row);
+    };
+    addSliderRow("Smoothing:", freq_smoothing_slider, freq_smoothing_label, 0, 100, 70);
+    addSliderRow("Sensitivity:", freq_sensitivity_slider, freq_sensitivity_label, 0, 200, 100);
+    addSliderRow("Attack:", freq_attack_slider, freq_attack_label, 0, 100, 5);
+    addSliderRow("Decay:", freq_decay_slider, freq_decay_label, 0, 100, 20);
+    if(freq_smoothing_slider)
+        connect(freq_smoothing_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_freq_smoothing_changed);
+    if(freq_sensitivity_slider)
+        connect(freq_sensitivity_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_freq_sensitivity_changed);
+    if(freq_attack_slider)
+        connect(freq_attack_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_freq_attack_changed);
+    if(freq_decay_slider)
+        connect(freq_decay_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_freq_decay_changed);
+    details_layout->addWidget(response_group);
+
+    QGroupBox* eq_group = new QGroupBox("Range EQ (dump bands to isolate bass/mids/highs)");
+    QHBoxLayout* eq_layout = new QHBoxLayout(eq_group);
+    eq_layout->addWidget(new QLabel("0% = dump, 100% = pass"));
+    freq_eq_sliders.clear();
+    for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS; i++)
+    {
+        QSlider* s = new QSlider(Qt::Vertical);
+        s->setRange(0, 200);
+        s->setValue(100);
+        s->setMaximumWidth(20);
+        int band = i;
+        connect(s, &QSlider::valueChanged, [this, band](int val) { on_freq_eq_changed(band, val); });
+        connect(s, &QSlider::sliderMoved, [band](int val) { QToolTip::showText(QCursor::pos(), QString("%1%").arg(val), nullptr); });
+        eq_layout->addWidget(s);
+        freq_eq_sliders.push_back(s);
+    }
+    QPushButton* reset_eq_btn = new QPushButton("Reset EQ");
+    connect(reset_eq_btn, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_freq_reset_eq_clicked);
+    eq_layout->addWidget(reset_eq_btn);
+    details_layout->addWidget(eq_group);
     
     freq_effect_settings_widget = new QWidget();
     freq_effect_settings_layout = new QVBoxLayout(freq_effect_settings_widget);
@@ -300,6 +369,9 @@ void OpenRGB3DSpatialTab::on_remove_freq_range_clicked()
     {
         freq_range_details->setVisible(false);
     }
+
+    /* Refresh grid/overlay so removed range stops rendering immediately */
+    RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_duplicate_freq_range_clicked()
@@ -326,6 +398,8 @@ void OpenRGB3DSpatialTab::on_duplicate_freq_range_clicked()
     clone->sensitivity = source->sensitivity;
     clone->attack = source->attack;
     clone->decay = source->decay;
+    for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS; i++)
+        clone->eq_gain[i] = source->eq_gain[i];
     
     frequency_ranges.push_back(std::move(clone));
     UpdateFrequencyRangesList();
@@ -426,7 +500,45 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         if(origin_idx >= 0) freq_origin_combo->setCurrentIndex(origin_idx);
         freq_origin_combo->blockSignals(false);
     }
-    
+
+    if(freq_smoothing_slider)
+    {
+        freq_smoothing_slider->blockSignals(true);
+        freq_smoothing_slider->setValue((int)(range->smoothing * 100.0f));
+        freq_smoothing_slider->blockSignals(false);
+        if(freq_smoothing_label) freq_smoothing_label->setText(QString::number((int)(range->smoothing * 100.0f)) + "%");
+    }
+    if(freq_sensitivity_slider)
+    {
+        freq_sensitivity_slider->blockSignals(true);
+        freq_sensitivity_slider->setValue((int)(range->sensitivity * 100.0f));
+        freq_sensitivity_slider->blockSignals(false);
+        if(freq_sensitivity_label) freq_sensitivity_label->setText(QString::number((int)(range->sensitivity * 100.0f)) + "%");
+    }
+    if(freq_attack_slider)
+    {
+        freq_attack_slider->blockSignals(true);
+        freq_attack_slider->setValue((int)(range->attack * 100.0f));
+        freq_attack_slider->blockSignals(false);
+        if(freq_attack_label) freq_attack_label->setText(QString::number(range->attack, 'f', 2));
+    }
+    if(freq_decay_slider)
+    {
+        freq_decay_slider->blockSignals(true);
+        freq_decay_slider->setValue((int)(range->decay * 100.0f));
+        freq_decay_slider->blockSignals(false);
+        if(freq_decay_label) freq_decay_label->setText(QString::number(range->decay, 'f', 2));
+    }
+    for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS && i < (int)freq_eq_sliders.size(); i++)
+    {
+        QSlider* s = freq_eq_sliders[i];
+        if(s)
+        {
+            s->blockSignals(true);
+            s->setValue((int)(range->eq_gain[i] * 100.0f));
+            s->blockSignals(false);
+        }
+    }
 }
 
 void OpenRGB3DSpatialTab::on_freq_range_name_changed(const QString& text)
@@ -446,15 +558,21 @@ void OpenRGB3DSpatialTab::on_freq_low_changed(int value)
 {
     int row = freq_ranges_list->currentRow();
     if(row < 0 || row >= (int)frequency_ranges.size()) return;
-    
+
     FrequencyRangeEffect3D* range = frequency_ranges[row].get();
     if(!range) return;
-    
+
+    if(value > (int)range->high_hz && freq_high_slider)
+    {
+        freq_high_slider->blockSignals(true);
+        freq_high_slider->setValue(value);
+        freq_high_slider->blockSignals(false);
+        range->high_hz = (float)value;
+        if(freq_high_label) freq_high_label->setText(QString::number(value) + " Hz");
+    }
     range->low_hz = (float)value;
     if(freq_low_label)
-    {
         freq_low_label->setText(QString::number(value) + " Hz");
-    }
     UpdateFrequencyRangesList();
     SaveFrequencyRanges();
 }
@@ -463,16 +581,170 @@ void OpenRGB3DSpatialTab::on_freq_high_changed(int value)
 {
     int row = freq_ranges_list->currentRow();
     if(row < 0 || row >= (int)frequency_ranges.size()) return;
-    
+
     FrequencyRangeEffect3D* range = frequency_ranges[row].get();
     if(!range) return;
-    
+
+    if(value < (int)range->low_hz && freq_low_slider)
+    {
+        freq_low_slider->blockSignals(true);
+        freq_low_slider->setValue(value);
+        freq_low_slider->blockSignals(false);
+        range->low_hz = (float)value;
+        if(freq_low_label) freq_low_label->setText(QString::number(value) + " Hz");
+    }
     range->high_hz = (float)value;
     if(freq_high_label)
-    {
         freq_high_label->setText(QString::number(value) + " Hz");
-    }
     UpdateFrequencyRangesList();
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::applyFreqPreset(int low_hz, int high_hz, const QString& name, int isolate_band)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+
+    range->low_hz = (float)low_hz;
+    range->high_hz = (float)high_hz;
+    range->name = name.toStdString();
+
+    /* isolate_band: 1 = bass (bands 0-4), 2 = mids (5-9), 3 = highs (10-15); 0 = no change */
+    if(isolate_band >= 1 && isolate_band <= 3)
+    {
+        for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS; i++)
+        {
+            if(isolate_band == 1)
+                range->eq_gain[i] = (i <= 4) ? 1.0f : 0.2f;
+            else if(isolate_band == 2)
+                range->eq_gain[i] = (i >= 5 && i <= 9) ? 1.0f : 0.2f;
+            else
+                range->eq_gain[i] = (i >= 10) ? 1.0f : 0.2f;
+        }
+        for(int i = 0; i < (int)freq_eq_sliders.size() && i < FrequencyRangeEffect3D::EQ_BANDS; i++)
+        {
+            if(freq_eq_sliders[i])
+            {
+                freq_eq_sliders[i]->blockSignals(true);
+                freq_eq_sliders[i]->setValue((int)(range->eq_gain[i] * 100.0f));
+                freq_eq_sliders[i]->blockSignals(false);
+            }
+        }
+    }
+
+    if(freq_low_slider)
+    {
+        freq_low_slider->blockSignals(true);
+        freq_low_slider->setValue(low_hz);
+        freq_low_slider->blockSignals(false);
+    }
+    if(freq_high_slider)
+    {
+        freq_high_slider->blockSignals(true);
+        freq_high_slider->setValue(high_hz);
+        freq_high_slider->blockSignals(false);
+    }
+    if(freq_low_label)
+        freq_low_label->setText(QString::number(low_hz) + " Hz");
+    if(freq_high_label)
+        freq_high_label->setText(QString::number(high_hz) + " Hz");
+    if(freq_range_name_edit)
+        freq_range_name_edit->setText(name);
+
+    UpdateFrequencyRangesList();
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_preset_bass_clicked()
+{
+    applyFreqPreset(20, 200, "Bass", 1);
+}
+
+void OpenRGB3DSpatialTab::on_freq_preset_mids_clicked()
+{
+    applyFreqPreset(200, 2000, "Mids", 2);
+}
+
+void OpenRGB3DSpatialTab::on_freq_preset_highs_clicked()
+{
+    applyFreqPreset(2000, 20000, "Highs", 3);
+}
+
+void OpenRGB3DSpatialTab::on_freq_eq_changed(int band_index, int value)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    if(band_index < 0 || band_index >= FrequencyRangeEffect3D::EQ_BANDS) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    range->eq_gain[band_index] = std::max(0.0f, std::min(2.0f, value / 100.0f));
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_reset_eq_clicked()
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS; i++)
+        range->eq_gain[i] = 1.0f;
+    for(int i = 0; i < (int)freq_eq_sliders.size(); i++)
+    {
+        if(freq_eq_sliders[i])
+        {
+            freq_eq_sliders[i]->blockSignals(true);
+            freq_eq_sliders[i]->setValue(100);
+            freq_eq_sliders[i]->blockSignals(false);
+        }
+    }
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_smoothing_changed(int value)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    range->smoothing = std::max(0.0f, std::min(1.0f, value / 100.0f));
+    if(freq_smoothing_label) freq_smoothing_label->setText(QString::number(value) + "%");
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_sensitivity_changed(int value)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    range->sensitivity = std::max(0.0f, std::min(3.0f, value / 100.0f));
+    if(freq_sensitivity_label) freq_sensitivity_label->setText(QString::number(value) + "%");
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_attack_changed(int value)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    range->attack = std::max(0.01f, std::min(1.0f, value / 100.0f));
+    if(freq_attack_label) freq_attack_label->setText(QString::number(range->attack, 'f', 2));
+    SaveFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::on_freq_decay_changed(int value)
+{
+    int row = freq_ranges_list->currentRow();
+    if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    FrequencyRangeEffect3D* range = frequency_ranges[row].get();
+    if(!range) return;
+    range->decay = std::max(0.01f, std::min(1.0f, value / 100.0f));
+    if(freq_decay_label) freq_decay_label->setText(QString::number(range->decay, 'f', 2));
     SaveFrequencyRanges();
 }
 
@@ -670,8 +942,8 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
         if(!range || !range->enabled) continue;
         if(range->effect_class_name.empty()) continue;
         
-        float raw_level = AudioInputManager::instance()->getBandEnergyHz(
-            range->low_hz, range->high_hz);
+        float raw_level = AudioInputManager::instance()->getBandEnergyHzWithGain(
+            range->low_hz, range->high_hz, range->eq_gain);
         
         if(raw_level > range->current_level)
         {

@@ -88,7 +88,7 @@ void BandScan3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* falloff_row = new QHBoxLayout();
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
-    falloff_slider->setRange(20, 500);
+    falloff_slider->setRange(20, 800);
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -105,7 +105,7 @@ void BandScan3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

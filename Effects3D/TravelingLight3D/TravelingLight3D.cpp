@@ -80,7 +80,7 @@ void TravelingLight3D::SetupCustomUI(QWidget* parent)
 
     layout->addWidget(new QLabel("Tail/beam size:"), row, 0);
     QSlider* size_slider = new QSlider(Qt::Horizontal);
-    size_slider->setRange(5, 80);
+    size_slider->setRange(5, 200);
     size_slider->setValue((int)(tail_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(tail_size * 100)) + "%");
     size_label->setMinimumWidth(36);

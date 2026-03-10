@@ -172,6 +172,14 @@ public:
     float GetRotationRoll() const { return effect_rotation_roll; }
 
     RGBColor PostProcessColorGrid(RGBColor color) const;
+
+    /** Effect origin in grid space (for boundary/edge multiplier). */
+    Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;
+    /** Boundary multiplier 0..1 for edge shaping: sharp, round, smooth, etc. Multiply effect color by this so edges are defined, not just a smooth wash. */
+    float GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
+    /** Apply edge profile to a normalized distance (0 = inside, 1 = at edge, >1 = outside). Effects can use this for lines/bands. */
+    float ApplyEdgeToIntensity(float normalized_dist) const;
+
     void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
     void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
 
@@ -204,6 +212,12 @@ protected:
     QLabel*             intensity_label;
     QSlider*            sharpness_slider;
     QLabel*             sharpness_label;
+    QGroupBox*          edge_shape_group;
+    QComboBox*          edge_profile_combo;
+    QSlider*            edge_thickness_slider;
+    QLabel*             edge_thickness_label;
+    QSlider*            glow_level_slider;
+    QLabel*             glow_level_label;
 
     QSlider*            scale_x_slider;
     QLabel*             scale_x_label;
@@ -256,6 +270,9 @@ protected:
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;
+    int                 effect_edge_profile;   /* 0=Sharp, 1=Square, 2=Round, 3=Smooth, 4=Sharpen */
+    unsigned int        effect_edge_thickness; /* 0..100: transition width / line thickness */
+    unsigned int        effect_glow_level;     /* 0..100: soft glow beyond edge */
     unsigned int        effect_scale_x;
     unsigned int        effect_scale_y;
     unsigned int        effect_scale_z;
@@ -297,7 +314,6 @@ protected:
     void AddWidgetToParent(QWidget* w, QWidget* container);
 
     Vector3D GetEffectOrigin() const;
-    Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;
     RGBColor GetRainbowColor(float hue);
     RGBColor GetColorAtPosition(float position);
 

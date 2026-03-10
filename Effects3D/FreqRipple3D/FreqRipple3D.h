@@ -31,6 +31,7 @@ public:
 private:
     void TickRipples(float time);
     RGBColor ComputeRippleColor(float dist_norm, float time) const;
+    float smoothstep(float edge0, float edge1, float x) const;
 
     struct Ripple
     {
@@ -45,9 +46,10 @@ private:
     float onset_smoothed = 0.0f;
     float onset_hold = 0.0f;
 
-    float trail_width  = 0.18f;
+    float trail_width  = 0.35f;
     float decay_rate   = 2.0f;
-    float onset_threshold = 0.55f;
+    float onset_threshold = 0.25f;
+    int ripple_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
 };
 
 #endif

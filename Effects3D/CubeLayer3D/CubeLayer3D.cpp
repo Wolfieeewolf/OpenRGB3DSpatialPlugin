@@ -81,7 +81,7 @@ void CubeLayer3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* thick_row = new QHBoxLayout();
     thick_row->addWidget(new QLabel("Layer thickness:"));
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
-    thick_slider->setRange(3, 40);
+    thick_slider->setRange(5, 100);
     thick_slider->setValue((int)(layer_thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(layer_thickness * 100)) + "%");
     thick_label->setMinimumWidth(40);
@@ -91,6 +91,21 @@ void CubeLayer3D::SetupCustomUI(QWidget* parent)
     connect(thick_slider, &QSlider::valueChanged, this, [this, thick_label](int v){
         layer_thickness = v / 100.0f;
         thick_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+
+    QHBoxLayout* edge_row = new QHBoxLayout();
+    edge_row->addWidget(new QLabel("Edge:"));
+    layer_edge_combo = new QComboBox();
+    layer_edge_combo->addItem("Round");
+    layer_edge_combo->addItem("Sharp");
+    layer_edge_combo->addItem("Square");
+    layer_edge_combo->setCurrentIndex(std::clamp(layer_edge_shape, 0, 2));
+    layer_edge_combo->setToolTip("Layer edge profile: Round = soft falloff, Sharp = hard cut, Square = hard band.");
+    edge_row->addWidget(layer_edge_combo);
+    layout->addLayout(edge_row);
+    connect(layer_edge_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        layer_edge_shape = std::clamp(idx, 0, 2);
         emit ParametersChanged();
     });
 
@@ -113,7 +128,7 @@ void CubeLayer3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -170,9 +185,22 @@ RGBColor CubeLayer3D::CalculateColorGrid(float x, float y, float z, float time, 
                                    grid.min_x, grid.max_x,
                                    grid.min_y, grid.max_y,
                                    grid.min_z, grid.max_z);
-    float sigma = std::max(layer_thickness, 0.02f);
-    float d = (axis_pos - layer_pos) / sigma;
-    float intensity = std::exp(-d * d * 0.5f);
+    float edge_distance = std::abs(axis_pos - layer_pos);
+    float thickness = std::max(layer_thickness, 0.02f);
+    float intensity = 0.0f;
+    switch(layer_edge_shape)
+    {
+    case 0:
+        intensity = 1.0f - smoothstep(0.0f, thickness, edge_distance);
+        break;
+    case 1:
+        intensity = edge_distance < thickness * 0.5f ? 1.0f : 0.0f;
+        break;
+    case 2:
+    default:
+        intensity = edge_distance < thickness ? 1.0f : 0.0f;
+        break;
+    }
     intensity = std::clamp(intensity, 0.0f, 1.0f);
 
     float gradient_pos = layer_pos;
@@ -184,11 +212,19 @@ RGBColor CubeLayer3D::CalculateColorGrid(float x, float y, float z, float time, 
     return ModulateRGBColors(color, user_color);
 }
 
+float CubeLayer3D::smoothstep(float edge0, float edge1, float x) const
+{
+    float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 nlohmann::json CubeLayer3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["layer_thickness"] = layer_thickness;
+    j["layer_edge_shape"] = layer_edge_shape;
     return j;
 }
 
@@ -196,7 +232,9 @@ void CubeLayer3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    if(settings.contains("layer_thickness")) layer_thickness = std::clamp(settings["layer_thickness"].get<float>(), 0.03f, 0.5f);
+    if(settings.contains("layer_thickness")) layer_thickness = std::clamp(settings["layer_thickness"].get<float>(), 0.05f, 1.0f);
+    if(settings.contains("layer_edge_shape")) layer_edge_shape = std::clamp(settings["layer_edge_shape"].get<int>(), 0, 2);
+    if(layer_edge_combo) layer_edge_combo->setCurrentIndex(layer_edge_shape);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
 }

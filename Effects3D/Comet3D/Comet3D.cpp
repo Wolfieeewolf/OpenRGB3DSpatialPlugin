@@ -77,7 +77,7 @@ void Comet3D::SetupCustomUI(QWidget* parent)
     row++;
     layout->addWidget(new QLabel("Tail size:"), row, 0);
     QSlider* size_slider = new QSlider(Qt::Horizontal);
-    size_slider->setRange(5, 80);
+    size_slider->setRange(5, 200);
     size_slider->setValue((int)(comet_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(comet_size * 100)) + "%");
     size_label->setMinimumWidth(36);

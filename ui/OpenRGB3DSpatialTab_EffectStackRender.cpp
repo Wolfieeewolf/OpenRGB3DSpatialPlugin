@@ -138,11 +138,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(active_effects.empty() && current_effect_ui && effect_running)
     {
+        /* Preview-only: run the currently selected effect's UI copy when stack has no enabled layers */
         RenderEffectSlot slot;
         slot.effect = current_effect_ui;
         slot.zone_index = ResolveZoneTargetSelection(effect_zone_combo);
         slot.blend_mode = BlendMode::REPLACE;
-        active_effects.push_back(slot);
+        if(slot.effect)
+            active_effects.push_back(slot);
     }
 
     bool has_enabled_freq_ranges = false;
@@ -275,7 +277,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 {
                     FrequencyRangeEffect3D* range = range_ptr.get();
                     if(!range || !range->enabled || range->effect_class_name.empty()) continue;
-                    float raw_level = AudioInputManager::instance()->getBandEnergyHz(range->low_hz, range->high_hz);
+                    float raw_level = AudioInputManager::instance()->getBandEnergyHzWithGain(range->low_hz, range->high_hz, range->eq_gain);
                     if(raw_level > range->current_level)
                         range->current_level += (raw_level - range->current_level) * range->attack;
                     else
@@ -332,8 +334,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
                             RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
-                            if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
-                                effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
@@ -348,8 +348,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 effect->ApplyAxisScale(spx, spy, spz, room_grid);
                                 effect->ApplyEffectRotation(spx, spy, spz, room_grid);
                                 RGBColor effect_color = effect->CalculateColorGrid(spx, spy, spz, time_val, room_grid);
-                                if(!effect->IsPointOnActiveSurface(spx, spy, spz, room_grid))
-                                    effect_color = 0x00000000;
                                 effect_color = effect->PostProcessColorGrid(effect_color);
                                 int r = std::min(255, (int)RGBGetRValue(final_color) + (int)RGBGetRValue(effect_color));
                                 int g = std::min(255, (int)RGBGetGValue(final_color) + (int)RGBGetGValue(effect_color));

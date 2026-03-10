@@ -59,7 +59,7 @@ void CrossingBeams3D::SetupCustomUI(QWidget* parent)
     int row = 0;
     layout->addWidget(new QLabel("Beam thickness:"), row, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
-    thick_slider->setRange(2, 20);
+    thick_slider->setRange(2, 200);
     thick_slider->setValue((int)(beam_thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(beam_thickness * 100)) + "%");
     thick_label->setMinimumWidth(36);

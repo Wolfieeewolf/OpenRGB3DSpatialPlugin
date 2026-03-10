@@ -375,12 +375,16 @@ private:
     QComboBox*      audio_device_combo = nullptr;
     QSlider*        audio_gain_slider = nullptr;
     QProgressBar*   audio_level_bar = nullptr;
+    QProgressBar*   audio_bass_bar = nullptr;
+    QProgressBar*   audio_mid_bar = nullptr;
+    QProgressBar*   audio_high_bar = nullptr;
     QPushButton*    audio_start_button = nullptr;
     QPushButton*    audio_stop_button = nullptr;
     QLabel*         audio_gain_value_label = nullptr;
 
     QComboBox*      audio_bands_combo = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
+    QLabel*         audio_spectrum_label = nullptr;
     
     std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
     int             next_freq_range_id = 1;
@@ -401,6 +405,15 @@ private:
     QComboBox*      freq_zone_combo = nullptr;
     QComboBox*      freq_origin_combo = nullptr;
     QCheckBox*      freq_range_enabled_check = nullptr;
+    QSlider*        freq_smoothing_slider = nullptr;
+    QLabel*         freq_smoothing_label = nullptr;
+    QSlider*        freq_sensitivity_slider = nullptr;
+    QLabel*         freq_sensitivity_label = nullptr;
+    QSlider*        freq_attack_slider = nullptr;
+    QLabel*         freq_attack_label = nullptr;
+    QSlider*        freq_decay_slider = nullptr;
+    QLabel*         freq_decay_label = nullptr;
+    std::vector<QSlider*> freq_eq_sliders;
     
     QWidget*        freq_effect_settings_widget = nullptr;
     QVBoxLayout*    freq_effect_settings_layout = nullptr;
@@ -414,6 +427,7 @@ private slots:
     void on_audio_level_updated(float level);
     void on_audio_bands_changed(int index);
     void on_audio_fft_changed(int index);
+    void on_audio_restore_defaults_clicked();
     
     void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
     void UpdateFrequencyRangesList();
@@ -421,6 +435,7 @@ private slots:
     void UpdateFreqOriginCombo();
     void UpdateFreqZoneCombo();
     void LoadFreqRangeDetails(FrequencyRangeEffect3D* range);
+    void applyFreqPreset(int low_hz, int high_hz, const QString& name, int isolate_band);
     void SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, const QString& class_name);
     void ClearFreqRangeEffectUI();
     void SaveFrequencyRanges();
@@ -436,6 +451,15 @@ private slots:
     void on_freq_zone_changed(int index);
     void on_freq_origin_changed(int index);
     void on_freq_enabled_toggled(bool checked);
+    void on_freq_preset_bass_clicked();
+    void on_freq_preset_mids_clicked();
+    void on_freq_preset_highs_clicked();
+    void on_freq_eq_changed(int band_index, int value);
+    void on_freq_reset_eq_clicked();
+    void on_freq_smoothing_changed(int value);
+    void on_freq_sensitivity_changed(int value);
+    void on_freq_attack_changed(int value);
+    void on_freq_decay_changed(int value);
     void OnFreqRangeEffectParamsChanged();
     void RenderFrequencyRangeEffects(const GridContext3D& room_grid);
 

@@ -44,13 +44,17 @@ private:
     QLabel*         char_variation_label;
     QSlider*        char_spacing_slider;
     QLabel*         char_spacing_label;
+    QSlider*        head_brightness_slider;
+    QLabel*         head_brightness_label;
     unsigned int    density;
     unsigned int    trail;
     unsigned int    char_height;
     unsigned int    char_gap;
     unsigned int    char_variation;
     unsigned int    char_spacing;
+    unsigned int    head_brightness;  /* 0..100: how much the leading LED is whitish (0=no white, 100=full white tip) */
 
+    /* Returns intensity 0..1; if out_head is non-null, sets *out_head to 0..1 for leading edge blend (only very tip is head). */
     float ComputeFaceIntensity(int face,
                                float x,
                                float y,
@@ -59,7 +63,8 @@ private:
                                const GridContext3D& grid,
                                float column_spacing,
                                float size_normalized,
-                               float speed_scale) const;
+                               float speed_scale,
+                               float* out_head = nullptr) const;
 };
 
 #endif

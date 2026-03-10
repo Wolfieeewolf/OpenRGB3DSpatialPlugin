@@ -69,6 +69,11 @@ public:
     float getTrebleLevel() const;
     float getOnsetLevel() const;
     float getBandEnergyHz(float low_hz, float high_hz) const;
+    float getBandEnergyHzWithGain(float low_hz, float high_hz, const float* band_gain_16) const;
+
+    void setEqGain(int band_index, float gain);
+    float getEqGain(int band_index) const;
+    void resetEq();
 
     int getChannelCount() const {
 #ifdef _WIN32
@@ -136,7 +141,7 @@ private:
 
     QTimer level_timer;
 
-    int fft_size = 1024;
+    int fft_size = 512;
     int sample_rate_hz = 48000;
     std::vector<float> sample_buffer;
     std::vector<float> window;
@@ -147,7 +152,11 @@ private:
     float treble_level = 0.0f;
     float onset_level = 0.0f;
     std::vector<float> prev_mags;
-    int bands_count = 16;
+    int bands_count = 8;
+    std::vector<float> band_peak_smoothed;  /* per-band peak so each band can peak independently (not just bass) */
+    static constexpr int EQ_BANDS = 16;
+    float eq_gain[EQ_BANDS] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     float xover_bass_upper = 200.0f;
     float xover_mid_upper  = 2000.0f;
 

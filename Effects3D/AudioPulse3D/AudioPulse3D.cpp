@@ -56,7 +56,7 @@ EffectInfo3D AudioPulse3D::GetEffectInfo()
     info.show_brightness_control = true;
     info.show_frequency_control = false;
     info.show_size_control = false;
-    info.show_scale_control = false;
+    info.show_scale_control = true;
     info.show_fps_control = false;
     info.show_axis_control = false;
     info.show_color_controls = true;
@@ -91,7 +91,7 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* falloff_row = new QHBoxLayout();
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
-    falloff_slider->setRange(20, 500);
+    falloff_slider->setRange(20, 800);
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -108,7 +108,7 @@ void AudioPulse3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -196,8 +196,9 @@ RGBColor AudioPulse3D::CalculateColorGrid(float x, float y, float z, float time,
         float dx = x - origin.x;
         float dy = y - origin.y;
         float dz = z - origin.z;
-        float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
-        distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 1.0f);
+        float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth}) * GetNormalizedScale();
+        if(max_radius < 1e-5f) max_radius = 1e-5f;
+        distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / max_radius, 0.0f, 1.0f);
     }
 
     float brightness;

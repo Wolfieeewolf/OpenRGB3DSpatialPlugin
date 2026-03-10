@@ -106,7 +106,7 @@ void BeatPulse3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* boost_row = new QHBoxLayout();
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
-    boost_slider->setRange(50, 400);
+    boost_slider->setRange(50, 500);
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -123,7 +123,7 @@ void BeatPulse3D::SetupCustomUI(QWidget* parent)
     QHBoxLayout* sens_row = new QHBoxLayout();
     sens_row->addWidget(new QLabel("Beat sensitivity:"));
     QSlider* sens_slider = new QSlider(Qt::Horizontal);
-    sens_slider->setRange(5, 90);
+    sens_slider->setRange(0, 95);
     sens_slider->setValue((int)(onset_threshold * 100.0f));
     QLabel* sens_label = new QLabel(QString::number((int)(onset_threshold * 100)) + "%");
     sens_label->setMinimumWidth(40);
