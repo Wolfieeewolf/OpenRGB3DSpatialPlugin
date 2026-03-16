@@ -212,10 +212,15 @@ HEADERS +=                                                                      
     Effects3D/Bubbles3D/Bubbles3D.h                                                              \
     Effects3D/ColorWheel3D/ColorWheel3D.h                                                       \
     Effects3D/Beam3D/Beam3D.h                                                                    \
+    Effects3D/Comet3D/Comet3D.h                                                                 \
+    Effects3D/CrossingBeams3D/CrossingBeams3D.h                                                 \
     Effects3D/MovingPanes3D/MovingPanes3D.h                                                     \
+    Effects3D/RotatingBeam3D/RotatingBeam3D.h                                                   \
     Effects3D/Sunrise3D/Sunrise3D.h                                                              \
     Effects3D/SkyLightning3D/SkyLightning3D.h                                                     \
     Effects3D/ScreenMirror3D/ScreenMirror3D.h                                                   \
+    Effects3D/Visor3D/Visor3D.h                                                                 \
+    Effects3D/ZigZag3D/ZigZag3D.h                                                               \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -278,10 +283,15 @@ SOURCES +=                                                                      
     Effects3D/Bubbles3D/Bubbles3D.cpp                                                          \
     Effects3D/ColorWheel3D/ColorWheel3D.cpp                                                     \
     Effects3D/Beam3D/Beam3D.cpp                                                                 \
+    Effects3D/Comet3D/Comet3D.cpp                                                               \
+    Effects3D/CrossingBeams3D/CrossingBeams3D.cpp                                               \
     Effects3D/MovingPanes3D/MovingPanes3D.cpp                                                  \
+    Effects3D/RotatingBeam3D/RotatingBeam3D.cpp                                                 \
     Effects3D/Sunrise3D/Sunrise3D.cpp                                                         \
     Effects3D/SkyLightning3D/SkyLightning3D.cpp                                                 \
     Effects3D/ScreenMirror3D/ScreenMirror3D.cpp                                                \
+    Effects3D/Visor3D/Visor3D.cpp                                                               \
+    Effects3D/ZigZag3D/ZigZag3D.cpp                                                             \
     Audio/AudioInputManager.cpp                                                                 \
 
 #-----------------------------------------------------------------------------------------------#

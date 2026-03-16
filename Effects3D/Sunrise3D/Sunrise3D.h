@@ -12,7 +12,7 @@ class Sunrise3D : public SpatialEffect3D
 public:
     explicit Sunrise3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Sunrise3D", "Realtime Environment", "3D Spatial", [](){ return new Sunrise3D; })
+    EFFECT_REGISTERER_3D("Sunrise3D", "Realtime Environment", "Spatial", [](){ return new Sunrise3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

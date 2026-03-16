@@ -13,7 +13,7 @@ class Beam3D : public SpatialEffect3D
 public:
     explicit Beam3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Beam3D", "Beam", "3D Spatial", [](){ return new Beam3D; })
+    EFFECT_REGISTERER_3D("Beam3D", "Beam", "Spatial", [](){ return new Beam3D; })
 
     static std::string const ClassName() { return "Beam3D"; }
     static std::string const UIName() { return "Beam"; }

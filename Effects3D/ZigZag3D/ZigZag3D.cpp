@@ -23,7 +23,7 @@ EffectInfo3D ZigZag3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "ZigZag";
     info.effect_description = "Snake path through the room (converted from OpenRGB ZigZag)";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

@@ -12,7 +12,7 @@ class WaveSurface3D : public SpatialEffect3D
 public:
     explicit WaveSurface3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("WaveSurface3D", "Wave Surface", "3D Spatial", [](){ return new WaveSurface3D; })
+    EFFECT_REGISTERER_3D("WaveSurface3D", "Wave Surface", "Spatial", [](){ return new WaveSurface3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

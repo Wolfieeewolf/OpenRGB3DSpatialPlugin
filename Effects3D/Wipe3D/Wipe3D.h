@@ -18,7 +18,7 @@ public:
     explicit Wipe3D(QWidget* parent = nullptr);
     ~Wipe3D() override = default;
 
-    EFFECT_REGISTERER_3D("Wipe3D", "Wipe", "3D Spatial", [](){ return new Wipe3D; });
+    EFFECT_REGISTERER_3D("Wipe3D", "Wipe", "Spatial", [](){ return new Wipe3D; });
 
     static std::string const ClassName() { return "Wipe3D"; }
     static std::string const UIName() { return "Wipe"; }

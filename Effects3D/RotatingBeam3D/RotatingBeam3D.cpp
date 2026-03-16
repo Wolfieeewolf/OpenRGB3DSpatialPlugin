@@ -25,7 +25,7 @@ EffectInfo3D RotatingBeam3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Rotating Beam";
     info.effect_description = "A beam that rotates in a plane";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

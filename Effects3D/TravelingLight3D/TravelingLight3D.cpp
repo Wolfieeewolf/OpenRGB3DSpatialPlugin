@@ -36,7 +36,7 @@ EffectInfo3D TravelingLight3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Traveling Light";
     info.effect_description = "Comet, ZigZag snake, or KITT-style scanner beam traveling through the room";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_COMET;
     info.is_reversible = true;
     info.supports_random = false;

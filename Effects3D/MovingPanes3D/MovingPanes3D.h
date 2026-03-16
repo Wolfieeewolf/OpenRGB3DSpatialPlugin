@@ -12,7 +12,7 @@ class MovingPanes3D : public SpatialEffect3D
 public:
     explicit MovingPanes3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("MovingPanes3D", "Moving Panes", "3D Spatial", [](){ return new MovingPanes3D; })
+    EFFECT_REGISTERER_3D("MovingPanes3D", "Moving Panes", "Spatial", [](){ return new MovingPanes3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

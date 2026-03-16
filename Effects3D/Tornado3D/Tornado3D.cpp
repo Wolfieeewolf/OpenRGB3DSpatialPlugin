@@ -28,7 +28,7 @@ EffectInfo3D Tornado3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Tornado";
     info.effect_description = "Spinning vortex around the origin";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_TORNADO;
     info.is_reversible = true;
     info.supports_random = true;

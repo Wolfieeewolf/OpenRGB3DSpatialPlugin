@@ -14,7 +14,7 @@ public:
     explicit Comet3D(QWidget* parent = nullptr);
     ~Comet3D() override = default;
 
-    EFFECT_REGISTERER_3D("Comet3D", "Comet", "3D Spatial", [](){ return new Comet3D; });
+    EFFECT_REGISTERER_3D("Comet3D", "Comet", "Spatial", [](){ return new Comet3D; });
 
     static std::string const ClassName() { return "Comet3D"; }
     static std::string const UIName() { return "Comet"; }

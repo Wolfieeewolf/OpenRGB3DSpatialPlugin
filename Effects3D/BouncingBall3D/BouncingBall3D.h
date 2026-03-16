@@ -21,7 +21,7 @@ public:
     explicit BouncingBall3D(QWidget* parent = nullptr);
     ~BouncingBall3D();
 
-    EFFECT_REGISTERER_3D("BouncingBall3D", "Bouncing Ball", "3D Spatial", [](){return new BouncingBall3D;});
+    EFFECT_REGISTERER_3D("BouncingBall3D", "Bouncing Ball", "Spatial", [](){return new BouncingBall3D;});
 
     static std::string const ClassName() { return "BouncingBall3D"; }
     static std::string const UIName() { return "Bouncing Ball"; }

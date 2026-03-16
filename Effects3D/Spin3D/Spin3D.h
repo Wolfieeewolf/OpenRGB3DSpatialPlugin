@@ -18,7 +18,7 @@ public:
     explicit Spin3D(QWidget* parent = nullptr);
     ~Spin3D();
 
-    EFFECT_REGISTERER_3D("Spin3D", "Spin", "3D Spatial", [](){return new Spin3D;});
+    EFFECT_REGISTERER_3D("Spin3D", "Spin", "Spatial", [](){return new Spin3D;});
 
     static std::string const ClassName() { return "Spin3D"; }
     static std::string const UIName() { return "Spin"; }

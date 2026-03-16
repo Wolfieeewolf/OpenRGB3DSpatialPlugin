@@ -25,7 +25,7 @@ EffectInfo3D Visor3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Visor (KITT)";
     info.effect_description = "KITT-style sweeping beam back and forth (Larson scanner)";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

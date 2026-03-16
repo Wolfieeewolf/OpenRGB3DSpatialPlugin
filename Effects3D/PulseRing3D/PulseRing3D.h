@@ -12,7 +12,7 @@ class PulseRing3D : public SpatialEffect3D
 public:
     explicit PulseRing3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("PulseRing3D", "Pulse Ring", "3D Spatial", [](){ return new PulseRing3D; })
+    EFFECT_REGISTERER_3D("PulseRing3D", "Pulse Ring", "Spatial", [](){ return new PulseRing3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

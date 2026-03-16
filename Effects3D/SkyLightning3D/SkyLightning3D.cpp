@@ -25,7 +25,7 @@ EffectInfo3D SkyLightning3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Sky Lightning";
     info.effect_description = "Real sky lightning: occasional bright flashes from above illuminating the room.";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SKY_LIGHTNING;
     info.is_reversible = false;
     info.supports_random = false;

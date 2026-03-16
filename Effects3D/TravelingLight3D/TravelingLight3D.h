@@ -13,7 +13,7 @@ class TravelingLight3D : public SpatialEffect3D
 public:
     explicit TravelingLight3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("TravelingLight3D", "Traveling Light", "3D Spatial", [](){ return new TravelingLight3D; })
+    EFFECT_REGISTERER_3D("TravelingLight3D", "Traveling Light", "Spatial", [](){ return new TravelingLight3D; })
 
     static std::string const ClassName() { return "TravelingLight3D"; }
     static std::string const UIName() { return "Traveling Light"; }

@@ -25,7 +25,7 @@ public:
     explicit Lightning3D(QWidget* parent = nullptr);
     ~Lightning3D();
 
-    EFFECT_REGISTERER_3D("Lightning3D", "Plasma Ball", "3D Spatial", [](){return new Lightning3D;});
+    EFFECT_REGISTERER_3D("Lightning3D", "Plasma Ball", "Spatial", [](){return new Lightning3D;});
 
     static std::string const ClassName() { return "Lightning3D"; }
     static std::string const UIName() { return "Plasma Ball"; }

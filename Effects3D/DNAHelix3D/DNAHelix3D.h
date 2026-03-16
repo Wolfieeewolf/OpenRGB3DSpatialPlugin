@@ -17,7 +17,7 @@ public:
     explicit DNAHelix3D(QWidget* parent = nullptr);
     ~DNAHelix3D();
 
-    EFFECT_REGISTERER_3D("DNAHelix3D", "DNA Helix", "3D Spatial", [](){return new DNAHelix3D;});
+    EFFECT_REGISTERER_3D("DNAHelix3D", "DNA Helix", "Spatial", [](){return new DNAHelix3D;});
 
     static std::string const ClassName() { return "DNAHelix3D"; }
     static std::string const UIName() { return "DNA Helix"; }

@@ -31,7 +31,7 @@ EffectInfo3D Starfield3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Starfield";
     info.effect_description = "Moving stars (Mega-Cube style): points in 3D, move along Z, wrap, rotate";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

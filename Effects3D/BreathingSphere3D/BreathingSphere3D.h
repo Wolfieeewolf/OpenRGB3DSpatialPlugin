@@ -17,7 +17,7 @@ public:
     explicit BreathingSphere3D(QWidget* parent = nullptr);
     ~BreathingSphere3D();
 
-    EFFECT_REGISTERER_3D("BreathingSphere3D", "Breathing Sphere", "3D Spatial", [](){return new BreathingSphere3D;});
+    EFFECT_REGISTERER_3D("BreathingSphere3D", "Breathing Sphere", "Spatial", [](){return new BreathingSphere3D;});
 
     static std::string const ClassName() { return "BreathingSphere3D"; }
     static std::string const UIName() { return "Breathing Sphere"; }

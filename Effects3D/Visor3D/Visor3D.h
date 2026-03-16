@@ -12,7 +12,7 @@ class Visor3D : public SpatialEffect3D
 public:
     explicit Visor3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Visor3D", "Visor (KITT)", "3D Spatial", [](){ return new Visor3D; })
+    EFFECT_REGISTERER_3D("Visor3D", "Visor (KITT)", "Spatial", [](){ return new Visor3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

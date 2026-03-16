@@ -12,7 +12,7 @@ class RotatingBeam3D : public SpatialEffect3D
 public:
     explicit RotatingBeam3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("RotatingBeam3D", "Rotating Beam", "3D Spatial", [](){ return new RotatingBeam3D; })
+    EFFECT_REGISTERER_3D("RotatingBeam3D", "Rotating Beam", "Spatial", [](){ return new RotatingBeam3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

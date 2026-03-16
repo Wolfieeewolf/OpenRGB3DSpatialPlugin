@@ -91,7 +91,7 @@ EffectInfo3D BouncingBall3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Bouncing Ball";
     info.effect_description = "Single ball bouncing in the room with glow";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
     info.supports_random = true;

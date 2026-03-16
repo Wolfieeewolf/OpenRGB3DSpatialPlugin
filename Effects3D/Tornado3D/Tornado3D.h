@@ -14,7 +14,7 @@ public:
     explicit Tornado3D(QWidget* parent = nullptr);
     ~Tornado3D();
 
-    EFFECT_REGISTERER_3D("Tornado3D", "Tornado", "3D Spatial", [](){return new Tornado3D;});
+    EFFECT_REGISTERER_3D("Tornado3D", "Tornado", "Spatial", [](){return new Tornado3D;});
 
     static std::string const ClassName() { return "Tornado3D"; }
     static std::string const UIName() { return "Tornado"; }

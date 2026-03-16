@@ -16,7 +16,7 @@ public:
     explicit Wave3D(QWidget* parent = nullptr);
     ~Wave3D();
 
-    EFFECT_REGISTERER_3D("Wave3D", "Wave", "3D Spatial", [](){return new Wave3D;});
+    EFFECT_REGISTERER_3D("Wave3D", "Wave", "Spatial", [](){return new Wave3D;});
 
     static std::string const ClassName() { return "Wave3D"; }
     static std::string const UIName() { return "Wave"; }

@@ -85,7 +85,7 @@ EffectInfo3D SurfaceAmbient3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Surface Fire/Water/Slime";
     info.effect_description = "Fire, water, slime, lava, ember, ocean, or steam on floor, ceiling, or walls";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

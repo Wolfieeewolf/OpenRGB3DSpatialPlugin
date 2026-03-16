@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| DisplayPlane3D.cpp                                        |
-|                                                           |
-|   Virtual display plane definition for ambilight mapping |
-|                                                           |
-|   Date: 2025-10-22                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "DisplayPlane3D.h"
 #include <cmath>

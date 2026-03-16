@@ -57,7 +57,7 @@ EffectInfo3D Explosion3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Explosion";
     info.effect_description = "Expanding shockwave from origin";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_EXPLOSION;
     info.is_reversible = false;
     info.supports_random = true;

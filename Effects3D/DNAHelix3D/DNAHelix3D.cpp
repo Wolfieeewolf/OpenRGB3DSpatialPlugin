@@ -38,7 +38,7 @@ EffectInfo3D DNAHelix3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "DNA Helix";
     info.effect_description = "Double helix with base pairs and rainbow colors";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_DNA_HELIX;
     info.is_reversible = false;
     info.supports_random = true;

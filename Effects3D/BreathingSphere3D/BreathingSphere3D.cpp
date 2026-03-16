@@ -42,7 +42,7 @@ EffectInfo3D BreathingSphere3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Breathing Sphere";
     info.effect_description = "Pulsing sphere with rainbow or custom colors";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BREATHING_SPHERE;
     info.is_reversible = false;
     info.supports_random = true;

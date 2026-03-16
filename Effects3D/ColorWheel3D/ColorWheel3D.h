@@ -12,7 +12,7 @@ class ColorWheel3D : public SpatialEffect3D
 public:
     explicit ColorWheel3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("ColorWheel3D", "Color Wheel", "3D Spatial", [](){ return new ColorWheel3D; })
+    EFFECT_REGISTERER_3D("ColorWheel3D", "Color Wheel", "Spatial", [](){ return new ColorWheel3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

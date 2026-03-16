@@ -35,7 +35,7 @@ EffectInfo3D Comet3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Comet";
     info.effect_description = "A comet that travels along an axis through the room with a fading tail";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_COMET;
     info.is_reversible = true;
     info.supports_random = false;

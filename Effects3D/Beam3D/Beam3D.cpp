@@ -43,7 +43,7 @@ EffectInfo3D Beam3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Beam";
     info.effect_description = "Crossing beams (X+Y) or rotating beam in a plane";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

@@ -353,7 +353,7 @@ namespace Geometry3D
      * - LEDs above screen sample top edge (spread by X position)
      * - LEDs behind screen sample based on X/Z offset from center
      *
-     * @param led_position World position of the LED (in mm)
+     * @param led_position LED position in grid units (same space as grid bounds)
      * @param plane The display plane to map to
      * @param edge_zone_depth Depth of edge zones (0.1 = 10% of screen)
      * @param user_position Optional user/viewer position for distance falloff (if null, uses screen center)

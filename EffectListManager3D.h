@@ -52,14 +52,9 @@ public:
 
     SpatialEffect3D* CreateEffect(const std::string& class_name)
     {
-        std::string resolved = class_name;
-        if(class_name == "Comet3D" || class_name == "ZigZag3D" || class_name == "Visor3D")
-            resolved = "TravelingLight3D";
-        else if(class_name == "CrossingBeams3D" || class_name == "RotatingBeam3D")
-            resolved = "Beam3D";
-        if(effects.find(resolved) != effects.end())
+        if(effects.find(class_name) != effects.end())
         {
-            return effects[resolved].constructor();
+            return effects.at(class_name).constructor();
         }
         return nullptr;
     }

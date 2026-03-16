@@ -34,7 +34,7 @@ EffectInfo3D WaveSurface3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Wave Surface";
     info.effect_description = "3D wave surface (Mega-Cube Sinus style): height = sin(phase + radius), rotating";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

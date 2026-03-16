@@ -14,7 +14,7 @@ OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
     info.Commit         = GIT_COMMIT_ID;
     info.URL            = "https://github.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin";
 
-    info.Label          = "3D Spatial";
+    info.Label          = "Spatial";
     info.Location       = OPENRGB_PLUGIN_LOCATION_TOP;
 
     return info;

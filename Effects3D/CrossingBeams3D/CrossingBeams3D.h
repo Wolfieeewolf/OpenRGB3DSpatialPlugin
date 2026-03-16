@@ -12,7 +12,7 @@ class CrossingBeams3D : public SpatialEffect3D
 public:
     explicit CrossingBeams3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("CrossingBeams3D", "Crossing Beams", "3D Spatial", [](){ return new CrossingBeams3D; })
+    EFFECT_REGISTERER_3D("CrossingBeams3D", "Crossing Beams", "Spatial", [](){ return new CrossingBeams3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

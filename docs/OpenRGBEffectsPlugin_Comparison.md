@@ -44,7 +44,7 @@ This document summarizes the **OpenRGB Effects Plugin** (`F:\MCP\OpenRGBEffectsP
 | **Manager** | `EffectListManager` singleton (pointer, heap), `get()` | `EffectListManager3D` singleton (static instance), `get()` returns `&instance` |
 | **Storage** | `effects_constructors[classname]`; `categorized_effects[category]` = vector of `effect_names` (classname, ui_name) | `effects[class_name]` = EffectRegistration3D; `effect_order` = registration order |
 | **RegisterEffect** | (classname, ui_name, category, constructor); adds to both maps | (class_name, ui_name, category, constructor); map + effect_order; allows overwrite by class_name |
-| **Get constructor** | `GetEffectConstructor(name)` | `CreateEffect(class_name)` (includes aliases, e.g. Comet3D→TravelingLight3D) |
+| **Get constructor** | `GetEffectConstructor(name)` | `CreateEffect(class_name)` |
 | **Categorization** | `GetCategorizedEffects()` → map<category, vector<effect_names>>; **no sort in manager**; EffectList sorts by ui_name when building menus | `GetCategorizedEffects()` → map<category, vector<EffectRegistration3D>>; **each category sorted by ui_name inside manager** |
 | **Registration style** | **EffectRegisterer.h**: `EFFECT_REGISTERER(classname, ui_name, category, constructor)` + `REGISTER_EFFECT(T)` in effect .cpp (static _registerer) | Macro in header only: `EFFECT_REGISTERER_3D("Class3D", "UI Name", "Category", lambda)` (no separate REGISTER_EFFECT_3D in cpp) |
 

@@ -28,7 +28,7 @@ EffectInfo3D CrossingBeams3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Crossing Beams";
     info.effect_description = "Two beams moving horizontally and vertically that cross";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

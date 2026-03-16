@@ -47,470 +47,6 @@ REGISTER_EFFECT_3D(ScreenMirror3D);
 #define M_PI 3.14159265358979323846
 #endif
 
-static const int   PREVIEW_BUFFER_GRID_UNITS = 5;
-static const float PREVIEW_CUBE_HALF_GRID_UNITS = 20.0f;
-static const int   PREVIEW_GRID_RES = 11;
-static const int   PREVIEW_LED_COUNT_VOLUME = PREVIEW_GRID_RES * PREVIEW_GRID_RES * PREVIEW_GRID_RES;
-static const float DISPLAY_PREVIEW_SCALE = 0.5f;
-
-static Vector3D TransformLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
-{
-    Vector3D scaled = {
-        local_pos.x * transform.scale.x,
-        local_pos.y * transform.scale.y,
-        local_pos.z * transform.scale.z
-    };
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-    float rx = transform.rotation.x * (float)(M_PI / 180.0);
-    float ry = transform.rotation.y * (float)(M_PI / 180.0);
-    float rz = transform.rotation.z * (float)(M_PI / 180.0);
-    float temp_y = scaled.y * cosf(rx) - scaled.z * sinf(rx);
-    float temp_z = scaled.y * sinf(rx) + scaled.z * cosf(rx);
-    scaled.y = temp_y;
-    scaled.z = temp_z;
-    float temp_x = scaled.x * cosf(ry) + scaled.z * sinf(ry);
-    temp_z = -scaled.x * sinf(ry) + scaled.z * cosf(ry);
-    scaled.x = temp_x;
-    scaled.z = temp_z;
-    temp_x = scaled.x * cosf(rz) - scaled.y * sinf(rz);
-    temp_y = scaled.x * sinf(rz) + scaled.y * cosf(rz);
-    scaled.x = temp_x;
-    scaled.y = temp_y;
-    return {
-        scaled.x + transform.position.x,
-        scaled.y + transform.position.y,
-        scaled.z + transform.position.z
-    };
-}
-
-class AmbilightPreview3DWidget : public QOpenGLWidget, protected QOpenGLFunctions
-{
-public:
-    static const int PREVIEW_LED_COUNT = PREVIEW_LED_COUNT_VOLUME;
-
-    DisplayPlane3D* display_plane = nullptr;
-    float grid_scale_mm_ = 10.0f;
-    std::vector<Vector3D> positions;
-    std::vector<Vector3D> box_corners_world;
-    std::vector<RGBColor> colors;
-
-    float cam_azimuth = 0.75f;
-    float cam_elevation = 0.45f;
-    float cam_zoom = 1.0f;
-    QPoint last_mouse_pos;
-    bool dragging = false;
-
-    bool* show_screen_preview_ptr = nullptr;
-    bool* show_test_pattern_ptr = nullptr;
-    bool* show_test_pattern_pulse_ptr = nullptr;
-    GLuint display_texture_id = 0;
-    QTimer* pulse_animation_timer = nullptr;
-
-    void SetPreviewOptions(bool* screen, bool* test, bool* test_pulse)
-    {
-        show_screen_preview_ptr = screen;
-        show_test_pattern_ptr = test;
-        show_test_pattern_pulse_ptr = test_pulse;
-        update();
-    }
-
-    void tickPulseAnimation()
-    {
-        if(show_test_pattern_pulse_ptr && *show_test_pattern_pulse_ptr && display_plane)
-        {
-            update();
-        }
-    }
-    void SetGridScaleMM(float mm)
-    {
-        float v = (mm > 0.001f) ? mm : 10.0f;
-        if(grid_scale_mm_ != v) { grid_scale_mm_ = v; updatePositions(); update(); }
-    }
-    float GetGridScaleMM() const { return grid_scale_mm_; }
-
-    explicit AmbilightPreview3DWidget(QWidget* parent = nullptr)
-        : QOpenGLWidget(parent)
-    {
-        setMinimumSize(200, 160);
-        setMaximumHeight(280);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        setMouseTracking(true);
-        setCursor(Qt::OpenHandCursor);
-        setToolTip("Live ambilight preview: LED grid around display plane. Drag to rotate, scroll to zoom.");
-        pulse_animation_timer = new QTimer(this);
-        connect(pulse_animation_timer, &QTimer::timeout, this, [this]() { tickPulseAnimation(); });
-        pulse_animation_timer->start(33);
-    }
-
-    void SetDisplayPlane(DisplayPlane3D* plane)
-    {
-        display_plane = plane;
-        updatePositions();
-        update();
-    }
-
-    void updatePositions()
-    {
-        positions.clear();
-        box_corners_world.clear();
-        if(!display_plane) return;
-
-        const Transform3D& t = display_plane->GetTransform();
-        float half = PREVIEW_CUBE_HALF_GRID_UNITS;
-        const int res = PREVIEW_GRID_RES;
-        float step = (2.0f * half) / (float)(res - 1);
-
-        Vector3D local_corners[8] = {
-            {-half, -half, -half}, { half, -half, -half}, { half,  half, -half}, {-half,  half, -half},
-            {-half, -half,  half}, { half, -half,  half}, { half,  half,  half}, {-half,  half,  half}
-        };
-        for(int i = 0; i < 8; i++)
-            box_corners_world.push_back(TransformLocalToWorld(local_corners[i], t));
-
-        auto addLocal = [&](float lx, float ly, float lz) {
-            positions.push_back(TransformLocalToWorld(Vector3D{lx, ly, lz}, t));
-        };
-
-        for(int ix = 0; ix < res; ix++)
-            for(int iy = 0; iy < res; iy++)
-                for(int iz = 0; iz < res; iz++)
-                {
-                    float x = -half + (float)ix * step;
-                    float y = -half + (float)iy * step;
-                    float z = -half + (float)iz * step;
-                    addLocal(x, y, z);
-                }
-    }
-
-    const std::vector<Vector3D>& GetPreviewPositions() const { return positions; }
-
-    void SetColors(const std::vector<RGBColor>& new_colors)
-    {
-        colors = new_colors;
-        update();
-    }
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        if(event->button() == Qt::LeftButton)
-        {
-            dragging = true;
-            last_mouse_pos = event->pos();
-            setCursor(Qt::ClosedHandCursor);
-        }
-            QOpenGLWidget::mousePressEvent(event);
-    }
-
-    void mouseMoveEvent(QMouseEvent* event) override
-    {
-        if(dragging)
-        {
-            QPoint delta = event->pos() - last_mouse_pos;
-            last_mouse_pos = event->pos();
-            cam_azimuth -= (float)delta.x() * 0.01f;
-            cam_elevation += (float)delta.y() * 0.01f;
-            float max_el = 1.45f;
-            if(cam_elevation > max_el) cam_elevation = max_el;
-            if(cam_elevation < -max_el) cam_elevation = -max_el;
-            update();
-        }
-        QOpenGLWidget::mouseMoveEvent(event);
-    }
-
-    void mouseReleaseEvent(QMouseEvent* event) override
-    {
-        if(event->button() == Qt::LeftButton)
-        {
-            dragging = false;
-            setCursor(Qt::OpenHandCursor);
-        }
-        QOpenGLWidget::mouseReleaseEvent(event);
-    }
-
-    void wheelEvent(QWheelEvent* event) override
-    {
-        int delta = event->angleDelta().y();
-        if(delta > 0)
-            cam_zoom *= 1.15f;
-        else if(delta < 0)
-            cam_zoom *= 0.87f;
-        if(cam_zoom < 0.2f) cam_zoom = 0.2f;
-        if(cam_zoom > 8.0f) cam_zoom = 8.0f;
-        update();
-        event->accept();
-    }
-
-    void initializeGL() override
-    {
-        initializeOpenGLFunctions();
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glClearColor(0.15f, 0.15f, 0.18f, 1.0f);
-    }
-
-    void resizeGL(int w, int h) override
-    {
-        if(h == 0) h = 1;
-        glViewport(0, 0, w, h);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        float aspect = (float)w / (float)h;
-        gluPerspective(45.0, aspect, 0.1, 1000.0);
-        glMatrixMode(GL_MODELVIEW);
-    }
-
-    void paintGL() override
-    {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        glDisable(GL_LIGHTING);
-        glDisable(GL_TEXTURE_2D);
-
-        if(positions.empty() || box_corners_world.size() < 8)
-        {
-            glColor3f(0.4f, 0.4f, 0.45f);
-            glBegin(GL_QUADS);
-            glVertex2f(-0.5f, -0.5f);
-            glVertex2f( 0.5f, -0.5f);
-            glVertex2f( 0.5f,  0.5f);
-            glVertex2f(-0.5f,  0.5f);
-            glEnd();
-            return;
-        }
-
-        float cx = 0.0f, cy = 0.0f, cz = 0.0f;
-        for(const Vector3D& pos : positions)
-        {
-            cx += pos.x; cy += pos.y; cz += pos.z;
-        }
-        float n = (float)positions.size();
-        cx /= n; cy /= n; cz /= n;
-
-        float radius = 0.0f;
-        for(const Vector3D& pos : positions)
-        {
-            float d = sqrtf((pos.x - cx) * (pos.x - cx) + (pos.y - cy) * (pos.y - cy) + (pos.z - cz) * (pos.z - cz));
-            if(d > radius) radius = d;
-        }
-        for(const Vector3D& pos : box_corners_world)
-        {
-            float d = sqrtf((pos.x - cx) * (pos.x - cx) + (pos.y - cy) * (pos.y - cy) + (pos.z - cz) * (pos.z - cz));
-            if(d > radius) radius = d;
-        }
-        if(radius < 1.0f) radius = 1.0f;
-
-        float cam_dist = radius * 2.8f / cam_zoom;
-        float camera_x = cx + cam_dist * cosf(cam_elevation) * cosf(cam_azimuth);
-        float camera_y = cy + cam_dist * sinf(cam_elevation);
-        float camera_z = cz + cam_dist * cosf(cam_elevation) * sinf(cam_azimuth);
-
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        gluLookAt(camera_x, camera_y, camera_z,
-                  cx, cy, cz,
-                  0.0f, 1.0f, 0.0f);
-
-        glColor3f(0.35f, 0.38f, 0.45f);
-        glLineWidth(1.5f);
-        glBegin(GL_LINES);
-        int cube_edges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
-        for(int e = 0; e < 12; e++)
-        {
-            const Vector3D& a = box_corners_world[cube_edges[e][0]];
-            const Vector3D& b = box_corners_world[cube_edges[e][1]];
-            glVertex3f(a.x, a.y, a.z);
-            glVertex3f(b.x, b.y, b.z);
-        }
-        glEnd();
-
-        if(display_plane)
-        {
-            const Transform3D& t = display_plane->GetTransform();
-            float width_units = MMToGridUnits(display_plane->GetWidthMM(), grid_scale_mm_);
-            float height_units = MMToGridUnits(display_plane->GetHeightMM(), grid_scale_mm_);
-            float half_w = width_units * 0.5f * DISPLAY_PREVIEW_SCALE;
-            float half_h = height_units * 0.5f * DISPLAY_PREVIEW_SCALE;
-            Vector3D local[4] = { {-half_w,-half_h,0}, {half_w,-half_h,0}, {half_w,half_h,0}, {-half_w,half_h,0} };
-            Vector3D world[4];
-            for(int i = 0; i < 4; i++)
-                world[i] = TransformLocalToWorld(local[i], t);
-
-            bool show_test = show_test_pattern_ptr && *show_test_pattern_ptr;
-            bool show_pulse = show_test_pattern_pulse_ptr && *show_test_pattern_pulse_ptr;
-            bool show_screen = show_screen_preview_ptr && *show_screen_preview_ptr && !show_test && !show_pulse;
-
-            if(!show_screen && display_texture_id != 0)
-            {
-                glDeleteTextures(1, &display_texture_id);
-                display_texture_id = 0;
-            }
-
-            if(show_pulse)
-            {
-                float t_sec = (float)QDateTime::currentMSecsSinceEpoch() / 1000.0f;
-                float pulse = 0.5f + 0.5f * sinf(t_sec * (float)(2.0 * M_PI));
-                int color_cycle = ((int)floorf(t_sec)) % 3;
-                float r = 0.0f, g = 0.0f, b = 0.0f;
-                if(color_cycle == 0)      { r = 1.0f; }
-                else if(color_cycle == 1) { g = 1.0f; }
-                else                      { b = 1.0f; }
-                r *= pulse; g *= pulse; b *= pulse;
-                glColor4f(r, g, b, 0.9f);
-                glBegin(GL_QUADS);
-                for(int i = 0; i < 4; i++)
-                    glVertex3f(world[i].x, world[i].y, world[i].z);
-                glEnd();
-            }
-            else if(show_test)
-            {
-                Vector3D center, mid_bottom, mid_top, mid_left, mid_right;
-                center.x = (world[0].x + world[2].x) * 0.5f;
-                center.y = (world[0].y + world[2].y) * 0.5f;
-                center.z = (world[0].z + world[2].z) * 0.5f;
-                mid_bottom.x = (world[0].x + world[1].x) * 0.5f; mid_bottom.y = (world[0].y + world[1].y) * 0.5f; mid_bottom.z = (world[0].z + world[1].z) * 0.5f;
-                mid_top.x    = (world[2].x + world[3].x) * 0.5f; mid_top.y    = (world[2].y + world[3].y) * 0.5f; mid_top.z    = (world[2].z + world[3].z) * 0.5f;
-                mid_left.x   = (world[0].x + world[3].x) * 0.5f; mid_left.y   = (world[0].y + world[3].y) * 0.5f; mid_left.z   = (world[0].z + world[3].z) * 0.5f;
-                mid_right.x  = (world[1].x + world[2].x) * 0.5f; mid_right.y  = (world[1].y + world[2].y) * 0.5f; mid_right.z  = (world[1].z + world[2].z) * 0.5f;
-                glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(world[0].x, world[0].y, world[0].z); glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z);
-                glVertex3f(center.x, center.y, center.z); glVertex3f(mid_left.x, mid_left.y, mid_left.z);
-                glEnd();
-                glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(mid_bottom.x, mid_bottom.y, mid_bottom.z); glVertex3f(world[1].x, world[1].y, world[1].z);
-                glVertex3f(mid_right.x, mid_right.y, mid_right.z); glVertex3f(center.x, center.y, center.z);
-                glEnd();
-                glColor4f(0.0f, 0.0f, 1.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(center.x, center.y, center.z); glVertex3f(mid_right.x, mid_right.y, mid_right.z);
-                glVertex3f(world[2].x, world[2].y, world[2].z); glVertex3f(mid_top.x, mid_top.y, mid_top.z);
-                glEnd();
-                glColor4f(1.0f, 1.0f, 0.0f, 0.85f);
-                glBegin(GL_QUADS);
-                glVertex3f(mid_left.x, mid_left.y, mid_left.z); glVertex3f(center.x, center.y, center.z);
-                glVertex3f(mid_top.x, mid_top.y, mid_top.z); glVertex3f(world[3].x, world[3].y, world[3].z);
-                glEnd();
-            }
-            else if(show_screen)
-            {
-                std::string source_id = display_plane->GetCaptureSourceId();
-                if(!source_id.empty())
-                {
-                    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-                    if(capture_mgr.IsInitialized() || capture_mgr.Initialize())
-                    {
-                        if(!capture_mgr.IsCapturing(source_id))
-                            capture_mgr.StartCapture(source_id);
-                        std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
-                        if(frame && frame->valid && !frame->data.empty())
-                        {
-                            if(display_texture_id == 0)
-                                glGenTextures(1, &display_texture_id);
-                            if(display_texture_id != 0)
-                            {
-                                glBindTexture(GL_TEXTURE_2D, display_texture_id);
-                                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame->width, frame->height,
-                                            0, GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                                glBindTexture(GL_TEXTURE_2D, 0);
-
-                                glEnable(GL_TEXTURE_2D);
-                                glBindTexture(GL_TEXTURE_2D, display_texture_id);
-                                glColor4f(1.0f, 1.0f, 1.0f, 0.85f);
-                                glBegin(GL_QUADS);
-                                glTexCoord2f(0.0f, 1.0f); glVertex3f(world[0].x, world[0].y, world[0].z);
-                                glTexCoord2f(1.0f, 1.0f); glVertex3f(world[1].x, world[1].y, world[1].z);
-                                glTexCoord2f(1.0f, 0.0f); glVertex3f(world[2].x, world[2].y, world[2].z);
-                                glTexCoord2f(0.0f, 0.0f); glVertex3f(world[3].x, world[3].y, world[3].z);
-                                glEnd();
-                                glBindTexture(GL_TEXTURE_2D, 0);
-                                glDisable(GL_TEXTURE_2D);
-                            }
-                        }
-                        else
-                        {
-                            glColor4f(0.2f, 0.55f, 0.6f, 0.25f);
-                            glBegin(GL_QUADS);
-                            for(int i = 0; i < 4; i++)
-                                glVertex3f(world[i].x, world[i].y, world[i].z);
-                            glEnd();
-                        }
-                    }
-                    else
-                    {
-                        glColor4f(0.2f, 0.55f, 0.6f, 0.25f);
-                        glBegin(GL_QUADS);
-                        for(int i = 0; i < 4; i++)
-                            glVertex3f(world[i].x, world[i].y, world[i].z);
-                        glEnd();
-                    }
-                }
-                else
-                {
-                    glColor4f(0.2f, 0.55f, 0.6f, 0.25f);
-                    glBegin(GL_QUADS);
-                    for(int i = 0; i < 4; i++)
-                        glVertex3f(world[i].x, world[i].y, world[i].z);
-                    glEnd();
-                }
-            }
-            else
-            {
-                glColor4f(0.2f, 0.55f, 0.6f, 0.25f);
-                glBegin(GL_QUADS);
-                for(int i = 0; i < 4; i++)
-                    glVertex3f(world[i].x, world[i].y, world[i].z);
-                glEnd();
-            }
-            glColor3f(0.35f, 0.7f, 0.75f);
-            glBegin(GL_LINE_LOOP);
-            for(int i = 0; i < 4; i++)
-                glVertex3f(world[i].x, world[i].y, world[i].z);
-            glEnd();
-        }
-
-        std::vector<int> order(positions.size());
-        for(size_t i = 0; i < positions.size(); i++)
-            order[i] = (int)i;
-        std::sort(order.begin(), order.end(), [&](int a, int b) {
-            const Vector3D& pa = positions[a];
-            const Vector3D& pb = positions[b];
-            float da = (pa.x - camera_x) * (pa.x - camera_x) + (pa.y - camera_y) * (pa.y - camera_y) + (pa.z - camera_z) * (pa.z - camera_z);
-            float db = (pb.x - camera_x) * (pb.x - camera_x) + (pb.y - camera_y) * (pb.y - camera_y) + (pb.z - camera_z) * (pb.z - camera_z);
-            return da > db;
-        });
-        glEnable(GL_POINT_SMOOTH);
-        glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-        glPointSize(2.5f);
-        glBegin(GL_POINTS);
-        for(int idx : order)
-        {
-            const Vector3D& p = positions[idx];
-            float r_ = 0.35f, g_ = 0.35f, b_ = 0.4f;
-            if((size_t)idx < colors.size())
-            {
-                RGBColor c = colors[idx];
-                r_ = RGBGetRValue(c) / 255.0f;
-                g_ = RGBGetGValue(c) / 255.0f;
-                b_ = RGBGetBValue(c) / 255.0f;
-            }
-            glColor3f(r_, g_, b_);
-            glVertex3f(p.x, p.y, p.z);
-        }
-        glEnd();
-        glDisable(GL_POINT_SMOOTH);
-    }
-};
-
 class CaptureAreaPreviewWidget : public QWidget
 {
 public:
@@ -1100,10 +636,8 @@ ScreenMirror3D::ScreenMirror3D(QWidget* parent)
     , monitor_status_label(nullptr)
     , monitor_help_label(nullptr)
     , monitors_container(nullptr)
-    , ambilight_preview_timer(nullptr)
     , monitors_layout(nullptr)
     , grid_scale_mm_(10.0f)
-    , source_effect_for_preview_(nullptr)
     , capture_quality(1)
     , capture_quality_combo(nullptr)
     , show_test_pattern(false)
@@ -1283,14 +817,6 @@ void ScreenMirror3D::SetupCustomUI(QWidget* parent)
 
     StartCaptureIfNeeded();
 
-    if(!ambilight_preview_timer)
-    {
-        ambilight_preview_timer = new QTimer(this);
-        connect(ambilight_preview_timer, &QTimer::timeout, this, &ScreenMirror3D::UpdateAmbilightPreviews);
-        ambilight_preview_timer->start(33);
-        QTimer::singleShot(0, this, &ScreenMirror3D::UpdateAmbilightPreviews);
-    }
-
     QTimer::singleShot(100, this, &ScreenMirror3D::OnScreenPreviewChanged);
 }
 
@@ -1402,6 +928,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
                                                      const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
                                                      const std::vector<DisplayPlane3D*>* pre_fetched_planes)
 {
+    (void)time;
     std::vector<DisplayPlane3D*> all_planes;
     if(pre_fetched_planes)
         all_planes = *pre_fetched_planes;
@@ -1433,7 +960,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         float black_bar_pillarbox_percent;
         float smoothing_time_ms;
         bool use_test_pattern;
-        bool use_test_pattern_pulse;
     };
 
     std::vector<MonitorContribution> contributions;
@@ -1491,7 +1017,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             continue;
         }
 
-        bool monitor_test_pattern = mon_settings.show_test_pattern || mon_settings.show_test_pattern_pulse;
+        bool monitor_test_pattern = mon_settings.show_test_pattern;
         
         std::string capture_id = plane->GetCaptureSourceId();
         std::shared_ptr<CapturedFrame> frame = nullptr;
@@ -1795,7 +1321,6 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             contrib.black_bar_pillarbox_percent = mon_settings.black_bar_pillarbox_percent;
             contrib.smoothing_time_ms = mon_settings.smoothing_time_ms;
             contrib.use_test_pattern = mon_settings.show_test_pattern;
-            contrib.use_test_pattern_pulse = mon_settings.show_test_pattern_pulse;
             contributions.push_back(contrib);
         }
     }
@@ -1872,19 +1397,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
 
         float r, g, b;
 
-        if(contrib.use_test_pattern_pulse)
-        {
-            float pulse = 0.5f + 0.5f * sinf(time * 2.0f);
-            int color_cycle = ((int)floorf(time)) % 3;
-            float rf = 0.0f, gf = 0.0f, bf = 0.0f;
-            if(color_cycle == 0)      rf = 1.0f;
-            else if(color_cycle == 1)  gf = 1.0f;
-            else                       bf = 1.0f;
-            r = rf * pulse * 255.0f;
-            g = gf * pulse * 255.0f;
-            b = bf * pulse * 255.0f;
-        }
-        else if(contrib.use_test_pattern)
+        if(contrib.use_test_pattern)
         {
             float clamped_u = std::clamp(sample_u, 0.0f, 1.0f);
             float clamped_v = std::clamp(sample_v, 0.0f, 1.0f);
@@ -2086,7 +1599,7 @@ void ScreenMirror3D::BuildFrameCache(std::unordered_map<std::string, std::shared
         MonitorSettings& mon_settings = it->second;
         bool monitor_enabled = mon_settings.group_box ? mon_settings.group_box->isChecked() : mon_settings.enabled;
         if(!monitor_enabled) continue;
-        if(mon_settings.show_test_pattern || mon_settings.show_test_pattern_pulse) continue;
+        if(mon_settings.show_test_pattern) continue;
         std::string capture_id = plane->GetCaptureSourceId();
         if(capture_id.empty()) continue;
         if(!capture_mgr.IsCapturing(capture_id))
@@ -2150,7 +1663,6 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
         
         mon["reference_point_index"] = mon_settings.reference_point_index;
         mon["show_test_pattern"] = mon_settings.show_test_pattern;
-        mon["show_test_pattern_pulse"] = mon_settings.show_test_pattern_pulse;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
         
         nlohmann::json zones_array = nlohmann::json::array();
@@ -2325,11 +1837,6 @@ void ScreenMirror3D::SyncMonitorSettingsToUI(MonitorSettings& msettings)
         QSignalBlocker blocker(msettings.test_pattern_check);
         msettings.test_pattern_check->setChecked(msettings.show_test_pattern);
     }
-    if(msettings.test_pattern_pulse_check)
-    {
-        QSignalBlocker blocker(msettings.test_pattern_pulse_check);
-        msettings.test_pattern_pulse_check->setChecked(msettings.show_test_pattern_pulse);
-    }
     if(msettings.screen_preview_check)
     {
         QSignalBlocker blocker(msettings.screen_preview_check);
@@ -2424,7 +1931,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             QCheckBox* existing_screen_preview_check = nullptr;
             QWidget* existing_capture_area_preview = nullptr;
             QPushButton* existing_add_zone_button = nullptr;
-            QWidget* existing_ambilight_preview_3d = nullptr;
 
             if(had_existing)
             {
@@ -2463,7 +1969,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 existing_top_bottom_balance_label = existing_it->second.top_bottom_balance_label;
                 existing_capture_area_preview = existing_it->second.capture_area_preview;
                 existing_add_zone_button = existing_it->second.add_zone_button;
-                existing_ambilight_preview_3d = existing_it->second.ambilight_preview_3d;
             }
             else
             {
@@ -2508,7 +2013,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             else msettings.top_bottom_balance = default_top_bottom_balance;
             
             if(mon.contains("show_test_pattern")) msettings.show_test_pattern = mon["show_test_pattern"].get<bool>();
-            if(mon.contains("show_test_pattern_pulse")) msettings.show_test_pattern_pulse = mon["show_test_pattern_pulse"].get<bool>();
             if(mon.contains("show_screen_preview")) msettings.show_screen_preview = mon["show_screen_preview"].get<bool>();
             
             if(mon.contains("capture_zones") && mon["capture_zones"].is_array())
@@ -2602,7 +2106,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 msettings.screen_preview_check = existing_screen_preview_check;
                 msettings.capture_area_preview = existing_capture_area_preview;
                 msettings.add_zone_button = existing_add_zone_button;
-                msettings.ambilight_preview_3d = existing_ambilight_preview_3d;
 
                 if(msettings.capture_area_preview)
                 {
@@ -2621,22 +2124,6 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                     preview_widget->SetValueChangedCallback([this]() {
                         OnParameterChanged();
                     });
-                }
-                if(msettings.ambilight_preview_3d)
-                {
-                    AmbilightPreview3DWidget* ambi_w = dynamic_cast<AmbilightPreview3DWidget*>(msettings.ambilight_preview_3d);
-                    if(ambi_w)
-                    {
-                        std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-                        for(DisplayPlane3D* plane : planes)
-                        {
-                            if(plane && plane->GetName() == monitor_name)
-                            {
-                                ambi_w->SetDisplayPlane(plane);
-                                break;
-                            }
-                        }
-                    }
                 }
             }
     }
@@ -2692,9 +2179,8 @@ void ScreenMirror3D::OnParameterChanged()
         bool old_test_pattern = settings.show_test_pattern;
         bool old_screen_preview = settings.show_screen_preview;
         if(settings.test_pattern_check) settings.show_test_pattern = settings.test_pattern_check->isChecked();
-        if(settings.test_pattern_pulse_check) settings.show_test_pattern_pulse = settings.test_pattern_pulse_check->isChecked();
         if(settings.screen_preview_check) settings.show_screen_preview = settings.screen_preview_check->isChecked();
-        if((settings.show_test_pattern || settings.show_test_pattern_pulse) && settings.group_box && !settings.group_box->isChecked())
+        if(settings.show_test_pattern && settings.group_box && !settings.group_box->isChecked())
         {
             QSignalBlocker block(settings.group_box);
             settings.group_box->setChecked(true);
@@ -2705,13 +2191,6 @@ void ScreenMirror3D::OnParameterChanged()
            && settings.capture_area_preview)
         {
             settings.capture_area_preview->update();
-        }
-
-        if(settings.ambilight_preview_3d)
-        {
-            AmbilightPreview3DWidget* ambi_w = dynamic_cast<AmbilightPreview3DWidget*>(settings.ambilight_preview_3d);
-            bool has_capture = ambi_w && ambi_w->display_plane && !ambi_w->display_plane->GetCaptureSourceId().empty();
-            settings.ambilight_preview_3d->setEnabled(has_capture || settings.show_test_pattern || settings.show_test_pattern_pulse);
         }
 
         if(settings.ref_point_combo)
@@ -2727,8 +2206,6 @@ void ScreenMirror3D::OnParameterChanged()
     RefreshMonitorStatus();
     RefreshReferencePointDropdowns();
 
-    UpdateAmbilightPreviews();
-    
     emit ParametersChanged();
 }
 
@@ -2992,7 +2469,9 @@ float ScreenMirror3D::GetHistoryRetentionMs() const
             }
             else
             {
-                monitor_retention = std::max(monitor_retention, max_distance_mm / mon_settings.propagation_speed_mm_per_ms);
+                float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 800.0f);
+                float speed_mm_per_ms = 800.0f - strength + 1.0f;
+                monitor_retention = std::max(monitor_retention, max_distance_mm / std::max(speed_mm_per_ms, 0.5f));
             }
             monitor_retention = std::max(monitor_retention, mon_settings.wave_decay_ms * 2.0f);
         }
@@ -3029,8 +2508,8 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     }
     settings.group_box = new QGroupBox(display_name);
     settings.group_box->setCheckable(true);
-    settings.group_box->setChecked(settings.enabled && (has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse));
-    settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse);
+    settings.group_box->setChecked(settings.enabled && (has_capture_source || settings.show_test_pattern));
+    settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern);
     if(has_capture_source)
     {
         settings.group_box->setToolTip("Enable or disable this monitor's influence.");
@@ -3258,7 +2737,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     settings.wave_decay_slider->setEnabled(has_capture_source);
     settings.wave_decay_slider->setTickPosition(QSlider::TicksBelow);
     settings.wave_decay_slider->setTickInterval(2000);
-    settings.wave_decay_slider->setToolTip("Wave decay (0-20000ms). How long the wave tail lasts. Use test pulse to tune.");
+    settings.wave_decay_slider->setToolTip("Wave decay (0-20000ms). How long the wave tail lasts.");
     wave_decay_layout->addWidget(settings.wave_decay_slider);
     settings.wave_decay_label = new QLabel(QString::number((int)settings.wave_decay_ms) + "ms");
     settings.wave_decay_label->setMinimumWidth(60);
@@ -3402,23 +2881,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     );
     preview_form->addRow("Test Pattern:", settings.test_pattern_check);
 
-    settings.test_pattern_pulse_check = new QCheckBox("Pulse (for tuning wave)");
-    settings.test_pattern_pulse_check->setEnabled(true);
-    settings.test_pattern_pulse_check->setChecked(settings.show_test_pattern_pulse);
-    settings.test_pattern_pulse_check->setToolTip("Pulsing color cycle to tune wave intensity and decay.");
-    connect(settings.test_pattern_pulse_check,
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            &QCheckBox::checkStateChanged,
-#else
-            &QCheckBox::stateChanged,
-#endif
-            this, [this, &settings]() {
-                OnParameterChanged();
-                if(settings.ambilight_preview_3d)
-                    settings.ambilight_preview_3d->update();
-            });
-    preview_form->addRow("", settings.test_pattern_pulse_check);
-
     settings.screen_preview_check = new QCheckBox("Show Screen Preview");
     settings.screen_preview_check->setEnabled(has_capture_source);
     settings.screen_preview_check->setChecked(settings.show_screen_preview);
@@ -3473,27 +2935,6 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     capture_col->addWidget(settings.capture_area_preview);
     previews_row->addLayout(capture_col, 1);
 
-    QVBoxLayout* ambi_col = new QVBoxLayout();
-    ambi_col->setContentsMargins(0, 0, 0, 0);
-    ambi_col->addWidget(new QLabel("Ambilight preview (LED frame):"));
-    AmbilightPreview3DWidget* ambilight_preview = new AmbilightPreview3DWidget(this);
-    ambilight_preview->SetDisplayPlane(plane);
-    ambilight_preview->SetPreviewOptions(&settings.show_screen_preview, &settings.show_test_pattern, &settings.show_test_pattern_pulse);
-    for(QWidget* p = this->parentWidget(); p; p = p->parentWidget())
-    {
-        OpenRGB3DSpatialTab* tab = qobject_cast<OpenRGB3DSpatialTab*>(p);
-        if(tab)
-        {
-            grid_scale_mm_ = tab->GetGridScaleMM();
-            ambilight_preview->SetGridScaleMM(grid_scale_mm_);
-            break;
-        }
-    }
-    ambilight_preview->setEnabled(has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse);
-    settings.ambilight_preview_3d = ambilight_preview;
-    ambi_col->addWidget(settings.ambilight_preview_3d);
-    previews_row->addLayout(ambi_col, 1);
-
     zones_layout->addLayout(previews_row);
 
     zones_group->setLayout(zones_layout);
@@ -3545,84 +2986,11 @@ void ScreenMirror3D::StopCaptureIfNeeded()
 {
 }
 
-void ScreenMirror3D::UpdateAmbilightPreviews()
-{
-    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-    std::unordered_map<std::string, DisplayPlane3D*> plane_by_name;
-    for(DisplayPlane3D* plane : planes)
-    {
-        if(plane && !plane->GetName().empty())
-            plane_by_name[plane->GetName()] = plane;
-    }
-    ScreenMirror3D* color_source = source_effect_for_preview_ ? source_effect_for_preview_ : this;
-
-    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin(); it != monitor_settings.end(); ++it)
-    {
-        MonitorSettings& m = it->second;
-        if(!m.ambilight_preview_3d)
-            continue;
-        AmbilightPreview3DWidget* w = dynamic_cast<AmbilightPreview3DWidget*>(m.ambilight_preview_3d);
-        if(!w)
-            continue;
-        if(!w->display_plane)
-        {
-            auto pit = plane_by_name.find(it->first);
-            if(pit != plane_by_name.end())
-                w->SetDisplayPlane(pit->second);
-            if(!w->display_plane && !planes.empty() && planes[0])
-                w->SetDisplayPlane(planes[0]);
-            if(!w->display_plane)
-                continue;
-        }
-        w->updatePositions();
-        const std::vector<Vector3D>& pos = w->GetPreviewPositions();
-        if(pos.size() != (size_t)AmbilightPreview3DWidget::PREVIEW_LED_COUNT && !planes.empty() && planes[0])
-        {
-            w->SetDisplayPlane(planes[0]);
-            w->updatePositions();
-        }
-        const std::vector<Vector3D>& pos_final = w->GetPreviewPositions();
-        if(pos_final.size() != (size_t)AmbilightPreview3DWidget::PREVIEW_LED_COUNT)
-            continue;
-        float min_x = 1e9f, max_x = -1e9f, min_y = 1e9f, max_y = -1e9f, min_z = 1e9f, max_z = -1e9f;
-        for(const Vector3D& p : pos_final)
-        {
-            if(p.x < min_x) min_x = p.x; if(p.x > max_x) max_x = p.x;
-            if(p.y < min_y) min_y = p.y; if(p.y > max_y) max_y = p.y;
-            if(p.z < min_z) min_z = p.z; if(p.z > max_z) max_z = p.z;
-        }
-        float pad = 20.0f;
-        GridContext3D grid(min_x - pad, max_x + pad, min_y - pad, max_y + pad, min_z - pad, max_z + pad, grid_scale_mm_);
-        float time = (float)QDateTime::currentMSecsSinceEpoch() / 1000.0f;
-        std::vector<RGBColor> colors;
-        if(color_source == this)
-            CalculateColorGridBatch(pos_final, time, grid, colors);
-        else
-        {
-            colors.reserve(pos_final.size());
-            for(const Vector3D& p : pos_final)
-                colors.push_back(color_source->CalculateColorGrid(p.x, p.y, p.z, time, grid));
-        }
-        w->SetColors(colors);
-    }
-}
-
 void ScreenMirror3D::SetGridScaleMM(float mm)
 {
     float v = (mm > 0.001f) ? mm : 10.0f;
     if(grid_scale_mm_ == v) return;
     grid_scale_mm_ = v;
-    for(auto& it : monitor_settings)
-    {
-        AmbilightPreview3DWidget* w = dynamic_cast<AmbilightPreview3DWidget*>(it.second.ambilight_preview_3d);
-        if(w)
-            w->SetGridScaleMM(grid_scale_mm_);
-    }
-}
-
-void ScreenMirror3D::SetRunningEffectForPreview(ScreenMirror3D* source)
-{
-    source_effect_for_preview_ = source;
 }
 
 void ScreenMirror3D::RefreshMonitorStatus()
@@ -3680,8 +3048,7 @@ void ScreenMirror3D::RefreshMonitorStatus()
                 display_name += " (No Capture Source)";
             }
             settings.group_box->setTitle(display_name);
-            bool can_use_test_or_pulse = settings.show_test_pattern || settings.show_test_pattern_pulse;
-            settings.group_box->setEnabled(has_capture_source || can_use_test_or_pulse);
+            settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern);
             
             if(has_capture_source)
             {
@@ -3716,7 +3083,6 @@ void ScreenMirror3D::RefreshMonitorStatus()
             if(settings.top_bottom_balance_slider) settings.top_bottom_balance_slider->setEnabled(has_capture_source);
             if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
             if(settings.test_pattern_check) settings.test_pattern_check->setEnabled(true);
-            if(settings.test_pattern_pulse_check) settings.test_pattern_pulse_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_area_preview)
             {
@@ -3725,19 +3091,12 @@ void ScreenMirror3D::RefreshMonitorStatus()
                 preview_widget->SetDisplayPlane(plane);
                 preview_widget->capture_zones = &settings.capture_zones;
             }
-            if(settings.ambilight_preview_3d)
-            {
-                settings.ambilight_preview_3d->setEnabled(has_capture_source || settings.show_test_pattern || settings.show_test_pattern_pulse);
-                AmbilightPreview3DWidget* ambi_w = dynamic_cast<AmbilightPreview3DWidget*>(settings.ambilight_preview_3d);
-                if(ambi_w)
-                    ambi_w->SetDisplayPlane(plane);
-            }
             if(settings.add_zone_button)
             {
                 settings.add_zone_button->setEnabled(has_capture_source);
             }
             
-            if(!has_capture_source && !can_use_test_or_pulse && settings.group_box->isChecked())
+            if(!has_capture_source && !settings.show_test_pattern && settings.group_box->isChecked())
             {
                 settings.group_box->setChecked(false);
             }

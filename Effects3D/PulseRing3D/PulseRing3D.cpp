@@ -27,7 +27,7 @@ EffectInfo3D PulseRing3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Pulse Ring";
     info.effect_description = "Pulsing donut rings that expand from the center outward, leaving a hole in the middle";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

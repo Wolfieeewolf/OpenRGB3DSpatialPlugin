@@ -40,7 +40,7 @@ EffectInfo3D Fireworks3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Fireworks";
     info.effect_description = "Missile launches and explodes into debris (Mega-Cube style); gravity and decay";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

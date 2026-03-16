@@ -41,7 +41,7 @@ EffectInfo3D Matrix3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Matrix";
     info.effect_description = "Matrix-style digital rain on all surfaces. Use effect colors or Rainbow for custom/rainbow matrix; Head brightness sets how white the leading character is.";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_MATRIX;
     info.is_reversible = true;
     info.supports_random = true;

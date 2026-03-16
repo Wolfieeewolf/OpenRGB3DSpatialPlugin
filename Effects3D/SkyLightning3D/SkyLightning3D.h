@@ -12,7 +12,7 @@ class SkyLightning3D : public SpatialEffect3D
 public:
     explicit SkyLightning3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("SkyLightning3D", "Sky Lightning", "3D Spatial", [](){ return new SkyLightning3D; })
+    EFFECT_REGISTERER_3D("SkyLightning3D", "Sky Lightning", "Spatial", [](){ return new SkyLightning3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

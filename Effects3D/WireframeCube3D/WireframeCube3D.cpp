@@ -45,7 +45,7 @@ EffectInfo3D WireframeCube3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Wireframe Cube";
     info.effect_description = "Rotating wireframe cube (Mega-Cube style); soft glow along edges";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

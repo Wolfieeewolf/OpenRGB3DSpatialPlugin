@@ -43,7 +43,7 @@ EffectInfo3D MovingPanes3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Moving Panes";
     info.effect_description = "Symmetrical moving color panes";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

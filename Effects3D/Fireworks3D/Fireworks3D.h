@@ -13,7 +13,7 @@ class Fireworks3D : public SpatialEffect3D
 public:
     explicit Fireworks3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Fireworks3D", "Fireworks", "3D Spatial", [](){ return new Fireworks3D; })
+    EFFECT_REGISTERER_3D("Fireworks3D", "Fireworks", "Spatial", [](){ return new Fireworks3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

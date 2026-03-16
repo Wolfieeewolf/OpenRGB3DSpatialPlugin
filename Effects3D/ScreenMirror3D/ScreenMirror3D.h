@@ -48,7 +48,6 @@ public:
     bool RequiresWorldSpaceGridBounds() const override { return true; }
 
     void SetGridScaleMM(float mm);
-    void SetRunningEffectForPreview(ScreenMirror3D* source);
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
@@ -130,7 +129,6 @@ private:
         int reference_point_index;
 
         bool show_test_pattern;
-        bool show_test_pattern_pulse;
         bool show_screen_preview;
 
         std::vector<CaptureZone> capture_zones;
@@ -169,11 +167,9 @@ private:
         QLabel* top_bottom_balance_label;
         QComboBox* ref_point_combo;
         QCheckBox* test_pattern_check;
-        QCheckBox* test_pattern_pulse_check;
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
-        QWidget* ambilight_preview_3d;
 
         MonitorSettings()
             : enabled(true)
@@ -195,7 +191,6 @@ private:
             , top_bottom_balance(0.0f)
             , reference_point_index(-1)
             , show_test_pattern(false)
-            , show_test_pattern_pulse(false)
             , show_screen_preview(false)
             , group_box(nullptr)
             , scale_slider(nullptr)
@@ -231,11 +226,9 @@ private:
             , top_bottom_balance_label(nullptr)
             , ref_point_combo(nullptr)
             , test_pattern_check(nullptr)
-            , test_pattern_pulse_check(nullptr)
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
-            , ambilight_preview_3d(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
@@ -245,7 +238,6 @@ private:
     void StopCaptureIfNeeded();
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
-    void UpdateAmbilightPreviews();
 
     int                 capture_quality;
     QComboBox*          capture_quality_combo;
@@ -266,12 +258,10 @@ private:
     QLabel*             monitor_status_label;
     QLabel*             monitor_help_label;
     QGroupBox*          monitors_container;
-    QTimer*             ambilight_preview_timer;
     QVBoxLayout*        monitors_layout;
     std::map<std::string, MonitorSettings> monitor_settings;
 
     float               grid_scale_mm_;
-    ScreenMirror3D*     source_effect_for_preview_;
 
     bool                        show_test_pattern;
 

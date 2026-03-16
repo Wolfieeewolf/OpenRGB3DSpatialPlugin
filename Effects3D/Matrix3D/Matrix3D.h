@@ -14,7 +14,7 @@ public:
     explicit Matrix3D(QWidget* parent = nullptr);
     ~Matrix3D() override = default;
 
-    EFFECT_REGISTERER_3D("Matrix3D", "Matrix", "3D Spatial", [](){ return new Matrix3D; });
+    EFFECT_REGISTERER_3D("Matrix3D", "Matrix", "Spatial", [](){ return new Matrix3D; });
 
     static std::string const ClassName() { return "Matrix3D"; }
     static std::string const UIName() { return "Matrix"; }

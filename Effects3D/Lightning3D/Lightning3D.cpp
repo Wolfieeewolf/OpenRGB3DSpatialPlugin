@@ -36,7 +36,7 @@ EffectInfo3D Lightning3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Plasma Ball";
     info.effect_description = "Plasma ball in the center with lightning arcs to the glass (room boundary)";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_LIGHTNING;
     info.is_reversible = false;
     info.supports_random = true;

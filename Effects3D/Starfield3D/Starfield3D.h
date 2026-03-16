@@ -13,7 +13,7 @@ class Starfield3D : public SpatialEffect3D
 public:
     explicit Starfield3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Starfield3D", "Starfield", "3D Spatial", [](){ return new Starfield3D; })
+    EFFECT_REGISTERER_3D("Starfield3D", "Starfield", "Spatial", [](){ return new Starfield3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

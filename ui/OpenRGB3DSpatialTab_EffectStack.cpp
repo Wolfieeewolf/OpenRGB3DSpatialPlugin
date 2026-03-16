@@ -507,6 +507,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     current_effect_ui = ui_effect;
 
     bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
+    bool is_screen_mirror = (instance->effect_class_name == "ScreenMirror3D");
     QPushButton* direct_start = nullptr;
     QPushButton* direct_stop  = nullptr;
 
@@ -532,6 +533,41 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(origin_label)        origin_label->setVisible(false);
         if(effect_origin_combo) effect_origin_combo->setVisible(false);
     }
+    else if(is_screen_mirror)
+    {
+        QWidget* btn_widget = new QWidget(effect_controls_widget);
+        QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
+        btn_layout->setContentsMargins(0, 0, 0, 0);
+
+        direct_start = new QPushButton("Start Effect");
+        direct_start->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
+        direct_stop = new QPushButton("Stop Effect");
+        direct_stop->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
+        direct_stop->setEnabled(false);
+
+        btn_layout->addWidget(direct_start);
+        btn_layout->addWidget(direct_stop);
+        btn_layout->addStretch();
+        effect_controls_layout->addWidget(btn_widget);
+
+        ui_effect->SetupCustomUI(effect_controls_widget);
+
+        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
+        if(screen_mirror)
+        {
+            screen_mirror->SetReferencePoints(&reference_points);
+            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
+            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
+        }
+
+        if(effect_zone_label)   effect_zone_label->setVisible(false);
+        if(effect_zone_combo)   effect_zone_combo->setVisible(false);
+        if(origin_label)        origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+
+        effect_controls_layout->addWidget(ui_effect);
+    }
     else
     {
         ui_effect->CreateCommonEffectControls(effect_controls_widget);
@@ -539,27 +575,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
 
         if(effect_zone_label) effect_zone_label->setVisible(true);
         if(effect_zone_combo) effect_zone_combo->setVisible(true);
-
-        if(instance->effect_class_name == "ScreenMirror3D")
-        {
-            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
-            if(screen_mirror)
-            {
-                screen_mirror->SetReferencePoints(&reference_points);
-                ScreenMirror3D* running_screen = dynamic_cast<ScreenMirror3D*>(instance->effect.get());
-                screen_mirror->SetRunningEffectForPreview(running_screen);
-                connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-                QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-                QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
-            }
-            if(origin_label)        origin_label->setVisible(false);
-            if(effect_origin_combo) effect_origin_combo->setVisible(false);
-        }
-        else
-        {
-            if(origin_label)        origin_label->setVisible(true);
-            if(effect_origin_combo) effect_origin_combo->setVisible(true);
-        }
+        if(origin_label)        origin_label->setVisible(true);
+        if(effect_origin_combo) effect_origin_combo->setVisible(true);
 
         effect_controls_layout->addWidget(ui_effect);
     }
@@ -579,8 +596,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         ui_effect->LoadSettings(settings);
     }
 
-    QPushButton* ui_start = is_audio ? direct_start : ui_effect->GetStartButton();
-    QPushButton* ui_stop  = is_audio ? direct_stop  : ui_effect->GetStopButton();
+    QPushButton* ui_start = (is_audio || is_screen_mirror) ? direct_start : ui_effect->GetStartButton();
+    QPushButton* ui_stop  = (is_audio || is_screen_mirror) ? direct_stop  : ui_effect->GetStopButton();
 
     if(ui_start)
     {

@@ -24,7 +24,7 @@ EffectInfo3D ColorWheel3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Color Wheel";
     info.effect_description = "Rotating rainbow from center";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
     info.supports_random = false;

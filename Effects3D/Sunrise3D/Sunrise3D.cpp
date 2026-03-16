@@ -125,7 +125,7 @@ EffectInfo3D Sunrise3D::GetEffectInfo()
     info.info_version = 2;
     info.effect_name = "Realtime Environment";
     info.effect_description = "Sky gradient with optional weather. Real-time clock, simulated day, or manual. Toggle rain, fog, cloudy, lightning.";
-    info.category = "3D Spatial";
+    info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
     info.supports_random = false;

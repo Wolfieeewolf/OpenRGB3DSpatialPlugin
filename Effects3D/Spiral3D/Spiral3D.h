@@ -18,7 +18,7 @@ public:
     explicit Spiral3D(QWidget* parent = nullptr);
     ~Spiral3D();
 
-    EFFECT_REGISTERER_3D("Spiral3D", "Spiral", "3D Spatial", [](){return new Spiral3D;});
+    EFFECT_REGISTERER_3D("Spiral3D", "Spiral", "Spatial", [](){return new Spiral3D;});
 
     static std::string const ClassName() { return "Spiral3D"; }
     static std::string const UIName() { return "Spiral"; }

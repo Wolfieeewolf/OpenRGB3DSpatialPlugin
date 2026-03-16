@@ -12,7 +12,7 @@ class ZigZag3D : public SpatialEffect3D
 public:
     explicit ZigZag3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("ZigZag3D", "ZigZag", "3D Spatial", [](){ return new ZigZag3D; })
+    EFFECT_REGISTERER_3D("ZigZag3D", "ZigZag", "Spatial", [](){ return new ZigZag3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
