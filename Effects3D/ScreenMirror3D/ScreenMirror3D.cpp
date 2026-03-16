@@ -876,6 +876,15 @@ namespace
         return sqrtf(max_distance_sq);
     }
 
+    /** Wave intensity 0-100 (%) -> propagation speed mm/ms. 0 = no wave; 1-100 maps to usable range so mid-slider is visible. */
+    float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
+    {
+        if(intensity_0_to_100 < 0.5f) return 0.0f;
+        float p = std::clamp(intensity_0_to_100, 1.0f, 100.0f) / 100.0f;
+        float speed = 200.0f * powf(0.01f, p);
+        return std::clamp(speed, 0.5f, 500.0f);
+    }
+
     float ComputeInvertedShellFalloff(float distance_mm,
                                       float max_distance_mm,
                                       float coverage,
@@ -1144,21 +1153,20 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         bool use_wave = !monitor_test_pattern && !capture_id.empty();
         if(use_wave && mon_settings.wave_time_to_edge_sec > 0.4f)
         {
-            float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 30.0f);
+            float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
             speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
             speed_mm_per_ms = std::max(speed_mm_per_ms, 0.1f);
             delay_ms = proj.distance / speed_mm_per_ms;
             delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
         }
-        else if(use_wave && mon_settings.propagation_speed_mm_per_ms > 0.001f)
+        else if(use_wave && mon_settings.propagation_speed_mm_per_ms > 0.5f)
         {
-            float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 800.0f);
-            speed_mm_per_ms = 800.0f - strength + 1.0f;
+            speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
             delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
             delay_ms = std::clamp(delay_ms, 0.0f, 15000.0f);
         }
 
-        if(use_wave && (mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.001f))
+        if(use_wave && (mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.5f))
         {
             std::unordered_map<std::string, FrameHistory>::iterator history_it;
             std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator>::iterator cache_it = history_cache.find(capture_id);
@@ -1257,20 +1265,19 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         }
 
         float wave_envelope = 1.0f;
-        if((mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.001f) && mon_settings.wave_decay_ms > 0.1f)
+        if((mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.5f) && mon_settings.wave_decay_ms > 0.1f)
         {
             if(delay_ms <= 0.0f && use_wave)
             {
                 if(mon_settings.wave_time_to_edge_sec > 0.4f)
                 {
-                    float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 30.0f);
+                    float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
                     speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.1f);
                 }
                 else
                 {
-                    float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 800.0f);
-                    speed_mm_per_ms = 800.0f - strength + 1.0f;
+                    speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
                 }
                 delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
@@ -1480,7 +1487,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             if(contrib.brightness_threshold > 0.0f)
             {
                 float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
-                float thr = std::min(255.0f, contrib.brightness_threshold * (255.0f / 1020.0f));
+                float thr = std::min(255.0f, contrib.brightness_threshold);
                 if(luminance <= thr)
                 {
                     float t = (thr <= 0.0f) ? 1.0f : std::max(0.0f, luminance / thr);
@@ -1776,7 +1783,7 @@ void ScreenMirror3D::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     }
     if(msettings.propagation_speed_label)
     {
-        msettings.propagation_speed_label->setText(QString::number((int)std::lround(msettings.propagation_speed_mm_per_ms)));
+        msettings.propagation_speed_label->setText(QString::number((int)std::lround(msettings.propagation_speed_mm_per_ms)) + "%");
     }
     if(msettings.wave_decay_slider)
     {
@@ -1988,7 +1995,12 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             else msettings.smoothing_time_ms = default_smoothing_time_ms;
             if(mon.contains("brightness_multiplier")) msettings.brightness_multiplier = mon["brightness_multiplier"].get<float>();
             else msettings.brightness_multiplier = default_brightness_multiplier;
-            if(mon.contains("brightness_threshold")) msettings.brightness_threshold = mon["brightness_threshold"].get<float>();
+            if(mon.contains("brightness_threshold"))
+            {
+                float v = mon["brightness_threshold"].get<float>();
+                if(v > 255.0f) v = v * 255.0f / 1020.0f;
+                msettings.brightness_threshold = v;
+            }
             else msettings.brightness_threshold = default_brightness_threshold;
             if(mon.contains("black_bar_letterbox_percent")) msettings.black_bar_letterbox_percent = mon["black_bar_letterbox_percent"].get<float>();
             else msettings.black_bar_letterbox_percent = 0.0f;
@@ -1997,7 +2009,12 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
 
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
             if(mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
-            if(mon.contains("propagation_speed_mm_per_ms")) msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();
+            if(mon.contains("propagation_speed_mm_per_ms"))
+            {
+                float v = mon["propagation_speed_mm_per_ms"].get<float>();
+                if(v > 100.0f) v = v * 100.0f / 800.0f;
+                msettings.propagation_speed_mm_per_ms = v;
+            }
             else msettings.propagation_speed_mm_per_ms = default_propagation_speed_mm_per_ms;
             if(mon.contains("wave_decay_ms")) msettings.wave_decay_ms = mon["wave_decay_ms"].get<float>();
             else msettings.wave_decay_ms = default_wave_decay_ms;
@@ -2054,14 +2071,14 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
-            msettings.brightness_threshold = std::clamp(msettings.brightness_threshold, 0.0f, 1020.0f);
+            msettings.brightness_threshold = std::clamp(msettings.brightness_threshold, 0.0f, 255.0f);
             msettings.black_bar_letterbox_percent = std::clamp(msettings.black_bar_letterbox_percent, 0.0f, 50.0f);
             msettings.black_bar_pillarbox_percent = std::clamp(msettings.black_bar_pillarbox_percent, 0.0f, 50.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
             msettings.blend = std::clamp(msettings.blend, 0.0f, 100.0f);
-            msettings.propagation_speed_mm_per_ms = std::clamp(msettings.propagation_speed_mm_per_ms, 0.0f, 800.0f);
-            msettings.wave_decay_ms = std::clamp(msettings.wave_decay_ms, 0.0f, 20000.0f);
-            msettings.wave_time_to_edge_sec = std::clamp(msettings.wave_time_to_edge_sec, 0.0f, 30.0f);
+            msettings.propagation_speed_mm_per_ms = std::clamp(msettings.propagation_speed_mm_per_ms, 0.0f, 100.0f);
+            msettings.wave_decay_ms = std::clamp(msettings.wave_decay_ms, 0.0f, 3000.0f);
+            msettings.wave_time_to_edge_sec = std::clamp(msettings.wave_time_to_edge_sec, 0.0f, 10.0f);
             msettings.falloff_curve_exponent = std::clamp(msettings.falloff_curve_exponent, 0.5f, 2.0f);
             msettings.front_back_balance = std::clamp(msettings.front_back_balance, -100.0f, 100.0f);
             msettings.left_right_balance = std::clamp(msettings.left_right_balance, -100.0f, 100.0f);
@@ -2168,7 +2185,7 @@ void ScreenMirror3D::OnParameterChanged()
         
         if(settings.softness_slider) settings.edge_softness = (float)settings.softness_slider->value();
         if(settings.blend_slider) settings.blend = (float)settings.blend_slider->value();
-        if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp((float)settings.propagation_speed_slider->value(), 0.0f, 800.0f);
+        if(settings.propagation_speed_slider) settings.propagation_speed_mm_per_ms = std::clamp((float)settings.propagation_speed_slider->value(), 0.0f, 100.0f);
         if(settings.wave_decay_slider) settings.wave_decay_ms = (float)settings.wave_decay_slider->value();
         if(settings.wave_time_to_edge_slider) settings.wave_time_to_edge_sec = (float)settings.wave_time_to_edge_slider->value() / 10.0f;
         if(settings.falloff_curve_slider) settings.falloff_curve_exponent = std::clamp((float)settings.falloff_curve_slider->value() / 100.0f, 0.5f, 2.0f);
@@ -2459,19 +2476,19 @@ float ScreenMirror3D::GetHistoryRetentionMs() const
         if(!mon_settings.enabled) continue;
         
         float monitor_retention = std::max(mon_settings.wave_decay_ms * 3.0f, mon_settings.smoothing_time_ms * 3.0f);
-        if(mon_settings.propagation_speed_mm_per_ms > 0.001f || mon_settings.wave_time_to_edge_sec > 0.4f)
+        if(mon_settings.propagation_speed_mm_per_ms > 0.5f || mon_settings.wave_time_to_edge_sec > 0.4f)
         {
             float max_distance_mm = 5000.0f;
             if(mon_settings.wave_time_to_edge_sec > 0.4f)
             {
-                float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 30.0f);
+                float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
                 monitor_retention = std::max(monitor_retention, t_sec * 1000.0f);
             }
             else
             {
-                float strength = std::clamp(mon_settings.propagation_speed_mm_per_ms, 1.0f, 800.0f);
-                float speed_mm_per_ms = 800.0f - strength + 1.0f;
-                monitor_retention = std::max(monitor_retention, max_distance_mm / std::max(speed_mm_per_ms, 0.5f));
+                float speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
+                if(speed_mm_per_ms > 0.0f)
+                    monitor_retention = std::max(monitor_retention, max_distance_mm / speed_mm_per_ms);
             }
             monitor_retention = std::max(monitor_retention, mon_settings.wave_decay_ms * 2.0f);
         }
@@ -2686,12 +2703,12 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* threshold_layout = new QHBoxLayout(threshold_widget);
     threshold_layout->setContentsMargins(0, 0, 0, 0);
     settings.brightness_threshold_slider = new QSlider(Qt::Horizontal);
-    settings.brightness_threshold_slider->setRange(0, 1020);
+    settings.brightness_threshold_slider->setRange(0, 255);
     settings.brightness_threshold_slider->setValue((int)settings.brightness_threshold);
     settings.brightness_threshold_slider->setEnabled(has_capture_source);
     settings.brightness_threshold_slider->setTickPosition(QSlider::TicksBelow);
-    settings.brightness_threshold_slider->setTickInterval(102);
-    settings.brightness_threshold_slider->setToolTip("Minimum brightness to trigger (0-1020). At max, ambilight is nearly off. Lower values capture more dim content.");
+    settings.brightness_threshold_slider->setTickInterval(25);
+    settings.brightness_threshold_slider->setToolTip("Minimum brightness (0-255). 0 = all content, 128 = mid, 255 = only bright content.");
     threshold_layout->addWidget(settings.brightness_threshold_slider);
     settings.brightness_threshold_label = new QLabel(QString::number((int)settings.brightness_threshold));
     settings.brightness_threshold_label->setMinimumWidth(50);
@@ -2712,19 +2729,19 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* propagation_layout = new QHBoxLayout(propagation_widget);
     propagation_layout->setContentsMargins(0, 0, 0, 0);
     settings.propagation_speed_slider = new QSlider(Qt::Horizontal);
-    settings.propagation_speed_slider->setRange(0, 800);
+    settings.propagation_speed_slider->setRange(0, 100);
     settings.propagation_speed_slider->setValue((int)std::lround(settings.propagation_speed_mm_per_ms));
     settings.propagation_speed_slider->setEnabled(has_capture_source);
     settings.propagation_speed_slider->setTickPosition(QSlider::TicksBelow);
-    settings.propagation_speed_slider->setTickInterval(80);
-    settings.propagation_speed_slider->setToolTip("Wave intensity (0-800). 0 = no wave (instant). Higher = stronger wave. Use 'Time to edge' for e.g. 5s to walls.");
+    settings.propagation_speed_slider->setTickInterval(10);
+    settings.propagation_speed_slider->setToolTip("Wave strength (0-100%). 0 = instant, 50% = moderate trail, 100% = long trail. Middle of slider is clearly visible.");
     propagation_layout->addWidget(settings.propagation_speed_slider);
-    settings.propagation_speed_label = new QLabel(QString::number((int)std::lround(settings.propagation_speed_mm_per_ms)));
-    settings.propagation_speed_label->setMinimumWidth(80);
+    settings.propagation_speed_label = new QLabel(QString::number((int)std::lround(settings.propagation_speed_mm_per_ms)) + "%");
+    settings.propagation_speed_label->setMinimumWidth(45);
     propagation_layout->addWidget(settings.propagation_speed_label);
     connect(settings.propagation_speed_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
     connect(settings.propagation_speed_slider, &QSlider::valueChanged, settings.propagation_speed_label, [&settings](int value) {
-        settings.propagation_speed_label->setText(QString::number(value));
+        settings.propagation_speed_label->setText(QString::number(value) + "%");
     });
     wave_form->addRow("Wave Intensity:", propagation_widget);
 
@@ -2732,12 +2749,12 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* wave_decay_layout = new QHBoxLayout(wave_decay_widget);
     wave_decay_layout->setContentsMargins(0, 0, 0, 0);
     settings.wave_decay_slider = new QSlider(Qt::Horizontal);
-    settings.wave_decay_slider->setRange(0, 20000);
+    settings.wave_decay_slider->setRange(0, 3000);
     settings.wave_decay_slider->setValue((int)settings.wave_decay_ms);
     settings.wave_decay_slider->setEnabled(has_capture_source);
     settings.wave_decay_slider->setTickPosition(QSlider::TicksBelow);
-    settings.wave_decay_slider->setTickInterval(2000);
-    settings.wave_decay_slider->setToolTip("Wave decay (0-20000ms). How long the wave tail lasts.");
+    settings.wave_decay_slider->setTickInterval(300);
+    settings.wave_decay_slider->setToolTip("Wave tail length (0-3000ms). 0 = no tail, ~500-1500ms = visible trail.");
     wave_decay_layout->addWidget(settings.wave_decay_slider);
     settings.wave_decay_label = new QLabel(QString::number((int)settings.wave_decay_ms) + "ms");
     settings.wave_decay_label->setMinimumWidth(60);
@@ -2752,12 +2769,12 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     QHBoxLayout* wave_time_layout = new QHBoxLayout(wave_time_to_edge_widget);
     wave_time_layout->setContentsMargins(0, 0, 0, 0);
     settings.wave_time_to_edge_slider = new QSlider(Qt::Horizontal);
-    settings.wave_time_to_edge_slider->setRange(0, 300);
+    settings.wave_time_to_edge_slider->setRange(0, 100);
     settings.wave_time_to_edge_slider->setValue((int)(settings.wave_time_to_edge_sec * 10.0f));
     settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
     settings.wave_time_to_edge_slider->setTickPosition(QSlider::TicksBelow);
-    settings.wave_time_to_edge_slider->setTickInterval(50);
-    settings.wave_time_to_edge_slider->setToolTip("Time (s) for wave to reach farthest LED. 0 = use Wave Intensity. 5 = 0.5s, 50 = 5s, 300 = 30s.");
+    settings.wave_time_to_edge_slider->setTickInterval(10);
+    settings.wave_time_to_edge_slider->setToolTip("Time for wave to reach farthest LED (0-10s). 0 = use Wave Intensity. 5 = 0.5s, 50 = 5s.");
     wave_time_layout->addWidget(settings.wave_time_to_edge_slider);
     settings.wave_time_to_edge_label = new QLabel(settings.wave_time_to_edge_sec <= 0.0f ? "Off" : QString::number(settings.wave_time_to_edge_sec, 'f', 1) + "s");
     settings.wave_time_to_edge_label->setMinimumWidth(45);
