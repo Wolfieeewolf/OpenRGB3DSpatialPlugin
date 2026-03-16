@@ -345,21 +345,20 @@ namespace Geometry3D
     /**
      * @brief Spatial mapping for perceptually correct 3D ambilight
      *
-     * Maps LED position to screen UV based on spatial relationship.
-     * This creates a "fake but perceptually correct" ambilight effect:
-     * - LEDs below screen sample bottom edge (spread by X position)
-     * - LEDs to the left sample left edge (spread by Z position)
-     * - LEDs to the right sample right edge (spread by Z position)
-     * - LEDs above screen sample top edge (spread by X position)
-     * - LEDs behind screen sample based on X/Z offset from center
+     * Maps LED position to screen UV. When directional_uv is false (default), uses orthographic
+     * projection so LEDs in a column perpendicular to the plane share the same UV (can feel quadrant-like).
+     * When directional_uv is true, UV is derived from the direction from reference to LED, giving a
+     * spherical/directional spread so each direction maps to a distinct screen point.
      *
      * @param led_position LED position in grid units (same space as grid bounds)
      * @param plane The display plane to map to
      * @param edge_zone_depth Depth of edge zones (0.1 = 10% of screen)
-     * @param user_position Optional user/viewer position for distance falloff (if null, uses screen center)
+     * @param user_position Optional user/viewer position for distance and direction origin (if null, uses plane center)
+     * @param grid_scale_mm Grid scale for distance conversion to mm
+     * @param directional_uv If true, UV from direction (spherical feel); if false, UV from position (orthographic)
      * @return PlaneProjection with UV coordinates and distance
      */
-    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f, bool directional_uv = false)
     {
         PlaneProjection result;
         result.is_valid = false;
@@ -369,30 +368,14 @@ namespace Geometry3D
         result.is_in_front = false;
 
         const Transform3D& transform = plane.GetTransform();
+        const Vector3D& ref = user_position ? *user_position : transform.position;
 
-        if (user_position)
-        {
-            Vector3D user_to_led;
-            user_to_led.x = led_position.x - user_position->x;
-            user_to_led.y = led_position.y - user_position->y;
-            user_to_led.z = led_position.z - user_position->z;
-            result.distance = sqrtf(user_to_led.x * user_to_led.x + user_to_led.y * user_to_led.y + user_to_led.z * user_to_led.z);
-        }
-        else
-        {
-            Vector3D screen_to_led;
-            screen_to_led.x = led_position.x - transform.position.x;
-            screen_to_led.y = led_position.y - transform.position.y;
-            screen_to_led.z = led_position.z - transform.position.z;
-            result.distance = sqrtf(screen_to_led.x * screen_to_led.x + screen_to_led.y * screen_to_led.y + screen_to_led.z * screen_to_led.z);
-        }
-
+        Vector3D ref_to_led;
+        ref_to_led.x = led_position.x - ref.x;
+        ref_to_led.y = led_position.y - ref.y;
+        ref_to_led.z = led_position.z - ref.z;
+        result.distance = sqrtf(ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z);
         result.distance = GridUnitsToMM(result.distance, grid_scale_mm);
-
-        Vector3D world_offset;
-        world_offset.x = led_position.x - transform.position.x;
-        world_offset.y = led_position.y - transform.position.y;
-        world_offset.z = led_position.z - transform.position.z;
 
         float rotation_matrix[9];
         ComputeRotationMatrix(transform.rotation, rotation_matrix);
@@ -401,25 +384,57 @@ namespace Geometry3D
         Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] };
         Vector3D plane_normal = { rotation_matrix[2], rotation_matrix[5], rotation_matrix[8] };
 
-        Vector3D local_offset;
-        local_offset.x = world_offset.x * plane_right.x  + world_offset.y * plane_right.y  + world_offset.z * plane_right.z;
-        local_offset.y = world_offset.x * plane_up.x     + world_offset.y * plane_up.y     + world_offset.z * plane_up.z;
-        local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
-
-        std::swap(local_offset.y, local_offset.z);
-
-        result.is_in_front = (local_offset.y < 0.0f);
-
-        float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
-        float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
-
-        if (screen_width_units <= 0.0f || screen_height_units <= 0.0f)
+        if (directional_uv)
         {
-            result.is_valid = false;
-            return result;
+            float len_sq = ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z;
+            float len = sqrtf(len_sq);
+            const float eps = 1e-6f;
+            if (len < eps)
+            {
+                result.u = 0.5f;
+                result.v = 0.5f;
+                result.is_in_front = true;
+                result.is_valid = true;
+                return result;
+            }
+            float inv_len = 1.0f / len;
+            float dir_x = ref_to_led.x * inv_len;
+            float dir_y = ref_to_led.y * inv_len;
+            float dir_z = ref_to_led.z * inv_len;
+            float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
+            float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
+            float dir_normal = dir_x * plane_normal.x + dir_y * plane_normal.y + dir_z * plane_normal.z;
+            result.is_in_front = (dir_normal < 0.0f);
+            static const float inv_half_sqrt2 = 1.414213562373095f;
+            result.u = 0.5f + 0.5f * dir_right * inv_half_sqrt2;
+            result.v = 0.5f + 0.5f * dir_up * inv_half_sqrt2;
         }
-        result.u = (local_offset.x + screen_width_units * 0.5f) / screen_width_units;
-        result.v = (local_offset.z + screen_height_units * 0.5f) / screen_height_units;
+        else
+        {
+            Vector3D world_offset;
+            world_offset.x = led_position.x - transform.position.x;
+            world_offset.y = led_position.y - transform.position.y;
+            world_offset.z = led_position.z - transform.position.z;
+
+            Vector3D local_offset;
+            local_offset.x = world_offset.x * plane_right.x  + world_offset.y * plane_right.y  + world_offset.z * plane_right.z;
+            local_offset.y = world_offset.x * plane_up.x     + world_offset.y * plane_up.y     + world_offset.z * plane_up.z;
+            local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
+
+            std::swap(local_offset.y, local_offset.z);
+            result.is_in_front = (local_offset.y < 0.0f);
+
+            float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
+            float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
+
+            if (screen_width_units <= 0.0f || screen_height_units <= 0.0f)
+            {
+                result.is_valid = false;
+                return result;
+            }
+            result.u = (local_offset.x + screen_width_units * 0.5f) / screen_width_units;
+            result.v = (local_offset.z + screen_height_units * 0.5f) / screen_height_units;
+        }
 
         if (result.u < 0.0f) result.u = 0.0f;
         if (result.u > 1.0f) result.u = 1.0f;

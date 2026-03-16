@@ -1077,7 +1077,7 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             }
         }
 
-        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, 0.0f, falloff_ref, scale_mm);
+        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, 0.0f, falloff_ref, scale_mm, true);
 
         if(!proj.is_valid) continue;
 
