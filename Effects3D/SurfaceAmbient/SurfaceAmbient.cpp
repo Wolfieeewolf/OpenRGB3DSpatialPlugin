@@ -188,7 +188,6 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float progress = CalculateProgress(time);
     float h_pct = std::max(0.05f, std::min(1.0f, height_pct));
     float sigma = std::max(thickness * 0.5f, 0.02f);
     float detail = std::max(0.05f, GetScaledDetail());
