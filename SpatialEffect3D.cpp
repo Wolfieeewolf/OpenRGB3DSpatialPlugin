@@ -14,6 +14,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_speed = 1;
     effect_brightness = 100;
     effect_frequency = 1;
+    effect_detail = 100;
     effect_size = 100;
     effect_scale = 200;
     scale_inverted = false;
@@ -41,6 +42,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     speed_slider = nullptr;
     brightness_slider = nullptr;
     frequency_slider = nullptr;
+    detail_slider = nullptr;
     size_slider = nullptr;
     scale_slider = nullptr;
     scale_invert_check = nullptr;
@@ -48,6 +50,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     speed_label = nullptr;
     brightness_label = nullptr;
     frequency_label = nullptr;
+    detail_label = nullptr;
     size_label = nullptr;
     scale_label = nullptr;
     fps_label = nullptr;
@@ -178,19 +181,31 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     frequency_slider = new QSlider(Qt::Horizontal);
     frequency_slider->setRange(0, 200);
     frequency_slider->setValue(effect_frequency);
-    frequency_slider->setToolTip("Pattern frequency - controls color wave/pattern density");
+    frequency_slider->setToolTip("Temporal rate (color cycle / modulation speed)");
     frequency_layout->addWidget(frequency_slider);
     frequency_label = new QLabel(QString::number(effect_frequency));
     frequency_label->setMinimumWidth(30);
     frequency_layout->addWidget(frequency_label);
     main_layout->addLayout(frequency_layout);
 
+    QHBoxLayout* detail_layout = new QHBoxLayout();
+    detail_layout->addWidget(new QLabel("Detail:"));
+    detail_slider = new QSlider(Qt::Horizontal);
+    detail_slider->setRange(0, 200);
+    detail_slider->setValue(effect_detail);
+    detail_slider->setToolTip("Spatial detail (higher = more pattern/color detail across space)");
+    detail_layout->addWidget(detail_slider);
+    detail_label = new QLabel(QString::number(effect_detail));
+    detail_label->setMinimumWidth(30);
+    detail_layout->addWidget(detail_label);
+    main_layout->addLayout(detail_layout);
+
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
     size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(0, 200);
     size_slider->setValue(effect_size);
-    size_slider->setToolTip("Pattern size - controls how tight/spread out the pattern is");
+    size_slider->setToolTip("Spatial scale (bigger = larger features / wider bands)");
     size_layout->addWidget(size_slider);
     size_label = new QLabel(QString::number(effect_size));
     size_label->setMinimumWidth(30);
@@ -218,7 +233,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_slider = new QSlider(Qt::Horizontal);
     fps_slider->setRange(1, 120);
     fps_slider->setValue(effect_fps);
-    fps_slider->setToolTip("Frames per second (1-60) - lower values reduce CPU usage");
+    fps_slider->setToolTip("Frames per second (1-120) - lower values reduce CPU usage");
     fps_layout->addWidget(fps_slider);
     fps_label = new QLabel(QString::number(effect_fps));
     fps_label->setMinimumWidth(30);
@@ -439,32 +454,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_group->setLayout(rotation_layout);
     main_layout->addWidget(rotation_group);
 
-    path_plane_group = new QGroupBox("Effect path / plane");
-    path_plane_group->setToolTip("Direction and plane for this effect (e.g. wave direction, rotation plane). Not the camera or scene layout.");
-    QVBoxLayout* path_plane_layout = new QVBoxLayout();
-    QHBoxLayout* path_axis_row = new QHBoxLayout();
-    path_axis_row->addWidget(new QLabel("Axis (X/Y/Z):"));
-    path_axis_combo = new QComboBox();
-    path_axis_combo->addItem("X (left ↔ right)", 0);
-    path_axis_combo->addItem("Y (floor ↔ ceiling)", 1);
-    path_axis_combo->addItem("Z (front ↔ back)", 2);
-    path_axis_combo->setCurrentIndex(effect_path_axis);
-    path_axis_combo->setToolTip("Direction for traveling/linear effects");
-    path_axis_row->addWidget(path_axis_combo);
-    path_plane_layout->addLayout(path_axis_row);
-    QHBoxLayout* plane_row = new QHBoxLayout();
-    plane_row->addWidget(new QLabel("Plane (XZ/XY/YZ):"));
-    plane_combo = new QComboBox();
-    plane_combo->addItem("XZ (horizontal)");
-    plane_combo->addItem("XY (vertical)");
-    plane_combo->addItem("YZ");
-    plane_combo->setCurrentIndex(effect_plane);
-    plane_combo->setToolTip("Plane for rotating effects");
-    plane_row->addWidget(plane_combo);
-    path_plane_layout->addLayout(plane_row);
-    path_plane_group->setLayout(path_plane_layout);
-    main_layout->addWidget(path_plane_group);
-
     surfaces_group = new QGroupBox("Surfaces");
     QGridLayout* surf_layout = new QGridLayout(surfaces_group);
     QCheckBox* cb_floor = new QCheckBox("Floor");
@@ -498,18 +487,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
 
     effect_controls_group->setLayout(main_layout);
 
-    connect(path_axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int){
-        effect_path_axis = path_axis_combo->currentData().toInt();
-        emit ParametersChanged();
-    });
-    connect(plane_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
-        effect_plane = std::max(0, std::min(2, idx));
-        emit ParametersChanged();
-    });
-
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(detail_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(size_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(fps_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -573,6 +554,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(frequency_slider, &QSlider::valueChanged, frequency_label, [this](int value) {
         frequency_label->setText(QString::number(value));
         effect_frequency = value;
+    });
+    connect(detail_slider, &QSlider::valueChanged, detail_label, [this](int value) {
+        detail_label->setText(QString::number(value));
+        effect_detail = value;
     });
     connect(size_slider, &QSlider::valueChanged, size_label, [this](int value) {
         size_label->setText(QString::number(value));
@@ -935,6 +920,20 @@ unsigned int SpatialEffect3D::GetFrequency() const
     return effect_frequency;
 }
 
+void SpatialEffect3D::SetDetail(unsigned int detail)
+{
+    effect_detail = detail;
+    if(detail_slider)
+    {
+        detail_slider->setValue(detail);
+    }
+}
+
+unsigned int SpatialEffect3D::GetDetail() const
+{
+    return effect_detail;
+}
+
 void SpatialEffect3D::SetReferenceMode(ReferenceMode mode)
 {
     reference_mode = mode;
@@ -1026,6 +1025,12 @@ float SpatialEffect3D::GetNormalizedFrequency() const
     return normalized * normalized;
 }
 
+float SpatialEffect3D::GetNormalizedDetail() const
+{
+    float normalized = effect_detail / 200.0f;
+    return normalized * normalized;
+}
+
 float SpatialEffect3D::GetNormalizedSize() const
 {
     return (effect_size / 200.0f) * 3.0f;
@@ -1077,6 +1082,13 @@ float SpatialEffect3D::GetScaledFrequency() const
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
     float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
     return GetNormalizedFrequency() * freq_scale;
+}
+
+float SpatialEffect3D::GetScaledDetail() const
+{
+    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    float s = (info.default_detail_scale > 0.0f) ? info.default_detail_scale : 10.0f;
+    return GetNormalizedDetail() * s;
 }
 
 float SpatialEffect3D::CalculateProgress(float time) const
@@ -1319,36 +1331,22 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
 
 void SpatialEffect3D::ApplyControlVisibility()
 {
-    EffectInfo3D info = GetEffectInfo();
-
-    bool is_versioned_effect = (info.info_version >= 2);
-
-    bool show_speed = is_versioned_effect ? info.show_speed_control : true;
-    bool show_brightness = is_versioned_effect ? info.show_brightness_control : true;
-    bool show_frequency = is_versioned_effect ? info.show_frequency_control : true;
-    bool show_size = is_versioned_effect ? info.show_size_control : true;
-    bool show_scale = is_versioned_effect ? info.show_scale_control : true;
-    bool show_fps = is_versioned_effect ? info.show_fps_control : true;
-    bool show_colors = is_versioned_effect ? info.show_color_controls : true;
-
-    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", show_speed);
-    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", show_brightness);
-    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", show_frequency);
-    SetControlGroupVisibility(size_slider, size_label, "Size:", show_size);
-    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", show_scale);
-    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", show_fps);
+    /* All standard controls are always shown for every effect that uses common controls. */
+    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", true);
+    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", true);
+    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", true);
+    SetControlGroupVisibility(detail_slider, detail_label, "Detail:", true);
+    SetControlGroupVisibility(size_slider, size_label, "Size:", true);
+    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", true);
+    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", true);
 
     if(color_controls_group)
     {
-        color_controls_group->setVisible(show_colors);
+        color_controls_group->setVisible(true);
     }
 
-    bool show_surface = is_versioned_effect ? info.show_surface_control : true;
-    bool show_path_plane = is_versioned_effect ? (info.show_path_axis_control || info.show_plane_control) : false;
-    bool show_offset = is_versioned_effect ? info.show_position_offset_control : true;
-    if(surfaces_group) surfaces_group->setVisible(show_surface);
-    if(path_plane_group) path_plane_group->setVisible(show_path_plane);
-    if(position_offset_group) position_offset_group->setVisible(show_offset);
+    if(surfaces_group) surfaces_group->setVisible(true);
+    if(position_offset_group) position_offset_group->setVisible(true);
 }
 
 void SpatialEffect3D::OnParameterChanged()
@@ -1551,6 +1549,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["speed"] = effect_speed;
     j["brightness"] = effect_brightness;
     j["frequency"] = effect_frequency;
+    j["detail"] = effect_detail;
     j["size"] = effect_size;
     j["scale_value"] = effect_scale;
     j["scale_inverted"] = scale_inverted;
@@ -1582,6 +1581,8 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     }
     j["colors"] = colors_array;
 
+    j["fps"] = effect_fps;
+
     j["path_axis"] = effect_path_axis;
     j["plane"] = effect_plane;
     j["surface_mask"] = effect_surface_mask;
@@ -1611,6 +1612,9 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("frequency"))
         SetFrequency(settings["frequency"].get<unsigned int>());
+
+    if(settings.contains("detail"))
+        SetDetail(settings["detail"].get<unsigned int>());
 
     if(settings.contains("rainbow_mode"))
         SetRainbowMode(settings["rainbow_mode"].get<bool>());
@@ -1676,6 +1680,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_scale = std::clamp(settings["scale_value"].get<unsigned int>(), 0u, 300u);
     if(settings.contains("scale_inverted"))
         scale_inverted = settings["scale_inverted"].get<bool>();
+    if(settings.contains("fps"))
+        effect_fps = std::clamp(settings["fps"].get<unsigned int>(), 1u, 120u);
 
 
     if(settings.contains("colors"))
@@ -1719,20 +1725,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("path_axis") && settings["path_axis"].is_number_integer())
         effect_path_axis = std::clamp(settings["path_axis"].get<int>(), 0, 2);
-    else if(settings.contains("comet_axis") && settings["comet_axis"].is_number_integer())
-        effect_path_axis = std::clamp(settings["comet_axis"].get<int>(), 0, 2);
-    else if(settings.contains("sweep_axis") && settings["sweep_axis"].is_number_integer())
-        effect_path_axis = std::clamp(settings["sweep_axis"].get<int>(), 0, 2);
-    else if(settings.contains("division_axis") && settings["division_axis"].is_number_integer())
-        effect_path_axis = std::clamp(settings["division_axis"].get<int>(), 0, 2);
-    else if(settings.contains("layer_axis") && settings["layer_axis"].is_number_integer())
-        effect_path_axis = std::clamp(settings["layer_axis"].get<int>(), 0, 2);
-    else if(settings.contains("fill_axis") && settings["fill_axis"].is_number_integer())
-        effect_path_axis = std::clamp(settings["fill_axis"].get<int>(), 0, 2);
     if(settings.contains("plane") && settings["plane"].is_number_integer())
         effect_plane = std::clamp(settings["plane"].get<int>(), 0, 2);
-    else if(settings.contains("plane_axis") && settings["plane_axis"].is_number_integer())
-        effect_plane = std::clamp(settings["plane_axis"].get<int>(), 0, 2);
     if(settings.contains("surface_mask") && settings["surface_mask"].is_number_integer())
         effect_surface_mask = settings["surface_mask"].get<int>() & SURF_ALL;
     if(effect_surface_mask == 0)
@@ -1788,6 +1782,16 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(frequency_label)
     {
         frequency_label->setText(QString::number(effect_frequency));
+    }
+
+    if(detail_slider)
+    {
+        QSignalBlocker blocker(detail_slider);
+        detail_slider->setValue(effect_detail);
+    }
+    if(detail_label)
+    {
+        detail_label->setText(QString::number(effect_detail));
     }
 
     if(rainbow_mode_check)

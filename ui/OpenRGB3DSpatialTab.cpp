@@ -7,7 +7,7 @@
 #include "VirtualController3D.h"
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
-#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
+#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "GridSpaceUtils.h"
 #include <QStackedWidget>
 #include <QFile>
@@ -622,7 +622,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
         if(current_effect_ui)
         {
-            ScreenMirror3D* sm = qobject_cast<ScreenMirror3D*>(current_effect_ui);
+            ScreenMirror* sm = qobject_cast<ScreenMirror*>(current_effect_ui);
             if(sm)
                 sm->SetGridScaleMM(grid_scale_mm);
         }
@@ -1349,10 +1349,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     std::vector<EffectRegistration3D> effect_list = EffectListManager3D::get()->GetAllEffects();
     for(unsigned int i = 0; i < effect_list.size(); i++)
     {
-        if(effect_list[i].category == "Audio" && effect_list[i].class_name != "AudioContainer3D")
-        {
-            continue;
-        }
         stack_effect_type_combo->addItem(QString::fromStdString(effect_list[i].ui_name),
                                          QString::fromStdString(effect_list[i].class_name));
     }
@@ -1596,10 +1592,6 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     const std::vector<EffectRegistration3D>& effects = cat_it->second;
     for(const EffectRegistration3D& reg : effects)
     {
-        if(selected_category.compare("Audio", Qt::CaseInsensitive) == 0 && reg.class_name != "AudioContainer3D")
-        {
-            continue;
-        }
         if(!search.isEmpty() && !QString::fromStdString(reg.ui_name).contains(search, Qt::CaseInsensitive))
         {
             continue;
@@ -1749,15 +1741,15 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
     effect->SetupCustomUI(effect_controls_widget);
     current_effect_ui = effect;
 
-    if(class_name == QLatin1String("ScreenMirror3D"))
+    if(class_name == QLatin1String("ScreenMirror"))
     {
-        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
+        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(effect);
         if(screen_mirror)
         {
             screen_mirror->SetReferencePoints(&reference_points);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
+            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
+            QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
+            QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
         }
         
         RemoveWidgetFromParentLayout(origin_label);
@@ -2033,7 +2025,7 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
 
     QString class_name = effect_combo->itemData(index, kEffectRoleClassName).toString();
     
-    if(class_name == QLatin1String("ScreenMirror3D"))
+    if(class_name == QLatin1String("ScreenMirror"))
     {
         if(origin_label) origin_label->setVisible(false);
         if(effect_origin_combo) effect_origin_combo->setVisible(false);

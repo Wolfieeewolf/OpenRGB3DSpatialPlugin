@@ -233,7 +233,7 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
         {
             continue;
         }
-        if(reg.class_name == "AudioContainer3D")
+        if(reg.class_name == "AudioContainer")
         {
             continue;
         }

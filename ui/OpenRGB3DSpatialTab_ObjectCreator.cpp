@@ -12,7 +12,7 @@
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
-#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
+#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include <nlohmann/json.hpp>
 #include <QDialog>
 #include <QDialogButtonBox>

@@ -79,11 +79,13 @@ struct EffectInfo3D
 
     float               default_speed_scale;
     float               default_frequency_scale;
+    float               default_detail_scale = 10.0f;
     bool                use_size_parameter;
 
     bool                show_speed_control;
     bool                show_brightness_control;
     bool                show_frequency_control;
+    bool                show_detail_control = true;
     bool                show_size_control;
     bool                show_scale_control;
     bool                show_fps_control;
@@ -151,6 +153,8 @@ public:
     virtual bool GetRainbowMode() const;
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
+    virtual void SetDetail(unsigned int detail);
+    virtual unsigned int GetDetail() const;
 
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual int GetPathAxis() const { return effect_path_axis; }
@@ -197,6 +201,7 @@ protected:
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
+    QSlider*            detail_slider;
     QSlider*            size_slider;
     QSlider*            scale_slider;
     QCheckBox*          scale_invert_check;
@@ -204,6 +209,7 @@ protected:
     QLabel*             speed_label;
     QLabel*             brightness_label;
     QLabel*             frequency_label;
+    QLabel*             detail_label;
     QLabel*             size_label;
     QLabel*             scale_label;
     QLabel*             fps_label;
@@ -260,6 +266,7 @@ protected:
     unsigned int        effect_speed;
     unsigned int        effect_brightness;
     unsigned int        effect_frequency;
+    unsigned int        effect_detail;
     unsigned int        effect_size;
     unsigned int        effect_scale;
     bool                scale_inverted;
@@ -319,6 +326,7 @@ protected:
 
     float GetNormalizedSpeed() const;
     float GetNormalizedFrequency() const;
+    float GetNormalizedDetail() const;
     float GetNormalizedSize() const;
     float GetNormalizedScale() const;
     unsigned int GetTargetFPS() const;
@@ -327,6 +335,7 @@ protected:
 
     float GetScaledSpeed() const;
     float GetScaledFrequency() const;
+    float GetScaledDetail() const;
     float CalculateProgress(float time) const;
 
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;

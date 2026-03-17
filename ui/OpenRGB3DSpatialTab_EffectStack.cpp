@@ -2,7 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
-#include "Effects3D/ScreenMirror3D/ScreenMirror3D.h"
+#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "LogManager.h"
 #include <nlohmann/json.hpp>
 #include <QMessageBox>
@@ -451,14 +451,14 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         }
         instance->effect.reset(effect);
 
-        if(instance->effect_class_name == "ScreenMirror3D")
+        if(instance->effect_class_name == "ScreenMirror")
         {
-            ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(effect);
+            ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(effect);
             if(screen_mirror && viewport)
             {
-                connect(screen_mirror, &ScreenMirror3D::ScreenPreviewChanged,
+                connect(screen_mirror, &ScreenMirror::ScreenPreviewChanged,
                         viewport, &LEDViewport3D::SetShowScreenPreview);
-                connect(screen_mirror, &ScreenMirror3D::TestPatternChanged,
+                connect(screen_mirror, &ScreenMirror::TestPatternChanged,
                         viewport, &LEDViewport3D::SetShowTestPattern);
                 screen_mirror->SetReferencePoints(&reference_points);
             }
@@ -507,7 +507,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     current_effect_ui = ui_effect;
 
     bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
-    bool is_screen_mirror = (instance->effect_class_name == "ScreenMirror3D");
+    bool is_screen_mirror = (instance->effect_class_name == "ScreenMirror");
     QPushButton* direct_start = nullptr;
     QPushButton* direct_stop  = nullptr;
 
@@ -552,13 +552,13 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
 
         ui_effect->SetupCustomUI(effect_controls_widget);
 
-        ScreenMirror3D* screen_mirror = dynamic_cast<ScreenMirror3D*>(ui_effect);
+        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(ui_effect);
         if(screen_mirror)
         {
             screen_mirror->SetReferencePoints(&reference_points);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror3D::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror3D::RefreshReferencePointDropdowns);
+            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
+            QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
+            QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
         }
 
         if(effect_zone_label)   effect_zone_label->setVisible(false);
