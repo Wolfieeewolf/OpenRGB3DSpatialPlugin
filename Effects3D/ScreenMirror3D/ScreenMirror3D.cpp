@@ -965,6 +965,8 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
         uint64_t sample_timestamp;
         float brightness_multiplier;
         float brightness_threshold;
+        float white_rolloff;
+        float vibrance;
         float black_bar_letterbox_percent;
         float black_bar_pillarbox_percent;
         float smoothing_time_ms;
@@ -1324,6 +1326,8 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
                                        (frame ? frame->timestamp_ms : 0);
             contrib.brightness_multiplier = mon_settings.brightness_multiplier;
             contrib.brightness_threshold = mon_settings.brightness_threshold;
+            contrib.white_rolloff = mon_settings.white_rolloff;
+            contrib.vibrance = mon_settings.vibrance;
             contrib.black_bar_letterbox_percent = mon_settings.black_bar_letterbox_percent;
             contrib.black_bar_pillarbox_percent = mon_settings.black_bar_pillarbox_percent;
             contrib.smoothing_time_ms = mon_settings.smoothing_time_ms;
@@ -1500,9 +1504,29 @@ RGBColor ScreenMirror3D::CalculateColorGridInternal(float x, float y, float z, f
             }
         }
 
-        r *= contrib.brightness_multiplier;
-        g *= contrib.brightness_multiplier;
-        b *= contrib.brightness_multiplier;
+        float lum = 0.299f * r + 0.587f * g + 0.114f * b;
+        float max_rgb = std::max(r, std::max(g, b));
+        float min_rgb = std::min(r, std::min(g, b));
+        float sat = (max_rgb > 0.001f) ? ((max_rgb - min_rgb) / max_rgb) : 0.0f;
+        float white_factor = (1.0f - sat) * (lum / 255.0f);
+        float white_reduce = std::min(1.0f, contrib.white_rolloff);
+        float dampen = 1.0f - white_reduce * white_factor;
+
+        r *= contrib.brightness_multiplier * dampen;
+        g *= contrib.brightness_multiplier * dampen;
+        b *= contrib.brightness_multiplier * dampen;
+
+        float vib = std::max(0.0f, std::min(2.0f, contrib.vibrance));
+        if(std::fabs(vib - 1.0f) > 0.001f)
+        {
+            float gray = (r + g + b) / 3.0f;
+            r = gray + (r - gray) * vib;
+            g = gray + (g - gray) * vib;
+            b = gray + (b - gray) * vib;
+            r = std::max(0.0f, std::min(255.0f, r));
+            g = std::max(0.0f, std::min(255.0f, g));
+            b = std::max(0.0f, std::min(255.0f, b));
+        }
 
         float adjusted_weight = contrib.weight * (0.5f + 0.5f * blend_factor);
 
@@ -1655,6 +1679,8 @@ nlohmann::json ScreenMirror3D::SaveSettings() const
         mon["smoothing_time_ms"] = mon_settings.smoothing_time_ms;
         mon["brightness_multiplier"] = mon_settings.brightness_multiplier;
         mon["brightness_threshold"] = mon_settings.brightness_threshold;
+        mon["white_rolloff"] = mon_settings.white_rolloff;
+        mon["vibrance"] = mon_settings.vibrance;
         mon["black_bar_letterbox_percent"] = mon_settings.black_bar_letterbox_percent;
         mon["black_bar_pillarbox_percent"] = mon_settings.black_bar_pillarbox_percent;
         
@@ -1739,6 +1765,24 @@ void ScreenMirror3D::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     if(msettings.brightness_threshold_label)
     {
         msettings.brightness_threshold_label->setText(QString::number((int)msettings.brightness_threshold));
+    }
+    if(msettings.white_rolloff_slider)
+    {
+        QSignalBlocker blocker(msettings.white_rolloff_slider);
+        msettings.white_rolloff_slider->setValue((int)std::lround(msettings.white_rolloff * 100.0f));
+    }
+    if(msettings.white_rolloff_label)
+    {
+        msettings.white_rolloff_label->setText(QString::number((int)std::lround(msettings.white_rolloff * 100.0f)) + "%");
+    }
+    if(msettings.vibrance_slider)
+    {
+        QSignalBlocker blocker(msettings.vibrance_slider);
+        msettings.vibrance_slider->setValue((int)std::lround(msettings.vibrance * 100.0f));
+    }
+    if(msettings.vibrance_label)
+    {
+        msettings.vibrance_label->setText(QString::number((int)std::lround(msettings.vibrance * 100.0f)) + "%");
     }
     if(msettings.black_bar_letterbox_slider)
     {
@@ -1912,6 +1956,10 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             QLabel* existing_brightness_label = nullptr;
             QSlider* existing_brightness_threshold_slider = nullptr;
             QLabel* existing_brightness_threshold_label = nullptr;
+            QSlider* existing_white_rolloff_slider = nullptr;
+            QLabel* existing_white_rolloff_label = nullptr;
+            QSlider* existing_vibrance_slider = nullptr;
+            QLabel* existing_vibrance_label = nullptr;
             QSlider* existing_black_bar_letterbox_slider = nullptr;
             QLabel* existing_black_bar_letterbox_label = nullptr;
             QSlider* existing_black_bar_pillarbox_slider = nullptr;
@@ -1952,6 +2000,10 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 existing_brightness_label = existing_it->second.brightness_label;
                 existing_brightness_threshold_slider = existing_it->second.brightness_threshold_slider;
                 existing_brightness_threshold_label = existing_it->second.brightness_threshold_label;
+                existing_white_rolloff_slider = existing_it->second.white_rolloff_slider;
+                existing_white_rolloff_label = existing_it->second.white_rolloff_label;
+                existing_vibrance_slider = existing_it->second.vibrance_slider;
+                existing_vibrance_label = existing_it->second.vibrance_label;
                 existing_black_bar_letterbox_slider = existing_it->second.black_bar_letterbox_slider;
                 existing_black_bar_letterbox_label = existing_it->second.black_bar_letterbox_label;
                 existing_black_bar_pillarbox_slider = existing_it->second.black_bar_pillarbox_slider;
@@ -2002,6 +2054,10 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 msettings.brightness_threshold = v;
             }
             else msettings.brightness_threshold = default_brightness_threshold;
+            if(mon.contains("white_rolloff")) msettings.white_rolloff = mon["white_rolloff"].get<float>();
+            else msettings.white_rolloff = 0.0f;
+            if(mon.contains("vibrance")) msettings.vibrance = mon["vibrance"].get<float>();
+            else msettings.vibrance = 1.0f;
             if(mon.contains("black_bar_letterbox_percent")) msettings.black_bar_letterbox_percent = mon["black_bar_letterbox_percent"].get<float>();
             else msettings.black_bar_letterbox_percent = 0.0f;
             if(mon.contains("black_bar_pillarbox_percent")) msettings.black_bar_pillarbox_percent = mon["black_bar_pillarbox_percent"].get<float>();
@@ -2072,6 +2128,8 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
             msettings.brightness_threshold = std::clamp(msettings.brightness_threshold, 0.0f, 255.0f);
+            msettings.white_rolloff = std::clamp(msettings.white_rolloff, 0.0f, 1.0f);
+            msettings.vibrance = std::clamp(msettings.vibrance, 0.0f, 2.0f);
             msettings.black_bar_letterbox_percent = std::clamp(msettings.black_bar_letterbox_percent, 0.0f, 50.0f);
             msettings.black_bar_pillarbox_percent = std::clamp(msettings.black_bar_pillarbox_percent, 0.0f, 50.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
@@ -2097,6 +2155,10 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                 msettings.brightness_label = existing_brightness_label;
                 msettings.brightness_threshold_slider = existing_brightness_threshold_slider;
                 msettings.brightness_threshold_label = existing_brightness_threshold_label;
+                msettings.white_rolloff_slider = existing_white_rolloff_slider;
+                msettings.white_rolloff_label = existing_white_rolloff_label;
+                msettings.vibrance_slider = existing_vibrance_slider;
+                msettings.vibrance_label = existing_vibrance_label;
                 msettings.black_bar_letterbox_slider = existing_black_bar_letterbox_slider;
                 msettings.black_bar_letterbox_label = existing_black_bar_letterbox_label;
                 msettings.black_bar_pillarbox_slider = existing_black_bar_pillarbox_slider;
@@ -2143,6 +2205,56 @@ void ScreenMirror3D::LoadSettings(const nlohmann::json& settings)
                     });
                 }
             }
+
+            /* Backfill White rolloff and Vibrance sliders for monitors that had UI created before these controls existed. */
+            if(msettings.white_rolloff_slider == nullptr && msettings.group_box != nullptr)
+            {
+                QGroupBox* bg = msettings.group_box->findChild<QGroupBox*>("ScreenMirror_BrightnessGroup");
+                if(!bg)
+                {
+                    for(QObject* child : msettings.group_box->children())
+                    {
+                        QGroupBox* g = qobject_cast<QGroupBox*>(child);
+                        if(g && g->title() == "Brightness") { bg = g; break; }
+                    }
+                }
+                QFormLayout* form = bg ? qobject_cast<QFormLayout*>(bg->layout()) : nullptr;
+                if(form)
+                {
+                    bool has_capture = !DisplayPlaneManager::instance()->GetDisplayPlanes().empty();
+                    QWidget* white_rolloff_widget = new QWidget();
+                    QHBoxLayout* white_rolloff_layout = new QHBoxLayout(white_rolloff_widget);
+                    white_rolloff_layout->setContentsMargins(0, 0, 0, 0);
+                    msettings.white_rolloff_slider = new QSlider(Qt::Horizontal);
+                    msettings.white_rolloff_slider->setRange(0, 100);
+                    msettings.white_rolloff_slider->setValue((int)std::lround(msettings.white_rolloff * 100.0f));
+                    msettings.white_rolloff_slider->setEnabled(has_capture);
+                    msettings.white_rolloff_slider->setToolTip("How much to reduce white/gray wash (0-100%). 0 = no rolloff, 100% = strong; keeps RGB/CYM vibrant.");
+                    white_rolloff_layout->addWidget(msettings.white_rolloff_slider);
+                    msettings.white_rolloff_label = new QLabel(QString::number((int)std::lround(msettings.white_rolloff * 100.0f)) + "%");
+                    msettings.white_rolloff_label->setMinimumWidth(45);
+                    white_rolloff_layout->addWidget(msettings.white_rolloff_label);
+                    connect(msettings.white_rolloff_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+                    connect(msettings.white_rolloff_slider, &QSlider::valueChanged, msettings.white_rolloff_label, [&msettings](int v) { msettings.white_rolloff_label->setText(QString::number(v) + "%"); });
+                    form->addRow("White rolloff:", white_rolloff_widget);
+
+                    QWidget* vibrance_widget = new QWidget();
+                    QHBoxLayout* vibrance_layout = new QHBoxLayout(vibrance_widget);
+                    vibrance_layout->setContentsMargins(0, 0, 0, 0);
+                    msettings.vibrance_slider = new QSlider(Qt::Horizontal);
+                    msettings.vibrance_slider->setRange(0, 200);
+                    msettings.vibrance_slider->setValue((int)std::lround(msettings.vibrance * 100.0f));
+                    msettings.vibrance_slider->setEnabled(has_capture);
+                    msettings.vibrance_slider->setToolTip("Saturation (0-200%). 100% = no change, below 100% = more muted, above 100% = more vivid RGB/CYM.");
+                    vibrance_layout->addWidget(msettings.vibrance_slider);
+                    msettings.vibrance_label = new QLabel(QString::number((int)std::lround(msettings.vibrance * 100.0f)) + "%");
+                    msettings.vibrance_label->setMinimumWidth(45);
+                    vibrance_layout->addWidget(msettings.vibrance_label);
+                    connect(msettings.vibrance_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+                    connect(msettings.vibrance_slider, &QSlider::valueChanged, msettings.vibrance_label, [&msettings](int v) { msettings.vibrance_label->setText(QString::number(v) + "%"); });
+                    form->addRow("Vibrance:", vibrance_widget);
+                }
+            }
     }
 
     OnScreenPreviewChanged();
@@ -2180,6 +2292,8 @@ void ScreenMirror3D::OnParameterChanged()
         if(settings.smoothing_time_slider) settings.smoothing_time_ms = (float)settings.smoothing_time_slider->value();
         if(settings.brightness_slider) settings.brightness_multiplier = std::clamp(settings.brightness_slider->value() / 100.0f, 0.0f, 2.0f);
         if(settings.brightness_threshold_slider) settings.brightness_threshold = (float)settings.brightness_threshold_slider->value();
+        if(settings.white_rolloff_slider) settings.white_rolloff = std::clamp((float)settings.white_rolloff_slider->value() / 100.0f, 0.0f, 1.0f);
+        if(settings.vibrance_slider) settings.vibrance = std::clamp((float)settings.vibrance_slider->value() / 100.0f, 0.0f, 2.0f);
         if(settings.black_bar_letterbox_slider) settings.black_bar_letterbox_percent = (float)settings.black_bar_letterbox_slider->value();
         if(settings.black_bar_pillarbox_slider) settings.black_bar_pillarbox_percent = (float)settings.black_bar_pillarbox_slider->value();
         
@@ -2676,6 +2790,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     main_layout->addWidget(direction_group);
 
     QGroupBox* brightness_group = new QGroupBox("Brightness");
+    brightness_group->setObjectName("ScreenMirror_BrightnessGroup");
     QFormLayout* brightness_form = new QFormLayout(brightness_group);
     brightness_form->setContentsMargins(8, 12, 8, 8);
 
@@ -2688,7 +2803,7 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
     settings.brightness_slider->setEnabled(has_capture_source);
     settings.brightness_slider->setTickPosition(QSlider::TicksBelow);
     settings.brightness_slider->setTickInterval(25);
-    settings.brightness_slider->setToolTip("Brightness multiplier (0-200%).");
+    settings.brightness_slider->setToolTip("Overall output level (0-200%). 100% = neutral. Use White rolloff to reduce wash and keep colors vibrant.");
     brightness_layout->addWidget(settings.brightness_slider);
     settings.brightness_label = new QLabel(QString::number((int)(settings.brightness_multiplier * 100)) + "%");
     settings.brightness_label->setMinimumWidth(50);
@@ -2718,6 +2833,46 @@ void ScreenMirror3D::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetti
         settings.brightness_threshold_label->setText(QString::number(value));
     });
     brightness_form->addRow("Brightness Threshold:", threshold_widget);
+
+    QWidget* white_rolloff_widget = new QWidget();
+    QHBoxLayout* white_rolloff_layout = new QHBoxLayout(white_rolloff_widget);
+    white_rolloff_layout->setContentsMargins(0, 0, 0, 0);
+    settings.white_rolloff_slider = new QSlider(Qt::Horizontal);
+    settings.white_rolloff_slider->setRange(0, 100);
+    settings.white_rolloff_slider->setValue((int)std::lround(settings.white_rolloff * 100.0f));
+    settings.white_rolloff_slider->setEnabled(has_capture_source);
+    settings.white_rolloff_slider->setTickPosition(QSlider::TicksBelow);
+    settings.white_rolloff_slider->setTickInterval(10);
+    settings.white_rolloff_slider->setToolTip("How much to reduce white/gray wash (0-100%). 0 = no rolloff, 100% = strong; keeps RGB/CYM vibrant, only big bright moments pop.");
+    white_rolloff_layout->addWidget(settings.white_rolloff_slider);
+    settings.white_rolloff_label = new QLabel(QString::number((int)std::lround(settings.white_rolloff * 100.0f)) + "%");
+    settings.white_rolloff_label->setMinimumWidth(45);
+    white_rolloff_layout->addWidget(settings.white_rolloff_label);
+    connect(settings.white_rolloff_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.white_rolloff_slider, &QSlider::valueChanged, settings.white_rolloff_label, [&settings](int value) {
+        settings.white_rolloff_label->setText(QString::number(value) + "%");
+    });
+    brightness_form->addRow("White rolloff:", white_rolloff_widget);
+
+    QWidget* vibrance_widget = new QWidget();
+    QHBoxLayout* vibrance_layout = new QHBoxLayout(vibrance_widget);
+    vibrance_layout->setContentsMargins(0, 0, 0, 0);
+    settings.vibrance_slider = new QSlider(Qt::Horizontal);
+    settings.vibrance_slider->setRange(0, 200);
+    settings.vibrance_slider->setValue((int)std::lround(settings.vibrance * 100.0f));
+    settings.vibrance_slider->setEnabled(has_capture_source);
+    settings.vibrance_slider->setTickPosition(QSlider::TicksBelow);
+    settings.vibrance_slider->setTickInterval(25);
+    settings.vibrance_slider->setToolTip("Saturation (0-200%). 100% = no change, below 100% = more muted, above 100% = more vivid RGB/CYM.");
+    vibrance_layout->addWidget(settings.vibrance_slider);
+    settings.vibrance_label = new QLabel(QString::number((int)std::lround(settings.vibrance * 100.0f)) + "%");
+    settings.vibrance_label->setMinimumWidth(45);
+    vibrance_layout->addWidget(settings.vibrance_label);
+    connect(settings.vibrance_slider, &QSlider::valueChanged, this, &ScreenMirror3D::OnParameterChanged);
+    connect(settings.vibrance_slider, &QSlider::valueChanged, settings.vibrance_label, [&settings](int value) {
+        settings.vibrance_label->setText(QString::number(value) + "%");
+    });
+    brightness_form->addRow("Vibrance:", vibrance_widget);
 
     main_layout->addWidget(brightness_group);
 

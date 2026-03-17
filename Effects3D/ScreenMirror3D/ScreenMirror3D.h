@@ -113,6 +113,8 @@ private:
         float smoothing_time_ms;
         float brightness_multiplier;
         float brightness_threshold;
+        float white_rolloff;
+        float vibrance;
         float black_bar_letterbox_percent;
         float black_bar_pillarbox_percent;
 
@@ -143,6 +145,10 @@ private:
         QLabel* brightness_label;
         QSlider* brightness_threshold_slider;
         QLabel* brightness_threshold_label;
+        QSlider* white_rolloff_slider;
+        QLabel* white_rolloff_label;
+        QSlider* vibrance_slider;
+        QLabel* vibrance_label;
         QSlider* black_bar_letterbox_slider;
         QLabel* black_bar_letterbox_label;
         QSlider* black_bar_pillarbox_slider;
@@ -178,6 +184,8 @@ private:
             , smoothing_time_ms(50.0f)
             , brightness_multiplier(1.0f)
             , brightness_threshold(0.0f)
+            , white_rolloff(0.0f)
+            , vibrance(1.0f)
             , black_bar_letterbox_percent(0.0f)
             , black_bar_pillarbox_percent(0.0f)
             , edge_softness(30.0f)
@@ -202,6 +210,10 @@ private:
             , brightness_label(nullptr)
             , brightness_threshold_slider(nullptr)
             , brightness_threshold_label(nullptr)
+            , white_rolloff_slider(nullptr)
+            , white_rolloff_label(nullptr)
+            , vibrance_slider(nullptr)
+            , vibrance_label(nullptr)
             , black_bar_letterbox_slider(nullptr)
             , black_bar_letterbox_label(nullptr)
             , black_bar_pillarbox_slider(nullptr)
