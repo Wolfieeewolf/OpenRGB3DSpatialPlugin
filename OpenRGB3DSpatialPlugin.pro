@@ -179,6 +179,7 @@ HEADERS +=                                                                      
     ui/LEDViewport3D.h                                                                          \
     ui/CustomControllerDialog.h                                                                 \
     ui/Gizmo3D.h                                                                                \
+    ui/CaptureZonesWidget.h                                                                     \
     Effects3D/Wave/Wave.h                                                                       \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
@@ -240,6 +241,7 @@ SOURCES +=                                                                      
     ui/LEDViewport3D.cpp                                                                        \
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \
+    ui/CaptureZonesWidget.cpp                                                                   \
     Effects3D/Wave/Wave.cpp                                                                 \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
@@ -271,6 +273,7 @@ SOURCES +=                                                                      
     Effects3D/Sunrise/Sunrise.cpp                                                         \
     Effects3D/ScreenMirror/ScreenMirror.cpp                                                \
     Audio/AudioInputManager.cpp                                                                 \
+
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #

@@ -199,7 +199,7 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
         if(!preset->effect_instances[i]) continue;
         nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
         std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
-        if(copied_instance)
+        if(copied_instance && EffectListManager3D::get()->IsEffectRegistered(copied_instance->effect_class_name))
         {
             effect_stack.push_back(std::move(copied_instance));
         }

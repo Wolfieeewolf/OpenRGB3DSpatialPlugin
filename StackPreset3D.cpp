@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "StackPreset3D.h"
+#include "EffectListManager3D.h"
 
 nlohmann::json StackPreset3D::ToJson() const
 {
@@ -32,7 +33,7 @@ std::unique_ptr<StackPreset3D> StackPreset3D::FromJson(const nlohmann::json& j)
         for(unsigned int i = 0; i < effects_array.size(); i++)
         {
             std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
-            if(instance)
+            if(instance && EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
             {
                 preset->effect_instances.push_back(std::move(instance));
             }

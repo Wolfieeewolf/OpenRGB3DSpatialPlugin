@@ -33,9 +33,11 @@ This document summarizes the effects architecture, the three effect types (Spati
 |-----------|------------|------------------|
 | **Spatial** | `"Spatial"` | Use common controls + custom UI; origin/scale/rotation; full standard params. |
 | **Audio**  | `"Audio"`  | Same base; often hide speed/FPS; use audio input (e.g. `AudioInputManager`, band data). |
-| **Ambilight** | `"Ambilight"` | Only **ScreenMirror**. No common controls; fully custom UI and Save/Load (no base contract). |
+| **Ambilight** | `"Ambilight"` | Only **Screen Mirror**. No common controls; fully custom UI and Save/Load (no base contract). |
 
 Structure is the same (same base and virtuals); only category, visibility flags, and UI/persistence differ.
+
+**Note:** Saved stacks, stack presets, and effect profiles that reference removed effect types (e.g. former experimental layers) are filtered on load via `EffectListManager3D::IsEffectRegistered`; dropped layers are logged as warnings.
 
 ---
 

@@ -47,577 +47,6 @@ REGISTER_EFFECT_3D(ScreenMirror);
 #define M_PI 3.14159265358979323846
 #endif
 
-class CaptureAreaPreviewWidget : public QWidget
-{
-public:
-    DisplayPlane3D* display_plane;
-    std::vector<ScreenMirror::CaptureZone>* capture_zones;
-    std::function<void()> on_value_changed;
-    bool* show_test_pattern_ptr;
-    bool* show_screen_preview_ptr;
-    float* black_bar_letterbox_percent_ptr;
-    float* black_bar_pillarbox_percent_ptr;
-
-    CaptureAreaPreviewWidget(std::vector<ScreenMirror::CaptureZone>* zones,
-                             DisplayPlane3D* plane = nullptr,
-                             bool* test_pattern = nullptr,
-                             bool* screen_preview = nullptr,
-                             float* black_bar_letterbox_percent = nullptr,
-                             float* black_bar_pillarbox_percent = nullptr,
-                             QWidget* parent = nullptr)
-        : QWidget(parent)
-        , display_plane(plane)
-        , capture_zones(zones)
-        , show_test_pattern_ptr(test_pattern)
-        , show_screen_preview_ptr(screen_preview)
-        , black_bar_letterbox_percent_ptr(black_bar_letterbox_percent)
-        , black_bar_pillarbox_percent_ptr(black_bar_pillarbox_percent)
-        , selected_zone_index(-1)
-        , dragging(false)
-        , drag_handle(None)
-        , preview_rect(0, 0, 0, 0)
-    {
-        setMinimumHeight(200);
-        setMaximumHeight(300);
-        setStyleSheet("QWidget { background-color: #1a1a1a; border: 1px solid #444; }");
-        setToolTip("Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete.");
-        setMouseTracking(true);
-    }
-    
-    void SetDisplayPlane(DisplayPlane3D* plane)
-    {
-        display_plane = plane;
-        update();
-    }
-    
-    void SetValueChangedCallback(std::function<void()> callback)
-    {
-        on_value_changed = callback;
-    }
-    
-    void AddZone()
-    {
-        if(!capture_zones) return;
-        ScreenMirror::CaptureZone new_zone(0.4f, 0.6f, 0.4f, 0.6f);
-        new_zone.name = "Zone " + std::to_string(capture_zones->size() + 1);
-        capture_zones->push_back(new_zone);
-        selected_zone_index = (int)capture_zones->size() - 1;
-        if(on_value_changed) on_value_changed();
-        update();
-    }
-    
-    void DeleteSelectedZone()
-    {
-        if(!capture_zones || selected_zone_index < 0 || selected_zone_index >= (int)capture_zones->size())
-            return;
-        if(capture_zones->size() <= 1) return;
-        
-        capture_zones->erase(capture_zones->begin() + selected_zone_index);
-        if(selected_zone_index >= (int)capture_zones->size())
-            selected_zone_index = (int)capture_zones->size() - 1;
-        if(on_value_changed) on_value_changed();
-        update();
-    }
-    
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        (void)event;
-        if(!capture_zones || !display_plane) return;
-        
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-        
-        QRect widget_rect = this->rect().adjusted(2, 2, -2, -2);
-        
-        float aspect_ratio = 16.0f / 9.0f;
-        float width_mm = display_plane->GetWidthMM();
-        float height_mm = display_plane->GetHeightMM();
-        if(height_mm > 0.0f)
-        {
-            aspect_ratio = width_mm / height_mm;
-        }
-        
-        QRect rect = widget_rect;
-        float widget_aspect = (float)widget_rect.width() / (float)widget_rect.height();
-        if(widget_aspect > aspect_ratio)
-        {
-            int new_width = (int)(widget_rect.height() * aspect_ratio);
-            int x_offset = (widget_rect.width() - new_width) / 2;
-            rect = QRect(widget_rect.left() + x_offset, widget_rect.top(), new_width, widget_rect.height());
-        }
-        else
-        {
-            int new_height = (int)(widget_rect.width() / aspect_ratio);
-            int y_offset = (widget_rect.height() - new_height) / 2;
-            rect = QRect(widget_rect.left(), widget_rect.top() + y_offset, widget_rect.width(), new_height);
-        }
-        
-        preview_rect = rect;
-        painter.setPen(QPen(QColor(100, 100, 100), 2));
-        painter.setBrush(QBrush(QColor(30, 30, 30)));
-        painter.drawRect(rect);
-        
-        bool show_test = show_test_pattern_ptr && *show_test_pattern_ptr;
-        bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr && !show_test;
-        
-        if(show_test)
-        {
-            int center_x = rect.left() + rect.width() / 2;
-            int center_y = rect.top() + rect.height() / 2;
-            
-            painter.fillRect(QRect(rect.left(), center_y, center_x - rect.left(), rect.bottom() - center_y), QColor(255, 0, 0, 200));
-            
-            painter.fillRect(QRect(center_x, center_y, rect.right() - center_x, rect.bottom() - center_y), QColor(0, 255, 0, 200));
-            
-            painter.fillRect(QRect(center_x, rect.top(), rect.right() - center_x, center_y - rect.top()), QColor(0, 0, 255, 200));
-            
-            painter.fillRect(QRect(rect.left(), rect.top(), center_x - rect.left(), center_y - rect.top()), QColor(255, 255, 0, 200));
-        }
-        else if(show_preview && display_plane)
-        {
-            std::string source_id = display_plane->GetCaptureSourceId();
-            if(!source_id.empty())
-            {
-                ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-                if(capture_mgr.IsInitialized() || capture_mgr.Initialize())
-                {
-                    if(!capture_mgr.IsCapturing(source_id))
-                    {
-                        capture_mgr.StartCapture(source_id);
-                    }
-                    
-                    std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
-                    if(frame && frame->valid && !frame->data.empty())
-                    {
-                        QImage image(frame->data.data(), frame->width, frame->height, QImage::Format_RGBA8888);
-                        if(!image.isNull())
-                        {
-                            painter.drawImage(rect, image);
-                            if(black_bar_letterbox_percent_ptr && black_bar_pillarbox_percent_ptr)
-                            {
-                                float lp = std::clamp(*black_bar_letterbox_percent_ptr, 0.0f, 49.0f) / 100.0f;
-                                float pp = std::clamp(*black_bar_pillarbox_percent_ptr, 0.0f, 49.0f) / 100.0f;
-                                float u_min = pp, u_max = 1.0f - pp;
-                                float v_min = lp, v_max = 1.0f - lp;
-                                int left   = rect.left() + (int)(rect.width() * u_min);
-                                int right  = rect.left() + (int)(rect.width() * u_max);
-                                int top    = rect.top() + (int)(rect.height() * v_min);
-                                int bottom = rect.top() + (int)(rect.height() * v_max);
-                                QRect bounds_rect(left, top, right - left, bottom - top);
-                                painter.setPen(QPen(QColor(255, 255, 0), 2, Qt::DashLine));
-                                painter.setBrush(Qt::NoBrush);
-                                painter.drawRect(bounds_rect);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        const int handle_size = 10;
-        const int handle_half = handle_size / 2;
-        QColor zone_color(0, 200, 255, 120);
-        QColor zone_border(0, 200, 255, 255);
-        QColor selected_zone_color(0, 255, 200, 150);
-        QColor selected_zone_border(0, 255, 200, 255);
-        QColor handle_color(100, 200, 255, 255);
-        QColor handle_hover_color(150, 255, 255, 255);
-        
-        for(size_t i = 0; i < capture_zones->size(); i++)
-        {
-            const ScreenMirror::CaptureZone& zone = (*capture_zones)[i];
-            if(!zone.enabled) continue;
-            
-            bool is_selected = ((int)i == selected_zone_index);
-            int zone_left = rect.left() + (int)(rect.width() * zone.u_min);
-            int zone_right = rect.left() + (int)(rect.width() * zone.u_max);
-            int zone_top = rect.top() + (int)(rect.height() * (1.0f - zone.v_max));
-            int zone_bottom = rect.top() + (int)(rect.height() * (1.0f - zone.v_min));
-            
-            QRect zone_rect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top);
-            painter.setPen(QPen(is_selected ? selected_zone_border : zone_border, is_selected ? 3 : 2));
-            painter.setBrush(QBrush(is_selected ? selected_zone_color : zone_color));
-            painter.drawRect(zone_rect);
-            if(is_selected)
-            {
-                QPoint corners[4] = {
-                    QPoint(zone_left, zone_top),
-                    QPoint(zone_right, zone_top),
-                    QPoint(zone_right, zone_bottom),
-                    QPoint(zone_left, zone_bottom)
-                };
-                
-                for(int corner = 0; corner < 4; corner++)
-                {
-                    bool is_hover = (drag_handle == (CornerHandle)(TopLeft + corner) && (int)i == selected_zone_index);
-                    painter.setPen(QPen(is_hover ? QColor(255, 255, 255) : QColor(0, 150, 200), 2));
-                    painter.setBrush(QBrush(is_hover ? handle_hover_color : handle_color));
-                    painter.drawEllipse(corners[corner].x() - handle_half, corners[corner].y() - handle_half, handle_size, handle_size);
-                }
-            }
-        }
-    }
-    
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        if(!capture_zones || !display_plane) return;
-        
-        QPoint pos = event->pos();
-        const int handle_size = 10;
-        const int handle_half = handle_size / 2;
-        
-        if(event->button() == Qt::RightButton)
-        {
-            for(size_t i = 0; i < capture_zones->size(); i++)
-            {
-                const ScreenMirror::CaptureZone& zone = (*capture_zones)[i];
-                if(!zone.enabled) continue;
-                
-                int zone_left = preview_rect.left() + (int)(preview_rect.width() * zone.u_min);
-                int zone_right = preview_rect.left() + (int)(preview_rect.width() * zone.u_max);
-                int zone_top = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_max));
-                int zone_bottom = preview_rect.top() + (int)(preview_rect.height() * (1.0f - zone.v_min));
-                
-                QRect zone_rect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top);
-                if(zone_rect.contains(pos))
-                {
-                    if(capture_zones->size() > 1)
-                    {
-                        capture_zones->erase(capture_zones->begin() + i);
-                        if(selected_zone_index >= (int)capture_zones->size())
-                            selected_zone_index = (int)capture_zones->size() - 1;
-                        if(on_value_changed) on_value_changed();
-                        update();
-                    }
-                    return;
-                }
-            }
-            return;
-        }
-        
-        if(event->button() != Qt::LeftButton) return;
-        
-        QRect widget_rect = this->rect().adjusted(2, 2, -2, -2);
-        float aspect_ratio = 16.0f / 9.0f;
-        if(display_plane)
-        {
-            float width_mm = display_plane->GetWidthMM();
-            float height_mm = display_plane->GetHeightMM();
-            if(height_mm > 0.0f)
-            {
-                aspect_ratio = width_mm / height_mm;
-            }
-        }
-        QRect calc_preview_rect = widget_rect;
-        float widget_aspect = (float)widget_rect.width() / (float)widget_rect.height();
-        if(widget_aspect > aspect_ratio)
-        {
-            int new_width = (int)(widget_rect.height() * aspect_ratio);
-            int x_offset = (widget_rect.width() - new_width) / 2;
-            calc_preview_rect = QRect(widget_rect.left() + x_offset, widget_rect.top(), new_width, widget_rect.height());
-        }
-        else
-        {
-            int new_height = (int)(widget_rect.width() / aspect_ratio);
-            int y_offset = (widget_rect.height() - new_height) / 2;
-            calc_preview_rect = QRect(widget_rect.left(), widget_rect.top() + y_offset, widget_rect.width(), new_height);
-        }
-        
-        for(size_t i = 0; i < capture_zones->size(); i++)
-        {
-            const ScreenMirror::CaptureZone& zone = (*capture_zones)[i];
-            if(!zone.enabled) continue;
-            
-            int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
-            int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
-            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
-            
-            QPoint corners[4] = {
-                QPoint(zone_left, zone_top),
-                QPoint(zone_right, zone_top),
-                QPoint(zone_right, zone_bottom),
-                QPoint(zone_left, zone_bottom)
-            };
-            
-            for(int corner = 0; corner < 4; corner++)
-            {
-                QRect handle_rect(corners[corner].x() - handle_half, corners[corner].y() - handle_half, handle_size, handle_size);
-                if(handle_rect.contains(pos))
-                {
-                    selected_zone_index = (int)i;
-                    drag_handle = (CornerHandle)(TopLeft + corner);
-                    dragging = true;
-                    drag_start_pos = pos;
-                    drag_start_zone = (*capture_zones)[i];
-                    update();
-                    return;
-                }
-            }
-        }
-        
-        for(size_t i = 0; i < capture_zones->size(); i++)
-        {
-            const ScreenMirror::CaptureZone& zone = (*capture_zones)[i];
-            if(!zone.enabled) continue;
-            
-            int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
-            int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-            int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
-            int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
-            
-            QRect zone_rect(zone_left, zone_top, zone_right - zone_left, zone_bottom - zone_top);
-            if(zone_rect.contains(pos))
-            {
-                selected_zone_index = (int)i;
-                dragging = true;
-                drag_handle = MoveZone;
-                drag_start_pos = pos;
-                drag_start_zone = (*capture_zones)[i];
-                update();
-                return;
-            }
-        }
-        
-        selected_zone_index = -1;
-        update();
-    }
-    
-    void mouseMoveEvent(QMouseEvent* event) override
-    {
-        if(!capture_zones || !display_plane) return;
-        
-        QPoint pos = event->pos();
-        const int handle_size = 10;
-        const int handle_half = handle_size / 2;
-        
-        QRect widget_rect = this->rect().adjusted(2, 2, -2, -2);
-        float aspect_ratio = 16.0f / 9.0f;
-        if(display_plane)
-        {
-            float width_mm = display_plane->GetWidthMM();
-            float height_mm = display_plane->GetHeightMM();
-            if(height_mm > 0.0f)
-            {
-                aspect_ratio = width_mm / height_mm;
-            }
-        }
-        QRect calc_preview_rect = widget_rect;
-        float widget_aspect = (float)widget_rect.width() / (float)widget_rect.height();
-        if(widget_aspect > aspect_ratio)
-        {
-            int new_width = (int)(widget_rect.height() * aspect_ratio);
-            int x_offset = (widget_rect.width() - new_width) / 2;
-            calc_preview_rect = QRect(widget_rect.left() + x_offset, widget_rect.top(), new_width, widget_rect.height());
-        }
-        else
-        {
-            int new_height = (int)(widget_rect.width() / aspect_ratio);
-            int y_offset = (widget_rect.height() - new_height) / 2;
-            calc_preview_rect = QRect(widget_rect.left(), widget_rect.top() + y_offset, widget_rect.width(), new_height);
-        }
-        preview_rect = calc_preview_rect;
-        
-        if(!dragging)
-        {
-            CornerHandle new_hover = None;
-            for(size_t i = 0; i < capture_zones->size(); i++)
-            {
-                const ScreenMirror::CaptureZone& zone = (*capture_zones)[i];
-                if(!zone.enabled || (int)i != selected_zone_index) continue;
-                
-                int zone_left = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_min);
-                int zone_right = calc_preview_rect.left() + (int)(calc_preview_rect.width() * zone.u_max);
-                int zone_top = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_max));
-                int zone_bottom = calc_preview_rect.top() + (int)(calc_preview_rect.height() * (1.0f - zone.v_min));
-                
-                QPoint corners[4] = {
-                    QPoint(zone_left, zone_top),
-                    QPoint(zone_right, zone_top),
-                    QPoint(zone_right, zone_bottom),
-                    QPoint(zone_left, zone_bottom)
-                };
-                
-                for(int corner = 0; corner < 4; corner++)
-                {
-                    QRect handle_rect(corners[corner].x() - handle_half, corners[corner].y() - handle_half, handle_size, handle_size);
-                    if(handle_rect.contains(pos))
-                    {
-                        new_hover = (CornerHandle)(TopLeft + corner);
-                        break;
-                    }
-                }
-                if(new_hover != None) break;
-            }
-            
-            if(new_hover != drag_handle)
-            {
-                drag_handle = new_hover;
-                update();
-            }
-            return;
-        }
-        
-        if(selected_zone_index < 0 || selected_zone_index >= (int)capture_zones->size())
-        {
-            dragging = false;
-            return;
-        }
-        
-        ScreenMirror::CaptureZone& zone = (*capture_zones)[selected_zone_index];
-        
-        if(calc_preview_rect.width() <= 0 || calc_preview_rect.height() <= 0)
-            return;
-        
-        float normalized_x = (float)(pos.x() - calc_preview_rect.left()) / (float)calc_preview_rect.width();
-        float normalized_y = (float)(pos.y() - calc_preview_rect.top()) / (float)calc_preview_rect.height();
-
-        normalized_x = std::max(-0.01f, std::min(1.01f, normalized_x));
-        normalized_y = std::max(-0.01f, std::min(1.01f, normalized_y));
-        normalized_x = std::max(0.0f, std::min(1.0f, normalized_x));
-        normalized_y = std::max(0.0f, std::min(1.0f, normalized_y));
-        
-        float v = 1.0f - normalized_y;
-        
-        if(drag_handle == MoveZone)
-        {
-            float delta_u = normalized_x - ((drag_start_zone.u_min + drag_start_zone.u_max) * 0.5f);
-            float delta_v = v - ((drag_start_zone.v_min + drag_start_zone.v_max) * 0.5f);
-            
-            float new_u_min = drag_start_zone.u_min + delta_u;
-            float new_u_max = drag_start_zone.u_max + delta_u;
-            float new_v_min = drag_start_zone.v_min + delta_v;
-            float new_v_max = drag_start_zone.v_max + delta_v;
-            
-            if(new_u_min < 0.0f) { new_u_max -= new_u_min; new_u_min = 0.0f; }
-            if(new_u_max > 1.0f) { new_u_min -= (new_u_max - 1.0f); new_u_max = 1.0f; }
-            if(new_v_min < 0.0f) { new_v_max -= new_v_min; new_v_min = 0.0f; }
-            if(new_v_max > 1.0f) { new_v_min -= (new_v_max - 1.0f); new_v_max = 1.0f; }
-            
-            zone.u_min = std::max(0.0f, std::min(1.0f, new_u_min));
-            zone.u_max = std::max(0.0f, std::min(1.0f, new_u_max));
-            zone.v_min = std::max(0.0f, std::min(1.0f, new_v_min));
-            zone.v_max = std::max(0.0f, std::min(1.0f, new_v_max));
-            
-            if(zone.u_min > zone.u_max) { float temp = zone.u_min; zone.u_min = zone.u_max; zone.u_max = temp; }
-            if(zone.v_min > zone.v_max) { float temp = zone.v_min; zone.v_min = zone.v_max; zone.v_max = temp; }
-        }
-        else
-        {
-            const float min_size = 0.01f;
-            normalized_x = std::max(0.0f, std::min(1.0f, normalized_x));
-            v            = std::max(0.0f, std::min(1.0f, v));
-
-            switch(drag_handle)
-            {
-                case TopLeft:
-                {
-                    zone.u_max = drag_start_zone.u_max;
-                    zone.v_min = drag_start_zone.v_min;
-                    zone.u_min = normalized_x;
-                    zone.v_max = v;
-                    break;
-                }
-                case TopRight:
-                {
-                    zone.u_min = drag_start_zone.u_min;
-                    zone.v_min = drag_start_zone.v_min;
-                    zone.u_max = normalized_x;
-                    zone.v_max = v;
-                    break;
-                }
-                case BottomRight:
-                {
-                    zone.u_min = drag_start_zone.u_min;
-                    zone.v_max = drag_start_zone.v_max;
-                    zone.u_max = normalized_x;
-                    zone.v_min = v;
-                    break;
-                }
-                case BottomLeft:
-                {
-                    zone.u_max = drag_start_zone.u_max;
-                    zone.v_max = drag_start_zone.v_max;
-                    zone.u_min = normalized_x;
-                    zone.v_min = v;
-                    break;
-                }
-                default:
-                    break;
-            }
-
-            zone.u_min = std::max(0.0f, std::min(1.0f, zone.u_min));
-            zone.u_max = std::max(0.0f, std::min(1.0f, zone.u_max));
-            zone.v_min = std::max(0.0f, std::min(1.0f, zone.v_min));
-            zone.v_max = std::max(0.0f, std::min(1.0f, zone.v_max));
-            switch(drag_handle)
-            {
-                case TopLeft:
-                    if(zone.u_max - zone.u_min < min_size) zone.u_min = zone.u_max - min_size;
-                    if(zone.v_max - zone.v_min < min_size) zone.v_max = zone.v_min + min_size;
-                    break;
-                case TopRight:
-                    if(zone.u_max - zone.u_min < min_size) zone.u_max = zone.u_min + min_size;
-                    if(zone.v_max - zone.v_min < min_size) zone.v_max = zone.v_min + min_size;
-                    break;
-                case BottomRight:
-                    if(zone.u_max - zone.u_min < min_size) zone.u_max = zone.u_min + min_size;
-                    if(zone.v_max - zone.v_min < min_size) zone.v_min = zone.v_max - min_size;
-                    break;
-                case BottomLeft:
-                    if(zone.u_max - zone.u_min < min_size) zone.u_min = zone.u_max - min_size;
-                    if(zone.v_max - zone.v_min < min_size) zone.v_min = zone.v_max - min_size;
-                    break;
-                default:
-                    break;
-            }
-            if(zone.u_max <= zone.u_min) zone.u_max = std::min(1.0f, zone.u_min + min_size);
-            if(zone.v_max <= zone.v_min) zone.v_min = std::max(0.0f, zone.v_max - min_size);
-            zone.u_min = std::max(0.0f, std::min(1.0f, zone.u_min));
-            zone.u_max = std::max(0.0f, std::min(1.0f, zone.u_max));
-            zone.v_min = std::max(0.0f, std::min(1.0f, zone.v_min));
-            zone.v_max = std::max(0.0f, std::min(1.0f, zone.v_max));
-        }
-        if(on_value_changed)
-        {
-            on_value_changed();
-        }
-        
-        update();
-    }
-    
-    void mouseReleaseEvent(QMouseEvent* event) override
-    {
-        (void)event;
-        if(dragging && selected_zone_index >= 0 && selected_zone_index < (int)capture_zones->size())
-        {
-            drag_start_zone = (*capture_zones)[selected_zone_index];
-        }
-        dragging = false;
-        drag_handle = None;
-        update();
-    }
-    
-private:
-    enum CornerHandle
-    {
-        None,
-        TopLeft,
-        TopRight,
-        BottomRight,
-        BottomLeft,
-        MoveZone
-    };
-    
-    int selected_zone_index;
-    bool dragging;
-    CornerHandle drag_handle;
-    QPoint drag_start_pos;
-    ScreenMirror::CaptureZone drag_start_zone;
-    QRect preview_rect;
-};
-
 ScreenMirror::ScreenMirror(QWidget* parent)
     : SpatialEffect3D(parent)
     , global_scale_slider(nullptr)
@@ -1986,6 +1415,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             QCheckBox* existing_screen_preview_check = nullptr;
             QWidget* existing_capture_area_preview = nullptr;
             QPushButton* existing_add_zone_button = nullptr;
+            CaptureZonesWidget* existing_capture_zones_widget = nullptr;
 
             if(had_existing)
             {
@@ -2028,6 +1458,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 existing_top_bottom_balance_label = existing_it->second.top_bottom_balance_label;
                 existing_capture_area_preview = existing_it->second.capture_area_preview;
                 existing_add_zone_button = existing_it->second.add_zone_button;
+                existing_capture_zones_widget = existing_it->second.capture_zones_widget;
             }
             else
             {
@@ -2185,24 +1616,21 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.screen_preview_check = existing_screen_preview_check;
                 msettings.capture_area_preview = existing_capture_area_preview;
                 msettings.add_zone_button = existing_add_zone_button;
+                msettings.capture_zones_widget = existing_capture_zones_widget;
 
-                if(msettings.capture_area_preview)
+                if(msettings.capture_zones_widget)
                 {
-                    CaptureAreaPreviewWidget* preview_widget = static_cast<CaptureAreaPreviewWidget*>(msettings.capture_area_preview);
-                    preview_widget->capture_zones = &msettings.capture_zones;
-                    
+                    msettings.capture_zones_widget->SetCaptureZones(&msettings.capture_zones);
+                    msettings.capture_zones_widget->SetValueChangedCallback([this]() { OnParameterChanged(); });
                     std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
                     for(DisplayPlane3D* plane : planes)
                     {
                         if(plane && plane->GetName() == monitor_name)
                         {
-                            preview_widget->SetDisplayPlane(plane);
+                            msettings.capture_zones_widget->SetDisplayPlane(plane);
                             break;
                         }
                     }
-                    preview_widget->SetValueChangedCallback([this]() {
-                        OnParameterChanged();
-                    });
                 }
             }
 
@@ -2739,56 +2167,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
 
     main_layout->addWidget(reach_group);
 
-    QGroupBox* direction_group = new QGroupBox("Wall / Direction Focus");
-    QFormLayout* direction_form = new QFormLayout(direction_group);
-    direction_form->setContentsMargins(8, 12, 8, 8);
-    QWidget* front_back_widget = new QWidget();
-    QHBoxLayout* front_back_layout = new QHBoxLayout(front_back_widget);
-    front_back_layout->setContentsMargins(0, 0, 0, 0);
-    settings.front_back_balance_slider = new QSlider(Qt::Horizontal);
-    settings.front_back_balance_slider->setRange(-100, 100);
-    settings.front_back_balance_slider->setValue((int)std::lround(settings.front_back_balance));
-    settings.front_back_balance_slider->setEnabled(has_capture_source);
-    settings.front_back_balance_slider->setToolTip("Favor front (+) or back (-) LEDs. 0 = even.");
-    front_back_layout->addWidget(settings.front_back_balance_slider);
-    settings.front_back_balance_label = new QLabel(QString::number((int)std::lround(settings.front_back_balance)));
-    settings.front_back_balance_label->setMinimumWidth(40);
-    front_back_layout->addWidget(settings.front_back_balance_label);
-    connect(settings.front_back_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.front_back_balance_slider, &QSlider::valueChanged, settings.front_back_balance_label, [&settings](int v) { settings.front_back_balance_label->setText(QString::number(v)); });
-    direction_form->addRow("Front/Back:", front_back_widget);
-    QWidget* left_right_widget = new QWidget();
-    QHBoxLayout* left_right_layout = new QHBoxLayout(left_right_widget);
-    left_right_layout->setContentsMargins(0, 0, 0, 0);
-    settings.left_right_balance_slider = new QSlider(Qt::Horizontal);
-    settings.left_right_balance_slider->setRange(-100, 100);
-    settings.left_right_balance_slider->setValue((int)std::lround(settings.left_right_balance));
-    settings.left_right_balance_slider->setEnabled(has_capture_source);
-    settings.left_right_balance_slider->setToolTip("Favor right (+) or left (-) LEDs. 0 = even.");
-    left_right_layout->addWidget(settings.left_right_balance_slider);
-    settings.left_right_balance_label = new QLabel(QString::number((int)std::lround(settings.left_right_balance)));
-    settings.left_right_balance_label->setMinimumWidth(40);
-    left_right_layout->addWidget(settings.left_right_balance_label);
-    connect(settings.left_right_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.left_right_balance_slider, &QSlider::valueChanged, settings.left_right_balance_label, [&settings](int v) { settings.left_right_balance_label->setText(QString::number(v)); });
-    direction_form->addRow("Left/Right:", left_right_widget);
-    QWidget* top_bottom_widget = new QWidget();
-    QHBoxLayout* top_bottom_layout = new QHBoxLayout(top_bottom_widget);
-    top_bottom_layout->setContentsMargins(0, 0, 0, 0);
-    settings.top_bottom_balance_slider = new QSlider(Qt::Horizontal);
-    settings.top_bottom_balance_slider->setRange(-100, 100);
-    settings.top_bottom_balance_slider->setValue((int)std::lround(settings.top_bottom_balance));
-    settings.top_bottom_balance_slider->setEnabled(has_capture_source);
-    settings.top_bottom_balance_slider->setToolTip("Favor top (+) or bottom (-) LEDs. 0 = even.");
-    top_bottom_layout->addWidget(settings.top_bottom_balance_slider);
-    settings.top_bottom_balance_label = new QLabel(QString::number((int)std::lround(settings.top_bottom_balance)));
-    settings.top_bottom_balance_label->setMinimumWidth(40);
-    top_bottom_layout->addWidget(settings.top_bottom_balance_label);
-    connect(settings.top_bottom_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.top_bottom_balance_slider, &QSlider::valueChanged, settings.top_bottom_balance_label, [&settings](int v) { settings.top_bottom_balance_label->setText(QString::number(v)); });
-    direction_form->addRow("Top/Bottom:", top_bottom_widget);
-    main_layout->addWidget(direction_group);
-
     QGroupBox* brightness_group = new QGroupBox("Brightness");
     brightness_group->setObjectName("ScreenMirror_BrightnessGroup");
     QFormLayout* brightness_form = new QFormLayout(brightness_group);
@@ -2875,72 +2253,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     brightness_form->addRow("Vibrance:", vibrance_widget);
 
     main_layout->addWidget(brightness_group);
-
-    QGroupBox* wave_group = new QGroupBox("Wave");
-    QFormLayout* wave_form = new QFormLayout(wave_group);
-    wave_form->setContentsMargins(8, 12, 8, 8);
-
-    QWidget* propagation_widget = new QWidget();
-    QHBoxLayout* propagation_layout = new QHBoxLayout(propagation_widget);
-    propagation_layout->setContentsMargins(0, 0, 0, 0);
-    settings.propagation_speed_slider = new QSlider(Qt::Horizontal);
-    settings.propagation_speed_slider->setRange(0, 100);
-    settings.propagation_speed_slider->setValue((int)std::lround(settings.propagation_speed_mm_per_ms));
-    settings.propagation_speed_slider->setEnabled(has_capture_source);
-    settings.propagation_speed_slider->setTickPosition(QSlider::TicksBelow);
-    settings.propagation_speed_slider->setTickInterval(10);
-    settings.propagation_speed_slider->setToolTip("Wave strength (0-100%). 0 = instant, 50% = moderate trail, 100% = long trail. Middle of slider is clearly visible.");
-    propagation_layout->addWidget(settings.propagation_speed_slider);
-    settings.propagation_speed_label = new QLabel(QString::number((int)std::lround(settings.propagation_speed_mm_per_ms)) + "%");
-    settings.propagation_speed_label->setMinimumWidth(45);
-    propagation_layout->addWidget(settings.propagation_speed_label);
-    connect(settings.propagation_speed_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.propagation_speed_slider, &QSlider::valueChanged, settings.propagation_speed_label, [&settings](int value) {
-        settings.propagation_speed_label->setText(QString::number(value) + "%");
-    });
-    wave_form->addRow("Wave Intensity:", propagation_widget);
-
-    QWidget* wave_decay_widget = new QWidget();
-    QHBoxLayout* wave_decay_layout = new QHBoxLayout(wave_decay_widget);
-    wave_decay_layout->setContentsMargins(0, 0, 0, 0);
-    settings.wave_decay_slider = new QSlider(Qt::Horizontal);
-    settings.wave_decay_slider->setRange(0, 3000);
-    settings.wave_decay_slider->setValue((int)settings.wave_decay_ms);
-    settings.wave_decay_slider->setEnabled(has_capture_source);
-    settings.wave_decay_slider->setTickPosition(QSlider::TicksBelow);
-    settings.wave_decay_slider->setTickInterval(300);
-    settings.wave_decay_slider->setToolTip("Wave tail length (0-3000ms). 0 = no tail, ~500-1500ms = visible trail.");
-    wave_decay_layout->addWidget(settings.wave_decay_slider);
-    settings.wave_decay_label = new QLabel(QString::number((int)settings.wave_decay_ms) + "ms");
-    settings.wave_decay_label->setMinimumWidth(60);
-    wave_decay_layout->addWidget(settings.wave_decay_label);
-    connect(settings.wave_decay_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.wave_decay_slider, &QSlider::valueChanged, settings.wave_decay_label, [&settings](int value) {
-        settings.wave_decay_label->setText(QString::number(value) + "ms");
-    });
-    wave_form->addRow("Wave Decay:", wave_decay_widget);
-
-    QWidget* wave_time_to_edge_widget = new QWidget();
-    QHBoxLayout* wave_time_layout = new QHBoxLayout(wave_time_to_edge_widget);
-    wave_time_layout->setContentsMargins(0, 0, 0, 0);
-    settings.wave_time_to_edge_slider = new QSlider(Qt::Horizontal);
-    settings.wave_time_to_edge_slider->setRange(0, 100);
-    settings.wave_time_to_edge_slider->setValue((int)(settings.wave_time_to_edge_sec * 10.0f));
-    settings.wave_time_to_edge_slider->setEnabled(has_capture_source);
-    settings.wave_time_to_edge_slider->setTickPosition(QSlider::TicksBelow);
-    settings.wave_time_to_edge_slider->setTickInterval(10);
-    settings.wave_time_to_edge_slider->setToolTip("Time for wave to reach farthest LED (0-10s). 0 = use Wave Intensity. 5 = 0.5s, 50 = 5s.");
-    wave_time_layout->addWidget(settings.wave_time_to_edge_slider);
-    settings.wave_time_to_edge_label = new QLabel(settings.wave_time_to_edge_sec <= 0.0f ? "Off" : QString::number(settings.wave_time_to_edge_sec, 'f', 1) + "s");
-    settings.wave_time_to_edge_label->setMinimumWidth(45);
-    wave_time_layout->addWidget(settings.wave_time_to_edge_label);
-    connect(settings.wave_time_to_edge_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
-    connect(settings.wave_time_to_edge_slider, &QSlider::valueChanged, settings.wave_time_to_edge_label, [&settings](int value) {
-        settings.wave_time_to_edge_label->setText(value == 0 ? "Off" : QString::number(value / 10.0, 'f', 1) + "s");
-    });
-    wave_form->addRow("Time to edge (s):", wave_time_to_edge_widget);
-
-    main_layout->addWidget(wave_group);
 
     QGroupBox* blackbars_group = new QGroupBox("Black Bars (Crop)");
     QFormLayout* blackbars_form = new QFormLayout(blackbars_group);
@@ -3070,47 +2382,54 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
 
     main_layout->addWidget(preview_group);
 
-    QGroupBox* zones_group = new QGroupBox("Capture Zones");
-    QVBoxLayout* zones_layout = new QVBoxLayout();
-
-    settings.add_zone_button = new QPushButton("Add Capture Zone");
-    settings.add_zone_button->setEnabled(has_capture_source);
-    settings.add_zone_button->setToolTip("Add a new capture zone that can be positioned anywhere on the screen.");
-    connect(settings.add_zone_button, &QPushButton::clicked, this, [&settings, this]() {
-        if(settings.capture_area_preview)
-        {
-            CaptureAreaPreviewWidget* preview_widget = static_cast<CaptureAreaPreviewWidget*>(settings.capture_area_preview);
-            preview_widget->AddZone();
-        }
-    });
-    zones_layout->addWidget(settings.add_zone_button);
-
-    QHBoxLayout* previews_row = new QHBoxLayout();
-    previews_row->setSpacing(12);
-
-    QVBoxLayout* capture_col = new QVBoxLayout();
-    capture_col->setContentsMargins(0, 0, 0, 0);
-    capture_col->addWidget(new QLabel("Capture area (zones):"));
-    CaptureAreaPreviewWidget* preview_widget = new CaptureAreaPreviewWidget(
+    CaptureZonesWidget* zones_widget = new CaptureZonesWidget(
         &settings.capture_zones,
         plane,
         &settings.show_test_pattern,
         &settings.show_screen_preview,
         &settings.black_bar_letterbox_percent,
-        &settings.black_bar_pillarbox_percent
-    );
-    preview_widget->SetValueChangedCallback([this]() {
-        OnParameterChanged();
-    });
-    settings.capture_area_preview = preview_widget;
-    settings.capture_area_preview->setEnabled(has_capture_source);
-    capture_col->addWidget(settings.capture_area_preview);
-    previews_row->addLayout(capture_col, 1);
+        &settings.black_bar_pillarbox_percent,
+        settings.propagation_speed_mm_per_ms,
+        settings.wave_decay_ms,
+        settings.wave_time_to_edge_sec,
+        settings.front_back_balance,
+        settings.left_right_balance,
+        settings.top_bottom_balance,
+        this);
+    zones_widget->setEnabled(has_capture_source);
+    zones_widget->SetValueChangedCallback([this]() { OnParameterChanged(); });
+    connect(zones_widget, &CaptureZonesWidget::valueChanged, this, &ScreenMirror::OnParameterChanged);
 
-    zones_layout->addLayout(previews_row);
+    settings.capture_zones_widget = zones_widget;
+    settings.propagation_speed_slider = zones_widget->getPropagationSpeedSlider();
+    settings.propagation_speed_label = zones_widget->getPropagationSpeedLabel();
+    settings.wave_decay_slider = zones_widget->getWaveDecaySlider();
+    settings.wave_decay_label = zones_widget->getWaveDecayLabel();
+    settings.wave_time_to_edge_slider = zones_widget->getWaveTimeToEdgeSlider();
+    settings.wave_time_to_edge_label = zones_widget->getWaveTimeToEdgeLabel();
+    settings.front_back_balance_slider = zones_widget->getFrontBackBalanceSlider();
+    settings.front_back_balance_label = zones_widget->getFrontBackBalanceLabel();
+    settings.left_right_balance_slider = zones_widget->getLeftRightBalanceSlider();
+    settings.left_right_balance_label = zones_widget->getLeftRightBalanceLabel();
+    settings.top_bottom_balance_slider = zones_widget->getTopBottomBalanceSlider();
+    settings.top_bottom_balance_label = zones_widget->getTopBottomBalanceLabel();
+    settings.capture_area_preview = zones_widget->getPreviewWidget();
+    settings.add_zone_button = zones_widget->getAddZoneButton();
 
-    zones_group->setLayout(zones_layout);
-    main_layout->addWidget(zones_group);
+    if(settings.propagation_speed_slider)
+        connect(settings.propagation_speed_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    if(settings.wave_decay_slider)
+        connect(settings.wave_decay_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    if(settings.wave_time_to_edge_slider)
+        connect(settings.wave_time_to_edge_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    if(settings.front_back_balance_slider)
+        connect(settings.front_back_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    if(settings.left_right_balance_slider)
+        connect(settings.left_right_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    if(settings.top_bottom_balance_slider)
+        connect(settings.top_bottom_balance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+
+    main_layout->addWidget(zones_widget);
 
     settings.group_box->setLayout(main_layout);
     monitors_layout->addWidget(settings.group_box);
@@ -3256,17 +2575,14 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
             if(settings.test_pattern_check) settings.test_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
-            if(settings.capture_area_preview)
+            if(settings.capture_zones_widget)
             {
-                settings.capture_area_preview->setEnabled(has_capture_source);
-                CaptureAreaPreviewWidget* preview_widget = static_cast<CaptureAreaPreviewWidget*>(settings.capture_area_preview);
-                preview_widget->SetDisplayPlane(plane);
-                preview_widget->capture_zones = &settings.capture_zones;
+                settings.capture_zones_widget->setEnabled(has_capture_source);
+                settings.capture_zones_widget->SetDisplayPlane(plane);
+                settings.capture_zones_widget->SetCaptureZones(&settings.capture_zones);
             }
             if(settings.add_zone_button)
-            {
                 settings.add_zone_button->setEnabled(has_capture_source);
-            }
             
             if(!has_capture_source && !settings.show_test_pattern && settings.group_box->isChecked())
             {

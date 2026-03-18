@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "EffectListManager3D.h"
 #include "LogManager.h"
 #include "filesystem.h"
 #include <fstream>
@@ -98,6 +99,12 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
                 std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
                 if(instance)
                 {
+                    if(!EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
+                    {
+                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Skipping saved stack layer (effect no longer available): %s",
+                                    instance->effect_class_name.c_str());
+                        continue;
+                    }
                     effect_stack.push_back(std::move(instance));
                 }
             }

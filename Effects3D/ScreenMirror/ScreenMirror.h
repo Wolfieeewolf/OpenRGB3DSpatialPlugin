@@ -18,12 +18,12 @@
 #include <memory>
 #include <string>
 #include "ScreenCaptureManager.h"
+#include "ui/CaptureZonesWidget.h"
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
 struct CaptureSourceInfo;
 struct CapturedFrame;
-class CaptureAreaPreviewWidget;
 
 class ScreenMirror : public SpatialEffect3D
 {
@@ -56,38 +56,7 @@ public:
     void RefreshReferencePointDropdowns();
     void RefreshMonitorStatus();
 
-    struct CaptureZone
-    {
-        float u_min;
-        float u_max;
-        float v_min;
-        float v_max;
-        bool enabled;
-        std::string name;
-        
-        CaptureZone()
-            : u_min(0.0f)
-            , u_max(1.0f)
-            , v_min(0.0f)
-            , v_max(1.0f)
-            , enabled(true)
-            , name("Zone")
-        {}
-        
-        CaptureZone(float u0, float u1, float v0, float v1)
-            : u_min(std::min(u0, u1))
-            , u_max(std::max(u0, u1))
-            , v_min(std::min(v0, v1))
-            , v_max(std::max(v0, v1))
-            , enabled(true)
-            , name("Zone")
-        {}
-        
-        bool Contains(float u, float v) const
-        {
-            return enabled && u >= u_min && u <= u_max && v >= v_min && v <= v_max;
-        }
-    };
+    using CaptureZone = ::CaptureZone;
 
 signals:
     void ScreenPreviewChanged(bool enabled);
@@ -176,6 +145,7 @@ private:
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
+        CaptureZonesWidget* capture_zones_widget;
 
         MonitorSettings()
             : enabled(true)
@@ -241,6 +211,7 @@ private:
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
+            , capture_zones_widget(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }

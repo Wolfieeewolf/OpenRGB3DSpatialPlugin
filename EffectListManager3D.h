@@ -59,6 +59,11 @@ public:
         return nullptr;
     }
 
+    bool IsEffectRegistered(const std::string& class_name) const
+    {
+        return !class_name.empty() && effects.find(class_name) != effects.end();
+    }
+
     std::vector<std::string> GetEffectNames() const
     {
         return effect_order;

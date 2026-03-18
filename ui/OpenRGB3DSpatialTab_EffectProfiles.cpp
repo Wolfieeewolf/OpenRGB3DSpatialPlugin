@@ -130,7 +130,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             for(size_t i = 0; i < stack_json.size(); i++)
             {
                 std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(stack_json[i]);
-                if(instance)
+                if(instance && EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
                 {
                     effect_stack.push_back(std::move(instance));
                 }
