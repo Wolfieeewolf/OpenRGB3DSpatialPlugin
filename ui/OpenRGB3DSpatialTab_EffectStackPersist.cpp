@@ -4,6 +4,7 @@
 #include "EffectListManager3D.h"
 #include "LogManager.h"
 #include "filesystem.h"
+#include <QSignalBlocker>
 #include <fstream>
 
 std::string OpenRGB3DSpatialTab::GetEffectStackPath()
@@ -88,31 +89,96 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
         file >> j;
         file.close();
 
-        LoadStackEffectControls(nullptr);
-        effect_stack.clear();
+        if(!j.contains("version") || !j["version"].is_number_integer() || j["version"].get<int>() != 1)
+        {
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Unsupported effect stack version in file: %s", stack_file.c_str());
+            return;
+        }
 
         if(j.contains("effects") && j["effects"].is_array())
         {
-            const nlohmann::json& effects_array = j["effects"];
-            for(unsigned int i = 0; i < effects_array.size(); i++)
-            {
-                std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
-                if(instance)
-                {
-                    if(!EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
-                    {
-                        LOG_WARNING("[OpenRGB3DSpatialPlugin] Skipping saved stack layer (effect no longer available): %s",
-                                    instance->effect_class_name.c_str());
-                        continue;
-                    }
-                    effect_stack.push_back(std::move(instance));
-                }
-            }
+            RebuildEffectStackFromJson(j["effects"]);
         }
     }
     catch(const std::exception& e)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load effect stack: %s - %s",
                  stack_file.c_str(), e.what());
+    }
+}
+
+bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effects_array)
+{
+    LoadStackEffectControls(nullptr);
+    effect_stack.clear();
+
+    if(!effects_array.is_array())
+    {
+        return false;
+    }
+
+    bool loaded_any = false;
+    for(unsigned int i = 0; i < effects_array.size(); i++)
+    {
+        std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
+        if(!instance)
+        {
+            continue;
+        }
+        if(!EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Skipping stack layer (effect no longer available): %s",
+                        instance->effect_class_name.c_str());
+            continue;
+        }
+        effect_stack.push_back(std::move(instance));
+        loaded_any = true;
+    }
+    return loaded_any;
+}
+
+void OpenRGB3DSpatialTab::ApplyLoadedStackSelection(int desired_index)
+{
+    if(desired_index < 0 || desired_index >= (int)effect_stack.size())
+    {
+        desired_index = effect_stack.empty() ? -1 : 0;
+    }
+
+    if(effect_stack_list)
+    {
+        effect_stack_list->blockSignals(true);
+    }
+    UpdateEffectStackList();
+
+    if(!effect_stack.empty() && desired_index >= 0 && desired_index < (int)effect_stack.size())
+    {
+        EffectInstance3D* instance = effect_stack[desired_index].get();
+        LoadStackEffectControls(instance);
+        if(effect_zone_combo)
+        {
+            QSignalBlocker zb(effect_zone_combo);
+            int zi = effect_zone_combo->findData(instance->zone_index);
+            if(zi >= 0)
+            {
+                effect_zone_combo->setCurrentIndex(zi);
+            }
+        }
+        if(effect_combo && desired_index < effect_combo->count())
+        {
+            QSignalBlocker cb(effect_combo);
+            effect_combo->setCurrentIndex(desired_index);
+        }
+        UpdateEffectCombo();
+        UpdateAudioPanelVisibility();
+    }
+    else
+    {
+        ClearCustomEffectUI();
+    }
+
+    if(effect_stack_list)
+    {
+        effect_stack_list->setCurrentRow(desired_index);
+        effect_stack_list->blockSignals(false);
     }
 }

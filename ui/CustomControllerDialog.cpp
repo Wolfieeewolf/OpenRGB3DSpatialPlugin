@@ -20,6 +20,42 @@
 #include <set>
 #include <tuple>
 
+static bool TryGetDialogGlobalLedIndex(RGBController* controller,
+                                       unsigned int zone_idx,
+                                       unsigned int led_idx,
+                                       unsigned int* global_led_idx)
+{
+    if(!controller || !global_led_idx)
+    {
+        return false;
+    }
+    if(zone_idx >= controller->zones.size())
+    {
+        return false;
+    }
+    if(led_idx >= controller->zones[zone_idx].leds_count)
+    {
+        return false;
+    }
+
+    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
+    return true;
+}
+
+static RGBController* GetControllerByRow(ResourceManagerInterface* resource_manager, int row)
+{
+    if(!resource_manager || row < 0)
+    {
+        return nullptr;
+    }
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    if(row < 0 || row >= (int)controllers.size())
+    {
+        return nullptr;
+    }
+    return controllers[row];
+}
+
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
       resource_manager(rm),
@@ -324,11 +360,7 @@ void CustomControllerDialog::UpdateItemCombo()
 
     int ctrl_idx = available_controllers->currentRow();
     if(ctrl_idx < 0) return;
-
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    if(ctrl_idx >= (int)controllers.size()) return;
-
-    RGBController* controller = controllers[ctrl_idx];
+    RGBController* controller = GetControllerByRow(resource_manager, ctrl_idx);
     if(!controller) return;
     int granularity = granularity_combo->currentIndex();
 
@@ -758,10 +790,7 @@ void CustomControllerDialog::on_assign_clicked()
     }
 
     if(!resource_manager) return;
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    if(ctrl_idx >= (int)controllers.size()) return;
-
-    RGBController* controller = controllers[ctrl_idx];
+    RGBController* controller = GetControllerByRow(resource_manager, ctrl_idx);
     if(!controller) return;
 
     int granularity = granularity_combo->currentIndex();
@@ -892,10 +921,9 @@ void CustomControllerDialog::on_assign_clicked()
     {
         for(unsigned int p = 0; p < positions.size(); p++)
         {
-            if(positions[p].zone_idx >= controller->zones.size())
+            unsigned int global_led_idx = 0;
+            if(!TryGetDialogGlobalLedIndex(controller, positions[p].zone_idx, positions[p].led_idx, &global_led_idx))
                 continue;
-
-            unsigned int global_led_idx = controller->zones[positions[p].zone_idx].start_idx + positions[p].led_idx;
             if(global_led_idx == (unsigned int)item_idx)
             {
                 GridLEDMapping mapping;
@@ -1071,6 +1099,11 @@ float CustomControllerDialog::GetSpacingZ() const
 
 bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granularity, int item_idx)
 {
+    if(!controller)
+    {
+        return false;
+    }
+
     if(granularity == 0)
     {
         for(unsigned int i = 0; i < led_mappings.size(); i++)
@@ -1095,11 +1128,14 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     {
         for(unsigned int i = 0; i < led_mappings.size(); i++)
         {
-            if(led_mappings[i].zone_idx >= controller->zones.size())
+            if(led_mappings[i].controller != controller)
+            {
                 continue;
-
-            unsigned int global_led_idx = controller->zones[led_mappings[i].zone_idx].start_idx + led_mappings[i].led_idx;
-            if(led_mappings[i].controller == controller && global_led_idx == (unsigned int)item_idx)
+            }
+            unsigned int global_led_idx = 0;
+            if(!TryGetDialogGlobalLedIndex(controller, led_mappings[i].zone_idx, led_mappings[i].led_idx, &global_led_idx))
+                continue;
+            if(global_led_idx == (unsigned int)item_idx)
             {
                 return true;
             }
@@ -1260,9 +1296,12 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
         QString led_name = tr("Unknown LED");
         if(mapping.zone_idx < mapping.controller->zones.size())
         {
-            unsigned int global_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-            if(global_led_idx < mapping.controller->leds.size())
+            unsigned int global_led_idx = 0;
+            if(TryGetDialogGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &global_led_idx) &&
+               global_led_idx < mapping.controller->leds.size())
+            {
                 led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+            }
         }
         return tr("Assigned: %1, LED: %2").arg(name, led_name);
     }

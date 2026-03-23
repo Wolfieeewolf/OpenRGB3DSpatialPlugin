@@ -11,6 +11,34 @@
 #include <QLabel>
 #include <QVariant>
 
+namespace
+{
+QString BuildZoneDialogControllerName(const ControllerTransform* ctrl, size_t index)
+{
+    if(!ctrl)
+    {
+        return QString("Controller %1").arg(index);
+    }
+
+    if(ctrl->virtual_controller)
+    {
+        return QString("[Custom] ") + QString::fromStdString(ctrl->virtual_controller->GetName());
+    }
+
+    if(ctrl->controller)
+    {
+        QString name = QString::fromStdString(ctrl->controller->name);
+        if(ctrl->granularity == 1 && ctrl->item_idx >= 0 && ctrl->item_idx < (int)ctrl->controller->zones.size())
+        {
+            name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
+        }
+        return name;
+    }
+
+    return QString("Controller %1").arg(index);
+}
+}
+
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
     if(!zone_manager) return;
@@ -43,24 +71,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* ctrl = controller_transforms[i].get();
-        QString name;
-
-        if(ctrl->virtual_controller)
-        {
-            name = QString("[Custom] ") + QString::fromStdString(ctrl->virtual_controller->GetName());
-        }
-        else if(ctrl->controller)
-        {
-            name = QString::fromStdString(ctrl->controller->name);
-            if(ctrl->granularity == 1 && ctrl->item_idx < (int)ctrl->controller->zones.size())
-            {
-                name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
-            }
-        }
-        else
-        {
-            name = QString("Controller %1").arg(i);
-        }
+        QString name = BuildZoneDialogControllerName(ctrl, i);
 
         QCheckBox* checkbox = new QCheckBox(name);
         layout->addWidget(checkbox);
@@ -131,24 +142,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
     for(size_t i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* ctrl = controller_transforms[i].get();
-        QString name;
-
-        if(ctrl->virtual_controller)
-        {
-            name = QString("[Custom] ") + QString::fromStdString(ctrl->virtual_controller->GetName());
-        }
-        else if(ctrl->controller)
-        {
-            name = QString::fromStdString(ctrl->controller->name);
-            if(ctrl->granularity == 1 && ctrl->item_idx < (int)ctrl->controller->zones.size())
-            {
-                name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
-            }
-        }
-        else
-        {
-            name = QString("Controller %1").arg(i);
-        }
+        QString name = BuildZoneDialogControllerName(ctrl, i);
 
         QCheckBox* checkbox = new QCheckBox(name);
         checkbox->setChecked(zone->ContainsController((int)i));

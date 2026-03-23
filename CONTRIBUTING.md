@@ -1,30 +1,49 @@
 # Contributing to OpenRGB 3D Spatial Plugin
 
-Align with **OpenRGB CONTRIBUTING** (style, C-style preferences, no QDebug/printf/cout) and **OpenRGB RGBController API** (device/zone/LED/colors, `0x00BBGGRR`, null and bounds checks). Do not modify files under `OpenRGB/` (upstream submodule).
+Follow:
+- `f:/MCP/CONTRIBUTING.md`
+- `f:/MCP/RGBControllerAPI.md`
+
+Scope note:
+- Plugin rules apply to plugin-owned code in this repository.
+- Do not modify files under `OpenRGB/` (upstream subtree) unless explicitly requested.
 
 ## Code quality
 
-- No debug code, dead code, or legacy/deprecated APIs.
-- Comments: minimal; explain why when non-obvious. Comment and code on separate lines.
+- No debug code, dead code, or compatibility migration branches unless explicitly required.
+- Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
+- Comments should be minimal and explain non-obvious intent only.
 
 ## Style
 
-- Follow existing style in the file. 4 spaces; braces on own lines. `snake_case` variables, `CamelCase` types/functions.
+- Follow existing style in the file first.
+- 4 spaces, braces on their own lines, `snake_case` variables, `CamelCase` types/functions.
+- Avoid `printf`, `std::cout`, and `QDebug`; use `LogManager`.
+- Prefer explicit types when they improve readability; avoid unnecessary `auto`.
+- Prefer indexed loops where index math matters; range loops are fine for simple read-only traversal.
+- File headers should be minimal: SPDX line plus a short header only when useful.
 
-## Practices
+## RGBController Safety Rules
 
-- DRY, KISS, YAGNI. Single responsibility; prefer commands over "get then if/else" in callers.
-- RGBController: guard pointers; use `zones[].start_idx` and zone LED counts; check bounds before indexing.
+- Always guard pointers before dereference (`controller`, `transform`, `virtual_controller`, `zone_manager`).
+- Before `zones[idx]`, validate `idx < zones.size()`.
+- Before color writes, validate global LED index against `colors.size()`.
+- For mapped LEDs, validate mapping index against `led_positions.size()` before use.
+- Prefer early-continue guards for invalid mappings or stale data.
 
 ## UI
 
-- Filter/sort: label "Filter:" and "Sort:" with combos; use `color: gray; font-size: small;` for labels.
-- Connections complete; list and viewport selection in sync; clear or disable dependent UI on unselect; null-check viewport and widget pointers.
+- Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
+- Keep list, combo, and selection state synchronized.
+- Clear/disable dependent controls when selection is invalid.
 
 ## Building
 
-- Qt 5.15+ (or 6), OpenRGB submodule init. **Windows**: `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake`. **Linux**: `qmake ... PREFIX=/usr` then `make -j$(nproc)`.
+- Qt 5.15+ (or 6), OpenRGB submodule initialized.
+- Windows: `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake`.
+- Linux: `qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr` then `make -j$(nproc)`.
 
 ## Releasing
 
-- **PROJECT_VERSION** in root (one line `YY.MM.DD.V`). Tag format `vYY.MM.DD.V`. **Actions** → **Create release tag** → Run workflow; or **Releases** → Draft new release; or `.\create-release-tag.ps1` then push tag.
+- `PROJECT_VERSION` in root uses `YY.MM.DD.V`.
+- Tag format: `vYY.MM.DD.V`.

@@ -1,6 +1,6 @@
-# Audio Effects Rework – Design
+# Audio Effects Rework – Current Plan
 
-## Current Problems
+## Current Problems (Remaining)
 
 1. **Same-y behavior** – Most effects use `getBandEnergyHz(low, high)` → smooth → gradient. Result: "brightness follows volume" with slight spatial variation. No real beat sync, no waves, no frequency-as-position.
 2. **No real beat** – BeatPulse uses `CalculateProgress(time)` (speed slider) for wave position, not audio. So the "pulse" is a time-based wave, not beat-triggered.
@@ -100,15 +100,25 @@ Use **Axis Scale** and **Scale** to fit these to real layouts (e.g. one axis com
 
 ---
 
-## Implementation Order
+## Implementation Status
 
-1. **BeatPulse3D** – ✅ Onset-driven wave + envelope; sets the "beat" standard. (Done: getOnsetLevel() triggers new pulses; speed = expansion rate; beat sensitivity slider.)
-2. **AudioLevel3D** – ✅ 3D fill surface / wave. (Done: fill axis X/Y/Z, boundary wave, edge softness; level drives fill height with sin wave on boundary.)
-3. **AudioPulse3D** – ✅ Breathing pulse. (Done: "Breathing" checkbox = radius grows with level; quiet = center only, loud = fill room.)
-4. **DiscoFlash3D** – ✅ Use getOnsetLevel() for trigger. (Done: trigger from onset instead of band energy.)
-5. **FreqRipple3D** – ✅ Use getOnsetLevel() for trigger. (Done: trigger from onset instead of band energy.)
-6. **BandScan3D / SpectrumBars3D** – Add height/radial variation; keep spectrum→position.
-7. **FreqFill3D** – Optional wave on boundary; optional radial mode.
+1. **BeatPulse3D** – Implemented (onset-driven), but still needs punch/impact polish on sparse layouts.
+2. **AudioLevel3D** – Implemented, but still needs better motion/character at low levels.
+3. **AudioPulse3D** – Implemented breathing behavior.
+4. **DiscoFlash3D** – Implemented onset triggering.
+5. **FreqRipple3D** – Implemented onset triggering.
+6. **BandScan3D / SpectrumBars3D** – Needs beat-aware bounce and improved readability.
+7. **FreqFill3D** – Needs optional radial/boundary-wave polish.
+
+---
+
+## Next Audio Work (Active)
+
+1. Add stronger beat impact options for BeatPulse/DiscoFlash/FreqRipple.
+2. Improve SpectrumBars/BandScan with better temporal feel (bounce/hold/decay tuning).
+3. Tune defaults so audio effects look good without heavy slider tweaking.
+4. Validate behavior on different geometries (single strip, panel, full room).
+5. Fix per-effect visual defects first, then add new audio concepts.
 
 ---
 

@@ -7,7 +7,6 @@
 #include <QInputDialog>
 #include <QFile>
 #include <QTextStream>
-#include <QSignalBlocker>
 #include <QRegularExpression>
 #include <fstream>
 #include <algorithm>
@@ -111,30 +110,23 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             return;
         }
         int version = profile_json["version"].get<int>();
-        if(version < 1 || version > kSupportedVersion)
+        if(version != kSupportedVersion)
         {
             QMessageBox::critical(this, "Unsupported Profile",
-                QString("This effect profile has version %1. This plugin supports version 1–%2 only.")
+                QString("This effect profile has version %1. This plugin supports version %2 only.")
                     .arg(version).arg(kSupportedVersion));
             LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d: %s", version, filename.c_str());
             return;
         }
 
-        LoadStackEffectControls(nullptr);
-        effect_stack.clear();
-
         bool has_stack_array = profile_json.contains("stack") && profile_json["stack"].is_array();
         if(has_stack_array)
         {
-            const nlohmann::json& stack_json = profile_json["stack"];
-            for(size_t i = 0; i < stack_json.size(); i++)
-            {
-                std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(stack_json[i]);
-                if(instance && EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
-                {
-                    effect_stack.push_back(std::move(instance));
-                }
-            }
+            RebuildEffectStackFromJson(profile_json["stack"]);
+        }
+        else
+        {
+            RebuildEffectStackFromJson(nlohmann::json::array());
         }
 
         int desired_index = -1;
@@ -147,38 +139,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             desired_index = effect_stack.empty() ? -1 : 0;
         }
 
-        if(effect_stack_list)
-        {
-            effect_stack_list->blockSignals(true);
-        }
-        UpdateEffectStackList();
-        if(!effect_stack.empty() && desired_index >= 0 && desired_index < (int)effect_stack.size())
-        {
-            EffectInstance3D* instance = effect_stack[desired_index].get();
-            LoadStackEffectControls(instance);
-            if(effect_zone_combo)
-            {
-                QSignalBlocker zb(effect_zone_combo);
-                int zi = effect_zone_combo->findData(instance->zone_index);
-                if(zi >= 0) effect_zone_combo->setCurrentIndex(zi);
-            }
-            if(effect_combo && desired_index < effect_combo->count())
-            {
-                QSignalBlocker cb(effect_combo);
-                effect_combo->setCurrentIndex(desired_index);
-            }
-            UpdateEffectCombo();
-            UpdateAudioPanelVisibility();
-        }
-        else
-        {
-            ClearCustomEffectUI();
-        }
-        if(effect_stack_list)
-        {
-            effect_stack_list->setCurrentRow(desired_index);
-            effect_stack_list->blockSignals(false);
-        }
+        ApplyLoadedStackSelection(desired_index);
 
         if(effect_origin_combo && profile_json.contains("origin_index"))
         {
@@ -268,7 +229,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             }
         }
 
-        
+        SaveEffectStack();
     }
     catch(const std::exception& e)
     {

@@ -5,7 +5,6 @@
 #include "filesystem.h"
 #include <QInputDialog>
 #include <QMessageBox>
-#include <QSignalBlocker>
 #include <fstream>
 
 std::string OpenRGB3DSpatialTab::GetStackPresetsPath()
@@ -191,52 +190,17 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
     StackPreset3D* preset = stack_presets[current_row].get();
     if(!preset) return;
 
-    LoadStackEffectControls(nullptr);
-    effect_stack.clear();
-
+    nlohmann::json effects_array = nlohmann::json::array();
     for(unsigned int i = 0; i < preset->effect_instances.size(); i++)
     {
         if(!preset->effect_instances[i]) continue;
-        nlohmann::json instance_json = preset->effect_instances[i]->ToJson();
-        std::unique_ptr<EffectInstance3D> copied_instance = EffectInstance3D::FromJson(instance_json);
-        if(copied_instance && EffectListManager3D::get()->IsEffectRegistered(copied_instance->effect_class_name))
-        {
-            effect_stack.push_back(std::move(copied_instance));
-        }
+        effects_array.push_back(preset->effect_instances[i]->ToJson());
     }
 
-    if(effect_stack_list)
-    {
-        effect_stack_list->blockSignals(true);
-    }
-    UpdateEffectStackList();
-    if(!effect_stack.empty())
-    {
-        LoadStackEffectControls(effect_stack[0].get());
-        if(effect_zone_combo)
-        {
-            QSignalBlocker zb(effect_zone_combo);
-            int zi = effect_zone_combo->findData(effect_stack[0]->zone_index);
-            if(zi >= 0) effect_zone_combo->setCurrentIndex(zi);
-        }
-        if(effect_combo && effect_combo->count() > 0)
-        {
-            QSignalBlocker cb(effect_combo);
-            effect_combo->setCurrentIndex(0);
-        }
-        UpdateEffectCombo();
-        UpdateAudioPanelVisibility();
-    }
-    if(effect_stack_list)
-    {
-        effect_stack_list->setCurrentRow(effect_stack.empty() ? -1 : 0);
-        effect_stack_list->blockSignals(false);
-    }
+    RebuildEffectStackFromJson(effects_array);
+    ApplyLoadedStackSelection(0);
 
-    if(effect_timer && !effect_timer->isActive())
-    {
-        effect_timer->start(33);
-    }
+    SaveEffectStack();
 
     QMessageBox::information(this, "Success",
                             QString("Stack preset \"%1\" loaded successfully!")

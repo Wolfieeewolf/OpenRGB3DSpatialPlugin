@@ -41,6 +41,28 @@
 
 namespace filesystem = std::filesystem;
 
+static bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
+                                              unsigned int zone_idx,
+                                              unsigned int led_idx,
+                                              unsigned int* global_led_idx)
+{
+    if(!controller || !global_led_idx)
+    {
+        return false;
+    }
+    if(zone_idx >= controller->zones.size())
+    {
+        return false;
+    }
+    if(led_idx >= controller->zones[zone_idx].leds_count)
+    {
+        return false;
+    }
+
+    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
+    return (*global_led_idx < controller->leds.size());
+}
+
 
 
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
@@ -1141,7 +1163,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         return;
     }
 
-    if(ctrl_idx >= (int)controllers.size())
+    if(ctrl_idx < 0 || ctrl_idx >= (int)controllers.size())
     {
         return;
     }
@@ -1175,7 +1197,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     }
     else if(granularity == 1)
     {
-        if(item_row >= (int)controller->zones.size())
+        if(item_row < 0 || item_row >= (int)controller->zones.size())
         {
             return;
         }
@@ -1199,7 +1221,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     }
     else if(granularity == 2)
     {
-        if(item_row >= (int)controller->leds.size())
+        if(item_row < 0 || item_row >= (int)controller->leds.size())
         {
             return;
         }
@@ -1211,7 +1233,11 @@ void OpenRGB3DSpatialTab::on_add_clicked()
 
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
-            unsigned int global_led_idx = controller->zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+            unsigned int global_led_idx = 0;
+            if(!TryGetObjectCreatorGlobalLedIndex(controller, all_positions[i].zone_idx, all_positions[i].led_idx, &global_led_idx))
+            {
+                continue;
+            }
             if(global_led_idx == (unsigned int)item_row)
             {
                 ctrl_transform->led_positions.push_back(all_positions[i]);
@@ -3033,9 +3059,15 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             ctrl_transform->granularity = 2;
                             unsigned int zone_idx = ctrl_transform->led_positions[0].zone_idx;
                             unsigned int led_idx = ctrl_transform->led_positions[0].led_idx;
-                            if(zone_idx < controller->zones.size())
+                            unsigned int global_led_idx = 0;
+                            if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx))
                             {
-                                ctrl_transform->item_idx = controller->zones[zone_idx].start_idx + led_idx;
+                                ctrl_transform->item_idx = global_led_idx;
+                            }
+                            else
+                            {
+                                ctrl_transform->item_idx = 0;
+                                ctrl_transform->granularity = 0;
                             }
                         }
                     }
@@ -3139,12 +3171,26 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     {
                         if(led_positions_size == 1)
                         {
-                            unsigned int led_global_idx = controller->zones[first_zone_idx].start_idx + first_led_idx;
-                            name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                            unsigned int led_global_idx = 0;
+                            if(TryGetObjectCreatorGlobalLedIndex(controller, first_zone_idx, first_led_idx, &led_global_idx))
+                            {
+                                name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                            }
+                            else
+                            {
+                                name = QString("[Device] ") + name;
+                            }
                         }
                         else
                         {
-                            name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[first_zone_idx].name);
+                            if(first_zone_idx < controller->zones.size())
+                            {
+                                name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[first_zone_idx].name);
+                            }
+                            else
+                            {
+                                name = QString("[Device] ") + name;
+                            }
                         }
                     }
                     else
@@ -3646,7 +3692,11 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
         {
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                unsigned int global_led_idx = controller->zones[ct->led_positions[j].zone_idx].start_idx + ct->led_positions[j].led_idx;
+                unsigned int global_led_idx = 0;
+                if(!TryGetObjectCreatorGlobalLedIndex(controller, ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx, &global_led_idx))
+                {
+                    continue;
+                }
                 if(global_led_idx == (unsigned int)item_idx)
                 {
                     return true;
@@ -3722,7 +3772,11 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         {
             for(unsigned int i = 0; i < all_positions.size(); i++)
             {
-                unsigned int global_led_idx = transform->controller->zones[all_positions[i].zone_idx].start_idx + all_positions[i].led_idx;
+                unsigned int global_led_idx = 0;
+                if(!TryGetObjectCreatorGlobalLedIndex(transform->controller, all_positions[i].zone_idx, all_positions[i].led_idx, &global_led_idx))
+                {
+                    continue;
+                }
                 if(global_led_idx == (unsigned int)transform->item_idx)
                 {
                     transform->led_positions.push_back(all_positions[i]);
@@ -3825,38 +3879,6 @@ void OpenRGB3DSpatialTab::LoadMonitorPresets()
                 if(out)
                 {
                     out << entry.dump(1);
-                }
-            }
-        }
-        std::string legacy_path = monitors_path.parent_path().string() + "/monitors.json";
-        filesystem::path legacy_file(legacy_path);
-        if(filesystem::exists(legacy_file))
-        {
-            std::ifstream in(legacy_path);
-            if(in)
-            {
-                nlohmann::json legacy_array = nlohmann::json::parse(in);
-                if(legacy_array.is_array())
-                {
-                    for(size_t i = 0; i < legacy_array.size(); i++)
-                    {
-                        const nlohmann::json& entry = legacy_array[i];
-                        std::string id = entry.value("id", std::string());
-                        if(id.empty())
-                        {
-                            continue;
-                        }
-                        filesystem::path out_path = monitors_path / (id + ".json");
-                        if(filesystem::exists(out_path))
-                        {
-                            continue;
-                        }
-                        std::ofstream out(out_path.string());
-                        if(out)
-                        {
-                            out << entry.dump(1);
-                        }
-                    }
                 }
             }
         }

@@ -484,7 +484,8 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 
 void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instance)
 {
-    ClearCustomEffectUI();
+    /* Layout already cleared in LoadStackEffectControls; do not call ClearCustomEffectUI here
+       or switching stack rows would stop playback (timer + effect_running). */
 
     if(!instance || !effect_controls_widget || !effect_controls_layout)
     {
@@ -670,7 +671,10 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     stack_effect_blend_combo = new QComboBox(stack_blend_container);
     stack_effect_blend_combo->setToolTip("How this effect combines with other layers.");
     stack_effect_blend_combo->addItem("No Blend", (int)BlendMode::NO_BLEND);
-    stack_effect_blend_combo->setItemData(0, "Effect runs independently without combining with other effects", Qt::ToolTipRole);
+    stack_effect_blend_combo->setItemData(0,
+        "Uses only this layer's color at this step (ignores the composite below it). "
+        "Earlier layers have no effect after a No Blend layer; order matters.",
+        Qt::ToolTipRole);
     stack_effect_blend_combo->addItem("Replace", (int)BlendMode::REPLACE);
     stack_effect_blend_combo->setItemData(1, "Completely replaces colors from previous effects (last effect wins)", Qt::ToolTipRole);
     stack_effect_blend_combo->addItem("Add", (int)BlendMode::ADD);

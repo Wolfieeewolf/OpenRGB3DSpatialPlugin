@@ -1,4 +1,4 @@
-# Audio UI and Effects – Super Deep Dive
+# Audio UI and Effects – Super Deep Dive (Current Reference)
 
 Full inventory of our audio pipeline, UI, and effects; comparison with OpenRGB Effects Plugin audio; and how to bring their best ideas into our 3D space. References: **MEGA_CUBE_ANIMATIONS_REFERENCE.md**, **EFFECT_CONVERSION_GUIDE.md**, **AUDIO_EFFECTS_REWORK.md**, **Audio_Effects_Deep_Dive.md**, **Audio_Pipeline_Deep_Dive.md**.
 
@@ -120,7 +120,7 @@ So: Swirl Circles (and optionally Visor) are explicit conversion targets; both c
 
 ---
 
-## Part 4 – Coverage Checklist (Have We Covered Everything?)
+## Part 4 – Coverage Checklist (Current)
 
 ### 4.1 Our audio UI
 
@@ -133,7 +133,7 @@ So: Swirl Circles (and optionally Visor) are explicit conversion targets; both c
 - [x] Frequency range list (add/remove/duplicate)  
 - [x] Per-range: name, enabled, low/high Hz, effect type, zone, origin  
 - [x] Per-range effect settings (effect’s SetupCustomUI in freq_effect_settings_widget)  
-- [ ] **Per-range smoothing / sensitivity / attack / decay** – In struct and render, but if there is no UI in the tab to edit them, consider adding sliders in “Frequency Range Effects” details so users can tune without editing JSON.  
+- [x] **Per-range smoothing / sensitivity / attack / decay** – Exposed in Frequency Range details UI.
 - [x] Save/load device, gain, bands, FFT, frequency_ranges in plugin settings  
 - [x] Audio panel visibility when selected effect is Audio  
 
@@ -230,10 +230,10 @@ So: Swirl Circles (and optionally Visor) are explicit conversion targets; both c
 
 ## Part 7 – Recommended Next Steps
 
-1. **UI:** Add per-range **smoothing, sensitivity, attack, decay** sliders in Frequency Range details (if not already present).  
-2. **Effects:** Implement one or two of: **Audio Sine 3D** (wave height = level), **Swirl Circles Audio 3D** (rotating circles, level-driven), **Audio Star 3D** (edge beat), or **Audio Bubbles 3D** (expanding spheres on trigger).  
-3. **Polish:** Add “roll” or “phase spread” option to Spectrum Bars or Freq Fill for Audio Sync–style behavior along the 3D axis.  
-4. **Docs:** Keep **AUDIO_EFFECTS_REWORK.md** and **Audio_Effects_Deep_Dive.md** as the behavior/design refs; this doc as the full inventory and cross-reference.
+1. **Effects polish first:** fix weak/flat visuals, tune decay/sensitivity defaults, and resolve effect-specific rendering issues.  
+2. **Then add concepts:** implement one or two of: **Audio Sine 3D**, **Swirl Circles Audio 3D**, **Audio Star 3D**, **Audio Bubbles 3D**.  
+3. **Spectrum polish:** add “roll” or “phase spread” option to Spectrum Bars or Freq Fill for stronger movement feel.  
+4. **Keep docs lean:** use this file plus `AUDIO_EFFECTS_REWORK.md` as the active references.
 
 All of the above keeps our 3D model (grid, zones, origins, path axis) and our capture/FFT pipeline; we only add or refine effects and UI so their best ideas work in our space.
 
