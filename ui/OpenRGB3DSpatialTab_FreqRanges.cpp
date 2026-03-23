@@ -17,6 +17,28 @@
 #include <QFormLayout>
 #include <QToolTip>
 
+static bool TryGetGlobalLedIndexForRange(RGBController* controller,
+                                         unsigned int zone_idx,
+                                         unsigned int led_idx,
+                                         unsigned int* global_idx)
+{
+    if(!controller || !global_idx)
+    {
+        return false;
+    }
+    if(zone_idx >= controller->zones.size())
+    {
+        return false;
+    }
+    if(led_idx >= controller->zones[zone_idx].leds_count)
+    {
+        return false;
+    }
+
+    *global_idx = controller->zones[zone_idx].start_idx + led_idx;
+    return (*global_idx < controller->colors.size());
+}
+
 void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout)
 {
     freq_ranges_group = new QGroupBox("Frequency Range Effects");
@@ -931,7 +953,7 @@ void OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged()
     SaveFrequencyRanges();
 }
 
-void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_grid)
+void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_grid, const GridContext3D& world_grid)
 {
     if(!AudioInputManager::instance()->isRunning()) return;
     if(controller_transforms.empty()) return;
@@ -1033,18 +1055,31 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                 
                 for(unsigned int led_idx = 0; led_idx < mappings.size(); led_idx++)
                 {
+                    if(led_idx >= transform->led_positions.size())
+                    {
+                        continue;
+                    }
                     const GridLEDMapping& mapping = mappings[led_idx];
                     if(!mapping.controller) continue;
+                    if(mapping.zone_idx >= mapping.controller->zones.size())
+                    {
+                        continue;
+                    }
                     
-                    Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    float x = world_pos.x, y = world_pos.y, z = world_pos.z;
-                    effect->ApplyAxisScale(x, y, z, room_grid);
-                    effect->ApplyEffectRotation(x, y, z, room_grid);
-                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
-                    if(!effect->IsPointOnActiveSurface(x, y, z, room_grid))
+                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
+                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                    const Vector3D& sample_pos = requires_world
+                        ? transform->led_positions[led_idx].world_position
+                        : transform->led_positions[led_idx].room_position;
+                    float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
+                    effect->ApplyAxisScale(x, y, z, active_grid);
+                    effect->ApplyEffectRotation(x, y, z, active_grid);
+                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
+                    if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
-                    unsigned int physical_led_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                    if(physical_led_idx < mapping.controller->colors.size())
+                    unsigned int physical_led_idx = 0;
+                    if(TryGetGlobalLedIndexForRange(mapping.controller, mapping.zone_idx, mapping.led_idx, &physical_led_idx))
                     {
                         RGBColor existing = mapping.controller->colors[physical_led_idx];
                         int r = std::min(255, (int)RGBGetRValue(existing) + (int)RGBGetRValue(color));
@@ -1057,19 +1092,32 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
             else if(transform->controller)
             {
                 RGBController* ctrl = transform->controller;
+                if(ctrl->zones.empty())
+                {
+                    continue;
+                }
                 
                 for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
                 {
-                    Vector3D world_pos = transform->led_positions[led_idx].world_position;
-                    float x = world_pos.x, y = world_pos.y, z = world_pos.z;
-                    effect->ApplyAxisScale(x, y, z, room_grid);
-                    effect->ApplyEffectRotation(x, y, z, room_grid);
-                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, room_grid);
-                    if(!effect->IsPointOnActiveSurface(x, y, z, room_grid))
+                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
+                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                    const Vector3D& sample_pos = requires_world
+                        ? transform->led_positions[led_idx].world_position
+                        : transform->led_positions[led_idx].room_position;
+                    float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
+                    effect->ApplyAxisScale(x, y, z, active_grid);
+                    effect->ApplyEffectRotation(x, y, z, active_grid);
+                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
+                    if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
-                    unsigned int physical_led_idx = ctrl->zones[led_pos.zone_idx].start_idx + led_pos.led_idx;
-                    if(physical_led_idx < ctrl->colors.size())
+                    if(led_pos.zone_idx >= ctrl->zones.size())
+                    {
+                        continue;
+                    }
+                    unsigned int physical_led_idx = 0;
+                    if(TryGetGlobalLedIndexForRange(ctrl, led_pos.zone_idx, led_pos.led_idx, &physical_led_idx))
                     {
                         RGBColor existing = ctrl->colors[physical_led_idx];
                         int r = std::min(255, (int)RGBGetRValue(existing) + (int)RGBGetRValue(color));

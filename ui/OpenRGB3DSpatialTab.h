@@ -213,6 +213,8 @@ private:
     void SaveEffectStack();
     void LoadEffectStack();
     std::string GetEffectStackPath();
+    bool RebuildEffectStackFromJson(const nlohmann::json& effects_array);
+    void ApplyLoadedStackSelection(int desired_index);
 
     void SaveEffectProfile(const std::string& filename);
     void LoadEffectProfile(const std::string& filename);
@@ -461,7 +463,7 @@ private slots:
     void on_freq_attack_changed(int value);
     void on_freq_decay_changed(int value);
     void OnFreqRangeEffectParamsChanged();
-    void RenderFrequencyRangeEffects(const GridContext3D& room_grid);
+    void RenderFrequencyRangeEffects(const GridContext3D& room_grid, const GridContext3D& world_grid);
 
     void on_display_plane_selected(int index);
     void on_add_display_plane_clicked();

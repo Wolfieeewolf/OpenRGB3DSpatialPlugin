@@ -72,6 +72,28 @@ static void ProjectPointToScreen(float x,
     screen_y = viewport[3] - winY;
 }
 
+static bool TryGetViewportGlobalLedIndex(RGBController* controller,
+                                         unsigned int zone_idx,
+                                         unsigned int led_idx,
+                                         unsigned int* global_led_idx)
+{
+    if(!controller || !global_led_idx)
+    {
+        return false;
+    }
+    if(zone_idx >= controller->zones.size())
+    {
+        return false;
+    }
+    if(led_idx >= controller->zones[zone_idx].leds_count)
+    {
+        return false;
+    }
+
+    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
+    return (*global_led_idx < controller->colors.size());
+}
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -975,11 +997,19 @@ void LEDViewport3D::SetRoomGridOverlayBounds(float min_x, float max_x, float min
     room_grid_overlay_max_y = max_y;
     room_grid_overlay_min_z = min_z;
     room_grid_overlay_max_z = max_z;
+    room_grid_overlay_last_nx = -1;
+    room_grid_overlay_last_ny = -1;
+    room_grid_overlay_last_nz = -1;
+    room_grid_overlay_colors_dirty = true;
 }
 
 void LEDViewport3D::ClearRoomGridOverlayBounds()
 {
     room_grid_overlay_use_bounds = false;
+    room_grid_overlay_last_nx = -1;
+    room_grid_overlay_last_ny = -1;
+    room_grid_overlay_last_nz = -1;
+    room_grid_overlay_colors_dirty = true;
 }
 
 void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const
@@ -1002,8 +1032,8 @@ void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* 
         ny = (int)(extents.height_units / (float)step) + 1;
         nz = (int)(extents.depth_units / (float)step) + 1;
     }
-    const int max_overlay_points = 35000;
-    int count = nx * ny * nz;
+    const size_t max_overlay_points = 35000u;
+    size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
     if(count > max_overlay_points)
     {
         float f = powf((float)max_overlay_points / (float)count, 1.0f / 3.0f);
@@ -1032,7 +1062,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
 
     int nx = 0, ny = 0, nz = 0;
     GetRoomGridOverlayDimensions(&nx, &ny, &nz);
-    const int count = nx * ny * nz;
+    const size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
     if(count <= 0) return;
 
     float min_x, max_x, min_y, max_y, min_z, max_z;
@@ -1056,7 +1086,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
         max_z = extents.depth_units;
     }
 
-    const bool use_buffer = ((int)room_grid_color_buffer.size() == count);
+    const bool use_buffer = (room_grid_color_buffer.size() == count);
     const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
     /* No buffer/callback: show black so overlay doesn't tint the view until effects run */
     const float default_r = 0.0f;
@@ -1067,14 +1097,14 @@ void LEDViewport3D::DrawRoomGridOverlay()
     const float span_y = (ny > 1) ? (max_y - min_y) : 0.0f;
     const float span_z = (nz > 1) ? (max_z - min_z) : 0.0f;
 
-    if(room_grid_overlay_positions.size() != (size_t)(3 * count) ||
+    if(room_grid_overlay_positions.size() != (3u * count) ||
        room_grid_overlay_last_nx != nx || room_grid_overlay_last_ny != ny || room_grid_overlay_last_nz != nz)
     {
         room_grid_overlay_last_nx = nx;
         room_grid_overlay_last_ny = ny;
         room_grid_overlay_last_nz = nz;
         room_grid_overlay_colors_dirty = true;
-        room_grid_overlay_positions.resize(3 * (size_t)count);
+        room_grid_overlay_positions.resize(3u * count);
         float* pos = room_grid_overlay_positions.data();
         for(int ix = 0; ix < nx; ix++)
         {
@@ -1093,11 +1123,11 @@ void LEDViewport3D::DrawRoomGridOverlay()
         }
     }
 
-    const bool need_color_refill = room_grid_overlay_colors_dirty || room_grid_overlay_colors.size() != (size_t)(3 * count);
+    const bool need_color_refill = room_grid_overlay_colors_dirty || room_grid_overlay_colors.size() != (3u * count);
     if(need_color_refill)
     {
         room_grid_overlay_colors_dirty = false;
-        room_grid_overlay_colors.resize(3 * (size_t)count);
+        room_grid_overlay_colors.resize(3u * count);
         float* col = room_grid_overlay_colors.data();
         for(int ix = 0; ix < nx; ix++)
         {
@@ -1143,7 +1173,7 @@ void LEDViewport3D::DrawRoomGridOverlay()
     glColorPointer(3, GL_FLOAT, 0, room_grid_overlay_colors.data());
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
-    glDrawArrays(GL_POINTS, 0, count);
+    glDrawArrays(GL_POINTS, 0, (GLsizei)count);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
     glPointSize(1.0f);
@@ -1590,13 +1620,10 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
                 unsigned int zone_idx = mappings[i].zone_idx;
                 unsigned int led_idx = mappings[i].led_idx;
                 RGBController* mapping_ctrl = mappings[i].controller;
-                if(mapping_ctrl && zone_idx < mapping_ctrl->zones.size())
+                unsigned int global_led_idx = 0;
+                if(TryGetViewportGlobalLedIndex(mapping_ctrl, zone_idx, led_idx, &global_led_idx))
                 {
-                    unsigned int global_led_idx = mapping_ctrl->zones[zone_idx].start_idx + led_idx;
-                    if(global_led_idx < mapping_ctrl->colors.size())
-                    {
-                        color = mapping_ctrl->colors[global_led_idx];
-                    }
+                    color = mapping_ctrl->colors[global_led_idx];
                 }
             }
 
@@ -1615,13 +1642,10 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
             const LEDPosition3D& pos = ctrl->led_positions[i];
             RGBColor color = pos.preview_color;
 
-            if(ctrl->controller && pos.zone_idx < ctrl->controller->zones.size())
+            unsigned int global_led_idx = 0;
+            if(TryGetViewportGlobalLedIndex(ctrl->controller, pos.zone_idx, pos.led_idx, &global_led_idx))
             {
-                unsigned int global_led_idx = ctrl->controller->zones[pos.zone_idx].start_idx + pos.led_idx;
-                if(global_led_idx < ctrl->controller->colors.size())
-                {
-                    color = ctrl->controller->colors[global_led_idx];
-                }
+                color = ctrl->controller->colors[global_led_idx];
             }
 
             float r = (float)RGBGetRValue(color) / 255.0f;

@@ -1671,10 +1671,6 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
         effect_stack_list->setCurrentRow(new_index);
         effect_stack_list->blockSignals(false);
     }
-    if(effect_timer && !effect_timer->isActive())
-    {
-        effect_timer->start(33);
-    }
     SaveEffectStack();
 }
 
@@ -2134,6 +2130,10 @@ void OpenRGB3DSpatialTab::on_effect_zone_changed(int index)
     {
         return;
     }
+    if(index < 0 || index >= effect_zone_combo->count())
+    {
+        return;
+    }
 
     EffectInstance3D* instance = effect_stack[current_row].get();
     instance->zone_index = effect_zone_combo->itemData(index).toInt();
@@ -2161,6 +2161,10 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
     {
         return;
     }
+    if(index < 0 || index >= effect_origin_combo->count())
+    {
+        return;
+    }
     int ref_point_idx = effect_origin_combo->itemData(index).toInt();
 
     Vector3D origin = {0.0f, 0.0f, 0.0f};
@@ -2168,7 +2172,10 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
     if(ref_point_idx >= 0 && ref_point_idx < (int)reference_points.size())
     {
         VirtualReferencePoint3D* ref_point = reference_points[ref_point_idx].get();
-        origin = ref_point->GetPosition();
+        if(ref_point)
+        {
+            origin = ref_point->GetPosition();
+        }
     }
 
     if(current_effect_ui)
@@ -2186,8 +2193,8 @@ void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_m
     GridExtents extents = BoundsToExtents(bounds);
 
     width_mm  = GridUnitsToMM(extents.width_units, grid_scale_mm);
-    depth_mm  = GridUnitsToMM(extents.height_units, grid_scale_mm);
-    height_mm = GridUnitsToMM(extents.depth_units, grid_scale_mm);
+    depth_mm  = GridUnitsToMM(extents.depth_units, grid_scale_mm);
+    height_mm = GridUnitsToMM(extents.height_units, grid_scale_mm);
 }
 
 nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const

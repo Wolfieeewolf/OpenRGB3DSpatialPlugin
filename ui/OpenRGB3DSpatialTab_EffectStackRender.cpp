@@ -74,6 +74,28 @@ static float AverageAlongAxis(ControllerTransform* transform,
     }
 }
 
+static bool TryGetGlobalLedIndex(RGBController* controller,
+                                 unsigned int zone_idx,
+                                 unsigned int led_idx,
+                                 unsigned int* global_idx)
+{
+    if(!controller || !global_idx)
+    {
+        return false;
+    }
+    if(zone_idx >= controller->zones.size())
+    {
+        return false;
+    }
+    if(led_idx >= controller->zones[zone_idx].leds_count)
+    {
+        return false;
+    }
+
+    *global_idx = controller->zones[zone_idx].start_idx + led_idx;
+    return (*global_idx < controller->colors.size());
+}
+
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
     if(controller_transforms.empty())
@@ -103,11 +125,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(effect_origin_combo)
     {
         int origin_index = effect_origin_combo->currentIndex();
-        int ref_idx = effect_origin_combo->itemData(origin_index).toInt();
-        if(ref_idx >= 0 && ref_idx < (int)reference_points.size())
+        if(origin_index >= 0)
         {
-            stack_origin_mode = REF_MODE_USER_POSITION;
-            stack_ref_origin = reference_points[ref_idx]->GetPosition();
+            int ref_idx = effect_origin_combo->itemData(origin_index).toInt();
+            if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && reference_points[ref_idx])
+            {
+                stack_origin_mode = REF_MODE_USER_POSITION;
+                stack_ref_origin = reference_points[ref_idx]->GetPosition();
+            }
         }
     }
 
@@ -192,10 +217,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     if(mapping.controller && !mapping.controller->zones.empty() && !mapping.controller->colors.empty() &&
                        mapping.zone_idx < mapping.controller->zones.size())
                     {
-                        unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                        if(led_global_idx < mapping.controller->colors.size())
+                        unsigned int led_global_idx = 0;
+                        if(TryGetGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &led_global_idx))
+                        {
                             mapping.controller->colors[led_global_idx] = black;
-                        controllers_to_update.insert(mapping.controller);
+                            controllers_to_update.insert(mapping.controller);
+                        }
                     }
                 }
                 continue;
@@ -208,9 +235,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             {
                 LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
                 led_position.preview_color = black;
-                if(led_position.zone_idx >= controller->zones.size()) continue;
-                unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
-                if(led_global_idx < controller->colors.size())
+                unsigned int led_global_idx = 0;
+                if(TryGetGlobalLedIndex(controller, led_position.zone_idx, led_position.led_idx, &led_global_idx))
                     controller->colors[led_global_idx] = black;
             }
             controllers_to_update.insert(controller);
@@ -328,12 +354,27 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         for(const RenderEffectSlot& slot : active_effects)
                         {
                             if(!slot.effect) continue;
-                            const bool use_world_bounds = slot.effect->RequiresWorldSpaceCoordinates() && slot.effect->RequiresWorldSpaceGridBounds();
-                            const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
-                            float spx = px, spy = py, spz = pz;
+                    const bool requires_world_coords = slot.effect->RequiresWorldSpaceCoordinates();
+                    const bool use_world_bounds = slot.effect->RequiresWorldSpaceGridBounds();
+                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                    const float u = (float)ix / (float)denom_x;
+                    const float v = (float)iy / (float)denom_y;
+                    const float w = (float)iz / (float)denom_z;
+                    float spx = px, spy = py, spz = pz;
+                    if(requires_world_coords)
+                    {
+                        const float world_span_x = world_bounds.max_x - world_bounds.min_x;
+                        const float world_span_y = world_bounds.max_y - world_bounds.min_y;
+                        const float world_span_z = world_bounds.max_z - world_bounds.min_z;
+                        spx = world_bounds.min_x + u * world_span_x;
+                        spy = world_bounds.min_y + v * world_span_y;
+                        spz = world_bounds.min_z + w * world_span_z;
+                    }
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
                             RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
+                    if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
+                        effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
@@ -489,8 +530,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 if(mapping.zone_idx < mapping.controller->zones.size())
                 {
-                    unsigned int led_global_idx = mapping.controller->zones[mapping.zone_idx].start_idx + mapping.led_idx;
-                    if(led_global_idx < mapping.controller->colors.size())
+                    unsigned int led_global_idx = 0;
+                    if(TryGetGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &led_global_idx))
                     {
                         mapping.controller->colors[led_global_idx] = final_color;
                     }
@@ -521,8 +562,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 {
                     continue;
                 }
-
-                unsigned int led_global_idx = controller->zones[led_position.zone_idx].start_idx + led_position.led_idx;
+                unsigned int led_global_idx = 0;
+                if(!TryGetGlobalLedIndex(controller, led_position.zone_idx, led_position.led_idx, &led_global_idx))
+                {
+                    continue;
+                }
 
                 RGBColor final_color = ToRGBColor(0, 0, 0);
                 for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
@@ -594,7 +638,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     EffectAxis sort_axis = AXIS_Y;
-    bool sort_reverse = false;
     std::vector<std::pair<float, unsigned int>> sorted_controllers;
     sorted_controllers.reserve(controller_transforms.size());
 
@@ -608,8 +651,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     std::sort(sorted_controllers.begin(), sorted_controllers.end(),
         [&](const std::pair<float, unsigned int>& a, const std::pair<float, unsigned int>& b){
-        if(!sort_reverse) return a.first < b.first;
-        return a.first > b.first;
+        return a.first < b.first;
     });
 
     std::set<RGBController*> updated_physical_controllers;
@@ -646,7 +688,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    RenderFrequencyRangeEffects(room_grid);
+    RenderFrequencyRangeEffects(room_grid, world_grid);
     
     if(viewport)
     {
