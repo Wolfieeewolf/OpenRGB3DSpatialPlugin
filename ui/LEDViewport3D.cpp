@@ -1734,16 +1734,29 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
             -(min_bounds.z + max_bounds.z) * 0.5f
         };
 
-        Vector3D world_min = {
-            ctrl->transform.position.x + center_offset.x + min_bounds.x,
-            ctrl->transform.position.y + center_offset.y + min_bounds.y,
-            ctrl->transform.position.z + center_offset.z + min_bounds.z
+        Vector3D local_corners[8] = {
+            {min_bounds.x + center_offset.x, min_bounds.y + center_offset.y, min_bounds.z + center_offset.z},
+            {max_bounds.x + center_offset.x, min_bounds.y + center_offset.y, min_bounds.z + center_offset.z},
+            {min_bounds.x + center_offset.x, max_bounds.y + center_offset.y, min_bounds.z + center_offset.z},
+            {max_bounds.x + center_offset.x, max_bounds.y + center_offset.y, min_bounds.z + center_offset.z},
+            {min_bounds.x + center_offset.x, min_bounds.y + center_offset.y, max_bounds.z + center_offset.z},
+            {max_bounds.x + center_offset.x, min_bounds.y + center_offset.y, max_bounds.z + center_offset.z},
+            {min_bounds.x + center_offset.x, max_bounds.y + center_offset.y, max_bounds.z + center_offset.z},
+            {max_bounds.x + center_offset.x, max_bounds.y + center_offset.y, max_bounds.z + center_offset.z}
         };
-        Vector3D world_max = {
-            ctrl->transform.position.x + center_offset.x + max_bounds.x,
-            ctrl->transform.position.y + center_offset.y + max_bounds.y,
-            ctrl->transform.position.z + center_offset.z + max_bounds.z
-        };
+
+        Vector3D world_min = TransformLocalToWorld(local_corners[0], ctrl->transform);
+        Vector3D world_max = world_min;
+        for(int corner = 1; corner < 8; corner++)
+        {
+            Vector3D world_corner = TransformLocalToWorld(local_corners[corner], ctrl->transform);
+            if(world_corner.x < world_min.x) world_min.x = world_corner.x;
+            if(world_corner.y < world_min.y) world_min.y = world_corner.y;
+            if(world_corner.z < world_min.z) world_min.z = world_corner.z;
+            if(world_corner.x > world_max.x) world_max.x = world_corner.x;
+            if(world_corner.y > world_max.y) world_max.y = world_corner.y;
+            if(world_corner.z > world_max.z) world_max.z = world_corner.z;
+        }
 
         if(world_min.x > world_max.x) { float temp = world_min.x; world_min.x = world_max.x; world_max.x = temp; }
         if(world_min.y > world_max.y) { float temp = world_min.y; world_min.y = world_max.y; world_max.y = temp; }

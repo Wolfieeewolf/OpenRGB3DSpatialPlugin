@@ -195,16 +195,21 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
             led_pos->local_position.y - local_center.y,
             led_pos->local_position.z - local_center.z
         };
+        Vector3D scaled_local = {
+            local.x * ctrl_transform->transform.scale.x,
+            local.y * ctrl_transform->transform.scale.y,
+            local.z * ctrl_transform->transform.scale.z
+        };
 
-        Vector3D rotated = Geometry3D::RotateVector(local, rotation_matrix);
+        Vector3D rotated = Geometry3D::RotateVector(scaled_local, rotation_matrix);
 
         led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
 
-        led_pos->room_position.x = local.x + ctrl_transform->transform.position.x;
-        led_pos->room_position.y = local.y + ctrl_transform->transform.position.y;
-        led_pos->room_position.z = local.z + ctrl_transform->transform.position.z;
+        led_pos->room_position.x = scaled_local.x + ctrl_transform->transform.position.x;
+        led_pos->room_position.y = scaled_local.y + ctrl_transform->transform.position.y;
+        led_pos->room_position.z = scaled_local.z + ctrl_transform->transform.position.z;
     }
 
     ctrl_transform->world_positions_dirty = false;

@@ -508,7 +508,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_x = requires_world ? world_x : room_x;
                         float sample_y = requires_world ? world_y : room_y;
                         float sample_z = requires_world ? world_z : room_z;
-                        const bool use_world_bounds = requires_world && effect->RequiresWorldSpaceGridBounds();
+                        const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                         const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
@@ -614,7 +614,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_x = requires_world ? world_x : room_x;
                     float sample_y = requires_world ? world_y : room_y;
                     float sample_z = requires_world ? world_z : room_z;
-                    const bool use_world_bounds = requires_world && effect->RequiresWorldSpaceGridBounds();
+                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                     const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
 
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
@@ -702,7 +702,7 @@ RGBColor OpenRGB3DSpatialTab::GetOverlayColorAt(float x, float y, float z) const
     for(const OverlaySlot& slot : overlay_slots)
     {
         if(!slot.effect) continue;
-        const bool use_world_bounds = slot.effect->RequiresWorldSpaceCoordinates() && slot.effect->RequiresWorldSpaceGridBounds();
+        const bool use_world_bounds = slot.effect->RequiresWorldSpaceGridBounds();
         const GridContext3D& active_grid = use_world_bounds ? overlay_world_grid : overlay_room_grid;
         float spx = x, spy = y, spz = z;
         slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
