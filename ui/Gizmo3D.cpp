@@ -27,6 +27,7 @@
 #define AXIS_HIT_THICKNESS          0.25f
 #define CENTER_SPHERE_RADIUS        0.30f
 #define CENTER_SPHERE_HIT_RADIUS    0.40f
+#define ROTATE_RING_HIT_THICKNESS   0.35f
 
 Gizmo3D::Gizmo3D()
 {
@@ -66,11 +67,17 @@ Gizmo3D::Gizmo3D()
     drag_axis_dir[0] = 1.0f; drag_axis_dir[1] = 0.0f; drag_axis_dir[2] = 0.0f;
     drag_plane_normal[0] = 0.0f; drag_plane_normal[1] = 1.0f; drag_plane_normal[2] = 0.0f;
     drag_start_world[0] = drag_start_world[1] = drag_start_world[2] = 0.0f;
+    drag_grab_offset[0] = drag_grab_offset[1] = drag_grab_offset[2] = 0.0f;
     center_press_pending = false;
     rot_plane_normal[0] = 1.0f; rot_plane_normal[1] = 0.0f; rot_plane_normal[2] = 0.0f;
     rot_u[0]=0.0f; rot_u[1]=1.0f; rot_u[2]=0.0f;
     rot_v[0]=0.0f; rot_v[1]=0.0f; rot_v[2]=1.0f;
     rot_angle0 = 0.0f;
+    rot_drag_start_angle = 0.0f;
+    rot_drag_accum_degrees = 0.0f;
+    rot_snap_remainder_degrees = 0.0f;
+    rotate_snap_active = false;
+    rotate_snap_step_degrees = 15.0f;
 }
 
 Gizmo3D::~Gizmo3D()
@@ -205,6 +212,28 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
             drag_start_world[0] = gizmo_x;
             drag_start_world[1] = gizmo_y;
             drag_start_world[2] = gizmo_z;
+            drag_grab_offset[0] = 0.0f;
+            drag_grab_offset[1] = 0.0f;
+            drag_grab_offset[2] = 0.0f;
+
+            Ray3D ray = GenerateRay((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
+            float n_dot_d = drag_plane_normal[0]*ray.direction[0] + drag_plane_normal[1]*ray.direction[1] + drag_plane_normal[2]*ray.direction[2];
+            if(fabsf(n_dot_d) > 1e-6f)
+            {
+                float w0x = drag_start_world[0] - ray.origin[0];
+                float w0y = drag_start_world[1] - ray.origin[1];
+                float w0z = drag_start_world[2] - ray.origin[2];
+                float t = (drag_plane_normal[0]*w0x + drag_plane_normal[1]*w0y + drag_plane_normal[2]*w0z) / n_dot_d;
+                if(t >= 0.0f)
+                {
+                    float hitx = ray.origin[0] + t*ray.direction[0];
+                    float hity = ray.origin[1] + t*ray.direction[1];
+                    float hitz = ray.origin[2] + t*ray.direction[2];
+                    drag_grab_offset[0] = hitx - gizmo_x;
+                    drag_grab_offset[1] = hity - gizmo_y;
+                    drag_grab_offset[2] = hitz - gizmo_z;
+                }
+            }
             return true;
         }
         else
@@ -243,6 +272,10 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, const float* modelview, const
                 angle = atan2f(y, x);
             }
             rot_angle0 = angle;
+            rot_drag_start_angle = angle;
+            rot_drag_accum_degrees = 0.0f;
+            rot_snap_remainder_degrees = 0.0f;
+            rotate_snap_active = ((event->modifiers() & Qt::ShiftModifier) != 0);
         }
         else
         {
@@ -289,6 +322,7 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, const float* modelview, const 
     }
     else if(dragging)
     {
+        rotate_snap_active = ((event->modifiers() & Qt::ShiftModifier) != 0);
         UpdateTransform((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event), modelview, projection, viewport);
         last_mouse_pos = QPoint((int)MOUSE_EVENT_X(event), (int)MOUSE_EVENT_Y(event));
         return true;
@@ -320,6 +354,9 @@ bool Gizmo3D::HandleMouseRelease(QMouseEvent* event)
         selected_axis = GIZMO_AXIS_NONE;
         hover_axis = GIZMO_AXIS_NONE;
         center_press_pending = false;
+        rot_drag_accum_degrees = 0.0f;
+        rot_snap_remainder_degrees = 0.0f;
+        rotate_snap_active = false;
         return true;
     }
 
@@ -334,11 +371,31 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
     if(!active)
         return;
 
-    glDisable(GL_DEPTH_TEST);
-
     glPushMatrix();
     glTranslatef(gizmo_x, gizmo_y, gizmo_z);
 
+    /* First pass keeps depth cues for behind-geometry segments. */
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+
+    switch(mode)
+    {
+        case GIZMO_MODE_MOVE:
+            DrawMoveGizmo();
+            break;
+        case GIZMO_MODE_ROTATE:
+            DrawRotateGizmo();
+            break;
+        case GIZMO_MODE_FREEROAM:
+            DrawFreeroamGizmo();
+            break;
+    }
+
+    /* Second pass overlays the gizmo so controls remain legible. */
+    glDisable(GL_DEPTH_TEST);
     switch(mode)
     {
         case GIZMO_MODE_MOVE:
@@ -354,6 +411,7 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
 
     glPopMatrix();
 
+    glDepthMask(GL_TRUE);
     glEnable(GL_DEPTH_TEST);
 }
 
@@ -489,47 +547,41 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
 
     if(mode == GIZMO_MODE_ROTATE)
     {
-        float handle_radius = 0.25f;
-
-        for(int i = 0; i < 4; i++)
+        const float ring_radius = gizmo_size;
+        const float ring_thickness = ROTATE_RING_HIT_THICKNESS;
+        for(int axis = 0; axis < 3; axis++)
         {
-            float angle = (i / 4.0f) * 2.0f * M_PI;
-            float handle_x = gizmo_x;
-            float handle_y = gizmo_y + cosf(angle) * gizmo_size;
-            float handle_z = gizmo_z + sinf(angle) * gizmo_size;
-
-            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            float n[3] = { 0.0f, 0.0f, 0.0f };
+            if(axis == 0) n[0] = 1.0f;
+            if(axis == 1) n[1] = 1.0f;
+            if(axis == 2) n[2] = 1.0f;
+            float denom = Dot3(n, ray.direction);
+            if(fabsf(denom) < 1e-6f)
             {
-                closest_distance = distance;
-                closest_axis = GIZMO_AXIS_X;
+                continue;
             }
-        }
-
-        for(int i = 0; i < 4; i++)
-        {
-            float angle = (i / 4.0f) * 2.0f * M_PI;
-            float handle_x = gizmo_x + cosf(angle) * gizmo_size;
-            float handle_y = gizmo_y;
-            float handle_z = gizmo_z + sinf(angle) * gizmo_size;
-
-            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            float w0[3] = { gizmo_x - ray.origin[0], gizmo_y - ray.origin[1], gizmo_z - ray.origin[2] };
+            float t = Dot3(n, w0) / denom;
+            if(t <= 0.0f)
             {
-                closest_distance = distance;
-                closest_axis = GIZMO_AXIS_Y;
+                continue;
             }
-        }
 
-        for(int i = 0; i < 4; i++)
-        {
-            float angle = (i / 4.0f) * 2.0f * M_PI;
-            float handle_x = gizmo_x + cosf(angle) * gizmo_size;
-            float handle_y = gizmo_y + sinf(angle) * gizmo_size;
-            float handle_z = gizmo_z;
+            float hx = ray.origin[0] + t * ray.direction[0] - gizmo_x;
+            float hy = ray.origin[1] + t * ray.direction[1] - gizmo_y;
+            float hz = ray.origin[2] + t * ray.direction[2] - gizmo_z;
 
-            if(RaySphereIntersect(ray, handle_x, handle_y, handle_z, handle_radius, distance) && distance < closest_distance)
+            float radial_sq = 0.0f;
+            if(axis == 0) radial_sq = hy*hy + hz*hz;
+            if(axis == 1) radial_sq = hx*hx + hz*hz;
+            if(axis == 2) radial_sq = hx*hx + hy*hy;
+            float radial = sqrtf(radial_sq);
+            float ring_err = fabsf(radial - ring_radius);
+
+            if(ring_err <= ring_thickness && t < closest_distance)
             {
-                closest_distance = distance;
-                closest_axis = GIZMO_AXIS_Z;
+                closest_distance = t;
+                closest_axis = (axis == 0) ? GIZMO_AXIS_X : ((axis == 1) ? GIZMO_AXIS_Y : GIZMO_AXIS_Z);
             }
         }
 
@@ -650,13 +702,27 @@ void Gizmo3D::UpdateTransform(int mouse_x, int mouse_y, const float* modelview, 
                         float dtheta = angle_now - rot_angle0;
                         while(dtheta > (float)M_PI) dtheta -= (float)(2.0 * M_PI);
                         while(dtheta < (float)-M_PI) dtheta += (float)(2.0 * M_PI);
-                        float deg = dtheta * (180.0f / (float)M_PI);
+                        float raw_deg = dtheta * (180.0f / (float)M_PI);
+                        float deg = raw_deg;
+                        if(rotate_snap_active && rotate_snap_step_degrees > 0.0f)
+                        {
+                            float total = rot_snap_remainder_degrees + raw_deg;
+                            float sign = (total >= 0.0f) ? 1.0f : -1.0f;
+                            float whole_steps = floorf(fabsf(total) / rotate_snap_step_degrees);
+                            deg = sign * whole_steps * rotate_snap_step_degrees;
+                            rot_snap_remainder_degrees = total - deg;
+                        }
+                        else
+                        {
+                            rot_snap_remainder_degrees = 0.0f;
+                        }
                         float rx=0, ry=0, rz=0;
                         if(selected_axis == GIZMO_AXIS_X) rx = deg;
                         if(selected_axis == GIZMO_AXIS_Y) ry = deg;
                         if(selected_axis == GIZMO_AXIS_Z) rz = deg;
                         ApplyRotation(rx, ry, rz);
                         rot_angle0 = angle_now;
+                        rot_drag_accum_degrees += deg;
                     }
                     else
                     {
@@ -931,9 +997,13 @@ void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* m
     float hity = ray.origin[1] + t*ray.direction[1];
     float hitz = ray.origin[2] + t*ray.direction[2];
 
-    float move_dx = hitx - gizmo_x;
-    float move_dy = hity - gizmo_y;
-    float move_dz = hitz - gizmo_z;
+    float target_x = hitx - drag_grab_offset[0];
+    float target_y = hity - drag_grab_offset[1];
+    float target_z = hitz - drag_grab_offset[2];
+
+    float move_dx = target_x - gizmo_x;
+    float move_dy = target_y - gizmo_y;
+    float move_dz = target_z - gizmo_z;
     ApplyTranslation(move_dx, move_dy, move_dz);
 }
 
@@ -1053,12 +1123,12 @@ void Gizmo3D::DrawCube(float pos[3], float size, float color[3])
 void Gizmo3D::DrawRotateGizmo()
 {
     glDisable(GL_LIGHTING);
-    glLineWidth(3.0f);
 
     float handle_radius = 0.15f;
 
     GizmoAxis hl = dragging ? selected_axis : hover_axis;
     float* color = (hl == GIZMO_AXIS_X) ? color_highlight : color_x_axis;
+    glLineWidth((hl == GIZMO_AXIS_X) ? 6.0f : 3.0f);
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -1075,6 +1145,7 @@ void Gizmo3D::DrawRotateGizmo()
     }
 
     color = (hl == GIZMO_AXIS_Y) ? color_highlight : color_y_axis;
+    glLineWidth((hl == GIZMO_AXIS_Y) ? 6.0f : 3.0f);
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -1091,6 +1162,7 @@ void Gizmo3D::DrawRotateGizmo()
     }
 
     color = (hl == GIZMO_AXIS_Z) ? color_highlight : color_z_axis;
+    glLineWidth((hl == GIZMO_AXIS_Z) ? 6.0f : 3.0f);
     glColor3f(color[0], color[1], color[2]);
     glBegin(GL_LINE_LOOP);
     for(int i = 0; i <= 32; i++)
@@ -1104,6 +1176,30 @@ void Gizmo3D::DrawRotateGizmo()
         float angle = (i / 4.0f) * 2.0f * M_PI;
         float handle_pos[3] = {cosf(angle) * gizmo_size, sinf(angle) * gizmo_size, 0.0f};
         DrawSphere(handle_pos, handle_radius, color);
+    }
+
+    /* Show a live swept-angle arc while rotating. */
+    if(dragging && mode == GIZMO_MODE_ROTATE &&
+       (selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z))
+    {
+        float arc_radius = gizmo_size * 1.12f;
+        float start = rot_drag_start_angle;
+        float sweep = rot_drag_accum_degrees * ((float)M_PI / 180.0f);
+        const int segments = 40;
+
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glLineWidth(5.0f);
+        glBegin(GL_LINE_STRIP);
+        for(int i = 0; i <= segments; i++)
+        {
+            float t = (float)i / (float)segments;
+            float a = start + sweep * t;
+            if(selected_axis == GIZMO_AXIS_X) glVertex3f(0.0f, cosf(a) * arc_radius, sinf(a) * arc_radius);
+            if(selected_axis == GIZMO_AXIS_Y) glVertex3f(cosf(a) * arc_radius, 0.0f, sinf(a) * arc_radius);
+            if(selected_axis == GIZMO_AXIS_Z) glVertex3f(cosf(a) * arc_radius, sinf(a) * arc_radius, 0.0f);
+        }
+        glEnd();
+        glLineWidth(3.0f);
     }
 
     float orange[3] = {1.0f, 0.5f, 0.0f};

@@ -65,6 +65,11 @@ public:
     bool IsActive() const { return active; }
     bool IsDragging() const { return dragging; }
     GizmoAxis GetSelectedAxis() const { return selected_axis; }
+    GizmoAxis GetHoverAxis() const { return hover_axis; }
+    GizmoMode GetMode() const { return mode; }
+    float GetRotateAccumDegrees() const { return rot_drag_accum_degrees; }
+    bool IsRotateSnapActive() const { return rotate_snap_active; }
+    void GetPosition(float& x, float& y, float& z) const { x = gizmo_x; y = gizmo_y; z = gizmo_z; }
 
 private:
     Ray3D GenerateRay(int mouse_x, int mouse_y, const float* modelview, const float* projection, const int* viewport);
@@ -139,11 +144,17 @@ private:
     float                  drag_axis_dir[3];
     float                  drag_plane_normal[3];
     float                  drag_start_world[3];
+    float                  drag_grab_offset[3];
     bool                   center_press_pending;
     float                  rot_plane_normal[3];
     float                  rot_u[3];
     float                  rot_v[3];
     float                  rot_angle0;
+    float                  rot_drag_start_angle;
+    float                  rot_drag_accum_degrees;
+    float                  rot_snap_remainder_degrees;
+    bool                   rotate_snap_active;
+    float                  rotate_snap_step_degrees;
 };
 
 #endif

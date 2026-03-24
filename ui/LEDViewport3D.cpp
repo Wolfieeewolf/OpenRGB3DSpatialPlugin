@@ -452,6 +452,43 @@ void LEDViewport3D::paintGL()
     {
         gizmo.SetCameraDistance(camera_distance);
         gizmo.Render(modelview, projection, viewport);
+
+        if(gizmo.GetMode() == GIZMO_MODE_ROTATE && gizmo.IsDragging())
+        {
+            float gx, gy, gz;
+            gizmo.GetPosition(gx, gy, gz);
+            double screen_x = 0.0;
+            double screen_y = 0.0;
+            GLdouble modelview_d[16];
+            GLdouble projection_d[16];
+            GLint viewport_i[4];
+            for(int i = 0; i < 16; i++)
+            {
+                modelview_d[i] = (GLdouble)modelview[i];
+                projection_d[i] = (GLdouble)projection[i];
+            }
+            for(int i = 0; i < 4; i++)
+            {
+                viewport_i[i] = (GLint)viewport[i];
+            }
+            ProjectPointToScreen(gx, gy, gz, modelview_d, projection_d, viewport_i, screen_x, screen_y);
+
+            QPainter painter(this);
+            painter.setRenderHint(QPainter::TextAntialiasing);
+            painter.setPen(QColor(255, 255, 255));
+            QFont font("Arial", 10, QFont::Bold);
+            painter.setFont(font);
+
+            const char axis_char = (gizmo.GetSelectedAxis() == GIZMO_AXIS_X) ? 'X' :
+                                   (gizmo.GetSelectedAxis() == GIZMO_AXIS_Y) ? 'Y' : 'Z';
+            const QString snap_text = gizmo.IsRotateSnapActive() ? " | Snap 15 deg" : " | Hold Shift to snap 15 deg";
+            const QString text = QString("Rotate %1: %2 deg%3")
+                                    .arg(QChar(axis_char))
+                                    .arg(QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1))
+                                    .arg(snap_text);
+            painter.drawText(QPointF(screen_x + 12.0, screen_y - 12.0), text);
+            painter.end();
+        }
     }
 }
 
@@ -807,7 +844,36 @@ void LEDViewport3D::wheelEvent(QWheelEvent *event)
 
 void LEDViewport3D::keyPressEvent(QKeyEvent *event)
 {
-    if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+    if(event->key() == Qt::Key_W)
+    {
+        gizmo.SetMode(GIZMO_MODE_MOVE);
+        update();
+        event->accept();
+        return;
+    }
+    else if(event->key() == Qt::Key_E)
+    {
+        gizmo.SetMode(GIZMO_MODE_ROTATE);
+        update();
+        event->accept();
+        return;
+    }
+    else if(event->key() == Qt::Key_R)
+    {
+        gizmo.SetMode(GIZMO_MODE_FREEROAM);
+        update();
+        event->accept();
+        return;
+    }
+    else if(event->key() == Qt::Key_Q)
+    {
+        grid_snap_enabled = !grid_snap_enabled;
+        gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+        update();
+        event->accept();
+        return;
+    }
+    else if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
         if(selected_controller_idx >= 0 && controller_transforms &&
            selected_controller_idx < (int)controller_transforms->size())
