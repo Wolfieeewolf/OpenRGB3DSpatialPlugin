@@ -163,37 +163,6 @@ void AudioLevel::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor AudioLevel::CalculateColor(float x, float y, float z, float time)
-{
-    AudioInputManager* audio = AudioInputManager::instance();
-    float amplitude = audio->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float fill_level = EvaluateIntensity(amplitude, time);
-
-    Vector3D origin = GetEffectOrigin();
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float ax = std::clamp(0.5f + rotated_pos.x * 0.5f, 0.0f, 1.0f);
-    float ay = std::clamp(0.5f + rotated_pos.y * 0.5f, 0.0f, 1.0f);
-    float az = std::clamp(0.5f + rotated_pos.z * 0.5f, 0.0f, 1.0f);
-    int fax = GetPathAxis();
-    float axis_pos = (fax == 0) ? ax : ((fax == 1) ? ay : az);
-    float axis_other = (fax == 0) ? ay : ((fax == 1) ? ax : ay);
-    float size_m = GetNormalizedSize();
-    float detail = std::max(0.05f, GetScaledDetail());
-    float wave = wave_amount * std::sin(time * 4.0f * std::max(0.2f, GetScaledFrequency() * 0.15f) + axis_other * 6.283185f * (0.6f + 0.4f * detail));
-    float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
-    float edge = std::max(edge_soft, 0.01f) / std::max(0.35f, size_m);
-    float blend = std::clamp((fill_boundary - axis_pos) / edge + 0.5f, 0.0f, 1.0f);
-    float intensity = blend;
-
-    float radial_norm = std::clamp(std::sqrt(rotated_pos.x*rotated_pos.x + rotated_pos.y*rotated_pos.y + rotated_pos.z*rotated_pos.z) / 0.75f, 0.0f, 1.0f);
-    float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
-    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(gradient_pos);
-    return ModulateRGBColors(color, user_color);
-}
 
 RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -220,8 +189,8 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float blend = std::clamp((fill_boundary - axis_pos) / edge + 0.5f, 0.0f, 1.0f);
     float intensity = blend;
 
-    float dx = rotated_pos.x - grid.center_x, dy = rotated_pos.y - grid.center_y, dz = rotated_pos.z - grid.center_z;
-    float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
+    float dx = rotated_pos.x - origin.x, dy = rotated_pos.y - origin.y, dz = rotated_pos.z - origin.z;
+    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);

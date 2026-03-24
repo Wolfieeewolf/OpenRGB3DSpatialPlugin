@@ -175,10 +175,6 @@ void Explosion::OnExplosionParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor Explosion::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 nlohmann::json Explosion::SaveSettings() const
 {
@@ -318,7 +314,7 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     }
     else if(explosion_type == TYPE_WALL_BOUNCE)
     {
-        float max_extent = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+        float max_extent = EffectGridBoundingRadius(grid, GetNormalizedScale());
         float period = fmax(0.1f, max_extent);
         float travel = burst_phase * (explosion_intensity * 0.25f) * size_multiplier;
         float t = fmodf(travel, 2.0f * period);

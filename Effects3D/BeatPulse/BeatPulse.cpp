@@ -194,25 +194,6 @@ void BeatPulse::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor BeatPulse::CalculateColor(float x, float y, float z, float time)
-{
-    TickPulses(time);
-    float radial_norm = std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);
-    float height_norm = std::clamp(0.5f + y, 0.0f, 1.0f);
-    float energy = SamplePulseField(radial_norm, height_norm, time);
-    float ambient = EvaluateIntensity(
-        AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz), time);
-    energy = std::clamp(energy + 0.15f * ambient, 0.0f, 1.0f);
-
-    float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
-    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
-    color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
-
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(gradient_pos);
-    return ModulateRGBColors(color, user_color);
-}
 
 RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -222,10 +203,10 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     TickPulses(time);
-    float dx = x - grid.center_x;
-    float dy = y - grid.center_y;
-    float dz = z - grid.center_z;
-    float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
+    float dx = x - origin.x;
+    float dy = y - origin.y;
+    float dz = z - origin.z;
+    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
     float height_norm = NormalizeRange(y, grid.min_y, grid.max_y);
     float energy = SamplePulseField(radial_norm, height_norm, time);

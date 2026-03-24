@@ -115,13 +115,13 @@ void Tornado::OnTornadoParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor Tornado::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     Vector3D origin = GetEffectOriginGrid(grid);
 
     float speed = GetScaledSpeed();
@@ -138,14 +138,15 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float axial = 0.0f;
     if(grid.height > 0.001f)
     {
-        axial = (rot_rel_y + grid.height * 0.5f) / grid.height;
+        axial = (rotated_pos.y - grid.min_y) / grid.height;
     }
     axial = fmaxf(0.0f, fminf(1.0f, axial));
     
     float height_center = 0.5f;
     float height_range_val = (tornado_height / 500.0f) * 0.5f;
     float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
-    float base_radius = 0.5f * fmin(grid.width, grid.depth);
+    EffectGridAxisHalfExtents ex = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float base_radius = fminf(ex.hw, ex.hd);
     float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
     float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m;
 
@@ -155,7 +156,7 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float swirl = a + along * (0.015f * detail) - time * speed * 0.25f;
 
     float ring = fabsf(rad - funnel_radius);
-    float thickness_base = (grid.width + grid.depth) * 0.01f;
+    float thickness_base = (ex.hw + ex.hd) * 0.01f;
     float ring_thickness = thickness_base * (0.6f + 1.2f * size_m);
     float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
 

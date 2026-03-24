@@ -144,51 +144,13 @@ void AudioPulse::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor AudioPulse::CalculateColor(float x, float y, float z, float time)
-{
-    float amplitude = AudioInputManager::instance()->getBandEnergyHz(
-        (float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float intensity = EvaluateIntensity(amplitude, time);
-
-    float distance = 0.0f;
-    if(use_radial)
-    {
-        Vector3D origin = GetEffectOrigin();
-        float dx = x - origin.x;
-        float dy = y - origin.y;
-        float dz = z - origin.z;
-        distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / 0.75f, 0.0f, 1.0f);
-    }
-
-    float brightness;
-    if(use_radial && radius_grows_with_level)
-    {
-        float size_m = GetNormalizedSize();
-        float effective_radius = 0.25f + 0.75f * intensity;
-        effective_radius = std::min(1.0f, effective_radius * (0.6f + 0.4f * size_m));
-        float fade = (distance <= effective_radius) ? 1.0f : std::max(0.0f, 1.0f - (distance - effective_radius) / 0.35f);
-        brightness = intensity * fade;
-    }
-    else
-    {
-        brightness = use_radial ? intensity * (1.0f - distance * 0.5f) : intensity;
-    }
-    brightness = std::clamp(brightness, 0.0f, 1.0f);
-
-    float detail = std::max(0.05f, GetScaledDetail());
-    float hue_pos = use_radial ? (1.0f - distance) : 0.5f;
-    hue_pos = fmodf(hue_pos * (0.6f + 0.4f * detail), 1.0f);
-    RGBColor color = ComposeAudioGradientColor(audio_settings, hue_pos, intensity);
-    color = ScaleRGBColor(color, 0.25f + 0.75f * brightness);
-
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(hue_pos * 360.0f + CalculateProgress(time) * 40.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(hue_pos);
-    return ModulateRGBColors(color, user_color);
-}
 
 RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     float amplitude = AudioInputManager::instance()->getBandEnergyHz(
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float intensity = EvaluateIntensity(amplitude, time);
@@ -200,7 +162,7 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
         float dx = x - origin.x;
         float dy = y - origin.y;
         float dz = z - origin.z;
-        float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth}) * GetNormalizedScale();
+        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
         if(max_radius < 1e-5f) max_radius = 1e-5f;
         distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / max_radius, 0.0f, 1.0f);
     }

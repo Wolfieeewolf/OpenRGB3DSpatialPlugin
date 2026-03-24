@@ -21,7 +21,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
-    boundary_prevalidated = false;
 
     effect_rotation_yaw = 0.0f;
     effect_rotation_pitch = 0.0f;
@@ -130,6 +129,24 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 
 SpatialEffect3D::~SpatialEffect3D()
 {
+}
+
+bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const
+{
+    Vector3D origin_grid = GetEffectOriginGrid(grid);
+    float rel_x = x - origin_grid.x;
+    float rel_y = y - origin_grid.y;
+    float rel_z = z - origin_grid.z;
+    return !IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid);
+}
+
+void SpatialEffect3D::ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const
+{
+    Vector3D origin_grid = GetEffectOriginGrid(grid);
+    Vector3D effect_origin = GetEffectOrigin();
+    x = x - origin_grid.x + effect_origin.x;
+    y = y - origin_grid.y + effect_origin.y;
+    z = z - origin_grid.z + effect_origin.z;
 }
 
 void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_start_stop)
@@ -1252,10 +1269,6 @@ Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, floa
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
 {
-    if(boundary_prevalidated)
-    {
-        return true;
-    }
     float scale_radius = GetNormalizedScale() * 10.0f;
     float scale_radius_sq = scale_radius * scale_radius;
     float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
@@ -1264,13 +1277,31 @@ bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel
 
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
-    float half_width = grid.width / 2.0f;
-    float half_depth = grid.depth / 2.0f;
-    float half_height = grid.height / 2.0f;
-    float max_dist_sq = half_width * half_width + half_depth * half_depth + half_height * half_height;
+    Vector3D o = GetEffectOriginGrid(grid);
+    float max_corner_sq = 0.0f;
+    for(int ix = 0; ix < 2; ++ix)
+    {
+        float cx = ix ? grid.max_x : grid.min_x;
+        float dx = cx - o.x;
+        for(int iy = 0; iy < 2; ++iy)
+        {
+            float cy = iy ? grid.max_y : grid.min_y;
+            float dy = cy - o.y;
+            for(int iz = 0; iz < 2; ++iz)
+            {
+                float cz = iz ? grid.max_z : grid.min_z;
+                float dz = cz - o.z;
+                float sq = dx * dx + dy * dy + dz * dz;
+                if(sq > max_corner_sq)
+                {
+                    max_corner_sq = sq;
+                }
+            }
+        }
+    }
 
     float scale_percentage = GetNormalizedScale();
-    float scale_radius_sq = max_dist_sq * scale_percentage * scale_percentage;
+    float scale_radius_sq = max_corner_sq * scale_percentage * scale_percentage;
 
     float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
     return dist_sq <= scale_radius_sq;

@@ -233,33 +233,20 @@ RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time) const
     return result;
 }
 
-RGBColor FreqRipple::CalculateColor(float x, float y, float z, float time)
-{
-    TickRipples(time);
-
-    Vector3D origin = GetEffectOrigin();
-    float dx = x - origin.x;
-    float dy = y - origin.y;
-    float dz = z - origin.z;
-    float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-
-    RGBColor color = ComputeRippleColor(dist, time);
-
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(CalculateProgress(time) * 360.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(0.0f);
-    return ModulateRGBColors(color, user_color);
-}
 
 RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     TickRipples(time);
 
     Vector3D origin = GetEffectOriginGrid(grid);
     float dx = x - origin.x;
     float dy = y - origin.y;
     float dz = z - origin.z;
-    float max_radius = 0.5f * std::max({grid.width, grid.height, grid.depth});
+    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float dist_norm = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 2.0f);
 
     RGBColor color = ComputeRippleColor(dist_norm, time);

@@ -147,30 +147,6 @@ void CubeLayer::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor CubeLayer::CalculateColor(float x, float y, float z, float time)
-{
-    float amplitude = AudioInputManager::instance()->getBandEnergyHz(
-        (float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float layer_pos = EvaluateIntensity(amplitude, time);
-
-    Vector3D origin = GetEffectOrigin();
-    Vector3D r = TransformPointByRotation(x, y, z, origin);
-    float axis_pos = AxisPosition(GetPathAxis(), r.x, r.y, r.z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-    float size_m = GetNormalizedSize();
-    float sigma = std::max(layer_thickness, 0.02f) * size_m;
-    float d = (axis_pos - layer_pos) / sigma;
-    float intensity = std::exp(-d * d * 0.5f);
-    intensity = std::clamp(intensity, 0.0f, 1.0f);
-
-    float detail = std::max(0.05f, GetScaledDetail());
-    float gradient_pos = fmodf(layer_pos * (0.6f + 0.4f * detail), 1.0f);
-    RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
-    color = ScaleRGBColor(color, 0.2f + 0.8f * intensity);
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(gradient_pos);
-    return ModulateRGBColors(color, user_color);
-}
 
 RGBColor CubeLayer::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

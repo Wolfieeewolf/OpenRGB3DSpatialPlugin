@@ -2,6 +2,7 @@
 
 #include "Starfield.h"
 #include "EffectHelpers.h"
+#include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
@@ -131,7 +132,6 @@ void Starfield::SetupCustomUI(QWidget* parent)
 
 void Starfield::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor Starfield::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -140,13 +140,13 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-    if(half < 1e-5f) half = 1.0f;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float h_scale = std::max({e.hw, e.hh, e.hd});
     float speed = GetScaledSpeed() * 0.5f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float sigma = std::max(star_size * 0.5f * size_m, 0.02f);
-    float sigma_sq = sigma * sigma * half * half;
+    float sigma_sq = sigma * sigma * h_scale * h_scale;
     const float d2_cutoff = 9.0f * sigma_sq;
     float color_cycle = time * GetScaledFrequency() * 12.0f;
 
@@ -158,7 +158,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         star_cache_count = n_stars;
         star_positions_cached.resize(n_stars);
         float drift = std::max(0.0f, std::min(1.0f, drift_amount));
-        float margin = 3.0f * sigma * half;
+        float margin = 3.0f * sigma * h_scale;
         float min_x = 1e9f, min_y = 1e9f, min_z = 1e9f;
         float max_x = -1e9f, max_y = -1e9f, max_z = -1e9f;
         for(int i = 0; i < n_stars; i++)
@@ -169,7 +169,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
             float sz = fmodf(sz0 + time * speed, 2.0f) - 1.0f;
             float sx_d = sx + drift * 0.3f * sinf(time * 2.0f + (float)i * 0.1f);
             float sy_d = sy + drift * 0.3f * cosf(time * 1.7f + (float)i * 0.07f);
-            Vector3D star_local{sx_d * half + origin.x, sy_d * half + origin.y, sz * half + origin.z};
+            Vector3D star_local{sx_d * e.hw + origin.x, sy_d * e.hh + origin.y, sz * e.hd + origin.z};
             Vector3D rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
             star_positions_cached[i] = rot;
             if(rot.x < min_x) min_x = rot.x; if(rot.x > max_x) max_x = rot.x;

@@ -163,10 +163,6 @@ void TravelingLight::UpdateParams(SpatialEffectParams& params)
     params.type = SPATIAL_EFFECT_COMET;
 }
 
-RGBColor TravelingLight::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -236,7 +232,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float rot_rel_x = rotated.x - origin.x;
         float rot_rel_y = rotated.y - origin.y;
         float rot_rel_z = rotated.z - origin.z;
-        float position = (grid.width > 0.001f) ? ((rot_rel_x + grid.width * 0.5f) / grid.width) : 0.0f;
+        float position = (grid.width > 0.001f) ? ((rotated.x - grid.min_x) / grid.width) : 0.0f;
         position = std::max(0.0f, std::min(1.0f, position));
         float edge_distance = fabsf(position - prog);
         float thickness_factor = 0.2f * size_scale;
@@ -251,7 +247,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         default: intensity = edge_distance < thickness_factor ? 1.0f : 0.0f; break;
         }
         float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-        float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
         float depth_factor = (max_radius > 0.001f) ? (0.5f + 0.5f * (1.0f - std::min(1.0f, radial_distance / max_radius) * 0.5f)) : 1.0f;
         float pos_color = std::fmod(prog + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
@@ -264,9 +260,9 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
 
     if(m == MODE_MOVING_PANES)
     {
-        float lx = (rotated.x - origin.x + grid.width * 0.5f) / std::max(0.001f, grid.width);
-        float ly = (rotated.y - origin.y + grid.height * 0.5f) / std::max(0.001f, grid.height);
-        float lz = (rotated.z - origin.z + grid.depth * 0.5f) / std::max(0.001f, grid.depth);
+        float lx = (rotated.x - grid.min_x) / std::max(0.001f, grid.width);
+        float ly = (rotated.y - grid.min_y) / std::max(0.001f, grid.height);
+        float lz = (rotated.z - grid.min_z) / std::max(0.001f, grid.depth);
         lx = std::max(0.0f, std::min(1.0f, lx));
         ly = std::max(0.0f, std::min(1.0f, ly));
         lz = std::max(0.0f, std::min(1.0f, lz));

@@ -142,31 +142,13 @@ static float AxisPosition(int axis, float x, float y, float z,
     return std::clamp((val - lo) / range, 0.0f, 1.0f);
 }
 
-RGBColor FreqFill::CalculateColor(float x, float y, float z, float time)
-{
-    float amplitude = AudioInputManager::instance()->getBandEnergyHz(
-        (float)audio_settings.low_hz, (float)audio_settings.high_hz);
-    float fill_level = EvaluateIntensity(amplitude, time);
-
-    float pos = AxisPosition(GetPathAxis(), x, y, z, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-
-    float size_m = GetNormalizedSize();
-    float detail = std::max(0.05f, GetScaledDetail());
-    float edge = std::max(edge_width, 1e-3f) / std::max(0.35f, size_m);
-    float blend = std::clamp((fill_level - pos) / edge + 0.5f, 0.0f, 1.0f);
-
-    float pos_color = fmodf(pos * (0.6f + 0.4f * detail), 1.0f);
-    RGBColor lit_color = GetRainbowMode()
-        ? GetRainbowColor(pos_color * 360.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(pos_color);
-    RGBColor dark_color = GetColorAtPosition(1.0f);
-
-    RGBColor color = BlendRGBColors(dark_color, lit_color, blend);
-    return ScaleRGBColor(color, 0.1f + 0.9f * blend);
-}
 
 RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     float amplitude = AudioInputManager::instance()->getBandEnergyHz(
         (float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float fill_level = EvaluateIntensity(amplitude, time);

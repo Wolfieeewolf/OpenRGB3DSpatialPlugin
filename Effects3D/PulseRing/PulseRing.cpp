@@ -127,7 +127,6 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 
 void PulseRing::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor PulseRing::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -137,13 +136,18 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     float progress = CalculateProgress(time);
-    float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-    if(half < 1e-5f) half = 1.0f;
+    float scale_eff = std::max(0.05f, GetNormalizedScale());
+    float sw = grid.width * 0.5f * scale_eff;
+    float sd = grid.depth * 0.5f * scale_eff;
+    if(sw < 1e-5f) sw = 1.0f;
+    if(sd < 1e-5f) sd = 1.0f;
 
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
-    float lx = (rot.x - origin.x) / half;
-    float lz = (rot.z - origin.z) / half;
-    float r = sqrtf(lx * lx + lz * lz);
+    float lx = (rot.x - origin.x) / sw;
+    float lz = (rot.z - origin.z) / sd;
+    float r_flat = sqrtf(lx * lx + lz * lz);
+    const float r_corner = 1.41421356f;
+    float r = (r_corner > 1e-5f) ? std::min(1.0f, r_flat / r_corner) : 0.0f;
     float hole_r = std::max(0.0f, std::min(0.8f, hole_size));
     float max_r = 1.0f;
     float usable = std::max(0.01f, max_r - hole_r);

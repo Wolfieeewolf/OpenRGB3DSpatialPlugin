@@ -235,7 +235,7 @@ void Lightning::UpdateArchCache(float time, const GridContext3D& grid)
     float arch_duration = (0.35f + 0.25f / (float)std::max(1u, strike_rate)) / std::max(0.3f, speed_factor);
     int max_arches = (int)branches;
 
-    float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
+    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float margin = room_avg * 0.15f;
 
     for(int i = 0; i < max_arches; i++)
@@ -271,13 +271,13 @@ void Lightning::UpdateArchCache(float time, const GridContext3D& grid)
     }
 }
 
-RGBColor Lightning::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     float color_cycle = time * GetScaledFrequency() * 12.0f;
     float detail = std::max(0.05f, GetScaledDetail());
     if(mode == MODE_SKY)
@@ -327,7 +327,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     float dist_from_center = sqrtf(rx*rx + ry*ry + rz*rz);
 
     float size_m = GetNormalizedSize();
-    float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
+    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float core_radius = room_avg * (0.04f + 0.06f * size_m);
     float core_glow = room_avg * (0.08f + 0.10f * size_m);
     float arc_core = room_avg * (0.015f + 0.02f * size_m);

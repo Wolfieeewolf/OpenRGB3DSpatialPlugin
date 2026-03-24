@@ -243,22 +243,22 @@ RGBColor DiscoFlash::SampleFlashField(float nx, float ny, float nz, float time)
     return result;
 }
 
-RGBColor DiscoFlash::CalculateColor(float x, float y, float z, float time)
-{
-    TickFlashes(time);
-    return SampleFlashField(x * 0.5f, y * 0.5f, z * 0.5f, time);
-}
 
 RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
+    Vector3D o = GetEffectOriginGrid(grid);
     int mode = std::max(0, std::min(flash_mode, MODE_COUNT - 1));
     if(mode == MODE_SPARKLE)
     {
         float detail = std::max(0.05f, GetScaledDetail());
         float rate = GetScaledFrequency();
-        float nx = (grid.width  > 1e-5f) ? (x - grid.center_x) / (grid.width  * 0.5f) : 0.0f;
-        float ny = (grid.height > 1e-5f) ? (y - grid.center_y) / (grid.height * 0.5f) : 0.0f;
-        float nz = (grid.depth  > 1e-5f) ? (z - grid.center_z) / (grid.depth  * 0.5f) : 0.0f;
+        float nx = (grid.width  > 1e-5f) ? (x - o.x) / (grid.width  * 0.5f) : 0.0f;
+        float ny = (grid.height > 1e-5f) ? (y - o.y) / (grid.height * 0.5f) : 0.0f;
+        float nz = (grid.depth  > 1e-5f) ? (z - o.z) / (grid.depth  * 0.5f) : 0.0f;
         unsigned int h = (unsigned int)((nx * 1000 + ny * 2000 + nz * 3000) * 1000);
         h = h * 73856093u ^ (unsigned int)(time * 100) * 19349663u;
         h = (h << 13) ^ h;
@@ -278,9 +278,9 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
 
     TickFlashes(time);
 
-    float nx = (grid.width  > 1e-5f) ? (x - grid.center_x) / (grid.width  * 0.5f) : 0.0f;
-    float ny = (grid.height > 1e-5f) ? (y - grid.center_y) / (grid.height * 0.5f) : 0.0f;
-    float nz = (grid.depth  > 1e-5f) ? (z - grid.center_z) / (grid.depth  * 0.5f) : 0.0f;
+    float nx = (grid.width  > 1e-5f) ? (x - o.x) / (grid.width  * 0.5f) : 0.0f;
+    float ny = (grid.height > 1e-5f) ? (y - o.y) / (grid.height * 0.5f) : 0.0f;
+    float nz = (grid.depth  > 1e-5f) ? (z - o.z) / (grid.depth  * 0.5f) : 0.0f;
 
     return SampleFlashField(nx, ny, nz, time);
 }

@@ -35,7 +35,7 @@ public:
     void SetupCustomUI(QWidget*) override {}
     void UpdateParams(SpatialEffectParams&) override {}
 
-    RGBColor CalculateColor(float, float, float, float) override
+    RGBColor CalculateColorGrid(float, float, float, float, const GridContext3D&) override
     {
         return 0x00000000;
     }

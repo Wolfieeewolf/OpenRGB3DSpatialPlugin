@@ -253,10 +253,6 @@ void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-RGBColor ScreenMirror::CalculateColor(float /*x*/, float /*y*/, float /*z*/, float /*time*/)
-{
-    return ToRGBColor(0, 0, 0);
-}
 
 namespace
 {

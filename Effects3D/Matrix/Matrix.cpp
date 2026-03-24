@@ -201,10 +201,6 @@ void Matrix::OnMatrixParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor Matrix::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 float Matrix::ComputeFaceIntensity(int face,
                                      float x,
@@ -294,7 +290,7 @@ float Matrix::ComputeFaceIntensity(int face,
     }
 
     /* Let matrix rain extend into the room so it feels on everything (walls, floor, ceiling, and volume) */
-    float room_extent = (grid.width + grid.height + grid.depth) / 3.0f;
+    float room_extent = EffectGridBoundingRadius(grid, GetNormalizedScale());
     if(room_extent > 0.001f && face_distance > room_extent * 0.75f)
         return 0.0f;
 
@@ -515,6 +511,10 @@ float Matrix::ComputeFaceIntensity(int face,
 
 RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     float speed = GetScaledSpeed();
     float size_m = GetNormalizedSize();
     float color_cycle = time * GetScaledFrequency() * 0.02f;

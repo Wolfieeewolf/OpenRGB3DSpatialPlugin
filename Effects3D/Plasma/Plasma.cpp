@@ -99,130 +99,6 @@ void Plasma::OnPlasmaParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor Plasma::CalculateColor(float x, float y, float z, float time)
-{
-    Vector3D origin = GetEffectOrigin();
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
-    {
-        return 0x00000000;
-    }
-
-    float rate = GetScaledFrequency();
-    float detail = std::max(0.05f, GetScaledDetail());
-
-    progress = CalculateProgress(time);
-
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float rot_rel_x = rotated_pos.x - origin.x;
-    float rot_rel_y = rotated_pos.y - origin.y;
-    float rot_rel_z = rotated_pos.z - origin.z;
-
-    float coord1 = rot_rel_x;
-    float coord2 = rot_rel_y;
-    float coord3 = rot_rel_z;
-
-    float plasma_value;
-    float size_multiplier = GetNormalizedSize();
-    float scale = detail * 0.004f / std::max(0.1f, size_multiplier);
-
-    switch(pattern_type)
-    {
-        case 0:
-            {
-                plasma_value =
-                    sin((coord1 + progress * 2.0f) * scale) +
-                    sin((coord2 + progress * 1.7f) * scale * 0.8f) +
-                    sin((coord1 + coord2 + progress * 1.3f) * scale * 0.6f) +
-                    cos((coord1 - coord2 + progress * 2.2f) * scale * 0.7f) +
-                    sin(sqrtf(coord1*coord1 + coord2*coord2) * scale * 0.5f + progress * 1.5f) +
-                    cos(coord3 * scale * 0.4f + progress * 0.9f);
-            }
-            break;
-
-        case 1:
-            {
-                float angle = atan2(coord2, coord1);
-                float radius = sqrtf(coord1*coord1 + coord2*coord2);
-
-                plasma_value =
-                    sin(angle * 4.0f + radius * scale * 0.8f + progress * 2.0f) +
-                    sin(angle * 3.0f - radius * scale * 0.6f + progress * 1.5f) +
-                    cos(angle * 5.0f + radius * scale * 0.4f - progress * 1.8f) +
-                    sin(coord3 * scale * 0.5f + progress) +
-                    cos((angle * 2.0f + coord3 * scale * 0.3f) + progress * 1.2f);
-            }
-            break;
-
-        case 2:
-            {
-                float dist_from_center = sqrtf(coord1*coord1 + coord2*coord2);
-
-                plasma_value =
-                    sin(dist_from_center * scale - progress * 3.0f) +
-                    sin(dist_from_center * scale * 1.5f - progress * 2.3f) +
-                    cos(dist_from_center * scale * 0.8f + progress * 1.8f) +
-                    sin((coord1 + coord2) * scale * 0.6f + progress * 1.2f) +
-                    cos(coord3 * scale * 0.5f - progress * 0.7f);
-            }
-            break;
-
-        case 3:
-            {
-                float flow1 = sin(coord1 * scale * 0.8f + sin(coord2 * scale * 1.2f + progress) + progress * 0.5f);
-                float flow2 = cos(coord2 * scale * 0.9f + cos(coord3 * scale * 1.1f + progress * 1.3f));
-                float flow3 = sin(coord3 * scale * 0.7f + sin(coord1 * scale * 1.3f + progress * 0.7f));
-                float flow4 = cos((coord1 + coord2) * scale * 0.6f + sin(progress * 1.5f));
-                float flow5 = sin((coord2 + coord3) * scale * 0.5f + cos(progress * 1.8f));
-
-                plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
-            }
-            break;
-
-        case 4:
-            {
-                float n1 = sin((coord1 + progress * 0.5f) * scale * 4.0f) * sin((coord2 + progress * 0.3f) * scale * 5.2f) * sin((coord3 + progress * 0.7f) * scale * 3.1f);
-                float n2 = sin((coord1 * 2.3f + coord2 + progress) * scale * 2.0f) * cos((coord2 * 1.7f + coord3 + progress * 1.2f) * scale * 2.5f);
-                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * scale * 1.5f + progress * 2.0f);
-                plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
-            }
-            break;
-
-        case 5:
-            {
-                float r = sqrtf(coord1*coord1 + coord2*coord2 + coord3*coord3);
-                plasma_value =
-                    sin(r * scale * 3.0f - progress * 2.0f) +
-                    sin((coord1 + coord2) * scale * 2.0f + progress * 1.5f) * 0.6f +
-                    cos((coord2 + coord3) * scale * 1.8f - progress * 1.2f) * 0.5f +
-                    sin(coord3 * scale * 2.5f + progress * 0.8f) * 0.4f;
-            }
-            break;
-
-        default:
-            plasma_value = 0.5f;
-            break;
-    }
-
-    plasma_value = (plasma_value + 6.0f) / 12.0f;
-    plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
-
-    RGBColor final_color;
-    if(GetRainbowMode())
-    {
-        float hue = plasma_value * 360.0f + time * rate * 12.0f;
-        final_color = GetRainbowColor(hue);
-    }
-    else
-    {
-        final_color = GetColorAtPosition(plasma_value);
-    }
-
-    return final_color;
-}
 
 RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -243,22 +119,14 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * 0.8f / fmax(0.1f, size_multiplier);
 
-    float norm_x = (grid.width > 0.001f) ? ((x - grid.min_x) / grid.width) : 0.0f;
-    float norm_y = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.0f;
-    float norm_z = (grid.depth > 0.001f) ? ((z - grid.min_z) / grid.depth) : 0.0f;
-    norm_x = fmaxf(0.0f, fminf(1.0f, norm_x));
-    norm_y = fmaxf(0.0f, fminf(1.0f, norm_y));
-    norm_z = fmaxf(0.0f, fminf(1.0f, norm_z));
-
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float max_distance = sqrtf(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
-    float coord1 = (max_distance > 0.001f) ? ((rot_rel_x + max_distance) / (2.0f * max_distance)) : 0.5f;
-    float coord2 = (max_distance > 0.001f) ? ((rot_rel_y + max_distance) / (2.0f * max_distance)) : 0.5f;
-    float coord3 = (max_distance > 0.001f) ? ((rot_rel_z + max_distance) / (2.0f * max_distance)) : 0.5f;
+    float coord1 = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.5f;
+    float coord2 = (grid.height > 0.001f) ? ((rotated_pos.y - grid.min_y) / grid.height) : 0.5f;
+    float coord3 = (grid.depth > 0.001f) ? ((rotated_pos.z - grid.min_z) / grid.depth) : 0.5f;
     coord1 = fmaxf(0.0f, fminf(1.0f, coord1));
     coord2 = fmaxf(0.0f, fminf(1.0f, coord2));
     coord3 = fmaxf(0.0f, fminf(1.0f, coord3));
@@ -335,7 +203,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {

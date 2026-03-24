@@ -2,6 +2,7 @@
 
 #include "Fireworks.h"
 #include "EffectHelpers.h"
+#include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
@@ -154,7 +155,6 @@ void Fireworks::SetupCustomUI(QWidget* parent)
 
 void Fireworks::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor Fireworks::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -163,14 +163,15 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-    if(half < 1e-5f) half = 1.0f;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float hw = e.hw, hh = e.hh, hd = e.hd;
+    float h_scale = std::max({hw, hh, hd});
     float speed_scale = GetScaledSpeed() * 0.015f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float color_cycle = time * GetScaledFrequency() * 12.0f;
-    float sigma = std::max(particle_size * half * size_m, 5.0f) / std::max(0.35f, detail);
-    const float sigma_cap = half * 0.4f;
+    float sigma = std::max(particle_size * h_scale * size_m, 5.0f) / std::max(0.35f, detail);
+    const float sigma_cap = h_scale * 0.4f;
     if(sigma > sigma_cap) sigma = sigma_cap;
     float sigma_sq = sigma * sigma;
     const float d2_cutoff = 9.0f * sigma_sq;
@@ -186,7 +187,7 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
         float cycle = CYCLE_DURATION;
         if(type == TYPE_ROMAN_CANDLE) cycle = 4.0f;
         if(type == TYPE_FOUNTAIN) cycle = 3.0f;
-        const float gravity_base = -0.95f * speed_scale * half * grav_mult;
+        const float gravity_base = -0.95f * speed_scale * hh * grav_mult;
         const float decay_coeff = 6.0f * decay_mult;
 
         for(int launch = 0; launch < n_sim; launch++)
@@ -210,11 +211,11 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                     float emit_t = (float)i / (float)n_pt * spray_duration;
                     if(phase < emit_t) continue;
                     float t = phase - emit_t;
-                    float vx = hash_f((unsigned int)(launch * 1000 + i), 10u) * speed_scale * half * 0.4f;
-                    float vy = (0.5f + 0.4f * (hash_f((unsigned int)(launch * 1000 + i), 20u) + 1.0f) * 0.5f) * speed_scale * half;
-                    float vz = hash_f((unsigned int)(launch * 1000 + i), 30u) * speed_scale * half * 0.4f;
+                    float vx = hash_f((unsigned int)(launch * 1000 + i), 10u) * speed_scale * hw * 0.4f;
+                    float vy = (0.5f + 0.4f * (hash_f((unsigned int)(launch * 1000 + i), 20u) + 1.0f) * 0.5f) * speed_scale * hh;
+                    float vz = hash_f((unsigned int)(launch * 1000 + i), 30u) * speed_scale * hd * 0.4f;
                     float px = origin.x + vx * t;
-                    float py = origin.y - half * 0.5f + vy * t + 0.5f * gravity * t * t;
+                    float py = origin.y - hh * 0.5f + vy * t + 0.5f * gravity * t * t;
                     float pz = origin.z + vz * t;
                     float decay = 1.0f / (1.0f + t * decay_coeff * 0.4f);
                     float hue = fmodf((float)i * 3.0f + color_cycle, 360.0f);
@@ -235,15 +236,15 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                     if(phase < pop_time) continue;
                     float burst_t = phase - pop_time;
                     float decay = 1.0f / (1.0f + burst_t * decay_coeff * 0.6f);
-                    float by = origin.y - half * 0.6f + (pop_time / rise) * (half * 1.0f);
+                    float by = origin.y - hh * 0.6f + (pop_time / rise) * hh;
                     float bx = origin.x; float bz = origin.z;
                     int n_pt = std::max(8, num_debris / 4);
                     for(int i = 0; i < n_pt; i++)
                     {
                         unsigned int seed = (unsigned int)(launch * 500 + p * 100 + i);
-                        float vx = hash_f(seed, 10u) * speed_scale * half * 0.6f;
-                        float vy = (0.2f + 0.4f * (hash_f(seed, 20u) + 1.0f) * 0.5f) * speed_scale * half;
-                        float vz = hash_f(seed, 30u) * speed_scale * half * 0.6f;
+                        float vx = hash_f(seed, 10u) * speed_scale * hw * 0.6f;
+                        float vy = (0.2f + 0.4f * (hash_f(seed, 20u) + 1.0f) * 0.5f) * speed_scale * hh;
+                        float vz = hash_f(seed, 30u) * speed_scale * hd * 0.6f;
                         float px = bx + vx * burst_t;
                         float py = by + vy * burst_t + 0.5f * gravity_base * burst_t * burst_t;
                         float pz = bz + vz * burst_t;
@@ -261,9 +262,9 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                 if(phase < rise_duration)
                 {
                     float t = phase / rise_duration;
-                    float mx = origin.x + 0.3f * half * cosf(time * 8.0f + (float)launch);
-                    float my = origin.y - half * 0.8f + t * (half * 1.1f);
-                    float mz = origin.z + 0.3f * half * sinf(time * 8.0f + (float)launch);
+                    float mx = origin.x + 0.3f * hw * cosf(time * 8.0f + (float)launch);
+                    float my = origin.y - hh * 0.8f + t * (hh * 1.1f);
+                    float mz = origin.z + 0.3f * hd * sinf(time * 8.0f + (float)launch);
                     float hue = fmodf(time * 60.0f, 360.0f);
                     if(hue < 0.0f) hue += 360.0f;
                     particle_cache.push_back({mx, my, mz, 1.0f, hue});
@@ -271,9 +272,9 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                     for(int i = 0; i < trail; i++)
                     {
                         float ti = (float)i / (float)trail * t;
-                        float tx = origin.x + 0.35f * half * cosf(time * 8.0f + (float)launch + ti * 6.0f);
-                        float ty = origin.y - half * 0.8f + ti * (half * 1.1f);
-                        float tz = origin.z + 0.35f * half * sinf(time * 8.0f + (float)launch + ti * 6.0f);
+                        float tx = origin.x + 0.35f * hw * cosf(time * 8.0f + (float)launch + ti * 6.0f);
+                        float ty = origin.y - hh * 0.8f + ti * (hh * 1.1f);
+                        float tz = origin.z + 0.35f * hd * sinf(time * 8.0f + (float)launch + ti * 6.0f);
                         float decay = 1.0f - ti * 0.7f;
                         float h = fmodf((float)i * 30.0f, 360.0f);
                         if(h < 0.0f) h += 360.0f;
@@ -284,13 +285,13 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                 {
                     float burst_t = phase - rise_duration;
                     float decay = 1.0f / (1.0f + burst_t * decay_coeff * 0.5f);
-                    float ex = origin.x, ey = origin.y + half * 0.3f, ez = origin.z;
+                    float ex = origin.x, ey = origin.y + hh * 0.3f, ez = origin.z;
                     int n_pt = std::max(10, num_debris / 2);
                     for(int i = 0; i < n_pt; i++)
                     {
-                        float vx = hash_f((unsigned int)(launch * 200 + i), 10u) * speed_scale * half * 0.5f;
-                        float vy = (0.2f + 0.3f * (hash_f((unsigned int)(launch * 200 + i), 20u) + 1.0f) * 0.5f) * speed_scale * half;
-                        float vz = hash_f((unsigned int)(launch * 200 + i), 30u) * speed_scale * half * 0.5f;
+                        float vx = hash_f((unsigned int)(launch * 200 + i), 10u) * speed_scale * hw * 0.5f;
+                        float vy = (0.2f + 0.3f * (hash_f((unsigned int)(launch * 200 + i), 20u) + 1.0f) * 0.5f) * speed_scale * hh;
+                        float vz = hash_f((unsigned int)(launch * 200 + i), 30u) * speed_scale * hd * 0.5f;
                         float px = ex + vx * burst_t;
                         float py = ey + vy * burst_t + 0.5f * gravity_base * 0.4f * burst_t * burst_t;
                         float pz = ez + vz * burst_t;
@@ -307,7 +308,7 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
             {
                 float t = phase / missile_dur;
                 float mx = origin.x;
-                float my = origin.y - half * 0.8f + t * (half * 1.2f);
+                float my = origin.y - hh * 0.8f + t * (hh * 1.2f);
                 float mz = origin.z;
                 float hue = fmodf(time * 50.0f + (float)launch * 70.0f, 360.0f);
                 if(hue < 0.0f) hue += 360.0f;
@@ -317,16 +318,16 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
             {
                 float explode_t = phase - missile_dur;
                 float decay = 1.0f / (1.0f + explode_t * decay_coeff);
-                float ex = origin.x, ey = origin.y + half * 0.4f, ez = origin.z;
+                float ex = origin.x, ey = origin.y + hh * 0.4f, ez = origin.z;
                 int n_debris_use = std::max(10, std::min(100, (use_type == TYPE_BIG_EXPLOSION) ? (num_debris * 3 / 2) : num_debris));
                 float vel_scale = (use_type == TYPE_BIG_EXPLOSION) ? 1.4f : 1.0f;
 
                 for(int i = 0; i < n_debris_use; i++)
                 {
                     unsigned int seed = (unsigned int)(launch * 1000 + i);
-                    float vx = hash_f(seed, 10u) * speed_scale * half * 0.8f * vel_scale;
-                    float vy = (0.3f + 0.5f * ((hash_f(seed, 20u) + 1.0f) * 0.5f)) * speed_scale * half * vel_scale;
-                    float vz = hash_f(seed, 30u) * speed_scale * half * 0.8f * vel_scale;
+                    float vx = hash_f(seed, 10u) * speed_scale * hw * 0.8f * vel_scale;
+                    float vy = (0.3f + 0.5f * ((hash_f(seed, 20u) + 1.0f) * 0.5f)) * speed_scale * hh * vel_scale;
+                    float vz = hash_f(seed, 30u) * speed_scale * hd * 0.8f * vel_scale;
                     float px = ex + vx * explode_t;
                     float py = ey + vy * explode_t + 0.5f * gravity_base * explode_t * explode_t;
                     float pz = ez + vz * explode_t;

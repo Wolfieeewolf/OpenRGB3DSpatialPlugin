@@ -2,6 +2,7 @@
 
 #include "Bubbles.h"
 #include "EffectHelpers.h"
+#include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
@@ -123,7 +124,6 @@ void Bubbles::SetupCustomUI(QWidget* parent)
 
 void Bubbles::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor Bubbles::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -135,17 +135,17 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-    if(half < 1e-5f) half = 1.0f;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float h_scale = std::max({e.hw, e.hh, e.hd});
     float speed_scale = GetScaledSpeed() * 0.015f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float color_cycle = time * GetScaledFrequency() * 12.0f;
     int n_bub = std::max(4, std::min(30, max_bubbles));
-    float thick = std::max(0.02f, std::min(4.0f, bubble_thickness * half)) / std::max(0.35f, detail);
-    float rise = std::max(0.2f, std::min(2.0f, rise_speed)) * speed_scale * half;
+    float thick = std::max(0.02f, std::min(4.0f, bubble_thickness * h_scale)) / std::max(0.35f, detail);
+    float rise = std::max(0.2f, std::min(2.0f, rise_speed)) * speed_scale * e.hh;
     float interval = std::max(0.3f, std::min(2.0f, spawn_interval));
-    float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * half * size_m;
+    float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * h_scale * size_m;
 
     if(bubble_centers_cached.size() != (size_t)n_bub || fabsf(time - bubble_cache_time) > 0.001f)
     {
@@ -155,9 +155,9 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         {
             float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
             float radius = (phase / interval) * max_r * 0.4f;
-            float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * half * 0.6f;
-            float cy = origin.y - half * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, half * 2.0f) - half;
-            float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * half * 0.6f;
+            float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
+            float cy = origin.y - e.hh * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
+            float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
             bubble_centers_cached[i] = {cx, cy, cz, radius};
         }
     }

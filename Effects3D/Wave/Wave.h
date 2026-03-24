@@ -26,7 +26,6 @@ public:
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
-    RGBColor CalculateColor(float x, float y, float z, float time) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;
@@ -66,11 +65,15 @@ private:
     QLabel* surface_amp_label = nullptr;
     QSlider* surface_dir_slider = nullptr;
     QLabel* surface_dir_label = nullptr;
+    QSlider* surface_edge_fade_slider = nullptr;
+    QLabel* surface_edge_fade_label = nullptr;
     int wave_style = STYLE_SINUS;
     float surface_thickness = 0.08f;
     float wave_frequency = 1.0f;
     float wave_amplitude = 1.0f;
     float wave_direction_deg = 0.0f;
+    /** 0..100: soften intensity toward horizontal room edges (large spatial grids). */
+    float surface_edge_fade = 18.0f;
 
     float progress = 0.0f;
 };

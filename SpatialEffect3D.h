@@ -21,6 +21,8 @@
 #include "RGBController.h"
 
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
@@ -56,6 +58,44 @@ struct GridContext3D
         center_z = (min_z + max_z) / 2.0f;
     }
 };
+
+struct EffectGridAxisHalfExtents
+{
+    float hw;
+    float hh;
+    float hd;
+};
+
+inline EffectGridAxisHalfExtents MakeEffectGridAxisHalfExtents(const GridContext3D& grid, float normalized_scale)
+{
+    float s = std::max(0.05f, normalized_scale);
+    float hw = grid.width * 0.5f * s;
+    float hh = grid.height * 0.5f * s;
+    float hd = grid.depth * 0.5f * s;
+    if(hw < 1e-6f) hw = 1.0f;
+    if(hh < 1e-6f) hh = 1.0f;
+    if(hd < 1e-6f) hd = 1.0f;
+    return {hw, hh, hd};
+}
+
+inline float EffectGridBoundingRadius(const GridContext3D& grid, float normalized_scale)
+{
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    return std::sqrt(e.hw * e.hw + e.hh * e.hh + e.hd * e.hd);
+}
+
+inline float EffectGridHorizontalRadialNormXZ(float rx, float rz, float hw, float hd)
+{
+    float lx = rx / hw;
+    float lz = rz / hd;
+    return std::sqrt(lx * lx + lz * lz);
+}
+
+inline float EffectGridHorizontalRadialNorm01(float r_xz_corner_sqrt2)
+{
+    constexpr float inv_sqrt2 = 0.70710678f;
+    return std::min(1.0f, r_xz_corner_sqrt2 * inv_sqrt2);
+}
 
 struct EffectInfo3D
 {
@@ -109,29 +149,12 @@ public:
     virtual EffectInfo3D GetEffectInfo() = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
-    virtual RGBColor CalculateColor(float x, float y, float z, float time) = 0;
+    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
 
-    virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
-    {
-        Vector3D origin_grid = GetEffectOriginGrid(grid);
-        float rel_x = x - origin_grid.x;
-        float rel_y = y - origin_grid.y;
-        float rel_z = z - origin_grid.z;
-
-        if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-        {
-            return 0x00000000;
-        }
-
-        Vector3D effect_origin = GetEffectOrigin();
-        float x_adj = x - origin_grid.x + effect_origin.x;
-        float y_adj = y - origin_grid.y + effect_origin.y;
-        float z_adj = z - origin_grid.z + effect_origin.z;
-        boundary_prevalidated = true;
-        RGBColor result = CalculateColor(x_adj, y_adj, z_adj, time);
-        boundary_prevalidated = false;
-        return result;
-    }
+    /** True if (x,y,z) is outside the scaled effect boundary (same test as grid-aware boundary). */
+    bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
+    /** Maps grid sample from effect-origin space into the effect's internal origin space. */
+    void ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
@@ -273,7 +296,6 @@ protected:
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
-    bool                boundary_prevalidated;
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;

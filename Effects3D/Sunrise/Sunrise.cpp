@@ -223,7 +223,6 @@ void Sunrise::SetupCustomUI(QWidget* parent)
 
 void Sunrise::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor Sunrise::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 static RGBColor lerp_color(RGBColor a, RGBColor b, float t)
 {

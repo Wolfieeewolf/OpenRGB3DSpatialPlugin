@@ -161,7 +161,6 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
 
 void SurfaceAmbient::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor SurfaceAmbient::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 static void eval_surface(int surf, const GridContext3D& grid, float x, float y, float z,
     float& dist, float& u, float& v, float& extent)

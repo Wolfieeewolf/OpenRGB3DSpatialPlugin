@@ -126,23 +126,6 @@ void BandScan::UpdateParams(SpatialEffectParams& /*params*/)
     RefreshBandRange();
 }
 
-RGBColor BandScan::CalculateColor(float x, float y, float z, float time)
-{
-    EnsureSpectrumCache(time);
-    float axis_pos = ResolveCoordinateNormalized(nullptr, x, y, z);
-    float height_norm = ResolveHeightNormalized(nullptr, x, y, z);
-    float radial_norm = ResolveRadialNormalized(nullptr, x, y, z);
-    float size_m = GetNormalizedSize();
-    float detail = std::max(0.05f, GetScaledDetail());
-    float color_cycle = time * GetScaledFrequency() * 12.0f;
-    float center = 0.5f;
-    axis_pos = std::clamp(center + (axis_pos - center) * (0.6f + 0.4f * size_m) * (0.7f + 0.3f * detail), 0.0f, 1.0f);
-    bool rainbow_mode = GetRainbowMode();
-    RGBColor axis_color = rainbow_mode
-        ? GetRainbowColor(axis_pos * 360.0f + color_cycle)
-        : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, axis_color, rainbow_mode);
-}
 
 RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -320,10 +303,11 @@ float BandScan::ResolveRadialNormalized(const GridContext3D* grid, float x, floa
 {
     if(grid)
     {
-        float dx = x - grid->center_x;
-        float dy = y - grid->center_y;
-        float dz = z - grid->center_z;
-        float max_radius = 0.5f * std::max({grid->width, grid->height, grid->depth});
+        Vector3D o = GetEffectOriginGrid(*grid);
+        float dx = x - o.x;
+        float dy = y - o.y;
+        float dz = z - o.z;
+        float max_radius = EffectGridBoundingRadius(*grid, GetNormalizedScale());
         return ComputeRadialNormalized(dx, dy, dz, max_radius);
     }
     return std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);

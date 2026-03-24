@@ -95,10 +95,6 @@ void BreathingSphere::UpdateParams(SpatialEffectParams& params)
 
 
 
-RGBColor BreathingSphere::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 /*---------------------------------------------------------*\
 | BreathingSphere.cpp                                     |
@@ -137,15 +133,15 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     }
 
     float size_multiplier = GetNormalizedSize();
-    float half_diag = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float bounds_r = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float base_scale = 0.45f;
-    float sphere_radius = half_diag * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * rate * 0.2f));
+    float sphere_radius = bounds_r * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * rate * 0.2f));
 
     float distance = sqrtf(rel_x*rel_x + rel_y*rel_y + rel_z*rel_z);
     
     float core_intensity = 1.0f - smoothstep(0.0f, sphere_radius * 0.7f, distance);
     float glow_intensity = 0.5f * (1.0f - smoothstep(sphere_radius * 0.7f, sphere_radius * 1.3f, distance));
-    float ripple = 0.3f * sinf(distance * (detail / (half_diag + 0.001f)) * 1.5f - progress * 2.0f);
+    float ripple = 0.3f * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f - progress * 2.0f);
     ripple = (ripple + 1.0f) * 0.5f;
     
     float ambient = 0.1f * (1.0f - smoothstep(0.0f, sphere_radius * 2.0f, distance));

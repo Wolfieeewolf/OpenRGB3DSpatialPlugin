@@ -70,7 +70,6 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
 
 void ColorWheel::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
-RGBColor ColorWheel::CalculateColor(float, float, float, float) { return 0x00000000; }
 
 RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -83,12 +82,13 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     float detail = std::max(0.05f, GetScaledDetail());
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
     float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
 
     int pl = GetPlane();
     float angle;
-    if(pl == 0) angle = atan2f(lz, lx);
-    else if(pl == 1) angle = atan2f(lx, ly);
-    else angle = atan2f(lz, ly);
+    if(pl == 0) angle = atan2f(lz / e.hd, lx / e.hw);
+    else if(pl == 1) angle = atan2f(lx / e.hw, ly / e.hh);
+    else angle = atan2f(lz / e.hd, ly / e.hh);
 
     float dir = (direction == 0) ? 1.0f : -1.0f;
     float hue = fmodf(angle * (180.0f / (float)M_PI) * (0.5f + 0.5f * detail) + progress * 360.0f * dir + time * GetScaledFrequency() * 12.0f, 360.0f);

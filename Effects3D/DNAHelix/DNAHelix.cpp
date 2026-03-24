@@ -102,10 +102,6 @@ void DNAHelix::OnDNAParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor DNAHelix::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -126,7 +122,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * 4.0f / fmax(0.1f, size_multiplier);
     
-    float max_distance = sqrt(grid.width*grid.width + grid.height*grid.height + grid.depth*grid.depth) / 2.0f;
+    float max_distance = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float radius_scale_normalized = (helix_radius / 200.0f) * size_multiplier;
     float radius_scale = max_distance * radius_scale_normalized * 0.3f;
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
@@ -139,7 +135,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     float coord_along_helix = 0.0f;
     if(grid.height > 0.001f)
     {
-        coord_along_helix = (rot_rel_y + grid.height * 0.5f) / grid.height;
+        coord_along_helix = (rotated_pos.y - grid.min_y) / grid.height;
     }
     coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
     float helix_height = coord_along_helix * freq_scale + progress;

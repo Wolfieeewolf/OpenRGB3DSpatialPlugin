@@ -168,20 +168,20 @@ void BouncingBall::OnBallParameterChanged()
     emit ParametersChanged();
 }
 
-RGBColor BouncingBall::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
     float speed = GetScaledSpeed();
     float e = fmax(0.1f, elasticity / 100.0f);
 
     float size_m = GetNormalizedSize();
     float color_cycle = time * GetScaledFrequency() * 12.0f;
     float detail = std::max(0.05f, GetScaledDetail());
-    float room_avg = (grid.width + grid.depth + grid.height) / 3.0f;
+    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float R = room_avg * (0.002f + 0.28f) * size_m;
 
     float xmin = grid.min_x + R;

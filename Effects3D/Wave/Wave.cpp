@@ -177,6 +177,16 @@ void Wave::SetupCustomUI(QWidget* parent)
     surface_dir_label->setMinimumWidth(36);
     surf_layout->addWidget(surface_dir_slider, row, 1);
     surf_layout->addWidget(surface_dir_label, row, 2);
+    row++;
+    surf_layout->addWidget(new QLabel("Edge fade:"), row, 0);
+    surface_edge_fade_slider = new QSlider(Qt::Horizontal);
+    surface_edge_fade_slider->setRange(0, 100);
+    surface_edge_fade_slider->setValue((int)surface_edge_fade);
+    surface_edge_fade_slider->setToolTip("Softens the wave toward the horizontal room edges (helps wide or large grid layouts).");
+    surface_edge_fade_label = new QLabel(QString::number((int)surface_edge_fade) + "%");
+    surface_edge_fade_label->setMinimumWidth(36);
+    surf_layout->addWidget(surface_edge_fade_slider, row, 1);
+    surf_layout->addWidget(surface_edge_fade_label, row, 2);
 
     connect(surface_style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         wave_style = std::max(0, std::min(idx, STYLE_COUNT - 1));
@@ -240,55 +250,6 @@ float Wave::smoothstep(float edge0, float edge1, float x) const
     return t * t * (3.0f - 2.0f * t);
 }
 
-RGBColor Wave::CalculateColor(float x, float y, float z, float time)
-{
-    if(mode == MODE_SURFACE)
-        return 0x00000000;
-    Vector3D origin = GetEffectOrigin();
-    float rel_x = x - origin.x;
-    float rel_y = y - origin.y;
-    float rel_z = z - origin.z;
-
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z))
-    {
-        return 0x00000000;
-    }
-
-    float rate = GetScaledFrequency();
-    float detail = std::max(0.05f, GetScaledDetail());
-    progress = CalculateProgress(time);
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float rot_rel_x = rotated_pos.x - origin.x;
-    float rot_rel_y = rotated_pos.y - origin.y;
-    float rot_rel_z = rotated_pos.z - origin.z;
-    float wave_value = 0.0f;
-    float size_multiplier = GetNormalizedSize();
-    float freq_scale = detail * 0.1f / size_multiplier;
-    float position = 0.0f;
-    if(shape_type == 0)
-        position = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    else if(shape_type == 1)
-        position = rot_rel_x;
-    else if(shape_type == 2)
-        position = rot_rel_y;
-    else
-        position = rot_rel_x + rot_rel_z;
-
-    wave_value = sin(position * freq_scale - progress);
-    float hue = (wave_value + 1.0f) * 180.0f;
-    hue = fmod(hue, 360.0f);
-    if(hue < 0.0f) hue += 360.0f;
-    RGBColor final_color;
-    if(GetRainbowMode())
-        final_color = GetRainbowColor(hue + time * rate * 12.0f);
-    else
-    {
-        float pos = fmodf(hue / 360.0f + time * rate * 0.02f, 1.0f);
-        if(pos < 0.0f) pos += 1.0f;
-        final_color = GetColorAtPosition(pos);
-    }
-    return final_color;
-}
 
 RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -301,13 +262,18 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     {
         float progress_val = CalculateProgress(time);
         float phase = progress_val * (float)(2.0 * M_PI);
-        float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-        if(half < 1e-5f) half = 1.0f;
+        float scale_eff = std::max(0.05f, GetNormalizedScale());
+        float sw = grid.width * 0.5f * scale_eff;
+        float sh = grid.height * 0.5f * scale_eff;
+        float sd = grid.depth * 0.5f * scale_eff;
+        if(sw < 1e-5f) sw = 1.0f;
+        if(sh < 1e-5f) sh = 1.0f;
+        if(sd < 1e-5f) sd = 1.0f;
 
         Vector3D rot = TransformPointByRotation(x, y, z, origin);
-        float lx = (rot.x - origin.x) / half;
-        float ly = (rot.y - origin.y) / half;
-        float lz = (rot.z - origin.z) / half;
+        float lx = (rot.x - origin.x) / sw;
+        float ly = (rot.y - origin.y) / sh;
+        float lz = (rot.z - origin.z) / sd;
 
         float r = sqrtf(lx*lx + lz*lz);
         float freq = std::max(0.2f, std::min(4.0f, wave_frequency));
@@ -344,6 +310,14 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float intensity = expf(-d * d / (sigma * sigma));
         intensity = fminf(1.0f, intensity);
 
+        float fade = std::clamp(surface_edge_fade / 100.0f, 0.0f, 1.0f);
+        if(fade > 0.001f)
+        {
+            float u = std::max(std::fabs(lx), std::fabs(lz));
+            float edge_mul = 1.0f - fade * smoothstep(0.0f, 1.0f, u);
+            intensity *= std::max(0.0f, std::min(1.0f, edge_mul));
+        }
+
         float hue = fmodf((surface_y / amp + 1.0f) * 90.0f + progress_val * 60.0f, 360.0f);
         if(hue < 0.0f) hue += 360.0f;
         float pos_norm = (surface_y / amp + 1.0f) * 0.5f;
@@ -372,23 +346,23 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     if(shape_type == 0)
     {
         float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-        float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
         normalized_position = (max_radius > 0.001f) ? (radial_distance / max_radius) : 0.0f;
     }
     else if(shape_type == 1)
-        normalized_position = (grid.width > 0.001f) ? ((rot_rel_x + grid.width * 0.5f) / grid.width) : 0.0f;
+        normalized_position = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.0f;
     else if(shape_type == 2)
-        normalized_position = (grid.height > 0.001f) ? ((rot_rel_y + grid.height * 0.5f) / grid.height) : 0.0f;
+        normalized_position = (grid.height > 0.001f) ? ((rotated_pos.y - grid.min_y) / grid.height) : 0.0f;
     else
     {
-        float diag = rot_rel_x + rot_rel_z;
-        float max_d = grid.width + grid.depth;
-        normalized_position = (max_d > 0.001f) ? ((diag + max_d * 0.5f) / max_d) : 0.0f;
+        float nx = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.5f;
+        float nz = (grid.depth > 0.001f) ? ((rotated_pos.z - grid.min_z) / grid.depth) : 0.5f;
+        normalized_position = 0.5f * (nx + nz);
     }
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
     wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    float max_radius = sqrtf(grid.width*grid.width + grid.depth*grid.depth + grid.height*grid.height) * 0.5f;
+    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {
@@ -476,6 +450,8 @@ void Wave::LoadSettings(const nlohmann::json& settings)
         wave_amplitude = std::max(0.2f, std::min(2.0f, settings["wave_amplitude"].get<float>()));
     if(settings.contains("wave_direction_deg") && settings["wave_direction_deg"].is_number())
         wave_direction_deg = fmodf(settings["wave_direction_deg"].get<float>() + 360.0f, 360.0f);
+    if(settings.contains("surface_edge_fade") && settings["surface_edge_fade"].is_number())
+        surface_edge_fade = std::clamp(settings["surface_edge_fade"].get<float>(), 0.0f, 100.0f);
 
     if(style_combo)
         style_combo->setCurrentIndex(mode);
@@ -509,5 +485,10 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     {
         surface_dir_slider->setValue((int)wave_direction_deg);
         if(surface_dir_label) surface_dir_label->setText(QString::number((int)wave_direction_deg) + "\u00B0");
+    }
+    if(surface_edge_fade_slider)
+    {
+        surface_edge_fade_slider->setValue((int)surface_edge_fade);
+        if(surface_edge_fade_label) surface_edge_fade_label->setText(QString::number((int)surface_edge_fade) + "%");
     }
 }

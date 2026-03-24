@@ -108,10 +108,6 @@ void WireframeCube::UpdateParams(SpatialEffectParams& params)
     (void)params;
 }
 
-RGBColor WireframeCube::CalculateColor(float, float, float, float)
-{
-    return 0x00000000;
-}
 
 RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -152,12 +148,11 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
         }
     }
 
-    float half = 0.5f * std::max(grid.width, std::max(grid.height, grid.depth)) * GetNormalizedScale();
-    if(half < 1e-5f) half = 1.0f;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
-    float lx = (rot.x - origin.x) / half;
-    float ly = (rot.y - origin.y) / half;
-    float lz = (rot.z - origin.z) / half;
+    float lx = (rot.x - origin.x) / e.hw;
+    float ly = (rot.y - origin.y) / e.hh;
+    float lz = (rot.z - origin.z) / e.hd;
 
     const int edges[12][2] = {
         {0,1},{2,3},{0,2},{1,3},{4,5},{6,7},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}
