@@ -1672,6 +1672,7 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
         effect_stack_list->setCurrentRow(new_index);
         effect_stack_list->blockSignals(restore_stack_list_signals);
     }
+    on_effect_stack_selection_changed(new_index);
     SaveEffectStack();
 }
 
