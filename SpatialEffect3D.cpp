@@ -778,6 +778,8 @@ RGBColor SpatialEffect3D::GetRainbowColor(float hue)
 
 RGBColor SpatialEffect3D::GetColorAtPosition(float position)
 {
+    position = std::clamp(position, 0.0f, 1.0f);
+
     if(rainbow_mode)
     {
         return GetRainbowColor(position * 360.0f);
@@ -1323,7 +1325,7 @@ bool SpatialEffect3D::IsPointOnActiveSurface(float x, float y, float z, const Gr
     if(d_wxm < best) { best = d_wxm; surf = SURF_WALL_XM; }
     if(d_wxp < best) { best = d_wxp; surf = SURF_WALL_XP; }
     if(d_wzm < best) { best = d_wzm; surf = SURF_WALL_ZM; }
-    if(d_wzp < best) { best = d_wzp; surf = SURF_WALL_ZP; }
+    if(d_wzp < best) { surf = SURF_WALL_ZP; }
     return (effect_surface_mask & surf) != 0;
 }
 

@@ -230,6 +230,7 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
         return;
     }
 
+    int selected_row = zones_list->currentRow();
     zones_list->clear();
 
     for(int i = 0; i < zone_manager->GetZoneCount(); i++)
@@ -247,6 +248,19 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
     UpdateEffectZoneCombo();
     UpdateStackEffectZoneCombo();
     UpdateFreqZoneCombo();
+
+    if(selected_row >= 0 && selected_row < zones_list->count())
+    {
+        zones_list->setCurrentRow(selected_row);
+    }
+    else if(zones_list->count() > 0)
+    {
+        zones_list->setCurrentRow(0);
+    }
+    else
+    {
+        on_zone_selected(-1);
+    }
 }
 
 void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_value)
@@ -256,7 +270,7 @@ void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_va
         return;
     }
 
-    combo->blockSignals(true);
+    bool restore_signals = combo->blockSignals(true);
     combo->clear();
 
     combo->addItem("All Controllers", QVariant(-1));
@@ -313,7 +327,7 @@ void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_va
     }
 
     combo->setCurrentIndex(restore_index);
-    combo->blockSignals(false);
+    combo->blockSignals(restore_signals);
 }
 
 int OpenRGB3DSpatialTab::ResolveZoneTargetSelection(const QComboBox* combo) const

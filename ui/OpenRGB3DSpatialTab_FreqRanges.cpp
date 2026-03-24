@@ -269,7 +269,8 @@ void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
 {
     if(!freq_origin_combo) return;
 
-    freq_origin_combo->blockSignals(true);
+    QVariant desired_selection = freq_origin_combo->currentData();
+    bool restore_signals = freq_origin_combo->blockSignals(true);
     freq_origin_combo->clear();
 
     freq_origin_combo->addItem("Room Center", QVariant(-1));
@@ -280,17 +281,24 @@ void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
         if(!ref_point) continue;
         QString name = QString::fromStdString(ref_point->GetName());
         QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-        freq_origin_combo->addItem(QString("%1 (%2)").arg(name).arg(type), QVariant((int)i));
+        freq_origin_combo->addItem(QString("%1 (%2)").arg(name, type), QVariant((int)i));
     }
 
-    freq_origin_combo->blockSignals(false);
+    int restore_index = freq_origin_combo->findData(desired_selection);
+    if(restore_index < 0)
+    {
+        restore_index = 0;
+    }
+    freq_origin_combo->setCurrentIndex(restore_index);
+    freq_origin_combo->blockSignals(restore_signals);
 }
 
 void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
 {
     if(!freq_zone_combo) return;
     
-    freq_zone_combo->blockSignals(true);
+    QVariant desired_selection = freq_zone_combo->currentData();
+    bool restore_signals = freq_zone_combo->blockSignals(true);
     freq_zone_combo->clear();
     
     freq_zone_combo->addItem("All Controllers", QVariant(-1));
@@ -327,7 +335,13 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
         freq_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
     }
     
-    freq_zone_combo->blockSignals(false);
+    int restore_index = freq_zone_combo->findData(desired_selection);
+    if(restore_index < 0)
+    {
+        restore_index = 0;
+    }
+    freq_zone_combo->setCurrentIndex(restore_index);
+    freq_zone_combo->blockSignals(restore_signals);
 }
 
 void OpenRGB3DSpatialTab::UpdateFrequencyRangesList()
@@ -391,6 +405,12 @@ void OpenRGB3DSpatialTab::on_remove_freq_range_clicked()
     {
         freq_range_details->setVisible(false);
     }
+    else if(!frequency_ranges.empty() && freq_ranges_list)
+    {
+        int new_row = std::min(row, (int)frequency_ranges.size() - 1);
+        freq_ranges_list->setCurrentRow(new_row);
+        on_freq_range_selected(new_row);
+    }
 
     /* Refresh grid/overlay so removed range stops rendering immediately */
     RenderEffectStack();
@@ -453,29 +473,25 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
     
     if(freq_range_name_edit)
     {
-        freq_range_name_edit->blockSignals(true);
+        QSignalBlocker block(*freq_range_name_edit);
         freq_range_name_edit->setText(QString::fromStdString(range->name));
-        freq_range_name_edit->blockSignals(false);
     }
     
     if(freq_range_enabled_check)
     {
-        freq_range_enabled_check->blockSignals(true);
+        QSignalBlocker block(*freq_range_enabled_check);
         freq_range_enabled_check->setChecked(range->enabled);
-        freq_range_enabled_check->blockSignals(false);
     }
     
     if(freq_low_slider)
     {
-        freq_low_slider->blockSignals(true);
+        QSignalBlocker block(*freq_low_slider);
         freq_low_slider->setValue((int)range->low_hz);
-        freq_low_slider->blockSignals(false);
     }
     if(freq_high_slider)
     {
-        freq_high_slider->blockSignals(true);
+        QSignalBlocker block(*freq_high_slider);
         freq_high_slider->setValue((int)range->high_hz);
-        freq_high_slider->blockSignals(false);
     }
     if(freq_low_label)
     {
@@ -488,7 +504,7 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
 
     if(freq_effect_combo)
     {
-        freq_effect_combo->blockSignals(true);
+        QSignalBlocker block(*freq_effect_combo);
         int effect_idx = 0;
         QString selected_class_name;
         for(int i = 0; i < freq_effect_combo->count(); i++)
@@ -502,53 +518,62 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
             }
         }
         freq_effect_combo->setCurrentIndex(effect_idx);
-        freq_effect_combo->blockSignals(false);
         
         SetupFreqRangeEffectUI(range, selected_class_name);
     }
     
     if(freq_zone_combo)
     {
-        freq_zone_combo->blockSignals(true);
+        QSignalBlocker block(*freq_zone_combo);
         int zone_idx = freq_zone_combo->findData(QVariant(range->zone_index));
-        if(zone_idx >= 0) freq_zone_combo->setCurrentIndex(zone_idx);
-        freq_zone_combo->blockSignals(false);
+        if(zone_idx >= 0)
+        {
+            freq_zone_combo->setCurrentIndex(zone_idx);
+        }
+        else
+        {
+            range->zone_index = -1;
+            freq_zone_combo->setCurrentIndex(0);
+        }
     }
 
     if(freq_origin_combo)
     {
-        freq_origin_combo->blockSignals(true);
+        QSignalBlocker block(*freq_origin_combo);
         int origin_idx = freq_origin_combo->findData(QVariant(range->origin_ref_index));
-        if(origin_idx >= 0) freq_origin_combo->setCurrentIndex(origin_idx);
-        freq_origin_combo->blockSignals(false);
+        if(origin_idx >= 0)
+        {
+            freq_origin_combo->setCurrentIndex(origin_idx);
+        }
+        else
+        {
+            range->origin_ref_index = -1;
+            freq_origin_combo->setCurrentIndex(0);
+        }
     }
 
     if(freq_smoothing_slider)
     {
-        freq_smoothing_slider->blockSignals(true);
+        QSignalBlocker block(*freq_smoothing_slider);
         freq_smoothing_slider->setValue((int)(range->smoothing * 100.0f));
-        freq_smoothing_slider->blockSignals(false);
         if(freq_smoothing_label) freq_smoothing_label->setText(QString::number((int)(range->smoothing * 100.0f)) + "%");
     }
     if(freq_sensitivity_slider)
     {
-        freq_sensitivity_slider->blockSignals(true);
+        QSignalBlocker block(*freq_sensitivity_slider);
         freq_sensitivity_slider->setValue((int)(range->sensitivity * 100.0f));
-        freq_sensitivity_slider->blockSignals(false);
         if(freq_sensitivity_label) freq_sensitivity_label->setText(QString::number((int)(range->sensitivity * 100.0f)) + "%");
     }
     if(freq_attack_slider)
     {
-        freq_attack_slider->blockSignals(true);
+        QSignalBlocker block(*freq_attack_slider);
         freq_attack_slider->setValue((int)(range->attack * 100.0f));
-        freq_attack_slider->blockSignals(false);
         if(freq_attack_label) freq_attack_label->setText(QString::number(range->attack, 'f', 2));
     }
     if(freq_decay_slider)
     {
-        freq_decay_slider->blockSignals(true);
+        QSignalBlocker block(*freq_decay_slider);
         freq_decay_slider->setValue((int)(range->decay * 100.0f));
-        freq_decay_slider->blockSignals(false);
         if(freq_decay_label) freq_decay_label->setText(QString::number(range->decay, 'f', 2));
     }
     for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS && i < (int)freq_eq_sliders.size(); i++)
@@ -556,9 +581,8 @@ void OpenRGB3DSpatialTab::LoadFreqRangeDetails(FrequencyRangeEffect3D* range)
         QSlider* s = freq_eq_sliders[i];
         if(s)
         {
-            s->blockSignals(true);
+            QSignalBlocker block(*s);
             s->setValue((int)(range->eq_gain[i] * 100.0f));
-            s->blockSignals(false);
         }
     }
 }
@@ -772,8 +796,16 @@ void OpenRGB3DSpatialTab::on_freq_decay_changed(int value)
 
 void OpenRGB3DSpatialTab::on_freq_effect_changed(int index)
 {
+    if(!freq_effect_combo)
+    {
+        return;
+    }
     int row = freq_ranges_list->currentRow();
     if(row < 0 || row >= (int)frequency_ranges.size()) return;
+    if(index < 0 || index >= freq_effect_combo->count())
+    {
+        return;
+    }
     
     FrequencyRangeEffect3D* range = frequency_ranges[row].get();
     if(!range) return;

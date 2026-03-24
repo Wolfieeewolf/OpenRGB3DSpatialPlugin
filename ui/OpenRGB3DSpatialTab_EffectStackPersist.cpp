@@ -144,11 +144,17 @@ void OpenRGB3DSpatialTab::ApplyLoadedStackSelection(int desired_index)
         desired_index = effect_stack.empty() ? -1 : 0;
     }
 
+    bool restore_stack_list_signals = false;
     if(effect_stack_list)
     {
-        effect_stack_list->blockSignals(true);
+        restore_stack_list_signals = effect_stack_list->blockSignals(true);
     }
     UpdateEffectStackList();
+
+    if(effect_stack_list)
+    {
+        effect_stack_list->setCurrentRow(desired_index);
+    }
 
     if(!effect_stack.empty() && desired_index >= 0 && desired_index < (int)effect_stack.size())
     {
@@ -169,6 +175,11 @@ void OpenRGB3DSpatialTab::ApplyLoadedStackSelection(int desired_index)
             effect_combo->setCurrentIndex(desired_index);
         }
         UpdateEffectCombo();
+        if(effect_combo && desired_index < effect_combo->count())
+        {
+            QSignalBlocker cb(effect_combo);
+            effect_combo->setCurrentIndex(desired_index);
+        }
         UpdateAudioPanelVisibility();
     }
     else
@@ -178,7 +189,6 @@ void OpenRGB3DSpatialTab::ApplyLoadedStackSelection(int desired_index)
 
     if(effect_stack_list)
     {
-        effect_stack_list->setCurrentRow(desired_index);
-        effect_stack_list->blockSignals(false);
+        effect_stack_list->blockSignals(restore_stack_list_signals);
     }
 }

@@ -189,6 +189,48 @@ void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<Controll
 {
     controller_transforms = transforms;
 
+    if(!controller_transforms)
+    {
+        selected_controller_idx = -1;
+        selected_controller_indices.clear();
+        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+        update();
+        return;
+    }
+
+    const int controller_count = (int)controller_transforms->size();
+    if(selected_controller_idx >= controller_count)
+    {
+        selected_controller_idx = -1;
+    }
+    if(selected_controller_idx >= 0)
+    {
+        ControllerTransform* selected = (*controller_transforms)[selected_controller_idx].get();
+        if(!selected || selected->hidden_by_virtual)
+        {
+            selected_controller_idx = -1;
+        }
+    }
+
+    std::vector<int> valid_selected_indices;
+    valid_selected_indices.reserve(selected_controller_indices.size());
+    for(int idx : selected_controller_indices)
+    {
+        if(idx < 0 || idx >= controller_count)
+        {
+            continue;
+        }
+        ControllerTransform* selected = (*controller_transforms)[idx].get();
+        if(!selected || selected->hidden_by_virtual)
+        {
+            continue;
+        }
+        valid_selected_indices.push_back(idx);
+    }
+    selected_controller_indices.swap(valid_selected_indices);
+
+    UpdateGizmoPosition();
+
     update();
 }
 
@@ -196,13 +238,16 @@ void LEDViewport3D::SelectController(int index)
 {
     if(controller_transforms && index >= 0 && index < (int)controller_transforms->size())
     {
-        selected_display_plane_idx = -1;
-        selected_controller_idx = index;
         ControllerTransform* ctrl = (*controller_transforms)[index].get();
         if(ctrl && ctrl->hidden_by_virtual)
         {
+            selected_controller_idx = -1;
             return;
         }
+
+        selected_display_plane_idx = -1;
+        selected_ref_point_idx = -1;
+        selected_controller_idx = index;
 
         if(!IsControllerSelected(index))
         {
@@ -219,6 +264,14 @@ void LEDViewport3D::SelectController(int index)
 
 void LEDViewport3D::SelectReferencePoint(int index)
 {
+    if(index < 0)
+    {
+        selected_ref_point_idx = -1;
+        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+        update();
+        return;
+    }
+
     if(reference_points && index >= 0 && index < (int)reference_points->size())
     {
         selected_controller_indices.clear();
@@ -459,6 +512,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             selected_controller_indices.clear();
             selected_controller_idx = -1;
+            selected_display_plane_idx = -1;
 
             selected_ref_point_idx = picked_ref_point;
 
@@ -479,6 +533,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         if(picked_controller >= 0)
         {
             selected_ref_point_idx = -1;
+            selected_display_plane_idx = -1;
             if(event->modifiers() & Qt::ControlModifier)
             {
                 if(IsControllerSelected(picked_controller))
@@ -550,22 +605,28 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
             if(ctrl)
             {
                 ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
-            }
-            UpdateGizmoPosition();
+                UpdateGizmoPosition();
 
-            emit ControllerPositionChanged(selected_controller_idx,
-                                         ctrl->transform.position.x,
-                                         ctrl->transform.position.y,
-                                         ctrl->transform.position.z);
-            emit ControllerRotationChanged(selected_controller_idx,
-                                         ctrl->transform.rotation.x,
-                                         ctrl->transform.rotation.y,
-                                         ctrl->transform.rotation.z);
+                emit ControllerPositionChanged(selected_controller_idx,
+                                             ctrl->transform.position.x,
+                                             ctrl->transform.position.y,
+                                             ctrl->transform.position.z);
+                emit ControllerRotationChanged(selected_controller_idx,
+                                             ctrl->transform.rotation.x,
+                                             ctrl->transform.rotation.y,
+                                             ctrl->transform.rotation.z);
+            }
         }
         else if(selected_ref_point_idx >= 0 && reference_points &&
                 selected_ref_point_idx < (int)reference_points->size())
         {
             VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
+            if(!ref_point)
+            {
+                update();
+                last_mouse_pos = current_pos;
+                return;
+            }
             Vector3D pos = ref_point->GetPosition();
 
             emit ReferencePointPositionChanged(selected_ref_point_idx,
@@ -693,28 +754,33 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::MiddleButton)
     {
-        int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
-        if(picked_controller >= 0)
+        QPoint delta = event->pos() - click_start_pos;
+        float distance = sqrtf(delta.x() * delta.x() + delta.y() * delta.y());
+        if(distance < 3.0f)
         {
-            ClearSelection();
-            AddControllerToSelection(picked_controller);
-            SelectController(picked_controller);
-            emit ControllerSelected(picked_controller);
-        }
-        else
-        {
-            int picked_plane = PickDisplayPlane(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
-            if(picked_plane >= 0)
+            int picked_controller = PickController(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
+            if(picked_controller >= 0)
             {
                 ClearSelection();
-                SelectDisplayPlane(picked_plane);
+                AddControllerToSelection(picked_controller);
+                SelectController(picked_controller);
+                emit ControllerSelected(picked_controller);
             }
             else
             {
-                ClearSelection();
-                SelectDisplayPlane(-1);
-                emit ControllerSelected(-1);
-                emit ReferencePointSelected(-1);
+                int picked_plane = PickDisplayPlane(MOUSE_EVENT_X(event), MOUSE_EVENT_Y(event));
+                if(picked_plane >= 0)
+                {
+                    ClearSelection();
+                    SelectDisplayPlane(picked_plane);
+                }
+                else
+                {
+                    ClearSelection();
+                    SelectDisplayPlane(-1);
+                    emit ControllerSelected(-1);
+                    emit ReferencePointSelected(-1);
+                }
             }
         }
     }
@@ -1724,6 +1790,7 @@ int LEDViewport3D::PickController(int mouse_x, int mouse_y)
     {
         ControllerTransform* ctrl = (*controller_transforms)[i].get();
         if(!ctrl) continue;
+        if(ctrl->hidden_by_virtual) continue;
 
         Vector3D min_bounds, max_bounds;
         CalculateControllerBounds(ctrl, min_bounds, max_bounds);

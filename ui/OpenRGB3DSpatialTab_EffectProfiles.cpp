@@ -181,7 +181,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
 
             if(a.contains("gain_slider") && audio_gain_slider)
             {
-                int gv = std::max(1, std::min(100, a["gain_slider"].get<int>()));
+                int gv = std::max(1, std::min(500, a["gain_slider"].get<int>()));
                 {
                     QSignalBlocker blocker(audio_gain_slider);
                     audio_gain_slider->setValue(gv);
@@ -248,7 +248,7 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
         return;
     }
 
-    effect_profiles_combo->blockSignals(true);
+    bool restore_signals = effect_profiles_combo->blockSignals(true);
     effect_profiles_combo->clear();
 
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
@@ -256,7 +256,7 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
 
     if(!filesystem::exists(profiles_dir))
     {
-        effect_profiles_combo->blockSignals(false);
+        effect_profiles_combo->blockSignals(restore_signals);
         return;
     }
 
@@ -275,7 +275,7 @@ void OpenRGB3DSpatialTab::PopulateEffectProfileDropdown()
         }
     }
 
-    effect_profiles_combo->blockSignals(false);
+    effect_profiles_combo->blockSignals(restore_signals);
 }
 
 void OpenRGB3DSpatialTab::SaveCurrentEffectProfileName()
@@ -362,18 +362,18 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
             profile_name = config["auto_load_profile"].get<std::string>();
         }
 
-        effect_auto_load_checkbox->blockSignals(true);
+        bool restore_auto_load_signals = effect_auto_load_checkbox->blockSignals(true);
         effect_auto_load_checkbox->setChecked(auto_load_enabled);
-        effect_auto_load_checkbox->blockSignals(false);
+        effect_auto_load_checkbox->blockSignals(restore_auto_load_signals);
 
         if(!profile_name.empty())
         {
             int index = effect_profiles_combo->findText(QString::fromStdString(profile_name));
             if(index >= 0)
             {
-                effect_profiles_combo->blockSignals(true);
+                bool restore_profile_combo_signals = effect_profiles_combo->blockSignals(true);
                 effect_profiles_combo->setCurrentIndex(index);
-                effect_profiles_combo->blockSignals(false);
+                effect_profiles_combo->blockSignals(restore_profile_combo_signals);
             }
         }
 
@@ -506,6 +506,7 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
     }
 
     PopulateEffectProfileDropdown();
+    SaveCurrentEffectProfileName();
 
     QMessageBox::information(this, "Success",
                             QString("Effect profile \"%1\" deleted successfully!").arg(profile_name));

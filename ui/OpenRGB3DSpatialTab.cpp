@@ -1452,7 +1452,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
         return;
     }
 
-    effect_category_combo->blockSignals(true);
+    bool restore_signals = effect_category_combo->blockSignals(true);
     effect_category_combo->clear();
     effect_category_combo->addItem(tr("Select Category"), QVariant());
 
@@ -1461,7 +1461,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
     {
         effect_category_combo->addItem(QString::fromStdString(entry.first), QString::fromStdString(entry.first));
     }
-    effect_category_combo->blockSignals(false);
+    effect_category_combo->blockSignals(restore_signals);
     effect_category_combo->setCurrentIndex(0);
     PopulateEffectLibrary();
 }
@@ -1561,7 +1561,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         return;
     }
 
-    effect_library_list->blockSignals(true);
+    bool restore_signals = effect_library_list->blockSignals(true);
     effect_library_list->clear();
 
     QVariant category_data;
@@ -1572,7 +1572,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
 
     if(!category_data.isValid())
     {
-        effect_library_list->blockSignals(false);
+        effect_library_list->blockSignals(restore_signals);
         on_effect_library_selection_changed(-1);
         return;
     }
@@ -1584,7 +1584,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     auto cat_it = categorized.find(selected_category.toStdString());
     if(cat_it == categorized.end())
     {
-        effect_library_list->blockSignals(false);
+        effect_library_list->blockSignals(restore_signals);
         on_effect_library_selection_changed(-1);
         return;
     }
@@ -1603,7 +1603,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         effect_library_list->addItem(item);
     }
 
-    effect_library_list->blockSignals(false);
+    effect_library_list->blockSignals(restore_signals);
     effect_library_list->setCurrentRow(-1);
     on_effect_library_selection_changed(-1);
 }
@@ -1642,9 +1642,10 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     effect_stack.push_back(std::move(instance));
     const int new_index = (int)effect_stack.size() - 1;
 
+    bool restore_stack_list_signals = false;
     if(effect_stack_list)
     {
-        effect_stack_list->blockSignals(true);
+        restore_stack_list_signals = effect_stack_list->blockSignals(true);
     }
     UpdateEffectStackList();
     EffectInstance3D* new_instance = effect_stack[new_index].get();
@@ -1669,7 +1670,7 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     if(effect_stack_list)
     {
         effect_stack_list->setCurrentRow(new_index);
-        effect_stack_list->blockSignals(false);
+        effect_stack_list->blockSignals(restore_stack_list_signals);
     }
     SaveEffectStack();
 }
@@ -1748,8 +1749,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
             QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
         }
         
-        RemoveWidgetFromParentLayout(origin_label);
-        RemoveWidgetFromParentLayout(effect_origin_combo);
+        if(origin_label) origin_label->setVisible(false);
+        if(effect_origin_combo) effect_origin_combo->setVisible(false);
     }
     else
     {
@@ -2044,7 +2045,8 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
 {
     if(!effect_origin_combo) return;
 
-    effect_origin_combo->blockSignals(true);
+    QVariant desired_selection = effect_origin_combo->currentData();
+    bool restore_signals = effect_origin_combo->blockSignals(true);
     effect_origin_combo->clear();
 
     effect_origin_combo->addItem("Room Center", QVariant(-1));
@@ -2056,11 +2058,17 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
 
         QString name = QString::fromStdString(ref_point->GetName());
         QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-        QString display = QString("%1 (%2)").arg(name).arg(type);
+        QString display = QString("%1 (%2)").arg(name, type);
         effect_origin_combo->addItem(display, QVariant((int)i));
     }
 
-    effect_origin_combo->blockSignals(false);
+    int restore_index = effect_origin_combo->findData(desired_selection);
+    if(restore_index < 0)
+    {
+        restore_index = 0;
+    }
+    effect_origin_combo->setCurrentIndex(restore_index);
+    effect_origin_combo->blockSignals(restore_signals);
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectCombo()

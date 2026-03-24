@@ -969,6 +969,21 @@ void CustomControllerDialog::on_clear_cell_clicked()
         }
     }
 
+    if(transform_locked)
+    {
+        for(std::vector<GridLEDMapping>::iterator it = preview_led_mappings.begin(); it != preview_led_mappings.end();)
+        {
+            if(it->x == selected_col && it->y == selected_row && it->z == current_layer)
+            {
+                it = preview_led_mappings.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
     UpdateGridColors();
     UpdateCellInfo();
     UpdateItemCombo();
@@ -990,6 +1005,10 @@ void CustomControllerDialog::on_remove_all_leds_clicked()
     {
         size_t removed_count = led_mappings.size();
         led_mappings.clear();
+        if(transform_locked)
+        {
+            preview_led_mappings.clear();
+        }
 
         QMessageBox::information(this, "Removed", QString("Removed all %1 LED(s) from grid").arg(static_cast<int>(removed_count)));
 

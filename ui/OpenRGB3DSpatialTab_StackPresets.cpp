@@ -114,11 +114,17 @@ void OpenRGB3DSpatialTab::UpdateStackPresetsList()
         return;
     }
 
+    int selected_row = stack_presets_list->currentRow();
     stack_presets_list->clear();
 
     for(unsigned int i = 0; i < stack_presets.size(); i++)
     {
         stack_presets_list->addItem(QString::fromStdString(stack_presets[i]->name));
+    }
+
+    if(selected_row >= 0 && selected_row < stack_presets_list->count())
+    {
+        stack_presets_list->setCurrentRow(selected_row);
     }
 }
 

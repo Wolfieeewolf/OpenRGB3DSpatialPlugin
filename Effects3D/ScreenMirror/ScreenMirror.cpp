@@ -574,7 +574,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         std::shared_ptr<CapturedFrame> sampling_frame = frame;
         std::shared_ptr<CapturedFrame> sampling_frame_blend;
         float sampling_blend_t = 0.0f;
-        int frame_offset = 0;
         float delay_ms = 0.0f;
         float speed_mm_per_ms = 0.0f;
         bool use_wave = !monitor_test_pattern && !capture_id.empty();
@@ -676,7 +675,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
                     if(frame_index_lo < frames.size())
                     {
                         sampling_frame = frames[frame_index_lo];
-                        frame_offset = frame_offset_int;
                         if(frac > 0.01f && frame_index_lo + 1 < frames.size())
                         {
                             sampling_frame_blend = frames[frame_index_lo + 1];
@@ -687,7 +685,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             }
             else
             {
-                frame_offset = 0;
             }
         }
 
@@ -1869,7 +1866,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         
         QString name = QString::fromStdString(ref_point->GetName());
         QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-        QString display = QString("%1 (%2)").arg(name).arg(type);
+        QString display = QString("%1 (%2)").arg(name, type);
         ref_point_names.push_back(display);
         ref_point_indices.push_back((int)i);
     }
@@ -1907,7 +1904,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
 
             QString name = QString::fromStdString(ref_point->GetName());
             QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-            QString display = QString("%1 (%2)").arg(name).arg(type);
+            QString display = QString("%1 (%2)").arg(name, type);
             settings.ref_point_combo->addItem(display, QVariant((int)i));
         }
 

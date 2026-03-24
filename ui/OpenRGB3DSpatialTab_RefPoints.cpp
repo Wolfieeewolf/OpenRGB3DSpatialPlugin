@@ -99,6 +99,27 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
     bool has_selection = (index >= 0 && index < (int)reference_points.size());
     if(remove_ref_point_button) remove_ref_point_button->setEnabled(has_selection);
 
+    if(!has_selection)
+    {
+        if(pos_x_spin) pos_x_spin->setEnabled(false);
+        if(pos_y_spin) pos_y_spin->setEnabled(false);
+        if(pos_z_spin) pos_z_spin->setEnabled(false);
+        if(pos_x_slider) pos_x_slider->setEnabled(false);
+        if(pos_y_slider) pos_y_slider->setEnabled(false);
+        if(pos_z_slider) pos_z_slider->setEnabled(false);
+        if(rot_x_slider) rot_x_slider->setEnabled(false);
+        if(rot_y_slider) rot_y_slider->setEnabled(false);
+        if(rot_z_slider) rot_z_slider->setEnabled(false);
+        if(rot_x_spin) rot_x_spin->setEnabled(false);
+        if(rot_y_spin) rot_y_spin->setEnabled(false);
+        if(rot_z_spin) rot_z_spin->setEnabled(false);
+        if(viewport)
+        {
+            viewport->SelectReferencePoint(-1);
+        }
+        return;
+    }
+
     if(has_selection)
     {
         if(reference_points_list)
@@ -116,6 +137,14 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index)
         }
 
         VirtualReferencePoint3D* ref_point = reference_points[index].get();
+        if(!ref_point)
+        {
+            if(viewport)
+            {
+                viewport->SelectReferencePoint(-1);
+            }
+            return;
+        }
         Vector3D pos = ref_point->GetPosition();
         double scale_mm = (grid_scale_spin != nullptr) ? grid_scale_spin->value() : (double)grid_scale_mm;
         if(scale_mm < 0.001) scale_mm = 10.0;
@@ -192,6 +221,7 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     if(index < 0 || index >= (int)reference_points.size()) return;
     if(!pos_x_slider || !pos_x_spin) return;
     VirtualReferencePoint3D* ref_point = reference_points[index].get();
+    if(!ref_point) return;
     Vector3D pos = {x, y, z};
     ref_point->SetPosition(pos);
 
@@ -246,6 +276,7 @@ void OpenRGB3DSpatialTab::on_ref_point_color_clicked()
 void OpenRGB3DSpatialTab::UpdateReferencePointsList()
 {
     if(!reference_points_list) return;
+    int selected_row = reference_points_list->currentRow();
     reference_points_list->clear();
     for(size_t i = 0; i < reference_points.size(); i++)
     {
@@ -259,6 +290,15 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     if(ref_points_empty_label)
     {
         ref_points_empty_label->setVisible(reference_points_list->count() == 0);
+    }
+
+    if(selected_row >= 0 && selected_row < reference_points_list->count())
+    {
+        reference_points_list->setCurrentRow(selected_row);
+    }
+    else if(reference_points_list->count() == 0)
+    {
+        on_ref_point_selected(-1);
     }
 
     UpdateEffectOriginCombo();

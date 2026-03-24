@@ -79,11 +79,20 @@ Gizmo3D::~Gizmo3D()
 
 void Gizmo3D::SetMode(GizmoMode new_mode)
 {
+    dragging = false;
+    center_press_pending = false;
+    selected_axis = GIZMO_AXIS_NONE;
+    hover_axis = GIZMO_AXIS_NONE;
     mode = new_mode;
 }
 
 void Gizmo3D::CycleMode()
 {
+    dragging = false;
+    center_press_pending = false;
+    selected_axis = GIZMO_AXIS_NONE;
+    hover_axis = GIZMO_AXIS_NONE;
+
     switch(mode)
     {
         case GIZMO_MODE_MOVE:
@@ -572,7 +581,6 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
 
     if(RayBoxIntersect(ray, z_box, distance) && distance < closest_distance)
     {
-        closest_distance = distance;
         closest_axis = GIZMO_AXIS_Z;
     }
 
@@ -912,6 +920,13 @@ void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* m
     float w0y = drag_start_world[1] - ray.origin[1];
     float w0z = drag_start_world[2] - ray.origin[2];
     float t = (drag_plane_normal[0]*w0x + drag_plane_normal[1]*w0y + drag_plane_normal[2]*w0z) / n_dot_d;
+    if(t < 0.0f)
+    {
+        float dx = (float)(mouse_x - last_mouse_pos.x());
+        float dy = (float)(mouse_y - last_mouse_pos.y());
+        ApplyFreeroamMovement(dx, dy, modelview, projection, viewport);
+        return;
+    }
     float hitx = ray.origin[0] + t*ray.direction[0];
     float hity = ray.origin[1] + t*ray.direction[1];
     float hitz = ray.origin[2] + t*ray.direction[2];

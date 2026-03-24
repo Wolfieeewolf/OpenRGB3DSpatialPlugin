@@ -540,8 +540,7 @@ private:
         QString DisplayLabel() const
         {
             return QString("%1 %2 (%3 x %4 mm)")
-                .arg(brand)
-                .arg(model)
+                .arg(brand, model)
                 .arg(width_mm, 0, 'f', 0)
                 .arg(height_mm, 0, 'f', 0);
         }

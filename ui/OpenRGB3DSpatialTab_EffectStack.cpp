@@ -706,7 +706,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     {
         current_blend_index = 0;
     }
-    stack_effect_blend_combo->blockSignals(true);
-    stack_effect_blend_combo->setCurrentIndex(current_blend_index);
-    stack_effect_blend_combo->blockSignals(false);
+    {
+        QSignalBlocker block(*stack_effect_blend_combo);
+        stack_effect_blend_combo->setCurrentIndex(current_blend_index);
+    }
 }

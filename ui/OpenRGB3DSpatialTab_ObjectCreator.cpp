@@ -129,7 +129,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
         }
     }
 
-    available_controllers_list->blockSignals(true);
+    bool restore_signals = available_controllers_list->blockSignals(true);
     available_controllers_list->clear();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
@@ -197,7 +197,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
         }
     }
 
-    available_controllers_list->blockSignals(false);
+    available_controllers_list->blockSignals(restore_signals);
 
     UpdateCustomControllersList();
 
@@ -236,6 +236,12 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
 void OpenRGB3DSpatialTab::UpdateCustomControllersList()
 {
+    if(!custom_controllers_list)
+    {
+        return;
+    }
+
+    int selected_row = custom_controllers_list->currentRow();
     custom_controllers_list->clear();
 
     for(unsigned int i = 0; i < virtual_controllers.size(); i++)
@@ -246,6 +252,11 @@ void OpenRGB3DSpatialTab::UpdateCustomControllersList()
     if(custom_controllers_empty_label)
     {
         custom_controllers_empty_label->setVisible(custom_controllers_list->count() == 0);
+    }
+
+    if(selected_row >= 0 && selected_row < custom_controllers_list->count())
+    {
+        custom_controllers_list->setCurrentRow(selected_row);
     }
 
     on_custom_controller_selection_changed(custom_controllers_list->currentRow());
@@ -420,6 +431,11 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
 
     if(transform_index >= 0 && transform_index < (int)controller_transforms.size())
     {
+        if(viewport)
+        {
+            viewport->SelectController(transform_index);
+        }
+
         int list_row = TransformIndexToControllerListRow(transform_index);
         if(controller_list && list_row >= 0)
         {
@@ -825,6 +841,11 @@ void OpenRGB3DSpatialTab::on_granularity_changed(int)
 
 void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
 {
+    if(!item_combo || !available_controllers_list || !granularity_combo || !resource_manager)
+    {
+        return;
+    }
+
     item_combo->clear();
 
     int list_row = available_controllers_list->currentRow();
@@ -959,6 +980,7 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
         viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
     }
+    SetLayoutDirty();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1103,6 +1125,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         controller_list->addItem(list_item);
 
         if(viewport) viewport->update();
+        SetLayoutDirty();
         UpdateAvailableControllersList();
         UpdateAvailableItemCombo();
 
@@ -1151,6 +1174,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             viewport->SelectDisplayPlane(plane_index);
             viewport->update();
         }
+        SetLayoutDirty();
         NotifyDisplayPlaneChanged();
         emit GridLayoutChanged();
         UpdateAvailableControllersList();
@@ -1292,16 +1316,21 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         if(type_code == -2)
         {
             if(object_index >= 0 && object_index < (int)reference_points.size())
-        {
-            reference_points[object_index]->SetVisible(false);
+            {
+                reference_points[object_index]->SetVisible(false);
+            }
+            if(viewport)
+            {
+                viewport->SelectReferencePoint(-1);
+                viewport->update();
+            }
+            delete controller_list->takeItem(selected_row);
+            SetLayoutDirty();
+            UpdateAvailableControllersList();
+            UpdateAvailableItemCombo();
+            RefreshHiddenControllerStates();
+            return;
         }
-        delete controller_list->takeItem(selected_row);
-        if(viewport) viewport->update();
-        UpdateAvailableControllersList();
-        UpdateAvailableItemCombo();
-        RefreshHiddenControllerStates();
-        return;
-    }
         else if(type_code == -3)
         {
             int plane_index = FindDisplayPlaneIndexById(object_index);
@@ -1341,7 +1370,12 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
                 }
             }
             delete controller_list->takeItem(selected_row);
-            if(viewport) viewport->update();
+            if(viewport)
+            {
+                viewport->SelectDisplayPlane(-1);
+                viewport->update();
+            }
+            SetLayoutDirty();
             NotifyDisplayPlaneChanged();
             emit GridLayoutChanged();
             UpdateDisplayPlanesList();
@@ -1367,6 +1401,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         viewport->SetControllerTransforms(&controller_transforms);
         viewport->update();
     }
+    SetLayoutDirty();
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
@@ -1426,6 +1461,14 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     NotifyDisplayPlaneChanged();
     emit GridLayoutChanged();
     RefreshHiddenControllerStates();
+
+    on_controller_selected(-1);
+    on_ref_point_selected(-1);
+    on_display_plane_selected(-1);
+    if(viewport)
+    {
+        viewport->ClearSelection();
+    }
 }
 
 void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
@@ -1446,6 +1489,7 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     RegenerateLEDPositions(ctrl);
 
     ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+    SetLayoutDirty();
 
     if(viewport)
     {
@@ -1559,6 +1603,18 @@ void OpenRGB3DSpatialTab::on_delete_layout_clicked()
         if(file.remove())
         {
             PopulateLayoutDropdown();
+            if(layout_profiles_combo)
+            {
+                if(layout_profiles_combo->count() > 0)
+                {
+                    layout_profiles_combo->setCurrentIndex(0);
+                }
+                else
+                {
+                    layout_profiles_combo->setCurrentIndex(-1);
+                }
+            }
+            SaveCurrentLayoutName();
             QMessageBox::information(this, "Profile Deleted",
                                     QString("Profile '%1' deleted successfully").arg(profile_name));
         }
@@ -2159,8 +2215,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     QMessageBox::information(this, "Add from preset",
         QString("Added %1 custom controller(s) from preset '%2' (one per matching device: %3).")
             .arg(matching.size())
-            .arg(QString::fromStdString(preset_display_name))
-            .arg(QString::fromStdString(controller_name)));
+            .arg(QString::fromStdString(preset_display_name), QString::fromStdString(controller_name)));
 }
 
 void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
@@ -2348,6 +2403,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
             virtual_controllers.push_back(std::move(virtual_ctrl));
             SaveCustomControllers();
             UpdateAvailableControllersList();
+            UpdateCustomControllersList();
 
             int unmatched = 0;
             if(added)
@@ -2493,7 +2549,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             UpdateAvailableControllersList();
             UpdateAvailableItemCombo();
             RefreshHiddenControllerStates();
-            virtual_ctrl = virtual_controllers[list_row].get();
         }
 
         if(old_name != new_name)
@@ -3506,18 +3561,18 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     }
 
 
-    auto_load_checkbox->blockSignals(true);
+    bool restore_auto_load_signals = auto_load_checkbox->blockSignals(true);
     auto_load_checkbox->setChecked(auto_load_enabled);
-    auto_load_checkbox->blockSignals(false);
+    auto_load_checkbox->blockSignals(restore_auto_load_signals);
 
     if(!saved_profile.empty())
     {
         int index = layout_profiles_combo->findText(QString::fromStdString(saved_profile));
         if(index >= 0)
         {
-            layout_profiles_combo->blockSignals(true);
+            bool restore_layout_combo_signals = layout_profiles_combo->blockSignals(true);
             layout_profiles_combo->setCurrentIndex(index);
-            layout_profiles_combo->blockSignals(false);
+            layout_profiles_combo->blockSignals(restore_layout_combo_signals);
         }
     }
 
@@ -4368,7 +4423,7 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
 
     int desired_index = current_display_plane_index;
 
-    display_planes_list->blockSignals(true);
+    bool restore_signals = display_planes_list->blockSignals(true);
     display_planes_list->clear();
     for(size_t i = 0; i < display_planes.size(); i++)
     {
@@ -4395,7 +4450,7 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         display_planes_list->setCurrentRow(-1);
     }
     
-    display_planes_list->blockSignals(false);
+    display_planes_list->blockSignals(restore_signals);
 
     if(display_planes_empty_label)
     {
@@ -4570,15 +4625,6 @@ void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
 {
     if(index < 0 || index >= (int)display_planes.size())
     {
-        if(!display_planes.empty() && display_planes_list)
-        {
-            int restore = (current_display_plane_index >= 0 && current_display_plane_index < (int)display_planes.size())
-                ? current_display_plane_index : 0;
-            QSignalBlocker block(display_planes_list);
-            display_planes_list->setCurrentRow(restore);
-            current_display_plane_index = restore;
-            return;
-        }
         current_display_plane_index = -1;
         RefreshDisplayPlaneDetails();
         if(viewport)
@@ -4761,6 +4807,7 @@ void OpenRGB3DSpatialTab::on_display_plane_monitor_preset_selected(int index)
     }
 
     UpdateCurrentDisplayPlaneListItemLabel();
+    SetLayoutDirty();
     NotifyDisplayPlaneChanged();
     UpdateAvailableControllersList();
 
@@ -4882,6 +4929,7 @@ void OpenRGB3DSpatialTab::on_display_plane_capture_changed(int index)
 
     QString capture_id = display_plane_capture_combo->itemData(index).toString();
     plane->SetCaptureSourceId(capture_id.toStdString());
+    SetLayoutDirty();
     NotifyDisplayPlaneChanged();
 }
 
@@ -5086,6 +5134,7 @@ void OpenRGB3DSpatialTab::on_display_plane_visible_toggled(Qt::CheckState state)
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
     plane->SetVisible(state == Qt::CheckState::Checked);
+    SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
     if(display_planes_list && current_display_plane_index >= 0 &&
        current_display_plane_index < display_planes_list->count())

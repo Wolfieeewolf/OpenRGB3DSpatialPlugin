@@ -151,9 +151,9 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
         int di = settings["AudioDeviceIndex"].get<int>();
         if(di >= 0 && di < audio_device_combo->count())
         {
-            audio_device_combo->blockSignals(true);
+            bool restore_signals = audio_device_combo->blockSignals(true);
             audio_device_combo->setCurrentIndex(di);
-            audio_device_combo->blockSignals(false);
+            audio_device_combo->blockSignals(restore_signals);
             on_audio_device_changed(di);
         }
     }
@@ -162,9 +162,9 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     {
         int gv = settings["AudioGain"].get<int>();
         gv = std::max(1, std::min(500, gv));
-        audio_gain_slider->blockSignals(true);
+        bool restore_signals = audio_gain_slider->blockSignals(true);
         audio_gain_slider->setValue(gv);
-        audio_gain_slider->blockSignals(false);
+        audio_gain_slider->blockSignals(restore_signals);
         on_audio_gain_changed(gv);
     }
     else if(audio_gain_slider)
@@ -178,9 +178,9 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
         int bidx = audio_bands_combo->findText(QString::number(bc));
         if(bidx >= 0)
         {
-            audio_bands_combo->blockSignals(true);
+            bool restore_signals = audio_bands_combo->blockSignals(true);
             audio_bands_combo->setCurrentIndex(bidx);
-            audio_bands_combo->blockSignals(false);
+            audio_bands_combo->blockSignals(restore_signals);
             on_audio_bands_changed(bidx);
         }
     }
@@ -191,9 +191,9 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
         int fidx = audio_fft_combo->findText(QString::number(n));
         if(fidx >= 0)
         {
-            audio_fft_combo->blockSignals(true);
+            bool restore_signals = audio_fft_combo->blockSignals(true);
             audio_fft_combo->setCurrentIndex(fidx);
-            audio_fft_combo->blockSignals(false);
+            audio_fft_combo->blockSignals(restore_signals);
             on_audio_fft_changed(fidx);
         }
     }
@@ -230,16 +230,16 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
 {
     if(audio_device_combo && audio_device_combo->isEnabled() && audio_device_combo->count() > 0)
     {
-        audio_device_combo->blockSignals(true);
+        bool restore_signals = audio_device_combo->blockSignals(true);
         audio_device_combo->setCurrentIndex(0);
-        audio_device_combo->blockSignals(false);
+        audio_device_combo->blockSignals(restore_signals);
         on_audio_device_changed(0);
     }
     if(audio_gain_slider)
     {
-        audio_gain_slider->blockSignals(true);
+        bool restore_signals = audio_gain_slider->blockSignals(true);
         audio_gain_slider->setValue(100);
-        audio_gain_slider->blockSignals(false);
+        audio_gain_slider->blockSignals(restore_signals);
         on_audio_gain_changed(100);
     }
     if(audio_bands_combo)
@@ -247,9 +247,9 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
         int idx = audio_bands_combo->findText("8");
         if(idx >= 0)
         {
-            audio_bands_combo->blockSignals(true);
+            bool restore_signals = audio_bands_combo->blockSignals(true);
             audio_bands_combo->setCurrentIndex(idx);
-            audio_bands_combo->blockSignals(false);
+            audio_bands_combo->blockSignals(restore_signals);
             on_audio_bands_changed(idx);
         }
     }
@@ -258,9 +258,9 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
         int idx = audio_fft_combo->findText("512");
         if(idx >= 0)
         {
-            audio_fft_combo->blockSignals(true);
+            bool restore_signals = audio_fft_combo->blockSignals(true);
             audio_fft_combo->setCurrentIndex(idx);
-            audio_fft_combo->blockSignals(false);
+            audio_fft_combo->blockSignals(restore_signals);
             on_audio_fft_changed(idx);
         }
     }
@@ -382,7 +382,16 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
 
 void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
 {
+    if(!audio_bands_combo || index < 0 || index >= audio_bands_combo->count())
+    {
+        return;
+    }
+
     int bands = audio_bands_combo->itemText(index).toInt();
+    if(bands <= 0)
+    {
+        return;
+    }
     AudioInputManager::instance()->setBandsCount(bands);
 
     nlohmann::json settings = GetPluginSettings();
