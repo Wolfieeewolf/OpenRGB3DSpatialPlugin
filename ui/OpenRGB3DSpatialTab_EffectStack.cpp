@@ -319,6 +319,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     if(class_name.isEmpty())
     {
         instance->effect.reset();
+        instance->saved_settings.reset();
         instance->effect_class_name = "";
         instance->name = "None";
 
@@ -330,6 +331,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     }
 
     instance->effect.reset();
+    instance->saved_settings.reset();
     instance->effect_class_name = class_name.toStdString();
     instance->name              = ui_name.toStdString();
 
