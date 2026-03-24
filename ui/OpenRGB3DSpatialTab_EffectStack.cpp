@@ -156,6 +156,9 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
+        /* UpdateEffectStackList() preserves selection with signals blocked, so selecting the same row
+           again may not emit currentRowChanged. Force-refresh controls for the remaining layer. */
+        on_effect_stack_selection_changed(new_row);
     }
 
     SaveEffectStack();
@@ -322,6 +325,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
         UpdateEffectStackList();
         LoadStackEffectControls(instance);
         SaveEffectStack();
+        UpdateAudioPanelVisibility();
         return;
     }
 
@@ -370,7 +374,7 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
     if(!effect_stack_list) return;
     int current_row = effect_stack_list->currentRow();
 
-    effect_stack_list->blockSignals(true);
+    bool restore_signals = effect_stack_list->blockSignals(true);
     effect_stack_list->clear();
 
     for(unsigned int i = 0; i < effect_stack.size(); i++)
@@ -389,7 +393,7 @@ void OpenRGB3DSpatialTab::UpdateEffectStackList()
         effect_stack_list->setCurrentRow(current_row);
     }
 
-    effect_stack_list->blockSignals(false);
+    effect_stack_list->blockSignals(restore_signals);
 
     UpdateEffectCombo();
 }
