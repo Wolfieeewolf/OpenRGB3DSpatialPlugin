@@ -220,6 +220,8 @@ signals:
     void ParametersChanged();
 
 protected:
+    void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
+
     QGroupBox*          effect_controls_group;
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
@@ -385,7 +387,6 @@ private:
     void CreateColorControls();
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
 };
 
 #endif

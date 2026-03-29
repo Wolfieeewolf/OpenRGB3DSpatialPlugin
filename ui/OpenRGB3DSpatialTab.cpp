@@ -26,7 +26,6 @@
 #include <QScrollArea>
 #include <QAbstractItemView>
 #include <QTabWidget>
-#include <functional>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -112,12 +111,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     grid_scale_spin = nullptr;
     selection_info_label = nullptr;
     room_grid_overlay_checkbox = nullptr;
-    room_grid_brightness_slider = nullptr;
-    room_grid_brightness_label = nullptr;
-    room_grid_point_size_slider = nullptr;
-    room_grid_point_size_label = nullptr;
-    room_grid_step_slider = nullptr;
-    room_grid_step_label = nullptr;
     custom_grid_x = 10;
     custom_grid_y = 10;
     custom_grid_z = 10;
@@ -288,20 +281,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* run_layout = new QVBoxLayout(run_content);
     run_layout->setContentsMargins(4, 4, 12, 4);
     run_layout->setSpacing(6);
-
-    QHBoxLayout* profile_row = new QHBoxLayout();
-    profile_row->setSpacing(4);
-    profile_row->addWidget(new QLabel("Profile:"));
-    effect_profiles_combo = new QComboBox();
-    effect_profiles_combo->setMinimumWidth(160);
-    connect(effect_profiles_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_profile_changed);
-    profile_row->addWidget(effect_profiles_combo);
-    run_layout->addLayout(profile_row);
-
-    effect_auto_load_checkbox = new QCheckBox("Auto-load this profile on startup");
-    effect_auto_load_checkbox->setToolTip("Automatically load this effect configuration when OpenRGB starts");
-    connect(effect_auto_load_checkbox, &QCheckBox::toggled, this, &OpenRGB3DSpatialTab::SaveCurrentEffectProfileName);
-    run_layout->addWidget(effect_auto_load_checkbox);
 
     SetupEffectLibraryPanel(run_layout);
     SetupEffectStackPanel(run_layout);
@@ -681,33 +660,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     room_grid_overlay_checkbox->setToolTip("Draw a dim grid of points in the room so you see the space. Real LEDs stand out.");
     overlay_gl->addWidget(room_grid_overlay_checkbox, 0, 0, 1, 4);
 
-    auto add_grid_slider_row = [this](QGridLayout* lo, int row, int label_col, int slider_col, int value_col,
-        const QString& labelText, int minVal, int maxVal, int value, const QString& initialValueText, const QString& tooltip,
-        QSlider*& slider, QLabel*& valueLabel, std::function<QString(int)> valueFormatter, std::function<void(int)> onValueChanged)
-    {
-        lo->addWidget(new QLabel(labelText), row, label_col);
-        slider = new QSlider(Qt::Horizontal);
-        slider->setRange(minVal, maxVal);
-        slider->setValue(value);
-        slider->setToolTip(tooltip);
-        valueLabel = new QLabel(initialValueText);
-        lo->addWidget(slider, row, slider_col);
-        lo->addWidget(valueLabel, row, value_col);
-        connect(slider, &QSlider::valueChanged, [this, valueLabel, valueFormatter, onValueChanged](int v) {
-            if(valueLabel) valueLabel->setText(valueFormatter(v));
-            onValueChanged(v);
-        });
-    };
-
-    add_grid_slider_row(overlay_gl, 1, 0, 1, 2, "Brightness:", 0, 100, 35, "35%", "Lower = real LEDs stand out more",
-        room_grid_brightness_slider, room_grid_brightness_label, [](int v) { return QString("%1%").arg(v); },
-        [this](int v) { if(viewport) viewport->SetRoomGridBrightness((float)v / 100.0f); });
-    add_grid_slider_row(overlay_gl, 1, 3, 4, 5, "Point size:", 1, 12, 3, "3", "Larger = easier to see points",
-        room_grid_point_size_slider, room_grid_point_size_label, [](int v) { return QString::number(v); },
-        [this](int v) { if(viewport) viewport->SetRoomGridPointSize((float)v); });
-    add_grid_slider_row(overlay_gl, 2, 0, 1, 2, "Step:", 1, 24, 4, "4", "Grid units between points (1=dense, 24=sparse). Step × grid scale (mm/unit) = spacing in mm.",
-        room_grid_step_slider, room_grid_step_label, [](int v) { return QString::number(v); },
-        [this](int v) { if(viewport) viewport->SetRoomGridStep(v); });
+    QLabel* overlay_hint = new QLabel(
+        "Overlay brightness, point size, and step are loaded from saved plugin settings (RoomGrid).");
+    overlay_hint->setForegroundRole(QPalette::PlaceholderText);
+    overlay_hint->setWordWrap(true);
+    overlay_gl->addWidget(overlay_hint, 1, 0, 1, 4);
 
     grid_tab_main->addWidget(overlay_group);
 
@@ -729,9 +686,12 @@ void OpenRGB3DSpatialTab::SetupUI()
             size = std::max(1, std::min(12, size));
             step_val = std::max(1, std::min(24, step_val));
             if(room_grid_overlay_checkbox) room_grid_overlay_checkbox->setChecked(show);
-            if(room_grid_brightness_slider) room_grid_brightness_slider->setValue(bright);
-            if(room_grid_point_size_slider) room_grid_point_size_slider->setValue(size);
-            if(room_grid_step_slider) room_grid_step_slider->setValue(step_val);
+            if(viewport)
+            {
+                viewport->SetRoomGridBrightness((float)bright / 100.0f);
+                viewport->SetRoomGridPointSize((float)size);
+                viewport->SetRoomGridStep(step_val);
+            }
         }
     }
     catch(const std::exception&) {}

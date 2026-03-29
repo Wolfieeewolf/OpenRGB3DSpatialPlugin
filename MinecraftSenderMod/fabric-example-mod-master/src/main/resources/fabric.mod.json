@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "openrgb-minecraft-sender",
+  "version": "${version}",
+  "name": "OpenRGB Minecraft Sender",
+  "description": "Sends world light and probe telemetry to OpenRGB 3D Spatial plugin (UDP).",
+  "authors": ["wolfi"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["me.wolfi.openrgb.OpenRGBSenderMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}

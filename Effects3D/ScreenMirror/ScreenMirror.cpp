@@ -930,6 +930,17 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float max_rgb = std::max(r, std::max(g, b));
         float min_rgb = std::min(r, std::min(g, b));
         float sat = (max_rgb > 0.001f) ? ((max_rgb - min_rgb) / max_rgb) : 0.0f;
+
+        // Reduce colored subpixel fringing in bright near-whites (e.g. Windows ClearType edges)
+        // so a white screen doesn't tint the output.
+        if(lum > 235.0f && sat > 0.10f)
+        {
+            float t = std::clamp((lum - 235.0f) / 20.0f, 0.0f, 1.0f); // 0 at 235, 1 at 255
+            float gray = lum;
+            r = (1.0f - t) * r + t * gray;
+            g = (1.0f - t) * g + t * gray;
+            b = (1.0f - t) * b + t * gray;
+        }
         float white_factor = (1.0f - sat) * (lum / 255.0f);
         float white_reduce = std::min(1.0f, contrib.white_rolloff);
         float dampen = 1.0f - white_reduce * white_factor;
@@ -2437,6 +2448,8 @@ void ScreenMirror::StartCaptureIfNeeded()
     {
         capture_mgr.Initialize();
     }
+    // Lower latency / closer to 1:1 feel. Capture thread still self-throttles.
+    capture_mgr.SetTargetFPS(60);
 
     int w = 320, h = 180;
     int q = std::clamp(capture_quality, 0, 7);

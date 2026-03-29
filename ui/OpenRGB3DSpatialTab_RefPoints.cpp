@@ -3,7 +3,6 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "VirtualReferencePoint3D.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 
@@ -304,27 +303,7 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     UpdateEffectOriginCombo();
     UpdateFreqOriginCombo();
 
-    for(unsigned int i = 0; i < effect_stack.size(); i++)
-    {
-        std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
-        if(inst && inst->effect_class_name == "ScreenMirror" && inst->effect)
-        {
-            ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(inst->effect.get());
-            if(screen_mirror)
-            {
-                screen_mirror->RefreshReferencePointDropdowns();
-            }
-        }
-    }
-
-    if(current_effect_ui)
-    {
-        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(current_effect_ui);
-        if(screen_mirror)
-        {
-            screen_mirror->RefreshReferencePointDropdowns();
-        }
-    }
+    RefreshAmbilightReferencePointDropdowns();
 }
 
 void OpenRGB3DSpatialTab::SaveReferencePoints()

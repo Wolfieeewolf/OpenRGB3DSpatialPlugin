@@ -225,7 +225,15 @@ private:
 
     void SetupProfilesTab(QTabWidget* tab_widget);
     void SetupAudioPanel(QVBoxLayout* parent_layout);
+    bool IsAmbilightEffectClass(const std::string& class_name) const;
+    bool IsAmbilightEffectClass(const QString& class_name) const;
+    void ApplyAmbilightOriginVisibility(const QString& class_name);
+    void ConfigureAmbilightRuntimeEffect(SpatialEffect3D* effect);
+    void ConfigureAmbilightUIEffect(SpatialEffect3D* effect);
+    void RefreshAmbilightReferencePointDropdowns();
+    void ApplyAmbilightGridScale(float grid_scale_mm);
     void UpdateAudioPanelVisibility();
+    bool IsAudioEffectClass(const std::string& class_name) const;
     void SetupZonesPanel(QVBoxLayout* parent_layout);
     void SetupEffectLibraryPanel(QVBoxLayout* parent_layout);
     void PopulateEffectLibraryCategories();
@@ -301,12 +309,6 @@ private:
     QDoubleSpinBox*             grid_scale_spin;
     QLabel*                     selection_info_label;
     QCheckBox*                  room_grid_overlay_checkbox;
-    QSlider*                    room_grid_brightness_slider;
-    QLabel*                     room_grid_brightness_label;
-    QSlider*                    room_grid_point_size_slider;
-    QLabel*                     room_grid_point_size_label;
-    QSlider*                    room_grid_step_slider;
-    QLabel*                     room_grid_step_label;
     int                         custom_grid_x;
     int                         custom_grid_y;
     int                         custom_grid_z;
@@ -387,7 +389,7 @@ private:
     QComboBox*      audio_bands_combo = nullptr;
     QComboBox*      audio_fft_combo = nullptr;
     QLabel*         audio_spectrum_label = nullptr;
-    
+
     std::vector<std::unique_ptr<FrequencyRangeEffect3D>> frequency_ranges;
     int             next_freq_range_id = 1;
     

@@ -424,12 +424,23 @@ void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
     if(row >= 0 && row < (int)effect_stack.size())
     {
         EffectInstance3D* inst = effect_stack[row].get();
-        if(inst && !inst->effect_class_name.empty())
+        if(inst)
         {
-            EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(inst->effect_class_name);
-            show = (info.category == "Audio");
+            show = IsAudioEffectClass(inst->effect_class_name);
         }
     }
 
     audio_panel_group->setVisible(show);
 }
+
+bool OpenRGB3DSpatialTab::IsAudioEffectClass(const std::string& class_name) const
+{
+    if(class_name.empty())
+    {
+        return false;
+    }
+
+    EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(class_name);
+    return info.category == "Audio";
+}
+

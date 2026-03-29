@@ -41,3 +41,7 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# Gradle (MinecraftSenderMod)
+MinecraftSenderMod/**/.gradle/
+MinecraftSenderMod/**/build/

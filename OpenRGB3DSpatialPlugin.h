@@ -7,9 +7,11 @@
 #include <QObject>
 #include <QWidget>
 #include <QMenu>
+#include <memory>
 #include "OpenRGBPluginInterface.h"
 #include "ResourceManagerInterface.h"
 #include "OpenRGB3DSpatialTab.h"
+#include "Game/GameTelemetryBridge.h"
 
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
 {
@@ -42,6 +44,7 @@ private:
     static void                 DetectionProgressCallback(void* ptr);
 
     OpenRGB3DSpatialTab*        ui;
+    std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
 };
 
 #endif

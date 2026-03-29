@@ -29,6 +29,12 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
 {
     RMPointer = RM;
     ui        = nullptr;
+    game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
+
+    if(RMPointer && game_telemetry_bridge)
+    {
+        game_telemetry_bridge->Register(RMPointer);
+    }
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -57,6 +63,12 @@ QMenu* OpenRGB3DSpatialPlugin::GetTrayMenu()
 
 void OpenRGB3DSpatialPlugin::Unload()
 {
+    if(RMPointer && game_telemetry_bridge)
+    {
+        game_telemetry_bridge->Unregister(RMPointer);
+    }
+    game_telemetry_bridge.reset();
+
     if(RMPointer && ui != nullptr)
     {
         RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);

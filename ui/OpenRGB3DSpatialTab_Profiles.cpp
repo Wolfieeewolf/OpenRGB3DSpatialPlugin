@@ -83,7 +83,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
     effect_layout->setSpacing(4);
     effect_layout->setContentsMargins(2, 4, 2, 4);
 
-    QLabel* effect_label = new QLabel("Save/Load single effect configurations. Select profile in the Run panel (left).");
+    QLabel* effect_label = new QLabel("Save/Load single effect configurations. Select a profile below.");
     effect_label->setWordWrap(true);
     effect_label->setForegroundRole(QPalette::PlaceholderText);
     effect_layout->addWidget(effect_label);

@@ -16,7 +16,6 @@
 
     #pragma comment(lib, "d3d11.lib")
     #pragma comment(lib, "dxgi.lib")
-    extern QPixmap qt_pixmapFromWinHBITMAP(HBITMAP bitmap, int format = 0);
 #endif
 
 ScreenCaptureManager& ScreenCaptureManager::Instance()
@@ -276,42 +275,13 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-static QPixmap GrabScreen(QScreen* screen)
-{
-    if(!screen) return QPixmap();
-
-    const QRect screen_geometry = screen->geometry();
-    int width = screen_geometry.width();
-    int height = screen_geometry.height();
-    int xIn = screen_geometry.x();
-    int yIn = screen_geometry.y();
-
-    HWND hwnd = GetDesktopWindow();
-    HDC display_dc = GetDC(nullptr);
-    HDC bitmap_dc = CreateCompatibleDC(display_dc);
-    HBITMAP bitmap = CreateCompatibleBitmap(display_dc, width, height);
-    HGDIOBJ null_bitmap = SelectObject(bitmap_dc, bitmap);
-
-    HDC window_dc = GetDC(hwnd);
-    BitBlt(bitmap_dc, 0, 0, width, height, window_dc, xIn, yIn, SRCCOPY);
-
-    ReleaseDC(hwnd, window_dc);
-    SelectObject(bitmap_dc, null_bitmap);
-    DeleteDC(bitmap_dc);
-
-    const QPixmap pixmap = qt_pixmapFromWinHBITMAP(bitmap);
-    DeleteObject(bitmap);
-    ReleaseDC(nullptr, display_dc);
-
-    return pixmap;
-}
-
 struct DXGICaptureState
 {
     ID3D11Device* device = nullptr;
     ID3D11DeviceContext* context = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
     ID3D11Texture2D* staging_texture = nullptr;
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     UINT width = 0;
     UINT height = 0;
 
@@ -321,6 +291,7 @@ struct DXGICaptureState
         if(duplication) { duplication->Release(); duplication = nullptr; }
         if(context) { context->Release(); context = nullptr; }
         if(device) { device->Release(); device = nullptr; }
+        format = DXGI_FORMAT_UNKNOWN;
         width = 0;
         height = 0;
     }
@@ -365,6 +336,28 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     ID3D11Texture2D* staging_texture = nullptr;
     UINT out_width = 0, out_height = 0;
 
+    auto RectArea = [](int w, int h) -> long long {
+        if(w <= 0 || h <= 0) return 0;
+        return (long long)w * (long long)h;
+    };
+    auto IntersectArea = [&](int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) -> long long {
+        int ix0 = (std::max)(ax0, bx0);
+        int iy0 = (std::max)(ay0, by0);
+        int ix1 = (std::min)(ax1, bx1);
+        int iy1 = (std::min)(ay1, by1);
+        return RectArea(ix1 - ix0, iy1 - iy0);
+    };
+
+    const int target_x0 = screen_x;
+    const int target_y0 = screen_y;
+    const int target_x1 = screen_x + screen_width;
+    const int target_y1 = screen_y + screen_height;
+    const long long target_area = RectArea(screen_width, screen_height);
+
+    long long best_overlap = -1;
+    DXGI_OUTPUT_DESC best_desc = {};
+    IDXGIOutput* best_output = nullptr;
+
     for(UINT i = 0; adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND; i++)
     {
         if(!output) continue;
@@ -376,62 +369,97 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         }
         RECT& r = desc.DesktopCoordinates;
         int left = r.left, top = r.top, right = r.right, bottom = r.bottom;
-        if(left == screen_x && top == screen_y &&
-            (right - left) == screen_width && (bottom - top) == screen_height)
+        long long overlap = IntersectArea(left, top, right, bottom, target_x0, target_y0, target_x1, target_y1);
+        if(overlap > best_overlap)
         {
-            hr = output->QueryInterface(__uuidof(IDXGIOutput1), (void**)&output1);
-            output->Release();
-            if(FAILED(hr) || !output1) break;
-
-            hr = output1->DuplicateOutput(device, &duplication);
-            output1->Release();
-            if(FAILED(hr) || !duplication)
-            {
-                context->Release();
-                device->Release();
-                return false;
-            }
-
-            DXGI_OUTDUPL_DESC dup_desc;
-            duplication->GetDesc(&dup_desc);
-            out_width = dup_desc.ModeDesc.Width;
-            out_height = dup_desc.ModeDesc.Height;
-
-            D3D11_TEXTURE2D_DESC tex_desc = {};
-            tex_desc.Width = out_width;
-            tex_desc.Height = out_height;
-            tex_desc.MipLevels = 1;
-            tex_desc.ArraySize = 1;
-            tex_desc.Format = dup_desc.ModeDesc.Format;
-            tex_desc.SampleDesc.Count = 1;
-            tex_desc.SampleDesc.Quality = 0;
-            tex_desc.Usage = D3D11_USAGE_STAGING;
-            tex_desc.BindFlags = 0;
-            tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-            tex_desc.MiscFlags = 0;
-            hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
-            if(FAILED(hr) || !staging_texture)
-            {
-                duplication->Release();
-                context->Release();
-                device->Release();
-                return false;
-            }
-            out.device = device;
-            out.context = context;
-            out.duplication = duplication;
-            out.staging_texture = staging_texture;
-            out.width = out_width;
-            out.height = out_height;
-            adapter->Release();
-            return true;
+            if(best_output) best_output->Release();
+            best_output = output; // take ownership
+            best_desc = desc;
+            best_overlap = overlap;
+            continue;
         }
         output->Release();
     }
+
+    if(!best_output || best_overlap <= 0 || (target_area > 0 && best_overlap < target_area / 4))
+    {
+        if(best_output) best_output->Release();
+        adapter->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+
+    hr = best_output->QueryInterface(__uuidof(IDXGIOutput1), (void**)&output1);
+    best_output->Release();
+    if(FAILED(hr) || !output1)
+    {
+        adapter->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+
+    hr = output1->DuplicateOutput(device, &duplication);
+    output1->Release();
+    if(FAILED(hr) || !duplication)
+    {
+        adapter->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+
+    DXGI_OUTDUPL_DESC dup_desc;
+    duplication->GetDesc(&dup_desc);
+    out_width = dup_desc.ModeDesc.Width;
+    out_height = dup_desc.ModeDesc.Height;
+    // Desktop duplication can expose non-8bpc formats (e.g. HDR / 16-bit float).
+    // This capture path assumes 4 bytes per pixel and manual BGRA->RGBA swizzle.
+    if(dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM &&
+       dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB &&
+       dup_desc.ModeDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
+       dup_desc.ModeDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
+    {
+        duplication->Release();
+        adapter->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+
+    D3D11_TEXTURE2D_DESC tex_desc = {};
+    tex_desc.Width = out_width;
+    tex_desc.Height = out_height;
+    tex_desc.MipLevels = 1;
+    tex_desc.ArraySize = 1;
+    tex_desc.Format = dup_desc.ModeDesc.Format;
+    tex_desc.SampleDesc.Count = 1;
+    tex_desc.SampleDesc.Quality = 0;
+    tex_desc.Usage = D3D11_USAGE_STAGING;
+    tex_desc.BindFlags = 0;
+    tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    tex_desc.MiscFlags = 0;
+    hr = device->CreateTexture2D(&tex_desc, nullptr, &staging_texture);
+    if(FAILED(hr) || !staging_texture)
+    {
+        duplication->Release();
+        adapter->Release();
+        context->Release();
+        device->Release();
+        return false;
+    }
+
+    out.device = device;
+    out.context = context;
+    out.duplication = duplication;
+    out.staging_texture = staging_texture;
+    out.format = dup_desc.ModeDesc.Format;
+    out.width = out_width;
+    out.height = out_height;
     adapter->Release();
-    context->Release();
-    device->Release();
-    return false;
+    return true;
+    // (unreachable)
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
@@ -465,20 +493,25 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     }
 
     QRect geometry = screen->geometry();
+    // QScreen geometry may be in logical coordinates under DPI scaling; DXGI desktop coordinates are in native pixels.
+    // Use devicePixelRatio as best-effort conversion.
+    const double dpr = screen->devicePixelRatio();
+    const int dx = (int)std::lround(geometry.x() * dpr);
+    const int dy = (int)std::lround(geometry.y() * dpr);
+    const int dw = (int)std::lround(geometry.width() * dpr);
+    const int dh = (int)std::lround(geometry.height() * dpr);
     DXGICaptureState dxgi_state;
-    bool use_dxgi = TryCreateDXGIDuplication(geometry.x(), geometry.y(), geometry.width(), geometry.height(), dxgi_state);
+    bool use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
     if(!use_dxgi)
     {
-        LOG_INFO("[ScreenCapture] Using GDI for screen %d (DXGI unavailable or failed)", screen_index);
+        LOG_WARNING("[ScreenCapture] DXGI desktop duplication unavailable for screen %d", screen_index);
+        return;
     }
 
     uint64_t frame_counter = 0;
     const int target_frame_time_ms = 1000 / target_fps.load();
     bool logged_screen_unavailable = false;
     std::vector<uint8_t> dxgi_rgba_buffer;
-    std::chrono::steady_clock::time_point last_dxgi_retry = std::chrono::steady_clock::now();
-    const std::chrono::seconds dxgi_retry_interval(5);
-
     while(active_flag->load())
     {
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
@@ -498,7 +531,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             logged_screen_unavailable = false;
 
         QImage image;
-        if(use_dxgi && dxgi_state.IsValid())
+        if(dxgi_state.IsValid())
         {
             DXGI_OUTDUPL_FRAME_INFO frame_info;
             IDXGIResource* resource = nullptr;
@@ -511,9 +544,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             if(hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
             {
                 dxgi_state.Release();
-                use_dxgi = false;
-                last_dxgi_retry = std::chrono::steady_clock::now();
-                image = GrabScreen(screen).toImage();
+                return;
             }
             else if(SUCCEEDED(hr) && resource)
             {
@@ -534,15 +565,37 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                             dxgi_rgba_buffer.resize(need);
                         const uint8_t* src = (const uint8_t*)mapped.pData;
                         uint8_t* dst = dxgi_rgba_buffer.data();
-                        const UINT row_pitch_skip = mapped.RowPitch - dxgi_state.width * 4;
+                        const UINT expected_row_bytes = dxgi_state.width * 4;
+                        if(mapped.RowPitch < expected_row_bytes)
+                        {
+                            dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
+                            dxgi_state.duplication->ReleaseFrame();
+                            return;
+                        }
+                        const UINT row_pitch_skip = mapped.RowPitch - expected_row_bytes;
+                        const bool src_is_bgra =
+                            (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
                         for(UINT y = 0; y < dxgi_state.height; y++)
                         {
                             for(UINT x = 0; x < dxgi_state.width; x++)
                             {
-                                dst[0] = src[2];
-                                dst[1] = src[1];
-                                dst[2] = src[0];
-                                dst[3] = src[3];
+                                if(src_is_bgra)
+                                {
+                                    // BGRA -> RGBA
+                                    dst[0] = src[2];
+                                    dst[1] = src[1];
+                                    dst[2] = src[0];
+                                    dst[3] = src[3];
+                                }
+                                else
+                                {
+                                    // RGBA already
+                                    dst[0] = src[0];
+                                    dst[1] = src[1];
+                                    dst[2] = src[2];
+                                    dst[3] = src[3];
+                                }
                                 src += 4;
                                 dst += 4;
                             }
@@ -558,44 +611,28 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                     dxgi_state.duplication->ReleaseFrame();
                 }
             }
-            if(image.isNull() && use_dxgi)
+            if(image.isNull())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
         }
-        if(!use_dxgi || image.isNull())
+        if(image.isNull())
         {
-            if(!use_dxgi)
-            {
-                std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-                if(now - last_dxgi_retry >= dxgi_retry_interval)
-                {
-                    last_dxgi_retry = now;
-                    QRect geo = screen->geometry();
-                    if(TryCreateDXGIDuplication(geo.x(), geo.y(), geo.width(), geo.height(), dxgi_state))
-                    {
-                        use_dxgi = true;
-                    }
-                }
-            }
-            if(!use_dxgi || image.isNull())
-            {
-                QPixmap pixmap = GrabScreen(screen);
-                if(pixmap.isNull())
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
-                image = pixmap.toImage();
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
         }
 
         int target_w = target_width.load();
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
+        {
             image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        image = image.convertToFormat(QImage::Format_RGBA8888);
+        }
+        if(image.format() != QImage::Format_RGBA8888)
+        {
+            image = image.convertToFormat(QImage::Format_RGBA8888);
+        }
 
         std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
         frame->width = image.width();
@@ -605,11 +642,18 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         const int src_stride = image.bytesPerLine();
         const uint8_t* src = image.constBits();
         uint8_t* dst = frame->data.data();
-        for(int y = 0; y < frame->height; y++)
+        if(src_stride == line_bytes)
         {
-            memcpy(dst, src, (size_t)line_bytes);
-            dst += line_bytes;
-            src += src_stride;
+            memcpy(dst, src, (size_t)line_bytes * (size_t)frame->height);
+        }
+        else
+        {
+            for(int y = 0; y < frame->height; y++)
+            {
+                memcpy(dst, src, (size_t)line_bytes);
+                dst += line_bytes;
+                src += src_stride;
+            }
         }
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

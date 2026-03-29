@@ -169,7 +169,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         slot.zone_index = ResolveZoneTargetSelection(effect_zone_combo);
         slot.blend_mode = BlendMode::REPLACE;
         if(slot.effect)
+        {
             active_effects.push_back(slot);
+        }
     }
 
     bool has_enabled_freq_ranges = false;

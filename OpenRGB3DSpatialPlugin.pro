@@ -128,6 +128,9 @@ DEFINES +=                                                                      
 #-----------------------------------------------------------------------------------------------#
 INCLUDEPATH +=                                                                                  \
     OpenRGB/                                                                                    \
+    OpenRGB/SPDAccessor                                                                         \
+    OpenRGB/hidapi_wrapper                                                                      \
+    OpenRGB/dependencies/hidapi-win/include                                                     \
     OpenRGB/i2c_smbus                                                                           \
     OpenRGB/RGBController                                                                       \
     OpenRGB/net_port                                                                            \
@@ -153,6 +156,7 @@ SOURCES +=                                                                      
 INCLUDEPATH +=                                                                                  \
     ui                                                                                          \
     Effects3D                                                                                   \
+    Game                                                                                        \
 
 HEADERS +=                                                                                      \
     OpenRGB3DSpatialPlugin.h                                                                    \
@@ -174,6 +178,10 @@ HEADERS +=                                                                      
     ScreenCaptureManager.h                                                                      \
     Geometry3DUtils.h                                                                           \
     QtCompat.h                                                                                  \
+    Game/GameTelemetryStatusPanel.h                                                             \
+    Game/GameTelemetryBridge.h                                                                  \
+    Effects3D/Games/Minecraft/MinecraftGameEffect3D.h                                             \
+    Effects3D/Games/Minecraft/MinecraftGame.h                                                   \
     FrequencyRangeEffect3D.h                                                                    \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
@@ -225,8 +233,13 @@ SOURCES +=                                                                      
     ZoneManager3D.cpp                                                                           \
     DisplayPlane3D.cpp                                                                          \
     ScreenCaptureManager.cpp                                                                    \
+    Game/GameTelemetryStatusPanel.cpp                                                           \
+    Game/GameTelemetryBridge.cpp                                                                \
+    Effects3D/Games/Minecraft/MinecraftGameEffect3D.cpp                                           \
+    Effects3D/Games/Minecraft/MinecraftGame.cpp                                                 \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/OpenRGB3DSpatialTab_Audio.cpp                                                            \
+    ui/OpenRGB3DSpatialTab_Ambilight.cpp                                                        \
     ui/OpenRGB3DSpatialTab_ObjectCreator.cpp                                                    \
     ui/OpenRGB3DSpatialTab_Presets.cpp                                                          \
     ui/OpenRGB3DSpatialTab_Profiles.cpp                                                         \
