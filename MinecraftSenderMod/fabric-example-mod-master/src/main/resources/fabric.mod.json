@@ -3,7 +3,7 @@
   "id": "openrgb-minecraft-sender",
   "version": "${version}",
   "name": "OpenRGB Minecraft Sender",
-  "description": "Sends world light and probe telemetry to OpenRGB 3D Spatial plugin (UDP).",
+  "description": "Telemetry for OpenRGB 3D Spatial: world_light (world tint layers), player_pose, health_state, and damage_event over UDP 127.0.0.1:9876.",
   "authors": ["wolfi"],
   "license": "MIT",
   "environment": "client",
@@ -14,5 +14,8 @@
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.1",
     "java": ">=21"
-  }
+  },
+  "mixins": [
+    "openrgb-sender.mixins.json"
+  ]
 }

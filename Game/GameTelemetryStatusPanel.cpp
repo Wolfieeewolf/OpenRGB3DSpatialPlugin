@@ -12,7 +12,10 @@ GameTelemetryStatusPanel::GameTelemetryStatusPanel(QWidget* parent) : QGroupBox(
     setTitle("Game telemetry (UDP)");
 
     QVBoxLayout* game_layout = new QVBoxLayout(this);
-    QLabel* game_help = new QLabel("Receives game telemetry as JSON datagrams on 127.0.0.1:9876 (protocol v1).");
+    QLabel* game_help = new QLabel(
+        "Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. "
+        "You do not need a separate 'OpenRGB server' for this. "
+        "Enable the 3D Spatial plugin; counters should increase while the game runs with the sender mod.");
     game_help->setWordWrap(true);
     game_help->setStyleSheet("color: gray; font-size: 10px;");
     game_layout->addWidget(game_help);

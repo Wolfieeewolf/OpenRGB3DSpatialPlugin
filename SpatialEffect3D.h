@@ -184,7 +184,7 @@ public:
     virtual int GetPlane() const { return effect_plane; }
     virtual int GetSurfaceMask() const { return effect_surface_mask; }
     Vector3D GetReferencePointGrid(const GridContext3D& grid) const;
-    bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
+    virtual bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
     virtual ReferenceMode GetReferenceMode() const;
     virtual void SetGlobalReferencePoint(const Vector3D& point);
     virtual Vector3D GetGlobalReferencePoint() const;

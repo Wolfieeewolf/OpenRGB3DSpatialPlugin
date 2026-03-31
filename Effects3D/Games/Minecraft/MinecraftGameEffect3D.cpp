@@ -135,3 +135,9 @@ RGBColor MinecraftGameEffect3D::CalculateColorGrid(float gx, float gy, float gz,
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
     return MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid);
 }
+
+bool MinecraftGameEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const
+{
+    /* Telemetry paints the whole rig; do not zero wall/ceiling LEDs when only "floor" surfaces are selected. */
+    return true;
+}

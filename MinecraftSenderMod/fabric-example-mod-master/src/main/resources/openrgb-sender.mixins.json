@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "me.wolfi.openrgb.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ClientPlayNetworkHandlerMixin",
+    "MinecraftClientMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

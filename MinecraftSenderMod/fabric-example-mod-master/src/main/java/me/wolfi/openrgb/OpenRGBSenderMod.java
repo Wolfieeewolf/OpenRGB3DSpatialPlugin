@@ -4,12 +4,15 @@ import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.color.world.BiomeColors;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.fluid.Fluids;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.MapColor;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.LightType;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.world.World;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -21,64 +24,81 @@ public class OpenRGBSenderMod implements ClientModInitializer
 {
     private static final String HOST = "127.0.0.1";
     private static final int PORT = 9876;
-    private static final long SEND_INTERVAL_MS = 100;
-    private static final int PROBE_COUNT = 48;
-    private static final Vec3d[] SPHERE_PROBE_DIRS = buildSphereProbeDirs();
+    private static final long DAMAGE_DIR_MAX_AGE_MS = 450L;
+    private static final long LIGHTNING_EVENT_COOLDOWN_MS = 250L;
+    private static final long LIGHTNING_EVENT_MAX_AGE_MS = 450L;
 
-    private volatile boolean running = true;
+    private static OpenRGBSenderMod instance;
+
     private float lastHealth = -1.0f;
+    /** ~10 Hz at 20 tps: send every other client tick. */
+    private int clientTickCounter = 0;
+
+    private static DatagramSocket sharedUdpSocket;
+    private static InetAddress sharedLoopback;
+    private static final Object sharedUdpLock = new Object();
     private boolean hasSmoothedWorld = false;
     private int smoothSkyR = 140, smoothSkyG = 170, smoothSkyB = 220;
     private int smoothMidR = 110, smoothMidG = 140, smoothMidB = 100;
     private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
     private float smoothWorldIntensity = 0.6f;
-    private final int[] smoothProbeR = new int[PROBE_COUNT];
-    private final int[] smoothProbeG = new int[PROBE_COUNT];
-    private final int[] smoothProbeB = new int[PROBE_COUNT];
-    private final float[] smoothProbeI = new float[PROBE_COUNT];
+    private long lastLightningSentMs = 0L;
 
     @Override
     public void onInitializeClient()
     {
-        Thread senderThread = new Thread(this::senderLoop, "openrgb-telemetry-sender");
-        senderThread.setDaemon(true);
-        senderThread.start();
+        instance = this;
     }
 
-    private void senderLoop()
+    /**
+     * Called from {@link me.wolfi.openrgb.mixin.MinecraftClientMixin} at end of each client tick (main thread only).
+     */
+    public static void onClientTick(MinecraftClient client)
     {
-        try(DatagramSocket socket = new DatagramSocket())
+        if(instance == null || client == null)
         {
-            InetAddress address = InetAddress.getByName(HOST);
-            while(running)
-            {
-                try
-                {
-                    MinecraftClient client = MinecraftClient.getInstance();
-                    ClientPlayerEntity player = (client != null) ? client.player : null;
-                    if(player != null && client != null && client.world != null)
-                    {
-                        sendPlayerPose(socket, address, player);
-                        sendHealthState(socket, address, player);
-                        sendWorldLight(socket, address, player, client.world);
-                        sendDamageEventIfNeeded(socket, address, player);
-                    }
-                }
-                catch(Exception ignored)
-                {
-                }
+            return;
+        }
+        instance.tickSendTelemetry(client);
+    }
 
-                try
-                {
-                    Thread.sleep(SEND_INTERVAL_MS);
-                }
-                catch(InterruptedException ignored)
-                {
-                }
-            }
+    private void tickSendTelemetry(MinecraftClient client)
+    {
+        if(client.player == null || client.world == null)
+        {
+            return;
+        }
+        clientTickCounter++;
+        if((clientTickCounter & 1) != 0)
+        {
+            return;
+        }
+        try
+        {
+            DatagramSocket socket = ensureSharedUdp();
+            InetAddress address = sharedLoopback;
+            ClientPlayerEntity player = client.player;
+            sendPlayerPose(socket, address, player);
+            sendHealthState(socket, address, player);
+            sendWorldLight(socket, address, player, client.world);
+            sendLightningEventIfNeeded(socket, address);
+            sendDamageEventIfNeeded(socket, address, player);
         }
         catch(Exception ignored)
         {
+        }
+    }
+
+    private static DatagramSocket ensureSharedUdp() throws Exception
+    {
+        synchronized(sharedUdpLock)
+        {
+            if(sharedUdpSocket == null || sharedUdpSocket.isClosed())
+            {
+                sharedUdpSocket = new DatagramSocket();
+                sharedLoopback = InetAddress.getByName(HOST);
+            }
+            return sharedUdpSocket;
         }
     }
 
@@ -86,7 +106,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     {
         Vec3d look = player.getRotationVec(1.0f);
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0}",
+                "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0,\"blocks_per_m\":1.0}",
                 System.currentTimeMillis(),
                 player.getX(), player.getY(), player.getZ(),
                 look.x, look.y, look.z);
@@ -95,17 +115,36 @@ public class OpenRGBSenderMod implements ClientModInitializer
 
     private void sendHealthState(DatagramSocket socket, InetAddress address, ClientPlayerEntity player) throws Exception
     {
+        final int hunger = player.getHungerManager().getFoodLevel();
+        final int maxHunger = 20;
+        final int air = player.getAir();
+        final int maxAir = player.getMaxAir();
+        final var held = player.getMainHandStack();
+        final boolean hasDurability = !held.isEmpty() && held.isDamageable();
+        final int durabilityMax = hasDurability ? Math.max(1, held.getMaxDamage()) : 1;
+        final int durability = hasDurability ? Math.max(0, durabilityMax - held.getDamage()) : 0;
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"health_state\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"health\":%.4f,\"health_max\":%.4f}",
+                "{\"version\":1,\"type\":\"health_state\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"health\":%.4f,\"health_max\":%.4f,\"hunger\":%d,\"hunger_max\":%d,\"air\":%d,\"air_max\":%d,\"item_durability_valid\":%s,\"item_durability\":%d,\"item_durability_max\":%d}",
                 System.currentTimeMillis(),
-                player.getHealth(), player.getMaxHealth());
+                player.getHealth(), player.getMaxHealth(),
+                hunger, maxHunger, air, maxAir,
+                hasDurability ? "true" : "false", durability, durabilityMax);
         sendJson(socket, address, json);
     }
 
     private void sendWorldLight(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, net.minecraft.world.World world) throws Exception
     {
-        MinecraftClient client = MinecraftClient.getInstance();
         var pos = player.getBlockPos();
+        Vec3d lightDir = estimateLocalLightDirection(world, player, pos);
+        float lightFocus = clamp01((float)lightDir.length());
+        if(lightFocus > 1e-4f)
+        {
+            lightDir = lightDir.normalize();
+        }
+        else
+        {
+            lightDir = Vec3d.ZERO;
+        }
         int blockLight = world.getLightLevel(LightType.BLOCK, pos);
         int skyLight = world.getLightLevel(LightType.SKY, pos);
         // Block-only is ~0 in open daylight (sky lights the scene); plugin multiplies tint by intensity,
@@ -115,6 +154,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
 
         float blockWeight = (combined > 0) ? ((float)blockLight / (float)combined) : 0.0f;
         float skyWeight = 1.0f - blockWeight;
+        final float warmBias = estimateWarmLightBias(world, pos);
 
         // MineLights-style read: biome carries distinct hue (forest green, desert sand, etc.) — see
         // https://github.com/megabytesme/MineLights — we sample vanilla grass + foliage tint.
@@ -143,6 +183,16 @@ public class OpenRGBSenderMod implements ClientModInitializer
         float fr = br * amp + skyBiasR * skyWeight * intensity * 0.82f + blkR * blockWeight * intensity * 0.92f;
         float fg = bg * amp + skyBiasG * skyWeight * intensity * 0.82f + blkG * blockWeight * intensity * 0.92f;
         float fb = bb * amp + skyBiasB * skyWeight * intensity * 0.82f + blkB * blockWeight * intensity * 0.92f;
+        if(warmBias > 1e-4f)
+        {
+            final float wr = 1.00f;
+            final float wg = 0.62f;
+            final float wb = 0.12f;
+            final float wm = clamp01(0.24f + 0.62f * warmBias);
+            fr = fr * (1.0f - wm) + wr * wm;
+            fg = fg * (1.0f - wm) + wg * wm;
+            fb = fb * (1.0f - wm) + wb * wm;
+        }
 
         int r = clamp255(Math.round(fr * 255.0f));
         int g = clamp255(Math.round(fg * 255.0f));
@@ -177,9 +227,16 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         else
         {
-            skyR = clamp255(Math.round(skyBaseR * 255.0f));
-            skyG = clamp255(Math.round(skyBaseG * 255.0f));
-            skyB = clamp255(Math.round(skyBaseB * 255.0f));
+            /* Open sky: blend time/rain model with vanilla biome sky tint (BiomeEffects#getSkyColor). */
+            int bskyR = clamp255(Math.round(skyBaseR * 255.0f));
+            int bskyG = clamp255(Math.round(skyBaseG * 255.0f));
+            int bskyB = clamp255(Math.round(skyBaseB * 255.0f));
+            float openR = skyBaseR * 255.0f * 0.42f + bskyR * 0.58f;
+            float openG = skyBaseG * 255.0f * 0.42f + bskyG * 0.58f;
+            float openB = skyBaseB * 255.0f * 0.42f + bskyB * 0.58f;
+            skyR = clamp255(Math.round(openR));
+            skyG = clamp255(Math.round(openG));
+            skyB = clamp255(Math.round(openB));
         }
 
         // World-tint layers are strictly position-based (not camera/crosshair based).
@@ -197,15 +254,21 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int groundR = (groundColor >> 16) & 0xFF;
         int groundG = (groundColor >> 8) & 0xFF;
         int groundB = groundColor & 0xFF;
-        // Underwater floor should be washed blue-green, not raw grass/sand.
-        if(player.isSubmergedInWater())
+        final float waterSubmerge = estimateWaterSubmerge(world, player);
+        if(waterSubmerge > 1e-4f)
         {
-            groundR = clamp255(Math.round(groundR * 0.35f + waterR * 0.65f));
-            groundG = clamp255(Math.round(groundG * 0.50f + waterG * 0.50f));
-            groundB = clamp255(Math.round(groundB * 0.22f + waterB * 0.78f));
-            midR = clamp255(Math.round(midR * 0.55f + waterR * 0.45f));
-            midG = clamp255(Math.round(midG * 0.62f + waterG * 0.38f));
-            midB = clamp255(Math.round(midB * 0.42f + waterB * 0.58f));
+            final float gw = clamp01(0.20f + 0.75f * waterSubmerge);
+            final float mw = clamp01(0.14f + 0.62f * waterSubmerge);
+            final float sw = clamp01(0.10f + 0.48f * waterSubmerge);
+            groundR = clamp255(Math.round(groundR * (1.0f - gw) + waterR * gw));
+            groundG = clamp255(Math.round(groundG * (1.0f - gw) + waterG * gw));
+            groundB = clamp255(Math.round(groundB * (1.0f - gw) + waterB * gw));
+            midR = clamp255(Math.round(midR * (1.0f - mw) + waterR * mw));
+            midG = clamp255(Math.round(midG * (1.0f - mw) + waterG * mw));
+            midB = clamp255(Math.round(midB * (1.0f - mw) + waterB * mw));
+            skyR = clamp255(Math.round(skyR * (1.0f - sw) + waterR * sw));
+            skyG = clamp255(Math.round(skyG * (1.0f - sw) + waterG * sw));
+            skyB = clamp255(Math.round(skyB * (1.0f - sw) + waterB * sw));
             midColor = ((midR & 0xFF) << 16) | ((midG & 0xFF) << 8) | (midB & 0xFF);
         }
 
@@ -228,156 +291,157 @@ public class OpenRGBSenderMod implements ClientModInitializer
         smoothGroundB = lerpInt(smoothGroundB, groundB, 0.18f);
         smoothWorldIntensity = lerpFloat(smoothWorldIntensity, intensity, 0.16f);
 
-        // Sphere-map is player-relative for mapping, but sampled in world-space from player orientation.
-        Vec3d lookRaw = player.getRotationVec(1.0f).normalize();
-        // Lock room orientation to yaw only so looking up/down does not rotate the environment mapping.
-        Vec3d look = new Vec3d(lookRaw.x, 0.0, lookRaw.z);
-        if(look.lengthSquared() < 1e-6)
-        {
-            look = new Vec3d(0.0, 0.0, 1.0);
-        }
-        else
-        {
-            look = look.normalize();
-        }
-        Vec3d worldUp = new Vec3d(0.0, 1.0, 0.0);
-        // Player's actual right = look × worldUp (NOT worldUp × look).
-        // worldUp × look gives the player's LEFT; look × worldUp gives the player's RIGHT.
-        // Verified for all four headings:
-        //   South(0,0,+1) → (−1,0,0) = West = right ✓
-        //   North(0,0,−1) → (+1,0,0) = East = right ✓
-        //   East (+1,0,0) → (0,0,+1) = South = right ✓
-        //   West (−1,0,0) → (0,0,−1) = North = right ✓
-        Vec3d right = look.crossProduct(worldUp);
-        if(right.lengthSquared() < 1e-6) {
-            right = new Vec3d(-1.0, 0.0, 0.0);
-        } else {
-            right = right.normalize();
-        }
-        // Since look is horizontal (y=0), worldUp is already perpendicular — use it directly.
-        Vec3d up = worldUp;
-
-        StringBuilder probes = new StringBuilder();
-        probes.append(",\"probe_count\":").append(SPHERE_PROBE_DIRS.length);
-        for (int i = 0; i < SPHERE_PROBE_DIRS.length; i++) {
-            Vec3d localDir = SPHERE_PROBE_DIRS[i];
-            // Canonical probe direction: no sender-side axis flips.
-            Vec3d sendDir = localDir;
-            Vec3d worldDir = right.multiply(sendDir.x).add(up.multiply(sendDir.y)).add(look.multiply(sendDir.z)).normalize();
-            ProbeSample ps = sampleProbe(world, player, worldDir, midColor);
-            // Decay toward black faster than rise toward bright (stops smoothed probes from lingering as a gray haze).
-            float lumPs = (0.2126f * ps.r + 0.7152f * ps.g + 0.0722f * ps.b);
-            float lumSm = (0.2126f * smoothProbeR[i] + 0.7152f * smoothProbeG[i] + 0.0722f * smoothProbeB[i]);
-            float cAlpha = (ps.intensity < smoothProbeI[i] - 0.03f || lumPs < lumSm - 3.0f) ? 0.52f : 0.28f;
-            float iAlpha = (ps.intensity < smoothProbeI[i]) ? 0.52f : 0.28f;
-            smoothProbeR[i] = lerpInt(smoothProbeR[i], ps.r, cAlpha);
-            smoothProbeG[i] = lerpInt(smoothProbeG[i], ps.g, cAlpha);
-            smoothProbeB[i] = lerpInt(smoothProbeB[i], ps.b, cAlpha);
-            smoothProbeI[i] = lerpFloat(smoothProbeI[i], ps.intensity, iAlpha);
-            probes.append(String.format(Locale.US,
-                    ",\"p%d_dx\":%.4f,\"p%d_dy\":%.4f,\"p%d_dz\":%.4f,\"p%d_r\":%d,\"p%d_g\":%d,\"p%d_b\":%d,\"p%d_i\":%.4f",
-                    i, sendDir.x, i, sendDir.y, i, sendDir.z,
-                    i, smoothProbeR[i], i, smoothProbeG[i], i, smoothProbeB[i], i, smoothProbeI[i]));
-        }
+        int bioSkyR = clamp255(Math.round(skyBaseR * 255.0f));
+        int bioSkyG = clamp255(Math.round(skyBaseG * 255.0f));
+        int bioSkyB = clamp255(Math.round(skyBaseB * 255.0f));
+        int bioFogR = clamp255(Math.round(bioSkyR * 0.62f));
+        int bioFogG = clamp255(Math.round(bioSkyG * 0.66f));
+        int bioFogB = clamp255(Math.round(bioSkyB * 0.72f));
+        int waterFogR = clamp255(Math.round(waterR * 0.25f + 8.0f));
+        int waterFogG = clamp255(Math.round(waterG * 0.52f + 10.0f));
+        int waterFogB = clamp255(Math.round(waterB * 0.90f + 28.0f));
+        String dimensionId = sanitizeDimensionKey(world.getRegistryKey());
 
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d%s}",
+                "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"biome_sky_r\":%d,\"biome_sky_g\":%d,\"biome_sky_b\":%d,\"biome_fog_r\":%d,\"biome_fog_g\":%d,\"biome_fog_b\":%d,\"water_fog_r\":%d,\"water_fog_g\":%d,\"water_fog_b\":%d,\"water_submerge\":%.4f,\"env_rain\":%.4f,\"env_thunder\":%.4f,\"dimension\":\"%s\"}",
                 System.currentTimeMillis(),
                 player.getX(), player.getY() + 1.0, player.getZ(),
+                lightDir.x, lightDir.y, lightDir.z, lightFocus,
                 r, g, bl, smoothWorldIntensity,
                 smoothSkyR, smoothSkyG, smoothSkyB,
                 smoothMidR, smoothMidG, smoothMidB,
                 smoothGroundR, smoothGroundG, smoothGroundB,
-                probes.toString());
+                bioSkyR, bioSkyG, bioSkyB,
+                bioFogR, bioFogG, bioFogB,
+                waterFogR, waterFogG, waterFogB,
+                waterSubmerge,
+                rain, thunder,
+                dimensionId);
         sendJson(socket, address, json);
     }
 
-    private static class ProbeSample
+    private static Vec3d estimateLocalLightDirection(net.minecraft.world.World world, ClientPlayerEntity player, BlockPos center)
     {
-        final int r;
-        final int g;
-        final int b;
-        final float intensity;
-
-        ProbeSample(int r, int g, int b, float intensity)
+        Vec3d eye = player.getEyePos();
+        double ax = 0.0, ay = 0.0, az = 0.0;
+        double aw = 0.0;
+        for(int dx = -4; dx <= 4; dx++)
         {
-            this.r = r;
-            this.g = g;
-            this.b = b;
-            this.intensity = intensity;
+            for(int dy = -2; dy <= 3; dy++)
+            {
+                for(int dz = -4; dz <= 4; dz++)
+                {
+                    BlockPos p = center.add(dx, dy, dz);
+                    var state = world.getBlockState(p);
+                    int lum = state.getLuminance();
+                    if(lum <= 0)
+                    {
+                        continue;
+                    }
+                    Vec3d src = new Vec3d(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
+                    Vec3d d = src.subtract(eye);
+                    double dist2 = Math.max(0.20, d.lengthSquared());
+                    double w = (double)lum / dist2;
+                    ax += d.x * w;
+                    ay += d.y * w;
+                    az += d.z * w;
+                    aw += w;
+                }
+            }
         }
+        if(aw <= 1e-6)
+        {
+            return Vec3d.ZERO;
+        }
+        return new Vec3d(ax / aw, ay / aw, az / aw);
     }
 
-    private static ProbeSample sampleProbe(net.minecraft.world.World world, ClientPlayerEntity player, Vec3d dir, int fallbackColor)
+    private static float estimateWaterSubmerge(net.minecraft.world.World world, ClientPlayerEntity player)
     {
-        Vec3d start = new Vec3d(player.getX(), player.getY() + 1.4, player.getZ());
-        Vec3d end = start.add(dir.multiply(12.0));
-        BlockHitResult hit = world.raycast(new RaycastContext(
-                start,
-                end,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.ANY,
-                player
-        ));
-
-        net.minecraft.util.math.BlockPos sp;
-        if(hit != null && hit.getType() == HitResult.Type.BLOCK)
+        final Box bb = player.getBoundingBox();
+        final double cx = (bb.minX + bb.maxX) * 0.5;
+        final double cz = (bb.minZ + bb.maxZ) * 0.5;
+        final double[] ySamples = {0.06, 0.22, 0.38, 0.56, 0.74, 0.90};
+        final double[][] xzOffsets = {
+                {0.0, 0.0},
+                {0.22, 0.0},
+                {-0.22, 0.0},
+                {0.0, 0.22},
+                {0.0, -0.22}
+        };
+        int waterHits = 0;
+        int total = 0;
+        for(double yf : ySamples)
         {
-            sp = hit.getBlockPos();
+            final double y = bb.minY + (bb.maxY - bb.minY) * yf;
+            for(double[] off : xzOffsets)
+            {
+                final double x = cx + off[0];
+                final double z = cz + off[1];
+                BlockPos p = BlockPos.ofFloored(x, y, z);
+                var fs = world.getFluidState(p);
+                total++;
+                if(fs.isOf(Fluids.WATER))
+                {
+                    float fh = fs.getHeight(world, p);
+                    double levelY = p.getY() + fh;
+                    if(y <= levelY + 1e-4)
+                    {
+                        waterHits++;
+                    }
+                }
+            }
         }
-        else
+        if(total <= 0)
         {
-            sp = net.minecraft.util.math.BlockPos.ofFloored(end);
+            return 0.0f;
         }
-
-        int sampled = getMapColorRgb(world, sp, fallbackColor);
-        int blockLight = world.getLightLevel(LightType.BLOCK, sp);
-        int skyLight = world.getLightLevel(LightType.SKY, sp);
-        int maxLight = Math.max(blockLight, skyLight);
-        float intensity = clamp01(maxLight / 15.0f);
-        // No minimum intensity: in true darkness every probe weight goes to zero on the plugin side.
-        if(maxLight <= 0)
-        {
-            return new ProbeSample(0, 0, 0, 0.0f);
-        }
-
-        int rr = (sampled >> 16) & 0xFF;
-        int gg = (sampled >> 8) & 0xFF;
-        int bb = sampled & 0xFF;
-        // Brighter, more vivid probes; lightCurve still pulls true-black toward black without gray haze.
-        float boost = 0.86f + 0.52f * intensity;
-        rr = clamp255(Math.round(rr * boost));
-        gg = clamp255(Math.round(gg * boost));
-        bb = clamp255(Math.round(bb * boost));
-        float sat = 1.14f + 0.18f * intensity;
-        float con = 1.06f + 0.14f * intensity;
-        int[] vivid = applyVividTone(rr, gg, bb, sat, con);
-        rr = vivid[0];
-        gg = vivid[1];
-        bb = vivid[2];
-        // Softer than 1.42: more LED pop in normal/indoor light; intensity=0 still returns black above.
-        float lightCurve = (float)Math.pow(intensity, 1.20);
-        rr = clamp255(Math.round(rr * lightCurve));
-        gg = clamp255(Math.round(gg * lightCurve));
-        bb = clamp255(Math.round(bb * lightCurve));
-        return new ProbeSample(rr, gg, bb, intensity);
+        return clamp01((float)waterHits / (float)total);
     }
 
-    private static Vec3d[] buildSphereProbeDirs()
+    private static float estimateWarmLightBias(net.minecraft.world.World world, BlockPos center)
     {
-        Vec3d[] dirs = new Vec3d[PROBE_COUNT];
-        final double goldenAngle = Math.PI * (3.0 - Math.sqrt(5.0));
-        for(int i = 0; i < PROBE_COUNT; i++)
+        int warm = 0;
+        int total = 0;
+        for(int dx = -2; dx <= 2; dx++)
         {
-            double t = (i + 0.5) / (double)PROBE_COUNT;
-            double y = 1.0 - 2.0 * t;
-            double r = Math.sqrt(Math.max(0.0, 1.0 - y * y));
-            double theta = i * goldenAngle;
-            double x = Math.cos(theta) * r;
-            double z = Math.sin(theta) * r;
-            dirs[i] = new Vec3d(x, y, z).normalize();
+            for(int dy = -1; dy <= 2; dy++)
+            {
+                for(int dz = -2; dz <= 2; dz++)
+                {
+                    BlockPos p = center.add(dx, dy, dz);
+                    var state = world.getBlockState(p);
+                    int lum = state.getLuminance();
+                    if(lum <= 0)
+                    {
+                        continue;
+                    }
+                    total += lum;
+                    boolean isWarm =
+                            state.isOf(Blocks.FIRE) ||
+                            state.isOf(Blocks.SOUL_FIRE) ||
+                            state.isOf(Blocks.LAVA) ||
+                            state.isOf(Blocks.MAGMA_BLOCK) ||
+                            state.isOf(Blocks.TORCH) ||
+                            state.isOf(Blocks.WALL_TORCH) ||
+                            state.isOf(Blocks.SOUL_TORCH) ||
+                            state.isOf(Blocks.SOUL_WALL_TORCH) ||
+                            state.isOf(Blocks.LANTERN) ||
+                            state.isOf(Blocks.SOUL_LANTERN) ||
+                            state.isOf(Blocks.CAMPFIRE) ||
+                            state.isOf(Blocks.SOUL_CAMPFIRE);
+                    if(isWarm)
+                    {
+                        warm += lum;
+                    }
+                }
+            }
         }
-        return dirs;
+        if(total <= 0)
+        {
+            return 0.0f;
+        }
+        return clamp01((float)warm / (float)total);
     }
 
     private static int sampleGroundColor(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
@@ -478,40 +542,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return a + (b - a) * t;
     }
 
-    private static int[] applyVividTone(int r, int g, int b, float saturation, float contrast)
+    private void sendLightningEventIfNeeded(DatagramSocket socket, InetAddress address) throws Exception
     {
-        float rf = clamp01(r / 255.0f);
-        float gf = clamp01(g / 255.0f);
-        float bf = clamp01(b / 255.0f);
-
-        float luma = 0.2126f * rf + 0.7152f * gf + 0.0722f * bf;
-        rf = clamp01(luma + (rf - luma) * saturation);
-        gf = clamp01(luma + (gf - luma) * saturation);
-        bf = clamp01(luma + (bf - luma) * saturation);
-
-        rf = clamp01((rf - 0.5f) * contrast + 0.5f);
-        gf = clamp01((gf - 0.5f) * contrast + 0.5f);
-        bf = clamp01((bf - 0.5f) * contrast + 0.5f);
-
-        // White suppression: reduce low-chroma bright whites so vivid hues dominate.
-        float maxc = Math.max(rf, Math.max(gf, bf));
-        float minc = Math.min(rf, Math.min(gf, bf));
-        float chroma = maxc - minc;
-        if(maxc > 0.70f && chroma < 0.16f)
+        long now = System.currentTimeMillis();
+        long age = now - LightningTelemetryState.lastPacketMs;
+        if(age >= 0L &&
+           age <= LIGHTNING_EVENT_MAX_AGE_MS &&
+           (now - lastLightningSentMs) >= LIGHTNING_EVENT_COOLDOWN_MS)
         {
-            float k = clamp01((0.16f - chroma) / 0.16f) * clamp01((maxc - 0.70f) / 0.30f);
-            float neutral = (rf + gf + bf) / 3.0f;
-            float target = neutral * (0.78f - 0.22f * k);
-            rf = clamp01(rf + (target - rf) * 0.55f * k);
-            gf = clamp01(gf + (target - gf) * 0.55f * k);
-            bf = clamp01(bf + (target - bf) * 0.55f * k);
+            float strength = clamp01(LightningTelemetryState.lastStrength);
+            String json = String.format(Locale.US,
+                    "{\"version\":1,\"type\":\"lightning_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"strength\":%.4f}",
+                    now,
+                    strength);
+            sendJson(socket, address, json);
+            lastLightningSentMs = now;
         }
-
-        return new int[] {
-                clamp255(Math.round(rf * 255.0f)),
-                clamp255(Math.round(gf * 255.0f)),
-                clamp255(Math.round(bf * 255.0f))
-        };
     }
 
     private void sendDamageEventIfNeeded(DatagramSocket socket, InetAddress address, ClientPlayerEntity player) throws Exception
@@ -520,13 +566,55 @@ public class OpenRGBSenderMod implements ClientModInitializer
         if(lastHealth >= 0.0f && health < lastHealth)
         {
             float amount = Math.max(0.0f, lastHealth - health);
+            long age = System.currentTimeMillis() - DamageTelemetryState.lastPacketMs;
+            float dx;
+            float dy;
+            float dz;
+            if(age >= 0L && age <= DAMAGE_DIR_MAX_AGE_MS)
+            {
+                dx = DamageTelemetryState.lastDirX;
+                dy = DamageTelemetryState.lastDirY;
+                dz = DamageTelemetryState.lastDirZ;
+            }
+            else
+            {
+                dx = 0.0f;
+                dy = 0.0f;
+                dz = 1.0f;
+            }
             String json = String.format(Locale.US,
-                    "{\"version\":1,\"type\":\"damage_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"amount\":%.4f,\"dir_x\":0.0,\"dir_y\":0.0,\"dir_z\":1.0}",
+                    "{\"version\":1,\"type\":\"damage_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"amount\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f}",
                     System.currentTimeMillis(),
-                    amount);
+                    amount,
+                    dx,
+                    dy,
+                    dz);
             sendJson(socket, address, json);
         }
         lastHealth = health;
+    }
+
+    private static String sanitizeDimensionKey(RegistryKey<World> key)
+    {
+        if(key == null)
+        {
+            return "unknown";
+        }
+        String id = key.getValue().toString();
+        StringBuilder sb = new StringBuilder(id.length());
+        for(int i = 0; i < id.length(); i++)
+        {
+            char c = id.charAt(i);
+            if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == ':' || c == '.' || c == '-')
+            {
+                sb.append(c);
+            }
+        }
+        if(sb.length() == 0)
+        {
+            return "unknown";
+        }
+        return sb.toString();
     }
 
     private static void sendJson(DatagramSocket socket, InetAddress address, String json) throws Exception

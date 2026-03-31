@@ -3,26 +3,50 @@
 #include "MinecraftGame.h"
 
 #include <QCheckBox>
-#include <QComboBox>
 #include <QGridLayout>
+#include <QLabel>
+#include <QSlider>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <utility>
 
 namespace MinecraftGame
 {
 float g_damage_flash_decay_s = 0.35f;
 float g_world_light_mix = 0.85f;
+float g_world_tint_smoothing = 0.72f;
+float g_world_tint_directional = 0.46f;
+float g_world_tint_dir_sharpness = 1.8f;
+float g_lightning_flash_strength = 0.90f;
+float g_lightning_flash_decay_s = 0.28f;
 float g_damage_flash_strength = 1.0f;
 float g_base_brightness = 1.12f;
-float g_probe_mix = 0.92f;
 bool g_enable_health_gradient = true;
+bool g_enable_hunger_gradient = true;
+bool g_enable_air_gradient = true;
+bool g_enable_durability_gradient = true;
+float g_hunger_mix = 0.45f;
+float g_air_mix = 0.55f;
+float g_durability_mix = 0.50f;
 bool g_enable_damage_flash = true;
 bool g_enable_ambient_world_tint = true;
-bool g_enable_spatial_camera = true;
-/** 0 = legacy probe hemispheres, 1 = six-face cube, 2 = amBX-style compass (8 horizontal + center) with soft blending. */
-int g_spatial_map_mode = 2;
+bool g_enable_lightning_flash = true;
+/** Vertical blend: low grid Y → ground, high Y → sky (fractions of grid height). */
+float g_tint_layer_ground_end = 0.36f;
+float g_tint_layer_sky_start = 0.54f;
+/** Extra BiomeEffects-driven tint on top of mod-smoothed layers (0 = ignore vanilla palette fields). */
+float g_biome_sky_overlay = 0.28f;
+float g_env_rain_darken_sky = 0.45f;
+float g_env_thunder_darken_sky = 0.35f;
+/** 0 = uniform damage flash; 1 = strongest toward incoming hit in player-local space vs LED offset. */
+float g_damage_directional_mix = 0.80f;
+float g_damage_dir_sharpness = 1.35f;
+
+bool g_has_smoothed_world_tint = false;
+unsigned long long g_last_world_smooth_sample_ms = 0;
+RGBColor g_smooth_world_sky = (RGBColor)0x00FFBEAA;
+RGBColor g_smooth_world_mid = (RGBColor)0x0078B48C;
+RGBColor g_smooth_world_ground = (RGBColor)0x00507864;
 
 unsigned long long NowMs()
 {
@@ -74,146 +98,148 @@ RGBColor SuppressWhites(RGBColor c)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
-/** Match GameTelemetryBridge compass layout: N,NE,E,SE,S,SW,W,NW from telemetry forward/up (horizontal). */
-bool BuildPlayerCompassDirs(const GameTelemetryBridge::TelemetrySnapshot& t,
-                            float sx[8],
-                            float sy[8],
-                            float sz[8],
-                            float* out_ux,
-                            float* out_uy,
-                            float* out_uz)
-{
-    float ux = t.up_x;
-    float uy = t.up_y;
-    float uz = t.up_z;
-    float ulen = std::sqrt(ux * ux + uy * uy + uz * uz);
-    if(ulen < 1e-5f)
-    {
-        ux = 0.0f;
-        uy = 1.0f;
-        uz = 0.0f;
-        ulen = 1.0f;
-    }
-    else
-    {
-        ux /= ulen;
-        uy /= ulen;
-        uz /= ulen;
-    }
-    float fx = t.forward_x;
-    float fy = t.forward_y;
-    float fz = t.forward_z;
-    float flen = std::sqrt(fx * fx + fy * fy + fz * fz);
-    if(flen < 1e-5f)
-    {
-        fx = 0.0f;
-        fy = 0.0f;
-        fz = 1.0f;
-        flen = 1.0f;
-    }
-    else
-    {
-        fx /= flen;
-        fy /= flen;
-        fz /= flen;
-    }
-    float fhx = fx - ux * (fx * ux + fy * uy + fz * uz);
-    float fhy = fy - uy * (fx * ux + fy * uy + fz * uz);
-    float fhz = fz - uz * (fx * ux + fy * uy + fz * uz);
-    float fhlen = std::sqrt(fhx * fhx + fhy * fhy + fhz * fhz);
-    if(fhlen < 1e-5f)
-    {
-        fhx = 1.0f;
-        fhy = 0.0f;
-        fhz = 0.0f;
-        fhlen = 1.0f;
-    }
-    else
-    {
-        fhx /= fhlen;
-        fhy /= fhlen;
-        fhz /= fhlen;
-    }
-    float rhx = uy * fhz - uz * fhy;
-    float rhy = uz * fhx - ux * fhz;
-    float rhz = ux * fhy - uy * fhx;
-    float rhlen = std::sqrt(rhx * rhx + rhy * rhy + rhz * rhz);
-    if(rhlen > 1e-5f)
-    {
-        rhx /= rhlen;
-        rhy /= rhlen;
-        rhz /= rhlen;
-    }
-    auto add_norm = [](float ax, float ay, float az, float bx, float by, float bz, float& ox, float& oy, float& oz) {
-        ox = ax + bx;
-        oy = ay + by;
-        oz = az + bz;
-        const float l = std::sqrt(ox * ox + oy * oy + oz * oz);
-        if(l > 1e-5f)
-        {
-            ox /= l;
-            oy /= l;
-            oz /= l;
-        }
-    };
-    sx[0] = fhx;
-    sy[0] = fhy;
-    sz[0] = fhz;
-    sx[4] = -fhx;
-    sy[4] = -fhy;
-    sz[4] = -fhz;
-    sx[2] = rhx;
-    sy[2] = rhy;
-    sz[2] = rhz;
-    sx[6] = -rhx;
-    sy[6] = -rhy;
-    sz[6] = -rhz;
-    add_norm(fhx, fhy, fhz, rhx, rhy, rhz, sx[1], sy[1], sz[1]);
-    add_norm(-fhx, -fhy, -fhz, rhx, rhy, rhz, sx[3], sy[3], sz[3]);
-    add_norm(-fhx, -fhy, -fhz, -rhx, -rhy, -rhz, sx[5], sy[5], sz[5]);
-    add_norm(fhx, fhy, fhz, -rhx, -rhy, -rhz, sx[7], sy[7], sz[7]);
-    *out_ux = ux;
-    *out_uy = uy;
-    *out_uz = uz;
-    return true;
-}
-
 QWidget* CreateMinecraftSettingsWidget(QWidget* parent)
 {
     QWidget* panel = new QWidget(parent);
     QGridLayout* layout = new QGridLayout(panel);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    QCheckBox* health_toggle = new QCheckBox("Health gradient");
+    int row = 0;
+    layout->addWidget(new QLabel(QStringLiteral("Health")), row++, 0, 1, 2);
+    QCheckBox* health_toggle = new QCheckBox("Enable health gradient");
     health_toggle->setChecked(g_enable_health_gradient);
-    layout->addWidget(health_toggle, 0, 0, 1, 2);
+    layout->addWidget(health_toggle, row++, 0, 1, 2);
+    QCheckBox* hunger_toggle = new QCheckBox("Enable hunger gradient");
+    hunger_toggle->setChecked(g_enable_hunger_gradient);
+    layout->addWidget(hunger_toggle, row++, 0, 1, 2);
+    QCheckBox* air_toggle = new QCheckBox("Enable air gradient");
+    air_toggle->setChecked(g_enable_air_gradient);
+    layout->addWidget(air_toggle, row++, 0, 1, 2);
+    QCheckBox* dura_toggle = new QCheckBox("Enable item durability gradient");
+    dura_toggle->setChecked(g_enable_durability_gradient);
+    layout->addWidget(dura_toggle, row++, 0, 1, 2);
 
-    QCheckBox* damage_toggle = new QCheckBox("Damage flash");
+    layout->addWidget(new QLabel(QStringLiteral("Damage")), row++, 0, 1, 2);
+    QCheckBox* damage_toggle = new QCheckBox("Enable damage flash");
     damage_toggle->setChecked(g_enable_damage_flash);
-    layout->addWidget(damage_toggle, 1, 0, 1, 2);
-
-    QCheckBox* world_tint_toggle = new QCheckBox("Ambient world tint");
-    world_tint_toggle->setChecked(g_enable_ambient_world_tint);
-    layout->addWidget(world_tint_toggle, 2, 0, 1, 2);
-
-    QCheckBox* spatial_toggle = new QCheckBox("Spatial camera (probes)");
-    spatial_toggle->setChecked(g_enable_spatial_camera);
-    layout->addWidget(spatial_toggle, 3, 0, 1, 2);
-
-    QComboBox* spatial_map_combo = new QComboBox();
-    spatial_map_combo->addItem(QStringLiteral("Probes: Legacy hemispheres"));
-    spatial_map_combo->addItem(QStringLiteral("Probes: Six-face cube"));
-    spatial_map_combo->addItem(QStringLiteral("Probes: Compass (8 + center)"));
-    spatial_map_combo->setCurrentIndex(std::clamp(g_spatial_map_mode, 0, 2));
-    layout->addWidget(spatial_map_combo, 4, 0, 1, 2);
+    layout->addWidget(damage_toggle, row++, 0, 1, 2);
 
     QObject::connect(health_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_health_gradient = v; });
+    QObject::connect(hunger_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_hunger_gradient = v; });
+    QObject::connect(air_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_air_gradient = v; });
+    QObject::connect(dura_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_durability_gradient = v; });
     QObject::connect(damage_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_damage_flash = v; });
+    auto addPctSlider = [&](const QString& name, float* v) {
+        auto* lab = new QLabel(name);
+        auto* sl = new QSlider(Qt::Horizontal);
+        sl->setRange(0, 100);
+        sl->setValue((int)std::lround(std::clamp(*v, 0.0f, 1.0f) * 100.0f));
+        layout->addWidget(lab, row, 0);
+        layout->addWidget(sl, row, 1);
+        QObject::connect(sl, &QSlider::valueChanged, panel, [v](int x) { *v = std::clamp(x / 100.0f, 0.0f, 1.0f); });
+        row++;
+    };
+
+    addPctSlider(QStringLiteral("Directional hit (vs uniform)"), &g_damage_directional_mix);
+    addPctSlider(QStringLiteral("Hunger gradient strength"), &g_hunger_mix);
+    addPctSlider(QStringLiteral("Air gradient strength"), &g_air_mix);
+    addPctSlider(QStringLiteral("Item durability gradient strength"), &g_durability_mix);
+
+    auto* dSharpLab = new QLabel(QStringLiteral("Damage direction sharpness"));
+    auto* dSharpSl = new QSlider(Qt::Horizontal);
+    dSharpSl->setRange(50, 400);
+    dSharpSl->setValue((int)std::lround(g_damage_dir_sharpness * 100.0f));
+    layout->addWidget(dSharpLab, row, 0);
+    layout->addWidget(dSharpSl, row, 1);
+    QObject::connect(dSharpSl, &QSlider::valueChanged, panel, [](int x) { g_damage_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); });
+    row++;
+
+    layout->addWidget(new QLabel(QStringLiteral("World tint")), row++, 0, 1, 2);
+    QCheckBox* world_tint_toggle = new QCheckBox("Enable ambient world tint");
+    world_tint_toggle->setChecked(g_enable_ambient_world_tint);
+    layout->addWidget(world_tint_toggle, row++, 0, 1, 2);
     QObject::connect(world_tint_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_ambient_world_tint = v; });
-    QObject::connect(spatial_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_spatial_camera = v; });
-    QObject::connect(spatial_map_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [](int idx) {
-        g_spatial_map_mode = std::clamp(idx, 0, 2);
-    });
+
+    QCheckBox* lightning_toggle = new QCheckBox("Enable lightning flash");
+    lightning_toggle->setChecked(g_enable_lightning_flash);
+    layout->addWidget(lightning_toggle, row++, 0, 1, 2);
+    QObject::connect(lightning_toggle, &QCheckBox::toggled, panel, [](bool v) { g_enable_lightning_flash = v; });
+
+    auto* mixLab = new QLabel(QStringLiteral("World tint strength"));
+    auto* mixSl = new QSlider(Qt::Horizontal);
+    mixSl->setRange(0, 100);
+    mixSl->setValue((int)std::lround(std::clamp(g_world_light_mix, 0.0f, 1.0f) * 100.0f));
+    layout->addWidget(mixLab, row, 0);
+    layout->addWidget(mixSl, row, 1);
+    QObject::connect(mixSl, &QSlider::valueChanged, panel, [](int x) { g_world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); });
+    row++;
+
+    auto* smoothLab = new QLabel(QStringLiteral("World tint smoothing"));
+    auto* smoothSl = new QSlider(Qt::Horizontal);
+    smoothSl->setRange(0, 95);
+    smoothSl->setValue((int)std::lround(std::clamp(g_world_tint_smoothing, 0.0f, 0.95f) * 100.0f));
+    layout->addWidget(smoothLab, row, 0);
+    layout->addWidget(smoothSl, row, 1);
+    QObject::connect(smoothSl, &QSlider::valueChanged, panel, [](int x) { g_world_tint_smoothing = std::clamp(x / 100.0f, 0.0f, 0.95f); });
+    row++;
+
+    auto* dirLab = new QLabel(QStringLiteral("World tint directional response"));
+    auto* dirSl = new QSlider(Qt::Horizontal);
+    dirSl->setRange(0, 100);
+    dirSl->setValue((int)std::lround(std::clamp(g_world_tint_directional, 0.0f, 1.0f) * 100.0f));
+    layout->addWidget(dirLab, row, 0);
+    layout->addWidget(dirSl, row, 1);
+    QObject::connect(dirSl, &QSlider::valueChanged, panel, [](int x) { g_world_tint_directional = std::clamp(x / 100.0f, 0.0f, 1.0f); });
+    row++;
+
+    auto* dirSharpLab = new QLabel(QStringLiteral("World tint directional sharpness"));
+    auto* dirSharpSl = new QSlider(Qt::Horizontal);
+    dirSharpSl->setRange(80, 320);
+    dirSharpSl->setValue((int)std::lround(std::clamp(g_world_tint_dir_sharpness, 0.8f, 3.2f) * 100.0f));
+    layout->addWidget(dirSharpLab, row, 0);
+    layout->addWidget(dirSharpSl, row, 1);
+    QObject::connect(dirSharpSl, &QSlider::valueChanged, panel, [](int x) { g_world_tint_dir_sharpness = std::clamp(x / 100.0f, 0.8f, 3.2f); });
+    row++;
+
+    auto* lStrLab = new QLabel(QStringLiteral("Lightning flash strength"));
+    auto* lStrSl = new QSlider(Qt::Horizontal);
+    lStrSl->setRange(0, 150);
+    lStrSl->setValue((int)std::lround(std::clamp(g_lightning_flash_strength, 0.0f, 1.5f) * 100.0f));
+    layout->addWidget(lStrLab, row, 0);
+    layout->addWidget(lStrSl, row, 1);
+    QObject::connect(lStrSl, &QSlider::valueChanged, panel, [](int x) { g_lightning_flash_strength = std::clamp(x / 100.0f, 0.0f, 1.5f); });
+    row++;
+
+    auto* lDecLab = new QLabel(QStringLiteral("Lightning decay (ms)"));
+    auto* lDecSl = new QSlider(Qt::Horizontal);
+    lDecSl->setRange(80, 900);
+    lDecSl->setValue((int)std::lround(std::clamp(g_lightning_flash_decay_s, 0.08f, 0.90f) * 1000.0f));
+    layout->addWidget(lDecLab, row, 0);
+    layout->addWidget(lDecSl, row, 1);
+    QObject::connect(lDecSl, &QSlider::valueChanged, panel, [](int x) { g_lightning_flash_decay_s = std::clamp(x / 1000.0f, 0.08f, 0.90f); });
+    row++;
+
+    auto* gEndLab = new QLabel(QStringLiteral("Ground-to-mid blend ends (grid Y %)"));
+    auto* gEndSl = new QSlider(Qt::Horizontal);
+    gEndSl->setRange(10, 55);
+    gEndSl->setValue((int)std::lround(std::clamp(g_tint_layer_ground_end, 0.10f, 0.55f) * 100.0f));
+    layout->addWidget(gEndLab, row, 0);
+    layout->addWidget(gEndSl, row, 1);
+    QObject::connect(gEndSl, &QSlider::valueChanged, panel, [](int x) { g_tint_layer_ground_end = std::clamp(x / 100.0f, 0.08f, 0.55f); });
+    row++;
+
+    auto* sStartLab = new QLabel(QStringLiteral("Mid-to-sky blend starts (grid Y %)"));
+    auto* sStartSl = new QSlider(Qt::Horizontal);
+    sStartSl->setRange(40, 85);
+    sStartSl->setValue((int)std::lround(std::clamp(g_tint_layer_sky_start, 0.40f, 0.85f) * 100.0f));
+    layout->addWidget(sStartLab, row, 0);
+    layout->addWidget(sStartSl, row, 1);
+    QObject::connect(sStartSl, &QSlider::valueChanged, panel, [](int x) { g_tint_layer_sky_start = std::clamp(x / 100.0f, 0.40f, 0.92f); });
+    row++;
+
+    addPctSlider(QStringLiteral("Biome sky overlay (BiomeEffects sky)"), &g_biome_sky_overlay);
+    addPctSlider(QStringLiteral("Rain darkens sky layer"), &g_env_rain_darken_sky);
+    addPctSlider(QStringLiteral("Thunder darkens sky layer"), &g_env_thunder_darken_sky);
 
     return panel;
 }
@@ -228,15 +254,38 @@ RGBColor RenderMinecraftColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                               float origin_z,
                               const GridContext3D& grid)
 {
-    float health_norm = 1.0f;
-    if(t.has_health_state && t.health_max > 0.01f)
-    {
-        health_norm = std::clamp(t.health / t.health_max, 0.0f, 1.0f);
-    }
-
     const RGBColor low_health = (RGBColor)0x000022FF;
     const RGBColor high_health = (RGBColor)0x0000FF22;
-    RGBColor out = g_enable_health_gradient ? LerpColor(low_health, high_health, health_norm) : (RGBColor)0x00000000;
+    const RGBColor low_hunger = (RGBColor)0x000020FF;
+    const RGBColor high_hunger = (RGBColor)0x0000E0FF;
+    const RGBColor low_air = (RGBColor)0x0000A0FF;
+    const RGBColor high_air = (RGBColor)0x00FFC040;
+    const RGBColor low_durability = (RGBColor)0x000000FF;
+    const RGBColor high_durability = (RGBColor)0x0000FF60;
+    RGBColor out = (RGBColor)0x00000000;
+    if(g_enable_health_gradient && t.has_health_state && t.health_max > 0.01f)
+    {
+        const float health_norm = std::clamp(t.health / t.health_max, 0.0f, 1.0f);
+        out = LerpColor(low_health, high_health, health_norm);
+    }
+    if(g_enable_hunger_gradient && t.has_health_state && t.hunger_max > 0.01f)
+    {
+        const float hunger_norm = std::clamp(t.hunger / t.hunger_max, 0.0f, 1.0f);
+        const RGBColor hunger_color = LerpColor(low_hunger, high_hunger, hunger_norm);
+        out = LerpColor(out, hunger_color, std::clamp(g_hunger_mix, 0.0f, 1.0f));
+    }
+    if(g_enable_air_gradient && t.has_health_state && t.air_max > 0.01f)
+    {
+        const float air_norm = std::clamp(t.air / t.air_max, 0.0f, 1.0f);
+        const RGBColor air_color = LerpColor(low_air, high_air, air_norm);
+        out = LerpColor(out, air_color, std::clamp(g_air_mix, 0.0f, 1.0f));
+    }
+    if(g_enable_durability_gradient && t.has_health_state && t.has_item_durability && t.item_durability_max > 0.01f)
+    {
+        const float dura_norm = std::clamp(t.item_durability / t.item_durability_max, 0.0f, 1.0f);
+        const RGBColor dura_color = LerpColor(low_durability, high_durability, dura_norm);
+        out = LerpColor(out, dura_color, std::clamp(g_durability_mix, 0.0f, 1.0f));
+    }
 
     if(g_enable_ambient_world_tint && t.has_world_light)
     {
@@ -248,22 +297,132 @@ RGBColor RenderMinecraftColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             RGBColor sky = SuppressWhites(MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b));
             RGBColor mid = SuppressWhites(MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b));
             RGBColor ground = SuppressWhites(MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b));
+            if(t.has_vanilla_biome_colors)
+            {
+                if(g_biome_sky_overlay > 1e-4f)
+                {
+                    RGBColor bioSky = SuppressWhites(MakeRgb(t.biome_sky_r, t.biome_sky_g, t.biome_sky_b));
+                    sky = LerpColor(sky, bioSky, std::clamp(g_biome_sky_overlay, 0.0f, 1.0f));
+                }
+            }
+            const float waterK = std::clamp(t.water_submerge, 0.0f, 1.0f);
+            if(waterK > 1e-4f)
+            {
+                RGBColor wFog = SuppressWhites(MakeRgb(t.water_fog_r, t.water_fog_g, t.water_fog_b));
+                const float gk = std::clamp(0.30f + 0.70f * waterK, 0.0f, 1.0f);
+                const float mk = std::clamp(0.20f + 0.68f * waterK, 0.0f, 1.0f);
+                const float sk = std::clamp(0.10f + 0.52f * waterK, 0.0f, 1.0f);
+                ground = LerpColor(ground, wFog, gk);
+                mid = LerpColor(mid, wFog, mk);
+                sky = LerpColor(sky, wFog, sk);
+            }
+            const float rainK = std::clamp(t.env_rain, 0.0f, 1.0f);
+            const float thK = std::clamp(t.env_thunder, 0.0f, 1.0f);
+            const float weatherK = std::clamp(rainK * g_env_rain_darken_sky + thK * g_env_thunder_darken_sky, 0.0f, 1.0f);
+            if(weatherK > 1e-4f)
+            {
+                sky = LerpColor(sky, (RGBColor)0x00002218, weatherK);
+            }
+            if(t.world_light_received_ms != 0 && t.world_light_received_ms != g_last_world_smooth_sample_ms)
+            {
+                g_last_world_smooth_sample_ms = t.world_light_received_ms;
+                if(!g_has_smoothed_world_tint)
+                {
+                    g_smooth_world_sky = sky;
+                    g_smooth_world_mid = mid;
+                    g_smooth_world_ground = ground;
+                    g_has_smoothed_world_tint = true;
+                }
+                else
+                {
+                    const float alpha = std::clamp(1.0f - g_world_tint_smoothing, 0.02f, 1.0f);
+                    g_smooth_world_sky = LerpColor(g_smooth_world_sky, sky, alpha);
+                    g_smooth_world_mid = LerpColor(g_smooth_world_mid, mid, alpha);
+                    g_smooth_world_ground = LerpColor(g_smooth_world_ground, ground, alpha);
+                }
+            }
+            if(g_has_smoothed_world_tint)
+            {
+                sky = g_smooth_world_sky;
+                mid = g_smooth_world_mid;
+                ground = g_smooth_world_ground;
+            }
             RGBColor projected = mid;
-            /* World tint: low grid Y = ground, high Y = sky (matches typical floor/ceiling rigs). */
-            if(y_norm < 0.36f)
+            const float gEnd = std::clamp(g_tint_layer_ground_end, 0.08f, 0.49f);
+            const float sStart = std::clamp(g_tint_layer_sky_start, gEnd + 0.04f, 0.92f);
+            /* World tint: low grid Y = ground, high Y = sky (ceiling / floor rigs). */
+            if(y_norm < gEnd)
             {
-                projected = LerpColor(ground, mid, y_norm / 0.36f);
+                projected = LerpColor(ground, mid, y_norm / gEnd);
             }
-            else if(y_norm > 0.54f)
+            else if(y_norm > sStart)
             {
-                projected = LerpColor(mid, sky, (y_norm - 0.54f) / 0.46f);
+                const float denom = std::max(1e-3f, 1.0f - sStart);
+                projected = LerpColor(mid, sky, (y_norm - sStart) / denom);
             }
-            const float layer_mix = std::clamp((0.30f + 0.70f * g_world_light_mix) * std::max(0.0f, t.world_light_intensity), 0.0f, 1.0f);
-            out = LerpColor(out, projected, layer_mix);
+            /* Keep room-wide tint present even in darker scenes so sky/mid/ground layering remains visible. */
+            const float wi_disp = std::max(t.world_light_intensity, 0.22f);
+            const float layer_mix = std::clamp((0.42f + 0.58f * g_world_light_mix) * wi_disp, 0.0f, 1.0f);
+            float dirMul = 1.0f;
+            if(t.has_player_pose && t.world_light_focus > 1e-4f && g_world_tint_directional > 1e-4f)
+            {
+                float fx = t.forward_x, fy = t.forward_y, fz = t.forward_z;
+                float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+                if(fl > 1e-5f)
+                {
+                    fx /= fl; fy /= fl; fz /= fl;
+                }
+                else
+                {
+                    fx = 0.0f; fy = 0.0f; fz = 1.0f;
+                }
+                float ux = t.up_x, uy = t.up_y, uz = t.up_z;
+                float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
+                if(ul > 1e-5f)
+                {
+                    ux /= ul; uy /= ul; uz /= ul;
+                }
+                else
+                {
+                    ux = 0.0f; uy = 1.0f; uz = 0.0f;
+                }
+                float rx = fy * uz - fz * uy;
+                float ry = fz * ux - fx * uz;
+                float rz = fx * uy - fy * ux;
+                float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
+                if(rl > 1e-5f)
+                {
+                    rx /= rl; ry /= rl; rz /= rl;
+                }
+                float ldx = t.world_light_dir_x, ldy = t.world_light_dir_y, ldz = t.world_light_dir_z;
+                float ll = std::sqrt(ldx * ldx + ldy * ldy + ldz * ldz);
+                if(ll > 1e-5f)
+                {
+                    ldx /= ll; ldy /= ll; ldz /= ll;
+                    const float lx = ldx * rx + ldy * ry + ldz * rz;
+                    const float ly = ldx * ux + ldy * uy + ldz * uz;
+                    const float lz = ldx * fx + ldy * fy + ldz * fz;
+                    float ox = grid_x - origin_x, oy = grid_y - origin_y, oz = grid_z - origin_z;
+                    float ol = std::sqrt(ox * ox + oy * oy + oz * oz);
+                    if(ol > 1e-5f)
+                    {
+                        ox /= ol; oy /= ol; oz /= ol;
+                        const float sa = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
+                        const float hemi = 0.5f * (sa + 1.0f);
+                        const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.8f, g_world_tint_dir_sharpness));
+                        const float focus = std::clamp(t.world_light_focus, 0.0f, 1.0f);
+                        const float dm = std::clamp(g_world_tint_directional * (0.25f + 0.75f * focus), 0.0f, 1.0f);
+                        const float floor = 0.30f;
+                        dirMul = (1.0f - dm) + dm * (floor + (1.0f - floor) * shaped);
+                    }
+                }
+            }
+            out = LerpColor(out, projected, std::clamp(layer_mix * dirMul, 0.0f, 1.0f));
             wl = LerpColor(wl, projected, 0.6f);
         }
-        const float wl_mix = std::clamp(g_world_light_mix * std::max(0.0f, t.world_light_intensity), 0.0f, 1.0f);
-        out = LerpColor(out, wl, wl_mix * 0.55f);
+        const float wi_disp2 = std::max(t.world_light_intensity, 0.22f);
+        const float wl_mix = std::clamp(g_world_light_mix * wi_disp2, 0.0f, 1.0f);
+        out = LerpColor(out, wl, wl_mix * 0.72f);
     }
 
     if(g_enable_damage_flash && t.has_damage_event && t.damage_received_ms > 0)
@@ -275,205 +434,101 @@ RGBColor RenderMinecraftColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         if(damage_t > 0.0f)
         {
             const float damage_strength = std::clamp(t.damage_amount / 20.0f, 0.0f, 1.0f);
-            const float flash_mix = std::clamp(g_damage_flash_strength * damage_t * (0.2f + 0.8f * damage_strength), 0.0f, 1.0f);
+            float flash_mix = std::clamp(g_damage_flash_strength * damage_t * (0.2f + 0.8f * damage_strength), 0.0f, 1.0f);
+            if(g_damage_directional_mix > 1e-4f && t.has_player_pose)
+            {
+                float dwx = t.damage_dir_x;
+                float dwy = t.damage_dir_y;
+                float dwz = t.damage_dir_z;
+                const float dl = std::sqrt(dwx * dwx + dwy * dwy + dwz * dwz);
+                if(dl > 1e-4f)
+                {
+                    dwx /= dl;
+                    dwy /= dl;
+                    dwz /= dl;
+                    float fx = t.forward_x;
+                    float fy = t.forward_y;
+                    float fz = t.forward_z;
+                    float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+                    if(fl > 1e-4f)
+                    {
+                        fx /= fl;
+                        fy /= fl;
+                        fz /= fl;
+                    }
+                    else
+                    {
+                        fx = 0.0f;
+                        fy = 0.0f;
+                        fz = 1.0f;
+                    }
+                    float ux = t.up_x;
+                    float uy = t.up_y;
+                    float uz = t.up_z;
+                    float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
+                    if(ul > 1e-4f)
+                    {
+                        ux /= ul;
+                        uy /= ul;
+                        uz /= ul;
+                    }
+                    else
+                    {
+                        ux = 0.0f;
+                        uy = 1.0f;
+                        uz = 0.0f;
+                    }
+                    float rx = fy * uz - fz * uy;
+                    float ry = fz * ux - fx * uz;
+                    float rz = fx * uy - fy * ux;
+                    const float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
+                    if(rl > 1e-4f)
+                    {
+                        rx /= rl;
+                        ry /= rl;
+                        rz /= rl;
+                    }
+                    const float lx = dwx * rx + dwy * ry + dwz * rz;
+                    const float ly = dwx * ux + dwy * uy + dwz * uz;
+                    const float lz = dwx * fx + dwy * fy + dwz * fz;
+                    float ox = grid_x - origin_x;
+                    float oy = grid_y - origin_y;
+                    float oz = grid_z - origin_z;
+                    const float olen = std::sqrt(ox * ox + oy * oy + oz * oz);
+                    if(olen > 1e-4f)
+                    {
+                        ox /= olen;
+                        oy /= olen;
+                        oz /= olen;
+                    }
+                    const float signed_align = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
+                    const float hemi = 0.5f * (signed_align + 1.0f);
+                    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, g_damage_dir_sharpness));
+                    const float dirMix = std::clamp(g_damage_directional_mix, 0.0f, 1.0f);
+                    const float minFactor = 0.10f;
+                    const float dirFactor = minFactor + (1.0f - minFactor) * shaped;
+                    flash_mix *= (1.0f - dirMix) + dirMix * dirFactor;
+                    flash_mix = std::clamp(flash_mix, 0.0f, 1.0f);
+                }
+            }
             out = LerpColor(out, (RGBColor)0x000000FF, flash_mix);
         }
     }
 
-    if(g_enable_spatial_camera && t.has_world_probes && t.world_probe_count > 0)
+    if(g_enable_lightning_flash && t.has_lightning_event && t.lightning_received_ms > 0)
     {
-        float ox = grid_x - origin_x;
-        float oy = grid_y - origin_y;
-        float oz = grid_z - origin_z;
-        float len = std::sqrt(ox * ox + oy * oy + oz * oz);
-        if(len > 1e-4f)
+        const unsigned long long now = NowMs();
+        const unsigned long long elapsed_ms = (now > t.lightning_received_ms) ? (now - t.lightning_received_ms) : 0;
+        const float decay_ms = std::max(80.0f, g_lightning_flash_decay_s * 1000.0f);
+        const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
+        if(lt > 0.0f)
         {
-            ox /= len;
-            oy /= len;
-            oz /= len;
-            float max_probe_i = 0.0f;
-            float sum_probe_i = 0.0f;
-            const int count = std::min(64, t.world_probe_count);
-            for(int i = 0; i < count; i++)
-            {
-                const float pi = std::clamp(t.world_probe_intensity[i], 0.0f, 1.2f);
-                max_probe_i = std::max(max_probe_i, pi);
-                sum_probe_i += pi;
-            }
-            const float mean_probe_i = (count > 0) ? (sum_probe_i / (float)count) : 0.0f;
-
-            const auto finish_spatial = [&](float prf, float pgf, float pbf)
-            {
-                if(sum_probe_i <= 1e-6f)
-                {
-                    return;
-                }
-                const float chroma = std::max(prf, std::max(pgf, pbf)) - std::min(prf, std::min(pgf, pbf));
-                const float luma = 0.2126f * prf + 0.7152f * pgf + 0.0722f * pbf;
-                const float dim = std::clamp(0.32f + 0.68f * std::pow(std::clamp(mean_probe_i, 0.0f, 1.0f), 1.12f), 0.0f, 1.0f);
-                if(chroma < 24.0f && luma > 42.0f)
-                {
-                    const float crush = std::clamp((luma - 42.0f) / 140.0f, 0.0f, 1.0f) * (1.0f - dim) * 0.75f;
-                    const float k = std::clamp(0.62f + 0.38f * dim, 0.0f, 1.0f);
-                    prf = std::clamp(prf * k - crush * 18.0f, 0.0f, 255.0f);
-                    pgf = std::clamp(pgf * k - crush * 18.0f, 0.0f, 255.0f);
-                    pbf = std::clamp(pbf * k - crush * 18.0f, 0.0f, 255.0f);
-                }
-                else
-                {
-                    const float sat_lift = 1.0f + 0.40f * std::clamp(chroma / 70.0f, 0.0f, 1.0f);
-                    prf = std::clamp(prf * dim * sat_lift, 0.0f, 255.0f);
-                    pgf = std::clamp(pgf * dim * sat_lift, 0.0f, 255.0f);
-                    pbf = std::clamp(pbf * dim * sat_lift, 0.0f, 255.0f);
-                }
-                const int pr = std::clamp((int)std::lround(prf), 0, 255);
-                const int pg = std::clamp((int)std::lround(pgf), 0, 255);
-                const int pb = std::clamp((int)std::lround(pbf), 0, 255);
-                const RGBColor raw_probe = (RGBColor)((pb << 16) | (pg << 8) | pr);
-                const RGBColor probe_color = (chroma >= 32.0f) ? raw_probe : SuppressWhites(raw_probe);
-                const float peak = std::pow(std::clamp(max_probe_i, 0.0f, 1.0f), 1.32f);
-                const float fill = std::pow(std::clamp(mean_probe_i, 0.0f, 1.0f), 1.06f);
-                const float spatial_t = std::clamp(g_probe_mix * std::min(1.0f, peak * 1.22f) * fill, 0.0f, 1.0f);
-                out = LerpColor(out, probe_color, spatial_t);
-            };
-
-            bool used_spatial_path = false;
-            if(g_spatial_map_mode == 2 && t.has_world_probe_compass)
-            {
-                float sx[8], sy[8], sz[8];
-                float ux = 0.0f;
-                float uy = 1.0f;
-                float uz = 0.0f;
-                if(BuildPlayerCompassDirs(t, sx, sy, sz, &ux, &uy, &uz))
-                {
-                    constexpr float fe_led = 2.2f;
-                    constexpr float led_iso = 0.11f;
-                    float lw[8];
-                    float lsum = 0.0f;
-                    for(int k = 0; k < 8; ++k)
-                    {
-                        const float dp = std::max(0.0f, ox * sx[k] + oy * sy[k] + oz * sz[k]);
-                        lw[k] = led_iso + (1.0f - led_iso) * std::pow(dp, fe_led);
-                        lsum += lw[k];
-                    }
-                    if(lsum > 1e-8f)
-                    {
-                        float hr = 0.0f;
-                        float hg = 0.0f;
-                        float hb = 0.0f;
-                        for(int k = 0; k < 8; ++k)
-                        {
-                            hr += t.world_probe_compass_r[k] * lw[k];
-                            hg += t.world_probe_compass_g[k] * lw[k];
-                            hb += t.world_probe_compass_b[k] * lw[k];
-                        }
-                        hr /= lsum;
-                        hg /= lsum;
-                        hb /= lsum;
-                        const float mx = *std::max_element(lw, lw + 8);
-                        const float spread = std::clamp(1.0f - mx / lsum, 0.0f, 1.0f);
-                        const float dup = ox * ux + oy * uy + oz * uz;
-                        const float elev = std::abs(dup);
-                        constexpr float k_vert = 0.48f;
-                        const float vert_mix = std::clamp(k_vert * elev * elev, 0.0f, 1.0f);
-                        float vr = hr;
-                        float vg = hg;
-                        float vb = hb;
-                        if(t.has_world_probe_cube)
-                        {
-                            const float w_up = std::pow(std::max(0.0f, dup), fe_led);
-                            const float w_dn = std::pow(std::max(0.0f, -dup), fe_led);
-                            const float ws = w_up + w_dn + 1e-6f;
-                            vr = (w_up * t.world_probe_cube_r[2] + w_dn * t.world_probe_cube_r[3]) / ws;
-                            vg = (w_up * t.world_probe_cube_g[2] + w_dn * t.world_probe_cube_g[3]) / ws;
-                            vb = (w_up * t.world_probe_cube_b[2] + w_dn * t.world_probe_cube_b[3]) / ws;
-                        }
-                        float prf = hr * (1.0f - vert_mix) + vr * vert_mix;
-                        float pgf = hg * (1.0f - vert_mix) + vg * vert_mix;
-                        float pbf = hb * (1.0f - vert_mix) + vb * vert_mix;
-                        const float cr = t.world_probe_compass_r[8];
-                        const float cg = t.world_probe_compass_g[8];
-                        const float cb = t.world_probe_compass_b[8];
-                        const float ca = std::clamp(0.08f + 0.38f * elev * elev + 0.22f * spread * spread, 0.0f, 0.72f);
-                        prf = prf * (1.0f - ca) + cr * ca;
-                        pgf = pgf * (1.0f - ca) + cg * ca;
-                        pbf = pbf * (1.0f - ca) + cb * ca;
-                        finish_spatial(prf, pgf, pbf);
-                        used_spatial_path = true;
-                    }
-                }
-            }
-            if(!used_spatial_path && (g_spatial_map_mode == 1 || g_spatial_map_mode == 2) && t.has_world_probe_cube)
-            {
-                /* Same axis weighting as bridge: squared positive part along each axis, exponent for sharpness. */
-                constexpr float fe = 2.2f;
-                const float lw0 = std::pow(std::max(0.0f, ox), fe);
-                const float lw1 = std::pow(std::max(0.0f, -ox), fe);
-                const float lw2 = std::pow(std::max(0.0f, oy), fe);
-                const float lw3 = std::pow(std::max(0.0f, -oy), fe);
-                const float lw4 = std::pow(std::max(0.0f, oz), fe);
-                const float lw5 = std::pow(std::max(0.0f, -oz), fe);
-                const float wl = lw0 + lw1 + lw2 + lw3 + lw4 + lw5;
-                if(wl > 1e-8f)
-                {
-                    const float lws[6] = {lw0, lw1, lw2, lw3, lw4, lw5};
-                    float prf = 0.0f;
-                    float pgf = 0.0f;
-                    float pbf = 0.0f;
-                    for(int f = 0; f < 6; f++)
-                    {
-                        prf += (float)t.world_probe_cube_r[f] * lws[f];
-                        pgf += (float)t.world_probe_cube_g[f] * lws[f];
-                        pbf += (float)t.world_probe_cube_b[f] * lws[f];
-                    }
-                    prf /= wl;
-                    pgf /= wl;
-                    pbf /= wl;
-                    finish_spatial(prf, pgf, pbf);
-                    used_spatial_path = true;
-                }
-            }
-            if(!used_spatial_path)
-            {
-                float sum_w = 0.0f;
-                float acc_r = 0.0f;
-                float acc_g = 0.0f;
-                float acc_b = 0.0f;
-                /* Directional lobe + small isotropic floor: if grid Z/X vs game space is flipped, pure hemispherical
-                   weights can all be ~0 so spatial shows nothing while world tint still works. */
-                constexpr float k_dot_power = 7.0f;
-                constexpr float k_isotropic_mix = 0.14f;
-                for(int i = 0; i < count; i++)
-                {
-                    const float pi = std::clamp(t.world_probe_intensity[i], 0.0f, 1.2f);
-                    float px = t.world_probe_dir_x[i];
-                    float py = t.world_probe_dir_y[i];
-                    float pz = t.world_probe_dir_z[i];
-                    float plen = std::sqrt(px * px + py * py + pz * pz);
-                    if(plen < 1e-5f)
-                    {
-                        continue;
-                    }
-                    px /= plen;
-                    py /= plen;
-                    pz /= plen;
-                    float dot = ox * px + oy * py + oz * pz;
-                    const float hem = std::pow(std::clamp(dot, 0.0f, 1.0f), k_dot_power);
-                    const float w = pi * (k_isotropic_mix + (1.0f - k_isotropic_mix) * hem);
-                    if(w <= 1e-8f)
-                    {
-                        continue;
-                    }
-                    sum_w += w;
-                    acc_r += (float)t.world_probe_r[i] * w;
-                    acc_g += (float)t.world_probe_g[i] * w;
-                    acc_b += (float)t.world_probe_b[i] * w;
-                }
-                if(sum_w > 1e-8f)
-                {
-                    finish_spatial(acc_r / sum_w, acc_g / sum_w, acc_b / sum_w);
-                }
-            }
+            const float height = (grid.height > 1e-3f) ? grid.height : 1.0f;
+            const float y_norm = std::clamp((grid_y - grid.min_y) / height, 0.0f, 1.0f);
+            const float skyBias = std::pow(y_norm, 1.9f);
+            const float layer = 0.20f + 0.80f * skyBias;
+            const float st = std::clamp(g_lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
+            out = LerpColor(out, (RGBColor)0x00FFF0DE, st);
         }
     }
 

@@ -10,6 +10,12 @@ base {
     archivesName = project.archives_base_name
 }
 
+loom {
+    mixin {
+        defaultRefmapName.set("openrgb-sender.refmap.json")
+    }
+}
+
 repositories {
     mavenCentral()
 }
