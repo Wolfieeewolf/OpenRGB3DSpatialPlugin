@@ -147,6 +147,5 @@ RGBColor MinecraftGameEffect3D::CalculateColorGrid(float gx, float gy, float gz,
 
 bool MinecraftGameEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const
 {
-    /* Telemetry paints the whole rig; do not zero wall/ceiling LEDs when only "floor" surfaces are selected. */
     return true;
 }

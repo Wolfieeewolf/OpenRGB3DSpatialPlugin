@@ -71,7 +71,6 @@ public:
     float GetSpacingZ() const;
 
 signals:
-    /** Emitted when user clicks "Preview in 3D View"; caller should add current dialog state to viewport as a temporary transform. */
     void previewRequested();
 
 private slots:

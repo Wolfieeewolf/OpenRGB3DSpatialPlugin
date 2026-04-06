@@ -9,7 +9,6 @@
 
 class GameTelemetryStatusPanel;
 
-/** Bundled Minecraft (Fabric) layer: all channels in one effect. Prefer stackable Minecraft - * entries per controller. */
 class MinecraftGameEffect3D : public SpatialEffect3D
 {
     Q_OBJECT

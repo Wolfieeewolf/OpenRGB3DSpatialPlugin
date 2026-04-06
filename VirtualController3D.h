@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| VirtualController3D.h                                     |
-|                                                           |
-|   Virtual controller for custom 3D LED layouts           |
-|                                                           |
-|   Date: 2025-09-24                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef VIRTUALCONTROLLER3D_H
 #define VIRTUALCONTROLLER3D_H
@@ -45,7 +36,6 @@ public:
 
     json ToJson() const;
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
-    /** Build a virtual controller from preset JSON with all mappings bound to the given controller. Used when adding preset for multiple instances (e.g. Fan 1, Fan 2, Fan 3). */
     static std::unique_ptr<VirtualController3D> FromJsonForController(const json& j, RGBController* controller, const std::string& display_name);
 
 private:

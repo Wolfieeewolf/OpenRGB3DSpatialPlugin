@@ -151,9 +151,7 @@ public:
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
 
-    /** True if (x,y,z) is outside the scaled effect boundary (same test as grid-aware boundary). */
     bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
-    /** Maps grid sample from effect-origin space into the effect's internal origin space. */
     void ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
@@ -200,11 +198,8 @@ public:
 
     RGBColor PostProcessColorGrid(RGBColor color) const;
 
-    /** Effect origin in grid space (for boundary/edge multiplier). */
     Vector3D GetEffectOriginGrid(const GridContext3D& grid) const;
-    /** Boundary multiplier 0..1 for edge shaping: sharp, round, smooth, etc. Multiply effect color by this so edges are defined, not just a smooth wash. */
     float GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
-    /** Apply edge profile to a normalized distance (0 = inside, 1 = at edge, >1 = outside). Effects can use this for lines/bands. */
     float ApplyEdgeToIntensity(float normalized_dist) const;
 
     void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;

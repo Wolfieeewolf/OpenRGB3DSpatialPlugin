@@ -5,7 +5,6 @@
 
 #include <cstddef>
 
-/** Embedded default monitor presets (JSON array). Written to monitors folder when missing. */
 extern const char* kDefaultMonitorPresetJson;
 
 struct DefaultControllerPreset
@@ -14,7 +13,6 @@ struct DefaultControllerPreset
     const char* content;
 };
 
-/** Embedded default controller presets. Written to controller_presets folder when missing. */
 extern const DefaultControllerPreset kDefaultControllerPresets[];
 extern const size_t kDefaultControllerPresetCount;
 

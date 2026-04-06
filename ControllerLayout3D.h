@@ -9,7 +9,6 @@
 #include "RGBController.h"
 #include "LEDPosition3D.h"
 
-// Forward declaration
 struct ControllerTransform;
 
 class ControllerLayout3D
@@ -21,7 +20,6 @@ public:
     static void UpdateWorldPositions(ControllerTransform* ctrl_transform);
     static void MarkWorldPositionsDirty(ControllerTransform* ctrl_transform);
 
-    /** Spatial hash for fast nearest-neighbor queries. */
     struct SpatialCell
     {
         std::vector<LEDPosition3D*> leds;

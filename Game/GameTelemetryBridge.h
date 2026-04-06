@@ -10,14 +10,12 @@
 
 class ResourceManagerInterface;
 
-/** UDP JSON listener (127.0.0.1:9876, protocol v1); shared by all Game-category effects. */
 class GameTelemetryBridge
 {
 public:
     struct TelemetrySnapshot
     {
         bool has_player_pose = false;
-        /** Hint for future room-scale mapping: Minecraft blocks per real-world metre (default 1). */
         float player_blocks_per_m = 1.0f;
         bool has_player_blocks_per_m = false;
         float player_x = 0.0f;
@@ -29,7 +27,6 @@ public:
         float up_x = 0.0f;
         float up_y = 1.0f;
         float up_z = 0.0f;
-        /* camera_mode: 0 = not sent (adapter should set); 1 = first_person; 2 = third_person */
         int camera_mode = 0;
         bool has_camera_mode = false;
 
@@ -78,7 +75,6 @@ public:
         unsigned char world_ground_r = 100;
         unsigned char world_ground_g = 120;
         unsigned char world_ground_b = 80;
-        /** Raw BiomeEffects palette from the mod (sky / air fog / water fog). */
         bool has_vanilla_biome_colors = false;
         unsigned char biome_sky_r = 128;
         unsigned char biome_sky_g = 180;
@@ -89,7 +85,6 @@ public:
         unsigned char water_fog_r = 32;
         unsigned char water_fog_g = 64;
         unsigned char water_fog_b = 120;
-        /* 0..1 estimated body submersion in water from sender-side vertical probes. */
         float water_submerge = 0.0f;
         float env_rain = 0.0f;
         float env_thunder = 0.0f;

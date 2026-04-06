@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| AudioInputManager.cpp                                     |
-|                                                           |
-|   Minimal audio capture for audio-reactive effects        |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioInputManager.h"
 #include <cmath>

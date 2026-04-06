@@ -156,14 +156,11 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effect_stack_list->setCurrentRow(new_row);
-        /* UpdateEffectStackList() preserves selection with signals blocked, so selecting the same row
-           again may not emit currentRowChanged. Force-refresh controls for the remaining layer. */
         on_effect_stack_selection_changed(new_row);
     }
 
     SaveEffectStack();
 
-    /* Always refresh so grid/overlay clear or re-render immediately (fixes stale overlay after remove) */
     RenderEffectStack();
 
     if(effect_stack.empty() && effect_library_list && effectLibraryRowIsMinecraftHub(effect_library_list->currentRow()))
@@ -516,9 +513,6 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 
 void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instance)
 {
-    /* Layout already cleared in LoadStackEffectControls; do not call ClearCustomEffectUI here
-       or switching stack rows would stop playback (timer + effect_running). */
-
     if(!instance || !effect_controls_widget || !effect_controls_layout)
     {
         return;

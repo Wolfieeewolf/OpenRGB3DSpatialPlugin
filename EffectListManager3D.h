@@ -92,7 +92,6 @@ public:
         return EffectRegistration3D();
     }
 
-    /** Returns effects grouped by category, each category's effects sorted by ui_name (like OpenRGB Effects plugin). */
     std::map<std::string, std::vector<EffectRegistration3D>> GetCategorizedEffects() const
     {
         std::map<std::string, std::vector<EffectRegistration3D>> result;

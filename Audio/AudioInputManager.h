@@ -1,15 +1,4 @@
-/*---------------------------------------------------------*\
-| AudioInputManager.h                                       |
-|                                                           |
-|   Minimal audio capture for audio-reactive effects        |
-|                                                           |
-|   Captures system/mic audio level and exposes a           |
-|   smoothed 0..1 amplitude value.                          |
-|                                                           |
-|   Date: 2025-10-14                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef AUDIOINPUTMANAGER_H
 #define AUDIOINPUTMANAGER_H

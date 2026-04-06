@@ -6,7 +6,6 @@
 #include "SpatialEffect3D.h"
 #include "MinecraftGameSettings.h"
 
-/** Base for stackable single-channel Minecraft layers (shared telemetry, per-instance settings). */
 class MinecraftSubEffect3D : public SpatialEffect3D
 {
 protected:

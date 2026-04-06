@@ -92,7 +92,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     glow_level_label = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
-    effect_edge_profile = 2;   /* Round default */
+    effect_edge_profile = 2;
     effect_edge_thickness = 50;
     effect_glow_level = 15;
 
@@ -280,8 +280,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_label->setMinimumWidth(30);
     sharpness_layout->addWidget(sharpness_label);
     main_layout->addLayout(sharpness_layout);
-
-    /* Edge & shape is not shown globally; effects that need it (e.g. Wipe, Wave, CubeLayer) add their own Edge shape + Thickness in custom UI. */
 
     QGroupBox* axis_scale_group = new QGroupBox("Effect scale (X / Y / Z %)");
     axis_scale_group->setToolTip("Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.");
@@ -1156,7 +1154,6 @@ static float smoothstep_edge(float edge0, float edge1, float x)
 
 float SpatialEffect3D::ApplyEdgeToIntensity(float normalized_dist) const
 {
-    /* normalized_dist: 0 = inside, 1 = at scale edge, >1 = outside */
     float thick = 0.05f + 0.45f * (effect_edge_thickness / 100.0f);
     float glow = 0.15f * (effect_glow_level / 100.0f);
     int profile = std::clamp(effect_edge_profile, 0, 4);
@@ -1164,19 +1161,19 @@ float SpatialEffect3D::ApplyEdgeToIntensity(float normalized_dist) const
     float mult = 0.0f;
     switch(profile)
     {
-    case 0: /* Sharp */
+    case 0:
         mult = (normalized_dist < 1.0f) ? 1.0f : 0.0f;
         break;
-    case 1: /* Square */
+    case 1:
         mult = (normalized_dist <= 1.0f) ? 1.0f : 0.0f;
         break;
-    case 2: /* Round */
+    case 2:
         mult = 1.0f - smoothstep_edge(1.0f - thick, 1.0f, normalized_dist);
         break;
-    case 3: /* Smooth */
+    case 3:
         mult = 1.0f - smoothstep_edge(1.0f - thick * 1.5f, 1.0f + thick * 0.5f, normalized_dist);
         break;
-    case 4: /* Sharpen */
+    case 4:
         {
             float margin = 0.08f * (1.0f - effect_edge_thickness / 100.0f);
             mult = (normalized_dist < 1.0f - margin) ? 1.0f : (1.0f - smoothstep_edge(1.0f - margin, 1.0f, normalized_dist));
@@ -1186,7 +1183,6 @@ float SpatialEffect3D::ApplyEdgeToIntensity(float normalized_dist) const
         mult = (normalized_dist < 1.0f) ? 1.0f : 0.0f;
         break;
     }
-    /* Glow beyond edge */
     if(normalized_dist > 1.0f && glow > 0.0f)
     {
         float fall = std::exp(-(normalized_dist - 1.0f) * 2.5f);
@@ -1364,7 +1360,6 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
 
 void SpatialEffect3D::ApplyControlVisibility()
 {
-    /* All standard controls are always shown for every effect that uses common controls. */
     SetControlGroupVisibility(speed_slider, speed_label, "Speed:", true);
     SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", true);
     SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", true);

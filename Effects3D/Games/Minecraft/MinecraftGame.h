@@ -11,9 +11,7 @@ class QWidget;
 
 namespace MinecraftGame
 {
-/** Settings UI for one or more channel bits (use ChAll for the bundled effect). */
 QWidget* CreateSettingsWidget(QWidget* parent, Settings& settings, std::uint32_t channels);
-/** Render; pass world_tint_smooth when ChWorldTint is set (one state per effect instance). */
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float time,
                      float grid_x,

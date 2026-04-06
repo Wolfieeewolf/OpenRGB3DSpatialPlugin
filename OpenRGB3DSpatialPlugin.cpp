@@ -31,7 +31,6 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
     ui        = nullptr;
     game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
 
-    /* UDP telemetry must start whenever the plugin loads; RM can be null in some call orders. */
     if(game_telemetry_bridge)
     {
         game_telemetry_bridge->Register(RMPointer);

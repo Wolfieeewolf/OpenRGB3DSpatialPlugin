@@ -6,6 +6,7 @@
 #include "VirtualReferencePoint3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
+#include "PluginLogOnce.h"
 #include "RGBController.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -412,7 +413,6 @@ void OpenRGB3DSpatialTab::on_remove_freq_range_clicked()
         on_freq_range_selected(new_row);
     }
 
-    /* Refresh grid/overlay so removed range stops rendering immediately */
     RenderEffectStack();
 }
 
@@ -658,7 +658,6 @@ void OpenRGB3DSpatialTab::applyFreqPreset(int low_hz, int high_hz, const QString
     range->high_hz = (float)high_hz;
     range->name = name.toStdString();
 
-    /* isolate_band: 1 = bass (bands 0-4), 2 = mids (5-9), 3 = highs (10-15); 0 = no change */
     if(isolate_band >= 1 && isolate_band <= 3)
     {
         for(int i = 0; i < FrequencyRangeEffect3D::EQ_BANDS; i++)
@@ -922,6 +921,7 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
     if(!effect)
     {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Frequency range: failed to create effect UI: %s", class_name.toStdString().c_str());
         freq_effect_settings_widget->hide();
         return;
     }
@@ -1017,7 +1017,11 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
         if(!range->effect_instance)
         {
             SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(range->effect_class_name);
-            if(!effect) continue;
+            if(!effect)
+            {
+                LogOnce_CreateEffectFailed("freq_range_render", range->effect_class_name);
+                continue;
+            }
 
             range->effect_instance.reset(effect);
 

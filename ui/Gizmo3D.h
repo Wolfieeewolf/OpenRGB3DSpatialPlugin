@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #ifndef GIZMO3D_H
 #define GIZMO3D_H
 

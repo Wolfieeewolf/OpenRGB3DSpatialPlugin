@@ -414,8 +414,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     duplication->GetDesc(&dup_desc);
     out_width = dup_desc.ModeDesc.Width;
     out_height = dup_desc.ModeDesc.Height;
-    // Desktop duplication can expose non-8bpc formats (e.g. HDR / 16-bit float).
-    // This capture path assumes 4 bytes per pixel and manual BGRA->RGBA swizzle.
     if(dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM &&
        dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB &&
        dup_desc.ModeDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
@@ -459,7 +457,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.height = out_height;
     adapter->Release();
     return true;
-    // (unreachable)
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
@@ -493,8 +490,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     }
 
     QRect geometry = screen->geometry();
-    // QScreen geometry may be in logical coordinates under DPI scaling; DXGI desktop coordinates are in native pixels.
-    // Use devicePixelRatio as best-effort conversion.
     const double dpr = screen->devicePixelRatio();
     const int dx = (int)std::lround(geometry.x() * dpr);
     const int dy = (int)std::lround(geometry.y() * dpr);
@@ -582,7 +577,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                             {
                                 if(src_is_bgra)
                                 {
-                                    // BGRA -> RGBA
                                     dst[0] = src[2];
                                     dst[1] = src[1];
                                     dst[2] = src[0];
@@ -590,7 +584,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 }
                                 else
                                 {
-                                    // RGBA already
                                     dst[0] = src[0];
                                     dst[1] = src[1];
                                     dst[2] = src[2];

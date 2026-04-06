@@ -1,12 +1,4 @@
-/*---------------------------------------------------------*\
-| FrequencyRangeEffect3D.h                                  |
-|                                                           |
-|   Multi-band audio effects data structure                 |
-|                                                           |
-|   Date: 2026-01-27                                        |
-|                                                           |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef FREQUENCYRANGEEFFECT3D_H
 #define FREQUENCYRANGEEFFECT3D_H

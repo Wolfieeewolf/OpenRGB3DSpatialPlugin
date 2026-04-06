@@ -93,20 +93,6 @@ void BreathingSphere::UpdateParams(SpatialEffectParams& params)
     params.type = SPATIAL_EFFECT_BREATHING_SPHERE;
 }
 
-
-
-
-/*---------------------------------------------------------*\
-| BreathingSphere.cpp                                     |
-|                                                           |
-|   3D Breathing Sphere effect - pulsing sphere from origin |
-|                                                           |
-|   Date: 2025-09-28                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
-
 RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);

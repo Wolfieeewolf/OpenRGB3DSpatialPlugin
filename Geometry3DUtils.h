@@ -11,9 +11,6 @@
 
 namespace Geometry3D
 {
-    /**
-     * @brief Result of projecting a point onto a plane
-     */
     struct PlaneProjection
     {
         float   u;
@@ -23,11 +20,6 @@ namespace Geometry3D
         bool    is_valid;
     };
 
-    /**
-     * @brief Compute a rotation matrix from Euler angles (XYZ order)
-     * @param rotation_deg Rotation in degrees {x, y, z}
-     * @param matrix Output 3x3 matrix (row-major)
-     */
     inline void ComputeRotationMatrix(const Rotation3D& rotation_deg, float matrix[9])
     {
         const float deg_to_rad = 3.14159265359f / 180.0f;
@@ -52,9 +44,6 @@ namespace Geometry3D
         matrix[8] = cx * cy;
     }
 
-    /**
-     * @brief Transform a point by rotation matrix
-     */
     inline Vector3D RotateVector(const Vector3D& v, const float matrix[9])
     {
         Vector3D result;
@@ -64,21 +53,6 @@ namespace Geometry3D
         return result;
     }
 
-    /**
-     * @brief Project an LED world position onto a display plane
-     *
-     * @param led_position World position of the LED (in mm)
-     * @param plane The display plane to project onto
-     * @return PlaneProjection result containing UV coordinates and distance
-     *
-     * The plane is defined by its transform (position + rotation) and dimensions.
-     * The plane's local coordinate system:
-     *   - Local +X is right (increasing U)
-     *   - Local +Y is up (increasing V)
-     *   - Local +Z is forward (plane normal, pointing away from screen)
-     *
-     * U and V are normalized coordinates [0,1] relative to the plane's width/height.
-     */
     inline PlaneProjection ProjectPointOntoPlane(const Vector3D& led_position, const DisplayPlane3D& plane)
     {
         PlaneProjection result;
@@ -138,17 +112,6 @@ namespace Geometry3D
         return result;
     }
 
-    /**
-     * @brief Ray-trace from LED toward screen to find intersection point
-     *
-     * @param led_position World position of the LED (in mm)
-     * @param view_direction Direction the LED is "looking" (normalized)
-     * @param plane The display plane to intersect with
-     * @return PlaneProjection result containing UV coordinates at intersection
-     *
-     * This performs true ray-tracing: cast a ray from the LED in the viewing direction
-     * and find where it hits the screen plane. This is what the LED actually "sees".
-     */
     inline PlaneProjection RayTracePlane(const Vector3D& led_position, const Vector3D& view_direction, const DisplayPlane3D& plane)
     {
         PlaneProjection result;
@@ -226,17 +189,6 @@ namespace Geometry3D
         return result;
     }
 
-    /**
-     * @brief Compute ambilight falloff with feathered edge
-     *
-     * Creates a soft, feathered fade at the edge of the light range - perfect for ambilight.
-     * Light is at full brightness up to (max_range - feather_width), then smoothly fades to black.
-     *
-     * @param distance Distance from LED to screen (mm)
-     * @param max_range Maximum light range (mm) - where light reaches 0%
-     * @param feather_percent Percentage of range to use for feathering (0-100)
-     * @return Intensity multiplier [0,1]
-     */
     inline float ComputeFalloff(float distance, float max_range, float feather_percent = 30.0f)
     {
         if (max_range <= 0.0f)
@@ -265,19 +217,6 @@ namespace Geometry3D
         return fade;
     }
 
-    /**
-     * @brief Compute angular/wrap falloff factor for immersive curved effect
-     *
-     * This calculates how much an LED is "off to the side" of a screen based on
-     * the viewing angle, creating a curved/wrapped immersive feeling.
-     *
-     * @param led_position World position of the LED (mm)
-     * @param plane The display plane
-     * @param horizontal_wrap_angle Max horizontal wrap angle in degrees (0-180)
-     * @param vertical_wrap_angle Max vertical wrap angle in degrees (0-90)
-     * @param wrap_strength How aggressively to fade outside wrap angle (1.0 = normal)
-     * @return Angular intensity multiplier [0,1]
-     */
     inline float ComputeAngularFalloff(const Vector3D& led_position, const DisplayPlane3D& plane,
                                       float horizontal_wrap_angle, float vertical_wrap_angle,
                                       float wrap_strength = 1.0f)
@@ -342,22 +281,6 @@ namespace Geometry3D
         return h_falloff * v_falloff;
     }
 
-    /**
-     * @brief Spatial mapping for perceptually correct 3D ambilight
-     *
-     * Maps LED position to screen UV. When directional_uv is false (default), uses orthographic
-     * projection so LEDs in a column perpendicular to the plane share the same UV (can feel quadrant-like).
-     * When directional_uv is true, UV is derived from the direction from reference to LED, giving a
-     * spherical/directional spread so each direction maps to a distinct screen point.
-     *
-     * @param led_position LED position in grid units (same space as grid bounds)
-     * @param plane The display plane to map to
-     * @param edge_zone_depth Depth of edge zones (0.1 = 10% of screen)
-     * @param user_position Optional user/viewer position for distance and direction origin (if null, uses plane center)
-     * @param grid_scale_mm Grid scale for distance conversion to mm
-     * @param directional_uv If true, UV from direction (spherical feel); if false, UV from position (orthographic)
-     * @return PlaneProjection with UV coordinates and distance
-     */
     inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f, bool directional_uv = false)
     {
         PlaneProjection result;
@@ -468,17 +391,6 @@ namespace Geometry3D
         return result;
     }
 
-    /**
-     * @brief Sample a color from a frame buffer using UV coordinates
-     *
-     * @param frame_data RGBA pixel data (row-major, top-left origin)
-     * @param frame_width Width of frame buffer
-     * @param frame_height Height of frame buffer
-     * @param u Horizontal coordinate [0,1]
-     * @param v Vertical coordinate [0,1]
-     * @param use_bilinear Use bilinear filtering (true) or nearest neighbor (false)
-     * @return Sampled RGBA color (or black if out of bounds)
-     */
     inline RGBColor SampleFrame(const uint8_t* frame_data, int frame_width, int frame_height,
                                float u, float v, bool use_bilinear = true)
     {
@@ -544,16 +456,6 @@ namespace Geometry3D
         }
     }
 
-    /**
-     * @brief Extract edge band average color from a frame
-     *
-     * @param frame_data RGBA pixel data
-     * @param frame_width Frame width
-     * @param frame_height Frame height
-     * @param edge Edge to sample (0=top, 1=right, 2=bottom, 3=left)
-     * @param band_thickness Thickness of band as fraction of dimension [0,1]
-     * @return Average color of the edge band
-     */
     inline RGBColor ExtractEdgeBandColor(const uint8_t* frame_data, int frame_width, int frame_height,
                                         int edge, float band_thickness = 0.1f)
     {
@@ -652,10 +554,6 @@ namespace Geometry3D
         return ToRGBColor(r, g, b);
     }
 
-    /**
-     * @brief Content bounds after black bar detection (normalized 0-1)
-     * Used so ambilight samples only the content area, not letterbox/pillarbox bars.
-     */
     struct ContentBounds
     {
         float u_min = 0.0f;
@@ -664,18 +562,6 @@ namespace Geometry3D
         float v_max = 1.0f;
     };
 
-    /**
-     * @brief Detect black letterbox (top/bottom) and optionally pillarbox (left/right) bars.
-     * Uses multi-point sampling per row/column so subtitles or logos in one spot
-     * don't break detection; per-channel black (R,G,B all below threshold).
-     * @param frame_data RGBA pixel data (row-major)
-     * @param frame_width Width of frame
-     * @param frame_height Height of frame
-     * @param black_threshold Per-channel threshold 0-255; pixel is black if R,G,B are all below this
-     * @param min_content_fraction If content would be smaller than this fraction, return full frame
-     * @param letterbox_only If true, only detect top/bottom bars (u_min=0, u_max=1); for wide content
-     * @return Content bounds (u_min, u_max, v_min, v_max); (0,1,0,1) if no bars or invalid
-     */
     inline ContentBounds DetectBlackBars(const uint8_t* frame_data, int frame_width, int frame_height,
                                          float black_threshold = 25.0f,
                                          float min_content_fraction = 0.2f,
@@ -753,4 +639,4 @@ namespace Geometry3D
     }
 }
 
-#endif // GEOMETRY3DUTILS_H
+#endif

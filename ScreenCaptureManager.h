@@ -25,9 +25,6 @@ struct CaptureSourceInfo
     bool            is_available;
 };
 
-/**
- * @brief A single captured frame with metadata
- */
 struct CapturedFrame
 {
     std::vector<uint8_t>    data;

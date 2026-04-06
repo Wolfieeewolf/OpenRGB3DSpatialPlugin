@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| Zone3D.h                                                  |
-|                                                           |
-|   Simple grouping of controllers for effect targeting    |
-|                                                           |
-|   Date: 2025-10-03                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only               |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef ZONE3D_H
 #define ZONE3D_H
@@ -16,7 +7,6 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-/** Named group of controllers for effect targeting (not RGBController::zone). */
 class Zone3D
 {
 public:

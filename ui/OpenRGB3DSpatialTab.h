@@ -258,7 +258,6 @@ private:
     ResourceManagerInterface*   resource_manager;
 
     QTabWidget*                 left_tabs;
-    /** Run vs Setup outer tabs; index 0 = Run (effects detail panel on the right). */
     QTabWidget*                 run_setup_tab_widget = nullptr;
     LEDViewport3D*              viewport;
 
@@ -350,7 +349,6 @@ private:
     QPushButton*                apply_spacing_button;
 
     QGroupBox*                  effect_config_group;
-    /** Shown when "Minecraft (Fabric)" is selected in the library; below Effect global settings and effect controls. */
     QGroupBox*                  minecraft_library_panel = nullptr;
     QLabel*                     effect_stack_row_label = nullptr;
     QComboBox*                  effect_combo;

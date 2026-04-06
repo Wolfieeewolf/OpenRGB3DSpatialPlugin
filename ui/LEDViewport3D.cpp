@@ -502,7 +502,6 @@ void LEDViewport3D::resizeGL(int w, int h)
     glLoadIdentity();
 
     float aspect = (float)w / (float)h;
-    /* Far plane must be at least as large as max camera distance (50000) so the grid and scene stay visible when zoomed out. */
     gluPerspective(45.0, aspect, 0.1, 100000.0);
 
     glMatrixMode(GL_MODELVIEW);
@@ -1220,7 +1219,6 @@ void LEDViewport3D::DrawRoomGridOverlay()
 
     const bool use_buffer = (room_grid_color_buffer.size() == count);
     const bool use_callback = (!use_buffer && room_grid_color_callback != nullptr);
-    /* No buffer/callback: show black so overlay doesn't tint the view until effects run */
     const float default_r = 0.0f;
     const float default_g = 0.0f;
     const float default_b = 0.0f;

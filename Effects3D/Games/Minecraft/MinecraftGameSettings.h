@@ -10,7 +10,6 @@
 namespace MinecraftGame
 {
 
-/** Which logical Minecraft layers this effect instance renders (stack-friendly). */
 constexpr std::uint32_t ChHealth = 1u << 0;
 constexpr std::uint32_t ChHunger = 1u << 1;
 constexpr std::uint32_t ChAir = 1u << 2;

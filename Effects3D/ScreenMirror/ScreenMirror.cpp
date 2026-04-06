@@ -301,7 +301,6 @@ namespace
         return sqrtf(max_distance_sq);
     }
 
-    /** Wave intensity 0-100 (%) -> propagation speed mm/ms. 0 = no wave; 1-100 maps to usable range so mid-slider is visible. */
     float WaveIntensityToSpeedMmPerMs(float intensity_0_to_100)
     {
         if(intensity_0_to_100 < 0.5f) return 0.0f;
@@ -931,11 +930,9 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float min_rgb = std::min(r, std::min(g, b));
         float sat = (max_rgb > 0.001f) ? ((max_rgb - min_rgb) / max_rgb) : 0.0f;
 
-        // Reduce colored subpixel fringing in bright near-whites (e.g. Windows ClearType edges)
-        // so a white screen doesn't tint the output.
         if(lum > 235.0f && sat > 0.10f)
         {
-            float t = std::clamp((lum - 235.0f) / 20.0f, 0.0f, 1.0f); // 0 at 235, 1 at 255
+            float t = std::clamp((lum - 235.0f) / 20.0f, 0.0f, 1.0f);
             float gray = lum;
             r = (1.0f - t) * r + t * gray;
             g = (1.0f - t) * g + t * gray;
@@ -1638,7 +1635,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 }
             }
 
-            /* Backfill White rolloff and Vibrance sliders for monitors that had UI created before these controls existed. */
             if(msettings.white_rolloff_slider == nullptr && msettings.group_box != nullptr)
             {
                 QGroupBox* bg = msettings.group_box->findChild<QGroupBox*>("ScreenMirror_BrightnessGroup");
@@ -2448,7 +2444,6 @@ void ScreenMirror::StartCaptureIfNeeded()
     {
         capture_mgr.Initialize();
     }
-    // Lower latency / closer to 1:1 feel. Capture thread still self-throttles.
     capture_mgr.SetTargetFPS(60);
 
     int w = 320, h = 180;

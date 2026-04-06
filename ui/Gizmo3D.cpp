@@ -374,7 +374,6 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
     glPushMatrix();
     glTranslatef(gizmo_x, gizmo_y, gizmo_z);
 
-    /* First pass keeps depth cues for behind-geometry segments. */
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -394,7 +393,6 @@ void Gizmo3D::Render(const float* modelview, const float* projection, const int*
             break;
     }
 
-    /* Second pass overlays the gizmo so controls remain legible. */
     glDisable(GL_DEPTH_TEST);
     switch(mode)
     {
@@ -535,10 +533,6 @@ GizmoAxis Gizmo3D::PickGizmoAxis(int mouse_x, int mouse_y, const float* modelvie
     float closest_distance = 1000.0f;
     GizmoAxis closest_axis = GIZMO_AXIS_NONE;
 
-    /*---------------------------------------------------------*\
-    | Check center sphere FIRST with priority                 |
-    | (larger hit radius for easier clicking)                 |
-    \*---------------------------------------------------------*/
     float distance;
     if(RaySphereIntersect(ray, gizmo_x, gizmo_y, gizmo_z, CENTER_SPHERE_HIT_RADIUS, distance))
     {
@@ -1178,7 +1172,6 @@ void Gizmo3D::DrawRotateGizmo()
         DrawSphere(handle_pos, handle_radius, color);
     }
 
-    /* Show a live swept-angle arc while rotating. */
     if(dragging && mode == GIZMO_MODE_ROTATE &&
        (selected_axis == GIZMO_AXIS_X || selected_axis == GIZMO_AXIS_Y || selected_axis == GIZMO_AXIS_Z))
     {

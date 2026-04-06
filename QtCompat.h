@@ -5,11 +5,6 @@
 
 #include <QtGlobal>
 
-/*---------------------------------------------------------*\
-| QMouseEvent position compatibility                       |
-| Qt 5: x(), y()                                           |
-| Qt 6: position().x(), position().y()                     |
-\*---------------------------------------------------------*/
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     #define MOUSE_EVENT_X(event) ((event)->position().x())
     #define MOUSE_EVENT_Y(event) ((event)->position().y())

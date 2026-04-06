@@ -208,7 +208,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     UpdateEffectOriginCombo();
     UpdateFreqOriginCombo();
 
-    const int kStartupDelayMs = 2000;  /* Defer auto-load so device detection and other plugins can settle */
+    const int kStartupDelayMs = 2000;
     auto_load_timer = new QTimer(this);
     auto_load_timer->setSingleShot(true);
     connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
@@ -224,7 +224,6 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
     SaveEffectStack();
     try
     {
-        /* Persist all plugin UI state to OpenRGB settings so it survives close/reopen */
         nlohmann::json settings = GetPluginSettings();
         if(viewport)
         {
@@ -559,7 +558,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
     middle_panel->addWidget(viewport, 1);
 
-    /* Right panel when "Setup" is selected on the left. First tab = scene object position/rotation. */
     QTabWidget* settings_tabs = new QTabWidget();
 
     QWidget* grid_settings_tab = new QWidget();
@@ -1308,7 +1306,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     QVBoxLayout* effect_layout = new QVBoxLayout(effect_config_group);
     effect_layout->setSpacing(6);
 
-    /* Same row pattern as Frequency Range details (Effect / Zone / Origin rows in OpenRGB3DSpatialTab_FreqRanges.cpp). */
     effect_stack_row_label = new QLabel(tr("Effect:"));
     effect_stack_row_label->setToolTip(tr("Which stack layer is active for editing and preview (same list as Effect Layers on the left)."));
 
@@ -1385,7 +1382,6 @@ void OpenRGB3DSpatialTab::SetupUI()
     }
     UpdateStartStopAllButtons();
 
-    /* Effect global settings, then per-effect controls; library hub last when adding from Game → Minecraft (Fabric). */
     detail_layout->addWidget(effect_config_group);
     detail_layout->addWidget(effect_controls_widget);
     detail_layout->addWidget(minecraft_library_panel);
@@ -1716,7 +1712,6 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
 
     if(keep_minecraft_hub_panel_after_add)
     {
-        /* Keep Minecraft (Fabric) hub on the right; still select the new row in the stack list for clarity. */
         if(effect_stack_list)
         {
             effect_stack_list->setCurrentRow(new_index);
@@ -1988,7 +1983,6 @@ void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem*
     }
     if(item->data(Qt::UserRole).toString() == QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId()))
     {
-        /* Same row does not emit currentRowChanged; double-click re-opens the hub (add uses Add Minecraft layer / Add To Stack). */
         ShowMinecraftHubConfigurator();
         return;
     }
@@ -2029,7 +2023,6 @@ void OpenRGB3DSpatialTab::ClearMinecraftLibraryPanel()
         }
     }
 
-    /* Hub preview doubles as current_effect_ui; stack layers use effect_controls_widget — do not clear those here. */
     if(current_effect_ui == preview)
     {
         current_effect_ui = nullptr;
@@ -2069,7 +2062,6 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
         return;
     }
 
-    /* Right panel stacks Run (effects) vs Setup (settings); hub lives on the effects side. */
     if(run_setup_tab_widget && run_setup_tab_widget->currentIndex() != 0)
     {
         run_setup_tab_widget->setCurrentIndex(0);
@@ -2077,7 +2069,6 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
 
     LoadStackEffectControls(nullptr);
 
-    /* Effect global settings: zone applies to the new layer; effect center is stack-global at render time. */
     if(effect_config_group)
     {
         effect_config_group->setVisible(true);
@@ -2158,7 +2149,6 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
         effect_controls_widget->setVisible(false);
     }
 
-    /* Scroll the Run tab’s right panel so the new hub is in view (first layout pass may be zero-height). */
     QTimer::singleShot(0, this, [this]() {
         if(!minecraft_library_panel || !minecraft_library_panel->isVisible())
         {
@@ -2189,8 +2179,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
     {
         return;
     }
-    /* Always show the Effect: row with Zone and Effect center whenever global settings are visible
-       (including Minecraft library hub — same strip as other flows). */
     const bool show_effect_row = effect_config_group->isVisible();
     if(effect_stack_row_label)
     {
@@ -2240,6 +2228,7 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
     SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
     if(!effect)
     {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Minecraft hub: failed to create effect: %s", class_name.toStdString().c_str());
         return;
     }
 
@@ -2315,8 +2304,6 @@ void OpenRGB3DSpatialTab::SetupStackPresetUI()
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect controls widget or layout is null!");
         return;
     }
-
-    
 
     QLabel* info_label = new QLabel(
         "This is a saved stack preset with pre-configured settings.\n\n"

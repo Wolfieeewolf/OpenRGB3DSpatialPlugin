@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| ZoneManager3D.h                                           |
-|                                                           |
-|   Manages zones for effect targeting                     |
-|                                                           |
-|   Date: 2025-10-03                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef ZONEMANAGER3D_H
 #define ZONEMANAGER3D_H
@@ -17,7 +8,6 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-// ZoneManager3D - Manages all zones
 class ZoneManager3D
 {
 public:

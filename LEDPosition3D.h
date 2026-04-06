@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| LEDPosition3D.h                                           |
-|                                                           |
-|   Individual LED 3D position tracking                    |
-|                                                           |
-|   Date: 2025-09-23                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef LEDPOSITION3D_H
 #define LEDPOSITION3D_H
@@ -57,16 +48,13 @@ struct ControllerTransform
     RGBColor            display_color;
     bool                hidden_by_virtual;
 
-    /** LED physical spacing (mm); used for real-world grid positions. */
     float               led_spacing_mm_x;
     float               led_spacing_mm_y;
     float               led_spacing_mm_z;
 
-    /** Granularity: 0=whole device, 1=zone, 2=LED (physical controllers only). */
     int                 granularity;
     int                 item_idx;
 
-    /** True when transform changed; world positions need recompute. */
     bool                world_positions_dirty;
 };
 

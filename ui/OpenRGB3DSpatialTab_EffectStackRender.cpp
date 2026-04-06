@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include "GridSpaceUtils.h"
 #include "EffectInstance3D.h"
 #include "EffectListManager3D.h"
 #include "FrequencyRangeEffect3D.h"
 #include "Audio/AudioInputManager.h"
+#include "PluginLogOnce.h"
 #include <set>
 #include <unordered_set>
 #include <algorithm>
@@ -163,7 +163,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(active_effects.empty() && current_effect_ui && effect_running)
     {
-        /* Preview-only: run the currently selected effect's UI copy when stack has no enabled layers */
         RenderEffectSlot slot;
         slot.effect = current_effect_ui;
         slot.zone_index = ResolveZoneTargetSelection(effect_zone_combo);
@@ -316,7 +315,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     if(!range->effect_instance)
                     {
                         SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(range->effect_class_name);
-                        if(!effect) continue;
+                        if(!effect)
+                        {
+                            LogOnce_CreateEffectFailed("room_grid_freq_overlay", range->effect_class_name);
+                            continue;
+                        }
                         range->effect_instance.reset(effect);
                         if(!range->effect_settings.is_null())
                             effect->LoadSettings(range->effect_settings);

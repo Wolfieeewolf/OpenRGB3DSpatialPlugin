@@ -10,7 +10,6 @@
 #include "EffectListManager3D.h"
 #include <nlohmann/json.hpp>
 
-/** Blend modes for combining multiple effects. */
 enum class BlendMode
 {
     NO_BLEND,
@@ -37,7 +36,6 @@ inline const char* BlendModeToString(BlendMode mode)
     }
 }
 
-/** One effect in the stack. */
 struct EffectInstance3D
 {
     std::string name;

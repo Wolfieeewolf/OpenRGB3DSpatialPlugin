@@ -8,13 +8,6 @@
 #include "LEDPosition3D.h"
 #include <nlohmann/json.hpp>
 
-/**
- * @brief Represents a rectangular display surface placed in 3D space.
- *
- * The plane is described by a Transform3D for position/orientation,
- * physical dimensions in millimetres, and capture identifiers used by
- * screen capture subsystems.
- */
 class DisplayPlane3D
 {
 public:

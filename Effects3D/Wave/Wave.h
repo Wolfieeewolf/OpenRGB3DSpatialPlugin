@@ -72,7 +72,6 @@ private:
     float wave_frequency = 1.0f;
     float wave_amplitude = 1.0f;
     float wave_direction_deg = 0.0f;
-    /** 0..100: soften intensity toward horizontal room edges (large spatial grids). */
     float surface_edge_fade = 18.0f;
 
     float progress = 0.0f;

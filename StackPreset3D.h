@@ -1,13 +1,4 @@
-/*---------------------------------------------------------*\
-| StackPreset3D.h                                           |
-|                                                           |
-|   Stack preset for saving multiple effects               |
-|                                                           |
-|   Date: 2025-10-05                                        |
-|                                                           |
-|   This file is part of the OpenRGB project                |
-|   SPDX-License-Identifier: GPL-2.0-only                   |
-\*---------------------------------------------------------*/
+// SPDX-License-Identifier: GPL-2.0-only
 
 #ifndef STACKPRESET3D_H
 #define STACKPRESET3D_H

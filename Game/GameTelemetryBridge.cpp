@@ -66,7 +66,6 @@ GameTelemetryBridge::GameTelemetryBridge()
 {
     udp_running = false;
     udp_socket_fd = -1;
-    /* Start listener immediately so game UDP works even if Register() were skipped. */
     StartUdpListener();
 }
 
@@ -172,7 +171,6 @@ void GameTelemetryBridge::StopUdpListener()
 
 void GameTelemetryBridge::UdpListenLoop()
 {
-    /* world_light JSON payload is small; keep max UDP packet size anyway. */
     std::vector<char> buf(65507);
     while(udp_running)
     {
@@ -222,7 +220,6 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
     try
     {
         nlohmann::json msg = nlohmann::json::parse(data, data + size);
-        /* Accept any JSON number for version/timestamp (some encoders use float or unsigned). */
         if(msg.is_object() &&
            msg.contains("version") && msg["version"].is_number() &&
            msg.contains("type") && msg["type"].is_string() &&

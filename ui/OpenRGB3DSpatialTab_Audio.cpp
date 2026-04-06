@@ -101,7 +101,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_gain_slider = new QSlider(Qt::Horizontal);
     audio_gain_slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     audio_gain_slider->setRange(1, 500);
-    audio_gain_slider->setValue(100);  /* default 10x (like Effects Plugin amplitude 100); use 200–500 if still quiet */
+    audio_gain_slider->setValue(100);
     connect(audio_gain_slider, &QSlider::valueChanged, this, &OpenRGB3DSpatialTab::on_audio_gain_changed);
     connect(audio_gain_slider, &QSlider::sliderMoved, [this](int v) {
         float g = std::max(0.1f, std::min(10.0f, v / 10.0f));
@@ -119,7 +119,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_bands_combo = new QComboBox();
     audio_bands_combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     audio_bands_combo->addItems({"8", "16", "32"});
-    audio_bands_combo->setCurrentText("8");  /* 8 bands = more stable with band normalization; 16/32 work better after pipeline fix */
+    audio_bands_combo->setCurrentText("8");
     connect(audio_bands_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_audio_bands_changed);
     bands_layout->addWidget(audio_bands_combo);
@@ -169,7 +169,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     }
     else if(audio_gain_slider)
     {
-        on_audio_gain_changed(audio_gain_slider->value());  /* apply default gain (10x) to manager */
+        on_audio_gain_changed(audio_gain_slider->value());
     }
 
     if(audio_bands_combo && settings.contains("AudioBands"))

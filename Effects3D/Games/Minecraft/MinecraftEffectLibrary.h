@@ -8,11 +8,9 @@
 #include <string>
 #include <vector>
 
-/** Effect library grouping: one list row opens the hub on the effect panel (not a registered class). */
 namespace MinecraftEffectLibrary
 {
 
-/** Sentinel UserRole for the single "Minecraft (Fabric)" library entry. */
 inline const char* LibraryHubClassId()
 {
     return "_MinecraftLibraryHub_";
@@ -39,7 +37,6 @@ struct Variant
     const char* label;
 };
 
-/** Order: single-channel layers first (library workflow); bundled last. */
 inline const std::vector<Variant>& Variants()
 {
     static const std::vector<Variant> v = {
@@ -60,7 +57,6 @@ inline bool IsCollapsedClass(const std::string& cn)
     return CollapsedClassNames().find(cn) != CollapsedClassNames().end();
 }
 
-/** Whether the grouped Minecraft row should appear under Game for this search string. */
 inline bool SearchMatchesFamily(const QString& search)
 {
     if(search.isEmpty())
