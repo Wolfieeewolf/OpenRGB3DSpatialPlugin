@@ -5,10 +5,11 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "MinecraftGameSettings.h"
 
 class GameTelemetryStatusPanel;
 
-/** Minecraft (Fabric) telemetry-driven layer; add to stack and start like any other effect. */
+/** Bundled Minecraft (Fabric) layer: all channels in one effect. Prefer stackable Minecraft - * entries per controller. */
 class MinecraftGameEffect3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -16,7 +17,7 @@ class MinecraftGameEffect3D : public SpatialEffect3D
 public:
     explicit MinecraftGameEffect3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("MinecraftGame", "Minecraft (Fabric)", "Game", []() { return new MinecraftGameEffect3D; })
+    EFFECT_REGISTERER_3D("MinecraftGame", "Minecraft (Fabric, all)", "Game", []() { return new MinecraftGameEffect3D; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -32,6 +33,8 @@ public:
 
 private:
     GameTelemetryStatusPanel* telemetry_status_panel = nullptr;
+    MinecraftGame::Settings mc_settings_{};
+    MinecraftGame::WorldTintSmoothState world_smooth_{};
 };
 
 #endif

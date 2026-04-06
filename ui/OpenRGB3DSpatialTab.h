@@ -124,6 +124,8 @@ private slots:
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
+    void on_minecraft_library_layer_combo_changed(int index);
+    void on_minecraft_library_add_clicked();
 
     void on_start_all_effects_clicked();
     void on_stop_all_effects_clicked();
@@ -192,6 +194,12 @@ private:
     void ApplyRotationComponent(int axis, double value);
     void RemoveWidgetFromParentLayout(QWidget* w);
 
+    bool effectLibraryRowIsMinecraftHub(int row) const;
+    void ShowMinecraftHubConfigurator();
+    void rebuildMinecraftHubPreviewEffect();
+    void ClearMinecraftLibraryPanel();
+    void UpdateEffectStackRowSelectorVisibility();
+
     void SetupEffectStackPanel(QVBoxLayout* parent_layout);
     void UpdateEffectStackList();
     void UpdateStackEffectZoneCombo();
@@ -243,12 +251,15 @@ private:
                                   int zone_index = -1,
                                   BlendMode blend_mode = BlendMode::NO_BLEND,
                                   const nlohmann::json* preset_settings = nullptr,
-                                  bool enabled = true);
+                                  bool enabled = true,
+                                  bool keep_minecraft_hub_panel_after_add = false);
 
     Ui::OpenRGB3DSpatialTab*    ui;
     ResourceManagerInterface*   resource_manager;
 
     QTabWidget*                 left_tabs;
+    /** Run vs Setup outer tabs; index 0 = Run (effects detail panel on the right). */
+    QTabWidget*                 run_setup_tab_widget = nullptr;
     LEDViewport3D*              viewport;
 
     std::vector<std::unique_ptr<ControllerTransform>> controller_transforms;
@@ -280,6 +291,11 @@ private:
     QLineEdit*                  effect_library_search;
     QListWidget*                effect_library_list;
     QPushButton*                effect_library_add_button;
+
+    bool                        minecraft_library_hub_active = false;
+    SpatialEffect3D*            minecraft_hub_preview_effect = nullptr;
+    QComboBox*                  minecraft_library_layer_combo = nullptr;
+    QWidget*                    minecraft_hub_preview_holder = nullptr;
 
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
@@ -334,6 +350,9 @@ private:
     QPushButton*                apply_spacing_button;
 
     QGroupBox*                  effect_config_group;
+    /** Shown when "Minecraft (Fabric)" is selected in the library; below Effect global settings and effect controls. */
+    QGroupBox*                  minecraft_library_panel = nullptr;
+    QLabel*                     effect_stack_row_label = nullptr;
     QComboBox*                  effect_combo;
     QLabel*                     effect_zone_label;
     QLabel*                     origin_label;

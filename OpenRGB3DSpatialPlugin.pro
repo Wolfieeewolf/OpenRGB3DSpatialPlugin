@@ -182,6 +182,9 @@ HEADERS +=                                                                      
     Game/GameTelemetryBridge.h                                                                  \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.h                                             \
     Effects3D/Games/Minecraft/MinecraftGame.h                                                   \
+    Effects3D/Games/Minecraft/MinecraftGameSettings.h                                           \
+    Effects3D/Games/Minecraft/MinecraftSubEffect3D.h                                            \
+    Effects3D/Games/Minecraft/MinecraftEffectLibrary.h                                          \
     FrequencyRangeEffect3D.h                                                                    \
     ui/OpenRGB3DSpatialTab.h                                                                    \
     ui/LEDViewport3D.h                                                                          \
@@ -237,6 +240,8 @@ SOURCES +=                                                                      
     Game/GameTelemetryBridge.cpp                                                                \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.cpp                                           \
     Effects3D/Games/Minecraft/MinecraftGame.cpp                                                 \
+    Effects3D/Games/Minecraft/MinecraftGameSettings.cpp                                         \
+    Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp                                          \
     ui/OpenRGB3DSpatialTab.cpp                                                                  \
     ui/OpenRGB3DSpatialTab_Audio.cpp                                                            \
     ui/OpenRGB3DSpatialTab_Ambilight.cpp                                                        \

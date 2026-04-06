@@ -4,14 +4,16 @@
 #define MINECRAFTGAME_H
 
 #include "Game/GameTelemetryBridge.h"
+#include "MinecraftGameSettings.h"
 #include "SpatialEffect3D.h"
 
 class QWidget;
 
-/** Minecraft (Fabric) visuals and settings; used by MinecraftGameEffect3D. */
 namespace MinecraftGame
 {
-QWidget* CreateSettingsWidget(QWidget* parent);
+/** Settings UI for one or more channel bits (use ChAll for the bundled effect). */
+QWidget* CreateSettingsWidget(QWidget* parent, Settings& settings, std::uint32_t channels);
+/** Render; pass world_tint_smooth when ChWorldTint is set (one state per effect instance). */
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float time,
                      float grid_x,
@@ -20,7 +22,10 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float origin_x,
                      float origin_y,
                      float origin_z,
-                     const GridContext3D& grid);
-}
+                     const GridContext3D& grid,
+                     const Settings& settings,
+                     std::uint32_t channels,
+                     WorldTintSmoothState* world_tint_smooth);
+} // namespace MinecraftGame
 
 #endif

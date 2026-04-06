@@ -18,8 +18,8 @@ EffectInfo3D MinecraftGameEffect3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Minecraft (Fabric)";
-    info.effect_description = "Fabric mod telemetry (UDP 127.0.0.1:9876).";
+    info.effect_name = "Minecraft (Fabric, all)";
+    info.effect_description = "All Minecraft channels in one layer. For per-strip control use Minecraft - Health / Hunger / ... (Game). UDP 127.0.0.1:9876.";
     info.category = "Game";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -102,7 +102,7 @@ void MinecraftGameEffect3D::SetupCustomUI(QWidget* parent)
     QVBoxLayout* layout = new QVBoxLayout(w);
     layout->setContentsMargins(8, 8, 8, 8);
 
-    QWidget* settings = MinecraftGame::CreateSettingsWidget(w);
+    QWidget* settings = MinecraftGame::CreateSettingsWidget(w, mc_settings_, MinecraftGame::ChAll);
     if(settings)
     {
         layout->addWidget(settings);
@@ -121,19 +121,28 @@ void MinecraftGameEffect3D::UpdateParams(SpatialEffectParams& params)
 
 nlohmann::json MinecraftGameEffect3D::SaveSettings() const
 {
-    return SpatialEffect3D::SaveSettings();
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    nlohmann::json mc;
+    MinecraftGame::SettingsToJson(mc_settings_, mc);
+    j["minecraft"] = mc;
+    return j;
 }
 
 void MinecraftGameEffect3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("minecraft") && settings["minecraft"].is_object())
+    {
+        MinecraftGame::SettingsFromJson(settings["minecraft"], mc_settings_);
+    }
 }
 
 RGBColor MinecraftGameEffect3D::CalculateColorGrid(float gx, float gy, float gz, float time, const GridContext3D& grid)
 {
     const GameTelemetryBridge::TelemetrySnapshot t = GameTelemetryBridge::GetTelemetrySnapshot();
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
-    return MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid);
+    return MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
+                                      mc_settings_, MinecraftGame::ChAll, &world_smooth_);
 }
 
 bool MinecraftGameEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const

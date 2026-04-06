@@ -165,6 +165,11 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
 
     /* Always refresh so grid/overlay clear or re-render immediately (fixes stale overlay after remove) */
     RenderEffectStack();
+
+    if(effect_stack.empty() && effect_library_list && effectLibraryRowIsMinecraftHub(effect_library_list->currentRow()))
+    {
+        ShowMinecraftHubConfigurator();
+    }
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
@@ -224,6 +229,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
             effect_zone_combo->setCurrentIndex(0);
         }
         UpdateAudioPanelVisibility();
+        UpdateEffectStackRowSelectorVisibility();
         return;
     }
 
@@ -303,6 +309,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 
     UpdateEffectCombo();
     UpdateAudioPanelVisibility();
+    UpdateEffectStackRowSelectorVisibility();
 }
 
 void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
@@ -407,6 +414,8 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
+    ClearMinecraftLibraryPanel();
+
     if(current_effect_ui)
     {
         disconnect(current_effect_ui, nullptr, this, nullptr);
@@ -438,11 +447,19 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 
     if(!instance)
     {
+        if(effect_controls_widget)
+        {
+            effect_controls_widget->setVisible(false);
+        }
         return;
     }
 
     if(instance->effect_class_name.empty())
     {
+        if(effect_controls_widget)
+        {
+            effect_controls_widget->setVisible(false);
+        }
         return;
     }
 
@@ -453,6 +470,10 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         {
             LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", instance->effect_class_name.c_str());
             ClearCustomEffectUI();
+            if(effect_controls_widget)
+            {
+                effect_controls_widget->setVisible(false);
+            }
             return;
         }
         instance->effect.reset(effect);
@@ -486,6 +507,11 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
     }
 
     DisplayEffectInstanceDetails(instance);
+
+    if(effect_controls_widget)
+    {
+        effect_controls_widget->setVisible(true);
+    }
 }
 
 void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instance)
@@ -577,6 +603,17 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
     else
     {
+        if(instance->effect_class_name == "MinecraftGame")
+        {
+            QLabel* bundled_hint = new QLabel(tr(
+                "This stack row is the bundled Minecraft layer (all channels in one effect). "
+                "To build your stack one channel at a time, use the Effect Library: Filter → Game, select "
+                "Minecraft (Fabric), pick a single layer in the dropdown, then Add Minecraft layer."));
+            bundled_hint->setWordWrap(true);
+            bundled_hint->setStyleSheet(QStringLiteral("QLabel { background-color: #fff9c4; padding: 8px; border-radius: 4px; }"));
+            effect_controls_layout->addWidget(bundled_hint);
+        }
+
         ui_effect->CreateCommonEffectControls(effect_controls_widget);
         ui_effect->SetupCustomUI(effect_controls_widget);
 
@@ -710,4 +747,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         QSignalBlocker block(*stack_effect_blend_combo);
         stack_effect_blend_combo->setCurrentIndex(current_blend_index);
     }
+
+    UpdateEffectStackRowSelectorVisibility();
 }
