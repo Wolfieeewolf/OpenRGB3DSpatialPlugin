@@ -44,6 +44,8 @@ public:
         bool has_health_state = false;
         float health = 100.0f;
         float health_max = 100.0f;
+        float hearts = 10.0f;
+        float hearts_max = 10.0f;
         float hunger = 20.0f;
         float hunger_max = 20.0f;
         float air = 300.0f;

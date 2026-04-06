@@ -11,6 +11,8 @@ class QWidget;
 
 namespace MinecraftGame
 {
+void SetRenderSampleIndexContext(int led_index, int led_count);
+void ClearRenderSampleIndexContext();
 QWidget* CreateSettingsWidget(QWidget* parent, Settings& settings, std::uint32_t channels);
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float time,

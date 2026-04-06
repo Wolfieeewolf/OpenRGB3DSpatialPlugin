@@ -5,6 +5,7 @@
 #include "EffectInstance3D.h"
 #include "EffectListManager3D.h"
 #include "FrequencyRangeEffect3D.h"
+#include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginLogOnce.h"
 #include <set>
@@ -515,6 +516,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_z = requires_world ? world_z : room_z;
                         const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                         const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                        MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
 
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
@@ -621,6 +623,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_z = requires_world ? world_z : room_z;
                     const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                     const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                    MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
 
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
@@ -692,6 +695,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
         }
     }
+
+    MinecraftGame::ClearRenderSampleIndexContext();
 
     RenderFrequencyRangeEffects(room_grid, world_grid);
     

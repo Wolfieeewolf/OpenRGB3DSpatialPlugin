@@ -40,6 +40,11 @@ struct Settings
     float damage_flash_strength = 1.0f;
     float base_brightness = 1.12f;
     bool enable_health_gradient = true;
+    bool health_per_heart_strip = false;
+    bool health_per_heart_indexed = false;
+    int health_leds_per_heart = 1;
+    int health_strip_axis = 0;
+    bool health_strip_invert = false;
     bool enable_hunger_gradient = true;
     bool enable_air_gradient = true;
     bool enable_durability_gradient = true;

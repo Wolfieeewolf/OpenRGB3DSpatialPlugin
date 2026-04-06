@@ -101,6 +101,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_stack_row_label = nullptr;
     effect_combo = nullptr;
     effect_type_combo = nullptr;
+    last_stack_selection_index = -1;
 
     available_controllers_list = nullptr;
     custom_controllers_list = nullptr;

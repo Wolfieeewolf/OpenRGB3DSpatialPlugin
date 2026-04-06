@@ -8,6 +8,10 @@
 
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QSlider>
+#include <QSpinBox>
 
 MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels,
                                            const char* effect_title,
@@ -112,6 +116,30 @@ void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
     if(settings)
     {
         layout->addWidget(settings);
+
+        const QList<QCheckBox*> checks = settings->findChildren<QCheckBox*>();
+        for(QCheckBox* cb : checks)
+        {
+            QObject::connect(cb, &QCheckBox::toggled, this, [this](bool) { emit ParametersChanged(); });
+        }
+
+        const QList<QSlider*> sliders = settings->findChildren<QSlider*>();
+        for(QSlider* sl : sliders)
+        {
+            QObject::connect(sl, &QSlider::valueChanged, this, [this](int) { emit ParametersChanged(); });
+        }
+
+        const QList<QSpinBox*> spins = settings->findChildren<QSpinBox*>();
+        for(QSpinBox* sp : spins)
+        {
+            QObject::connect(sp, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { emit ParametersChanged(); });
+        }
+
+        const QList<QComboBox*> combos = settings->findChildren<QComboBox*>();
+        for(QComboBox* combo : combos)
+        {
+            QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit ParametersChanged(); });
+        }
     }
 
     auto* telemetry_status_panel = new GameTelemetryStatusPanel(this);
@@ -183,7 +211,7 @@ public:
     explicit MinecraftHealthEffect3D(QWidget* parent = nullptr)
         : MinecraftSubEffect3D(ChHealth,
                                "Minecraft - Health",
-                               "Health gradient from Fabric UDP (127.0.0.1:9876). Stack per controller.",
+                               "Health from Fabric UDP (127.0.0.1:9876): full-strip gradient or per-heart strip (LEDs/heart, axis). Stack per controller.",
                                parent)
     {
     }
@@ -191,7 +219,7 @@ public:
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_name = "Minecraft - Health";
-        info.effect_description = "Health gradient from Fabric UDP (127.0.0.1:9876). Stack per controller.";
+        info.effect_description = "Health from Fabric UDP (127.0.0.1:9876): gradient or per-heart strip. Stack per controller.";
         return info;
     }
     EFFECT_REGISTERER_3D("MinecraftHealth", "Minecraft - Health", "Game", []() { return new MinecraftHealthEffect3D; })

@@ -47,6 +47,19 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     effect_stack_list->setMinimumHeight(180);
     connect(effect_stack_list, &QListWidget::currentRowChanged,
             this, &OpenRGB3DSpatialTab::on_effect_stack_selection_changed);
+    connect(effect_stack_list, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem*)
+            {
+                if(!effect_stack_list)
+                {
+                    return;
+                }
+                const int row = effect_stack_list->currentRow();
+                if(row >= 0 && row == last_stack_selection_index)
+                {
+                    on_effect_stack_selection_changed(row);
+                }
+            });
     connect(effect_stack_list, &QListWidget::itemDoubleClicked,
             this, &OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked);
     active_layout->addWidget(effect_stack_list);
@@ -192,6 +205,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     if(!effect_stack_list) return;
     if(index < 0 || index >= (int)effect_stack.size())
     {
+        last_stack_selection_index = -1;
         if(effect_config_group) effect_config_group->setVisible(false);
         if(stack_effect_type_combo) stack_effect_type_combo->setEnabled(false);
         if(stack_effect_zone_combo) stack_effect_zone_combo->setEnabled(false);
@@ -238,6 +252,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
 
     EffectInstance3D* instance = effect_stack[index].get();
     if(!instance) return;
+    last_stack_selection_index = index;
 
     QSignalBlocker type_blocker(stack_effect_type_combo ? stack_effect_type_combo : nullptr);
     QSignalBlocker zone_blocker(stack_effect_zone_combo ? stack_effect_zone_combo : nullptr);

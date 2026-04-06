@@ -4,15 +4,35 @@
 #include "MinecraftGameSettings.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
+#include <QSpinBox>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 
 namespace MinecraftGame
 {
+
+namespace
+{
+thread_local int tls_led_index = -1;
+thread_local int tls_led_count = 0;
+}
+
+void SetRenderSampleIndexContext(int led_index, int led_count)
+{
+    tls_led_index = led_index;
+    tls_led_count = led_count;
+}
+
+void ClearRenderSampleIndexContext()
+{
+    tls_led_index = -1;
+    tls_led_count = 0;
+}
 
 unsigned long long NowMs()
 {
@@ -65,6 +85,83 @@ RGBColor SuppressWhites(RGBColor c)
 
 static bool ch(std::uint32_t mask, std::uint32_t bit) { return (mask & bit) != 0u; }
 
+static int ResolveHealthStripAxis(const GridContext3D& grid, int axis_in)
+{
+    if(axis_in >= 1 && axis_in <= 3)
+    {
+        return axis_in;
+    }
+    if(grid.width >= grid.height && grid.width >= grid.depth)
+    {
+        return 1;
+    }
+    if(grid.height >= grid.depth)
+    {
+        return 2;
+    }
+    return 3;
+}
+
+static bool HealthStripMappingUsable(const GridContext3D& grid, int axis_in)
+{
+    const int axis = ResolveHealthStripAxis(grid, axis_in);
+    const float span = (axis == 1) ? grid.width : (axis == 2 ? grid.height : grid.depth);
+    return span > 1e-4f;
+}
+
+static bool TryGetIndexedStripCoord01(bool invert, float* out_u)
+{
+    if(!out_u)
+    {
+        return false;
+    }
+    if(tls_led_count <= 0 || tls_led_index < 0)
+    {
+        return false;
+    }
+    const float countf = (float)tls_led_count;
+    float u = ((float)tls_led_index + 0.5f) / countf;
+    u = std::clamp(u, 0.0f, 1.0f);
+    if(invert)
+    {
+        u = 1.0f - u;
+    }
+    *out_u = u;
+    return true;
+}
+
+static float HealthStripCoord01(float gx, float gy, float gz, const GridContext3D& grid, int axis_in, bool invert)
+{
+    const int axis = ResolveHealthStripAxis(grid, axis_in);
+    float span = 1.0f;
+    float pos = 0.0f;
+    if(axis == 1)
+    {
+        span = grid.width;
+        pos = gx - grid.min_x;
+    }
+    else if(axis == 2)
+    {
+        span = grid.height;
+        pos = gy - grid.min_y;
+    }
+    else
+    {
+        span = grid.depth;
+        pos = gz - grid.min_z;
+    }
+    if(span < 1e-6f)
+    {
+        span = 1.0f;
+    }
+    float u = std::clamp(pos / span, 0.0f, 1.0f);
+    if(invert)
+    {
+        u = 1.0f - u;
+    }
+    return u;
+}
+
 QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channels)
 {
     QWidget* panel = new QWidget(parent);
@@ -95,6 +192,42 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         health_toggle->setChecked(s.enable_health_gradient);
         layout->addWidget(health_toggle, row++, 0, 1, 2);
         QObject::connect(health_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_health_gradient = v; });
+
+        QCheckBox* strip_toggle = new QCheckBox("Per-heart strip (each heart uses LEDs along layout axis)");
+        strip_toggle->setChecked(s.health_per_heart_strip);
+        layout->addWidget(strip_toggle, row++, 0, 1, 2);
+        QObject::connect(strip_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.health_per_heart_strip = v; });
+
+        QCheckBox* index_toggle = new QCheckBox("Index strip mode (works on any controller; uses LED order)");
+        index_toggle->setChecked(s.health_per_heart_indexed);
+        layout->addWidget(index_toggle, row++, 0, 1, 2);
+        QObject::connect(index_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.health_per_heart_indexed = v; });
+
+        auto* lph_lab = new QLabel(QStringLiteral("LEDs per heart"));
+        auto* lph_spin = new QSpinBox();
+        lph_spin->setRange(1, 16);
+        lph_spin->setValue(std::clamp(s.health_leds_per_heart, 1, 16));
+        layout->addWidget(lph_lab, row, 0);
+        layout->addWidget(lph_spin, row, 1);
+        QObject::connect(lph_spin, QOverload<int>::of(&QSpinBox::valueChanged), panel, [&s](int v) { s.health_leds_per_heart = std::clamp(v, 1, 32); });
+        row++;
+
+        auto* axis_lab = new QLabel(QStringLiteral("Heart strip axis"));
+        auto* axis_combo = new QComboBox();
+        axis_combo->addItem(QStringLiteral("Auto (longest span)"));
+        axis_combo->addItem(QStringLiteral("Along X"));
+        axis_combo->addItem(QStringLiteral("Along Y"));
+        axis_combo->addItem(QStringLiteral("Along Z"));
+        axis_combo->setCurrentIndex(std::clamp(s.health_strip_axis, 0, 3));
+        layout->addWidget(axis_lab, row, 0);
+        layout->addWidget(axis_combo, row, 1);
+        QObject::connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s](int idx) { s.health_strip_axis = std::clamp(idx, 0, 3); });
+        row++;
+
+        QCheckBox* inv_toggle = new QCheckBox("Invert strip direction");
+        inv_toggle->setChecked(s.health_strip_invert);
+        layout->addWidget(inv_toggle, row++, 0, 1, 2);
+        QObject::connect(inv_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.health_strip_invert = v; });
     }
     if(all || ch(channels, ChHunger))
     {
@@ -295,10 +428,55 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     const RGBColor high_durability = (RGBColor)0x0000FF60;
     RGBColor out = (RGBColor)0x00000000;
 
-    if(ch(channels, ChHealth) && s.enable_health_gradient && t.has_health_state && t.health_max > 0.01f)
+    if(ch(channels, ChHealth) && s.enable_health_gradient && t.has_health_state && t.hearts_max > 1e-4f)
     {
-        const float health_norm = std::clamp(t.health / t.health_max, 0.0f, 1.0f);
-        out = LerpColor(low_health, high_health, health_norm);
+        const float max_h = std::max(t.hearts_max, 1e-4f);
+        const float cur_h = std::clamp(t.hearts, 0.0f, max_h);
+        const float filled_norm = std::clamp(cur_h / max_h, 0.0f, 1.0f);
+        const RGBColor health_bar_color = LerpColor(low_health, high_health, filled_norm);
+
+        if(s.health_per_heart_strip)
+        {
+            const int lph = std::clamp(s.health_leds_per_heart, 1, 32);
+            const float total_slots = max_h * (float)lph;
+            float u = 0.0f;
+            bool have_u = false;
+            if(s.health_per_heart_indexed)
+            {
+                have_u = TryGetIndexedStripCoord01(s.health_strip_invert, &u);
+            }
+            else if(HealthStripMappingUsable(grid, s.health_strip_axis))
+            {
+                u = HealthStripCoord01(grid_x, grid_y, grid_z, grid, s.health_strip_axis, s.health_strip_invert);
+                have_u = true;
+            }
+
+            if(total_slots < 0.01f || !have_u)
+            {
+                const float health_norm = (t.health_max > 0.01f) ? std::clamp(t.health / t.health_max, 0.0f, 1.0f) : filled_norm;
+                out = LerpColor(low_health, high_health, health_norm);
+            }
+            else
+            {
+                const float slot = std::clamp(u * total_slots, 0.0f, total_slots - 1e-3f);
+                const float fill_end = cur_h * (float)lph;
+                const float delta = fill_end - slot;
+                const float br = std::clamp(delta, 0.0f, 1.0f);
+                if(br > 1e-3f)
+                {
+                    out = LerpColor((RGBColor)0x00000000, health_bar_color, br);
+                }
+                else
+                {
+                    out = (RGBColor)0x00000000;
+                }
+            }
+        }
+        else if(t.health_max > 0.01f)
+        {
+            const float health_norm = std::clamp(t.health / t.health_max, 0.0f, 1.0f);
+            out = LerpColor(low_health, high_health, health_norm);
+        }
     }
     if(ch(channels, ChHunger) && s.enable_hunger_gradient && t.has_health_state && t.hunger_max > 0.01f)
     {

@@ -168,11 +168,17 @@ Example:
 
 ### `health_state`
 
-Continuous health status for pulse/heartbeat overlays.
+Continuous vitals for gradients, per-heart LED strips, and related UI.
 
-Required fields:
-- `current` (float >= 0.0)
-- `max` (float > 0.0)
+Required fields (as implemented by the plugin receiver):
+- `health` (float >= 0.0): player health in Minecraft HP (vanilla player max is 20).
+- `health_max` (float > 0.0)
+
+Optional (recommended for correct **per-heart** mapping with non-vanilla max health):
+- `hp_per_heart` (float > 0.0, default `2.0`): Minecraft HP per full heart on the hotbar (vanilla uses 2 HP per heart).
+- `hearts` (float >= 0.0) and `hearts_max` (float > 0.0): explicit heart counts. If both are present, the plugin uses them; otherwise it derives `hearts = health / hp_per_heart` and `hearts_max = health_max / hp_per_heart`.
+
+Other fields (hunger, air, item durability) are documented in the Fabric sender and `GameTelemetryBridge.cpp`.
 
 Example:
 
@@ -182,8 +188,18 @@ Example:
   "type": "health_state",
   "timestamp_ms": 1711111111230,
   "source": "minecraft-fabric",
-  "current": 12.0,
-  "max": 20.0
+  "health": 15.0,
+  "health_max": 20.0,
+  "hp_per_heart": 2.0,
+  "hearts": 7.5,
+  "hearts_max": 10.0,
+  "hunger": 18,
+  "hunger_max": 20,
+  "air": 300,
+  "air_max": 300,
+  "item_durability_valid": false,
+  "item_durability": 0,
+  "item_durability_max": 1
 }
 ```
 

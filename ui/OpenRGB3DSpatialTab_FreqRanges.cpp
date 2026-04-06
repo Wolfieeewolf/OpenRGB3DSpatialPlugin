@@ -4,6 +4,7 @@
 #include "SpatialEffect3D.h"
 #include "Audio/AudioInputManager.h"
 #include "VirtualReferencePoint3D.h"
+#include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include "PluginLogOnce.h"
@@ -1109,6 +1110,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                         ? transform->led_positions[led_idx].world_position
                         : transform->led_positions[led_idx].room_position;
                     float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
+                    MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
@@ -1142,6 +1144,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                         ? transform->led_positions[led_idx].world_position
                         : transform->led_positions[led_idx].room_position;
                     float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
+                    MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
@@ -1165,4 +1168,6 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
             }
         }
     }
+
+    MinecraftGame::ClearRenderSampleIndexContext();
 }

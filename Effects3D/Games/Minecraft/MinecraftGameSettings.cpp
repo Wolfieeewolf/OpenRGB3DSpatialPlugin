@@ -2,6 +2,8 @@
 
 #include "MinecraftGameSettings.h"
 
+#include <algorithm>
+
 namespace MinecraftGame
 {
 
@@ -14,6 +16,19 @@ static bool get_bool(const nlohmann::json& j, const char* k, bool d)
 static float get_f(const nlohmann::json& j, const char* k, float d)
 {
     return j.contains(k) && j[k].is_number() ? j[k].get<float>() : d;
+}
+static void put_i(nlohmann::json& j, const char* k, int v) { j[k] = v; }
+static int get_i(const nlohmann::json& j, const char* k, int d)
+{
+    if(!j.contains(k) || !j[k].is_number())
+    {
+        return d;
+    }
+    if(j[k].is_number_integer())
+    {
+        return j[k].get<int>();
+    }
+    return (int)j[k].get<double>();
 }
 
 void SettingsToJson(const Settings& s, nlohmann::json& j)
@@ -28,6 +43,11 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_f(j, "damage_flash_strength", s.damage_flash_strength);
     put_f(j, "base_brightness", s.base_brightness);
     put_bool(j, "enable_health_gradient", s.enable_health_gradient);
+    put_bool(j, "health_per_heart_strip", s.health_per_heart_strip);
+    put_bool(j, "health_per_heart_indexed", s.health_per_heart_indexed);
+    put_i(j, "health_leds_per_heart", s.health_leds_per_heart);
+    put_i(j, "health_strip_axis", s.health_strip_axis);
+    put_bool(j, "health_strip_invert", s.health_strip_invert);
     put_bool(j, "enable_hunger_gradient", s.enable_hunger_gradient);
     put_bool(j, "enable_air_gradient", s.enable_air_gradient);
     put_bool(j, "enable_durability_gradient", s.enable_durability_gradient);
@@ -58,6 +78,11 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.damage_flash_strength = get_f(j, "damage_flash_strength", s.damage_flash_strength);
     s.base_brightness = get_f(j, "base_brightness", s.base_brightness);
     s.enable_health_gradient = get_bool(j, "enable_health_gradient", s.enable_health_gradient);
+    s.health_per_heart_strip = get_bool(j, "health_per_heart_strip", s.health_per_heart_strip);
+    s.health_per_heart_indexed = get_bool(j, "health_per_heart_indexed", s.health_per_heart_indexed);
+    s.health_leds_per_heart = get_i(j, "health_leds_per_heart", s.health_leds_per_heart);
+    s.health_strip_axis = get_i(j, "health_strip_axis", s.health_strip_axis);
+    s.health_strip_invert = get_bool(j, "health_strip_invert", s.health_strip_invert);
     s.enable_hunger_gradient = get_bool(j, "enable_hunger_gradient", s.enable_hunger_gradient);
     s.enable_air_gradient = get_bool(j, "enable_air_gradient", s.enable_air_gradient);
     s.enable_durability_gradient = get_bool(j, "enable_durability_gradient", s.enable_durability_gradient);
@@ -74,6 +99,8 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.env_thunder_darken_sky = get_f(j, "env_thunder_darken_sky", s.env_thunder_darken_sky);
     s.damage_directional_mix = get_f(j, "damage_directional_mix", s.damage_directional_mix);
     s.damage_dir_sharpness = get_f(j, "damage_dir_sharpness", s.damage_dir_sharpness);
+    s.health_leds_per_heart = std::max(1, std::min(32, s.health_leds_per_heart));
+    s.health_strip_axis = std::max(0, std::min(3, s.health_strip_axis));
 }
 
 } // namespace MinecraftGame

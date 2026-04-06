@@ -123,10 +123,14 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final boolean hasDurability = !held.isEmpty() && held.isDamageable();
         final int durabilityMax = hasDurability ? Math.max(1, held.getMaxDamage()) : 1;
         final int durability = hasDurability ? Math.max(0, durabilityMax - held.getDamage()) : 0;
+        final float hpPerHeart = 2.0f;
+        final float hearts = player.getHealth() / hpPerHeart;
+        final float heartsMax = Math.max(0.01f, player.getMaxHealth() / hpPerHeart);
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"health_state\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"health\":%.4f,\"health_max\":%.4f,\"hunger\":%d,\"hunger_max\":%d,\"air\":%d,\"air_max\":%d,\"item_durability_valid\":%s,\"item_durability\":%d,\"item_durability_max\":%d}",
+                "{\"version\":1,\"type\":\"health_state\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"health\":%.4f,\"health_max\":%.4f,\"hp_per_heart\":%.4f,\"hearts\":%.4f,\"hearts_max\":%.4f,\"hunger\":%d,\"hunger_max\":%d,\"air\":%d,\"air_max\":%d,\"item_durability_valid\":%s,\"item_durability\":%d,\"item_durability_max\":%d}",
                 System.currentTimeMillis(),
                 player.getHealth(), player.getMaxHealth(),
+                hpPerHeart, hearts, heartsMax,
                 hunger, maxHunger, air, maxAir,
                 hasDurability ? "true" : "false", durability, durabilityMax);
         sendJson(socket, address, json);

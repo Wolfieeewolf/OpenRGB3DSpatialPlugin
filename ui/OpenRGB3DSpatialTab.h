@@ -379,6 +379,7 @@ private:
     std::unique_ptr<ZoneManager3D> zone_manager;
 
     QListWidget*                effect_stack_list;
+    int                         last_stack_selection_index = -1;
     QComboBox*                  stack_effect_type_combo;
     QComboBox*                  stack_effect_zone_combo;
     QComboBox*                  stack_effect_blend_combo;

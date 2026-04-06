@@ -318,6 +318,17 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                     telemetry.has_health_state = true;
                     telemetry.health = msg.value("health", 100.0f);
                     telemetry.health_max = (std::max)(1.0f, msg.value("health_max", 100.0f));
+                    const float hp_per_heart = (std::max)(0.01f, msg.value("hp_per_heart", 2.0f));
+                    if(msg.contains("hearts") && msg["hearts"].is_number() && msg.contains("hearts_max") && msg["hearts_max"].is_number())
+                    {
+                        telemetry.hearts = msg.value("hearts", 0.0f);
+                        telemetry.hearts_max = (std::max)(1e-3f, msg.value("hearts_max", 1.0f));
+                    }
+                    else
+                    {
+                        telemetry.hearts = telemetry.health / hp_per_heart;
+                        telemetry.hearts_max = (std::max)(1e-3f, telemetry.health_max / hp_per_heart);
+                    }
                     telemetry.hunger = msg.value("hunger", 20.0f);
                     telemetry.hunger_max = (std::max)(1.0f, msg.value("hunger_max", 20.0f));
                     telemetry.air = msg.value("air", 300.0f);
