@@ -214,7 +214,7 @@ static float HealthStripCoord01(float gx, float gy, float gz, const GridContext3
     }
     if(span < 1e-6f)
     {
-        span = 1.0f;
+        return 0.5f;
     }
     float u = std::clamp(pos / span, 0.0f, 1.0f);
     if(invert)
@@ -602,8 +602,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
         if(t.has_world_layers)
         {
-            const float height = (grid.height > 1e-3f) ? grid.height : 1.0f;
-            const float y_norm = std::clamp((grid_y - grid.min_y) / height, 0.0f, 1.0f);
+            const float y_norm = NormalizeGridAxis01(grid_y, grid.min_y, grid.max_y);
             RGBColor sky = SuppressWhites(MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b));
             RGBColor mid = SuppressWhites(MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b));
             RGBColor ground = SuppressWhites(MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b));
@@ -831,8 +830,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
         if(lt > 0.0f)
         {
-            const float height = (grid.height > 1e-3f) ? grid.height : 1.0f;
-            const float y_norm = std::clamp((grid_y - grid.min_y) / height, 0.0f, 1.0f);
+            const float y_norm = NormalizeGridAxis01(grid_y, grid.min_y, grid.max_y);
             const float skyBias = std::pow(y_norm, 1.9f);
             const float layer = 0.20f + 0.80f * skyBias;
             const float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);

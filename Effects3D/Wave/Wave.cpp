@@ -346,23 +346,23 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     if(shape_type == 0)
     {
         float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+        float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
         normalized_position = (max_radius > 0.001f) ? (radial_distance / max_radius) : 0.0f;
     }
     else if(shape_type == 1)
-        normalized_position = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.0f;
+        normalized_position = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
     else if(shape_type == 2)
-        normalized_position = (grid.height > 0.001f) ? ((rotated_pos.y - grid.min_y) / grid.height) : 0.0f;
+        normalized_position = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     else
     {
-        float nx = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.5f;
-        float nz = (grid.depth > 0.001f) ? ((rotated_pos.z - grid.min_z) / grid.depth) : 0.5f;
+        float nx = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+        float nz = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
         normalized_position = 0.5f * (nx + nz);
     }
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
     wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {

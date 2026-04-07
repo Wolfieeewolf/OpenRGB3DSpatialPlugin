@@ -120,7 +120,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * 4.0f / fmax(0.1f, size_multiplier);
     
-    float max_distance = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_distance = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float radius_scale_normalized = (helix_radius / 200.0f) * size_multiplier;
     float radius_scale = max_distance * radius_scale_normalized * 0.3f;
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
@@ -129,12 +129,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
 
     float radial_distance = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
     float angle = atan2(rot_rel_z, rot_rel_x);
-    float coord_along_helix = 0.0f;
-    if(grid.height > 0.001f)
-    {
-        coord_along_helix = (rotated_pos.y - grid.min_y) / grid.height;
-    }
-    coord_along_helix = fmaxf(0.0f, fminf(1.0f, coord_along_helix));
+    float coord_along_helix = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     float helix_height = coord_along_helix * freq_scale + progress;
     float coord1 = rot_rel_x;
     float coord2 = rot_rel_z;

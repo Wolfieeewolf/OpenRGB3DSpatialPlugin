@@ -181,8 +181,8 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     float size_m = GetNormalizedSize();
     float color_cycle = time * GetScaledFrequency() * 12.0f;
     float detail = std::max(0.05f, GetScaledDetail());
-    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
-    float R = room_avg * (0.002f + 0.28f) * size_m;
+    float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
+    float R = radius_basis * (0.04f + 0.24f) * size_m;
 
     float xmin = grid.min_x + R;
     float xmax = grid.max_x - R;
@@ -191,7 +191,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     float zmin = grid.min_z + R;
     float zmax = grid.max_z - R;
 
-    float gravity = room_avg * 0.8f * (0.3f + speed * 0.02f);
+    float gravity = radius_basis * 0.8f * (0.3f + speed * 0.02f);
 
     unsigned int N = ball_count == 0 ? 1u : ball_count;
 
@@ -213,9 +213,9 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
             float p0y = ymin + HashFloat01(k * 313U) * 0.3f + (ymax - ymin) * 0.5f;
             float p0z = zmin + HashFloat01(k * 919U) * (zmax - zmin);
 
-            float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
-            float v0y = HashFloat01(k * 577U) * 0.5f * room_avg * (0.3f + speed * 0.05f);
-            float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * room_avg;
+            float v0x = (HashFloat01(k * 733U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * radius_basis;
+            float v0y = HashFloat01(k * 577U) * 0.5f * radius_basis * (0.3f + speed * 0.05f);
+            float v0z = (HashFloat01(k * 829U) * 2.0f - 1.0f) * (0.3f + speed * 0.05f) * radius_basis;
 
             float pos_x = p0x;
             float pos_y = p0y;

@@ -35,6 +35,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     global_reference_point = {0.0f, 0.0f, 0.0f};
     custom_reference_point = {0.0f, 0.0f, 0.0f};
     use_custom_reference = false;
+    reference_source_grid_context = nullptr;
+    reference_active_grid_context = nullptr;
 
     colors.push_back(COLOR_RED);
     colors.push_back(COLOR_BLUE);
@@ -993,6 +995,56 @@ void SpatialEffect3D::SetUseCustomReference(bool use_custom)
     use_custom_reference = use_custom;
 }
 
+void SpatialEffect3D::SetGridReferenceRemapContext(const GridContext3D* source_grid, const GridContext3D* active_grid)
+{
+    reference_source_grid_context = source_grid;
+    reference_active_grid_context = active_grid;
+}
+
+void SpatialEffect3D::ClearGridReferenceRemapContext()
+{
+    reference_source_grid_context = nullptr;
+    reference_active_grid_context = nullptr;
+}
+
+namespace
+{
+float NormalizeAxis(float value, float center, float extent)
+{
+    if(extent <= 1e-6f)
+    {
+        return 0.5f;
+    }
+    float normalized = ((value - center) / extent + 1.0f) * 0.5f;
+    return std::max(0.0f, std::min(1.0f, normalized));
+}
+
+float DenormalizeAxis(float normalized, float center, float extent)
+{
+    return center + ((normalized * 2.0f) - 1.0f) * extent;
+}
+
+Vector3D RemapPointBetweenGrids(const Vector3D& point, const GridContext3D& source, const GridContext3D& target)
+{
+    const float src_half_w = source.width * 0.5f;
+    const float src_half_h = source.height * 0.5f;
+    const float src_half_d = source.depth * 0.5f;
+    const float dst_half_w = target.width * 0.5f;
+    const float dst_half_h = target.height * 0.5f;
+    const float dst_half_d = target.depth * 0.5f;
+
+    const float nx = NormalizeAxis(point.x, source.center_x, src_half_w);
+    const float ny = NormalizeAxis(point.y, source.center_y, src_half_h);
+    const float nz = NormalizeAxis(point.z, source.center_z, src_half_d);
+
+    return {
+        DenormalizeAxis(nx, target.center_x, dst_half_w),
+        DenormalizeAxis(ny, target.center_y, dst_half_h),
+        DenormalizeAxis(nz, target.center_z, dst_half_d)
+    };
+}
+}
+
 Vector3D SpatialEffect3D::GetEffectOrigin() const
 {
     if(use_custom_reference)
@@ -1014,16 +1066,29 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 
 Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 {
+    auto remap_if_needed = [this](const Vector3D& point) -> Vector3D
+    {
+        if(!use_zone_grid || !reference_source_grid_context || !reference_active_grid_context)
+        {
+            return point;
+        }
+        if(reference_source_grid_context == reference_active_grid_context)
+        {
+            return point;
+        }
+        return RemapPointBetweenGrids(point, *reference_source_grid_context, *reference_active_grid_context);
+    };
+
     if(use_custom_reference)
     {
-        return custom_reference_point;
+        return remap_if_needed(custom_reference_point);
     }
     switch(reference_mode)
     {
         case REF_MODE_USER_POSITION:
-            return global_reference_point;
+            return remap_if_needed(global_reference_point);
         case REF_MODE_CUSTOM_POINT:
-            return custom_reference_point;
+            return remap_if_needed(custom_reference_point);
         case REF_MODE_ROOM_CENTER:
         default:
             return {grid.center_x, grid.center_y, grid.center_z};

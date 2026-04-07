@@ -133,12 +133,7 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float axial = 0.0f;
-    if(grid.height > 0.001f)
-    {
-        axial = (rotated_pos.y - grid.min_y) / grid.height;
-    }
-    axial = fmaxf(0.0f, fminf(1.0f, axial));
+    float axial = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     
     float height_center = 0.5f;
     float height_range_val = (tornado_height / 500.0f) * 0.5f;

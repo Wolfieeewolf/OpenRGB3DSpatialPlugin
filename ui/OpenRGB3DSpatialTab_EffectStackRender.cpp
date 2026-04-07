@@ -543,6 +543,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         {
                             continue;
                         }
+                        const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                        if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                        {
+                            continue;
+                        }
 
                         const bool requires_world = effect->RequiresWorldSpaceCoordinates();
                         float sample_x = requires_world ? world_x : room_x;
@@ -550,7 +555,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_z = requires_world ? world_z : room_z;
                         const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                         const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                        const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                         const GridContext3D* local_grid = nullptr;
                         if(grid_override.use_zone_grid)
                         {
@@ -559,12 +563,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         }
                         const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                         MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
+                        effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
 
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                             effect_color = 0x00000000;
+                        effect->ClearGridReferenceRemapContext();
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
@@ -658,6 +664,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         continue;
                     }
+                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                    {
+                        continue;
+                    }
 
                     const bool requires_world = effect->RequiresWorldSpaceCoordinates();
                     float sample_x = requires_world ? world_x : room_x;
@@ -665,7 +676,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_z = requires_world ? world_z : room_z;
                     const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
                     const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                     const GridContext3D* local_grid = nullptr;
                     if(grid_override.use_zone_grid)
                     {
@@ -674,12 +684,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                     const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
+                    effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
 
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                     RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                         effect_color = 0x00000000;
+                    effect->ClearGridReferenceRemapContext();
                     effect_color = effect->PostProcessColorGrid(effect_color);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);

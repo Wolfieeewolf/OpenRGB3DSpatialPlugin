@@ -175,9 +175,9 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float fill_level = EvaluateIntensity(amplitude, time);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
-    float ax = NormalizeRange(rotated_pos.x, grid.min_x, grid.max_x);
-    float ay = NormalizeRange(rotated_pos.y, grid.min_y, grid.max_y);
-    float az = NormalizeRange(rotated_pos.z, grid.min_z, grid.max_z);
+    float ax = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+    float ay = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    float az = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
     int fax = GetPathAxis();
     float axis_pos = (fax == 0) ? ax : ((fax == 1) ? ay : az);
     float axis_other = (fax == 0) ? ay : ((fax == 1) ? ax : ay);
@@ -190,7 +190,7 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float intensity = blend;
 
     float dx = rotated_pos.x - origin.x, dy = rotated_pos.y - origin.y, dz = rotated_pos.z - origin.z;
-    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);

@@ -262,9 +262,7 @@ void BandScan::UpdateSmoothedBands(const std::vector<float>& spectrum)
 
 static float normalize_linear(float value, float min, float max)
 {
-    float range = max - min;
-    if(range <= 1e-5f) return 0.0f;
-    return (value - min) / range;
+    return NormalizeGridAxis01(value, min, max);
 }
 
 float BandScan::ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const
@@ -291,7 +289,7 @@ float BandScan::ResolveHeightNormalized(const GridContext3D* grid, float x, floa
     (void)z;
     if(grid)
     {
-        return NormalizeRange(y, grid->min_y, grid->max_y);
+        return NormalizeGridAxis01(y, grid->min_y, grid->max_y);
     }
     else
     {
@@ -307,7 +305,7 @@ float BandScan::ResolveRadialNormalized(const GridContext3D* grid, float x, floa
         float dx = x - o.x;
         float dy = y - o.y;
         float dz = z - o.z;
-        float max_radius = EffectGridBoundingRadius(*grid, GetNormalizedScale());
+        float max_radius = EffectGridMedianHalfExtent(*grid, GetNormalizedScale()) * 1.7320508f;
         return ComputeRadialNormalized(dx, dy, dz, max_radius);
     }
     return std::clamp(std::sqrt(x * x + y * y + z * z) / 0.75f, 0.0f, 1.0f);

@@ -122,12 +122,9 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float coord1 = (grid.width > 0.001f) ? ((rotated_pos.x - grid.min_x) / grid.width) : 0.5f;
-    float coord2 = (grid.height > 0.001f) ? ((rotated_pos.y - grid.min_y) / grid.height) : 0.5f;
-    float coord3 = (grid.depth > 0.001f) ? ((rotated_pos.z - grid.min_z) / grid.depth) : 0.5f;
-    coord1 = fmaxf(0.0f, fminf(1.0f, coord1));
-    coord2 = fmaxf(0.0f, fminf(1.0f, coord2));
-    coord3 = fmaxf(0.0f, fminf(1.0f, coord3));
+    float coord1 = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    float coord3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
 
     float plasma_value;
     switch(pattern_type)
@@ -201,7 +198,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     plasma_value = fmax(0.0f, fmin(1.0f, plasma_value));
 
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float depth_factor = 1.0f;
     if(max_radius > 0.001f)
     {

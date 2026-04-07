@@ -290,7 +290,7 @@ float Matrix::ComputeFaceIntensity(int face,
     }
 
     /* Let matrix rain extend into the room so it feels on everything (walls, floor, ceiling, and volume) */
-    float room_extent = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float room_extent = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     if(room_extent > 0.001f && face_distance > room_extent * 0.75f)
         return 0.0f;
 

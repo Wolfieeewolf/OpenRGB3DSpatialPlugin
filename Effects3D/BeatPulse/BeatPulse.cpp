@@ -206,9 +206,9 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
     float dx = x - origin.x;
     float dy = y - origin.y;
     float dz = z - origin.z;
-    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
-    float height_norm = NormalizeRange(y, grid.min_y, grid.max_y);
+    float height_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     float energy = SamplePulseField(radial_norm, height_norm, time);
     float ambient = EvaluateIntensity(
         AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz), time);

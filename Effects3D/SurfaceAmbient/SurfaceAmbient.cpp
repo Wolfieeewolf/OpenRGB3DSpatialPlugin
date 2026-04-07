@@ -168,16 +168,14 @@ static void eval_surface(int surf, const GridContext3D& grid, float x, float y, 
     dist = 0.0f; u = 0.0f; v = 0.0f; extent = 0.0f;
     switch(surf)
     {
-    case 1: extent = grid.height; dist = y - grid.min_y; u = (x - grid.min_x) / std::max(0.001f, grid.width); v = (z - grid.min_z) / std::max(0.001f, grid.depth); break;
-    case 2: extent = grid.height; dist = grid.max_y - y; u = (x - grid.min_x) / std::max(0.001f, grid.width); v = (z - grid.min_z) / std::max(0.001f, grid.depth); break;
-    case 4: extent = grid.width; dist = x - grid.min_x; u = (y - grid.min_y) / std::max(0.001f, grid.height); v = (z - grid.min_z) / std::max(0.001f, grid.depth); break;
-    case 8: extent = grid.width; dist = grid.max_x - x; u = (y - grid.min_y) / std::max(0.001f, grid.height); v = (z - grid.min_z) / std::max(0.001f, grid.depth); break;
-    case 16: extent = grid.depth; dist = z - grid.min_z; u = (x - grid.min_x) / std::max(0.001f, grid.width); v = (y - grid.min_y) / std::max(0.001f, grid.height); break;
-    case 32: extent = grid.depth; dist = grid.max_z - z; u = (x - grid.min_x) / std::max(0.001f, grid.width); v = (y - grid.min_y) / std::max(0.001f, grid.height); break;
+    case 1: extent = std::max(0.001f, grid.height); dist = y - grid.min_y; u = NormalizeGridAxis01(x, grid.min_x, grid.max_x); v = NormalizeGridAxis01(z, grid.min_z, grid.max_z); break;
+    case 2: extent = std::max(0.001f, grid.height); dist = grid.max_y - y; u = NormalizeGridAxis01(x, grid.min_x, grid.max_x); v = NormalizeGridAxis01(z, grid.min_z, grid.max_z); break;
+    case 4: extent = std::max(0.001f, grid.width); dist = x - grid.min_x; u = NormalizeGridAxis01(y, grid.min_y, grid.max_y); v = NormalizeGridAxis01(z, grid.min_z, grid.max_z); break;
+    case 8: extent = std::max(0.001f, grid.width); dist = grid.max_x - x; u = NormalizeGridAxis01(y, grid.min_y, grid.max_y); v = NormalizeGridAxis01(z, grid.min_z, grid.max_z); break;
+    case 16: extent = std::max(0.001f, grid.depth); dist = z - grid.min_z; u = NormalizeGridAxis01(x, grid.min_x, grid.max_x); v = NormalizeGridAxis01(y, grid.min_y, grid.max_y); break;
+    case 32: extent = std::max(0.001f, grid.depth); dist = grid.max_z - z; u = NormalizeGridAxis01(x, grid.min_x, grid.max_x); v = NormalizeGridAxis01(y, grid.min_y, grid.max_y); break;
     default: break;
     }
-    u = std::max(0.0f, std::min(1.0f, u));
-    v = std::max(0.0f, std::min(1.0f, v));
 }
 
 RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

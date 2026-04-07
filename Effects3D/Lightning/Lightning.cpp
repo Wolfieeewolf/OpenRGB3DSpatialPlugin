@@ -233,7 +233,7 @@ void Lightning::UpdateArchCache(float time, const GridContext3D& grid)
     float arch_duration = (0.35f + 0.25f / (float)std::max(1u, strike_rate)) / std::max(0.3f, speed_factor);
     int max_arches = (int)branches;
 
-    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float room_avg = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float margin = room_avg * 0.15f;
 
     for(int i = 0; i < max_arches; i++)
@@ -300,8 +300,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         if(intensity <= 0.001f)
             return 0x00000000;
 
-        float norm_y = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.5f;
-        norm_y = std::max(0.0f, std::min(1.0f, norm_y));
+        float norm_y = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
         float sky_factor = 0.6f + 0.4f * norm_y;
 
         RGBColor base;
@@ -325,7 +324,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     float dist_from_center = sqrtf(rx*rx + ry*ry + rz*rz);
 
     float size_m = GetNormalizedSize();
-    float room_avg = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float room_avg = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float core_radius = room_avg * (0.04f + 0.06f * size_m);
     float core_glow = room_avg * (0.08f + 0.10f * size_m);
     float arc_core = room_avg * (0.015f + 0.02f * size_m);

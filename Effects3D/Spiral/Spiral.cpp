@@ -172,12 +172,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     float norm_radius = EffectGridHorizontalRadialNorm01(r_xz);
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
 
-    float norm_twist = 0.0f;
-    if(grid.height > 0.001f)
-    {
-        norm_twist = (rotated_pos.y - grid.min_y) / grid.height;
-    }
-    norm_twist = fmaxf(0.0f, fminf(1.0f, norm_twist));
+    float norm_twist = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     
     float z_twist = norm_twist * freq_scale * 3.0f;
     float spiral_angle = angle * num_arms + norm_radius * (detail * 6.0f) + z_twist - progress;

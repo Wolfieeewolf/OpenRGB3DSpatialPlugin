@@ -245,6 +245,8 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float detail = std::max(0.05f, GetScaledDetail());
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * 0.01f / (size_multiplier > 0.001f ? size_multiplier : 1.0f);
+    float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+    radius_basis = std::max(radius_basis, 1e-3f);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
@@ -254,8 +256,9 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float horiz = sqrtf(rot_rel_x * rot_rel_x + rot_rel_z * rot_rel_z);
     float distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
 
-    float explosion_radius = burst_phase * (explosion_intensity * 0.25f) * size_multiplier;
-    float wave_thickness = (8.0f + explosion_intensity * 0.08f) * size_multiplier;
+    float intensity_norm = std::clamp(explosion_intensity / 200.0f, 0.05f, 1.0f);
+    float explosion_radius = burst_phase * radius_basis * (0.15f + 0.85f * intensity_norm) * size_multiplier;
+    float wave_thickness = radius_basis * (0.03f + 0.07f * intensity_norm) * size_multiplier;
     float explosion_intensity_final = 0.0f;
     float hue_base = 60.0f + time * rate * 12.0f;
 
@@ -314,7 +317,7 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     }
     else if(explosion_type == TYPE_WALL_BOUNCE)
     {
-        float max_extent = EffectGridBoundingRadius(grid, GetNormalizedScale());
+        float max_extent = radius_basis;
         float period = fmax(0.1f, max_extent);
         float travel = burst_phase * (explosion_intensity * 0.25f) * size_multiplier;
         float t = fmodf(travel, 2.0f * period);

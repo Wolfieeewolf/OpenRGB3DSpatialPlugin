@@ -162,7 +162,7 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
         float dx = x - origin.x;
         float dy = y - origin.y;
         float dz = z - origin.z;
-        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+        float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
         if(max_radius < 1e-5f) max_radius = 1e-5f;
         distance = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / max_radius, 0.0f, 1.0f);
     }

@@ -117,7 +117,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     }
 
     float size_multiplier = GetNormalizedSize();
-    float bounds_r = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float bounds_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float base_scale = 0.45f;
     float sphere_radius = bounds_r * base_scale * size_multiplier * (1.0f + 0.25f * sinf(progress * rate * 0.2f));
 

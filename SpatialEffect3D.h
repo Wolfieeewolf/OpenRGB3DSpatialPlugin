@@ -93,6 +93,24 @@ inline float EffectGridHorizontalRadialNorm01(float r_xz_corner_sqrt2)
     return std::min(1.0f, r_xz_corner_sqrt2 * inv_sqrt2);
 }
 
+inline float NormalizeGridAxis01(float value, float min_v, float max_v)
+{
+    float range = max_v - min_v;
+    if(range <= 1e-5f)
+    {
+        return 0.5f;
+    }
+    return std::max(0.0f, std::min(1.0f, (value - min_v) / range));
+}
+
+inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normalized_scale)
+{
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
+    float extents[3] = {e.hw, e.hh, e.hd};
+    std::sort(extents, extents + 3);
+    return extents[1];
+}
+
 struct EffectInfo3D
 {
     int                 info_version;
@@ -190,6 +208,8 @@ public:
     virtual Vector3D GetGlobalReferencePoint() const;
     virtual void SetCustomReferencePoint(const Vector3D& point);
     virtual void SetUseCustomReference(bool use_custom);
+    void SetGridReferenceRemapContext(const GridContext3D* source_grid, const GridContext3D* active_grid);
+    void ClearGridReferenceRemapContext();
 
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
@@ -343,6 +363,8 @@ protected:
     Vector3D            global_reference_point;
     Vector3D            custom_reference_point;
     bool                use_custom_reference;
+    const GridContext3D* reference_source_grid_context;
+    const GridContext3D* reference_active_grid_context;
 
     void AddWidgetToParent(QWidget* w, QWidget* container);
 

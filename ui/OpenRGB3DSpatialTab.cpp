@@ -2214,9 +2214,21 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
         return;
     }
 
+    // Force-clear any stale preview widgets so layer switching always shows
+    // the newly selected effect immediately.
+    while(QLayoutItem* item = hl->takeAt(0))
+    {
+        if(QWidget* w = item->widget())
+        {
+            w->setVisible(false);
+            w->setParent(nullptr);
+            w->deleteLater();
+        }
+        delete item;
+    }
+
     if(minecraft_hub_preview_effect)
     {
-        hl->removeWidget(minecraft_hub_preview_effect);
         disconnect(minecraft_hub_preview_effect, nullptr, this, nullptr);
         if(start_effect_button)
         {
@@ -2226,7 +2238,6 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
         {
             disconnect(stop_effect_button, nullptr, this, nullptr);
         }
-        minecraft_hub_preview_effect->deleteLater();
         minecraft_hub_preview_effect = nullptr;
         current_effect_ui = nullptr;
         start_effect_button = nullptr;

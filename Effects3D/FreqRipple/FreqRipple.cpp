@@ -246,7 +246,7 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
     float dx = x - origin.x;
     float dy = y - origin.y;
     float dz = z - origin.z;
-    float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+    float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float dist_norm = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 2.0f);
 
     RGBColor color = ComputeRippleColor(dist_norm, time);

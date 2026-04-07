@@ -232,8 +232,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float rot_rel_x = rotated.x - origin.x;
         float rot_rel_y = rotated.y - origin.y;
         float rot_rel_z = rotated.z - origin.z;
-        float position = (grid.width > 0.001f) ? ((rotated.x - grid.min_x) / grid.width) : 0.0f;
-        position = std::max(0.0f, std::min(1.0f, position));
+        float position = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
         float edge_distance = fabsf(position - prog);
         float thickness_factor = 0.2f * size_scale;
         float intensity;
@@ -247,7 +246,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         default: intensity = edge_distance < thickness_factor ? 1.0f : 0.0f; break;
         }
         float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
-        float max_radius = EffectGridBoundingRadius(grid, GetNormalizedScale());
+        float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
         float depth_factor = (max_radius > 0.001f) ? (0.5f + 0.5f * (1.0f - std::min(1.0f, radial_distance / max_radius) * 0.5f)) : 1.0f;
         float pos_color = std::fmod(prog + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;

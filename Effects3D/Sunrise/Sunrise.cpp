@@ -251,8 +251,7 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
     float weather_freq = std::max(0.2f, std::min(8.0f, GetScaledFrequency() * 0.15f));
     float detail = std::max(0.05f, GetScaledDetail());
 
-    float norm_y = (grid.height > 0.001f) ? ((y - grid.min_y) / grid.height) : 0.5f;
-    norm_y = std::max(0.0f, std::min(1.0f, norm_y));
+    float norm_y = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
 
     const std::vector<RGBColor>& cols = GetColors();
     RGBColor c0 = (cols.size() > 0) ? cols[0] : 0x00FFCC66;
