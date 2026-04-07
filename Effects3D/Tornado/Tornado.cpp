@@ -18,9 +18,7 @@ Tornado::Tornado(QWidget* parent) : SpatialEffect3D(parent)
     SetFrequency(50);
 }
 
-Tornado::~Tornado()
-{
-}
+Tornado::~Tornado() = default;
 
 EffectInfo3D Tornado::GetEffectInfo()
 {

@@ -32,7 +32,7 @@ SpectrumBars::SpectrumBars(QWidget* parent)
     RefreshBandRange();
 }
 
-SpectrumBars::~SpectrumBars() {}
+SpectrumBars::~SpectrumBars() = default;
 
 EffectInfo3D SpectrumBars::GetEffectInfo()
 {

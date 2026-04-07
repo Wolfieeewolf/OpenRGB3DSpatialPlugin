@@ -85,6 +85,6 @@ inline bool SearchMatchesFamily(const QString& search)
     return false;
 }
 
-} // namespace MinecraftEffectLibrary
+}
 
 #endif

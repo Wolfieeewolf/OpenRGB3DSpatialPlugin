@@ -28,20 +28,6 @@ public:
         return display_planes;
     }
 
-    DisplayPlane3D* GetPlaneById(int id) const
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        for(unsigned int i = 0; i < display_planes.size(); i++)
-        {
-            DisplayPlane3D* plane = display_planes[i];
-            if(plane != nullptr && plane->GetId() == id)
-            {
-                return plane;
-            }
-        }
-        return nullptr;
-    }
-
 private:
     DisplayPlaneManager() {}
 

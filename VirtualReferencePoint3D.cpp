@@ -14,9 +14,7 @@ VirtualReferencePoint3D::VirtualReferencePoint3D(const std::string& name, Refere
     display_color = GetDefaultColor(type);
 }
 
-VirtualReferencePoint3D::~VirtualReferencePoint3D()
-{
-}
+VirtualReferencePoint3D::~VirtualReferencePoint3D() = default;
 
 int VirtualReferencePoint3D::GetIconType() const
 {

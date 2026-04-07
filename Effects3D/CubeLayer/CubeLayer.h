@@ -7,7 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
-#include <QComboBox>
 #include <limits>
 
 class CubeLayer : public SpatialEffect3D

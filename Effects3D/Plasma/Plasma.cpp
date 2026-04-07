@@ -25,9 +25,7 @@ Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(false);
 }
 
-Plasma::~Plasma()
-{
-}
+Plasma::~Plasma() = default;
 
 EffectInfo3D Plasma::GetEffectInfo()
 {

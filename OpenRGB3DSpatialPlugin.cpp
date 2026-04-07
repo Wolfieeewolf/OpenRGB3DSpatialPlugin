@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialPlugin.h"
+#include "OpenRGB3DSpatialTab.h"
+#include "Game/GameTelemetryBridge.h"
+#include "ResourceManagerInterface.h"
 
 ResourceManagerInterface* OpenRGB3DSpatialPlugin::RMPointer = nullptr;
+
+OpenRGB3DSpatialPlugin::OpenRGB3DSpatialPlugin() = default;
+
+OpenRGB3DSpatialPlugin::~OpenRGB3DSpatialPlugin() = default;
 
 OpenRGBPluginInfo OpenRGB3DSpatialPlugin::GetPluginInfo()
 {
@@ -30,11 +37,7 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
     RMPointer = RM;
     ui        = nullptr;
     game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
-
-    if(game_telemetry_bridge)
-    {
-        game_telemetry_bridge->Register(RMPointer);
-    }
+    game_telemetry_bridge->Register(RMPointer);
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()

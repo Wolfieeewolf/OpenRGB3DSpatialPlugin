@@ -64,11 +64,6 @@ public:
         return !class_name.empty() && effects.find(class_name) != effects.end();
     }
 
-    std::vector<std::string> GetEffectNames() const
-    {
-        return effect_order;
-    }
-
     std::vector<EffectRegistration3D> GetAllEffects() const
     {
         std::vector<EffectRegistration3D> result;

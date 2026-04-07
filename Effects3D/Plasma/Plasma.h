@@ -3,9 +3,6 @@
 #ifndef PLASMA_H
 #define PLASMA_H
 
-#include <QWidget>
-#include <QComboBox>
-#include <QLabel>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 

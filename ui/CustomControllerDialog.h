@@ -4,24 +4,28 @@
 #define CUSTOMCONTROLLERDIALOG_H
 
 #include <QDialog>
-#include <QListWidget>
-#include <QComboBox>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
-#include <QPushButton>
-#include <QTableWidget>
-#include <QLabel>
-#include <QLineEdit>
-#include <QTabWidget>
 #include <QStyledItemDelegate>
-#include <QPainter>
-#include <QTimer>
-#include <QSlider>
-#include <QCheckBox>
-#include <QGroupBox>
 #include <vector>
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
+
+class QCheckBox;
+class QComboBox;
+class QDoubleSpinBox;
+class QGroupBox;
+class QLabel;
+class QLineEdit;
+class QListWidget;
+class QModelIndex;
+class QPainter;
+class QPushButton;
+class QSize;
+class QSlider;
+class QSpinBox;
+class QStyleOptionViewItem;
+class QTabWidget;
+class QTableWidget;
+class QTimer;
 
 struct GridLEDMapping
 {

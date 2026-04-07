@@ -4,7 +4,6 @@
 #define AUDIOINPUTMANAGER_H
 
 #include <QObject>
-#include <QByteArray>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QTimer>

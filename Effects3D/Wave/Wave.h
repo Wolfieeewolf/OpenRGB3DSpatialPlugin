@@ -3,10 +3,6 @@
 #ifndef WAVE_H
 #define WAVE_H
 
-#include <QWidget>
-#include <QComboBox>
-#include <QLabel>
-#include <QSlider>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 

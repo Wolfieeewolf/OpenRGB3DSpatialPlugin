@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ZoneManager3D.h"
-#include <algorithm>
 
-ZoneManager3D::ZoneManager3D()
-{
-}
+ZoneManager3D::ZoneManager3D() = default;
 
 ZoneManager3D::~ZoneManager3D()
 {
@@ -78,7 +75,7 @@ std::vector<int> ZoneManager3D::GetControllersInZone(const std::string& zone_nam
     {
         return zone->GetControllers();
     }
-    return std::vector<int>();
+    return {};
 }
 
 std::vector<int> ZoneManager3D::GetControllersInZone(int zone_idx)
@@ -88,7 +85,7 @@ std::vector<int> ZoneManager3D::GetControllersInZone(int zone_idx)
     {
         return zone->GetControllers();
     }
-    return std::vector<int>();
+    return {};
 }
 
 bool ZoneManager3D::ZoneExists(const std::string& name) const

@@ -82,9 +82,7 @@ VirtualController3D::VirtualController3D(const std::string& name,
 {
 }
 
-VirtualController3D::~VirtualController3D()
-{
-}
+VirtualController3D::~VirtualController3D() = default;
 
 std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_scale_mm)
 {

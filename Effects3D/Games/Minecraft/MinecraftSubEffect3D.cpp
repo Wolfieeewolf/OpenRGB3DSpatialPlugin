@@ -8,19 +8,11 @@
 
 #include <QVBoxLayout>
 #include <QGroupBox>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QSlider>
-#include <QSpinBox>
 
-MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels,
-                                           const char* effect_title,
-                                           const char* effect_description,
-                                           QWidget* parent)
+MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* effect_title, QWidget* parent)
     : SpatialEffect3D(parent),
       channels_(channels),
-      effect_title_(effect_title),
-      effect_description_(effect_description)
+      effect_title_(effect_title)
 {
 }
 
@@ -29,7 +21,7 @@ EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
     EffectInfo3D info{};
     info.info_version = 2;
     info.effect_name = effect_title_;
-    info.effect_description = effect_description_;
+    info.effect_description = "";
     info.category = "Game";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -57,53 +49,7 @@ EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
 void MinecraftSubEffect3D::ApplyControlVisibility()
 {
     SpatialEffect3D::ApplyControlVisibility();
-
-    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", false);
-    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", false);
-    SetControlGroupVisibility(detail_slider, detail_label, "Detail:", false);
-    SetControlGroupVisibility(size_slider, size_label, "Size:", false);
-    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", false);
-    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", false);
-
-    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", true);
-    SetControlGroupVisibility(intensity_slider, intensity_label, "Intensity:", true);
-    SetControlGroupVisibility(sharpness_slider, sharpness_label, "Sharpness:", true);
-
-    if(color_controls_group)
-    {
-        color_controls_group->setVisible(false);
-    }
-    if(surfaces_group)
-    {
-        surfaces_group->setVisible(false);
-    }
-    if(position_offset_group)
-    {
-        position_offset_group->setVisible(false);
-    }
-    if(edge_shape_group)
-    {
-        edge_shape_group->setVisible(false);
-    }
-    if(path_plane_group)
-    {
-        path_plane_group->setVisible(false);
-    }
-
-    if(effect_controls_group)
-    {
-        const QList<QGroupBox*> groups = effect_controls_group->findChildren<QGroupBox*>(QString(), Qt::FindDirectChildrenOnly);
-        for(QGroupBox* gb : groups)
-        {
-            const QString t = gb->title();
-            if(t == QStringLiteral("Effect scale (X / Y / Z %)") ||
-               t == QStringLiteral("Effect scale rotation (\u00B0)") ||
-               t == QStringLiteral("Effect rotation (\u00B0)"))
-            {
-                gb->setVisible(false);
-            }
-        }
-    }
+    MinecraftGame::ApplyFabricGameEffectChrome(this);
 }
 
 void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
@@ -116,30 +62,7 @@ void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
     if(settings)
     {
         layout->addWidget(settings);
-
-        const QList<QCheckBox*> checks = settings->findChildren<QCheckBox*>();
-        for(QCheckBox* cb : checks)
-        {
-            QObject::connect(cb, &QCheckBox::toggled, this, [this](bool) { emit ParametersChanged(); });
-        }
-
-        const QList<QSlider*> sliders = settings->findChildren<QSlider*>();
-        for(QSlider* sl : sliders)
-        {
-            QObject::connect(sl, &QSlider::valueChanged, this, [this](int) { emit ParametersChanged(); });
-        }
-
-        const QList<QSpinBox*> spins = settings->findChildren<QSpinBox*>();
-        for(QSpinBox* sp : spins)
-        {
-            QObject::connect(sp, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { emit ParametersChanged(); });
-        }
-
-        const QList<QComboBox*> combos = settings->findChildren<QComboBox*>();
-        for(QComboBox* combo : combos)
-        {
-            QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit ParametersChanged(); });
-        }
+        MinecraftGame::WireChildWidgetsToParametersChanged(settings, [this]() { emit ParametersChanged(); });
     }
 
     auto* telemetry_status_panel = new GameTelemetryStatusPanel(this);
@@ -209,16 +132,12 @@ class MinecraftHealthEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftHealthEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChHealth,
-                               "Minecraft - Health",
-                               "Health from Fabric UDP (127.0.0.1:9876): full-strip gradient or per-heart strip (LEDs/heart, axis). Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChHealth, "Minecraft - Health", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Health";
         info.effect_description = "Health from Fabric UDP (127.0.0.1:9876): gradient or per-heart strip. Stack per controller.";
         return info;
     }
@@ -229,16 +148,12 @@ class MinecraftHungerEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftHungerEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChHunger,
-                               "Minecraft - Hunger",
-                               "Hunger gradient from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChHunger, "Minecraft - Hunger", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Hunger";
         info.effect_description = "Hunger gradient from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -249,16 +164,12 @@ class MinecraftAirEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftAirEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChAir,
-                               "Minecraft - Air",
-                               "Air/breathing gradient from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChAir, "Minecraft - Air", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Air";
         info.effect_description = "Air/breathing gradient from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -269,16 +180,12 @@ class MinecraftDurabilityEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftDurabilityEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChDurability,
-                               "Minecraft - Durability",
-                               "Main-hand item durability from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChDurability, "Minecraft - Durability", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Durability";
         info.effect_description = "Main-hand item durability from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -289,16 +196,12 @@ class MinecraftDamageEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftDamageEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChDamage,
-                               "Minecraft - Damage",
-                               "Directional damage flash from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChDamage, "Minecraft - Damage", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Damage";
         info.effect_description = "Directional damage flash from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -309,16 +212,12 @@ class MinecraftWorldTintEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftWorldTintEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChWorldTint,
-                               "Minecraft - World tint",
-                               "Sky/mid/ground ambient tint from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChWorldTint, "Minecraft - World tint", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - World tint";
         info.effect_description = "Sky/mid/ground ambient tint from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -329,16 +228,12 @@ class MinecraftLightningEffect3D : public MinecraftSubEffect3D
 {
 public:
     explicit MinecraftLightningEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChLightning,
-                               "Minecraft - Lightning",
-                               "Lightning flash (sky-heavy) from Fabric UDP. Stack per controller.",
-                               parent)
+        : MinecraftSubEffect3D(ChLightning, "Minecraft - Lightning", parent)
     {
     }
     EffectInfo3D GetEffectInfo() override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_name = "Minecraft - Lightning";
         info.effect_description = "Lightning flash (sky-heavy) from Fabric UDP. Stack per controller.";
         return info;
     }
@@ -352,4 +247,4 @@ REGISTER_EFFECT_3D(MinecraftDurabilityEffect3D);
 REGISTER_EFFECT_3D(MinecraftDamageEffect3D);
 REGISTER_EFFECT_3D(MinecraftWorldTintEffect3D);
 REGISTER_EFFECT_3D(MinecraftLightningEffect3D);
-} // namespace
+}

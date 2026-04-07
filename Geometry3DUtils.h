@@ -16,7 +16,6 @@ namespace Geometry3D
         float   u;
         float   v;
         float   distance;
-        bool    is_in_front;
         bool    is_valid;
     };
 
@@ -53,142 +52,6 @@ namespace Geometry3D
         return result;
     }
 
-    inline PlaneProjection ProjectPointOntoPlane(const Vector3D& led_position, const DisplayPlane3D& plane)
-    {
-        PlaneProjection result;
-        result.is_valid = false;
-        result.u = 0.0f;
-        result.v = 0.0f;
-        result.distance = 0.0f;
-        result.is_in_front = false;
-
-        const Transform3D& transform = plane.GetTransform();
-
-        float rotation_matrix[9];
-        ComputeRotationMatrix(transform.rotation, rotation_matrix);
-
-        Vector3D plane_normal;
-        plane_normal.x = rotation_matrix[2];
-        plane_normal.y = rotation_matrix[5];
-        plane_normal.z = rotation_matrix[8];
-
-        Vector3D to_led;
-        to_led.x = led_position.x - transform.position.x;
-        to_led.y = led_position.y - transform.position.y;
-        to_led.z = led_position.z - transform.position.z;
-
-        float dot = to_led.x * plane_normal.x + to_led.y * plane_normal.y + to_led.z * plane_normal.z;
-
-        result.distance = sqrtf(to_led.x * to_led.x + to_led.y * to_led.y + to_led.z * to_led.z);
-        result.is_in_front = (dot > 0.0f);
-
-        Vector3D point_on_plane;
-        point_on_plane.x = led_position.x - plane_normal.x * dot;
-        point_on_plane.y = led_position.y - plane_normal.y * dot;
-        point_on_plane.z = led_position.z - plane_normal.z * dot;
-
-        Vector3D relative;
-        relative.x = point_on_plane.x - transform.position.x;
-        relative.y = point_on_plane.y - transform.position.y;
-        relative.z = point_on_plane.z - transform.position.z;
-
-        Vector3D local;
-        local.x = rotation_matrix[0] * relative.x + rotation_matrix[3] * relative.y + rotation_matrix[6] * relative.z;
-        local.y = rotation_matrix[1] * relative.x + rotation_matrix[4] * relative.y + rotation_matrix[7] * relative.z;
-        local.z = rotation_matrix[2] * relative.x + rotation_matrix[5] * relative.y + rotation_matrix[8] * relative.z;
-
-        float width_mm = plane.GetWidthMM();
-        float height_mm = plane.GetHeightMM();
-        if (width_mm <= 0.0f || height_mm <= 0.0f)
-        {
-            return result;
-        }
-        float half_width = width_mm * 0.5f;
-        float half_height = height_mm * 0.5f;
-        result.u = (local.x + half_width) / width_mm;
-        result.v = (local.y + half_height) / height_mm;
-
-        result.is_valid = true;
-        return result;
-    }
-
-    inline PlaneProjection RayTracePlane(const Vector3D& led_position, const Vector3D& view_direction, const DisplayPlane3D& plane)
-    {
-        PlaneProjection result;
-        result.is_valid = false;
-        result.u = 0.0f;
-        result.v = 0.0f;
-        result.distance = 0.0f;
-        result.is_in_front = false;
-
-        const Transform3D& transform = plane.GetTransform();
-
-        float rotation_matrix[9];
-        ComputeRotationMatrix(transform.rotation, rotation_matrix);
-
-        Vector3D plane_normal;
-        plane_normal.x = rotation_matrix[2];
-        plane_normal.y = rotation_matrix[5];
-        plane_normal.z = rotation_matrix[8];
-
-        float denominator = view_direction.x * plane_normal.x +
-                           view_direction.y * plane_normal.y +
-                           view_direction.z * plane_normal.z;
-
-        if (fabsf(denominator) < 0.0001f)
-        {
-            return result;
-        }
-
-        Vector3D to_plane;
-        to_plane.x = transform.position.x - led_position.x;
-        to_plane.y = transform.position.y - led_position.y;
-        to_plane.z = transform.position.z - led_position.z;
-
-        float numerator = to_plane.x * plane_normal.x +
-                         to_plane.y * plane_normal.y +
-                         to_plane.z * plane_normal.z;
-
-        float t = numerator / denominator;
-
-        if (t < 0.0f)
-        {
-            return result;
-        }
-
-        Vector3D intersection;
-        intersection.x = led_position.x + view_direction.x * t;
-        intersection.y = led_position.y + view_direction.y * t;
-        intersection.z = led_position.z + view_direction.z * t;
-
-        result.distance = t;
-        result.is_in_front = true;
-
-        Vector3D relative;
-        relative.x = intersection.x - transform.position.x;
-        relative.y = intersection.y - transform.position.y;
-        relative.z = intersection.z - transform.position.z;
-
-        Vector3D local;
-        local.x = rotation_matrix[0] * relative.x + rotation_matrix[3] * relative.y + rotation_matrix[6] * relative.z;
-        local.y = rotation_matrix[1] * relative.x + rotation_matrix[4] * relative.y + rotation_matrix[7] * relative.z;
-        local.z = rotation_matrix[2] * relative.x + rotation_matrix[5] * relative.y + rotation_matrix[8] * relative.z;
-
-        float width_mm = plane.GetWidthMM();
-        float height_mm = plane.GetHeightMM();
-        if (width_mm <= 0.0f || height_mm <= 0.0f)
-        {
-            return result;
-        }
-        float half_width = width_mm * 0.5f;
-        float half_height = height_mm * 0.5f;
-        result.u = (local.x + half_width) / width_mm;
-        result.v = (local.y + half_height) / height_mm;
-
-        result.is_valid = true;
-        return result;
-    }
-
     inline float ComputeFalloff(float distance, float max_range, float feather_percent = 30.0f)
     {
         if (max_range <= 0.0f)
@@ -217,69 +80,6 @@ namespace Geometry3D
         return fade;
     }
 
-    inline float ComputeAngularFalloff(const Vector3D& led_position, const DisplayPlane3D& plane,
-                                      float horizontal_wrap_angle, float vertical_wrap_angle,
-                                      float wrap_strength = 1.0f)
-    {
-        const Transform3D& transform = plane.GetTransform();
-
-        float rotation_matrix[9];
-        ComputeRotationMatrix(transform.rotation, rotation_matrix);
-
-        Vector3D plane_normal;
-        plane_normal.x = rotation_matrix[2];
-        plane_normal.y = rotation_matrix[5];
-        plane_normal.z = rotation_matrix[8];
-
-        Vector3D to_led;
-        to_led.x = led_position.x - transform.position.x;
-        to_led.y = led_position.y - transform.position.y;
-        to_led.z = led_position.z - transform.position.z;
-
-        float led_dist = sqrtf(to_led.x * to_led.x + to_led.y * to_led.y + to_led.z * to_led.z);
-        if (led_dist < 0.001f) return 1.0f;
-
-        to_led.x /= led_dist;
-        to_led.y /= led_dist;
-        to_led.z /= led_dist;
-
-        float dot_normal = to_led.x * plane_normal.x + to_led.y * plane_normal.y + to_led.z * plane_normal.z;
-
-        Vector3D plane_right;
-        plane_right.x = rotation_matrix[0];
-        plane_right.y = rotation_matrix[3];
-        plane_right.z = rotation_matrix[6];
-
-        Vector3D plane_up;
-        plane_up.x = rotation_matrix[1];
-        plane_up.y = rotation_matrix[4];
-        plane_up.z = rotation_matrix[7];
-
-        float dot_right = to_led.x * plane_right.x + to_led.y * plane_right.y + to_led.z * plane_right.z;
-        float dot_up = to_led.x * plane_up.x + to_led.y * plane_up.y + to_led.z * plane_up.z;
-
-        float horizontal_angle = atan2f(fabsf(dot_right), fabsf(dot_normal) + 0.001f);
-        horizontal_angle = horizontal_angle * 180.0f / 3.14159265359f;
-
-        float vertical_angle = atan2f(fabsf(dot_up), fabsf(dot_normal) + 0.001f);
-        vertical_angle = vertical_angle * 180.0f / 3.14159265359f;
-
-        float h_falloff = 1.0f;
-        if (horizontal_angle > horizontal_wrap_angle)
-        {
-            float overshoot = (horizontal_angle - horizontal_wrap_angle) / fmaxf(1.0f, horizontal_wrap_angle);
-            h_falloff = expf(-overshoot * wrap_strength * 2.0f);
-        }
-
-        float v_falloff = 1.0f;
-        if (vertical_angle > vertical_wrap_angle)
-        {
-            float overshoot = (vertical_angle - vertical_wrap_angle) / fmaxf(1.0f, vertical_wrap_angle);
-            v_falloff = expf(-overshoot * wrap_strength * 2.0f);
-        }
-
-        return h_falloff * v_falloff;
-    }
 
     inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f, bool directional_uv = false)
     {
@@ -288,7 +88,6 @@ namespace Geometry3D
         result.u = 0.5f;
         result.v = 0.5f;
         result.distance = 0.0f;
-        result.is_in_front = false;
 
         const Transform3D& transform = plane.GetTransform();
         const Vector3D& ref = user_position ? *user_position : transform.position;
@@ -316,7 +115,6 @@ namespace Geometry3D
             {
                 result.u = 0.5f;
                 result.v = 0.5f;
-                result.is_in_front = true;
                 result.is_valid = true;
                 return result;
             }
@@ -326,8 +124,6 @@ namespace Geometry3D
             float dir_z = ref_to_led.z * inv_len;
             float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
             float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
-            float dir_normal = dir_x * plane_normal.x + dir_y * plane_normal.y + dir_z * plane_normal.z;
-            result.is_in_front = (dir_normal < 0.0f);
             static const float inv_half_sqrt2 = 1.414213562373095f;
             result.u = 0.5f + 0.5f * dir_right * inv_half_sqrt2;
             result.v = 0.5f + 0.5f * dir_up * inv_half_sqrt2;
@@ -345,7 +141,6 @@ namespace Geometry3D
             local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
 
             std::swap(local_offset.y, local_offset.z);
-            result.is_in_front = (local_offset.y < 0.0f);
 
             float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
             float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
@@ -456,187 +251,6 @@ namespace Geometry3D
         }
     }
 
-    inline RGBColor ExtractEdgeBandColor(const uint8_t* frame_data, int frame_width, int frame_height,
-                                        int edge, float band_thickness = 0.1f)
-    {
-        if (!frame_data || frame_width <= 0 || frame_height <= 0)
-        {
-            return ToRGBColor(0, 0, 0);
-        }
-
-        int sum_r = 0, sum_g = 0, sum_b = 0;
-        int count = 0;
-
-        switch (edge)
-        {
-        case 0:
-        {
-            int band_height = (int)(frame_height * band_thickness);
-            if (band_height < 1) band_height = 1;
-
-            for (int y = 0; y < band_height && y < frame_height; y++)
-            {
-                for (int x = 0; x < frame_width; x++)
-                {
-                    int idx = (y * frame_width + x) * 4;
-                    sum_r += frame_data[idx + 0];
-                    sum_g += frame_data[idx + 1];
-                    sum_b += frame_data[idx + 2];
-                    count++;
-                }
-            }
-            break;
-        }
-        case 1:
-        {
-            int band_width = (int)(frame_width * band_thickness);
-            if (band_width < 1) band_width = 1;
-
-            for (int y = 0; y < frame_height; y++)
-            {
-                for (int x = frame_width - band_width; x < frame_width; x++)
-                {
-                    int idx = (y * frame_width + x) * 4;
-                    sum_r += frame_data[idx + 0];
-                    sum_g += frame_data[idx + 1];
-                    sum_b += frame_data[idx + 2];
-                    count++;
-                }
-            }
-            break;
-        }
-        case 2:
-        {
-            int band_height = (int)(frame_height * band_thickness);
-            if (band_height < 1) band_height = 1;
-
-            for (int y = frame_height - band_height; y < frame_height; y++)
-            {
-                for (int x = 0; x < frame_width; x++)
-                {
-                    int idx = (y * frame_width + x) * 4;
-                    sum_r += frame_data[idx + 0];
-                    sum_g += frame_data[idx + 1];
-                    sum_b += frame_data[idx + 2];
-                    count++;
-                }
-            }
-            break;
-        }
-        case 3:
-        {
-            int band_width = (int)(frame_width * band_thickness);
-            if (band_width < 1) band_width = 1;
-
-            for (int y = 0; y < frame_height; y++)
-            {
-                for (int x = 0; x < band_width; x++)
-                {
-                    int idx = (y * frame_width + x) * 4;
-                    sum_r += frame_data[idx + 0];
-                    sum_g += frame_data[idx + 1];
-                    sum_b += frame_data[idx + 2];
-                    count++;
-                }
-            }
-            break;
-        }
-        }
-
-        if (count == 0)
-        {
-            return ToRGBColor(0, 0, 0);
-        }
-
-        uint8_t r = sum_r / count;
-        uint8_t g = sum_g / count;
-        uint8_t b = sum_b / count;
-        return ToRGBColor(r, g, b);
-    }
-
-    struct ContentBounds
-    {
-        float u_min = 0.0f;
-        float u_max = 1.0f;
-        float v_min = 0.0f;
-        float v_max = 1.0f;
-    };
-
-    inline ContentBounds DetectBlackBars(const uint8_t* frame_data, int frame_width, int frame_height,
-                                         float black_threshold = 25.0f,
-                                         float min_content_fraction = 0.2f,
-                                         bool letterbox_only = false)
-    {
-        ContentBounds out;
-        if(!frame_data || frame_width <= 0 || frame_height <= 0)
-        {
-            return out;
-        }
-
-        uint8_t thresh = (uint8_t)std::max(0, std::min(255, (int)(black_threshold + 0.5f)));
-        auto isBlack = [&](int x, int y) -> bool
-        {
-            if(x < 0 || x >= frame_width || y < 0 || y >= frame_height) return false;
-            int idx = (y * frame_width + x) * 4;
-            uint8_t r = frame_data[idx + 0];
-            uint8_t g = frame_data[idx + 1];
-            uint8_t b = frame_data[idx + 2];
-            return (r <= thresh) && (g <= thresh) && (b <= thresh);
-        };
-
-        int x25 = frame_width / 4;
-        int x50 = frame_width / 2;
-        int x75 = (frame_width * 3) / 4;
-        int y25 = frame_height / 4;
-        int y50 = frame_height / 2;
-        int y75 = (frame_height * 3) / 4;
-
-        auto rowIsBlack = [&](int y) -> bool
-        {
-            return isBlack(x25, y) && isBlack(x50, y) && isBlack(x75, y);
-        };
-        auto colIsBlack = [&](int x) -> bool
-        {
-            return isBlack(x, y25) && isBlack(x, y50) && isBlack(x, y75);
-        };
-
-        int top = 0;
-        for(; top < frame_height; top++)
-        {
-            if(!rowIsBlack(top)) break;
-        }
-        int bottom = frame_height - 1;
-        for(; bottom >= top; bottom--)
-        {
-            if(!rowIsBlack(bottom)) break;
-        }
-        int left = 0;
-        int right = frame_width - 1;
-        if(!letterbox_only)
-        {
-            for(; left < frame_width; left++)
-            {
-                if(!colIsBlack(left)) break;
-            }
-            for(; right >= left; right--)
-            {
-                if(!colIsBlack(right)) break;
-            }
-        }
-
-        float content_h = (float)(bottom - top + 1);
-        float content_w = (float)(right - left + 1);
-        if(content_h < frame_height * min_content_fraction || content_w < frame_width * min_content_fraction)
-        {
-            return out;
-        }
-
-        out.v_min = (float)top / (float)frame_height;
-        out.v_max = (float)(bottom + 1) / (float)frame_height;
-        out.u_min = (float)left / (float)frame_width;
-        out.u_max = (float)(right + 1) / (float)frame_width;
-        return out;
-    }
 }
 
 #endif

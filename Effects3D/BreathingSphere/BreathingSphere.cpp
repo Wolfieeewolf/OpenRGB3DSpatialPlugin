@@ -28,9 +28,7 @@ BreathingSphere::BreathingSphere(QWidget* parent) : SpatialEffect3D(parent)
 }
 
 
-BreathingSphere::~BreathingSphere()
-{
-}
+BreathingSphere::~BreathingSphere() = default;
 
 
 EffectInfo3D BreathingSphere::GetEffectInfo()

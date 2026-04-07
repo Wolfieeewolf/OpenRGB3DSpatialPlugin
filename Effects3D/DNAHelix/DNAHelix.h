@@ -3,9 +3,6 @@
 #ifndef DNAHELIX_H
 #define DNAHELIX_H
 
-#include <QWidget>
-#include <QSlider>
-#include <QLabel>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 

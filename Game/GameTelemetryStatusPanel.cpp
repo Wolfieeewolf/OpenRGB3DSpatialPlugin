@@ -31,9 +31,7 @@ GameTelemetryStatusPanel::GameTelemetryStatusPanel(QWidget* parent) : QGroupBox(
     refresh_timer->start();
 }
 
-GameTelemetryStatusPanel::~GameTelemetryStatusPanel()
-{
-}
+GameTelemetryStatusPanel::~GameTelemetryStatusPanel() = default;
 
 void GameTelemetryStatusPanel::RefreshStatus()
 {

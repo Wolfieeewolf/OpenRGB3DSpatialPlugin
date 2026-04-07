@@ -6,7 +6,6 @@
 #include "CustomControllerDialog.h"
 #include "VirtualController3D.h"
 #include "DisplayPlaneManager.h"
-#include "ScreenCaptureManager.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "GridSpaceUtils.h"
 #include <QStackedWidget>
@@ -19,8 +18,19 @@
 #include <QList>
 #include <QSignalBlocker>
 #include <QColor>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QCompleter>
+#include <QDoubleSpinBox>
 #include <QFont>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QPalette>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QSlider>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QGroupBox>
 #include <QScrollArea>
@@ -2122,13 +2132,16 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
     QScrollArea* hub_settings_scroll = new QScrollArea(minecraft_library_panel);
     hub_settings_scroll->setWidgetResizable(true);
     hub_settings_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    hub_settings_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    hub_settings_scroll->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     hub_settings_scroll->setFrameShape(QFrame::StyledPanel);
-    hub_settings_scroll->setMinimumHeight(200);
-    hub_settings_scroll->setMaximumHeight(380);
+    hub_settings_scroll->setMinimumHeight(260);
+    hub_settings_scroll->setMaximumHeight(520);
 
     minecraft_hub_preview_holder = new QWidget();
     auto* holder_lay = new QVBoxLayout(minecraft_hub_preview_holder);
     holder_lay->setContentsMargins(4, 4, 4, 4);
+    holder_lay->setSizeConstraint(QLayout::SetMinAndMaxSize);
     hub_settings_scroll->setWidget(minecraft_hub_preview_holder);
     ml->addWidget(hub_settings_scroll);
 
@@ -2256,6 +2269,9 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
     connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]() {
         RefreshEffectDisplay();
     });
+
+    effect->adjustSize();
+    minecraft_hub_preview_holder->adjustSize();
 
     if(minecraft_library_panel)
     {

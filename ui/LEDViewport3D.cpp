@@ -483,9 +483,9 @@ void LEDViewport3D::paintGL()
                                    (gizmo.GetSelectedAxis() == GIZMO_AXIS_Y) ? 'Y' : 'Z';
             const QString snap_text = gizmo.IsRotateSnapActive() ? " | Snap 15 deg" : " | Hold Shift to snap 15 deg";
             const QString text = QString("Rotate %1: %2 deg%3")
-                                    .arg(QChar(axis_char))
-                                    .arg(QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1))
-                                    .arg(snap_text);
+                                   .arg(QChar(axis_char),
+                                        QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1),
+                                        snap_text);
             painter.drawText(QPointF(screen_x + 12.0, screen_y - 12.0), text);
             painter.end();
         }

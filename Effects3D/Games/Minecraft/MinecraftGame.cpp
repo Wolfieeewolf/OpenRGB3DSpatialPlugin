@@ -2,10 +2,12 @@
 
 #include "MinecraftGame.h"
 #include "MinecraftGameSettings.h"
+#include "SpatialEffect3D.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
@@ -32,6 +34,30 @@ void ClearRenderSampleIndexContext()
 {
     tls_led_index = -1;
     tls_led_count = 0;
+}
+
+void WireChildWidgetsToParametersChanged(QWidget* root, const std::function<void()>& on_changed)
+{
+    if(!root || !on_changed)
+    {
+        return;
+    }
+    for(QCheckBox* cb : root->findChildren<QCheckBox*>())
+    {
+        QObject::connect(cb, &QCheckBox::toggled, root, [on_changed](bool) { on_changed(); });
+    }
+    for(QSlider* sl : root->findChildren<QSlider*>())
+    {
+        QObject::connect(sl, &QSlider::valueChanged, root, [on_changed](int) { on_changed(); });
+    }
+    for(QSpinBox* sp : root->findChildren<QSpinBox*>())
+    {
+        QObject::connect(sp, QOverload<int>::of(&QSpinBox::valueChanged), root, [on_changed](int) { on_changed(); });
+    }
+    for(QComboBox* combo : root->findChildren<QComboBox*>())
+    {
+        QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), root, [on_changed](int) { on_changed(); });
+    }
 }
 
 unsigned long long NowMs()
@@ -109,25 +135,61 @@ static bool HealthStripMappingUsable(const GridContext3D& grid, int axis_in)
     return span > 1e-4f;
 }
 
-static bool TryGetIndexedStripCoord01(bool invert, float* out_u)
+static float HealthStripBrightnessAlongSlots(float fill_end, float total_slots, float u01)
 {
-    if(!out_u)
+    if(total_slots < 1e-4f)
     {
-        return false;
+        return 0.0f;
     }
-    if(tls_led_count <= 0 || tls_led_index < 0)
+    const float u = std::clamp(u01, 0.0f, 1.0f);
+    float center;
+    if(total_slots <= 1.0f)
     {
-        return false;
+        center = 0.5f * total_slots;
     }
-    const float countf = (float)tls_led_count;
-    float u = ((float)tls_led_index + 0.5f) / countf;
-    u = std::clamp(u, 0.0f, 1.0f);
-    if(invert)
+    else
     {
-        u = 1.0f - u;
+        center = 0.5f + u * (total_slots - 1.0f);
     }
-    *out_u = u;
-    return true;
+    const float lo = center - 0.5f;
+    const float hi = center + 0.5f;
+    const float overlap = std::max(0.0f, std::min(hi, fill_end) - std::max(lo, 0.0f));
+    const float width = hi - lo;
+    if(width < 1e-6f)
+    {
+        return 0.0f;
+    }
+    return std::clamp(overlap / width, 0.0f, 1.0f);
+}
+
+static float HealthStripBrightnessIndexedLed(float fill_end, float total_slots, int led_index, int led_count, bool invert)
+{
+    if(led_count <= 0 || total_slots < 1e-4f)
+    {
+        return 0.0f;
+    }
+    const float n = (float)led_count;
+    const float hw_lo = (float)led_index / n;
+    const float hw_hi = (float)(led_index + 1) / n;
+    float su_lo = invert ? (1.0f - hw_hi) : hw_lo;
+    float su_hi = invert ? (1.0f - hw_lo) : hw_hi;
+    if(su_lo > su_hi)
+    {
+        std::swap(su_lo, su_hi);
+    }
+    float lo = su_lo * total_slots;
+    float hi = su_hi * total_slots;
+    if(lo > hi)
+    {
+        std::swap(lo, hi);
+    }
+    const float overlap = std::min(hi, fill_end) - lo;
+    const float width = hi - lo;
+    if(width < 1e-6f)
+    {
+        return 0.0f;
+    }
+    return std::clamp(overlap / width, 0.0f, 1.0f);
 }
 
 static float HealthStripCoord01(float gx, float gy, float gz, const GridContext3D& grid, int axis_in, bool invert)
@@ -205,8 +267,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
 
         auto* lph_lab = new QLabel(QStringLiteral("LEDs per heart"));
         auto* lph_spin = new QSpinBox();
-        lph_spin->setRange(1, 16);
-        lph_spin->setValue(std::clamp(s.health_leds_per_heart, 1, 16));
+        lph_spin->setRange(1, 32);
+        lph_spin->setValue(std::clamp(s.health_leds_per_heart, 1, 32));
         layout->addWidget(lph_lab, row, 0);
         layout->addWidget(lph_spin, row, 1);
         QObject::connect(lph_spin, QOverload<int>::of(&QSpinBox::valueChanged), panel, [&s](int v) { s.health_leds_per_heart = std::clamp(v, 1, 32); });
@@ -228,6 +290,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         inv_toggle->setChecked(s.health_strip_invert);
         layout->addWidget(inv_toggle, row++, 0, 1, 2);
         QObject::connect(inv_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.health_strip_invert = v; });
+
     }
     if(all || ch(channels, ChHunger))
     {
@@ -235,6 +298,10 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         hunger_toggle->setChecked(s.enable_hunger_gradient);
         layout->addWidget(hunger_toggle, row++, 0, 1, 2);
         QObject::connect(hunger_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_hunger_gradient = v; });
+        QCheckBox* hunger_strip_toggle = new QCheckBox("Per-strip hunger (uses strip/index settings above)");
+        hunger_strip_toggle->setChecked(s.hunger_per_strip);
+        layout->addWidget(hunger_strip_toggle, row++, 0, 1, 2);
+        QObject::connect(hunger_strip_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.hunger_per_strip = v; });
         addPctSlider(QStringLiteral("Hunger gradient strength"), &s.hunger_mix);
     }
     if(all || ch(channels, ChAir))
@@ -243,6 +310,10 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         air_toggle->setChecked(s.enable_air_gradient);
         layout->addWidget(air_toggle, row++, 0, 1, 2);
         QObject::connect(air_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_air_gradient = v; });
+        QCheckBox* air_strip_toggle = new QCheckBox("Per-strip air (uses strip/index settings above)");
+        air_strip_toggle->setChecked(s.air_per_strip);
+        layout->addWidget(air_strip_toggle, row++, 0, 1, 2);
+        QObject::connect(air_strip_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.air_per_strip = v; });
         addPctSlider(QStringLiteral("Air gradient strength"), &s.air_mix);
     }
     if(all || ch(channels, ChDurability))
@@ -251,6 +322,10 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         dura_toggle->setChecked(s.enable_durability_gradient);
         layout->addWidget(dura_toggle, row++, 0, 1, 2);
         QObject::connect(dura_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_durability_gradient = v; });
+        QCheckBox* dura_strip_toggle = new QCheckBox("Per-strip durability (uses strip/index settings above)");
+        dura_strip_toggle->setChecked(s.durability_per_strip);
+        layout->addWidget(dura_strip_toggle, row++, 0, 1, 2);
+        QObject::connect(dura_strip_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.durability_per_strip = v; });
         addPctSlider(QStringLiteral("Item durability gradient strength"), &s.durability_mix);
     }
 
@@ -381,16 +456,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
     if(all)
     {
         layout->addWidget(new QLabel(QStringLiteral("Output")), row++, 0, 1, 2);
-        auto* bLab = new QLabel(QStringLiteral("Base brightness"));
-        auto* bSl = new QSlider(Qt::Horizontal);
-        bSl->setRange(80, 150);
-        bSl->setValue((int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f));
-        layout->addWidget(bLab, row, 0);
-        layout->addWidget(bSl, row, 1);
-        QObject::connect(bSl, &QSlider::valueChanged, panel, [&s](int x) { s.base_brightness = std::clamp(x / 100.0f, 0.8f, 1.5f); });
-        row++;
     }
-    else
     {
         auto* bLab = new QLabel(QStringLiteral("Base brightness"));
         auto* bSl = new QSlider(Qt::Horizontal);
@@ -427,6 +493,24 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     const RGBColor low_durability = (RGBColor)0x000000FF;
     const RGBColor high_durability = (RGBColor)0x0000FF60;
     RGBColor out = (RGBColor)0x00000000;
+    const int lph = std::clamp(s.health_leds_per_heart, 1, 32);
+    const bool have_indexed =
+        s.health_per_heart_indexed && tls_led_count > 0 && tls_led_index >= 0 && tls_led_index < tls_led_count;
+    const bool have_spatial =
+        !s.health_per_heart_indexed && HealthStripMappingUsable(grid, s.health_strip_axis);
+    const auto strip_brightness_for = [&](float fill_end, float max_units) -> float {
+        const float total_slots = max_units * (float)lph;
+        if(total_slots < 0.01f || (!have_indexed && !have_spatial))
+        {
+            return -1.0f;
+        }
+        if(have_indexed)
+        {
+            return HealthStripBrightnessIndexedLed(fill_end, total_slots, tls_led_index, tls_led_count, s.health_strip_invert);
+        }
+        const float u = HealthStripCoord01(grid_x, grid_y, grid_z, grid, s.health_strip_axis, s.health_strip_invert);
+        return HealthStripBrightnessAlongSlots(fill_end, total_slots, u);
+    };
 
     if(ch(channels, ChHealth) && s.enable_health_gradient && t.has_health_state && t.hearts_max > 1e-4f)
     {
@@ -437,31 +521,14 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
 
         if(s.health_per_heart_strip)
         {
-            const int lph = std::clamp(s.health_leds_per_heart, 1, 32);
-            const float total_slots = max_h * (float)lph;
-            float u = 0.0f;
-            bool have_u = false;
-            if(s.health_per_heart_indexed)
-            {
-                have_u = TryGetIndexedStripCoord01(s.health_strip_invert, &u);
-            }
-            else if(HealthStripMappingUsable(grid, s.health_strip_axis))
-            {
-                u = HealthStripCoord01(grid_x, grid_y, grid_z, grid, s.health_strip_axis, s.health_strip_invert);
-                have_u = true;
-            }
-
-            if(total_slots < 0.01f || !have_u)
+            const float br = strip_brightness_for(cur_h * (float)lph, max_h);
+            if(br < 0.0f)
             {
                 const float health_norm = (t.health_max > 0.01f) ? std::clamp(t.health / t.health_max, 0.0f, 1.0f) : filled_norm;
                 out = LerpColor(low_health, high_health, health_norm);
             }
             else
             {
-                const float slot = std::clamp(u * total_slots, 0.0f, total_slots - 1e-3f);
-                const float fill_end = cur_h * (float)lph;
-                const float delta = fill_end - slot;
-                const float br = std::clamp(delta, 0.0f, 1.0f);
                 if(br > 1e-3f)
                 {
                     out = LerpColor((RGBColor)0x00000000, health_bar_color, br);
@@ -482,19 +549,52 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     {
         const float hunger_norm = std::clamp(t.hunger / t.hunger_max, 0.0f, 1.0f);
         const RGBColor hunger_color = LerpColor(low_hunger, high_hunger, hunger_norm);
-        out = LerpColor(out, hunger_color, std::clamp(s.hunger_mix, 0.0f, 1.0f));
+        if(s.hunger_per_strip)
+        {
+            const float br = strip_brightness_for(std::clamp(t.hunger, 0.0f, t.hunger_max) * (float)lph, t.hunger_max);
+            const float mix = (br < 0.0f)
+                ? std::clamp(s.hunger_mix, 0.0f, 1.0f)
+                : std::clamp(br * s.hunger_mix, 0.0f, 1.0f);
+            out = LerpColor(out, hunger_color, mix);
+        }
+        else
+        {
+            out = LerpColor(out, hunger_color, std::clamp(s.hunger_mix, 0.0f, 1.0f));
+        }
     }
     if(ch(channels, ChAir) && s.enable_air_gradient && t.has_health_state && t.air_max > 0.01f)
     {
         const float air_norm = std::clamp(t.air / t.air_max, 0.0f, 1.0f);
         const RGBColor air_color = LerpColor(low_air, high_air, air_norm);
-        out = LerpColor(out, air_color, std::clamp(s.air_mix, 0.0f, 1.0f));
+        if(s.air_per_strip)
+        {
+            const float br = strip_brightness_for(std::clamp(t.air, 0.0f, t.air_max) * (float)lph, t.air_max);
+            const float mix = (br < 0.0f)
+                ? std::clamp(s.air_mix, 0.0f, 1.0f)
+                : std::clamp(br * s.air_mix, 0.0f, 1.0f);
+            out = LerpColor(out, air_color, mix);
+        }
+        else
+        {
+            out = LerpColor(out, air_color, std::clamp(s.air_mix, 0.0f, 1.0f));
+        }
     }
     if(ch(channels, ChDurability) && s.enable_durability_gradient && t.has_health_state && t.has_item_durability && t.item_durability_max > 0.01f)
     {
         const float dura_norm = std::clamp(t.item_durability / t.item_durability_max, 0.0f, 1.0f);
         const RGBColor dura_color = LerpColor(low_durability, high_durability, dura_norm);
-        out = LerpColor(out, dura_color, std::clamp(s.durability_mix, 0.0f, 1.0f));
+        if(s.durability_per_strip)
+        {
+            const float br = strip_brightness_for(std::clamp(t.item_durability, 0.0f, t.item_durability_max) * (float)lph, t.item_durability_max);
+            const float mix = (br < 0.0f)
+                ? std::clamp(s.durability_mix, 0.0f, 1.0f)
+                : std::clamp(br * s.durability_mix, 0.0f, 1.0f);
+            out = LerpColor(out, dura_color, mix);
+        }
+        else
+        {
+            out = LerpColor(out, dura_color, std::clamp(s.durability_mix, 0.0f, 1.0f));
+        }
     }
 
     if(ch(channels, ChWorldTint) && s.enable_ambient_world_tint && t.has_world_light && world_smooth != nullptr)
@@ -748,4 +848,59 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
     return out;
 }
 
-} // namespace MinecraftGame
+void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
+{
+    if(!effect)
+    {
+        return;
+    }
+    effect->SetControlGroupVisibility(effect->speed_slider, effect->speed_label, QStringLiteral("Speed:"), false);
+    effect->SetControlGroupVisibility(effect->frequency_slider, effect->frequency_label, QStringLiteral("Frequency:"), false);
+    effect->SetControlGroupVisibility(effect->detail_slider, effect->detail_label, QStringLiteral("Detail:"), false);
+    effect->SetControlGroupVisibility(effect->size_slider, effect->size_label, QStringLiteral("Size:"), false);
+    effect->SetControlGroupVisibility(effect->scale_slider, effect->scale_label, QStringLiteral("Scale:"), false);
+    effect->SetControlGroupVisibility(effect->fps_slider, effect->fps_label, QStringLiteral("FPS:"), false);
+
+    effect->SetControlGroupVisibility(effect->brightness_slider, effect->brightness_label, QStringLiteral("Brightness:"), true);
+    effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), true);
+    effect->SetControlGroupVisibility(effect->sharpness_slider, effect->sharpness_label, QStringLiteral("Sharpness:"), true);
+
+    if(effect->color_controls_group)
+    {
+        effect->color_controls_group->setVisible(false);
+    }
+    if(effect->surfaces_group)
+    {
+        effect->surfaces_group->setVisible(false);
+    }
+    if(effect->position_offset_group)
+    {
+        effect->position_offset_group->setVisible(false);
+    }
+    if(effect->edge_shape_group)
+    {
+        effect->edge_shape_group->setVisible(false);
+    }
+    if(effect->path_plane_group)
+    {
+        effect->path_plane_group->setVisible(false);
+    }
+
+    if(effect->effect_controls_group)
+    {
+        const QList<QGroupBox*> groups =
+            effect->effect_controls_group->findChildren<QGroupBox*>(QString(), Qt::FindDirectChildrenOnly);
+        for(QGroupBox* gb : groups)
+        {
+            const QString t = gb->title();
+            if(t == QStringLiteral("Effect scale (X / Y / Z %)") ||
+               t == QStringLiteral("Effect scale rotation (\u00B0)") ||
+               t == QStringLiteral("Effect rotation (\u00B0)"))
+            {
+                gb->setVisible(false);
+            }
+        }
+    }
+}
+
+}

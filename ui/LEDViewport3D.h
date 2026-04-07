@@ -5,9 +5,6 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
-#include <QMouseEvent>
-#include <QWheelEvent>
-#include <QTimer>
 
 #include <vector>
 #include <memory>
@@ -21,6 +18,11 @@
 #include "SpatialEffectTypes.h"
 #include "VirtualController3D.h"
 #include "DisplayPlane3D.h"
+
+class QKeyEvent;
+class QMouseEvent;
+class QTimer;
+class QWheelEvent;
 
 class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions
 {

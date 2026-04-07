@@ -51,6 +51,9 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_bool(j, "enable_hunger_gradient", s.enable_hunger_gradient);
     put_bool(j, "enable_air_gradient", s.enable_air_gradient);
     put_bool(j, "enable_durability_gradient", s.enable_durability_gradient);
+    put_bool(j, "hunger_per_strip", s.hunger_per_strip);
+    put_bool(j, "air_per_strip", s.air_per_strip);
+    put_bool(j, "durability_per_strip", s.durability_per_strip);
     put_f(j, "hunger_mix", s.hunger_mix);
     put_f(j, "air_mix", s.air_mix);
     put_f(j, "durability_mix", s.durability_mix);
@@ -86,6 +89,9 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.enable_hunger_gradient = get_bool(j, "enable_hunger_gradient", s.enable_hunger_gradient);
     s.enable_air_gradient = get_bool(j, "enable_air_gradient", s.enable_air_gradient);
     s.enable_durability_gradient = get_bool(j, "enable_durability_gradient", s.enable_durability_gradient);
+    s.hunger_per_strip = get_bool(j, "hunger_per_strip", s.hunger_per_strip);
+    s.air_per_strip = get_bool(j, "air_per_strip", s.air_per_strip);
+    s.durability_per_strip = get_bool(j, "durability_per_strip", s.durability_per_strip);
     s.hunger_mix = get_f(j, "hunger_mix", s.hunger_mix);
     s.air_mix = get_f(j, "air_mix", s.air_mix);
     s.durability_mix = get_f(j, "durability_mix", s.durability_mix);
@@ -103,4 +109,4 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.health_strip_axis = std::max(0, std::min(3, s.health_strip_axis));
 }
 
-} // namespace MinecraftGame
+}

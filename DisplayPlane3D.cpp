@@ -16,7 +16,6 @@ DisplayPlane3D::DisplayPlane3D(const std::string& name_value) :
     transform.position = {0.0f, 0.0f, 0.0f};
     transform.rotation = {0.0f, 0.0f, 0.0f};
     transform.scale    = {1.0f, 1.0f, 1.0f};
-    monitor_preset_id.clear();
 }
 
 nlohmann::json DisplayPlane3D::ToJson() const

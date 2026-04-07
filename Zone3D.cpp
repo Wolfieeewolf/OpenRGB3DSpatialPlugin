@@ -8,9 +8,7 @@ Zone3D::Zone3D(const std::string& name)
 {
 }
 
-Zone3D::~Zone3D()
-{
-}
+Zone3D::~Zone3D() = default;
 
 void Zone3D::SetName(const std::string& name)
 {

@@ -3,10 +3,6 @@
 #ifndef SPIRAL_H
 #define SPIRAL_H
 
-#include <QWidget>
-#include <QSlider>
-#include <QLabel>
-#include <QComboBox>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 

@@ -7,8 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "MinecraftGameSettings.h"
 
-class GameTelemetryStatusPanel;
-
 class MinecraftGameEffect3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -31,7 +29,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
-    GameTelemetryStatusPanel* telemetry_status_panel = nullptr;
     MinecraftGame::Settings mc_settings_{};
     MinecraftGame::WorldTintSmoothState world_smooth_{};
 };

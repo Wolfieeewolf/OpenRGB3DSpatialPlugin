@@ -44,7 +44,7 @@ Wave::Wave(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
-Wave::~Wave() {}
+Wave::~Wave() = default;
 
 EffectInfo3D Wave::GetEffectInfo()
 {

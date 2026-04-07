@@ -4,11 +4,8 @@
 #define SPATIALEFFECT3D_H
 
 #include <QWidget>
-#include <QLayout>
 #include <QLabel>
 #include <QSlider>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>
@@ -16,7 +13,6 @@
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QPushButton>
-#include <QColorDialog>
 
 #include "RGBController.h"
 
@@ -137,6 +133,12 @@ struct EffectInfo3D
     bool                show_position_offset_control = true;
 };
 
+class SpatialEffect3D;
+
+namespace MinecraftGame {
+void ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
+}
+
 class SpatialEffect3D : public QWidget
 {
     Q_OBJECT
@@ -207,6 +209,7 @@ public:
 
     virtual bool RequiresWorldSpaceCoordinates() const { return true; }
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }
+    virtual bool UseZoneGrid() const { return use_zone_grid; }
 
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
@@ -217,6 +220,8 @@ signals:
 protected:
     void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
 
+    friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
+
     QGroupBox*          effect_controls_group;
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
@@ -225,6 +230,7 @@ protected:
     QSlider*            size_slider;
     QSlider*            scale_slider;
     QCheckBox*          scale_invert_check;
+    QCheckBox*          zone_grid_check;
     QSlider*            fps_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
@@ -290,6 +296,7 @@ protected:
     unsigned int        effect_size;
     unsigned int        effect_scale;
     bool                scale_inverted;
+    bool                use_zone_grid;
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
@@ -357,7 +364,6 @@ protected:
     float GetScaledDetail() const;
     float CalculateProgress(float time) const;
 
-    bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const;
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
 
     Vector3D TransformPointByRotation(float x, float y, float z,

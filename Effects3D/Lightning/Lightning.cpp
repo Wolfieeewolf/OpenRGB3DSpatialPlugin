@@ -42,9 +42,7 @@ Lightning::Lightning(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(cols);
 }
 
-Lightning::~Lightning()
-{
-}
+Lightning::~Lightning() = default;
 
 EffectInfo3D Lightning::GetEffectInfo()
 {

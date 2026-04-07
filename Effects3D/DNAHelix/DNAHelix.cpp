@@ -28,9 +28,7 @@ DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(false);
 }
 
-DNAHelix::~DNAHelix()
-{
-}
+DNAHelix::~DNAHelix() = default;
 
 EffectInfo3D DNAHelix::GetEffectInfo()
 {

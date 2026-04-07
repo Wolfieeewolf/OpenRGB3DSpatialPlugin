@@ -3,9 +3,6 @@
 #ifndef BREATHINGSPHERE_H
 #define BREATHINGSPHERE_H
 
-#include <QWidget>
-#include <QSlider>
-#include <QLabel>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 
@@ -30,7 +27,6 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
-private slots:
 private:
     enum Mode { MODE_SPHERE = 0, MODE_GLOBAL_PULSE, MODE_COUNT };
     static const char* ModeName(int m);

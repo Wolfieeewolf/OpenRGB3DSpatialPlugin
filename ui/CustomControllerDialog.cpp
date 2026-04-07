@@ -2,13 +2,25 @@
 
 #include "CustomControllerDialog.h"
 #include "ControllerLayout3D.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPushButton>
+#include <QSlider>
+#include <QSpinBox>
 #include <QStyledItemDelegate>
+#include <QTableWidget>
+#include <QTabWidget>
 #include <QTimer>
 #include <QIcon>
 #include <QPixmap>

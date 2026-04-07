@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "GridSpaceUtils.h"
+#include "ZoneGrid3D.h"
 #include "EffectInstance3D.h"
 #include "EffectListManager3D.h"
 #include "FrequencyRangeEffect3D.h"
@@ -11,6 +12,7 @@
 #include <set>
 #include <unordered_set>
 #include <algorithm>
+#include <memory>
 
 static float AverageAlongAxis(ControllerTransform* transform,
                               EffectAxis sort_axis,
@@ -99,6 +101,8 @@ static bool TryGetGlobalLedIndex(RGBController* controller,
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
 {
+    MinecraftGame::ClearRenderSampleIndexContext();
+
     if(controller_transforms.empty())
     {
         return;
@@ -431,6 +435,36 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
+    struct SlotGridOverride
+    {
+        bool use_zone_grid = false;
+        std::unique_ptr<GridContext3D> room_grid_local;
+        std::unique_ptr<GridContext3D> world_grid_local;
+    };
+    std::vector<SlotGridOverride> slot_grid_overrides(active_effects.size());
+
+    for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
+    {
+        const RenderEffectSlot& slot = active_effects[effect_idx];
+        if(!slot.effect || !slot.effect->UseZoneGrid())
+        {
+            continue;
+        }
+
+        if(TryMakeZoneGridContextPair(zone_manager.get(),
+                                      controller_transforms,
+                                      slot.zone_index,
+                                      &controllers_managed_by_virtuals,
+                                      true,
+                                      room_grid.grid_scale_mm,
+                                      world_grid.grid_scale_mm,
+                                      slot_grid_overrides[effect_idx].room_grid_local,
+                                      slot_grid_overrides[effect_idx].world_grid_local))
+        {
+            slot_grid_overrides[effect_idx].use_zone_grid = true;
+        }
+    }
+
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
@@ -515,7 +549,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_y = requires_world ? world_y : room_y;
                         float sample_z = requires_world ? world_z : room_z;
                         const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
-                        const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                        const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+                        const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                        const GridContext3D* local_grid = nullptr;
+                        if(grid_override.use_zone_grid)
+                        {
+                            local_grid = use_world_bounds ? grid_override.world_grid_local.get()
+                                                          : grid_override.room_grid_local.get();
+                        }
+                        const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                         MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
 
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
@@ -622,7 +664,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_y = requires_world ? world_y : room_y;
                     float sample_z = requires_world ? world_z : room_z;
                     const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
-                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
+                    const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    const GridContext3D* local_grid = nullptr;
+                    if(grid_override.use_zone_grid)
+                    {
+                        local_grid = use_world_bounds ? grid_override.world_grid_local.get()
+                                                      : grid_override.room_grid_local.get();
+                    }
+                    const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
 
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);

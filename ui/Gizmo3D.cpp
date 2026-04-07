@@ -5,6 +5,7 @@
 #include "QtCompat.h"
 
 #include <cmath>
+#include <QMouseEvent>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -80,9 +81,7 @@ Gizmo3D::Gizmo3D()
     rotate_snap_step_degrees = 15.0f;
 }
 
-Gizmo3D::~Gizmo3D()
-{
-}
+Gizmo3D::~Gizmo3D() = default;
 
 void Gizmo3D::SetMode(GizmoMode new_mode)
 {

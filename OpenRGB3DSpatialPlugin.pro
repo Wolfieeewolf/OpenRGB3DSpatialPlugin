@@ -143,7 +143,6 @@ HEADERS +=                                                                      
     OpenRGB/ResourceManagerInterface.h                                                          \
     OpenRGB/RGBController/RGBController.h                                                       \
     OpenRGB/LogManager.h                                                                        \
-    OpenRGB/NetworkServer.h                                                                     \
 
 SOURCES +=                                                                                      \
     OpenRGB/RGBController/RGBController.cpp                                                     \
@@ -163,6 +162,7 @@ HEADERS +=                                                                      
     LEDPosition3D.h                                                                             \
     ControllerLayout3D.h                                                                        \
     GridSpaceUtils.h                                                                            \
+    ZoneGrid3D.h                                                                                \
     PluginLogOnce.h                                                                             \
     SpatialEffectTypes.h                                                                        \
     SpatialEffect3D.h                                                                           \
@@ -228,6 +228,7 @@ SOURCES +=                                                                      
     OpenRGB3DSpatialPlugin.cpp                                                                  \
     ControllerLayout3D.cpp                                                                      \
     GridSpaceUtils.cpp                                                                          \
+    ZoneGrid3D.cpp                                                                              \
     PluginLogOnce.cpp                                                                           \
     SpatialEffect3D.cpp                                                                         \
     EffectInstance3D.cpp                                                                        \

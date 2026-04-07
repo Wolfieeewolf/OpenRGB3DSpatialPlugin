@@ -3,13 +3,6 @@
 #ifndef SCREENMIRROR_H
 #define SCREENMIRROR_H
 
-#include <QWidget>
-#include <QComboBox>
-#include <QSlider>
-#include <QLabel>
-#include <QCheckBox>
-#include <QPaintEvent>
-#include <QPainter>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include <map>
@@ -217,7 +210,6 @@ private:
     };
 
     void StartCaptureIfNeeded();
-    void StopCaptureIfNeeded();
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
 

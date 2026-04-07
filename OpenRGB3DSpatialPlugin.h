@@ -5,13 +5,14 @@
 #define OPENRGB3DSPATIALPLUGIN_H
 
 #include <QObject>
-#include <QWidget>
-#include <QMenu>
 #include <memory>
 #include "OpenRGBPluginInterface.h"
-#include "ResourceManagerInterface.h"
-#include "OpenRGB3DSpatialTab.h"
-#include "Game/GameTelemetryBridge.h"
+
+class GameTelemetryBridge;
+class OpenRGB3DSpatialTab;
+class QMenu;
+class ResourceManagerInterface;
+class QWidget;
 
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
 {
@@ -20,22 +21,17 @@ class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
     Q_INTERFACES(OpenRGBPluginInterface)
 
 public:
-    OpenRGB3DSpatialPlugin()
-        : ui(nullptr)
-    {
-    }
+    OpenRGB3DSpatialPlugin();
 
-    ~OpenRGB3DSpatialPlugin() override
-    {
-    }
+    ~OpenRGB3DSpatialPlugin() override;
 
-    virtual OpenRGBPluginInfo   GetPluginInfo()                                                     override;
-    virtual unsigned int        GetPluginAPIVersion()                                               override;
+    OpenRGBPluginInfo   GetPluginInfo()                                                     override;
+    unsigned int        GetPluginAPIVersion()                                               override;
 
-    virtual void                Load(ResourceManagerInterface* resource_manager_ptr)                override;
-    virtual QWidget*            GetWidget()                                                         override;
-    virtual QMenu*              GetTrayMenu()                                                       override;
-    virtual void                Unload()                                                            override;
+    void                Load(ResourceManagerInterface* resource_manager_ptr)                override;
+    QWidget*            GetWidget()                                                         override;
+    QMenu*              GetTrayMenu()                                                       override;
+    void                Unload()                                                            override;
 
     static ResourceManagerInterface* RMPointer;
 
@@ -43,7 +39,7 @@ private:
     static void                 DeviceListChangedCallback(void* ptr);
     static void                 DetectionProgressCallback(void* ptr);
 
-    OpenRGB3DSpatialTab*        ui;
+    OpenRGB3DSpatialTab*        ui = nullptr;
     std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
 };
 

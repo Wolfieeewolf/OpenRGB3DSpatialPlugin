@@ -74,10 +74,7 @@ ScreenMirror::ScreenMirror(QWidget* parent)
 {
 }
 
-ScreenMirror::~ScreenMirror()
-{
-    StopCaptureIfNeeded();
-}
+ScreenMirror::~ScreenMirror() = default;
 
 EffectInfo3D ScreenMirror::GetEffectInfo()
 {
@@ -788,14 +785,11 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
     }
 
     float avg_blend = 0.0f;
-    if(!contributions.empty())
+    for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
-        for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
-        {
-            avg_blend += contributions[contrib_index].blend;
-        }
-        avg_blend /= (float)contributions.size();
+        avg_blend += contributions[contrib_index].blend;
     }
+    avg_blend /= (float)contributions.size();
     float blend_factor = avg_blend / 100.0f;
 
     if(blend_factor < 0.01f && contributions.size() > 1)
@@ -1037,7 +1031,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             total_b = state.b;
         }
     }
-    else if(!led_states.empty())
+    else
     {
         led_states.clear();
     }
@@ -2472,10 +2466,6 @@ void ScreenMirror::StartCaptureIfNeeded()
             capture_mgr.StartCapture(capture_id);
         }
     }
-}
-
-void ScreenMirror::StopCaptureIfNeeded()
-{
 }
 
 void ScreenMirror::SetGridScaleMM(float mm)

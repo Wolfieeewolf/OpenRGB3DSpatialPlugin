@@ -9,16 +9,12 @@
 class MinecraftSubEffect3D : public SpatialEffect3D
 {
 protected:
-    explicit MinecraftSubEffect3D(std::uint32_t channels,
-                                  const char* effect_title,
-                                  const char* effect_description,
-                                  QWidget* parent = nullptr);
+    explicit MinecraftSubEffect3D(std::uint32_t channels, const char* effect_title, QWidget* parent = nullptr);
 
     EffectInfo3D BaseMinecraftEffectInfo() const;
 
     std::uint32_t channels_ = 0;
     const char* effect_title_ = "";
-    const char* effect_description_ = "";
     MinecraftGame::Settings mc_settings_{};
     MinecraftGame::WorldTintSmoothState world_smooth_{};
 

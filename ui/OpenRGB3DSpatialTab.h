@@ -174,7 +174,6 @@ private:
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
     void SaveReferencePoints();
-    void LoadReferencePoints();
     void UpdateZonesList();
     void UpdateEffectZoneCombo();
     void PopulateZoneTargetCombo(QComboBox* combo, int saved_value);
@@ -182,7 +181,6 @@ private:
     int ResolveZoneTargetSelection(const QComboBox* combo) const;
     void UpdateEffectCombo();
     void SaveZones();
-    void LoadZones();
     bool IsItemInScene(RGBController* controller, int granularity, int item_idx);
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);

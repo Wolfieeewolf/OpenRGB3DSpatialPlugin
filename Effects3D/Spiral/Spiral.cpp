@@ -33,9 +33,7 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
-Spiral::~Spiral()
-{
-}
+Spiral::~Spiral() = default;
 
 EffectInfo3D Spiral::GetEffectInfo()
 {

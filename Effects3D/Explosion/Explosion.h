@@ -3,14 +3,10 @@
 #ifndef Explosion_H
 #define Explosion_H
 
-#include <QWidget>
-#include <QSlider>
-#include <QLabel>
-#include <QComboBox>
-#include <QCheckBox>
-#include <QSpinBox>
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+
+class QSpinBox;
 
 class Explosion : public SpatialEffect3D
 {

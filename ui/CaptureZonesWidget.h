@@ -4,14 +4,14 @@
 #define CAPTUREZONESWIDGET_H
 
 #include <QWidget>
-#include <QSlider>
-#include <QLabel>
-#include <QPushButton>
 #include <vector>
 #include <string>
 #include <functional>
 
 class DisplayPlane3D;
+class QLabel;
+class QPushButton;
+class QSlider;
 
 struct CaptureZone
 {

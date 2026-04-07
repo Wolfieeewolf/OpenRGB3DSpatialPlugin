@@ -48,6 +48,9 @@ struct Settings
     bool enable_hunger_gradient = true;
     bool enable_air_gradient = true;
     bool enable_durability_gradient = true;
+    bool hunger_per_strip = false;
+    bool air_per_strip = false;
+    bool durability_per_strip = false;
     float hunger_mix = 0.45f;
     float air_mix = 0.55f;
     float durability_mix = 0.50f;
@@ -66,6 +69,6 @@ struct Settings
 void SettingsToJson(const Settings& s, nlohmann::json& out);
 void SettingsFromJson(const nlohmann::json& j, Settings& s);
 
-} // namespace MinecraftGame
+}
 
 #endif

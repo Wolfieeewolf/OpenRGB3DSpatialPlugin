@@ -350,7 +350,3 @@ void OpenRGB3DSpatialTab::SaveZones()
 {
     SetLayoutDirty();
 }
-
-void OpenRGB3DSpatialTab::LoadZones()
-{
-}

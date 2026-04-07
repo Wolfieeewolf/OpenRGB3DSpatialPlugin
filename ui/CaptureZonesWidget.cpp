@@ -8,8 +8,11 @@
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QFormLayout>
+#include <QLabel>
 #include <QPainter>
 #include <QMouseEvent>
+#include <QPushButton>
+#include <QSlider>
 #include <algorithm>
 #include <functional>
 #include <cmath>

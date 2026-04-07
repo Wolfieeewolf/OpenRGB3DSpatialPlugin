@@ -310,7 +310,3 @@ void OpenRGB3DSpatialTab::SaveReferencePoints()
 {
     SetLayoutDirty();
 }
-
-void OpenRGB3DSpatialTab::LoadReferencePoints()
-{
-}

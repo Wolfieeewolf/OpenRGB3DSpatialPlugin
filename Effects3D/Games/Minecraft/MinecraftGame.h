@@ -5,14 +5,17 @@
 
 #include "Game/GameTelemetryBridge.h"
 #include "MinecraftGameSettings.h"
-#include "SpatialEffect3D.h"
+
+#include <functional>
 
 class QWidget;
+struct GridContext3D;
 
 namespace MinecraftGame
 {
 void SetRenderSampleIndexContext(int led_index, int led_count);
 void ClearRenderSampleIndexContext();
+void WireChildWidgetsToParametersChanged(QWidget* root, const std::function<void()>& on_changed);
 QWidget* CreateSettingsWidget(QWidget* parent, Settings& settings, std::uint32_t channels);
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float time,
@@ -26,6 +29,6 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      const Settings& settings,
                      std::uint32_t channels,
                      WorldTintSmoothState* world_tint_smooth);
-} // namespace MinecraftGame
+}
 
 #endif

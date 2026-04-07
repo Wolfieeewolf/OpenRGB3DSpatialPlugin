@@ -47,53 +47,7 @@ EffectInfo3D MinecraftGameEffect3D::GetEffectInfo()
 void MinecraftGameEffect3D::ApplyControlVisibility()
 {
     SpatialEffect3D::ApplyControlVisibility();
-
-    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", false);
-    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", false);
-    SetControlGroupVisibility(detail_slider, detail_label, "Detail:", false);
-    SetControlGroupVisibility(size_slider, size_label, "Size:", false);
-    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", false);
-    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", false);
-
-    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", true);
-    SetControlGroupVisibility(intensity_slider, intensity_label, "Intensity:", true);
-    SetControlGroupVisibility(sharpness_slider, sharpness_label, "Sharpness:", true);
-
-    if(color_controls_group)
-    {
-        color_controls_group->setVisible(false);
-    }
-    if(surfaces_group)
-    {
-        surfaces_group->setVisible(false);
-    }
-    if(position_offset_group)
-    {
-        position_offset_group->setVisible(false);
-    }
-    if(edge_shape_group)
-    {
-        edge_shape_group->setVisible(false);
-    }
-    if(path_plane_group)
-    {
-        path_plane_group->setVisible(false);
-    }
-
-    if(effect_controls_group)
-    {
-        const QList<QGroupBox*> groups = effect_controls_group->findChildren<QGroupBox*>(QString(), Qt::FindDirectChildrenOnly);
-        for(QGroupBox* gb : groups)
-        {
-            const QString t = gb->title();
-            if(t == QStringLiteral("Effect scale (X / Y / Z %)") ||
-               t == QStringLiteral("Effect scale rotation (\u00B0)") ||
-               t == QStringLiteral("Effect rotation (\u00B0)"))
-            {
-                gb->setVisible(false);
-            }
-        }
-    }
+    MinecraftGame::ApplyFabricGameEffectChrome(this);
 }
 
 void MinecraftGameEffect3D::SetupCustomUI(QWidget* parent)
@@ -106,10 +60,10 @@ void MinecraftGameEffect3D::SetupCustomUI(QWidget* parent)
     if(settings)
     {
         layout->addWidget(settings);
+        MinecraftGame::WireChildWidgetsToParametersChanged(settings, [this]() { emit ParametersChanged(); });
     }
 
-    telemetry_status_panel = new GameTelemetryStatusPanel(this);
-    layout->addWidget(telemetry_status_panel);
+    layout->addWidget(new GameTelemetryStatusPanel(this));
 
     AddWidgetToParent(w, parent);
 }

@@ -3,7 +3,6 @@
 #ifndef GIZMO3D_H
 #define GIZMO3D_H
 
-#include <QMouseEvent>
 #include <QPoint>
 
 #include "LEDPosition3D.h"
@@ -38,6 +37,8 @@ struct Box3D
     float min[3];
     float max[3];
 };
+
+class QMouseEvent;
 
 class Gizmo3D
 {

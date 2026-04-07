@@ -80,7 +80,7 @@ BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
     SetRainbowMode(true);
 }
 
-BouncingBall::~BouncingBall() {}
+BouncingBall::~BouncingBall() = default;
 
 EffectInfo3D BouncingBall::GetEffectInfo()
 {

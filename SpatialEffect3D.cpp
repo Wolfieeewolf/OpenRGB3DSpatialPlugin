@@ -5,6 +5,7 @@
 #include "SpatialEffectTypes.h"
 #include <cmath>
 #include <algorithm>
+#include <QColorDialog>
 #include <QSignalBlocker>
 
 SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
@@ -18,6 +19,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_size = 100;
     effect_scale = 200;
     scale_inverted = false;
+    use_zone_grid = false;
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
@@ -45,6 +47,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     size_slider = nullptr;
     scale_slider = nullptr;
     scale_invert_check = nullptr;
+    zone_grid_check = nullptr;
     fps_slider = nullptr;
     speed_label = nullptr;
     brightness_label = nullptr;
@@ -127,9 +130,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     plane_combo = nullptr;
 }
 
-SpatialEffect3D::~SpatialEffect3D()
-{
-}
+SpatialEffect3D::~SpatialEffect3D() = default;
 
 bool SpatialEffect3D::EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const
 {
@@ -244,6 +245,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_invert_check->setChecked(scale_inverted);
     scale_layout->addWidget(scale_invert_check);
     main_layout->addLayout(scale_layout);
+
+    zone_grid_check = new QCheckBox("Use zone grid (target bounds)");
+    zone_grid_check->setToolTip(
+        "Third grid context after room and world: normalize this effect to the active zone or controller target "
+        "instead of the full room/world bounds.");
+    zone_grid_check->setChecked(use_zone_grid);
+    main_layout->addWidget(zone_grid_check);
 
     QHBoxLayout* fps_layout = new QHBoxLayout();
     fps_layout->addWidget(new QLabel("FPS:"));
@@ -512,6 +520,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     if(scale_invert_check)
     {
         connect(scale_invert_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
+    }
+    if(zone_grid_check)
+    {
+        connect(zone_grid_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
     }
     connect(rotation_yaw_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
@@ -1265,14 +1277,6 @@ Vector3D SpatialEffect3D::RotateVectorByEuler(float dx, float dy, float dz, floa
     return {fx, fy, fz};
 }
 
-bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z) const
-{
-    float scale_radius = GetNormalizedScale() * 10.0f;
-    float scale_radius_sq = scale_radius * scale_radius;
-    float dist_sq = rel_x * rel_x + rel_y * rel_y + rel_z * rel_z;
-    return dist_sq <= scale_radius_sq;
-}
-
 bool SpatialEffect3D::IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const
 {
     Vector3D o = GetEffectOriginGrid(grid);
@@ -1415,6 +1419,10 @@ void SpatialEffect3D::OnParameterChanged()
     if(scale_invert_check)
     {
         scale_inverted = scale_invert_check->isChecked();
+    }
+    if(zone_grid_check)
+    {
+        use_zone_grid = zone_grid_check->isChecked();
     }
 
     if(fps_slider && fps_label)
@@ -1581,6 +1589,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["size"] = effect_size;
     j["scale_value"] = effect_scale;
     j["scale_inverted"] = scale_inverted;
+    j["use_zone_grid"] = use_zone_grid;
     j["rainbow_mode"] = rainbow_mode;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
@@ -1646,6 +1655,13 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("rainbow_mode"))
         SetRainbowMode(settings["rainbow_mode"].get<bool>());
+
+    if(settings.contains("use_zone_grid"))
+        use_zone_grid = settings["use_zone_grid"].get<bool>();
+    else if(settings.contains("use_target_local_grid"))
+        use_zone_grid = settings["use_target_local_grid"].get<bool>();
+    else
+        use_zone_grid = false;
 
     if(settings.contains("intensity"))
         effect_intensity = settings["intensity"].get<unsigned int>();
@@ -1883,6 +1899,11 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         QSignalBlocker blocker(scale_invert_check);
         scale_invert_check->setChecked(scale_inverted);
+    }
+    if(zone_grid_check)
+    {
+        QSignalBlocker blocker(zone_grid_check);
+        zone_grid_check->setChecked(use_zone_grid);
     }
 
     if(fps_slider)

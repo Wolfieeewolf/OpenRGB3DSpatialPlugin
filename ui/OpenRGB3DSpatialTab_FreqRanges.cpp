@@ -5,18 +5,16 @@
 #include "Audio/AudioInputManager.h"
 #include "VirtualReferencePoint3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
-#include "SettingsManager.h"
+#include "ZoneGrid3D.h"
 #include "LogManager.h"
 #include "PluginLogOnce.h"
 #include "RGBController.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
-#include <QMessageBox>
-#include <QInputDialog>
-#include <QFile>
-#include <QTextStream>
+#include <memory>
+#include <unordered_set>
+#include <vector>
 #include <QGroupBox>
-#include <QFormLayout>
 #include <QToolTip>
 
 static bool TryGetGlobalLedIndexForRange(RGBController* controller,
@@ -988,8 +986,26 @@ void OpenRGB3DSpatialTab::OnFreqRangeEffectParamsChanged()
 
 void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_grid, const GridContext3D& world_grid)
 {
+    MinecraftGame::ClearRenderSampleIndexContext();
     if(!AudioInputManager::instance()->isRunning()) return;
     if(controller_transforms.empty()) return;
+
+    std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+    {
+        ControllerTransform* transform = transform_ptr.get();
+        if(!transform || transform->virtual_controller == nullptr)
+        {
+            continue;
+        }
+        for(const GridLEDMapping& mapping : transform->virtual_controller->GetMappings())
+        {
+            if(mapping.controller)
+            {
+                controllers_managed_by_virtuals.insert(mapping.controller);
+            }
+        }
+    }
     
     for(unsigned int range_idx = 0; range_idx < frequency_ranges.size(); range_idx++)
     {
@@ -1055,35 +1071,96 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
         {
             effect->SetReferenceMode(REF_MODE_ROOM_CENTER);
         }
+
+        std::unique_ptr<GridContext3D> local_room_grid;
+        std::unique_ptr<GridContext3D> local_world_grid;
+        if(effect->UseZoneGrid())
+        {
+            TryMakeZoneGridContextPair(zone_manager.get(),
+                                       controller_transforms,
+                                       range->zone_index,
+                                       &controllers_managed_by_virtuals,
+                                       true,
+                                       room_grid.grid_scale_mm,
+                                       world_grid.grid_scale_mm,
+                                       local_room_grid,
+                                       local_world_grid);
+        }
+
+        enum class TargetMode
+        {
+            AllControllers,
+            SingleController,
+            ZoneControllers,
+            None
+        };
+        TargetMode target_mode = TargetMode::None;
+        int target_controller_idx = -1;
+        std::unordered_set<int> zone_controller_indices;
+        if(range->zone_index == -1)
+        {
+            target_mode = TargetMode::AllControllers;
+        }
+        else if(range->zone_index <= -1000)
+        {
+            target_controller_idx = -(range->zone_index + 1000);
+            if(target_controller_idx >= 0 && target_controller_idx < (int)controller_transforms.size())
+            {
+                target_mode = TargetMode::SingleController;
+            }
+        }
+        else if(zone_manager && range->zone_index >= 0 && range->zone_index < zone_manager->GetZoneCount())
+        {
+            Zone3D* zone = zone_manager->GetZone(range->zone_index);
+            if(zone)
+            {
+                const std::vector<int>& controllers = zone->GetControllers();
+                zone_controller_indices.insert(controllers.begin(), controllers.end());
+                if(!zone_controller_indices.empty())
+                {
+                    target_mode = TargetMode::ZoneControllers;
+                }
+            }
+        }
+        if(target_mode == TargetMode::None)
+        {
+            continue;
+        }
         
         for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
         {
             ControllerTransform* transform = controller_transforms[ctrl_idx].get();
             if(!transform) continue;
+            if(transform->hidden_by_virtual) continue;
+            if(transform->controller &&
+               controllers_managed_by_virtuals.find(transform->controller) != controllers_managed_by_virtuals.end())
+            {
+                continue;
+            }
             
             bool is_targeted = false;
-            if(range->zone_index == -1)
+            switch(target_mode)
             {
+            case TargetMode::AllControllers:
                 is_targeted = true;
-            }
-            else if(range->zone_index >= 0)
-            {
-                if(zone_manager && range->zone_index < zone_manager->GetZoneCount())
-                {
-                    Zone3D* zone = zone_manager->GetZone(range->zone_index);
-                    if(zone && zone->ContainsController(ctrl_idx))
-                    {
-                        is_targeted = true;
-                    }
-                }
-            }
-            else if(range->zone_index <= -1000)
-            {
-                int target_ctrl = -(range->zone_index + 1000);
-                is_targeted = ((int)ctrl_idx == target_ctrl);
+                break;
+            case TargetMode::SingleController:
+                is_targeted = ((int)ctrl_idx == target_controller_idx);
+                break;
+            case TargetMode::ZoneControllers:
+                is_targeted = (zone_controller_indices.find((int)ctrl_idx) != zone_controller_indices.end());
+                break;
+            default:
+                break;
             }
             
             if(!is_targeted) continue;
+
+            const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+            const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
+            const GridContext3D& active_grid = use_world_bounds
+                ? (local_world_grid ? *local_world_grid : world_grid)
+                : (local_room_grid ? *local_room_grid : room_grid);
             
             if(transform->virtual_controller)
             {
@@ -1102,10 +1179,6 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     {
                         continue;
                     }
-                    
-                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
-                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
-                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
                     const Vector3D& sample_pos = requires_world
                         ? transform->led_positions[led_idx].world_position
                         : transform->led_positions[led_idx].room_position;
@@ -1116,6 +1189,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
+                    color = effect->PostProcessColorGrid(color);
                     unsigned int physical_led_idx = 0;
                     if(TryGetGlobalLedIndexForRange(mapping.controller, mapping.zone_idx, mapping.led_idx, &physical_led_idx))
                     {
@@ -1137,9 +1211,6 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                 
                 for(unsigned int led_idx = 0; led_idx < transform->led_positions.size(); led_idx++)
                 {
-                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
-                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
-                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
                     const Vector3D& sample_pos = requires_world
                         ? transform->led_positions[led_idx].world_position
                         : transform->led_positions[led_idx].room_position;
@@ -1150,6 +1221,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
+                    color = effect->PostProcessColorGrid(color);
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
                     if(led_pos.zone_idx >= ctrl->zones.size())
                     {
