@@ -54,6 +54,7 @@ struct ControllerTransform
 
     int                 granularity;
     int                 item_idx;
+    int                 linked_reference_point_index = -1;
 
     bool                world_positions_dirty;
 };

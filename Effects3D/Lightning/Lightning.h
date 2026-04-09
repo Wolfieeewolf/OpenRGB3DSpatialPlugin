@@ -42,7 +42,15 @@ private slots:
     void OnLightningParameterChanged();
 
 private:
-    enum Mode { MODE_PLASMA_BALL = 0, MODE_SKY, MODE_COUNT };
+    enum Mode
+    {
+        MODE_PLASMA_BALL = 0,
+        MODE_SKY_FLASH,
+        MODE_SKY_BOLT,
+        MODE_SKY_FORKED,
+        MODE_SKY_STORM,
+        MODE_COUNT
+    };
     static const char* ModeName(int m);
     static float hash11(float t);
 

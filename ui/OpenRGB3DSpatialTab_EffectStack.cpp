@@ -574,6 +574,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(effect_zone_combo)   effect_zone_combo->setVisible(false);
         if(origin_label)        origin_label->setVisible(false);
         if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        if(effect_bounds_label) effect_bounds_label->setVisible(false);
+        if(effect_bounds_combo) effect_bounds_combo->setVisible(false);
     }
     else if(is_screen_mirror)
     {
@@ -607,6 +609,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(effect_zone_combo)   effect_zone_combo->setVisible(false);
         if(origin_label)        origin_label->setVisible(false);
         if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        if(effect_bounds_label) effect_bounds_label->setVisible(false);
+        if(effect_bounds_combo) effect_bounds_combo->setVisible(false);
 
         effect_controls_layout->addWidget(ui_effect);
     }
@@ -630,6 +634,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(effect_zone_combo) effect_zone_combo->setVisible(true);
         if(origin_label)        origin_label->setVisible(true);
         if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        if(effect_bounds_label) effect_bounds_label->setVisible(true);
+        if(effect_bounds_combo) effect_bounds_combo->setVisible(true);
 
         effect_controls_layout->addWidget(ui_effect);
     }
@@ -647,6 +653,13 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     if(!settings.is_null())
     {
         ui_effect->LoadSettings(settings);
+    }
+
+    if(effect_bounds_combo)
+    {
+        QSignalBlocker b(effect_bounds_combo);
+        int idx = effect_bounds_combo->findData(QVariant(ui_effect->GetEffectBoundsMode()));
+        if(idx >= 0) effect_bounds_combo->setCurrentIndex(idx);
     }
 
     QPushButton* ui_start = (is_audio || is_screen_mirror) ? direct_start : ui_effect->GetStartButton();

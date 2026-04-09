@@ -139,9 +139,10 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float height_range_val = (tornado_height / 500.0f) * 0.5f;
     float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
     EffectGridAxisHalfExtents ex = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    float base_radius = fminf(ex.hw, ex.hd);
+    float base_radius = std::max(ex.hw, ex.hd);
     float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
-    float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m;
+    constexpr float kTornadoGridFill = 2.5f;
+    float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m * kTornadoGridFill;
 
     float a = atan2f(rot_rel_z, rot_rel_x);
     float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);

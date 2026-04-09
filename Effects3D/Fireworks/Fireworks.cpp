@@ -166,12 +166,13 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float hw = e.hw, hh = e.hh, hd = e.hd;
     float h_scale = std::max({hw, hh, hd});
-    float speed_scale = GetScaledSpeed() * 0.015f;
+    constexpr float kFireworkGridFill = 3.0f;
+    float speed_scale = GetScaledSpeed() * 0.015f * kFireworkGridFill;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float color_cycle = time * GetScaledFrequency() * 12.0f;
     float sigma = std::max(particle_size * h_scale * size_m, 5.0f) / std::max(0.35f, detail);
-    const float sigma_cap = h_scale * 0.4f;
+    const float sigma_cap = h_scale * 1.0f;
     if(sigma > sigma_cap) sigma = sigma_cap;
     float sigma_sq = sigma * sigma;
     const float d2_cutoff = 9.0f * sigma_sq;

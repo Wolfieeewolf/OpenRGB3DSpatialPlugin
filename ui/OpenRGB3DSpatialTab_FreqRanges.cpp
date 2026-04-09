@@ -1161,12 +1161,11 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
             if(!is_targeted) continue;
 
             const bool requires_world = effect->RequiresWorldSpaceCoordinates();
-            const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
-            const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+            const bool use_world_bounds = effect->UseWorldGridBounds();
             const GridContext3D& active_grid = use_world_bounds
                 ? (local_world_grid ? *local_world_grid : world_grid)
                 : (local_room_grid ? *local_room_grid : room_grid);
-            
+
             if(transform->virtual_controller)
             {
                 VirtualController3D* vctrl = transform->virtual_controller;
@@ -1189,13 +1188,11 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                         : transform->led_positions[led_idx].room_position;
                     float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
-                    effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
-                    effect->ClearGridReferenceRemapContext();
                     color = effect->PostProcessColorGrid(color);
                     unsigned int physical_led_idx = 0;
                     if(TryGetGlobalLedIndexForRange(mapping.controller, mapping.zone_idx, mapping.led_idx, &physical_led_idx))
@@ -1223,13 +1220,11 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                         : transform->led_positions[led_idx].room_position;
                     float x = sample_pos.x, y = sample_pos.y, z = sample_pos.z;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
-                    effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
                     RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
-                    effect->ClearGridReferenceRemapContext();
                     color = effect->PostProcessColorGrid(color);
                     LEDPosition3D& led_pos = transform->led_positions[led_idx];
                     if(led_pos.zone_idx >= ctrl->zones.size())

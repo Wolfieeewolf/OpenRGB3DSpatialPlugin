@@ -58,7 +58,8 @@ enum ReferenceMode
 {
     REF_MODE_ROOM_CENTER    = 0,
     REF_MODE_USER_POSITION  = 1,
-    REF_MODE_CUSTOM_POINT   = 2
+    REF_MODE_CUSTOM_POINT   = 2,
+    REF_MODE_TARGET_ZONE_CENTER = 3
 };
 
 enum EffectAxis

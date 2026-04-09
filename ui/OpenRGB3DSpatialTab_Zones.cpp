@@ -42,6 +42,7 @@ QString BuildZoneDialogControllerName(const ControllerTransform* ctrl, size_t in
 void OpenRGB3DSpatialTab::on_create_zone_clicked()
 {
     if(!zone_manager) return;
+    UpdateDeviceList();
     bool ok;
     QString zone_name = QInputDialog::getText(this, "Create Zone",
                                               "Zone name:", QLineEdit::Normal,
@@ -117,6 +118,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
 void OpenRGB3DSpatialTab::on_edit_zone_clicked()
 {
     if(!zones_list || !zone_manager) return;
+    UpdateDeviceList();
     int selected_idx = zones_list->currentRow();
     if(selected_idx < 0 || selected_idx >= zone_manager->GetZoneCount())
     {

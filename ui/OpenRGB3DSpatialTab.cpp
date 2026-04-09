@@ -112,6 +112,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_combo = nullptr;
     effect_type_combo = nullptr;
     last_stack_selection_index = -1;
+    add_controller_ref_point_check = nullptr;
 
     available_controllers_list = nullptr;
     custom_controllers_list = nullptr;
@@ -440,8 +441,21 @@ void OpenRGB3DSpatialTab::SetupUI()
     add_remove_layout->addWidget(clear_button);
     available_layout->addLayout(add_remove_layout);
 
+    add_controller_ref_point_check = new QCheckBox("Create linked controller reference point");
+    add_controller_ref_point_check->setToolTip(
+        "Optionally create a reference point at the controller center when adding to scene. "
+        "The point stays synced to controller position.");
+    add_controller_ref_point_check->setChecked(false);
+    available_layout->addWidget(add_controller_ref_point_check);
+
     available_tab->setLayout(available_layout);
     left_tabs->addTab(available_tab, "Available Controllers");
+    connect(left_tabs, &QTabWidget::currentChanged, this, [this, available_tab](int) {
+        if(left_tabs && left_tabs->currentWidget() == available_tab)
+        {
+            UpdateDeviceList();
+        }
+    });
 
     left_panel->addWidget(left_tabs);
 
@@ -1352,12 +1366,30 @@ void OpenRGB3DSpatialTab::SetupUI()
     effect_origin_combo = new QComboBox();
     effect_origin_combo->setToolTip(tr("Applied to all running layers when rendering the stack."));
     effect_origin_combo->addItem("Room Center", QVariant(-1));
+    effect_origin_combo->addItem("Target Zone Center", QVariant(-2));
     connect(effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
     {
         QHBoxLayout* row = new QHBoxLayout();
         row->addWidget(origin_label);
         row->addWidget(effect_origin_combo, 1);
+        effect_layout->addLayout(row);
+    }
+
+    effect_bounds_label = new QLabel(tr("Target bounds:"));
+    effect_bounds_label->setToolTip(tr(
+        "Bounds source for the selected stack layer at render time."));
+    effect_bounds_combo = new QComboBox();
+    effect_bounds_combo->setToolTip(tr(
+        "Global bounds uses normal room/world behavior. "
+        "Target zone bounds uses the selected zone bounds."));
+    effect_bounds_combo->addItem("Global bounds", QVariant((int)SpatialEffect3D::BOUNDS_MODE_GLOBAL));
+    effect_bounds_combo->addItem("Target zone bounds", QVariant((int)SpatialEffect3D::BOUNDS_MODE_TARGET_ZONE));
+    connect(effect_bounds_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_bounds_changed);
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+        row->addWidget(effect_bounds_label);
+        row->addWidget(effect_bounds_combo, 1);
         effect_layout->addLayout(row);
     }
 
@@ -1480,20 +1512,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
         effect_category_combo->addItem(QString::fromStdString(entry.first), QString::fromStdString(entry.first));
     }
     effect_category_combo->blockSignals(restore_signals);
-    int default_cat = 0;
-    if(effect_category_combo->count() > 1)
-    {
-        default_cat = 1;
-        for(int i = 1; i < effect_category_combo->count(); i++)
-        {
-            if(effect_category_combo->itemData(i).toString().compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0)
-            {
-                default_cat = i;
-                break;
-            }
-        }
-    }
-    effect_category_combo->setCurrentIndex(default_cat);
+    effect_category_combo->setCurrentIndex(0);
     PopulateEffectLibrary();
 }
 
@@ -2519,6 +2538,7 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     effect_origin_combo->clear();
 
     effect_origin_combo->addItem("Room Center", QVariant(-1));
+    effect_origin_combo->addItem("Target Zone Center", QVariant(-2));
 
     for(size_t i = 0; i < reference_points.size(); i++)
     {
@@ -2657,7 +2677,68 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
 
     if(current_effect_ui)
     {
-        current_effect_ui->SetCustomReferencePoint(origin);
+        if(ref_point_idx == -2)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_TARGET_ZONE_CENTER);
+        }
+        else if(ref_point_idx >= 0)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_CUSTOM_POINT);
+            current_effect_ui->SetCustomReferencePoint(origin);
+        }
+        else
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_ROOM_CENTER);
+        }
+    }
+
+    if(viewport) viewport->UpdateColors();
+}
+
+void OpenRGB3DSpatialTab::on_effect_bounds_changed(int index)
+{
+    if(!effect_bounds_combo)
+    {
+        return;
+    }
+    if(index < 0 || index >= effect_bounds_combo->count())
+    {
+        return;
+    }
+    int mode = effect_bounds_combo->itemData(index).toInt();
+
+    if(current_effect_ui)
+    {
+        current_effect_ui->SetEffectBoundsMode(mode);
+    }
+
+    if(effect_stack_list)
+    {
+        int current_row = effect_stack_list->currentRow();
+        if(current_row >= 0 && current_row < (int)effect_stack.size())
+        {
+            EffectInstance3D* instance = effect_stack[current_row].get();
+            if(instance)
+            {
+                SpatialEffect3D* settings_source = nullptr;
+                if(instance->effect)
+                {
+                    instance->effect->SetEffectBoundsMode(mode);
+                    settings_source = instance->effect.get();
+                }
+                else if(current_effect_ui)
+                {
+                    settings_source = current_effect_ui;
+                }
+
+                if(settings_source)
+                {
+                    nlohmann::json current_settings = settings_source->SaveSettings();
+                    instance->saved_settings = std::make_unique<nlohmann::json>(current_settings);
+                    SaveEffectStack();
+                }
+            }
+        }
     }
 
     if(viewport) viewport->UpdateColors();
@@ -2723,6 +2804,7 @@ void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)
             if(axis == 0) transform->transform.position.x = value;
             else if(axis == 1) transform->transform.position.y = value;
             else transform->transform.position.z = value;
+            SyncControllerLinkedReferencePoint(transform_index);
             ControllerLayout3D::MarkWorldPositionsDirty(transform);
         }
         viewport->NotifyControllerTransformChanged();

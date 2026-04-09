@@ -245,7 +245,8 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float detail = std::max(0.05f, GetScaledDetail());
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * 0.01f / (size_multiplier > 0.001f ? size_multiplier : 1.0f);
-    float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
+    constexpr float kExplosionGridFill = 3.0f;
+    float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f * kExplosionGridFill;
     radius_basis = std::max(radius_basis, 1e-3f);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);

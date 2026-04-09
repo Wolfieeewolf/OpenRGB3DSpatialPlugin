@@ -162,6 +162,12 @@ class SpatialEffect3D : public QWidget
     Q_OBJECT
 
 public:
+    enum EffectBoundsMode
+    {
+        BOUNDS_MODE_GLOBAL = 0,
+        BOUNDS_MODE_TARGET_ZONE = 1
+    };
+
     explicit SpatialEffect3D(QWidget* parent = nullptr);
     virtual ~SpatialEffect3D();
     unsigned int GetTargetFPSSetting() const { return GetTargetFPS(); }
@@ -208,8 +214,6 @@ public:
     virtual Vector3D GetGlobalReferencePoint() const;
     virtual void SetCustomReferencePoint(const Vector3D& point);
     virtual void SetUseCustomReference(bool use_custom);
-    void SetGridReferenceRemapContext(const GridContext3D* source_grid, const GridContext3D* active_grid);
-    void ClearGridReferenceRemapContext();
 
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
@@ -229,7 +233,10 @@ public:
 
     virtual bool RequiresWorldSpaceCoordinates() const { return true; }
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }
-    virtual bool UseZoneGrid() const { return use_zone_grid; }
+    virtual bool UseWorldGridBounds() const;
+    virtual bool UseZoneGrid() const;
+    int GetEffectBoundsMode() const { return effect_bounds_mode; }
+    void SetEffectBoundsMode(int mode) { effect_bounds_mode = std::clamp(mode, (int)BOUNDS_MODE_GLOBAL, (int)BOUNDS_MODE_TARGET_ZONE); }
 
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
@@ -250,7 +257,6 @@ protected:
     QSlider*            size_slider;
     QSlider*            scale_slider;
     QCheckBox*          scale_invert_check;
-    QCheckBox*          zone_grid_check;
     QSlider*            fps_slider;
     QLabel*             speed_label;
     QLabel*             brightness_label;
@@ -316,7 +322,7 @@ protected:
     unsigned int        effect_size;
     unsigned int        effect_scale;
     bool                scale_inverted;
-    bool                use_zone_grid;
+    int                 effect_bounds_mode;
     unsigned int        effect_fps;
     bool                rainbow_mode;
     float               rainbow_progress;
@@ -363,8 +369,6 @@ protected:
     Vector3D            global_reference_point;
     Vector3D            custom_reference_point;
     bool                use_custom_reference;
-    const GridContext3D* reference_source_grid_context;
-    const GridContext3D* reference_active_grid_context;
 
     void AddWidgetToParent(QWidget* w, QWidget* container);
 

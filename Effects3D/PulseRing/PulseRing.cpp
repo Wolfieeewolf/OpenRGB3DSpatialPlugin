@@ -136,18 +136,13 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     float progress = CalculateProgress(time);
-    float scale_eff = std::max(0.05f, GetNormalizedScale());
-    float sw = grid.width * 0.5f * scale_eff;
-    float sd = grid.depth * 0.5f * scale_eff;
-    if(sw < 1e-5f) sw = 1.0f;
-    if(sd < 1e-5f) sd = 1.0f;
-
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
-    float lx = (rot.x - origin.x) / sw;
-    float lz = (rot.z - origin.z) / sd;
-    float r_flat = sqrtf(lx * lx + lz * lz);
-    const float r_corner = 1.41421356f;
-    float r = (r_corner > 1e-5f) ? std::min(1.0f, r_flat / r_corner) : 0.0f;
+    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    constexpr float kRingHorizontalFill = 1.0f / 3.0f;
+    float hw = std::max(1e-6f, e.hw * kRingHorizontalFill);
+    float hd = std::max(1e-6f, e.hd * kRingHorizontalFill);
+    float r_corner = EffectGridHorizontalRadialNormXZ(rot.x - origin.x, rot.z - origin.z, hw, hd);
+    float r = EffectGridHorizontalRadialNorm01(r_corner);
     float hole_r = std::max(0.0f, std::min(0.8f, hole_size));
     float max_r = 1.0f;
     float usable = std::max(0.01f, max_r - hole_r);

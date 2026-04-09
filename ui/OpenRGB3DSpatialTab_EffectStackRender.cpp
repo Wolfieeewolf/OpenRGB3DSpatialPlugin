@@ -125,15 +125,19 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             room_bounds.min_z, room_bounds.max_z,
                             grid_scale_mm);
 
-    ReferenceMode stack_origin_mode = REF_MODE_ROOM_CENTER;
-    Vector3D stack_ref_origin = {0.0f, 0.0f, 0.0f};
+    ReferenceMode stack_origin_mode = REF_MODE_USER_POSITION;
+    Vector3D stack_ref_origin = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
     if(effect_origin_combo)
     {
         int origin_index = effect_origin_combo->currentIndex();
         if(origin_index >= 0)
         {
             int ref_idx = effect_origin_combo->itemData(origin_index).toInt();
-            if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && reference_points[ref_idx])
+            if(ref_idx == -2)
+            {
+                stack_origin_mode = REF_MODE_TARGET_ZONE_CENTER;
+            }
+            else if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && reference_points[ref_idx])
             {
                 stack_origin_mode = REF_MODE_USER_POSITION;
                 stack_ref_origin = reference_points[ref_idx]->GetPosition();
@@ -283,6 +287,34 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(viewport && viewport->GetShowRoomGridOverlay() && (active_effects.size() > 0 || has_enabled_freq_ranges))
     {
+        struct OverlaySlotGridOverride
+        {
+            bool use_zone_grid = false;
+            std::unique_ptr<GridContext3D> room_grid_local;
+            std::unique_ptr<GridContext3D> world_grid_local;
+        };
+        std::vector<OverlaySlotGridOverride> overlay_slot_grid_overrides(active_effects.size());
+        for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
+        {
+            const RenderEffectSlot& slot = active_effects[effect_idx];
+            if(!slot.effect || !slot.effect->UseZoneGrid())
+            {
+                continue;
+            }
+            if(TryMakeZoneGridContextPair(zone_manager.get(),
+                                          controller_transforms,
+                                          slot.zone_index,
+                                          nullptr,
+                                          true,
+                                          room_grid.grid_scale_mm,
+                                          world_grid.grid_scale_mm,
+                                          overlay_slot_grid_overrides[effect_idx].room_grid_local,
+                                          overlay_slot_grid_overrides[effect_idx].world_grid_local))
+            {
+                overlay_slot_grid_overrides[effect_idx].use_zone_grid = true;
+            }
+        }
+
         viewport->SetRoomGridOverlayBounds(room_bounds.min_x, room_bounds.max_x,
                                            room_bounds.min_y, room_bounds.max_y,
                                            room_bounds.min_z, room_bounds.max_z);
@@ -361,30 +393,43 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         const float pz = room_bounds.min_z + (float)iz / (float)denom_z * span_z;
                         RGBColor final_color = ToRGBColor(0, 0, 0);
-                        for(const RenderEffectSlot& slot : active_effects)
+                        for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                         {
+                            const RenderEffectSlot& slot = active_effects[effect_idx];
                             if(!slot.effect) continue;
-                    const bool requires_world_coords = slot.effect->RequiresWorldSpaceCoordinates();
-                    const bool use_world_bounds = slot.effect->RequiresWorldSpaceGridBounds();
-                    const GridContext3D& active_grid = use_world_bounds ? world_grid : room_grid;
-                    const float u = (float)ix / (float)denom_x;
-                    const float v = (float)iy / (float)denom_y;
-                    const float w = (float)iz / (float)denom_z;
-                    float spx = px, spy = py, spz = pz;
-                    if(requires_world_coords)
-                    {
-                        const float world_span_x = world_bounds.max_x - world_bounds.min_x;
-                        const float world_span_y = world_bounds.max_y - world_bounds.min_y;
-                        const float world_span_z = world_bounds.max_z - world_bounds.min_z;
-                        spx = world_bounds.min_x + u * world_span_x;
-                        spy = world_bounds.min_y + v * world_span_y;
-                        spz = world_bounds.min_z + w * world_span_z;
-                    }
+                            const OverlaySlotGridOverride& grid_override = overlay_slot_grid_overrides[effect_idx];
+                            if(slot.effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                            {
+                                continue;
+                            }
+                            const bool requires_world_coords = slot.effect->RequiresWorldSpaceCoordinates();
+                            const bool use_world_bounds = slot.effect->UseWorldGridBounds();
+                            const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+                            const GridContext3D* local_grid = nullptr;
+                            if(grid_override.use_zone_grid)
+                            {
+                                local_grid = use_world_bounds ? grid_override.world_grid_local.get()
+                                                              : grid_override.room_grid_local.get();
+                            }
+                            const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
+                            const GridContext3D& sample_grid = requires_world_coords
+                                ? (grid_override.use_zone_grid && grid_override.world_grid_local
+                                    ? *grid_override.world_grid_local
+                                    : world_grid)
+                                : (grid_override.use_zone_grid && grid_override.room_grid_local
+                                    ? *grid_override.room_grid_local
+                                    : room_grid);
+                            const float u = (float)ix / (float)denom_x;
+                            const float v = (float)iy / (float)denom_y;
+                            const float w = (float)iz / (float)denom_z;
+                            float spx = sample_grid.min_x + u * (sample_grid.max_x - sample_grid.min_x);
+                            float spy = sample_grid.min_y + v * (sample_grid.max_y - sample_grid.min_y);
+                            float spz = sample_grid.min_z + w * (sample_grid.max_z - sample_grid.min_z);
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
                             RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
-                    if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
-                        effect_color = 0x00000000;
+                            if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
+                                effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
@@ -553,7 +598,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_x = requires_world ? world_x : room_x;
                         float sample_y = requires_world ? world_y : room_y;
                         float sample_z = requires_world ? world_z : room_z;
-                        const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
+                        const bool use_world_bounds = effect->UseWorldGridBounds();
                         const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
                         const GridContext3D* local_grid = nullptr;
                         if(grid_override.use_zone_grid)
@@ -563,14 +608,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         }
                         const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                         MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
-                        effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
-
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                         RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                             effect_color = 0x00000000;
-                        effect->ClearGridReferenceRemapContext();
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
@@ -674,7 +716,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_x = requires_world ? world_x : room_x;
                     float sample_y = requires_world ? world_y : room_y;
                     float sample_z = requires_world ? world_z : room_z;
-                    const bool use_world_bounds = effect->RequiresWorldSpaceGridBounds();
+                    const bool use_world_bounds = effect->UseWorldGridBounds();
                     const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
                     const GridContext3D* local_grid = nullptr;
                     if(grid_override.use_zone_grid)
@@ -684,14 +726,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                     const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
-                    effect->SetGridReferenceRemapContext(&global_grid, &active_grid);
-
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
                     RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                         effect_color = 0x00000000;
-                    effect->ClearGridReferenceRemapContext();
                     effect_color = effect->PostProcessColorGrid(effect_color);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);
@@ -774,7 +813,7 @@ RGBColor OpenRGB3DSpatialTab::GetOverlayColorAt(float x, float y, float z) const
     for(const OverlaySlot& slot : overlay_slots)
     {
         if(!slot.effect) continue;
-        const bool use_world_bounds = slot.effect->RequiresWorldSpaceGridBounds();
+        const bool use_world_bounds = slot.effect->UseWorldGridBounds();
         const GridContext3D& active_grid = use_world_bounds ? overlay_world_grid : overlay_room_grid;
         float spx = x, spy = y, spz = z;
         slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);

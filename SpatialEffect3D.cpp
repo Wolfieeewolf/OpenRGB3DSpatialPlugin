@@ -19,7 +19,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_size = 100;
     effect_scale = 200;
     scale_inverted = false;
-    use_zone_grid = false;
+    effect_bounds_mode = (int)BOUNDS_MODE_GLOBAL;
     effect_fps = 30;
     rainbow_mode = false;
     rainbow_progress = 0.0f;
@@ -35,8 +35,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     global_reference_point = {0.0f, 0.0f, 0.0f};
     custom_reference_point = {0.0f, 0.0f, 0.0f};
     use_custom_reference = false;
-    reference_source_grid_context = nullptr;
-    reference_active_grid_context = nullptr;
 
     colors.push_back(COLOR_RED);
     colors.push_back(COLOR_BLUE);
@@ -49,7 +47,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     size_slider = nullptr;
     scale_slider = nullptr;
     scale_invert_check = nullptr;
-    zone_grid_check = nullptr;
     fps_slider = nullptr;
     speed_label = nullptr;
     brightness_label = nullptr;
@@ -248,12 +245,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_layout->addWidget(scale_invert_check);
     main_layout->addLayout(scale_layout);
 
-    zone_grid_check = new QCheckBox("Use zone grid (target bounds)");
-    zone_grid_check->setToolTip(
-        "Third grid context after room and world: normalize this effect to the active zone or controller target "
-        "instead of the full room/world bounds.");
-    zone_grid_check->setChecked(use_zone_grid);
-    main_layout->addWidget(zone_grid_check);
+    // Bounds mode is controlled from the global Effect Stack panel.
 
     QHBoxLayout* fps_layout = new QHBoxLayout();
     fps_layout->addWidget(new QLabel("FPS:"));
@@ -523,10 +515,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     {
         connect(scale_invert_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
     }
-    if(zone_grid_check)
-    {
-        connect(zone_grid_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
-    }
+    // Bounds mode is controlled from the global Effect Stack panel.
     connect(rotation_yaw_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_roll_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
@@ -995,56 +984,6 @@ void SpatialEffect3D::SetUseCustomReference(bool use_custom)
     use_custom_reference = use_custom;
 }
 
-void SpatialEffect3D::SetGridReferenceRemapContext(const GridContext3D* source_grid, const GridContext3D* active_grid)
-{
-    reference_source_grid_context = source_grid;
-    reference_active_grid_context = active_grid;
-}
-
-void SpatialEffect3D::ClearGridReferenceRemapContext()
-{
-    reference_source_grid_context = nullptr;
-    reference_active_grid_context = nullptr;
-}
-
-namespace
-{
-float NormalizeAxis(float value, float center, float extent)
-{
-    if(extent <= 1e-6f)
-    {
-        return 0.5f;
-    }
-    float normalized = ((value - center) / extent + 1.0f) * 0.5f;
-    return std::max(0.0f, std::min(1.0f, normalized));
-}
-
-float DenormalizeAxis(float normalized, float center, float extent)
-{
-    return center + ((normalized * 2.0f) - 1.0f) * extent;
-}
-
-Vector3D RemapPointBetweenGrids(const Vector3D& point, const GridContext3D& source, const GridContext3D& target)
-{
-    const float src_half_w = source.width * 0.5f;
-    const float src_half_h = source.height * 0.5f;
-    const float src_half_d = source.depth * 0.5f;
-    const float dst_half_w = target.width * 0.5f;
-    const float dst_half_h = target.height * 0.5f;
-    const float dst_half_d = target.depth * 0.5f;
-
-    const float nx = NormalizeAxis(point.x, source.center_x, src_half_w);
-    const float ny = NormalizeAxis(point.y, source.center_y, src_half_h);
-    const float nz = NormalizeAxis(point.z, source.center_z, src_half_d);
-
-    return {
-        DenormalizeAxis(nx, target.center_x, dst_half_w),
-        DenormalizeAxis(ny, target.center_y, dst_half_h),
-        DenormalizeAxis(nz, target.center_z, dst_half_d)
-    };
-}
-}
-
 Vector3D SpatialEffect3D::GetEffectOrigin() const
 {
     if(use_custom_reference)
@@ -1058,6 +997,7 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
             return global_reference_point;
         case REF_MODE_CUSTOM_POINT:
             return custom_reference_point;
+        case REF_MODE_TARGET_ZONE_CENTER:
         case REF_MODE_ROOM_CENTER:
         default:
             return {0.0f, 0.0f, 0.0f};
@@ -1066,29 +1006,18 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 
 Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 {
-    auto remap_if_needed = [this](const Vector3D& point) -> Vector3D
-    {
-        if(!use_zone_grid || !reference_source_grid_context || !reference_active_grid_context)
-        {
-            return point;
-        }
-        if(reference_source_grid_context == reference_active_grid_context)
-        {
-            return point;
-        }
-        return RemapPointBetweenGrids(point, *reference_source_grid_context, *reference_active_grid_context);
-    };
-
     if(use_custom_reference)
     {
-        return remap_if_needed(custom_reference_point);
+        return custom_reference_point;
     }
     switch(reference_mode)
     {
         case REF_MODE_USER_POSITION:
-            return remap_if_needed(global_reference_point);
+            return global_reference_point;
         case REF_MODE_CUSTOM_POINT:
-            return remap_if_needed(custom_reference_point);
+            return custom_reference_point;
+        case REF_MODE_TARGET_ZONE_CENTER:
+            return {grid.center_x, grid.center_y, grid.center_z};
         case REF_MODE_ROOM_CENTER:
         default:
             return {grid.center_x, grid.center_y, grid.center_z};
@@ -1176,6 +1105,21 @@ float SpatialEffect3D::GetScaledFrequency() const
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
     float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
     return GetNormalizedFrequency() * freq_scale;
+}
+
+bool SpatialEffect3D::UseZoneGrid() const
+{
+    return (effect_bounds_mode == (int)BOUNDS_MODE_TARGET_ZONE);
+}
+
+bool SpatialEffect3D::UseWorldGridBounds() const
+{
+    if(effect_bounds_mode == (int)BOUNDS_MODE_TARGET_ZONE)
+    {
+        // Match bounds space to the effect sample space so origin/center math stays coherent.
+        return RequiresWorldSpaceCoordinates();
+    }
+    return RequiresWorldSpaceGridBounds();
 }
 
 float SpatialEffect3D::GetScaledDetail() const
@@ -1485,10 +1429,7 @@ void SpatialEffect3D::OnParameterChanged()
     {
         scale_inverted = scale_invert_check->isChecked();
     }
-    if(zone_grid_check)
-    {
-        use_zone_grid = zone_grid_check->isChecked();
-    }
+    // effect_bounds_mode is managed externally (Effect Stack panel).
 
     if(fps_slider && fps_label)
     {
@@ -1654,7 +1595,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["size"] = effect_size;
     j["scale_value"] = effect_scale;
     j["scale_inverted"] = scale_inverted;
-    j["use_zone_grid"] = use_zone_grid;
+    j["effect_bounds_mode"] = effect_bounds_mode;
     j["rainbow_mode"] = rainbow_mode;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
@@ -1721,12 +1662,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("rainbow_mode"))
         SetRainbowMode(settings["rainbow_mode"].get<bool>());
 
-    if(settings.contains("use_zone_grid"))
-        use_zone_grid = settings["use_zone_grid"].get<bool>();
-    else if(settings.contains("use_target_local_grid"))
-        use_zone_grid = settings["use_target_local_grid"].get<bool>();
+    if(settings.contains("effect_bounds_mode"))
+        effect_bounds_mode = std::clamp(settings["effect_bounds_mode"].get<int>(), (int)BOUNDS_MODE_GLOBAL, (int)BOUNDS_MODE_TARGET_ZONE);
     else
-        use_zone_grid = false;
+        effect_bounds_mode = (int)BOUNDS_MODE_GLOBAL;
 
     if(settings.contains("intensity"))
         effect_intensity = settings["intensity"].get<unsigned int>();
@@ -1965,11 +1904,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         QSignalBlocker blocker(scale_invert_check);
         scale_invert_check->setChecked(scale_inverted);
     }
-    if(zone_grid_check)
-    {
-        QSignalBlocker blocker(zone_grid_check);
-        zone_grid_check->setChecked(use_zone_grid);
-    }
+    // Bounds mode is controlled from the global Effect Stack panel.
 
     if(fps_slider)
     {

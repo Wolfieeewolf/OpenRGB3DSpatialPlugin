@@ -114,6 +114,7 @@ private slots:
     void on_grid_snap_toggled(bool enabled);
     void on_effect_changed(int index);
     void on_effect_origin_changed(int index);
+    void on_effect_bounds_changed(int index);
     void on_effect_zone_changed(int index);
     void UpdateSelectionInfo();
     void on_apply_spacing_clicked();
@@ -164,6 +165,9 @@ private:
     void SaveCustomControllers();
     void LoadCustomControllers();
     void UpdateAvailableItemCombo();
+    int  CreateControllerLinkedReferencePoint(int transform_index, const QString& base_name);
+    void SyncControllerLinkedReferencePoint(int transform_index);
+    void RemoveControllerLinkedReferencePoint(int transform_index);
     void UpdateAvailableControllersList();
     void UpdateCustomControllersList();
     int  FindDisplayPlaneIndexById(int plane_id) const;
@@ -270,6 +274,7 @@ private:
     QLabel*                     object_creator_status_label;
     QComboBox*                  granularity_combo;
     QComboBox*                  item_combo;
+    QCheckBox*                  add_controller_ref_point_check = nullptr;
     QListWidget*                controller_list;
     QDoubleSpinBox*             pos_x_spin;
     QDoubleSpinBox*             pos_y_spin;
@@ -352,7 +357,9 @@ private:
     QComboBox*                  effect_combo;
     QLabel*                     effect_zone_label;
     QLabel*                     origin_label;
+    QLabel*                     effect_bounds_label = nullptr;
     QComboBox*                  effect_origin_combo;
+    QComboBox*                  effect_bounds_combo = nullptr;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
 

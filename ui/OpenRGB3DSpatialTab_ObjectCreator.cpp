@@ -604,6 +604,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         ctrl->transform.position.x = x;
         ctrl->transform.position.y = y;
         ctrl->transform.position.z = z;
+        SyncControllerLinkedReferencePoint(index);
         ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
         SetLayoutDirty();
 
@@ -969,10 +970,19 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
     ctrl_transform->display_color = (color.blue() << 16) | (color.green() << 8) | color.red();
     ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
     controller_transforms.push_back(std::move(ctrl_transform));
+    int new_transform_index = (int)controller_transforms.size() - 1;
     QString name = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
     QListWidgetItem* list_item = new QListWidgetItem(name);
     controller_list->addItem(list_item);
     controller_list->setCurrentRow(controller_list->count() - 1);
+
+    if(add_controller_ref_point_check && add_controller_ref_point_check->isChecked())
+    {
+        if(CreateControllerLinkedReferencePoint(new_transform_index, name) >= 0)
+        {
+            SyncControllerLinkedReferencePoint(new_transform_index);
+        }
+    }
     if(viewport)
     {
         viewport->SelectController((int)controller_transforms.size() - 1);
@@ -984,6 +994,127 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
     UpdateAvailableItemCombo();
     RefreshHiddenControllerStates();
     return true;
+}
+
+int OpenRGB3DSpatialTab::CreateControllerLinkedReferencePoint(int transform_index, const QString& base_name)
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
+    {
+        return -1;
+    }
+
+    ControllerTransform* transform = controller_transforms[transform_index].get();
+    if(!transform)
+    {
+        return -1;
+    }
+
+    const std::string ref_name = base_name.toStdString() + " Reference";
+    const Vector3D& pos = transform->transform.position;
+
+    std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(
+        ref_name,
+        REF_POINT_CUSTOM,
+        pos.x,
+        pos.y,
+        pos.z
+    );
+    ref_point->SetDisplayColor(0x00A0FF);
+    ref_point->SetVisible(false);
+
+    int ref_index = (int)reference_points.size();
+    reference_points.push_back(std::move(ref_point));
+    transform->linked_reference_point_index = ref_index;
+    UpdateReferencePointsList();
+    return ref_index;
+}
+
+void OpenRGB3DSpatialTab::SyncControllerLinkedReferencePoint(int transform_index)
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
+    {
+        return;
+    }
+
+    ControllerTransform* transform = controller_transforms[transform_index].get();
+    if(!transform)
+    {
+        return;
+    }
+
+    const int ref_index = transform->linked_reference_point_index;
+    if(ref_index < 0 || ref_index >= (int)reference_points.size())
+    {
+        return;
+    }
+
+    VirtualReferencePoint3D* ref_point = reference_points[ref_index].get();
+    if(!ref_point)
+    {
+        return;
+    }
+
+    const Vector3D& pos = transform->transform.position;
+    ref_point->SetPosition({pos.x, pos.y, pos.z});
+}
+
+void OpenRGB3DSpatialTab::RemoveControllerLinkedReferencePoint(int transform_index)
+{
+    if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
+    {
+        return;
+    }
+
+    ControllerTransform* removed_transform = controller_transforms[transform_index].get();
+    if(!removed_transform)
+    {
+        return;
+    }
+
+    const int removed_ref_index = removed_transform->linked_reference_point_index;
+    if(removed_ref_index < 0 || removed_ref_index >= (int)reference_points.size())
+    {
+        return;
+    }
+
+    for(size_t i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* ct = controller_transforms[i].get();
+        if(!ct)
+        {
+            continue;
+        }
+        if(ct->linked_reference_point_index == removed_ref_index)
+        {
+            ct->linked_reference_point_index = -1;
+        }
+        else if(ct->linked_reference_point_index > removed_ref_index)
+        {
+            ct->linked_reference_point_index -= 1;
+        }
+    }
+
+    for(size_t i = 0; i < display_planes.size(); i++)
+    {
+        DisplayPlane3D* plane = display_planes[i].get();
+        if(!plane)
+        {
+            continue;
+        }
+        int plane_ref_idx = plane->GetReferencePointIndex();
+        if(plane_ref_idx == removed_ref_index)
+        {
+            plane->SetReferencePointIndex(-1);
+        }
+        else if(plane_ref_idx > removed_ref_index)
+        {
+            plane->SetReferencePointIndex(plane_ref_idx - 1);
+        }
+    }
+
+    RemoveReferencePointControllerEntries(removed_ref_index);
+    reference_points.erase(reference_points.begin() + removed_ref_index);
+    UpdateReferencePointsList();
 }
 
 void OpenRGB3DSpatialTab::AddCustomControllerPreview(CustomControllerDialog* dialog)
@@ -1066,6 +1197,7 @@ void OpenRGB3DSpatialTab::ClearCustomControllerPreview()
     {
         delete controller_list->takeItem(list_row);
     }
+    RemoveControllerLinkedReferencePoint(remove_index);
     controller_transforms.erase(controller_transforms.begin() + remove_index);
     preview_virtual_controller.reset();
 
@@ -1279,9 +1411,18 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     ControllerLayout3D::UpdateWorldPositions(ctrl_transform.get());
 
     controller_transforms.push_back(std::move(ctrl_transform));
+    int new_transform_index = (int)controller_transforms.size() - 1;
 
     QListWidgetItem* item = new QListWidgetItem(name);
     controller_list->addItem(item);
+
+    if(add_controller_ref_point_check && add_controller_ref_point_check->isChecked())
+    {
+        if(CreateControllerLinkedReferencePoint(new_transform_index, name) >= 0)
+        {
+            SyncControllerLinkedReferencePoint(new_transform_index);
+        }
+    }
 
     if(viewport)
     {
@@ -1391,6 +1532,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
         return;
     }
 
+    RemoveControllerLinkedReferencePoint(transform_index);
     controller_transforms.erase(controller_transforms.begin() + transform_index);
 
     delete controller_list->takeItem(selected_row);
@@ -1414,6 +1556,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
     }
 
     int list_row = TransformIndexToControllerListRow(index);
+    RemoveControllerLinkedReferencePoint(index);
     controller_transforms.erase(controller_transforms.begin() + index);
 
     if(controller_list && list_row >= 0)
@@ -1690,7 +1833,10 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
             delete controller_list->takeItem(row);
         std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
         for(int ti : transform_indices_to_remove)
+        {
+            RemoveControllerLinkedReferencePoint(ti);
             controller_transforms.erase(controller_transforms.begin() + ti);
+        }
         if(viewport)
         {
             viewport->SetControllerTransforms(&controller_transforms);
@@ -2379,6 +2525,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                                 std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
                                 for(int ti : transform_indices_to_remove)
                                 {
+                                    RemoveControllerLinkedReferencePoint(ti);
                                     controller_transforms.erase(controller_transforms.begin() + ti);
                                 }
                                 virtual_controllers.erase(virtual_controllers.begin() + j);
@@ -2534,7 +2681,10 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                 delete controller_list->takeItem(row);
             std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
             for(int ti : transform_indices_to_remove)
+            {
+                RemoveControllerLinkedReferencePoint(ti);
                 controller_transforms.erase(controller_transforms.begin() + ti);
+            }
             if(viewport)
             {
                 viewport->SetControllerTransforms(&controller_transforms);
@@ -2680,6 +2830,7 @@ void OpenRGB3DSpatialTab::on_delete_custom_controller_clicked()
         std::sort(transform_indices_to_remove.begin(), transform_indices_to_remove.end(), std::greater<int>());
         for(int ti : transform_indices_to_remove)
         {
+            RemoveControllerLinkedReferencePoint(ti);
             controller_transforms.erase(controller_transforms.begin() + ti);
         }
         if(viewport)
@@ -2795,6 +2946,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
 
         controller_json["granularity"] = ct->granularity;
         controller_json["item_idx"] = ct->item_idx;
+        controller_json["linked_reference_point_index"] = ct->linked_reference_point_index;
 
         controller_json["display_color"] = ct->display_color;
 
@@ -3173,6 +3325,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             ctrl_transform->transform.scale.z = controller_json["transform"]["scale"]["z"].get<float>();
 
             ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
+            ctrl_transform->linked_reference_point_index =
+                controller_json.value("linked_reference_point_index", -1);
 
             unsigned int display_color = ctrl_transform->display_color;
             int granularity = ctrl_transform->granularity;
@@ -3275,6 +3429,22 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
 
     UpdateReferencePointsList();
+
+    int ref_count_loaded = (int)reference_points.size();
+    for(size_t i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* ct = controller_transforms[i].get();
+        if(!ct)
+        {
+            continue;
+        }
+        if(ct->linked_reference_point_index < 0 || ct->linked_reference_point_index >= ref_count_loaded)
+        {
+            ct->linked_reference_point_index = -1;
+            continue;
+        }
+        SyncControllerLinkedReferencePoint(static_cast<int>(i));
+    }
 
     display_planes.clear();
     current_display_plane_index = -1;
