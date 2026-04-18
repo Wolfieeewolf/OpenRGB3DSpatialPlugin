@@ -926,7 +926,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
             {
                 if(!IsItemInScene(controller, granularity, i))
                 {
-                    item_combo->addItem(QString::fromStdString(controller->zones[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                    item_combo->addItem(QString::fromStdString(controller->GetZoneName(i)), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
                 }
             }
         }
@@ -936,7 +936,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
             {
                 if(!IsItemInScene(controller, granularity, i))
                 {
-                    item_combo->addItem(QString::fromStdString(controller->leds[i].name), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
+                    item_combo->addItem(QString::fromStdString(controller->GetLEDName(i)), QVariant::fromValue(qMakePair(actual_ctrl_idx, (int)i)));
                 }
             }
         }
@@ -1361,8 +1361,6 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
-        zone* z = &controller->zones[item_row];
-
         for(unsigned int i = 0; i < all_positions.size(); i++)
         {
             if(all_positions[i].zone_idx == (unsigned int)item_row)
@@ -1372,7 +1370,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         }
         
 
-        name = QString("[Zone] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(z->name);
+        name = QString("[Zone] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(controller->GetZoneName((unsigned int)item_row));
     }
     else if(granularity == 2)
     {
@@ -1400,7 +1398,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             }
         }
 
-        name = QString("[LED] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(controller->leds[item_row].name);
+        name = QString("[LED] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(controller->GetLEDName((unsigned int)item_row));
     }
 
     int hue = (controller_transforms.size() * 137) % 360;
@@ -3367,7 +3365,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     name = QString("[Zone] ") + QString::fromStdString(controller->GetName());
                     if(item_idx >= 0 && item_idx < (int)controller->zones.size())
                     {
-                        name += " - " + QString::fromStdString(controller->zones[item_idx].name);
+                        name += " - " + QString::fromStdString(controller->GetZoneName((unsigned int)item_idx));
                     }
                 }
                 else if(granularity == 2)
@@ -3375,7 +3373,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                     name = QString("[LED] ") + QString::fromStdString(controller->GetName());
                     if(item_idx >= 0 && item_idx < (int)controller->leds.size())
                     {
-                        name += " - " + QString::fromStdString(controller->leds[item_idx].name);
+                        name += " - " + QString::fromStdString(controller->GetLEDName((unsigned int)item_idx));
                     }
                 }
                 else
@@ -3388,7 +3386,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                             unsigned int led_global_idx = 0;
                             if(TryGetObjectCreatorGlobalLedIndex(controller, first_zone_idx, first_led_idx, &led_global_idx))
                             {
-                                name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->leds[led_global_idx].name);
+                                name = QString("[LED] ") + name + " - " + QString::fromStdString(controller->GetLEDName(led_global_idx));
                             }
                             else
                             {
@@ -3399,7 +3397,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         {
                             if(first_zone_idx < controller->zones.size())
                             {
-                                name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->zones[first_zone_idx].name);
+                                name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->GetZoneName(first_zone_idx));
                             }
                             else
                             {

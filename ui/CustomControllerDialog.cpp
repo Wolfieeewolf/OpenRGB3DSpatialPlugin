@@ -399,7 +399,7 @@ void CustomControllerDialog::UpdateItemCombo()
                 QPixmap pixmap(16, 16);
                 pixmap.fill(color);
                 QIcon icon(pixmap);
-                item_combo->addItem(icon, QString::fromStdString(controller->zones[i].name), i);
+                item_combo->addItem(icon, QString::fromStdString(controller->GetZoneName(i)), i);
             }
         }
     }
@@ -413,7 +413,7 @@ void CustomControllerDialog::UpdateItemCombo()
                 QPixmap pixmap(16, 16);
                 pixmap.fill(color);
                 QIcon icon(pixmap);
-                item_combo->addItem(icon, QString::fromStdString(controller->leds[i].name), i);
+                item_combo->addItem(icon, QString::fromStdString(controller->GetLEDName(i)), i);
             }
         }
     }
@@ -1318,7 +1318,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
     if(mapping.granularity == 1)
     {
         QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
-            ? QString::fromStdString(mapping.controller->zones[mapping.zone_idx].name)
+            ? QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx))
             : tr("Unknown Zone");
         return tr("Assigned: %1, Zone: %2").arg(name, zone_name);
     }
@@ -1331,7 +1331,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
             if(TryGetDialogGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &global_led_idx) &&
                global_led_idx < mapping.controller->leds.size())
             {
-                led_name = QString::fromStdString(mapping.controller->leds[global_led_idx].name);
+                led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
             }
         }
         return tr("Assigned: %1, LED: %2").arg(name, led_name);
