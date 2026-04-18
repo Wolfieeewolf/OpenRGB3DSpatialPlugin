@@ -2349,7 +2349,7 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     settings.test_pattern_check->setChecked(settings.show_test_pattern);
     settings.test_pattern_check->setToolTip("Display a fixed color quadrant pattern for calibration.");
     connect(settings.test_pattern_check,
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
             &QCheckBox::checkStateChanged,
             this, [this]() { OnParameterChanged(); }
 #else
@@ -2364,7 +2364,7 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     settings.screen_preview_check->setChecked(settings.show_screen_preview);
     settings.screen_preview_check->setToolTip("Show captured screen on display planes in the 3D viewport. Turn off to save CPU/GPU.");
     connect(settings.screen_preview_check,
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
             &QCheckBox::checkStateChanged,
             this, [this]() { OnParameterChanged(); OnScreenPreviewChanged(); }
 #else

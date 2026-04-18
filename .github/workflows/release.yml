@@ -16,14 +16,25 @@ jobs:
   build-and-release:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            artifact: OpenRGB3DSpatialPlugin.dll
-            path: release/OpenRGB3DSpatialPlugin.dll
+            qt_version: '5.15.2'
+            qt_arch: win64_msvc2019_64
+            qt_major: '5'
+            artifact_name: OpenRGB3DSpatialPlugin-Windows
+          - os: windows-latest
+            qt_version: '6.8.3'
+            qt_arch: win64_msvc2022_64
+            qt_major: '6'
+            artifact_name: OpenRGB3DSpatialPlugin-Windows-qt6
           - os: ubuntu-latest
-            artifact: libOpenRGB3DSpatialPlugin.so
-            path: libOpenRGB3DSpatialPlugin.so
+            qt_major: '5'
+            artifact_name: OpenRGB3DSpatialPlugin-Linux
+          - os: ubuntu-latest
+            qt_major: '6'
+            artifact_name: OpenRGB3DSpatialPlugin-Linux-qt6
 
     steps:
       - uses: actions/checkout@v4
@@ -31,28 +42,36 @@ jobs:
           submodules: recursive
 
       - name: Setup MSVC (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
 
       - name: Install Qt (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '5.15.2'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'win64_msvc2019_64'
+          version: ${{ matrix.qt_version }}
+          arch: ${{ matrix.qt_arch }}
           cache: true
           aqtversion: '==3.1.*'
 
-      - name: Install Qt (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y qtbase5-dev qt5-qmake qtbase5-dev-tools libusb-1.0-0-dev libhidapi-dev
+          sudo apt-get install -y \
+            build-essential \
+            libusb-1.0-0-dev \
+            libhidapi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev
+          if [ "${{ matrix.qt_major }}" = "6" ]; then
+            sudo apt-get install -y qt6-base-dev qt6-base-dev-tools
+          else
+            sudo apt-get install -y qtbase5-dev qt5-qmake qtbase5-dev-tools
+          fi
 
       - name: Build (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
@@ -60,16 +79,41 @@ jobs:
           nmake
 
       - name: Build (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
-          qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+          if [ "${{ matrix.qt_major }}" = "6" ]; then
+            QMQ="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
+            if [ -z "$QMQ" ] && [ -x /usr/lib/qt6/bin/qmake ]; then QMQ=/usr/lib/qt6/bin/qmake; fi
+            if [ -z "$QMQ" ]; then echo "Qt6 qmake not found"; exit 1; fi
+            "$QMQ" OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+          else
+            qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+          fi
           make -j$(nproc)
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          mkdir -p staging
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if [ "${{ matrix.qt_major }}" = "6" ]; then
+              cp release/OpenRGB3DSpatialPlugin.dll "staging/OpenRGB3DSpatialPlugin-qt6.dll"
+            else
+              cp release/OpenRGB3DSpatialPlugin.dll "staging/OpenRGB3DSpatialPlugin.dll"
+            fi
+          else
+            if [ "${{ matrix.qt_major }}" = "6" ]; then
+              cp libOpenRGB3DSpatialPlugin.so "staging/OpenRGB3DSpatialPlugin-qt6.so"
+            else
+              cp libOpenRGB3DSpatialPlugin.so "staging/OpenRGB3DSpatialPlugin.so"
+            fi
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.path }}
+          name: ${{ matrix.artifact_name }}
+          path: staging/*
 
   create-release:
     needs: build-and-release
@@ -82,13 +126,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+          path: release-assets
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            **/*.dll
-            **/*.so
+            release-assets/**/*.dll
+            release-assets/**/*.so
           draft: false
           prerelease: false
           generate_release_notes: true

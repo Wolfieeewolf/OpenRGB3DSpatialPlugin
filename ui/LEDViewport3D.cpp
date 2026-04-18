@@ -757,7 +757,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 {
     if(dragging_grab && event->button() == Qt::LeftButton)
     {
-        QPoint delta = event->pos() - click_start_pos;
+        QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
         float distance = sqrtf(delta.x() * delta.x() + delta.y() * delta.y());
 
         if(distance < 3.0f)
@@ -790,7 +790,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::MiddleButton)
     {
-        QPoint delta = event->pos() - click_start_pos;
+        QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
         float distance = sqrtf(delta.x() * delta.x() + delta.y() * delta.y());
         if(distance < 3.0f)
         {

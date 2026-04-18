@@ -352,7 +352,8 @@ win32:DEFINES +=                                                                
 # Linux-specific Configuration                                                                  #
 #-----------------------------------------------------------------------------------------------#
 unix:!macx {
-    QMAKE_CXXFLAGS += -std=c++17 -Wno-psabi
+    CONFIG += c++17
+    QMAKE_CXXFLAGS += -Wno-psabi
     target.path=$$PREFIX/lib/openrgb/plugins/
     INSTALLS += target
 

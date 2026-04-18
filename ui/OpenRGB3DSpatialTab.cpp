@@ -1258,7 +1258,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     settings_container_layout->addLayout(plane_form);
 
     display_plane_visible_check = new QCheckBox("Visible in viewport");
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     connect(display_plane_visible_check, &QCheckBox::checkStateChanged,
             this, &OpenRGB3DSpatialTab::on_display_plane_visible_toggled);
 #else
