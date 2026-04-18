@@ -330,7 +330,7 @@ void CustomControllerDialog::SetupUI()
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
-        available_controllers->addItem(QString::fromStdString(controllers[i]->name));
+        available_controllers->addItem(QString::fromStdString(controllers[i]->GetName()));
     }
 
     color_refresh_timer = new QTimer(this);
@@ -1312,7 +1312,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
 {
     if(!mapping.controller)
         return tr("Unknown device (not found on this system)");
-    QString name = QString::fromStdString(mapping.controller->name);
+    QString name = QString::fromStdString(mapping.controller->GetName());
     if(mapping.granularity == 0)
         return tr("Assigned: %1 (Whole Device)").arg(name);
     if(mapping.granularity == 1)

@@ -882,7 +882,7 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
 
             if(ctrl && ctrl->controller)
             {
-                controller_name = QString::fromStdString(ctrl->controller->name);
+                controller_name = QString::fromStdString(ctrl->controller->GetName());
             }
             else if(ctrl && ctrl->virtual_controller)
             {

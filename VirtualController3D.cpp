@@ -36,12 +36,18 @@ bool ControllerNameMatches(const std::string& preset_name, const std::string& ac
 std::string ControllerSearchText(RGBController* c)
 {
     std::string t;
-    if(!c->name.empty()) t += c->name + " ";
-    if(!c->description.empty()) t += c->description + " ";
-    if(!c->location.empty()) t += c->location + " ";
-    if(!c->vendor.empty()) t += c->vendor + " ";
-    if(!c->serial.empty()) t += c->serial + " ";
-    if(!c->version.empty()) t += c->version + " ";
+    const std::string nm = c->GetName();
+    const std::string desc = c->GetDescription();
+    const std::string loc = c->GetLocation();
+    const std::string vend = c->GetVendor();
+    const std::string ser = c->GetSerial();
+    const std::string ver = c->GetVersion();
+    if(!nm.empty()) t += nm + " ";
+    if(!desc.empty()) t += desc + " ";
+    if(!loc.empty()) t += loc + " ";
+    if(!vend.empty()) t += vend + " ";
+    if(!ser.empty()) t += ser + " ";
+    if(!ver.empty()) t += ver + " ";
     t += device_type_to_str(c->type);
     return ToLower(t);
 }
@@ -50,19 +56,21 @@ bool ControllerMatchesPreset(RGBController* c, const std::string& ctrl_name, con
                              const std::string& preset_model, const std::string& preset_brand,
                              const std::string& preset_brand_model, bool match_location)
 {
-    if(ControllerNameMatches(ctrl_name, c->name))
-        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
-    if(match_location && !ctrl_location.empty() && c->location == ctrl_location)
+    const std::string c_name = c->GetName();
+    const std::string c_loc = c->GetLocation();
+    if(ControllerNameMatches(ctrl_name, c_name))
+        return !match_location || ctrl_location.empty() || c_loc == ctrl_location;
+    if(match_location && !ctrl_location.empty() && c_loc == ctrl_location)
         return true;
     std::string searchText = ControllerSearchText(c);
     if(ctrl_name.size() >= 4 && searchText.find(ToLower(ctrl_name)) != std::string::npos)
-        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+        return !match_location || ctrl_location.empty() || c_loc == ctrl_location;
     if(preset_brand_model.size() >= 4 && searchText.find(ToLower(preset_brand_model)) != std::string::npos)
-        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+        return !match_location || ctrl_location.empty() || c_loc == ctrl_location;
     if(preset_model.size() >= 4 && searchText.find(ToLower(preset_model)) != std::string::npos)
-        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+        return !match_location || ctrl_location.empty() || c_loc == ctrl_location;
     if(preset_brand.size() >= 2 && searchText.find(ToLower(preset_brand)) != std::string::npos)
-        return !match_location || ctrl_location.empty() || c->location == ctrl_location;
+        return !match_location || ctrl_location.empty() || c_loc == ctrl_location;
     return false;
 }
 }
@@ -142,8 +150,8 @@ json VirtualController3D::ToJson() const
         m["z"] = led_mappings[i].z;
         if(led_mappings[i].controller)
         {
-            m["controller_name"] = led_mappings[i].controller->name;
-            m["controller_location"] = led_mappings[i].controller->location;
+            m["controller_name"] = led_mappings[i].controller->GetName();
+            m["controller_location"] = led_mappings[i].controller->GetLocation();
         }
         else
         {

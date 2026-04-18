@@ -150,7 +150,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
         if(unassigned_leds > 0)
         {
-            QString display_text = QString::fromStdString(controllers[i]->name) +
+            QString display_text = QString::fromStdString(controllers[i]->GetName()) +
                                    QString(" [%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
             QListWidgetItem* item = new QListWidgetItem(display_text);
             item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(static_cast<int>(i), -1)));
@@ -917,7 +917,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableItemCombo()
         {
             if(!IsItemInScene(controller, granularity, 0))
             {
-                item_combo->addItem(QString::fromStdString(controller->name), QVariant::fromValue(qMakePair(actual_ctrl_idx, 0)));
+                item_combo->addItem(QString::fromStdString(controller->GetName()), QVariant::fromValue(qMakePair(actual_ctrl_idx, 0)));
             }
         }
         else if(granularity == 1)
@@ -1348,7 +1348,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             controller, custom_grid_x, custom_grid_y,
             ctrl_transform->led_spacing_mm_x, ctrl_transform->led_spacing_mm_y, ctrl_transform->led_spacing_mm_z,
             grid_scale_mm);
-        name = QString("[Device] ") + QString::fromStdString(controller->name);
+        name = QString("[Device] ") + QString::fromStdString(controller->GetName());
     }
     else if(granularity == 1)
     {
@@ -1372,7 +1372,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
         }
         
 
-        name = QString("[Zone] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(z->name);
+        name = QString("[Zone] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(z->name);
     }
     else if(granularity == 2)
     {
@@ -1400,7 +1400,7 @@ void OpenRGB3DSpatialTab::on_add_clicked()
             }
         }
 
-        name = QString("[LED] ") + QString::fromStdString(controller->name) + " - " + QString::fromStdString(controller->leds[item_row].name);
+        name = QString("[LED] ") + QString::fromStdString(controller->GetName()) + " - " + QString::fromStdString(controller->leds[item_row].name);
     }
 
     int hue = (controller_transforms.size() * 137) % 360;
@@ -2237,7 +2237,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         {
             return truncate(brand_model, max_len);
         }
-        return c ? truncate(c->name, max_len) : std::string();
+        return c ? truncate(c->GetName(), max_len) : std::string();
     };
 
     std::string preset_location = j["mappings"].empty() ? std::string() : j["mappings"][0].value("controller_location", std::string());
@@ -2246,12 +2246,18 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     auto controllerSearchText = [](RGBController* c) -> QString
     {
         std::string t;
-        if(!c->name.empty()) t += c->name + " ";
-        if(!c->description.empty()) t += c->description + " ";
-        if(!c->location.empty()) t += c->location + " ";
-        if(!c->vendor.empty()) t += c->vendor + " ";
-        if(!c->serial.empty()) t += c->serial + " ";
-        if(!c->version.empty()) t += c->version + " ";
+        const std::string nm = c->GetName();
+        const std::string desc = c->GetDescription();
+        const std::string loc = c->GetLocation();
+        const std::string vend = c->GetVendor();
+        const std::string ser = c->GetSerial();
+        const std::string ver = c->GetVersion();
+        if(!nm.empty()) t += nm + " ";
+        if(!desc.empty()) t += desc + " ";
+        if(!loc.empty()) t += loc + " ";
+        if(!vend.empty()) t += vend + " ";
+        if(!ser.empty()) t += ser + " ";
+        if(!ver.empty()) t += ver + " ";
         t += device_type_to_str(c->type);
         return QString::fromStdString(t).toLower();
     };
@@ -2266,7 +2272,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     for(RGBController* c : all_controllers)
     {
         if(!c) continue;
-        QString actual_name = QString::fromStdString(c->name);
+        QString actual_name = QString::fromStdString(c->GetName());
         if(actual_name.compare(preset_ctrl_name, Qt::CaseInsensitive) == 0)
         {
             matching.push_back(c);
@@ -2279,7 +2285,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
             matching.push_back(c);
             continue;
         }
-        if(!preset_location_q.isEmpty() && QString::fromStdString(c->location).trimmed() == preset_location_q)
+        if(!preset_location_q.isEmpty() && QString::fromStdString(c->GetLocation()).trimmed() == preset_location_q)
         {
             matching.push_back(c);
             continue;
@@ -2913,9 +2919,9 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         }
         else
         {
-            controller_json["name"] = ct->controller->name;
+            controller_json["name"] = ct->controller->GetName();
             controller_json["type"] = "physical";
-            controller_json["location"] = ct->controller->location;
+            controller_json["location"] = ct->controller->GetLocation();
         }
 
         controller_json["led_mappings"] = nlohmann::json::array();
@@ -3146,7 +3152,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             {
                 for(unsigned int j = 0; j < controllers.size(); j++)
                 {
-                    if(controllers[j]->name == ctrl_name && controllers[j]->location == ctrl_location)
+                    if(controllers[j]->GetName() == ctrl_name && controllers[j]->GetLocation() == ctrl_location)
                     {
                         controller = controllers[j];
                         break;
@@ -3301,7 +3307,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         else
                         {
                             LOG_WARNING("[OpenRGB3DSpatialPlugin] CORRUPTED DATA for '%s': has %d LEDs from multiple zones with granularity=%d. Treating as Whole Device and will regenerate on next change.",
-                                        controller->name.c_str(),
+                                        controller->GetName().c_str(),
                                         (int)ctrl_transform->led_positions.size(),
                                         original_granularity);
                             ctrl_transform->granularity = 0;
@@ -3354,11 +3360,11 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             {
                 if(granularity == 0)
                 {
-                    name = QString("[Device] ") + QString::fromStdString(controller->name);
+                    name = QString("[Device] ") + QString::fromStdString(controller->GetName());
                 }
                 else if(granularity == 1)
                 {
-                    name = QString("[Zone] ") + QString::fromStdString(controller->name);
+                    name = QString("[Zone] ") + QString::fromStdString(controller->GetName());
                     if(item_idx >= 0 && item_idx < (int)controller->zones.size())
                     {
                         name += " - " + QString::fromStdString(controller->zones[item_idx].name);
@@ -3366,7 +3372,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
                 else if(granularity == 2)
                 {
-                    name = QString("[LED] ") + QString::fromStdString(controller->name);
+                    name = QString("[LED] ") + QString::fromStdString(controller->GetName());
                     if(item_idx >= 0 && item_idx < (int)controller->leds.size())
                     {
                         name += " - " + QString::fromStdString(controller->leds[item_idx].name);
@@ -3374,7 +3380,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
                 else
                 {
-                    name = QString::fromStdString(controller->name);
+                    name = QString::fromStdString(controller->GetName());
                     if(led_positions_size < controller->leds.size())
                     {
                         if(led_positions_size == 1)

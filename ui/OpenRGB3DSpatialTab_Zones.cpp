@@ -27,7 +27,7 @@ QString BuildZoneDialogControllerName(const ControllerTransform* ctrl, size_t in
 
     if(ctrl->controller)
     {
-        QString name = QString::fromStdString(ctrl->controller->name);
+        QString name = QString::fromStdString(ctrl->controller->GetName());
         if(ctrl->granularity == 1 && ctrl->item_idx >= 0 && ctrl->item_idx < (int)ctrl->controller->zones.size())
         {
             name += " - " + QString::fromStdString(ctrl->controller->zones[ctrl->item_idx].name);
@@ -300,7 +300,7 @@ void OpenRGB3DSpatialTab::PopulateZoneTargetCombo(QComboBox* combo, int saved_va
         {
             if(transform->controller)
             {
-                base_name = QString::fromStdString(transform->controller->name);
+                base_name = QString::fromStdString(transform->controller->GetName());
             }
             if(transform->virtual_controller && base_name.isEmpty())
             {
