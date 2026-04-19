@@ -60,6 +60,9 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     mode_combo->addItem("Beat (audio)");
     mode_combo->addItem("Sparkle (time)");
     mode_combo->setCurrentIndex(std::max(0, std::min(flash_mode, MODE_COUNT - 1)));
+    mode_combo->setToolTip("Beat mode needs audio input; Sparkle uses time only.");
+    mode_combo->setItemData(0, "Flash on rhythm peaks—threshold and density matter.", Qt::ToolTipRole);
+    mode_combo->setItemData(1, "Random twinkles over time, no beat required.", Qt::ToolTipRole);
     mode_row->addWidget(mode_combo);
     layout->addLayout(mode_row);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
@@ -71,6 +74,7 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     density_row->addWidget(new QLabel("Density:"));
     QSlider* density_slider = new QSlider(Qt::Horizontal);
     density_slider->setRange(5, 100);
+    density_slider->setToolTip("How much of the room flashes per hit (Beat mode) or sparkle density (Sparkle mode).");
     density_slider->setValue((int)(flash_density * 100.0f));
     QLabel* density_label = new QLabel(QString::number((int)(flash_density * 100)) + "%");
     density_label->setMinimumWidth(40);
@@ -88,6 +92,7 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     size_row->addWidget(new QLabel("Flash Size:"));
     QSlider* size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(5, 200);
+    size_slider->setToolTip("Spatial size of each flash region.");
     size_slider->setValue((int)(flash_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(flash_size * 100)) + "%");
     size_label->setMinimumWidth(40);
@@ -122,6 +127,7 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     thresh_row->addWidget(new QLabel("Threshold:"));
     QSlider* thresh_slider = new QSlider(Qt::Horizontal);
     thresh_slider->setRange(0, 95);
+    thresh_slider->setToolTip("Beat onset sensitivity in Beat mode (higher = fewer flashes).");
     thresh_slider->setValue((int)(onset_threshold * 100.0f));
     QLabel* thresh_label = new QLabel(QString::number((int)(onset_threshold * 100)) + "%");
     thresh_label->setMinimumWidth(40);
@@ -139,6 +145,7 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Gain on the monitored band for beat detection and flash strength.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

@@ -9,6 +9,7 @@ REGISTER_EFFECT_3D(Explosion);
 #include <QVBoxLayout>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include "../EffectHelpers.h"
 
 static const int TYPE_STANDARD = 0;
@@ -95,12 +96,17 @@ void Explosion::SetupCustomUI(QWidget* parent)
 
     layout->addWidget(new QLabel("Type:"), row, 0);
     type_combo = new QComboBox();
-    type_combo->setToolTip("Explosion style: Standard (shockwave + debris), Nuke (mushroom), Land Mine (ground burst), Bomb (symmetric + debris), Wall Bounce");
+    type_combo->setToolTip("Shockwave recipe and debris style. Particles slider mainly affects Standard and Bomb.");
     type_combo->addItem("Standard");
+    type_combo->setItemData(0, "Expanding wave plus optional debris.", Qt::ToolTipRole);
     type_combo->addItem("Nuke");
+    type_combo->setItemData(1, "Tall mushroom-style column and cap.", Qt::ToolTipRole);
     type_combo->addItem("Land Mine");
+    type_combo->setItemData(2, "Low ground-hugging burst.", Qt::ToolTipRole);
     type_combo->addItem("Bomb");
+    type_combo->setItemData(3, "Symmetric fireball with debris.", Qt::ToolTipRole);
     type_combo->addItem("Wall Bounce");
+    type_combo->setItemData(4, "Wave reflects when it hits room bounds.", Qt::ToolTipRole);
     type_combo->setCurrentIndex(explosion_type);
     layout->addWidget(type_combo, row, 1, 1, 2);
     row++;

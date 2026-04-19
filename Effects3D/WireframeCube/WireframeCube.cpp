@@ -77,6 +77,7 @@ void WireframeCube::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Edge glow:"), 0, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(2, 100);
+    thick_slider->setToolTip("How wide the lit region around each edge (halo thickness).");
     thick_slider->setValue((int)(thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(thickness * 100)) + "%");
     thick_label->setMinimumWidth(36);
@@ -90,6 +91,7 @@ void WireframeCube::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Line brightness:"), 1, 0);
     QSlider* bright_slider = new QSlider(Qt::Horizontal);
     bright_slider->setRange(0, 100);
+    bright_slider->setToolTip("Peak brightness along the wireframe lines.");
     bright_slider->setValue((int)(line_brightness * 100.0f));
     QLabel* bright_label = new QLabel(QString::number((int)(line_brightness * 100)) + "%");
     bright_label->setMinimumWidth(36);
@@ -177,7 +179,9 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
     float hue = fmodf(cached_angle_deg * 0.1f, 360.0f);
     if(hue < 0.0f) hue += 360.0f;
     float detail = std::max(0.05f, GetScaledDetail());
-    hue = fmodf(hue * (0.6f + 0.4f * detail) + time * GetScaledFrequency() * 12.0f, 360.0f);
+    hue = fmodf(hue * (0.6f + 0.4f * detail) + time * GetScaledFrequency() * 12.0f
+                  + lx * 42.0f + ly * 38.0f + lz * 46.0f,
+              360.0f);
     if(hue < 0.0f) hue += 360.0f;
     RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(0.5f);
     int r = (int)((c & 0xFF) * total);

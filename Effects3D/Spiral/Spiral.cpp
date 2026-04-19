@@ -11,6 +11,10 @@ REGISTER_EFFECT_3D(Spiral);
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace {
+constexpr int kSpiralPatternCount = 6;
+}
+
 Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
 {
     arms_slider = nullptr;
@@ -84,9 +88,18 @@ void Spiral::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Swirl Circles");
     pattern_combo->addItem("Hypnotic");
     pattern_combo->addItem("Simple Spin");
-    pattern_combo->setCurrentIndex(pattern_type);
-    pattern_combo->setToolTip("Spiral pattern style");
+    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kSpiralPatternCount - 1));
+    pattern_combo->setToolTip(
+        "Spiral field recipe (changes both shape and rainbow hue layout). "
+        "Arms and Gap matter for pinwheel and blade styles; use Scale and zone bounds on sparse layouts.");
+    pattern_combo->setItemData(0, "Classic logarithmic spiral—smooth color roll-off.", Qt::ToolTipRole);
+    pattern_combo->setItemData(1, "Radial wedges like a pinwheel; pair with Arms.", Qt::ToolTipRole);
+    pattern_combo->setItemData(2, "High-contrast blades; Gap Size sets dark spacing.", Qt::ToolTipRole);
+    pattern_combo->setItemData(3, "Concentric rings with twist—strong center read.", Qt::ToolTipRole);
+    pattern_combo->setItemData(4, "Multi-frequency twist; busy, hypnotic motion.", Qt::ToolTipRole);
+    pattern_combo->setItemData(5, "Lightweight angular spin—fewer features, very legible.", Qt::ToolTipRole);
     layout->addWidget(pattern_combo, 0, 1);
+    pattern_type = pattern_combo->currentIndex();
 
     layout->addWidget(new QLabel("Arms:"), 1, 0);
     arms_slider = new QSlider(Qt::Horizontal);
@@ -128,7 +141,8 @@ void Spiral::UpdateParams(SpatialEffectParams& params)
 
 void Spiral::OnSpiralParameterChanged()
 {
-    if(pattern_combo) pattern_type = pattern_combo->currentIndex();
+    if(pattern_combo)
+        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kSpiralPatternCount - 1);
     if(arms_slider)
     {
         num_arms = arms_slider->value();
@@ -276,7 +290,9 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     }
     else if(GetRainbowMode())
     {
-        float hue = spiral_angle * 57.2958f + time * rate * 12.0f;
+        // spiral_value differs per pattern_type; spiral_angle alone is shared across patterns,
+        // so ignoring spiral_value made every pattern look identical in rainbow mode (default).
+        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate * 12.0f;
         final_color = GetRainbowColor(hue);
     }
     else
@@ -314,7 +330,7 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
     }
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
     {
-        pattern_type = std::max(0, std::min(settings["pattern_type"].get<int>(), 5));
+        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kSpiralPatternCount - 1);
         if(pattern_combo)
         {
             pattern_combo->setCurrentIndex(pattern_type);

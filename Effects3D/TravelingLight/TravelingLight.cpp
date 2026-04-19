@@ -107,6 +107,17 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     QComboBox* mode_combo = new QComboBox();
     for(int m = 0; m < MODE_COUNT; m++) mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::max(0, std::min(this->mode, MODE_COUNT - 1)));
+    mode_combo->setToolTip(
+        "How the light path moves through the grid. Wipe uses Wipe edge below; beams use Glow.");
+    mode_combo->setItemData(0, "Single bright head with tail.", Qt::ToolTipRole);
+    mode_combo->setItemData(1, "Several heads spaced along the path.", Qt::ToolTipRole);
+    mode_combo->setItemData(2, "Wide lit band that travels.", Qt::ToolTipRole);
+    mode_combo->setItemData(3, "Snake path that folds across axes.", Qt::ToolTipRole);
+    mode_combo->setItemData(4, "Back-and-forth scanner bars.", Qt::ToolTipRole);
+    mode_combo->setItemData(5, "Plane that sweeps across the volume.", Qt::ToolTipRole);
+    mode_combo->setItemData(6, "Multiple parallel sheets in motion.", Qt::ToolTipRole);
+    mode_combo->setItemData(7, "Two crossing beams with glow control.", Qt::ToolTipRole);
+    mode_combo->setItemData(8, "One beam rotating around the vertical axis.", Qt::ToolTipRole);
     layout->addWidget(mode_combo, row, 1, 1, 2);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         this->mode = std::max(0, std::min(idx, MODE_COUNT - 1));
@@ -120,6 +131,10 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     wipe_edge_combo->addItem("Sharp");
     wipe_edge_combo->addItem("Square");
     wipe_edge_combo->setCurrentIndex(std::clamp(wipe_edge_shape, 0, 2));
+    wipe_edge_combo->setToolTip("Cross-section of the wipe plane (Wipe style only).");
+    wipe_edge_combo->setItemData(0, "Soft falloff at the lit boundary.", Qt::ToolTipRole);
+    wipe_edge_combo->setItemData(1, "Hard on/off boundary.", Qt::ToolTipRole);
+    wipe_edge_combo->setItemData(2, "Flat lit region with steep sides.", Qt::ToolTipRole);
     layout->addWidget(wipe_edge_combo, row, 1, 1, 2);
     connect(wipe_edge_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         wipe_edge_shape = std::clamp(idx, 0, 2);
@@ -130,6 +145,7 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Panes divisions:"), row, 0);
     QSlider* div_slider = new QSlider(Qt::Horizontal);
     div_slider->setRange(2, 16);
+    div_slider->setToolTip("Number of bands or cells for Moving Panes and similar styles.");
     div_slider->setValue(num_divisions);
     QLabel* div_label = new QLabel(QString::number(num_divisions));
     div_label->setMinimumWidth(36);
@@ -145,6 +161,7 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Glow (beams):"), row, 0);
     QSlider* glow_slider = new QSlider(Qt::Horizontal);
     glow_slider->setRange(10, 100);
+    glow_slider->setToolTip("Beam softness for Crossing Beams and Rotating Beam (wider halo = higher).");
     glow_slider->setValue((int)(glow * 100.0f));
     QLabel* glow_label = new QLabel(QString::number((int)(glow * 100)) + "%");
     glow_label->setMinimumWidth(36);

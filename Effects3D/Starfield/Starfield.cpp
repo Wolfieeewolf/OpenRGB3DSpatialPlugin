@@ -66,6 +66,9 @@ void Starfield::SetupCustomUI(QWidget* parent)
     QComboBox* mode_combo = new QComboBox();
     for(int m = 0; m < MODE_COUNT; m++) mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::max(0, std::min(this->mode, MODE_COUNT - 1)));
+    mode_combo->setToolTip("Motion style for star points. Size and drift still apply in both modes.");
+    mode_combo->setItemData(0, "Classic drift along depth with wrap—good volumetric read.", Qt::ToolTipRole);
+    mode_combo->setItemData(1, "Stars brighten and dim in place; less directional motion.", Qt::ToolTipRole);
     layout->addWidget(mode_combo, row, 1, 1, 2);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         this->mode = std::max(0, std::min(idx, MODE_COUNT - 1));
@@ -75,6 +78,7 @@ void Starfield::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Star count:"), row, 0);
     QSlider* count_slider = new QSlider(Qt::Horizontal);
     count_slider->setRange(40, 120);
+    count_slider->setToolTip("Number of star points simulated in the field.");
     count_slider->setValue(num_stars);
     QLabel* count_label = new QLabel(QString::number(num_stars));
     count_label->setMinimumWidth(36);
@@ -89,6 +93,7 @@ void Starfield::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Star size:"), row, 0);
     QSlider* size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(2, 100);
+    size_slider->setToolTip("Apparent size of each star streak or point.");
     size_slider->setValue((int)(star_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(star_size * 100)) + "%");
     size_label->setMinimumWidth(36);
@@ -117,6 +122,7 @@ void Starfield::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Twinkle:"), row, 0);
     QSlider* twinkle_slider = new QSlider(Qt::Horizontal);
     twinkle_slider->setRange(0, 100);
+    twinkle_slider->setToolTip("Brightness modulation; strongest in Twinkle mode, subtle shimmer in Starfield when raised.");
     twinkle_slider->setValue((int)(twinkle_speed * 100.0f));
     QLabel* twinkle_label = new QLabel(QString::number((int)(twinkle_speed * 100)) + "%");
     twinkle_label->setMinimumWidth(36);

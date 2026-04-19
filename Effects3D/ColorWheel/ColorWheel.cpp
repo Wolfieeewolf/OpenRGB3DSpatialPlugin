@@ -60,6 +60,9 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     dir_combo->addItem("Clockwise");
     dir_combo->addItem("Counter-clockwise");
     dir_combo->setCurrentIndex(direction);
+    dir_combo->setToolTip("Hue progression around the effect origin in the active plane (see Plane in common controls).");
+    dir_combo->setItemData(0, "Increasing angle follows clock motion when viewed from the plane normal.", Qt::ToolTipRole);
+    dir_combo->setItemData(1, "Reverses hue sweep—useful to match other rotating effects.", Qt::ToolTipRole);
     layout->addWidget(dir_combo, row, 1, 1, 2);
     connect(dir_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         direction = std::max(0, std::min(1, idx));

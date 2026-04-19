@@ -74,6 +74,7 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Helix Radius:"), 0, 0);
     radius_slider = new QSlider(Qt::Horizontal);
     radius_slider->setRange(20, 150);
+    radius_slider->setToolTip("How far strands sit from the helix axis (pairs with Scale and room bounds).");
     radius_slider->setValue(helix_radius);
     layout->addWidget(radius_slider, 0, 1);
     radius_label = new QLabel(QString::number(helix_radius));
@@ -186,7 +187,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        float hue = helix_height * 50.0f + time * rate * 12.0f;
+        float hue = helix_height * 50.0f + angle * 20.0f + time * rate * 12.0f;
         if(base_pair_connection > 0.3f)
         {
             hue += 180.0f;

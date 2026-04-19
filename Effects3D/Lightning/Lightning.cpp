@@ -92,6 +92,13 @@ void Lightning::SetupCustomUI(QWidget* parent)
     QComboBox* mode_combo = new QComboBox();
     for(int m = 0; m < MODE_COUNT; m++) mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::max(0, std::min(this->mode, MODE_COUNT - 1)));
+    mode_combo->setToolTip(
+        "Plasma Ball uses arcs/sec and max arcs. Sky modes use ceiling/height cues—try zone bounds on strips.");
+    mode_combo->setItemData(0, "Grounded energy sphere with branching arcs.", Qt::ToolTipRole);
+    mode_combo->setItemData(1, "Brief ceiling-wide flash.", Qt::ToolTipRole);
+    mode_combo->setItemData(2, "Single bolt from cloud band to floor.", Qt::ToolTipRole);
+    mode_combo->setItemData(3, "Forked discharge from cloud height.", Qt::ToolTipRole);
+    mode_combo->setItemData(4, "Multiple strikes and ambient flicker.", Qt::ToolTipRole);
     layout->addWidget(mode_combo, row, 1, 1, 2);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         this->mode = std::max(0, std::min(idx, MODE_COUNT - 1));

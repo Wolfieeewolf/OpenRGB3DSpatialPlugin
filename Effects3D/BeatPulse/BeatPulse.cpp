@@ -74,6 +74,7 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("Smooths the beat envelope between onsets.");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -91,6 +92,7 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
     falloff_slider->setRange(20, 500);
+    falloff_slider->setToolTip("How tight each expanding wave ring is behind the pulse front.");
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -108,6 +110,7 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Boosts band energy used for pulse strength.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -125,6 +128,7 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
     sens_row->addWidget(new QLabel("Beat sensitivity:"));
     QSlider* sens_slider = new QSlider(Qt::Horizontal);
     sens_slider->setRange(0, 95);
+    sens_slider->setToolTip("Higher = fewer but stronger beat triggers (uses onset detector).");
     sens_slider->setValue((int)(onset_threshold * 100.0f));
     QLabel* sens_label = new QLabel(QString::number((int)(onset_threshold * 100)) + "%");
     sens_label->setMinimumWidth(40);

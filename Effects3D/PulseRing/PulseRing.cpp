@@ -61,6 +61,9 @@ void PulseRing::SetupCustomUI(QWidget* parent)
     QComboBox* style_combo = new QComboBox();
     for(int s = 0; s < STYLE_COUNT; s++) style_combo->addItem(StyleName(s));
     style_combo->setCurrentIndex(std::max(0, std::min(ring_style, STYLE_COUNT - 1)));
+    style_combo->setToolTip("Pulse Ring = expanding donut; Radial Rainbow = hue by angle from center.");
+    style_combo->setItemData(0, "Timed rings with configurable thickness and inner hole.", Qt::ToolTipRole);
+    style_combo->setItemData(1, "Rainbow locked to horizontal angle—strong on floors and rings of LEDs.", Qt::ToolTipRole);
     layout->addWidget(style_combo, row, 1, 1, 2);
     connect(style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         ring_style = std::max(0, std::min(idx, STYLE_COUNT - 1));
@@ -70,6 +73,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Ring thickness:"), row, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(2, 100);
+    thick_slider->setToolTip("Gaussian width of the ring band (Pulse Ring style only).");
     thick_slider->setValue((int)(ring_thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(ring_thickness * 100)) + "%");
     thick_label->setMinimumWidth(36);
@@ -84,6 +88,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Hole size:"), row, 0);
     QSlider* hole_slider = new QSlider(Qt::Horizontal);
     hole_slider->setRange(0, 80);
+    hole_slider->setToolTip("Dark core radius inside the ring (fraction of horizontal span).");
     hole_slider->setValue((int)(hole_size * 100.0f));
     QLabel* hole_label = new QLabel(QString::number((int)(hole_size * 100)) + "%");
     hole_label->setMinimumWidth(36);
@@ -98,6 +103,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Pulse amplitude:"), row, 0);
     QSlider* amp_slider = new QSlider(Qt::Horizontal);
     amp_slider->setRange(20, 200);
+    amp_slider->setToolTip("How strongly the ring front modulates (Pulse Ring style).");
     amp_slider->setValue((int)(pulse_amplitude * 100.0f));
     QLabel* amp_label = new QLabel(QString::number((int)(pulse_amplitude * 100)) + "%");
     amp_label->setMinimumWidth(36);
@@ -112,6 +118,7 @@ void PulseRing::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Direction:"), row, 0);
     QSlider* dir_slider = new QSlider(Qt::Horizontal);
     dir_slider->setRange(0, 360);
+    dir_slider->setToolTip("Rotates where the expanding ring starts in the cycle (Pulse Ring style).");
     dir_slider->setValue((int)direction_deg);
     QLabel* dir_label = new QLabel(QString::number((int)direction_deg) + "°");
     dir_label->setMinimumWidth(36);
@@ -177,7 +184,15 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     }
     intensity = std::min(1.0f, std::max(0.0f, intensity));
 
-    float hue = fmodf(pos_norm * 360.0f + progress * (style == STYLE_RADIAL_RAINBOW ? 30.0f : 80.0f), 360.0f);
+    float azimuth_deg = atan2f(rot.z - origin.z, rot.x - origin.x) * 57.2957795f;
+    float hue = fmodf(
+        pos_norm * 360.0f
+        + 0.22f * azimuth_deg
+        + progress * (style == STYLE_RADIAL_RAINBOW ? 36.0f : 84.0f)
+        + (float)style * 52.0f
+        + direction_deg * (style == STYLE_PULSE_RING ? 0.85f : 0.30f)
+        + (style == STYLE_PULSE_RING ? intensity * 55.0f : 0.0f),
+        360.0f);
     if(hue < 0.0f) hue += 360.0f;
     RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pos_norm);
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));

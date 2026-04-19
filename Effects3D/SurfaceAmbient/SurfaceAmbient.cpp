@@ -119,6 +119,15 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     QComboBox* style_combo = new QComboBox();
     for(int s = 0; s < STYLE_COUNT; s++) style_combo->addItem(StyleName(s));
     style_combo->setCurrentIndex(std::max(0, std::min(style, STYLE_COUNT - 1)));
+    style_combo->setToolTip(
+        "Plasma-style field on the chosen room shell (floor/ceiling/wall). Pick surface mask in common controls.");
+    style_combo->setItemData(0, "Chaotic warm flicker—strong vertical motion.", Qt::ToolTipRole);
+    style_combo->setItemData(1, "Cool ripples and softer peaks.", Qt::ToolTipRole);
+    style_combo->setItemData(2, "Blobby organic motion.", Qt::ToolTipRole);
+    style_combo->setItemData(3, "Sharper hot peaks with radial emphasis.", Qt::ToolTipRole);
+    style_combo->setItemData(4, "Softer, wider fire—less harsh detail.", Qt::ToolTipRole);
+    style_combo->setItemData(5, "Deeper, slower waves.", Qt::ToolTipRole);
+    style_combo->setItemData(6, "Wispy high-frequency haze.", Qt::ToolTipRole);
     layout->addWidget(style_combo, row, 1, 1, 2);
     connect(style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         style = std::max(0, std::min(idx, STYLE_COUNT - 1));
@@ -129,6 +138,7 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Height:"), row, 0);
     QSlider* height_slider = new QSlider(Qt::Horizontal);
     height_slider->setRange(5, 100);
+    height_slider->setToolTip("How far the effect extends from each enabled shell into the room (surface mask in common controls).");
     height_slider->setValue((int)(height_pct * 100.0f));
     QLabel* height_label = new QLabel(QString::number((int)(height_pct * 100)) + "%");
     height_label->setMinimumWidth(36);
@@ -144,6 +154,7 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Thickness:"), row, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(2, 50);
+    thick_slider->setToolTip("Falloff thickness from the shell—higher = softer edge into the volume.");
     thick_slider->setValue((int)(thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(thickness * 100)) + "%");
     thick_label->setMinimumWidth(36);

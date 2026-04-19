@@ -78,6 +78,7 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("Smooths per-band levels so bars move less nervously.");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -95,6 +96,7 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
     falloff_slider->setRange(20, 800);
+    falloff_slider->setToolTip("How sharply each bar falls off above its peak height.");
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -112,6 +114,7 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Gain on spectrum energy so quiet mixes still light the grid.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -129,6 +132,7 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
     roll_row->addWidget(new QLabel("Roll speed:"));
     QSlider* roll_slider = new QSlider(Qt::Horizontal);
     roll_slider->setRange(0, 200);
+    roll_slider->setToolTip("Scrolls the bar pattern along the spectrum axis over time.");
     roll_slider->setValue((int)(roll_speed * 100.0f));
     QLabel* roll_label = new QLabel(QString::number(roll_speed, 'f', 2));
     roll_label->setMinimumWidth(36);

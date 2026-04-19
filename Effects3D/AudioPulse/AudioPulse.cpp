@@ -75,6 +75,7 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("How quickly level follows the selected frequency band (higher = smoother).");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -92,6 +93,7 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
     falloff_slider->setRange(20, 800);
+    falloff_slider->setToolTip("When radial fade is on, how quickly brightness drops from the center outward.");
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -109,6 +111,7 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Gain on band energy so quiet passages still move the room.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
@@ -123,6 +126,7 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     });
 
     QCheckBox* radial_check = new QCheckBox("Radial Fade");
+    radial_check->setToolTip("When on, output varies with distance from the effect origin; off = uniform room pulse.");
     radial_check->setChecked(use_radial);
     connect(radial_check, &QCheckBox::toggled, this, [this](bool checked){
         use_radial = checked;

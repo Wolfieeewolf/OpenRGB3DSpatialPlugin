@@ -4,7 +4,12 @@
 
 REGISTER_EFFECT_3D(Plasma);
 #include <QGridLayout>
+#include <algorithm>
 #include <cmath>
+
+namespace {
+constexpr int kPlasmaPatternCount = 6;
+}
 
 Plasma::Plasma(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -76,9 +81,30 @@ void Plasma::SetupCustomUI(QWidget* parent)
     pattern_combo->addItem("Organic");
     pattern_combo->addItem("Noise");
     pattern_combo->addItem("CubeFire");
-    pattern_combo->setCurrentIndex(pattern_type);
-    pattern_combo->setToolTip("Plasma pattern variant");
+    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kPlasmaPatternCount - 1));
+    pattern_combo->setToolTip(
+        "How the plasma field is built from normalized room coordinates. "
+        "Detail and Size tune spatial frequency; Target zone bounds in the stack helps strips or partial rooms.");
+    pattern_combo->setItemData(0,
+        "Layered sines in X/Y plus mild radial and Z terms—balanced default.",
+        Qt::ToolTipRole);
+    pattern_combo->setItemData(1,
+        "Polar swirl in the horizontal plane with Z modulation.",
+        Qt::ToolTipRole);
+    pattern_combo->setItemData(2,
+        "Radial rings from center—reads clearly on floors and wide walls.",
+        Qt::ToolTipRole);
+    pattern_combo->setItemData(3,
+        "Coupled flows with nested sines—softer, cloud-like motion.",
+        Qt::ToolTipRole);
+    pattern_combo->setItemData(4,
+        "High-frequency grain—busy texture; works best with lower Detail.",
+        Qt::ToolTipRole);
+    pattern_combo->setItemData(5,
+        "3D radial shells from room center—strong depth cue in volumetric layouts.",
+        Qt::ToolTipRole);
     layout->addWidget(pattern_combo, 0, 1);
+    pattern_type = pattern_combo->currentIndex();
 
     AddWidgetToParent(plasma_widget, parent);
 
@@ -93,7 +119,8 @@ void Plasma::UpdateParams(SpatialEffectParams& params)
 
 void Plasma::OnPlasmaParameterChanged()
 {
-    if(pattern_combo) pattern_type = pattern_combo->currentIndex();
+    if(pattern_combo)
+        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kPlasmaPatternCount - 1);
     emit ParametersChanged();
 }
 
@@ -229,7 +256,7 @@ void Plasma::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
-        pattern_type = std::max(0, std::min(settings["pattern_type"].get<int>(), 5));
+        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kPlasmaPatternCount - 1);
 
     if(pattern_combo) pattern_combo->setCurrentIndex(pattern_type);
 }

@@ -73,6 +73,7 @@ void BandScan::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("How quickly the spectrum level follows peaks (higher = smoother, slower meter).");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -90,6 +91,7 @@ void BandScan::SetupCustomUI(QWidget* parent)
     falloff_row->addWidget(new QLabel("Falloff:"));
     QSlider* falloff_slider = new QSlider(Qt::Horizontal);
     falloff_slider->setRange(20, 800);
+    falloff_slider->setToolTip("How sharply level drops away from the current peak (higher = tighter band).");
     falloff_slider->setValue((int)(audio_settings.falloff * 100.0f));
     QLabel* falloff_label = new QLabel(QString::number(audio_settings.falloff, 'f', 1));
     falloff_label->setMinimumWidth(36);
@@ -107,6 +109,7 @@ void BandScan::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Amplifies quiet input so the scan reads on sparse LED layouts.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

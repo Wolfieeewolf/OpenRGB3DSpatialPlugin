@@ -67,6 +67,7 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Max bubbles:"), row, 0);
     QSlider* max_slider = new QSlider(Qt::Horizontal);
     max_slider->setRange(4, 100);
+    max_slider->setToolTip("How many bubble centers are simulated (internally capped for performance).");
     max_slider->setValue(max_bubbles);
     QLabel* max_label = new QLabel(QString::number(max_bubbles));
     max_label->setMinimumWidth(36);
@@ -81,6 +82,7 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Ring thickness:"), row, 0);
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(2, 100);
+    thick_slider->setToolTip("Shell thickness of each bubble as a fraction of room scale.");
     thick_slider->setValue((int)(bubble_thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(bubble_thickness * 100)) + "%");
     thick_label->setMinimumWidth(36);
@@ -95,6 +97,7 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Rise speed:"), row, 0);
     QSlider* rise_slider = new QSlider(Qt::Horizontal);
     rise_slider->setRange(20, 200);
+    rise_slider->setToolTip("How fast bubbles drift upward through the volume.");
     rise_slider->setValue((int)(rise_speed * 100.0f));
     QLabel* rise_label = new QLabel(QString::number(rise_speed, 'f', 2));
     rise_label->setMinimumWidth(36);
@@ -109,6 +112,7 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Spawn rate:"), row, 0);
     QSlider* spawn_slider = new QSlider(Qt::Horizontal);
     spawn_slider->setRange(30, 200);
+    spawn_slider->setToolTip("Spacing between bubble phases (lower = busier, more motion).");
     spawn_slider->setValue((int)(spawn_interval * 100.0f));
     QLabel* spawn_label = new QLabel(QString::number(spawn_interval, 'f', 2));
     spawn_label->setMinimumWidth(36);

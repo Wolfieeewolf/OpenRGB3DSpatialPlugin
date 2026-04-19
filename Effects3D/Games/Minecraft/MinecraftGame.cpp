@@ -281,6 +281,13 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         axis_combo->addItem(QStringLiteral("Along Y"));
         axis_combo->addItem(QStringLiteral("Along Z"));
         axis_combo->setCurrentIndex(std::clamp(s.health_strip_axis, 0, 3));
+        axis_combo->setToolTip(
+            "Which room axis maps one heart's LED strip when Per-heart strip is on. "
+            "Auto picks the longest layout span.");
+        axis_combo->setItemData(0, QStringLiteral("Pick X, Y, or Z by largest LED span in the layout."), Qt::ToolTipRole);
+        axis_combo->setItemData(1, QStringLiteral("Strip runs with increasing X along the strip."), Qt::ToolTipRole);
+        axis_combo->setItemData(2, QStringLiteral("Strip runs with increasing Y along the strip."), Qt::ToolTipRole);
+        axis_combo->setItemData(3, QStringLiteral("Strip runs with increasing Z along the strip."), Qt::ToolTipRole);
         layout->addWidget(axis_lab, row, 0);
         layout->addWidget(axis_combo, row, 1);
         QObject::connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s](int idx) { s.health_strip_axis = std::clamp(idx, 0, 3); });
@@ -891,9 +898,7 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
         for(QGroupBox* gb : groups)
         {
             const QString t = gb->title();
-            if(t == QStringLiteral("Effect scale (X / Y / Z %)") ||
-               t == QStringLiteral("Effect scale rotation (\u00B0)") ||
-               t == QStringLiteral("Effect rotation (\u00B0)"))
+            if(t == QStringLiteral("Effect geometry"))
             {
                 gb->setVisible(false);
             }

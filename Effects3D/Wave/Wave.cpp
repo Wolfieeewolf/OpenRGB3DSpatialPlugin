@@ -90,6 +90,15 @@ void Wave::SetupCustomUI(QWidget* parent)
     style_combo = new QComboBox();
     for(int m = 0; m < MODE_COUNT; m++) style_combo->addItem(ModeName(m));
     style_combo->setCurrentIndex(std::max(0, std::min(mode, MODE_COUNT - 1)));
+    style_combo->setToolTip(
+        "Line: traveling fronts using Shape below (good on perimeters). "
+        "Surface: a heightfield-style wave across the horizontal span.");
+    style_combo->setItemData(0,
+        "Traveling fronts—circles, squares, lines, or diagonal bands.",
+        Qt::ToolTipRole);
+    style_combo->setItemData(1,
+        "3D surface waves; tune Wave style, direction, and edge fade for sparse grids.",
+        Qt::ToolTipRole);
     top->addWidget(style_combo, 0, 1);
     main_layout->addLayout(top);
 
@@ -105,6 +114,11 @@ void Wave::SetupCustomUI(QWidget* parent)
     shape_combo->addItem("Lines");
     shape_combo->addItem("Diagonal");
     shape_combo->setCurrentIndex(shape_type);
+    shape_combo->setToolTip("Wave front geometry in line mode (horizontal plane).");
+    shape_combo->setItemData(0, "Circular rings from the effect origin in XZ.", Qt::ToolTipRole);
+    shape_combo->setItemData(1, "Square rings—sharper corners than circles.", Qt::ToolTipRole);
+    shape_combo->setItemData(2, "Parallel bands; strong on opposing walls.", Qt::ToolTipRole);
+    shape_combo->setItemData(3, "Diagonal bands—readable in corners and along two walls.", Qt::ToolTipRole);
     line_layout->addWidget(shape_combo, 0, 1);
     line_layout->addWidget(new QLabel("Edge:"), 1, 0);
     edge_shape_combo = new QComboBox();
@@ -112,7 +126,10 @@ void Wave::SetupCustomUI(QWidget* parent)
     edge_shape_combo->addItem("Sharp");
     edge_shape_combo->addItem("Square");
     edge_shape_combo->setCurrentIndex(std::clamp(edge_shape, 0, 2));
-    edge_shape_combo->setToolTip("Wave edge profile: Round = soft, Sharp = hard, Square = hard band.");
+    edge_shape_combo->setToolTip("Cross-section of the traveling band in line mode.");
+    edge_shape_combo->setItemData(0, "Soft cosine falloff at the band edges.", Qt::ToolTipRole);
+    edge_shape_combo->setItemData(1, "Hard edge—crisp on-off band.", Qt::ToolTipRole);
+    edge_shape_combo->setItemData(2, "Flat-top band with steep sides.", Qt::ToolTipRole);
     line_layout->addWidget(edge_shape_combo, 1, 1);
     line_layout->addWidget(new QLabel("Thickness:"), 2, 0);
     thickness_slider = new QSlider(Qt::Horizontal);
@@ -140,6 +157,13 @@ void Wave::SetupCustomUI(QWidget* parent)
     surface_style_combo = new QComboBox();
     for(int s = 0; s < STYLE_COUNT; s++) surface_style_combo->addItem(WaveStyleName(s));
     surface_style_combo->setCurrentIndex(std::max(0, std::min(wave_style, STYLE_COUNT - 1)));
+    surface_style_combo->setToolTip(
+        "How the surface height is synthesized. Radial reads well from above; Linear follows Wave direction.");
+    surface_style_combo->setItemData(0, "Classic mega-cube style sinusoid in radius and travel.", Qt::ToolTipRole);
+    surface_style_combo->setItemData(1, "Concentric ripples from the horizontal center.", Qt::ToolTipRole);
+    surface_style_combo->setItemData(2, "Plane wave along the direction slider.", Qt::ToolTipRole);
+    surface_style_combo->setItemData(3, "Layered ocean-like motion with softer peaks.", Qt::ToolTipRole);
+    surface_style_combo->setItemData(4, "Smoother gradient roll without sharp crests.", Qt::ToolTipRole);
     surf_layout->addWidget(surface_style_combo, row, 1, 1, 2);
     row++;
     surf_layout->addWidget(new QLabel("Surface thickness:"), row, 0);

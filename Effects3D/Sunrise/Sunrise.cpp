@@ -160,6 +160,10 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     QComboBox* mode_combo = new QComboBox();
     for(int m = 0; m < MODE_COUNT; m++) mode_combo->addItem(ModeName(m));
     mode_combo->setCurrentIndex(std::max(0, std::min(time_mode, MODE_COUNT - 1)));
+    mode_combo->setToolTip("What drives the sun/sky cycle. Simulated uses Day length; Real-time uses your PC clock.");
+    mode_combo->setItemData(0, "Effect speed slider drives the day phase.", Qt::ToolTipRole);
+    mode_combo->setItemData(1, "Phase follows local time of day.", Qt::ToolTipRole);
+    mode_combo->setItemData(2, "Compresses a full day into Day length minutes.", Qt::ToolTipRole);
     layout->addWidget(mode_combo, row, 1, 1, 2);
     connect(mode_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         time_mode = std::max(0, std::min(idx, MODE_COUNT - 1));
@@ -171,6 +175,12 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     QComboBox* preset_combo = new QComboBox();
     for(int p = 0; p < PRESET_COUNT; p++) preset_combo->addItem(PresetName(p));
     preset_combo->setCurrentIndex(std::max(0, std::min(color_preset, PRESET_COUNT - 1)));
+    preset_combo->setToolTip("Loads sky/horizon/ground key colors. Custom leaves your color pickers as-is.");
+    preset_combo->setItemData(0, "Warm dawn palette.", Qt::ToolTipRole);
+    preset_combo->setItemData(1, "Evening oranges and deep blues.", Qt::ToolTipRole);
+    preset_combo->setItemData(2, "Bright midday look.", Qt::ToolTipRole);
+    preset_combo->setItemData(3, "Dim night tones.", Qt::ToolTipRole);
+    preset_combo->setItemData(4, "No automatic color load—edit colors manually.", Qt::ToolTipRole);
     layout->addWidget(preset_combo, row, 1, 1, 2);
     connect(preset_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         color_preset = std::max(0, std::min(idx, PRESET_COUNT - 1));
@@ -182,6 +192,7 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Day length (min):"), row, 0);
     QSlider* day_slider = new QSlider(Qt::Horizontal);
     day_slider->setRange(1, 120);
+    day_slider->setToolTip("Length of one full day/night cycle in Simulated time mode (minutes).");
     day_slider->setValue((int)day_length_minutes);
     QLabel* day_label = new QLabel(QString::number((int)day_length_minutes));
     day_label->setMinimumWidth(36);
@@ -195,24 +206,28 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     row++;
 
     QCheckBox* rain_cb = new QCheckBox("Rain");
+    rain_cb->setToolTip("Adds blue-violet streaks in the upper volume.");
     rain_cb->setChecked(weather_rain);
     layout->addWidget(rain_cb, row, 0);
     connect(rain_cb, &QCheckBox::toggled, this, [this](bool on){ weather_rain = on; emit ParametersChanged(); });
     row++;
 
     QCheckBox* fog_cb = new QCheckBox("Fog");
+    fog_cb->setToolTip("Softens horizon contrast and lifts low tones.");
     fog_cb->setChecked(weather_fog);
     layout->addWidget(fog_cb, row, 0);
     connect(fog_cb, &QCheckBox::toggled, this, [this](bool on){ weather_fog = on; emit ParametersChanged(); });
     row++;
 
     QCheckBox* cloudy_cb = new QCheckBox("Cloudy");
+    cloudy_cb->setToolTip("Broadens cloud band and mutes the sun disk.");
     cloudy_cb->setChecked(weather_cloudy);
     layout->addWidget(cloudy_cb, row, 0);
     connect(cloudy_cb, &QCheckBox::toggled, this, [this](bool on){ weather_cloudy = on; emit ParametersChanged(); });
     row++;
 
     QCheckBox* lightning_cb = new QCheckBox("Lightning");
+    lightning_cb->setToolTip("Random brief flashes during stormy parts of the cycle.");
     lightning_cb->setChecked(weather_lightning);
     layout->addWidget(lightning_cb, row, 0);
     connect(lightning_cb, &QCheckBox::toggled, this, [this](bool on){ weather_lightning = on; emit ParametersChanged(); });

@@ -169,7 +169,15 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->addItem("1440p (2560×1440)", QVariant(6));
     capture_quality_combo->addItem("4K (3840×2160)", QVariant(7));
     capture_quality_combo->setCurrentIndex(std::clamp(capture_quality, 0, 7));
-    capture_quality_combo->setToolTip("Higher resolution = sharper ambilight, more CPU/GPU/RAM. 4K for high-end GPUs.");
+    capture_quality_combo->setToolTip("Downscaled capture size before color extraction. Higher = sharper, heavier CPU/GPU/RAM.");
+    capture_quality_combo->setItemData(0, "Lightest load; fine for small planes or testing.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(1, "Low bandwidth; acceptable on integrated GPUs.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(2, "Balanced default for many setups.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(3, "Sharper color detail on wide monitors.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(4, "720p capture; use when GPU headroom is comfortable.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(5, "1080p; noticeable cost—prefer on discrete GPUs.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(6, "1440p; high cost.", Qt::ToolTipRole);
+    capture_quality_combo->setItemData(7, "4K; only if you need maximum edge fidelity.", Qt::ToolTipRole);
     capture_layout->addWidget(capture_quality_label);
     capture_layout->addWidget(capture_quality_combo, 1);
     capture_group->setLayout(capture_layout);
@@ -1897,6 +1905,9 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         settings.ref_point_combo->clear();
 
         settings.ref_point_combo->addItem("Room Center", QVariant(-1));
+        settings.ref_point_combo->setItemData(0,
+            "Falloff distance is measured from the room center.",
+            Qt::ToolTipRole);
 
         for(size_t i = 0; i < reference_points->size(); i++)
         {
@@ -1907,6 +1918,10 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
             QString display = QString("%1 (%2)").arg(name, type);
             settings.ref_point_combo->addItem(display, QVariant((int)i));
+            const int row = settings.ref_point_combo->count() - 1;
+            settings.ref_point_combo->setItemData(row,
+                QStringLiteral("Measure reach/falloff from \"%1\" for this monitor.").arg(name),
+                Qt::ToolTipRole);
         }
 
         if(current_data >= -1)
@@ -2131,8 +2146,13 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
 
     settings.ref_point_combo = new QComboBox();
     settings.ref_point_combo->addItem("Room Center", QVariant(-1));
+    settings.ref_point_combo->setItemData(0,
+        "Falloff distance is measured from the room center. Named reference points appear here when available.",
+        Qt::ToolTipRole);
     settings.ref_point_combo->setEnabled(has_capture_source);
-    settings.ref_point_combo->setToolTip("Anchor for falloff distance. Defaults to the display plane's position for ambilight effects.");
+    settings.ref_point_combo->setToolTip(
+        "Anchor for reach/falloff: room center or a saved reference point. "
+        "The list refreshes when reference points change (see 3D layout / reference points).");
     connect(settings.ref_point_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ScreenMirror::OnParameterChanged);
     int plane_ref_index = plane->GetReferencePointIndex();
     if(plane_ref_index >= 0 && settings.reference_point_index < 0)

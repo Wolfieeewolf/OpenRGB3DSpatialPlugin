@@ -129,7 +129,10 @@ void FreqRipple::SetupCustomUI(QWidget* parent)
     edge_combo->addItem("Sharp");
     edge_combo->addItem("Square");
     edge_combo->setCurrentIndex(std::clamp(ripple_edge_shape, 0, 2));
-    edge_combo->setToolTip("Ripple ring edge: Round = soft, Sharp = hard, Square = hard band.");
+    edge_combo->setToolTip("Cross-section of the expanding beat ring.");
+    edge_combo->setItemData(0, "Soft falloff—wider apparent ring.", Qt::ToolTipRole);
+    edge_combo->setItemData(1, "Narrow hard ring.", Qt::ToolTipRole);
+    edge_combo->setItemData(2, "Flat ring top with steep sides.", Qt::ToolTipRole);
     edge_row->addWidget(edge_combo);
     layout->addLayout(edge_row);
     connect(edge_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {

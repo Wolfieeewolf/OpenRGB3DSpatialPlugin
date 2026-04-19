@@ -169,6 +169,42 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         main_layout->addLayout(button_layout);
     }
 
+    surfaces_group = new QGroupBox("Surfaces");
+    surfaces_group->setToolTip(
+        "Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
+        "All checked = no surface filter. "
+        "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack.");
+    QGridLayout* surf_layout = new QGridLayout(surfaces_group);
+    QCheckBox* cb_floor = new QCheckBox("Floor");
+    cb_floor->setChecked((effect_surface_mask & SURF_FLOOR) != 0);
+    surf_layout->addWidget(cb_floor, 0, 0);
+    connect(cb_floor, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_FLOOR; else effect_surface_mask &= ~SURF_FLOOR; emit ParametersChanged(); });
+    QCheckBox* cb_ceil = new QCheckBox("Ceiling");
+    cb_ceil->setChecked((effect_surface_mask & SURF_CEIL) != 0);
+    surf_layout->addWidget(cb_ceil, 0, 1);
+    connect(cb_ceil, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_CEIL; else effect_surface_mask &= ~SURF_CEIL; emit ParametersChanged(); });
+    QCheckBox* cb_wxm = new QCheckBox("Wall -X");
+    cb_wxm->setChecked((effect_surface_mask & SURF_WALL_XM) != 0);
+    surf_layout->addWidget(cb_wxm, 0, 2);
+    connect(cb_wxm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XM; else effect_surface_mask &= ~SURF_WALL_XM; emit ParametersChanged(); });
+    QCheckBox* cb_wxp = new QCheckBox("Wall +X");
+    cb_wxp->setChecked((effect_surface_mask & SURF_WALL_XP) != 0);
+    surf_layout->addWidget(cb_wxp, 1, 0);
+    connect(cb_wxp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XP; else effect_surface_mask &= ~SURF_WALL_XP; emit ParametersChanged(); });
+    QCheckBox* cb_wzm = new QCheckBox("Wall -Z");
+    cb_wzm->setChecked((effect_surface_mask & SURF_WALL_ZM) != 0);
+    surf_layout->addWidget(cb_wzm, 1, 1);
+    connect(cb_wzm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZM; else effect_surface_mask &= ~SURF_WALL_ZM; emit ParametersChanged(); });
+    QCheckBox* cb_wzp = new QCheckBox("Wall +Z");
+    cb_wzp->setChecked((effect_surface_mask & SURF_WALL_ZP) != 0);
+    surf_layout->addWidget(cb_wzp, 1, 2);
+    connect(cb_wzp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZP; else effect_surface_mask &= ~SURF_WALL_ZP; emit ParametersChanged(); });
+    main_layout->addWidget(surfaces_group);
+
+    QGroupBox* motion_pattern_group = new QGroupBox("Motion and pattern");
+    motion_pattern_group->setToolTip("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds.");
+    QVBoxLayout* motion_layout = new QVBoxLayout(motion_pattern_group);
+
     QHBoxLayout* speed_layout = new QHBoxLayout();
     speed_layout->addWidget(new QLabel("Speed:"));
     speed_slider = new QSlider(Qt::Horizontal);
@@ -179,7 +215,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     speed_label = new QLabel(QString::number(effect_speed));
     speed_label->setMinimumWidth(30);
     speed_layout->addWidget(speed_label);
-    main_layout->addLayout(speed_layout);
+    motion_layout->addLayout(speed_layout);
 
     QHBoxLayout* brightness_layout = new QHBoxLayout();
     brightness_layout->addWidget(new QLabel("Brightness:"));
@@ -191,7 +227,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     brightness_label = new QLabel(QString::number(effect_brightness));
     brightness_label->setMinimumWidth(30);
     brightness_layout->addWidget(brightness_label);
-    main_layout->addLayout(brightness_layout);
+    motion_layout->addLayout(brightness_layout);
 
     QHBoxLayout* frequency_layout = new QHBoxLayout();
     frequency_layout->addWidget(new QLabel("Frequency:"));
@@ -203,7 +239,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     frequency_label = new QLabel(QString::number(effect_frequency));
     frequency_label->setMinimumWidth(30);
     frequency_layout->addWidget(frequency_label);
-    main_layout->addLayout(frequency_layout);
+    motion_layout->addLayout(frequency_layout);
 
     QHBoxLayout* detail_layout = new QHBoxLayout();
     detail_layout->addWidget(new QLabel("Detail:"));
@@ -215,7 +251,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     detail_label = new QLabel(QString::number(effect_detail));
     detail_label->setMinimumWidth(30);
     detail_layout->addWidget(detail_label);
-    main_layout->addLayout(detail_layout);
+    motion_layout->addLayout(detail_layout);
 
     QHBoxLayout* size_layout = new QHBoxLayout();
     size_layout->addWidget(new QLabel("Size:"));
@@ -227,7 +263,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     size_label = new QLabel(QString::number(effect_size));
     size_label->setMinimumWidth(30);
     size_layout->addWidget(size_label);
-    main_layout->addLayout(size_layout);
+    motion_layout->addLayout(size_layout);
 
     QHBoxLayout* scale_layout = new QHBoxLayout();
     scale_layout->addWidget(new QLabel("Scale:"));
@@ -243,7 +279,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_invert_check->setToolTip("Collapse effect toward the reference point instead of expanding outward.");
     scale_invert_check->setChecked(scale_inverted);
     scale_layout->addWidget(scale_invert_check);
-    main_layout->addLayout(scale_layout);
+    motion_layout->addLayout(scale_layout);
 
     // Bounds mode is controlled from the global Effect Stack panel.
 
@@ -257,7 +293,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_label = new QLabel(QString::number(effect_fps));
     fps_label->setMinimumWidth(30);
     fps_layout->addWidget(fps_label);
-    main_layout->addLayout(fps_layout);
+    motion_layout->addLayout(fps_layout);
+
+    main_layout->addWidget(motion_pattern_group);
+
+    QGroupBox* output_shaping_group = new QGroupBox("Output shaping");
+    output_shaping_group->setToolTip("Final contrast and level before colors; pair with Brightness above.");
+    QVBoxLayout* output_layout = new QVBoxLayout(output_shaping_group);
 
     QHBoxLayout* intensity_layout = new QHBoxLayout();
     intensity_layout->addWidget(new QLabel("Intensity:"));
@@ -269,7 +311,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     intensity_label = new QLabel(QString::number(effect_intensity));
     intensity_label->setMinimumWidth(30);
     intensity_layout->addWidget(intensity_label);
-    main_layout->addLayout(intensity_layout);
+    output_layout->addLayout(intensity_layout);
 
     QHBoxLayout* sharpness_layout = new QHBoxLayout();
     sharpness_layout->addWidget(new QLabel("Sharpness:"));
@@ -281,7 +323,17 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_label = new QLabel(QString::number(effect_sharpness));
     sharpness_label->setMinimumWidth(30);
     sharpness_layout->addWidget(sharpness_label);
-    main_layout->addLayout(sharpness_layout);
+    output_layout->addLayout(sharpness_layout);
+
+    main_layout->addWidget(output_shaping_group);
+
+    QGroupBox* geometry_group = new QGroupBox("Effect geometry");
+    geometry_group->setToolTip(
+        "LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
+        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
+        "Overall coverage uses the Scale slider under Motion and pattern. "
+        "Choose zone and global/target bounds for this layer in the Effect Stack.");
+    QVBoxLayout* geometry_layout = new QVBoxLayout(geometry_group);
 
     QGroupBox* axis_scale_group = new QGroupBox("Effect scale (X / Y / Z %)");
     axis_scale_group->setToolTip("Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.");
@@ -328,10 +380,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_layout->addWidget(axis_scale_reset_button);
 
     axis_scale_group->setLayout(axis_scale_layout);
-    main_layout->addWidget(axis_scale_group);
+    geometry_layout->addWidget(axis_scale_group);
 
     QGroupBox* axis_scale_rot_group = new QGroupBox("Effect scale rotation (°)");
-    axis_scale_rot_group->setToolTip("Rotate the direction of the effect scale axes. Scale (X/Y/Z) is applied in this orientation. Different from effect rotation below.");
+    axis_scale_rot_group->setToolTip("Rotate the direction of the effect scale axes. Per-axis scale is applied in this orientation (before effect rotation below).");
     QVBoxLayout* axis_scale_rot_layout = new QVBoxLayout();
     QHBoxLayout* asr_yaw_layout = new QHBoxLayout();
     asr_yaw_layout->addWidget(new QLabel("Yaw:"));
@@ -370,10 +422,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     axis_scale_rot_layout->addWidget(axis_scale_rot_reset_button);
 
     axis_scale_rot_group->setLayout(axis_scale_rot_layout);
-    main_layout->addWidget(axis_scale_rot_group);
+    geometry_layout->addWidget(axis_scale_rot_group);
 
-    position_offset_group = new QGroupBox("Effect position offset (%)");
-    position_offset_group->setToolTip("Offset the effect center from its origin (Room Center or reference point). Percent of half-room size. Does not move scene objects or the camera.");
+    position_offset_group = new QGroupBox("Effect center offset (%)");
+    position_offset_group->setToolTip("Shift the effect origin from room center or the chosen reference point. Percent of half-room size per axis. Does not move scene objects or the camera.");
     QVBoxLayout* offset_layout = new QVBoxLayout();
     QHBoxLayout* offset_x_layout = new QHBoxLayout();
     offset_x_layout->addWidget(new QLabel("X:"));
@@ -422,10 +474,10 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         emit ParametersChanged();
     });
     position_offset_group->setLayout(offset_layout);
-    main_layout->addWidget(position_offset_group);
+    geometry_layout->addWidget(position_offset_group);
 
     QGroupBox* rotation_group = new QGroupBox("Effect rotation (°)");
-    rotation_group->setToolTip("Rotate the effect around its center (origin). Does not move the camera or scene objects.");
+    rotation_group->setToolTip("Rotate the pattern around the effect origin (after per-axis scale and scale-axis rotation). Does not move the camera or scene objects.");
     QVBoxLayout* rotation_layout = new QVBoxLayout();
     
     QHBoxLayout* yaw_layout = new QHBoxLayout();
@@ -469,35 +521,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     rotation_layout->addWidget(rotation_reset_button);
     
     rotation_group->setLayout(rotation_layout);
-    main_layout->addWidget(rotation_group);
+    geometry_layout->addWidget(rotation_group);
 
-    surfaces_group = new QGroupBox("Surfaces");
-    QGridLayout* surf_layout = new QGridLayout(surfaces_group);
-    QCheckBox* cb_floor = new QCheckBox("Floor");
-    cb_floor->setChecked((effect_surface_mask & SURF_FLOOR) != 0);
-    surf_layout->addWidget(cb_floor, 0, 0);
-    connect(cb_floor, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_FLOOR; else effect_surface_mask &= ~SURF_FLOOR; emit ParametersChanged(); });
-    QCheckBox* cb_ceil = new QCheckBox("Ceiling");
-    cb_ceil->setChecked((effect_surface_mask & SURF_CEIL) != 0);
-    surf_layout->addWidget(cb_ceil, 0, 1);
-    connect(cb_ceil, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_CEIL; else effect_surface_mask &= ~SURF_CEIL; emit ParametersChanged(); });
-    QCheckBox* cb_wxm = new QCheckBox("Wall -X");
-    cb_wxm->setChecked((effect_surface_mask & SURF_WALL_XM) != 0);
-    surf_layout->addWidget(cb_wxm, 0, 2);
-    connect(cb_wxm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XM; else effect_surface_mask &= ~SURF_WALL_XM; emit ParametersChanged(); });
-    QCheckBox* cb_wxp = new QCheckBox("Wall +X");
-    cb_wxp->setChecked((effect_surface_mask & SURF_WALL_XP) != 0);
-    surf_layout->addWidget(cb_wxp, 1, 0);
-    connect(cb_wxp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XP; else effect_surface_mask &= ~SURF_WALL_XP; emit ParametersChanged(); });
-    QCheckBox* cb_wzm = new QCheckBox("Wall -Z");
-    cb_wzm->setChecked((effect_surface_mask & SURF_WALL_ZM) != 0);
-    surf_layout->addWidget(cb_wzm, 1, 1);
-    connect(cb_wzm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZM; else effect_surface_mask &= ~SURF_WALL_ZM; emit ParametersChanged(); });
-    QCheckBox* cb_wzp = new QCheckBox("Wall +Z");
-    cb_wzp->setChecked((effect_surface_mask & SURF_WALL_ZP) != 0);
-    surf_layout->addWidget(cb_wzp, 1, 2);
-    connect(cb_wzp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZP; else effect_surface_mask &= ~SURF_WALL_ZP; emit ParametersChanged(); });
-    main_layout->addWidget(surfaces_group);
+    main_layout->addWidget(geometry_group);
 
     CreateColorControls();
     main_layout->addWidget(color_controls_group);

@@ -75,6 +75,13 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     QComboBox* type_combo = new QComboBox();
     for(int t = 0; t < TYPE_COUNT; t++) type_combo->addItem(TypeName(t));
     type_combo->setCurrentIndex(std::max(0, std::min(firework_type, TYPE_COUNT - 1)));
+    type_combo->setToolTip("Launch and burst personality. Random cycles mixed styles each cycle.");
+    type_combo->setItemData(0, "One classic mortar burst.", Qt::ToolTipRole);
+    type_combo->setItemData(1, "Large aerial burst.", Qt::ToolTipRole);
+    type_combo->setItemData(2, "Repeated upward shots from low height.", Qt::ToolTipRole);
+    type_combo->setItemData(3, "Spinning fountain-style emission.", Qt::ToolTipRole);
+    type_combo->setItemData(4, "Upward spray that falls with gravity.", Qt::ToolTipRole);
+    type_combo->setItemData(5, "Pick a different style each cycle.", Qt::ToolTipRole);
     layout->addWidget(type_combo, row, 1, 1, 2);
     connect(type_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
         firework_type = std::max(0, std::min(idx, TYPE_COUNT - 1));
@@ -84,6 +91,7 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Simultaneous:"), row, 0);
     QSlider* sim_slider = new QSlider(Qt::Horizontal);
     sim_slider->setRange(1, 5);
+    sim_slider->setToolTip("How many bursts can be active at once (more = busier, heavier).");
     sim_slider->setValue(num_simultaneous);
     QLabel* sim_label = new QLabel(QString::number(num_simultaneous));
     sim_label->setMinimumWidth(36);
@@ -98,6 +106,7 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Particle count:"), row, 0);
     QSlider* count_slider = new QSlider(Qt::Horizontal);
     count_slider->setRange(15, 100);
+    count_slider->setToolTip("Debris particle count for styles that spawn sparks (not all types use it equally).");
     count_slider->setValue(num_debris);
     QLabel* count_label = new QLabel(QString::number(num_debris));
     count_label->setMinimumWidth(36);
@@ -112,6 +121,7 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Particle size:"), row, 0);
     QSlider* size_slider = new QSlider(Qt::Horizontal);
     size_slider->setRange(2, 100);
+    size_slider->setToolTip("Visual size of debris streaks and sparks.");
     size_slider->setValue((int)(particle_size * 100.0f));
     QLabel* size_label = new QLabel(QString::number((int)(particle_size * 100)) + "%");
     size_label->setMinimumWidth(36);
@@ -126,6 +136,7 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Gravity:"), row, 0);
     QSlider* grav_slider = new QSlider(Qt::Horizontal);
     grav_slider->setRange(0, 200);
+    grav_slider->setToolTip("How strongly particles fall after burst (0 = floaty).");
     grav_slider->setValue((int)(gravity_strength * 100.0f));
     QLabel* grav_label = new QLabel(QString::number((int)(gravity_strength * 100)) + "%");
     grav_label->setMinimumWidth(36);
@@ -140,6 +151,7 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     layout->addWidget(new QLabel("Decay speed:"), row, 0);
     QSlider* decay_slider = new QSlider(Qt::Horizontal);
     decay_slider->setRange(50, 600);
+    decay_slider->setToolTip("How quickly sparks and trails fade out.");
     decay_slider->setValue((int)(decay_speed * 100.0f));
     QLabel* decay_label = new QLabel(QString::number(decay_speed, 'f', 1));
     decay_label->setMinimumWidth(36);

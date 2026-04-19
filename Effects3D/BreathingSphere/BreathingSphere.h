@@ -14,10 +14,10 @@ public:
     explicit BreathingSphere(QWidget* parent = nullptr);
     ~BreathingSphere();
 
-    EFFECT_REGISTERER_3D("BreathingSphere", "Breathing Sphere", "Spatial", [](){return new BreathingSphere;});
+    EFFECT_REGISTERER_3D("BreathingSphere", "Breathing Shape", "Spatial", [](){return new BreathingSphere;});
 
     static std::string const ClassName() { return "BreathingSphere"; }
-    static std::string const UIName() { return "Breathing Sphere"; }
+    static std::string const UIName() { return "Breathing Shape"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -28,10 +28,30 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private:
-    enum Mode { MODE_SPHERE = 0, MODE_GLOBAL_PULSE, MODE_COUNT };
-    static const char* ModeName(int m);
-    int breathing_mode = MODE_SPHERE;
-    float           progress;
+    enum Shape {
+        SHAPE_SPHERE = 0,
+        SHAPE_SQUARE,
+        SHAPE_RECTANGLE,
+        SHAPE_TRIANGLE,
+        SHAPE_PENTAGON,
+        SHAPE_WHOLE_ROOM,
+        SHAPE_COUNT
+    };
+    enum EdgeProfile {
+        EDGE_SMOOTH = 0,
+        EDGE_SHARP,
+        EDGE_FEATHERED,
+        EDGE_RING,
+        EDGE_COUNT
+    };
+    static const char* ShapeName(int s);
+    static const char* EdgeName(int e);
+
+    int breathing_shape = SHAPE_SPHERE;
+    int edge_profile = EDGE_SMOOTH;
+    int breath_pulse_pct = 40;
+    int center_hole_pct = 0;
+    float progress;
 };
 
 #endif

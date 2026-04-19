@@ -1347,8 +1347,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     }
 
     effect_zone_label = new QLabel(tr("Zone:"));
-    effect_zone_label->setToolTip(tr("Which zone or controllers the selected stack layer targets."));
+    effect_zone_label->setToolTip(tr(
+        "Which LEDs this stack layer considers: all controllers, one zone, or one controller. "
+        "Pair with Target bounds: zone bounds remap pattern coordinates into that box (good for strips or partial rooms); "
+        "per-effect placement and coverage stay under Effect Controls (geometry and Scale)."));
     effect_zone_combo = new QComboBox();
+    effect_zone_combo->setToolTip(tr(
+        "Target selection for the selected layer. "
+        "Target zone bounds (below) needs a real zone or a meaningful selection so the local grid can be built."));
     PopulateZoneTargetCombo(effect_zone_combo, -1);
     connect(effect_zone_combo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(on_effect_zone_changed(int)));
@@ -1378,13 +1384,20 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     effect_bounds_label = new QLabel(tr("Target bounds:"));
     effect_bounds_label->setToolTip(tr(
-        "Bounds source for the selected stack layer at render time."));
+        "Which coordinate span the effect samples for this layer: full room/world grid, or the selected target's axis-aligned box. "
+        "Does not replace per-effect geometry (center offset, axis scale, rotations, Scale slider)."));
     effect_bounds_combo = new QComboBox();
     effect_bounds_combo->setToolTip(tr(
-        "Global bounds uses normal room/world behavior. "
-        "Target zone bounds uses the selected zone bounds."));
+        "Global: sample using the normal room (or world) grid. "
+        "Target zone: sample positions mapped across the zone (or target) bounding box so motion and detail read on that volume."));
     effect_bounds_combo->addItem("Global bounds", QVariant((int)SpatialEffect3D::BOUNDS_MODE_GLOBAL));
+    effect_bounds_combo->setItemData(0,
+        tr("Use the full room or world grid bounds for this layer's pattern math (same space as the voxel preview)."),
+        Qt::ToolTipRole);
     effect_bounds_combo->addItem("Target zone bounds", QVariant((int)SpatialEffect3D::BOUNDS_MODE_TARGET_ZONE));
+    effect_bounds_combo->setItemData(1,
+        tr("Build a local grid from the Zone target's bounding box and sample the effect in that space—useful when LEDs only cover part of the room."),
+        Qt::ToolTipRole);
     connect(effect_bounds_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OpenRGB3DSpatialTab::on_effect_bounds_changed);
     {
         QHBoxLayout* row = new QHBoxLayout();
@@ -1421,7 +1434,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     UpdateEffectStackList();
     if(!effect_stack.empty() && effect_stack_list)
     {
-        effect_stack_list->setCurrentRow(0);
+        {
+            const QSignalBlocker stack_sel_block(effect_stack_list);
+            effect_stack_list->setCurrentRow(0);
+        }
+        // RebuildEffectStackFromJson(nullptr) disconnects Start/Stop; QListWidget may not emit
+        // currentRowChanged(0) if the row was already 0, so wire the layer UI explicitly.
+        on_effect_stack_selection_changed(0);
     }
     UpdateStartStopAllButtons();
 

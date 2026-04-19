@@ -6,7 +6,6 @@
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
-#include <QComboBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 
@@ -73,6 +72,7 @@ void FreqFill::SetupCustomUI(QWidget* parent)
     edge_row->addWidget(new QLabel("Edge width:"));
     QSlider* edge_slider = new QSlider(Qt::Horizontal);
     edge_slider->setRange(0, 100);
+    edge_slider->setToolTip("Width of the transition from lit to dark along the fill axis (Path axis in common controls).");
     edge_slider->setValue((int)(edge_width * 100.0f));
     QLabel* edge_label = new QLabel(QString::number((int)(edge_width * 100)) + "%");
     edge_label->setMinimumWidth(40);
@@ -90,6 +90,7 @@ void FreqFill::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("Smooths band energy before mapping to fill position.");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -107,6 +108,7 @@ void FreqFill::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Boosts quiet audio so the fill reaches farther on subtle tracks.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);

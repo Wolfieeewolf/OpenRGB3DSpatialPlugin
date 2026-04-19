@@ -108,7 +108,13 @@ inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normali
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, normalized_scale);
     float extents[3] = {e.hw, e.hh, e.hd};
     std::sort(extents, extents + 3);
-    return extents[1];
+    const float med = extents[1];
+    const float max_e = extents[2];
+    // Narrow zones (e.g. strips along one axis): the median half-axis can shrink toward zero even when
+    // the long axis still spans usable distance. Floor by a fraction of the dominant half-axis so
+    // radial falloff, rings, and depth cues stay tunable on sparse layouts and target-zone bounds.
+    constexpr float kDominantAxisFraction = 0.2f;
+    return std::max(med, kDominantAxisFraction * max_e);
 }
 
 struct EffectInfo3D

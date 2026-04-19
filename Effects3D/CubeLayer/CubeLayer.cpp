@@ -83,6 +83,7 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     thick_row->addWidget(new QLabel("Layer thickness:"));
     QSlider* thick_slider = new QSlider(Qt::Horizontal);
     thick_slider->setRange(5, 100);
+    thick_slider->setToolTip("Thickness of the lit audio layer along the Path axis.");
     thick_slider->setValue((int)(layer_thickness * 100.0f));
     QLabel* thick_label = new QLabel(QString::number((int)(layer_thickness * 100)) + "%");
     thick_label->setMinimumWidth(40);
@@ -102,7 +103,10 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     layer_edge_combo->addItem("Sharp");
     layer_edge_combo->addItem("Square");
     layer_edge_combo->setCurrentIndex(std::clamp(layer_edge_shape, 0, 2));
-    layer_edge_combo->setToolTip("Layer edge profile: Round = soft falloff, Sharp = hard cut, Square = hard band.");
+    layer_edge_combo->setToolTip("How sharply the active audio layer transitions to dark above/below it.");
+    layer_edge_combo->setItemData(0, "Smooth blend across the layer thickness.", Qt::ToolTipRole);
+    layer_edge_combo->setItemData(1, "Hard cut at layer boundaries.", Qt::ToolTipRole);
+    layer_edge_combo->setItemData(2, "Lit slab with steep sides.", Qt::ToolTipRole);
     edge_row->addWidget(layer_edge_combo);
     layout->addLayout(edge_row);
     connect(layer_edge_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
@@ -114,6 +118,7 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     smooth_row->addWidget(new QLabel("Smoothing:"));
     QSlider* smooth_slider = new QSlider(Qt::Horizontal);
     smooth_slider->setRange(0, 99);
+    smooth_slider->setToolTip("Smooths audio level before mapping to layer position.");
     smooth_slider->setValue((int)(audio_settings.smoothing * 100.0f));
     QLabel* smooth_label = new QLabel(QString::number(audio_settings.smoothing, 'f', 2));
     smooth_label->setMinimumWidth(36);
@@ -130,6 +135,7 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     boost_row->addWidget(new QLabel("Peak Boost:"));
     QSlider* boost_slider = new QSlider(Qt::Horizontal);
     boost_slider->setRange(50, 500);
+    boost_slider->setToolTip("Gain so quiet passages still move the layer.");
     boost_slider->setValue((int)(audio_settings.peak_boost * 100.0f));
     QLabel* boost_label = new QLabel(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
     boost_label->setMinimumWidth(44);
