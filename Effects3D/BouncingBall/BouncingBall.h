@@ -47,6 +47,7 @@ private:
 
     float ball_cache_time = -1e9f;
     float ball_cache_grid_hash = 0.0f;
+    float ball_cache_phys_tag = -1e10f;
     std::vector<CachedBall3D> ball_positions_cached;
 };
 

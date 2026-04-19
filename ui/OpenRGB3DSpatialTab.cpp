@@ -706,18 +706,53 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     room_grid_overlay_checkbox = new QCheckBox("Show overlay in 3D view");
     room_grid_overlay_checkbox->setToolTip("Draw a dim grid of points in the room so you see the space. Real LEDs stand out.");
-    overlay_gl->addWidget(room_grid_overlay_checkbox, 0, 0, 1, 4);
+    overlay_gl->addWidget(room_grid_overlay_checkbox, 0, 0, 1, 3);
+
+    int overlay_bright_pct = 35;
+    int overlay_point_size = 3;
+    int overlay_step = 4;
+
+    overlay_gl->addWidget(new QLabel("Overlay brightness:"), 1, 0);
+    QSlider* room_grid_overlay_bright_slider = new QSlider(Qt::Horizontal);
+    room_grid_overlay_bright_slider->setRange(0, 100);
+    room_grid_overlay_bright_slider->setValue(overlay_bright_pct);
+    room_grid_overlay_bright_slider->setToolTip("How bright the preview grid points are (0–100%).");
+    QLabel* room_grid_overlay_bright_label = new QLabel(QString::number(overlay_bright_pct) + "%");
+    room_grid_overlay_bright_label->setMinimumWidth(44);
+    overlay_gl->addWidget(room_grid_overlay_bright_slider, 1, 1);
+    overlay_gl->addWidget(room_grid_overlay_bright_label, 1, 2);
+
+    overlay_gl->addWidget(new QLabel("Point size:"), 2, 0);
+    QSlider* room_grid_overlay_point_slider = new QSlider(Qt::Horizontal);
+    room_grid_overlay_point_slider->setRange(1, 12);
+    room_grid_overlay_point_slider->setValue(overlay_point_size);
+    room_grid_overlay_point_slider->setToolTip("OpenGL point size for each overlay dot (1–12).");
+    QLabel* room_grid_overlay_point_label = new QLabel(QString::number(overlay_point_size));
+    room_grid_overlay_point_label->setMinimumWidth(44);
+    overlay_gl->addWidget(room_grid_overlay_point_slider, 2, 1);
+    overlay_gl->addWidget(room_grid_overlay_point_label, 2, 2);
+
+    overlay_gl->addWidget(new QLabel("Grid step:"), 3, 0);
+    QSlider* room_grid_overlay_step_slider = new QSlider(Qt::Horizontal);
+    room_grid_overlay_step_slider->setRange(1, 24);
+    room_grid_overlay_step_slider->setValue(overlay_step);
+    room_grid_overlay_step_slider->setToolTip("Sample every Nth grid cell per axis (1 = densest, 24 = sparsest).");
+    QLabel* room_grid_overlay_step_label = new QLabel(QString::number(overlay_step));
+    room_grid_overlay_step_label->setMinimumWidth(44);
+    overlay_gl->addWidget(room_grid_overlay_step_slider, 3, 1);
+    overlay_gl->addWidget(room_grid_overlay_step_label, 3, 2);
 
     QLabel* overlay_hint = new QLabel(
-        "Overlay brightness, point size, and step are loaded from saved plugin settings (RoomGrid).");
+        "These match the RoomGrid fields in your plugin settings and are saved when you change them.");
     overlay_hint->setForegroundRole(QPalette::PlaceholderText);
     overlay_hint->setWordWrap(true);
-    overlay_gl->addWidget(overlay_hint, 1, 0, 1, 4);
+    overlay_gl->addWidget(overlay_hint, 4, 0, 1, 3);
 
     grid_tab_main->addWidget(overlay_group);
 
     connect(room_grid_overlay_checkbox, &QCheckBox::toggled, [this](bool checked) {
         if(viewport) viewport->SetShowRoomGridOverlay(checked);
+        PersistRoomGridOverlayToSettings();
     });
 
     try
@@ -727,22 +762,53 @@ void OpenRGB3DSpatialTab::SetupUI()
         {
             const nlohmann::json& rg = settings["RoomGrid"];
             bool show = rg.value("Show", false);
-            int bright = (int)(rg.value("Brightness", 0.35) * 100.0);
-            int size = (int)rg.value("PointSize", 3.0);
-            int step_val = (int)rg.value("Step", 4);
-            bright = std::max(0, std::min(100, bright));
-            size = std::max(1, std::min(12, size));
-            step_val = std::max(1, std::min(24, step_val));
+            overlay_bright_pct = (int)(rg.value("Brightness", 0.35) * 100.0);
+            overlay_point_size = (int)rg.value("PointSize", 3.0);
+            overlay_step = (int)rg.value("Step", 4);
+            overlay_bright_pct = std::max(0, std::min(100, overlay_bright_pct));
+            overlay_point_size = std::max(1, std::min(12, overlay_point_size));
+            overlay_step = std::max(1, std::min(24, overlay_step));
             if(room_grid_overlay_checkbox) room_grid_overlay_checkbox->setChecked(show);
+            room_grid_overlay_bright_slider->setValue(overlay_bright_pct);
+            room_grid_overlay_point_slider->setValue(overlay_point_size);
+            room_grid_overlay_step_slider->setValue(overlay_step);
+            room_grid_overlay_bright_label->setText(QString::number(overlay_bright_pct) + "%");
+            room_grid_overlay_point_label->setText(QString::number(overlay_point_size));
+            room_grid_overlay_step_label->setText(QString::number(overlay_step));
             if(viewport)
             {
-                viewport->SetRoomGridBrightness((float)bright / 100.0f);
-                viewport->SetRoomGridPointSize((float)size);
-                viewport->SetRoomGridStep(step_val);
+                viewport->SetRoomGridBrightness((float)overlay_bright_pct / 100.0f);
+                viewport->SetRoomGridPointSize((float)overlay_point_size);
+                viewport->SetRoomGridStep(overlay_step);
             }
         }
     }
     catch(const std::exception&) {}
+
+    connect(room_grid_overlay_bright_slider, &QSlider::valueChanged, this,
+            [this, room_grid_overlay_bright_label](int v)
+            {
+                v = std::max(0, std::min(100, v));
+                if(room_grid_overlay_bright_label) room_grid_overlay_bright_label->setText(QString::number(v) + "%");
+                if(viewport) viewport->SetRoomGridBrightness((float)v / 100.0f);
+                PersistRoomGridOverlayToSettings();
+            });
+    connect(room_grid_overlay_point_slider, &QSlider::valueChanged, this,
+            [this, room_grid_overlay_point_label](int v)
+            {
+                v = std::max(1, std::min(12, v));
+                if(room_grid_overlay_point_label) room_grid_overlay_point_label->setText(QString::number(v));
+                if(viewport) viewport->SetRoomGridPointSize((float)v);
+                PersistRoomGridOverlayToSettings();
+            });
+    connect(room_grid_overlay_step_slider, &QSlider::valueChanged, this,
+            [this, room_grid_overlay_step_label](int v)
+            {
+                v = std::max(1, std::min(24, v));
+                if(room_grid_overlay_step_label) room_grid_overlay_step_label->setText(QString::number(v));
+                if(viewport) viewport->SetRoomGridStep(v);
+                PersistRoomGridOverlayToSettings();
+            });
 
     connect(grid_x_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
     connect(grid_y_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
@@ -2797,6 +2863,21 @@ void OpenRGB3DSpatialTab::SetPluginSettingsNoSave(const nlohmann::json& settings
     if(!resource_manager) return;
     SettingsManager* mgr = resource_manager->GetSettingsManager();
     if(mgr) mgr->SetSettings("3DSpatialPlugin", settings);
+}
+
+void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
+{
+    if(!viewport) return;
+    try
+    {
+        nlohmann::json settings = GetPluginSettings();
+        settings["RoomGrid"]["Show"] = viewport->GetShowRoomGridOverlay();
+        settings["RoomGrid"]["Brightness"] = viewport->GetRoomGridBrightness();
+        settings["RoomGrid"]["PointSize"] = viewport->GetRoomGridPointSize();
+        settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
+        SetPluginSettings(settings);
+    }
+    catch(const std::exception&) {}
 }
 
 void OpenRGB3DSpatialTab::RefreshEffectDisplay()

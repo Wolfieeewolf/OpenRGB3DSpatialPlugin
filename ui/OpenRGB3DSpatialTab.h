@@ -218,6 +218,7 @@ private:
     nlohmann::json GetPluginSettings() const;
     void SetPluginSettings(const nlohmann::json& settings);
     void SetPluginSettingsNoSave(const nlohmann::json& settings);
+    void PersistRoomGridOverlayToSettings();
     void RefreshEffectDisplay();
 
     void SaveEffectStack();
