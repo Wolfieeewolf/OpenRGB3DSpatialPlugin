@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "EffectInstance3D.h"
-#include "EffectListManager3D.h"
 #include "LogManager.h"
 
 nlohmann::json EffectInstance3D::ToJson() const
