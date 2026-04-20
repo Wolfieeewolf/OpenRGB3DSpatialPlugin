@@ -25,7 +25,7 @@ void Zone3D::AddController(int controller_idx)
 
 void Zone3D::RemoveController(int controller_idx)
 {
-    std::vector<int>::iterator it = std::find(controller_indices.begin(), controller_indices.end(), controller_idx);
+    auto it = std::find(controller_indices.begin(), controller_indices.end(), controller_idx);
     if(it != controller_indices.end())
     {
         controller_indices.erase(it);
@@ -53,15 +53,14 @@ nlohmann::json Zone3D::ToJSON() const
 
 Zone3D* Zone3D::FromJSON(const nlohmann::json& json)
 {
-    std::string name = json.value("name", "Unnamed Zone");
-    Zone3D* zone = new Zone3D(name);
+    Zone3D* zone = new Zone3D(json.value("name", "Unnamed Zone"));
 
     if(json.contains("controllers") && json["controllers"].is_array())
     {
         const nlohmann::json& controllers_array = json["controllers"];
-        for(size_t i = 0; i < controllers_array.size(); i++)
+        for(const nlohmann::json& controller_idx : controllers_array)
         {
-            zone->AddController(controllers_array[i].get<int>());
+            zone->AddController(controller_idx.get<int>());
         }
     }
 

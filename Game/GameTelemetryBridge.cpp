@@ -11,7 +11,6 @@
 
 #include <nlohmann/json.hpp>
 #include <vector>
-#include <cstring>
 #include <chrono>
 #include <algorithm>
 
@@ -121,8 +120,7 @@ void GameTelemetryBridge::StartUdpListener()
         LOG_ERROR("[3DSpatial] game telemetry UDP: setsockopt(SO_REUSEADDR) failed");
     }
 
-    sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(kGameUdpPort);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
