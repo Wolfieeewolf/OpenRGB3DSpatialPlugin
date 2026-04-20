@@ -5,7 +5,6 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
-#include "SpatialEffectTypes.h"
 
 #include <QImage>
 #include <QMutex>

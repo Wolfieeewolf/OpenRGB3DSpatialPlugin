@@ -5,7 +5,6 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
-#include "LEDPosition3D.h"
 #include <vector>
 
 struct PlasmaArc3D
