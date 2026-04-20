@@ -6,7 +6,6 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QPalette>
-#include <QScrollArea>
 #include <QFrame>
 #include <QMessageBox>
 #include <QTimer>

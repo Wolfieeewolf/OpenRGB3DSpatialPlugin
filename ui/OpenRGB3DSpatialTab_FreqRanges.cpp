@@ -2,17 +2,13 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
-#include "VirtualReferencePoint3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "ZoneGrid3D.h"
 #include "LogManager.h"
 #include "PluginLogOnce.h"
-#include <nlohmann/json.hpp>
 #include <algorithm>
-#include <memory>
 #include <unordered_set>
 #include <vector>
-#include <QGroupBox>
 #include <QToolTip>
 
 static bool TryGetGlobalLedIndexForRange(RGBController* controller,

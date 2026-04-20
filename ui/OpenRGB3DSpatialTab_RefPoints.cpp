@@ -2,7 +2,6 @@
 
 
 #include "OpenRGB3DSpatialTab.h"
-#include "VirtualReferencePoint3D.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 

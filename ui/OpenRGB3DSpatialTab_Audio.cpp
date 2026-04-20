@@ -4,7 +4,6 @@
 #include "Audio/AudioInputManager.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
-#include <nlohmann/json.hpp>
 #include <QToolTip>
 #include <QPainter>
 

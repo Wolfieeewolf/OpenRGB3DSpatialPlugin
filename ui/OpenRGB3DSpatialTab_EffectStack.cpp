@@ -3,16 +3,11 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "LogManager.h"
-#include <nlohmann/json.hpp>
 #include <QMessageBox>
 #include <QFont>
 #include <QPalette>
-#include <QGroupBox>
-#include <QLabel>
 #include <QSignalBlocker>
-#include <QTabWidget>
 #include <QAbstractItemView>
-#include <QHBoxLayout>
 #include <QPointer>
 
 void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)

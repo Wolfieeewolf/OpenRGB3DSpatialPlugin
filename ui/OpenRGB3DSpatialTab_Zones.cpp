@@ -5,10 +5,6 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QDialog>
-#include <QVBoxLayout>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QLabel>
 #include <QVariant>
 
 namespace

@@ -3,15 +3,12 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "GridSpaceUtils.h"
 #include "ZoneGrid3D.h"
-#include "EffectInstance3D.h"
-#include "FrequencyRangeEffect3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginLogOnce.h"
 #include <set>
 #include <unordered_set>
 #include <algorithm>
-#include <memory>
 
 static float AverageAlongAxis(ControllerTransform* transform,
                               EffectAxis sort_axis,

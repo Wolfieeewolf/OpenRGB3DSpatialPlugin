@@ -5,13 +5,11 @@
 #include "OpenRGB3DSpatialTab_Presets.h"
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
-#include "VirtualController3D.h"
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
-#include <nlohmann/json.hpp>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>

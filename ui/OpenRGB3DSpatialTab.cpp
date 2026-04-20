@@ -4,7 +4,6 @@
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
-#include "VirtualController3D.h"
 #include "DisplayPlaneManager.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "GridSpaceUtils.h"
@@ -58,7 +57,6 @@
 #include <filesystem>
 #include <cmath>
 #include "SettingsManager.h"
-#include <nlohmann/json.hpp>
 #include "Audio/AudioInputManager.h"
 #include "Zone3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftEffectLibrary.h"
