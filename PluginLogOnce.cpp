@@ -4,7 +4,6 @@
 #include "LogManager.h"
 
 #include <mutex>
-#include <string>
 #include <unordered_set>
 
 void LogOnce_CreateEffectFailed(const char* context, const std::string& class_name)
