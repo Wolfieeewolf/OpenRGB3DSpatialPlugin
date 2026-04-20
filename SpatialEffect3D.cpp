@@ -3,9 +3,6 @@
 #include "SpatialEffect3D.h"
 #include "Colors.h"
 #include "Geometry3DUtils.h"
-#include "SpatialEffectTypes.h"
-#include <cmath>
-#include <algorithm>
 #include <QColorDialog>
 #include <QSignalBlocker>
 

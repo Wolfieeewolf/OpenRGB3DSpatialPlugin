@@ -17,26 +17,11 @@
 #include <QList>
 #include <QSignalBlocker>
 #include <QColor>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QCompleter>
-#include <QDoubleSpinBox>
 #include <QFont>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
 #include <QPalette>
-#include <QProgressBar>
-#include <QPushButton>
-#include <QSlider>
-#include <QSpinBox>
 #include <QSplitter>
-#include <QGroupBox>
-#include <QScrollArea>
 #include <QFrame>
 #include <QAbstractItemView>
-#include <QTabWidget>
-#include <QTimer>
 
 #ifdef _WIN32
 #ifndef NOMINMAX

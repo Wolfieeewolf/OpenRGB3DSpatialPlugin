@@ -8,7 +8,6 @@
 #include "PluginLogOnce.h"
 #include <algorithm>
 #include <unordered_set>
-#include <vector>
 #include <QToolTip>
 
 static bool TryGetGlobalLedIndexForRange(RGBController* controller,
