@@ -148,7 +148,7 @@ struct EffectInfo3D
     bool                show_detail_control = true;
     bool                show_size_control;
     bool                show_scale_control;
-    bool                show_fps_control;
+    bool                show_fps_control = true;
     bool                show_axis_control;
     bool                show_color_controls;
     bool                show_surface_control = true;
@@ -182,6 +182,10 @@ public:
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
+    /** Call from render paths: applies global Sampling (spatial) when enabled, then CalculateColorGrid. */
+    RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
+    /** Override false for effects that only sample textures/screens (UV quantization handles resolution). */
+    virtual bool UsesSpatialSamplingQuantization() const { return true; }
 
     bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
     void ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const;
@@ -208,6 +212,10 @@ public:
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
     virtual unsigned int GetDetail() const;
+    virtual unsigned int GetSmoothing() const { return effect_smoothing; }
+    virtual unsigned int GetSamplingResolution() const { return effect_sampling_resolution; }
+    /** Effective 0..100 sampling quality: global × per-layer (for media-style effects). */
+    unsigned int CombineMediaSampling(unsigned int local_detail_percent) const;
 
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual int GetPathAxis() const { return effect_path_axis; }
@@ -276,6 +284,10 @@ protected:
     QLabel*             intensity_label;
     QSlider*            sharpness_slider;
     QLabel*             sharpness_label;
+    QSlider*            smoothing_slider;
+    QLabel*             smoothing_label;
+    QSlider*            sampling_resolution_slider;
+    QLabel*             sampling_resolution_label;
     QGroupBox*          edge_shape_group;
     QComboBox*          edge_profile_combo;
     QSlider*            edge_thickness_slider;
@@ -335,6 +347,8 @@ protected:
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;
+    unsigned int        effect_smoothing;
+    unsigned int        effect_sampling_resolution;
     int                 effect_edge_profile;   /* 0=Sharp, 1=Square, 2=Round, 3=Smooth, 4=Sharpen */
     unsigned int        effect_edge_thickness; /* 0..100: transition width / line thickness */
     unsigned int        effect_glow_level;     /* 0..100: soft glow beyond edge */

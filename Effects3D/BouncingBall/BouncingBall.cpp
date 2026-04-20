@@ -3,7 +3,6 @@
 #include "BouncingBall.h"
 #include <QGridLayout>
 #include <cmath>
-#include <utility>
 #include <vector>
 
 REGISTER_EFFECT_3D(BouncingBall);
@@ -25,6 +24,7 @@ float HashFloat01(unsigned int seed)
 void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
                    float& vel_x, float& vel_y, float& vel_z,
                    float dt, float gravity, float e,
+                   float floor_bounce_vy_up,
                    float xmin, float xmax, float ymin, float ymax, float zmin, float zmax)
 {
     vel_y -= gravity * dt;
@@ -47,11 +47,9 @@ void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
     if(pos_y <= ymin)
     {
         pos_y = ymin;
-        vel_y = -vel_y * e;
-        if(fabsf(vel_y) < 0.025f && pos_y <= ymin + 0.02f)
-        {
-            vel_y = 0.35f + 0.55f * e;
-        }
+        /* Match OpenRGBEffectsPlugin idea: reset upward speed from sqrt(2 g h) so energy
+         * does not drain away from friction / float error; balls keep bouncing. */
+        vel_y = floor_bounce_vy_up;
     }
     else if(pos_y >= ymax)
     {
@@ -71,98 +69,47 @@ void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
     }
 }
 
-void ResolveBallPair(float& pxi, float& pyi, float& pzi, float& vxi, float& vyi, float& vzi,
-                     float& pxj, float& pyj, float& pzj, float& vxj, float& vyj, float& vzj,
-                     float collision_r, float e_pair)
+void ClampBallSpeed(float& vx, float& vy, float& vz, float v_max)
 {
-    float dx = pxj - pxi;
-    float dy = pyj - pyi;
-    float dz = pzj - pzi;
-    float dist_sq = dx * dx + dy * dy + dz * dz;
-    const float min_d = 2.0f * collision_r * 1.004f;
-
-    if(dist_sq < 1e-12f)
-    {
-        const float j = 0.001f * collision_r;
-        pxi -= j;
-        pxj += j;
-        dx = pxj - pxi;
-        dy = pyj - pyi;
-        dz = pzj - pzi;
-        dist_sq = dx * dx + dy * dy + dz * dz;
-    }
-
-    float dist = sqrtf(dist_sq);
-    if(dist < 1e-6f) return;
-
-    float nx = dx / dist;
-    float ny = dy / dist;
-    float nz = dz / dist;
-
-    if(dist < min_d)
-    {
-        float pen = 0.5f * (min_d - dist);
-        pxi -= nx * pen;
-        pyi -= ny * pen;
-        pzi -= nz * pen;
-        pxj += nx * pen;
-        pyj += ny * pen;
-        pzj += nz * pen;
-    }
-
-    float vn = (vxj - vxi) * nx + (vyj - vyi) * ny + (vzj - vzi) * nz;
-    if(vn >= -1e-5f) return;
-
-    float jimp = -(1.0f + e_pair) * vn * 0.5f;
-    vxi -= jimp * nx;
-    vyi -= jimp * ny;
-    vzi -= jimp * nz;
-    vxj += jimp * nx;
-    vyj += jimp * ny;
-    vzj += jimp * nz;
+    const float s2 = vx * vx + vy * vy + vz * vz;
+    const float m2 = v_max * v_max;
+    if(s2 <= m2 || s2 < 1e-12f) return;
+    const float inv = v_max / sqrtf(s2);
+    vx *= inv;
+    vy *= inv;
+    vz *= inv;
 }
 
-void ResolveAllPairs(std::vector<float>& px, std::vector<float>& py, std::vector<float>& pz,
-                     std::vector<float>& vx, std::vector<float>& vy, std::vector<float>& vz,
-                     unsigned int N, float collision_r, float e_pair, int passes)
+void SeedBall(unsigned int k,
+              float xmin, float ymin, float zmin,
+              float span_x, float span_y, float span_z,
+              float motion, float gravity, float radius_basis,
+              CachedBall3D& b)
 {
-    for(int pass = 0; pass < passes; pass++)
-    {
-        for(unsigned int i = 0; i < N; i++)
-        {
-            for(unsigned int j = i + 1; j < N; j++)
-            {
-                ResolveBallPair(px[i], py[i], pz[i], vx[i], vy[i], vz[i],
-                                px[j], py[j], pz[j], vx[j], vy[j], vz[j],
-                                collision_r, e_pair);
-            }
-        }
-    }
-}
+    const float hy = HashFloat01(k * 313U + 5U);
+    const float hx = HashFloat01(k * 131U);
+    const float hz = HashFloat01(k * 919U);
 
-float WallRestitutionFromElasticity(unsigned int elasticity_ui)
-{
-    float t = (float(elasticity_ui) - 10.0f) / 90.0f;
-    t = fmaxf(0.0f, fminf(1.0f, t));
-    return 0.30f + t * t * 0.95f;
-}
+    b.px = xmin + hx * span_x;
+    b.py = ymin + (0.08f + hy * 0.88f) * span_y;
+    b.pz = zmin + hz * span_z;
 
-float PairRestitutionFromElasticity(unsigned int elasticity_ui)
-{
-    float t = (float(elasticity_ui) - 10.0f) / 90.0f;
-    t = fmaxf(0.0f, fminf(1.0f, t));
-    return 0.52f + t * t * 0.46f;
+    const float drop_h = fmaxf(span_y * (0.14f + 0.72f * HashFloat01(k * 419U + 11U)),
+                               radius_basis * 0.04f);
+    b.floor_bounce_vy = sqrtf(2.0f * gravity * drop_h) * 0.996f;
+
+    const float horiz = (0.30f + 1.20f * motion) * radius_basis;
+    b.vx = (HashFloat01(k * 733U) * 2.0f - 1.0f) * horiz;
+    b.vz = (HashFloat01(k * 829U) * 2.0f - 1.0f) * horiz;
+    b.vy = (0.40f + HashFloat01(k * 577U) * 0.60f) * radius_basis * (0.50f + 1.05f * motion);
 }
 
 } // namespace
 
 BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
 {
-    elasticity_slider = nullptr;
-    elasticity_label = nullptr;
     count_slider = nullptr;
     count_label = nullptr;
-    elasticity = 70;
     ball_count = 1;
     SetRainbowMode(true);
 }
@@ -174,7 +121,7 @@ EffectInfo3D BouncingBall::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "Bouncing Ball";
-    info.effect_description = "One or more balls with elastic walls, ball–ball collisions, and glow; max Speed and Elasticity are tuned for strong ceiling-height bounces";
+    info.effect_description = "Independent balls bouncing in the room (no ball–ball physics). Physics runs forward without looping; use Speed for motion rate.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -198,7 +145,6 @@ EffectInfo3D BouncingBall::GetEffectInfo()
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
-    info.show_fps_control = true;
     info.show_color_controls = true;
     return info;
 }
@@ -209,30 +155,18 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    layout->addWidget(new QLabel("Elasticity:"), 0, 0);
-    elasticity_slider = new QSlider(Qt::Horizontal);
-    elasticity_slider->setRange(10, 100);
-    elasticity_slider->setValue(elasticity);
-    elasticity_slider->setToolTip(
-        "Wall and ball–ball bounciness. Low = damped; high approaches super-ball (very lively at maximum).");
-    layout->addWidget(elasticity_slider, 0, 1);
-    elasticity_label = new QLabel(QString::number(elasticity));
-    elasticity_label->setMinimumWidth(30);
-    layout->addWidget(elasticity_label, 0, 2);
-
-    layout->addWidget(new QLabel("Balls:"), 1, 0);
+    layout->addWidget(new QLabel("Balls:"), 0, 0);
     count_slider = new QSlider(Qt::Horizontal);
     count_slider->setRange(1, 50);
     count_slider->setValue(ball_count);
-    count_slider->setToolTip("Number of balls (1..50). Balls collide and push each other.");
-    layout->addWidget(count_slider, 1, 1);
+    count_slider->setToolTip("Number of balls. Each follows its own path inside the room.");
+    layout->addWidget(count_slider, 0, 1);
     count_label = new QLabel(QString::number(ball_count));
     count_label->setMinimumWidth(30);
-    layout->addWidget(count_label, 1, 2);
+    layout->addWidget(count_label, 0, 2);
 
     AddWidgetToParent(w, parent);
 
-    connect(elasticity_slider, &QSlider::valueChanged, this, &BouncingBall::OnBallParameterChanged);
     connect(count_slider, &QSlider::valueChanged, this, &BouncingBall::OnBallParameterChanged);
 }
 
@@ -243,11 +177,6 @@ void BouncingBall::UpdateParams(SpatialEffectParams& params)
 
 void BouncingBall::OnBallParameterChanged()
 {
-    if(elasticity_slider)
-    {
-        elasticity = elasticity_slider->value();
-        if(elasticity_label) elasticity_label->setText(QString::number(elasticity));
-    }
     if(count_slider)
     {
         ball_count = count_slider->value();
@@ -263,9 +192,10 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     {
         return 0x00000000;
     }
-    const float speed = GetScaledSpeed();
-    const float e_wall = WallRestitutionFromElasticity(elasticity);
-    const float e_pair = PairRestitutionFromElasticity(elasticity);
+    /* Linear 0..1 from main effect Speed slider (not squared GetNormalizedSpeed) so the control is obvious. */
+    const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
+    const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
+    constexpr float k_wall_e = 0.987f;
 
     const float size_m = GetNormalizedSize();
     const float color_cycle = time * GetScaledFrequency() * 12.0f;
@@ -292,75 +222,83 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         return 0x00000000;
     }
 
-    const float speed_boost = 0.22f + fminf(3.8f, speed) * 0.34f;
-    const float elast_t = fmaxf(0.0f, fminf(1.0f, (float(elasticity) - 10.0f) / 90.0f));
-    const float gravity = radius_basis * (0.14f + 0.06f * speed_boost) * (1.05f - 0.28f * elast_t);
+    const float gravity = fmaxf(1e-5f, radius_basis * (0.092f + 0.070f * motion));
 
     const unsigned int N = ball_count == 0 ? 1u : ball_count;
 
     const float grid_hash = grid.min_x + grid.max_x * 31.0f + grid.min_y * 31.0f * 31.0f + grid.max_y * 31.0f * 31.0f * 31.0f;
-    const float phys_tag = float(elasticity) * 0.17f + float(ball_count) * 2.31f + size_m * 7.9f + speed * 1.03f + R * 0.02f;
+    const int phys_key = (int)ball_count * 100000 + (int)(size_m * 500.f + 0.5f) + (int)(speed_lin * 2000.f + 0.5f);
 
-    if(ball_positions_cached.size() != N || fabsf(time - ball_cache_time) > 0.001f || fabsf(grid_hash - ball_cache_grid_hash) > 0.01f
-       || fabsf(phys_tag - ball_cache_phys_tag) > 1e-4f)
+    const bool count_changed = (ball_positions_cached.size() != N);
+    const bool grid_changed = fabsf(grid_hash - ball_cache_grid_hash) > 0.01f;
+    const bool phys_changed = (phys_key != ball_cache_phys_key);
+    const bool structural = count_changed || grid_changed || phys_changed;
+    const bool time_dirty = fabsf(time - ball_last_integrated_wall_time) > 0.001f;
+
+    const float sim_phase_rate = 0.28f + motion * 2.35f;
+    const float target_sim_t = time * sim_phase_rate;
+    const float v_cap = radius_basis * (1.22f + 2.05f * motion);
+    constexpr float k_sim_dt = 0.028f;
+    constexpr float k_max_sim_advance = 6.0f;
+
+    if(structural)
     {
-        ball_cache_time = time;
         ball_cache_grid_hash = grid_hash;
-        ball_cache_phys_tag = phys_tag;
+        ball_cache_phys_key = phys_key;
         ball_positions_cached.resize(N);
-
-        std::vector<float> px(N), py(N), pz(N), vx(N), vy(N), vz(N);
-
-        const float sim_horizon = 28.0f;
-        const float wrapped_time = fmodf(time, sim_horizon);
-        const float dt = 0.032f;
-        int max_steps = (int)ceilf(wrapped_time / dt) + 2;
-        if(max_steps > 880) max_steps = 880;
-
+        ball_physics_sim_t = 0.f;
+        ball_last_integrated_wall_time = -1e9f;
         for(unsigned int k = 0; k < N; k++)
         {
-            const float hy = HashFloat01(k * 313U + 5U);
-            const float hx = HashFloat01(k * 131U);
-            const float hz = HashFloat01(k * 919U);
-
-            px[k] = xmin + hx * span_x;
-            py[k] = ymin + (0.08f + hy * 0.88f) * span_y;
-            pz[k] = zmin + hz * span_z;
-
-            const float horiz = (0.28f + speed_boost * 0.55f) * radius_basis;
-            vx[k] = (HashFloat01(k * 733U) * 2.0f - 1.0f) * horiz;
-            vz[k] = (HashFloat01(k * 829U) * 2.0f - 1.0f) * horiz;
-            const float vy_up = (0.35f + HashFloat01(k * 577U) * 0.65f) * radius_basis * (0.55f + speed_boost * 0.95f);
-            vy[k] = vy_up;
+            SeedBall(k, xmin, ymin, zmin, span_x, span_y, span_z, motion, gravity, radius_basis, ball_positions_cached[k]);
         }
+    }
 
-        float sim_time = 0.0f;
-        for(int step = 0; step < max_steps && sim_time < wrapped_time; step++)
+    if(structural || time_dirty)
+    {
+        float sim_remain = target_sim_t - ball_physics_sim_t;
+        bool just_seeded = structural;
+
+        if(!structural && (time + 0.0005f < ball_last_integrated_wall_time))
         {
-            const float step_dt = fminf(dt, wrapped_time - sim_time);
-
+            ball_physics_sim_t = 0.f;
             for(unsigned int k = 0; k < N; k++)
             {
-                IntegrateBall(px[k], py[k], pz[k], vx[k], vy[k], vz[k], step_dt, gravity, e_wall, xmin, xmax, ymin, ymax, zmin, zmax);
+                SeedBall(k, xmin, ymin, zmin, span_x, span_y, span_z, motion, gravity, radius_basis, ball_positions_cached[k]);
             }
-
-            if(N > 1u)
-            {
-                ResolveAllPairs(px, py, pz, vx, vy, vz, N, R, e_pair, 5);
-            }
-
-            sim_time += step_dt;
+            just_seeded = true;
+            sim_remain = fminf(target_sim_t, k_max_sim_advance);
         }
-
-        for(unsigned int k = 0; k < N; k++)
+        else if(sim_remain > k_max_sim_advance)
         {
-            ball_positions_cached[k].px = px[k];
-            ball_positions_cached[k].py = py[k];
-            ball_positions_cached[k].pz = pz[k];
-            ball_positions_cached[k].vx = vx[k];
-            ball_positions_cached[k].vy = vy[k];
-            ball_positions_cached[k].vz = vz[k];
+            ball_physics_sim_t = 0.f;
+            if(!just_seeded)
+            {
+                for(unsigned int k = 0; k < N; k++)
+                {
+                    SeedBall(k, xmin, ymin, zmin, span_x, span_y, span_z, motion, gravity, radius_basis, ball_positions_cached[k]);
+                }
+            }
+            sim_remain = k_max_sim_advance;
         }
+
+        int safety = 0;
+        while(sim_remain > 1e-7f && safety < 32000)
+        {
+            const float h = fminf(k_sim_dt, sim_remain);
+            for(unsigned int k = 0; k < N; k++)
+            {
+                CachedBall3D& ball = ball_positions_cached[k];
+                IntegrateBall(ball.px, ball.py, ball.pz, ball.vx, ball.vy, ball.vz, h, gravity, k_wall_e, ball.floor_bounce_vy,
+                              xmin, xmax, ymin, ymax, zmin, zmax);
+                ClampBallSpeed(ball.vx, ball.vy, ball.vz, v_cap);
+            }
+            sim_remain -= h;
+            safety++;
+        }
+
+        ball_physics_sim_t = target_sim_t;
+        ball_last_integrated_wall_time = time;
     }
 
     const float glow_radius = R * 2.0f;
@@ -391,9 +329,16 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         if(intensity > max_intensity)
         {
             max_intensity = intensity;
-            const float hue_ball = (float(k) * 41.7f);
-            float hue = fmodf((atan2f(ball.vz, ball.vx) * 57.2958f) * (0.6f + 0.4f * detail) + color_cycle + hue_ball, 360.0f);
-            hue_for_max = hue;
+            const float cx = (ball.px - grid.min_x) / fmaxf(1e-4f, grid.width);
+            const float cy = (ball.py - grid.min_y) / fmaxf(1e-4f, grid.height);
+            const float cz = (ball.pz - grid.min_z) / fmaxf(1e-4f, grid.depth);
+            const float hue_spatial = (cx * 140.0f + cy * 200.0f + cz * 120.0f) * (0.55f + 0.45f * detail);
+            const float hue_ball = float(k) * 38.0f;
+            const float vh = hypotf(ball.vx, hypotf(ball.vy, ball.vz));
+            const float vel_w = fminf(1.0f, vh / fmaxf(1e-4f, radius_basis * 0.35f));
+            const float hue_vel = atan2f(ball.vz, ball.vx) * 57.2958f * 0.12f * vel_w;
+            hue_for_max = fmodf(color_cycle + hue_ball + hue_spatial + hue_vel, 360.0f);
+            if(hue_for_max < 0.0f) hue_for_max += 360.0f;
         }
     }
 
@@ -419,7 +364,6 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
 nlohmann::json BouncingBall::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["elasticity"] = elasticity;
     j["ball_count"] = ball_count;
     return j;
 }
@@ -427,9 +371,7 @@ nlohmann::json BouncingBall::SaveSettings() const
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("elasticity")) elasticity = settings["elasticity"];
     if(settings.contains("ball_count")) ball_count = settings["ball_count"];
 
-    if(elasticity_slider) elasticity_slider->setValue(elasticity);
     if(count_slider) count_slider->setValue(ball_count);
 }

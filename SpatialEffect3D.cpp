@@ -2,6 +2,7 @@
 
 #include "SpatialEffect3D.h"
 #include "Colors.h"
+#include "Geometry3DUtils.h"
 #include "SpatialEffectTypes.h"
 #include <cmath>
 #include <algorithm>
@@ -86,6 +87,10 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     intensity_label = nullptr;
     sharpness_slider = nullptr;
     sharpness_label = nullptr;
+    smoothing_slider = nullptr;
+    smoothing_label = nullptr;
+    sampling_resolution_slider = nullptr;
+    sampling_resolution_label = nullptr;
     edge_shape_group = nullptr;
     edge_profile_combo = nullptr;
     edge_thickness_slider = nullptr;
@@ -94,6 +99,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     glow_level_label = nullptr;
     effect_intensity = 100;
     effect_sharpness = 100;
+    effect_smoothing = 0;
+    effect_sampling_resolution = 100;
     effect_edge_profile = 2;
     effect_edge_thickness = 50;
     effect_glow_level = 15;
@@ -288,7 +295,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_slider = new QSlider(Qt::Horizontal);
     fps_slider->setRange(1, 120);
     fps_slider->setValue(effect_fps);
-    fps_slider->setToolTip("Frames per second (1-120) - lower values reduce CPU usage");
+    fps_slider->setToolTip(
+        "Effect refresh rate (1–120 Hz). When an effect is running, the plugin timer uses this layer’s value "
+        "(single effect) or the maximum across enabled stack layers so motion stays smooth.");
     fps_layout->addWidget(fps_slider);
     fps_label = new QLabel(QString::number(effect_fps));
     fps_label->setMinimumWidth(30);
@@ -324,6 +333,32 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sharpness_label->setMinimumWidth(30);
     sharpness_layout->addWidget(sharpness_label);
     output_layout->addLayout(sharpness_layout);
+
+    QHBoxLayout* smoothing_layout = new QHBoxLayout();
+    smoothing_layout->addWidget(new QLabel("Smoothing:"));
+    smoothing_slider = new QSlider(Qt::Horizontal);
+    smoothing_slider->setRange(0, 100);
+    smoothing_slider->setValue((int)effect_smoothing);
+    smoothing_slider->setToolTip("Global temporal smoothing hint (0 = off). Effects that support it blend frame-to-frame to reduce low-FPS stepping.");
+    smoothing_layout->addWidget(smoothing_slider);
+    smoothing_label = new QLabel(QString::number(effect_smoothing));
+    smoothing_label->setMinimumWidth(30);
+    smoothing_layout->addWidget(smoothing_label);
+    output_layout->addLayout(smoothing_layout);
+
+    QHBoxLayout* sampling_layout = new QHBoxLayout();
+    sampling_layout->addWidget(new QLabel("Sampling:"));
+    sampling_resolution_slider = new QSlider(Qt::Horizontal);
+    sampling_resolution_slider->setRange(0, 100);
+    sampling_resolution_slider->setValue((int)effect_sampling_resolution);
+    sampling_resolution_slider->setToolTip(
+        "Global sampling detail (100 = full, 0 = blocky). Image/GIF layers: UV quantization (× per-media Resolution). "
+        "Other effects: LED positions snap to a coarser voxel grid in room bounds (retro / low-res look).");
+    sampling_layout->addWidget(sampling_resolution_slider);
+    sampling_resolution_label = new QLabel(QString::number((int)effect_sampling_resolution));
+    sampling_resolution_label->setMinimumWidth(30);
+    sampling_layout->addWidget(sampling_resolution_label);
+    output_layout->addLayout(sampling_layout);
 
     main_layout->addWidget(output_shaping_group);
 
@@ -550,6 +585,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(axis_scale_rot_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAxisScaleRotationResetClicked);
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(smoothing_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    connect(sampling_resolution_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -587,10 +624,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         effect_axis_scale_rotation_roll = (float)value;
     });
 
-    connect(speed_slider, &QSlider::valueChanged, speed_label, [this](int value) {
-        speed_label->setText(QString::number(value));
-        effect_speed = value;
-    });
+    /* Speed label is updated from OnParameterChanged via virtual SetSpeed() so effects
+     * (e.g. GIF playback) can react when the slider moves. */
     connect(brightness_slider, &QSlider::valueChanged, brightness_label, [this](int value) {
         brightness_label->setText(QString::number(value));
         effect_brightness = value;
@@ -622,6 +657,14 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(sharpness_slider, &QSlider::valueChanged, sharpness_label, [this](int value) {
         sharpness_label->setText(QString::number(value));
         effect_sharpness = value;
+    });
+    connect(smoothing_slider, &QSlider::valueChanged, smoothing_label, [this](int value) {
+        smoothing_label->setText(QString::number(value));
+        effect_smoothing = (unsigned int)value;
+    });
+    connect(sampling_resolution_slider, &QSlider::valueChanged, sampling_resolution_label, [this](int value) {
+        sampling_resolution_label->setText(QString::number(value));
+        effect_sampling_resolution = (unsigned int)std::clamp(value, 0, 100);
     });
     connect(scale_x_slider, &QSlider::valueChanged, scale_x_label, [this](int value) {
         scale_x_label->setText(QString::number(value) + "%");
@@ -1114,6 +1157,46 @@ float SpatialEffect3D::GetNormalizedScale() const
     return std::max(0.0f, normalized);
 }
 
+unsigned int SpatialEffect3D::CombineMediaSampling(unsigned int local_detail_percent) const
+{
+    const unsigned int g = std::min(100u, effect_sampling_resolution);
+    const unsigned int l = std::min(100u, local_detail_percent);
+    return (unsigned int)std::clamp((int)((l * g + 50u) / 100u), 0, 100);
+}
+
+namespace
+{
+void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridContext3D& grid, unsigned int resolution_pct)
+{
+    if(resolution_pct >= 100u)
+    {
+        return;
+    }
+    const float sx = std::max(1e-6f, grid.max_x - grid.min_x);
+    const float sy = std::max(1e-6f, grid.max_y - grid.min_y);
+    const float sz = std::max(1e-6f, grid.max_z - grid.min_z);
+    float nx = std::clamp((x - grid.min_x) / sx, 0.0f, 1.0f);
+    float ny = std::clamp((y - grid.min_y) / sy, 0.0f, 1.0f);
+    float nz = std::clamp((z - grid.min_z) / sz, 0.0f, 1.0f);
+    constexpr int kVirtualCells = 128;
+    Geometry3D::QuantizeNormalizedAxis01(nx, resolution_pct, kVirtualCells);
+    Geometry3D::QuantizeNormalizedAxis01(ny, resolution_pct, kVirtualCells);
+    Geometry3D::QuantizeNormalizedAxis01(nz, resolution_pct, kVirtualCells);
+    x = grid.min_x + nx * sx;
+    y = grid.min_y + ny * sy;
+    z = grid.min_z + nz * sz;
+}
+}
+
+RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    if(UsesSpatialSamplingQuantization())
+    {
+        ApplySpatialSamplingQuantization(x, y, z, grid, GetSamplingResolution());
+    }
+    return CalculateColorGrid(x, y, z, time, grid);
+}
+
 unsigned int SpatialEffect3D::GetTargetFPS() const
 {
     return effect_fps;
@@ -1405,7 +1488,7 @@ void SpatialEffect3D::ApplyControlVisibility()
     SetControlGroupVisibility(detail_slider, detail_label, "Detail:", true);
     SetControlGroupVisibility(size_slider, size_label, "Size:", true);
     SetControlGroupVisibility(scale_slider, scale_label, "Scale:", true);
-    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", true);
+    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", GetEffectInfo().show_fps_control);
 
     if(color_controls_group)
     {
@@ -1420,7 +1503,7 @@ void SpatialEffect3D::OnParameterChanged()
 {
     if(speed_slider)
     {
-        effect_speed = speed_slider->value();
+        SetSpeed((unsigned int)std::max(0, speed_slider->value()));
         if(speed_label)
         {
             speed_label->setText(QString::number(effect_speed));
@@ -1476,6 +1559,23 @@ void SpatialEffect3D::OnParameterChanged()
         if(sharpness_label)
         {
             sharpness_label->setText(QString::number(effect_sharpness));
+        }
+    }
+    if(smoothing_slider)
+    {
+        effect_smoothing = (unsigned int)std::clamp(smoothing_slider->value(), 0, 100);
+        if(smoothing_label)
+        {
+            smoothing_label->setText(QString::number(effect_smoothing));
+        }
+    }
+    if(sampling_resolution_slider)
+    {
+        const int sv = sampling_resolution_slider->value();
+        effect_sampling_resolution = (unsigned int)std::clamp(sv, 0, 100);
+        if(sampling_resolution_label)
+        {
+            sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
         }
     }
     if(edge_profile_combo)
@@ -1625,6 +1725,8 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rainbow_mode"] = rainbow_mode;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
+    j["smoothing"] = effect_smoothing;
+    j["sampling_resolution"] = effect_sampling_resolution;
     j["edge_profile"] = effect_edge_profile;
     j["edge_thickness"] = effect_edge_thickness;
     j["glow_level"] = effect_glow_level;
@@ -1674,7 +1776,10 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
 void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 {
     if(settings.contains("speed"))
-        SetSpeed(settings["speed"].get<unsigned int>());
+    {
+        unsigned int spd = settings["speed"].get<unsigned int>();
+        SetSpeed(std::min(200u, spd));
+    }
 
     if(settings.contains("brightness"))
         SetBrightness(settings["brightness"].get<unsigned int>());
@@ -1697,6 +1802,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         effect_intensity = settings["intensity"].get<unsigned int>();
     if(settings.contains("sharpness"))
         effect_sharpness = settings["sharpness"].get<unsigned int>();
+    if(settings.contains("smoothing"))
+        effect_smoothing = std::clamp(settings["smoothing"].get<unsigned int>(), 0u, 100u);
+    if(settings.contains("sampling_resolution"))
+        effect_sampling_resolution = std::clamp(settings["sampling_resolution"].get<unsigned int>(), 0u, 100u);
     if(settings.contains("edge_profile"))
         effect_edge_profile = std::clamp(settings["edge_profile"].get<int>(), 0, 4);
     if(settings.contains("edge_thickness"))
@@ -1884,6 +1993,24 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         QSignalBlocker blocker(sharpness_slider);
         sharpness_slider->setValue(effect_sharpness);
+    }
+    if(smoothing_slider)
+    {
+        QSignalBlocker blocker(smoothing_slider);
+        smoothing_slider->setValue((int)effect_smoothing);
+    }
+    if(smoothing_label)
+    {
+        smoothing_label->setText(QString::number(effect_smoothing));
+    }
+    if(sampling_resolution_slider)
+    {
+        QSignalBlocker blocker(sampling_resolution_slider);
+        sampling_resolution_slider->setValue((int)effect_sampling_resolution);
+    }
+    if(sampling_resolution_label)
+    {
+        sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
     }
     if(edge_profile_combo)
     {

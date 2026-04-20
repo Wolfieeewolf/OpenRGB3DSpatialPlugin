@@ -864,7 +864,6 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     effect->SetControlGroupVisibility(effect->detail_slider, effect->detail_label, QStringLiteral("Detail:"), false);
     effect->SetControlGroupVisibility(effect->size_slider, effect->size_label, QStringLiteral("Size:"), false);
     effect->SetControlGroupVisibility(effect->scale_slider, effect->scale_label, QStringLiteral("Scale:"), false);
-    effect->SetControlGroupVisibility(effect->fps_slider, effect->fps_label, QStringLiteral("FPS:"), false);
 
     effect->SetControlGroupVisibility(effect->brightness_slider, effect->brightness_label, QStringLiteral("Brightness:"), true);
     effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), true);

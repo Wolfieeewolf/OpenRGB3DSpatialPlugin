@@ -38,6 +38,7 @@ desktop.ini
 # IDE files
 .vscode/
 .idea/
+**/.qtc_clangd/
 *.swp
 *.swo
 *~

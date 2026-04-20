@@ -27,7 +27,6 @@ public:
         info.show_frequency_control  = false;
         info.show_size_control       = false;
         info.show_scale_control      = false;
-        info.show_fps_control        = false;
         info.show_color_controls     = false;
         return info;
     }

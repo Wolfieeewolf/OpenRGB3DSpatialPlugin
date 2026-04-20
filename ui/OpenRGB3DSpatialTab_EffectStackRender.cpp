@@ -427,7 +427,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             float spz = sample_grid.min_z + w * (sample_grid.max_z - sample_grid.min_z);
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
-                            RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, time_val, active_grid);
+                            RGBColor effect_color = slot.effect->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
                             if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
                                 effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
@@ -443,7 +443,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 float spx = px, spy = py, spz = pz;
                                 effect->ApplyAxisScale(spx, spy, spz, room_grid);
                                 effect->ApplyEffectRotation(spx, spy, spz, room_grid);
-                                RGBColor effect_color = effect->CalculateColorGrid(spx, spy, spz, time_val, room_grid);
+                                RGBColor effect_color = effect->EvaluateColorGrid(spx, spy, spz, time_val, room_grid);
                                 effect_color = effect->PostProcessColorGrid(effect_color);
                                 int r = std::min(255, (int)RGBGetRValue(final_color) + (int)RGBGetRValue(effect_color));
                                 int g = std::min(255, (int)RGBGetGValue(final_color) + (int)RGBGetGValue(effect_color));
@@ -610,7 +610,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
                         effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
-                        RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                        RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                             effect_color = 0x00000000;
                         effect_color = effect->PostProcessColorGrid(effect_color);
@@ -728,7 +728,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                     effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
                     effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
-                    RGBColor effect_color = effect->CalculateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
+                    RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                         effect_color = 0x00000000;
                     effect_color = effect->PostProcessColorGrid(effect_color);
@@ -818,7 +818,7 @@ RGBColor OpenRGB3DSpatialTab::GetOverlayColorAt(float x, float y, float z) const
         float spx = x, spy = y, spz = z;
         slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
         slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
-        RGBColor effect_color = slot.effect->CalculateColorGrid(spx, spy, spz, overlay_effect_time, active_grid);
+        RGBColor effect_color = slot.effect->EvaluateColorGrid(spx, spy, spz, overlay_effect_time, active_grid);
         if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
             effect_color = 0x00000000;
         effect_color = slot.effect->PostProcessColorGrid(effect_color);

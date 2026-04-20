@@ -39,7 +39,6 @@ EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
     info.show_frequency_control = false;
     info.show_size_control = false;
     info.show_scale_control = false;
-    info.show_fps_control = false;
     info.show_axis_control = false;
     info.show_color_controls = false;
     info.show_surface_control = false;

@@ -11,6 +11,7 @@ struct CachedBall3D
 {
     float px, py, pz;
     float vx, vy, vz;
+    float floor_bounce_vy;
 };
 
 class BouncingBall : public SpatialEffect3D
@@ -38,17 +39,16 @@ private slots:
     void OnBallParameterChanged();
 
 private:
-    QSlider* elasticity_slider;
-    QLabel* elasticity_label;
     QSlider* count_slider;
     QLabel* count_label;
-    unsigned int elasticity;
     unsigned int ball_count;
 
-    float ball_cache_time = -1e9f;
     float ball_cache_grid_hash = 0.0f;
-    float ball_cache_phys_tag = -1e10f;
+    int ball_cache_phys_key = 0x7fffffff;
     std::vector<CachedBall3D> ball_positions_cached;
+    /* Monotonic simulation time (effect time * phase rate); no wrap — state advances forever. */
+    float ball_physics_sim_t = 0.f;
+    float ball_last_integrated_wall_time = -1e9f;
 };
 
 #endif

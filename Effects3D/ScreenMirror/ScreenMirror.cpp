@@ -81,7 +81,8 @@ EffectInfo3D ScreenMirror::GetEffectInfo()
     EffectInfo3D info           = {};
     info.info_version           = 2;
     info.effect_name            = "Screen Mirror";
-    info.effect_description     = "Maps screen content onto LEDs in 3D space";
+    info.effect_description =
+        "Maps screen content onto LEDs in 3D space. Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
     info.category               = "Ambilight";
     info.effect_type            = SPATIAL_EFFECT_WAVE;
     info.is_reversible          = false;
@@ -103,7 +104,6 @@ EffectInfo3D ScreenMirror::GetEffectInfo()
     info.show_frequency_control = false;
     info.show_size_control      = false;
     info.show_scale_control     = false;
-    info.show_fps_control       = false;
     info.show_axis_control      = false;
 
     return info;
@@ -835,6 +835,11 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         {
             float clamped_u = std::clamp(sample_u, 0.0f, 1.0f);
             float clamped_v = std::clamp(sample_v, 0.0f, 1.0f);
+            const unsigned int samp = GetSamplingResolution();
+            if(samp < 100u)
+            {
+                Geometry3D::QuantizeMediaUV01(clamped_u, clamped_v, 256, 256, samp);
+            }
 
             bool left_half = (clamped_u < 0.5f);
             bool bottom_half = (clamped_v < 0.5f);
@@ -878,13 +883,20 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             float sample_u_clamped = std::clamp(sample_u, u_min, u_max);
             float flipped_v = 1.0f - sample_v;
             flipped_v = std::clamp(flipped_v, v_min, v_max);
+            const unsigned int samp = GetSamplingResolution();
+            float u_s = sample_u_clamped;
+            float v_s = flipped_v;
+            if(samp < 100u)
+            {
+                Geometry3D::QuantizeMediaUV01(u_s, v_s, contrib.frame->width, contrib.frame->height, samp);
+            }
 
             RGBColor sampled_color = Geometry3D::SampleFrame(
                 contrib.frame->data.data(),
                 contrib.frame->width,
                 contrib.frame->height,
-                sample_u_clamped,
-                flipped_v,
+                u_s,
+                v_s,
                 true
             );
 
@@ -896,6 +908,10 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             {
                 float u_b = std::clamp(sample_u, u_min, u_max);
                 float v_b = std::clamp(flipped_v, v_min, v_max);
+                if(samp < 100u)
+                {
+                    Geometry3D::QuantizeMediaUV01(u_b, v_b, contrib.frame_blend->width, contrib.frame_blend->height, samp);
+                }
                 RGBColor sampled_blend = Geometry3D::SampleFrame(
                     contrib.frame_blend->data.data(),
                     contrib.frame_blend->width,
@@ -1045,51 +1061,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
     }
 
     return ToRGBColor((uint8_t)total_r, (uint8_t)total_g, (uint8_t)total_b);
-}
-
-void ScreenMirror::BuildFrameCache(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* out_cache)
-{
-    if(!out_cache) return;
-    out_cache->clear();
-    std::vector<DisplayPlane3D*> all_planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-    for(DisplayPlane3D* plane : all_planes)
-    {
-        if(!plane) continue;
-        std::string plane_name = plane->GetName();
-        auto it = monitor_settings.find(plane_name);
-        if(it == monitor_settings.end()) continue;
-        MonitorSettings& mon_settings = it->second;
-        bool monitor_enabled = mon_settings.group_box ? mon_settings.group_box->isChecked() : mon_settings.enabled;
-        if(!monitor_enabled) continue;
-        if(mon_settings.show_test_pattern) continue;
-        std::string capture_id = plane->GetCaptureSourceId();
-        if(capture_id.empty()) continue;
-        if(!capture_mgr.IsCapturing(capture_id))
-        {
-            capture_mgr.StartCapture(capture_id);
-            if(!capture_mgr.IsCapturing(capture_id)) continue;
-        }
-        std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(capture_id);
-        if(!frame || !frame->valid || frame->data.empty()) continue;
-        AddFrameToHistory(capture_id, frame);
-        (*out_cache)[capture_id] = frame;
-    }
-}
-
-void ScreenMirror::CalculateColorGridBatch(const std::vector<Vector3D>& positions, float time, const GridContext3D& grid,
-                                             std::vector<RGBColor>& out)
-{
-    out.resize(positions.size());
-    if(positions.empty()) return;
-    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-    std::unordered_map<std::string, std::shared_ptr<CapturedFrame>> frame_cache;
-    BuildFrameCache(&frame_cache);
-    for(size_t i = 0; i < positions.size(); i++)
-    {
-        const Vector3D& p = positions[i];
-        out[i] = CalculateColorGridInternal(p.x, p.y, p.z, time, grid, &frame_cache, &planes);
-    }
 }
 
 nlohmann::json ScreenMirror::SaveSettings() const

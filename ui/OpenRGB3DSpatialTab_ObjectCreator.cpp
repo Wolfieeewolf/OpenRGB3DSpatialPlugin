@@ -6,7 +6,6 @@
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "VirtualController3D.h"
-#include "RGBController.h"
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
 #include "LogManager.h"

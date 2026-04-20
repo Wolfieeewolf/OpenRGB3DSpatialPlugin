@@ -76,7 +76,6 @@ EffectInfo3D Lightning::GetEffectInfo()
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
-    info.show_fps_control = true;
     info.show_color_controls = true;
     return info;
 }

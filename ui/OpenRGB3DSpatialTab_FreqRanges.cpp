@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
-#include "SpatialEffect3D.h"
 #include "Audio/AudioInputManager.h"
 #include "VirtualReferencePoint3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "ZoneGrid3D.h"
 #include "LogManager.h"
 #include "PluginLogOnce.h"
-#include "RGBController.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <memory>
@@ -1190,7 +1188,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
-                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
+                    RGBColor color = effect->EvaluateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
                     color = effect->PostProcessColorGrid(color);
@@ -1222,7 +1220,7 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                     MinecraftGame::SetRenderSampleIndexContext((int)led_idx, (int)transform->led_positions.size());
                     effect->ApplyAxisScale(x, y, z, active_grid);
                     effect->ApplyEffectRotation(x, y, z, active_grid);
-                    RGBColor color = effect->CalculateColorGrid(x, y, z, effect_time, active_grid);
+                    RGBColor color = effect->EvaluateColorGrid(x, y, z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(x, y, z, active_grid))
                         color = 0x00000000;
                     color = effect->PostProcessColorGrid(color);

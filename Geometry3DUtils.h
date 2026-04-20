@@ -186,6 +186,32 @@ namespace Geometry3D
         return result;
     }
 
+    /** Snap UVs to a coarser grid (100 = unchanged; 0 = coarsest). Matches texture media resolution semantics. */
+    inline void QuantizeMediaUV01(float& u, float& v, int w, int h, unsigned int resolution_pct)
+    {
+        if(resolution_pct >= 100u)
+        {
+            return;
+        }
+        const float q = resolution_pct / 100.0f;
+        const float steps_u = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, w) - 4));
+        const float steps_v = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, h) - 4));
+        u = std::floor(u * steps_u) / steps_u;
+        v = std::floor(v * steps_v) / steps_v;
+    }
+
+    /** Snap a 0..1 coordinate (e.g. normalized room axis) to a coarser grid; same curve as QuantizeMediaUV01. */
+    inline void QuantizeNormalizedAxis01(float& t, unsigned int resolution_pct, int virtual_cells = 128)
+    {
+        if(resolution_pct >= 100u)
+        {
+            return;
+        }
+        const float q = resolution_pct / 100.0f;
+        const float steps = std::max(2.0f, 4.0f + q * q * (float)(std::max(2, virtual_cells) - 4));
+        t = std::floor(t * steps) / steps;
+    }
+
     inline RGBColor SampleFrame(const uint8_t* frame_data, int frame_width, int frame_height,
                                float u, float v, bool use_bilinear = true)
     {

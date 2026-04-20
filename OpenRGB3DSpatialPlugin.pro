@@ -178,6 +178,7 @@ HEADERS +=                                                                      
     DisplayPlaneManager.h                                                                       \
     ScreenCaptureManager.h                                                                      \
     Geometry3DUtils.h                                                                           \
+    MediaTextureEffectUtils.h                                                                   \
     QtCompat.h                                                                                  \
     Game/GameTelemetryStatusPanel.h                                                             \
     Game/GameTelemetryBridge.h                                                                  \
@@ -223,6 +224,8 @@ HEADERS +=                                                                      
     Effects3D/ColorWheel/ColorWheel.h                                                            \
     Effects3D/Sunrise/Sunrise.h                                                                  \
     Effects3D/ScreenMirror/ScreenMirror.h                                                       \
+    Effects3D/TextureProjection/TextureProjection.h                                             \
+    Effects3D/OmniShapeTexture/OmniShapeTexture.h                                                \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -293,6 +296,8 @@ SOURCES +=                                                                      
     Effects3D/ColorWheel/ColorWheel.cpp                                                     \
     Effects3D/Sunrise/Sunrise.cpp                                                         \
     Effects3D/ScreenMirror/ScreenMirror.cpp                                                \
+    Effects3D/TextureProjection/TextureProjection.cpp                                      \
+    Effects3D/OmniShapeTexture/OmniShapeTexture.cpp                                        \
     Audio/AudioInputManager.cpp                                                                 \
 
 

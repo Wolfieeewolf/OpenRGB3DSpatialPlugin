@@ -36,6 +36,7 @@ public:
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }
     bool RequiresWorldSpaceGridBounds() const override { return true; }
 
@@ -285,9 +286,6 @@ private:
     RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
                                        const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
                                        const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr);
-    void BuildFrameCache(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* out_cache);
-    void CalculateColorGridBatch(const std::vector<Vector3D>& positions, float time, const GridContext3D& grid,
-                                std::vector<RGBColor>& out);
 };
 
 #endif // SCREENMIRROR_H

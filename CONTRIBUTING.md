@@ -2,21 +2,23 @@
 
 ## OpenRGB reference documentation (MCP mirror)
 
-When changing plugin behavior—especially anything that touches devices, colors, zones, builds, or user-facing setup—stay consistent with the upstream OpenRGB docs in the MCP tree (adjust the drive letter if your mirror lives elsewhere):
+When changing plugin behavior—especially anything that touches devices, colors, zones, builds, or user-facing setup—stay consistent with upstream OpenRGB docs beside this repo (adjust the drive letter or parent folder if your tree differs):
 
 | Document | Use it for |
 | -------- | ---------- |
-| `f:/MCP/CONTRIBUTING.md` | Merge-request style, C++/Qt style guidelines, logging (`LogManager` not `QDebug`/`printf`), general OpenRGB contribution expectations. |
-| `f:/MCP/RGBControllerAPI.md` | LEDs, zones, modes, `colors` layout, `SetCustomMode` / `UpdateLEDs` expectations—any path that reads or writes controller state. |
-| `f:/MCP/OpenRGBSDK.md` | Network SDK packet layout and plugin-related IDs—only if you change or document SDK-facing behavior. |
-| `f:/MCP/Common-Modes.md` | Naming and meaning of **firmware** modes on devices; plugin spatial effects are software-driven but avoid confusing users with conflicting terminology where it overlaps UI copy. |
-| `f:/MCP/Compiling.md` | How OpenRGB itself is built; align user-facing build hints (Qt, qmake, deps) with this where relevant. |
-| `f:/MCP/UdevRules.md` | Linux permissions for USB/HID access—reference when documenting Linux install or troubleshooting detection. |
-| `f:/MCP/USBAccess.md` | USB setup and permission notes—user docs or issues involving USB devices. |
-| `f:/MCP/SMBusAccess.md` | SMBus/I2C setup (Windows/Linux/macOS)—user docs for RAM/motherboard RGB access issues. |
-| `f:/MCP/KernelParameters.md` | Kernel cmdline (e.g. ACPI/SMBus conflicts)—user docs, not plugin C++ unless you add explicit guidance text. |
+| `OpenRGB/CONTRIBUTING.md` | Merge-request style, C++/Qt style guidelines, logging (`LogManager` not `QDebug`/`printf`), general contribution expectations. |
+| `OpenRGB/Documentation/RGBControllerAPI.md` | LEDs, zones, modes, `colors` layout, `SetCustomMode` / `UpdateLEDs` expectations—any path that reads or writes controller state. |
+| `OpenRGB/Documentation/OpenRGBSDK.md` | Network SDK packet layout and plugin-related IDs—only if you change or document SDK-facing behavior. |
+| `OpenRGB/Documentation/Common-Modes.md` | Naming and meaning of **firmware** modes on devices; plugin spatial effects are software-driven but avoid confusing users with conflicting terminology where it overlaps UI copy. |
+| `OpenRGB/Documentation/Compiling.md` | How OpenRGB itself is built; align user-facing build hints (Qt, qmake, deps) with this where relevant. |
+| `OpenRGB/Documentation/UdevRules.md` | Linux permissions for USB/HID access—reference when documenting Linux install or troubleshooting detection. |
+| `OpenRGB/Documentation/USBAccess.md` | USB setup and permission notes—user docs or issues involving USB devices. |
+| `OpenRGB/Documentation/SMBusAccess.md` | SMBus/I2C setup (Windows/Linux/macOS)—user docs for RAM/motherboard RGB access issues. |
+| `OpenRGB/Documentation/KernelParameters.md` | Kernel cmdline (e.g. ACPI/SMBus conflicts)—user docs, not plugin C++ unless you add explicit guidance text. |
 
-**Minimum bar for this repo:** treat `CONTRIBUTING.md` and `RGBControllerAPI.md` as binding for code style and anything that touches `RGBController` / LED indices / zones. The others apply when you document behavior, debug hardware access, or work near those subsystems.
+**Typical MCP layout:** `F:/MCP/OpenRGB3DSpatialPlugin` (this repo) next to `F:/MCP/OpenRGB` (upstream clone). Paths above are relative to the folder that contains both.
+
+**Minimum bar for this repo:** treat `OpenRGB/CONTRIBUTING.md` and `OpenRGB/Documentation/RGBControllerAPI.md` as binding for code style and anything that touches `RGBController` / LED indices / zones. The others apply when you document behavior, debug hardware access, or work near those subsystems.
 
 ## Scope
 
@@ -26,12 +28,13 @@ When changing plugin behavior—especially anything that touches devices, colors
 ## Code quality
 
 - No debug code, dead code, or compatibility migration branches unless explicitly required.
+- Before keeping a **non-virtual** public or private helper, grep the repo for call sites; unused batch paths and similar leftovers should be removed.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
 - Comments should be minimal and explain non-obvious intent only.
 
 ## Style
 
-- Follow **existing style in the file first**, then `f:/MCP/CONTRIBUTING.md` where it does not conflict.
+- Follow **existing style in the file first**, then `OpenRGB/CONTRIBUTING.md` where it does not conflict.
 - 4 spaces, braces on their own lines, `snake_case` variables, `CamelCase` types/functions.
 - Avoid `printf`, `std::cout`, and `QDebug`; use `LogManager`.
 - Prefer explicit types when they improve readability; avoid unnecessary `auto`.
@@ -40,7 +43,7 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 ## RGBController safety rules
 
-Aligned with `f:/MCP/RGBControllerAPI.md` and safe patterns for mapped devices:
+Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for mapped devices:
 
 - Always guard pointers before dereference (`controller`, `transform`, `virtual_controller`, `zone_manager`).
 - Before `zones[idx]`, validate `idx < zones.size()`.
@@ -62,9 +65,15 @@ Aligned with `f:/MCP/RGBControllerAPI.md` and safe patterns for mapped devices:
 ## Building
 
 - Qt 5.15+ (or 6), OpenRGB submodule initialized.
-- Windows: `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake`.
+- Windows: `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` (or your kit’s equivalent).
 - Linux: `qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr` then `make -j$(nproc)`.
-- For full OpenRGB build prerequisites, see `f:/MCP/Compiling.md`.
+- For full OpenRGB build prerequisites, see `OpenRGB/Documentation/Compiling.md`.
+
+## Effect rendering entry points
+
+- Stack and frequency-range code should call **`SpatialEffect3D::EvaluateColorGrid`** (applies global **Sampling** / spatial quantization where enabled), not `CalculateColorGrid` directly.
+- Implement per-effect color in **`CalculateColorGrid`**; override **`UsesSpatialSamplingQuantization()`** only when the effect already handles resolution in UV space (e.g. texture projection, screen mirror).
+- **Texture / GIF effects:** reuse **`MediaTextureEffectUtils.h`** (`MediaTextureEffect` namespace) for bilinear sampling, ambience gain, and RGB lerp—avoid duplicating those helpers in individual `.cpp` files.
 
 ## Releasing
 

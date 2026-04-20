@@ -66,7 +66,6 @@ EffectInfo3D CubeLayer::GetEffectInfo()
     info.show_frequency_control = true;
     info.show_size_control = true;
     info.show_scale_control = true;
-    info.show_fps_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
     info.show_path_axis_control = true;
