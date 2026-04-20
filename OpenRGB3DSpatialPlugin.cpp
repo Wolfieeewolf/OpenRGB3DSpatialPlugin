@@ -93,7 +93,7 @@ void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
         return;
     }
 
-    QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(static_cast<OpenRGB3DSpatialTab*>(o), "UpdateDeviceList", Qt::QueuedConnection);
 }
 
 void OpenRGB3DSpatialPlugin::DetectionProgressCallback(void* o)
@@ -108,5 +108,5 @@ void OpenRGB3DSpatialPlugin::DetectionProgressCallback(void* o)
         return;
     }
 
-    QMetaObject::invokeMethod((OpenRGB3DSpatialTab*)o, "UpdateDeviceList", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(static_cast<OpenRGB3DSpatialTab*>(o), "UpdateDeviceList", Qt::QueuedConnection);
 }

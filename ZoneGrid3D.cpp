@@ -143,9 +143,8 @@ bool TryComputeZoneGridBounds(ZoneManager3D* zone_manager,
         }
 
         ControllerLayout3D::UpdateWorldPositions(transform);
-        for(unsigned int li = 0; li < transform->led_positions.size(); li++)
+        for(const LEDPosition3D& led_pos : transform->led_positions)
         {
-            const LEDPosition3D& led_pos = transform->led_positions[li];
             const Vector3D& room = led_pos.room_position;
             const Vector3D& world = led_pos.world_position;
             room_min_x = std::min(room_min_x, room.x);
