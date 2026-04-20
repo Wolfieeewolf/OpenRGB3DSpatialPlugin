@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
-#include "EffectListManager3D.h"
 #include "LogManager.h"
 #include "filesystem.h"
 #include <QSignalBlocker>

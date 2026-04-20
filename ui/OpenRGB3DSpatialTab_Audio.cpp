@@ -2,7 +2,6 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
-#include "EffectListManager3D.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include <nlohmann/json.hpp>
