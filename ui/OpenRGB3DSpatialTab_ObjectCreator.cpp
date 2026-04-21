@@ -59,6 +59,31 @@ static bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
     return (*global_led_idx < controller->leds.size());
 }
 
+static bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+                                           RGBController* controller,
+                                           float& out_x,
+                                           float& out_y,
+                                           float& out_z)
+{
+    if(!controller)
+    {
+        return false;
+    }
+    for(unsigned int i = 0; i < transforms.size(); i++)
+    {
+        const ControllerTransform* t = transforms[i].get();
+        if(!t || t->controller != controller)
+        {
+            continue;
+        }
+        out_x = t->led_spacing_mm_x;
+        out_y = t->led_spacing_mm_y;
+        out_z = t->led_spacing_mm_z;
+        return true;
+    }
+    return false;
+}
+
 
 
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
@@ -1331,9 +1356,18 @@ void OpenRGB3DSpatialTab::on_add_clicked()
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
     ctrl_transform->hidden_by_virtual = false;
 
-    ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
-    ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
-    ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+    float canonical_x = 10.0f;
+    float canonical_y = 0.0f;
+    float canonical_z = 0.0f;
+    if(!TryGetCanonicalPhysicalSpacing(controller_transforms, controller, canonical_x, canonical_y, canonical_z))
+    {
+        canonical_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
+        canonical_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
+        canonical_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+    }
+    ctrl_transform->led_spacing_mm_x = canonical_x;
+    ctrl_transform->led_spacing_mm_y = canonical_y;
+    ctrl_transform->led_spacing_mm_z = canonical_z;
 
     ctrl_transform->granularity = granularity;
     ctrl_transform->item_idx = item_row;
@@ -1648,8 +1682,20 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     }
     else
     {
-        RegenerateLEDPositions(ctrl);
-        ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        RGBController* physical_ctrl = ctrl->controller;
+        for(size_t i = 0; i < controller_transforms.size(); i++)
+        {
+            ControllerTransform* transform = controller_transforms[i].get();
+            if(!transform || transform->controller != physical_ctrl)
+            {
+                continue;
+            }
+            transform->led_spacing_mm_x = ctrl->led_spacing_mm_x;
+            transform->led_spacing_mm_y = ctrl->led_spacing_mm_y;
+            transform->led_spacing_mm_z = ctrl->led_spacing_mm_z;
+            RegenerateLEDPositions(transform);
+            ControllerLayout3D::MarkWorldPositionsDirty(transform);
+        }
     }
 
     SetLayoutDirty();
@@ -3158,6 +3204,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     on_clear_all_clicked();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::unordered_map<RGBController*, Vector3D> physical_spacing_by_controller;
 
     if(layout_json.contains("controllers"))
     {
@@ -3198,14 +3245,33 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             {
                 ctrl_transform->led_spacing_mm_x = controller_json["led_spacing_mm"]["x"].get<float>();
                 ctrl_transform->led_spacing_mm_y = controller_json["led_spacing_mm"]["y"].get<float>();
-            ctrl_transform->led_spacing_mm_z = controller_json["led_spacing_mm"]["z"].get<float>();
-        }
-        else
-        {
-            ctrl_transform->led_spacing_mm_x = 10.0f;
-            ctrl_transform->led_spacing_mm_y = 0.0f;
-            ctrl_transform->led_spacing_mm_z = 0.0f;
-        }
+                ctrl_transform->led_spacing_mm_z = controller_json["led_spacing_mm"]["z"].get<float>();
+            }
+            else
+            {
+                ctrl_transform->led_spacing_mm_x = 10.0f;
+                ctrl_transform->led_spacing_mm_y = 0.0f;
+                ctrl_transform->led_spacing_mm_z = 0.0f;
+            }
+
+            if(!is_virtual && controller)
+            {
+                auto it = physical_spacing_by_controller.find(controller);
+                if(it != physical_spacing_by_controller.end())
+                {
+                    ctrl_transform->led_spacing_mm_x = it->second.x;
+                    ctrl_transform->led_spacing_mm_y = it->second.y;
+                    ctrl_transform->led_spacing_mm_z = it->second.z;
+                }
+                else
+                {
+                    physical_spacing_by_controller[controller] = {
+                        ctrl_transform->led_spacing_mm_x,
+                        ctrl_transform->led_spacing_mm_y,
+                        ctrl_transform->led_spacing_mm_z
+                    };
+                }
+            }
 
             if(controller_json.contains("granularity"))
             {
