@@ -187,8 +187,10 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
 
     float norm_twist = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     
-    float z_twist = norm_twist * freq_scale * 3.0f;
-    float spiral_angle = angle * num_arms + norm_radius * (detail * 6.0f) + z_twist - progress;
+    // Keep spiral motion primarily angular. A strong vertical phase term can look
+    // like the pattern is mostly rising instead of rotating in place.
+    float z_twist = norm_twist * (0.35f + 0.25f * detail);
+    float spiral_angle = angle * num_arms + norm_radius * (detail * 6.5f) + z_twist - progress * 1.35f;
 
     float spiral_value;
     float gap_factor = gap_size / 100.0f;
