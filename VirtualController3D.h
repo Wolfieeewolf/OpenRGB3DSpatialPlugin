@@ -29,6 +29,12 @@ public:
     float GetSpacingX() const { return spacing_mm_x; }
     float GetSpacingY() const { return spacing_mm_y; }
     float GetSpacingZ() const { return spacing_mm_z; }
+    void SetSpacing(float spacing_x, float spacing_y, float spacing_z)
+    {
+        spacing_mm_x = spacing_x;
+        spacing_mm_y = spacing_y;
+        spacing_mm_z = spacing_z;
+    }
 
     const std::vector<GridLEDMapping>& GetMappings() const { return led_mappings; }
 

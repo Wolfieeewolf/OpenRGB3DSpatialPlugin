@@ -955,9 +955,10 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
     ctrl_transform->hidden_by_virtual = false;
-    ctrl_transform->led_spacing_mm_x = led_spacing_x_spin ? (float)led_spacing_x_spin->value() : 10.0f;
-    ctrl_transform->led_spacing_mm_y = led_spacing_y_spin ? (float)led_spacing_y_spin->value() : 0.0f;
-    ctrl_transform->led_spacing_mm_z = led_spacing_z_spin ? (float)led_spacing_z_spin->value() : 0.0f;
+    // Virtual controllers should inherit spacing from their shared definition.
+    ctrl_transform->led_spacing_mm_x = virtual_ctrl->GetSpacingX();
+    ctrl_transform->led_spacing_mm_y = virtual_ctrl->GetSpacingY();
+    ctrl_transform->led_spacing_mm_z = virtual_ctrl->GetSpacingZ();
     ctrl_transform->granularity = -1;
     ctrl_transform->item_idx = -1;
     ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
@@ -1623,9 +1624,34 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
     ctrl->led_spacing_mm_y = edit_led_spacing_y_spin ? (float)edit_led_spacing_y_spin->value() : 0.0f;
     ctrl->led_spacing_mm_z = edit_led_spacing_z_spin ? (float)edit_led_spacing_z_spin->value() : 0.0f;
 
-    RegenerateLEDPositions(ctrl);
+    if(ctrl->virtual_controller)
+    {
+        // Two-way sync: scene spacing edits update the custom-controller definition,
+        // then all placed instances of that custom controller.
+        VirtualController3D* virtual_ctrl = ctrl->virtual_controller;
+        virtual_ctrl->SetSpacing(ctrl->led_spacing_mm_x, ctrl->led_spacing_mm_y, ctrl->led_spacing_mm_z);
 
-    ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+        for(size_t i = 0; i < controller_transforms.size(); i++)
+        {
+            ControllerTransform* transform = controller_transforms[i].get();
+            if(!transform || transform->virtual_controller != virtual_ctrl)
+            {
+                continue;
+            }
+            transform->led_spacing_mm_x = virtual_ctrl->GetSpacingX();
+            transform->led_spacing_mm_y = virtual_ctrl->GetSpacingY();
+            transform->led_spacing_mm_z = virtual_ctrl->GetSpacingZ();
+            transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
+            ControllerLayout3D::MarkWorldPositionsDirty(transform);
+        }
+        SaveCustomControllers();
+    }
+    else
+    {
+        RegenerateLEDPositions(ctrl);
+        ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
+    }
+
     SetLayoutDirty();
 
     if(viewport)
@@ -2742,6 +2768,9 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             if(t && t->virtual_controller == old_ptr)
             {
                 t->virtual_controller = new_ptr;
+                t->led_spacing_mm_x = new_ptr->GetSpacingX();
+                t->led_spacing_mm_y = new_ptr->GetSpacingY();
+                t->led_spacing_mm_z = new_ptr->GetSpacingZ();
                 t->led_positions = new_ptr->GenerateLEDPositions(grid_scale_mm);
                 ControllerLayout3D::MarkWorldPositionsDirty(t);
 
@@ -3211,6 +3240,9 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 {
                     ctrl_transform->controller = nullptr;
                     ctrl_transform->virtual_controller = virtual_ctrl;
+                    ctrl_transform->led_spacing_mm_x = virtual_ctrl->GetSpacingX();
+                    ctrl_transform->led_spacing_mm_y = virtual_ctrl->GetSpacingY();
+                    ctrl_transform->led_spacing_mm_z = virtual_ctrl->GetSpacingZ();
                     ctrl_transform->led_positions = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
                 }
                 else
