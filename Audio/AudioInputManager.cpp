@@ -47,14 +47,14 @@ private:
         IAudioCaptureClient* capture = nullptr;
 
         HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
-                                      __uuidof(IMMDeviceEnumerator), (void**)&enumerator);
+                                      __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
         if(FAILED(hr)) { if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
         if(dev_id.isEmpty())
             hr = enumerator->GetDefaultAudioEndpoint(loopback ? eRender : eCapture, eMultimedia, &device);
         else
-            hr = enumerator->GetDevice((LPCWSTR)dev_id.utf16(), &device);
+            hr = enumerator->GetDevice(reinterpret_cast<LPCWSTR>(dev_id.utf16()), &device);
         if(FAILED(hr)) { enumerator->Release(); if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
-        hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&client);
+        hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&client));
         if(FAILED(hr)) { device->Release(); enumerator->Release(); if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
 
         WAVEFORMATEX* mix = nullptr;
@@ -64,20 +64,24 @@ private:
                                 0, 0, mix, nullptr);
         if(FAILED(hr)) { CoTaskMemFree(mix); client->Release(); device->Release(); enumerator->Release(); if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
 
-        hr = client->GetService(__uuidof(IAudioCaptureClient), (void**)&capture);
+        hr = client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture));
         if(FAILED(hr)) { client->Release(); device->Release(); enumerator->Release(); CoTaskMemFree(mix); if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
 
         hr = client->Start();
         if(FAILED(hr)) { capture->Release(); client->Release(); device->Release(); enumerator->Release(); CoTaskMemFree(mix); if(SUCCEEDED(coinithr)) CoUninitialize(); return; }
 
+        const WAVEFORMATEXTENSIBLE* mix_ext =
+            (mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+                ? reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mix)
+                : nullptr;
         const bool isFloat = (mix->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) ||
-                             (mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE && ((WAVEFORMATEXTENSIBLE*)mix)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+                             (mix_ext && mix_ext->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
         const bool isPCM   = (mix->wFormatTag == WAVE_FORMAT_PCM) ||
-                             (mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE && ((WAVEFORMATEXTENSIBLE*)mix)->SubFormat == KSDATAFORMAT_SUBTYPE_PCM);
+                             (mix_ext && mix_ext->SubFormat == KSDATAFORMAT_SUBTYPE_PCM);
         int bitsPerSample  = mix->wBitsPerSample;
-        if(mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+        if(mix_ext)
         {
-            WORD vbits = ((WAVEFORMATEXTENSIBLE*)mix)->Samples.wValidBitsPerSample;
+            WORD vbits = mix_ext->Samples.wValidBitsPerSample;
             if(vbits) bitsPerSample = vbits;
         }
         const int channels = mix->nChannels;
@@ -264,7 +268,7 @@ QStringList AudioInputManager::listInputDevices()
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT coinithr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
-                                  __uuidof(IMMDeviceEnumerator), (void**)&enumerator);
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
     if(FAILED(hr))
     {
         if(SUCCEEDED(coinithr)) CoUninitialize();
