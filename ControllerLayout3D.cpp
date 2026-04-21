@@ -205,9 +205,9 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
 
-        led_pos->room_position.x = scaled_local.x + ctrl_transform->transform.position.x;
-        led_pos->room_position.y = scaled_local.y + ctrl_transform->transform.position.y;
-        led_pos->room_position.z = scaled_local.z + ctrl_transform->transform.position.z;
+        // Keep room-space sampling aligned with the rendered transform so effect
+        // evaluation sees the same LED spacing/orientation the viewport shows.
+        led_pos->room_position = led_pos->world_position;
     }
 
     ctrl_transform->world_positions_dirty = false;
