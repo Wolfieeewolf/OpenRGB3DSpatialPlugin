@@ -125,7 +125,9 @@ void GameTelemetryBridge::StartUdpListener()
     addr.sin_port = htons(kGameUdpPort);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    if(bind(fd, (sockaddr*)&addr, (socklen_t)sizeof(addr)) != 0)
+    if(bind(fd,
+            reinterpret_cast<sockaddr*>(&addr),
+            static_cast<socklen_t>(sizeof(addr))) != 0)
     {
 #ifdef _WIN32
         LOG_ERROR("[3DSpatial] game telemetry UDP: bind failed on 127.0.0.1:%u (WSA error %d, port busy or blocked?)",
@@ -179,7 +181,13 @@ void GameTelemetryBridge::UdpListenLoop()
 
         sockaddr_in src_addr;
         socklen_t src_len = (socklen_t)sizeof(src_addr);
-        int n = (int)recvfrom(udp_socket_fd, buf.data(), (int)buf.size(), 0, (sockaddr*)&src_addr, &src_len);
+        int n = static_cast<int>(
+            recvfrom(udp_socket_fd,
+                     buf.data(),
+                     static_cast<int>(buf.size()),
+                     0,
+                     reinterpret_cast<sockaddr*>(&src_addr),
+                     &src_len));
         if(n <= 0)
         {
             if(!udp_running)

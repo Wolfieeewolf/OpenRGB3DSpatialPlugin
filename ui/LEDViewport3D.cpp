@@ -192,7 +192,7 @@ void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<Controll
     {
         selected_controller_idx = -1;
         selected_controller_indices.clear();
-        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+        gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
         update();
         return;
     }
@@ -266,7 +266,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
     if(index < 0)
     {
         selected_ref_point_idx = -1;
-        gizmo.SetTarget((DisplayPlane3D*)nullptr);
+        gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
         update();
         return;
     }
@@ -358,7 +358,7 @@ void LEDViewport3D::UpdateGizmoPosition()
         }
     }
 
-    gizmo.SetTarget((DisplayPlane3D*)nullptr);
+    gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
 }
 
 void LEDViewport3D::NotifyControllerTransformChanged()
@@ -2393,7 +2393,7 @@ void LEDViewport3D::ClearSelection()
     selected_controller_idx = -1;
     selected_display_plane_idx = -1;
     selected_ref_point_idx = -1;
-    gizmo.SetTarget((DisplayPlane3D*)nullptr);
+    gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const
@@ -2440,7 +2440,7 @@ void LEDViewport3D::SelectDisplayPlane(int index)
 
         if(selected_controller_idx < 0 && selected_ref_point_idx < 0)
         {
-            gizmo.SetTarget((DisplayPlane3D*)nullptr);
+            gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
         }
     }
 
