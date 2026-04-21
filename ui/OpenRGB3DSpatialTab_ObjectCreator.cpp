@@ -3917,59 +3917,155 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
 bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granularity, int item_idx)
 {
+    if(!controller)
+    {
+        return false;
+    }
+
+    std::vector<bool> used_leds(controller->leds.size(), false);
+    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    {
+        unsigned int global_led_idx = 0;
+        if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
+           global_led_idx < used_leds.size())
+        {
+            used_leds[global_led_idx] = true;
+        }
+    };
+
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* ct = controller_transforms[i].get();
-        if(ct->controller == nullptr) continue;
-        if(ct->controller != controller) continue;
-
-        if(ct->granularity == granularity && ct->item_idx == item_idx)
+        if(!ct)
         {
-            return true;
+            continue;
         }
 
-        if(granularity == 0)
-        {
-            if(ct->granularity == 0)
-            {
-                return true;
-            }
-        }
-        else if(granularity == 1)
+        if(ct->controller == controller)
         {
             for(unsigned int j = 0; j < ct->led_positions.size(); j++)
             {
-                if(ct->led_positions[j].zone_idx == (unsigned int)item_idx)
-                {
-                    return true;
-                }
+                mark_led_used(ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx);
             }
         }
-        else if(granularity == 2)
+        else if(ct->virtual_controller)
         {
-            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+            const std::vector<GridLEDMapping>& mappings = ct->virtual_controller->GetMappings();
+            for(unsigned int j = 0; j < mappings.size(); j++)
             {
-                unsigned int global_led_idx = 0;
-                if(!TryGetObjectCreatorGlobalLedIndex(controller, ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx, &global_led_idx))
+                if(mappings[j].controller != controller)
                 {
                     continue;
                 }
-                if(global_led_idx == (unsigned int)item_idx)
-                {
-                    return true;
-                }
+                mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
             }
         }
     }
+
+    if(granularity == 0)
+    {
+        // Whole-device entry is considered "in scene" only when all LEDs are consumed.
+        for(unsigned int i = 0; i < used_leds.size(); i++)
+        {
+            if(!used_leds[i])
+            {
+                return false;
+            }
+        }
+        return !used_leds.empty();
+    }
+    else if(granularity == 1)
+    {
+        if(item_idx < 0 || item_idx >= (int)controller->zones.size())
+        {
+            return true;
+        }
+        const zone& selected_zone = controller->zones[(unsigned int)item_idx];
+        for(unsigned int led_idx = 0; led_idx < selected_zone.leds_count; led_idx++)
+        {
+            unsigned int global_led_idx = selected_zone.start_idx + led_idx;
+            if(global_led_idx < used_leds.size() && !used_leds[global_led_idx])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    else if(granularity == 2)
+    {
+        if(item_idx < 0)
+        {
+            return true;
+        }
+        unsigned int led_idx = (unsigned int)item_idx;
+        return (led_idx >= used_leds.size()) ? true : used_leds[led_idx];
+    }
+
     return false;
 }
 
 int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 {
-    int unassigned_count = 0;
-    for(unsigned int i = 0; i < controller->zones.size(); i++)
+    if(!controller)
     {
-        if(!IsItemInScene(controller, 1, i))
+        return 0;
+    }
+
+    std::vector<bool> used_leds(controller->leds.size(), false);
+    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    {
+        unsigned int global_led_idx = 0;
+        if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
+           global_led_idx < used_leds.size())
+        {
+            used_leds[global_led_idx] = true;
+        }
+    };
+
+    for(unsigned int i = 0; i < controller_transforms.size(); i++)
+    {
+        ControllerTransform* ct = controller_transforms[i].get();
+        if(!ct)
+        {
+            continue;
+        }
+
+        if(ct->controller == controller)
+        {
+            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+            {
+                mark_led_used(ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx);
+            }
+        }
+        else if(ct->virtual_controller)
+        {
+            const std::vector<GridLEDMapping>& mappings = ct->virtual_controller->GetMappings();
+            for(unsigned int j = 0; j < mappings.size(); j++)
+            {
+                if(mappings[j].controller != controller)
+                {
+                    continue;
+                }
+                mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
+            }
+        }
+    }
+
+    int unassigned_count = 0;
+    for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
+    {
+        const zone& z = controller->zones[zone_idx];
+        bool zone_has_free_led = false;
+        for(unsigned int led_idx = 0; led_idx < z.leds_count; led_idx++)
+        {
+            unsigned int global_led_idx = z.start_idx + led_idx;
+            if(global_led_idx < used_leds.size() && !used_leds[global_led_idx])
+            {
+                zone_has_free_led = true;
+                break;
+            }
+        }
+        if(zone_has_free_led)
         {
             unassigned_count++;
         }
@@ -3979,18 +4075,62 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
 
 int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
 {
-    int total_leds = (int)controller->leds.size();
-    int assigned_leds = 0;
+    if(!controller)
+    {
+        return 0;
+    }
+
+    std::vector<bool> used_leds(controller->leds.size(), false);
+    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    {
+        unsigned int global_led_idx = 0;
+        if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
+           global_led_idx < used_leds.size())
+        {
+            used_leds[global_led_idx] = true;
+        }
+    };
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
-        if(controller_transforms[i]->controller == controller)
+        ControllerTransform* ct = controller_transforms[i].get();
+        if(!ct)
         {
-            assigned_leds += (int)controller_transforms[i]->led_positions.size();
+            continue;
+        }
+
+        if(ct->controller == controller)
+        {
+            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
+            {
+                mark_led_used(ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx);
+            }
+        }
+        else if(ct->virtual_controller)
+        {
+            const std::vector<GridLEDMapping>& mappings = ct->virtual_controller->GetMappings();
+            for(unsigned int j = 0; j < mappings.size(); j++)
+            {
+                if(mappings[j].controller != controller)
+                {
+                    continue;
+                }
+                mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
+            }
         }
     }
 
-    return total_leds - assigned_leds;
+    int used_count = 0;
+    for(unsigned int i = 0; i < used_leds.size(); i++)
+    {
+        if(used_leds[i])
+        {
+            used_count++;
+        }
+    }
+
+    int total_leds = (int)controller->leds.size();
+    return std::max(0, total_leds - used_count);
 }
 
 void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
