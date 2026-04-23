@@ -1046,8 +1046,8 @@ void LEDViewport3D::DrawAxisLabels()
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
-    const float max_depth = extents.depth_units;
-    const float max_z = extents.height_units;
+    const float max_y = extents.height_units; // vertical (matches room height_mm / LED Y)
+    const float max_z = extents.depth_units;  // depth (matches room depth_mm / LED Z)
 
     double screen_x, screen_y;
 
@@ -1058,16 +1058,16 @@ void LEDViewport3D::DrawAxisLabels()
     painter.drawText(QPointF(screen_x + 10, screen_y), "Left Wall (X=0)");
 
     painter.setPen(QColor(100, 255, 100));
-    ProjectPointToScreen(0.5f, 0.0f, max_depth, modelview, projection, viewport, screen_x, screen_y);
-    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Back Wall (Y=%1)").arg((int)max_depth));
+    ProjectPointToScreen(0.5f, 0.0f, max_z, modelview, projection, viewport, screen_x, screen_y);
+    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Back Wall (Z=%1)").arg((int)max_z));
     ProjectPointToScreen(0.5f, 0.0f, 0.3f, modelview, projection, viewport, screen_x, screen_y);
-    painter.drawText(QPointF(screen_x + 10, screen_y), "Front Wall (Y=0)");
+    painter.drawText(QPointF(screen_x + 10, screen_y), "Front Wall (Z=0)");
 
     painter.setPen(QColor(100, 100, 255));
-    ProjectPointToScreen(0.5f, max_z, 0.0f, modelview, projection, viewport, screen_x, screen_y);
-    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Ceiling (Z=%1)").arg((int)max_z));
+    ProjectPointToScreen(0.5f, max_y, 0.0f, modelview, projection, viewport, screen_x, screen_y);
+    painter.drawText(QPointF(screen_x + 10, screen_y), QString("Ceiling (Y=%1)").arg((int)max_y));
     ProjectPointToScreen(0.5f, 0.2f, 0.0f, modelview, projection, viewport, screen_x, screen_y);
-    painter.drawText(QPointF(screen_x + 10, screen_y), "Floor (Z=0)");
+    painter.drawText(QPointF(screen_x + 10, screen_y), "Floor (Y=0)");
 
     painter.setPen(QColor(255, 255, 255));
     ProjectPointToScreen(0.5f, 0.5f, 0.5f, modelview, projection, viewport, screen_x, screen_y);

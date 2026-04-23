@@ -43,6 +43,13 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
     private float smoothWorldIntensity = 0.6f;
     private long lastLightningSentMs = 0L;
+    /** Exponential smoothing for directional probe RGB (reduces twitchy room tint). */
+    private static final float PROBE_COLOR_SMOOTH = 0.11f;
+    private static final float AMBIENT_RGB_SMOOTH = 0.14f;
+    private final int[][] smoothLayeredProbeRgb = new int[4 * 9][3];
+    private boolean hasSmoothLayeredProbeRgb = false;
+    private int smoothAmbR = 0, smoothAmbG = 0, smoothAmbB = 0;
+    private boolean hasSmoothAmbientRgb = false;
 
     @Override
     public void onInitializeClient()
@@ -156,10 +163,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int combined = Math.max(blockLight, skyLight);
         float intensity = Math.max(0.0f, Math.min(1.0f, combined / 15.0f));
 
-        float blockWeight = (combined > 0) ? ((float)blockLight / (float)combined) : 0.0f;
-        float skyWeight = 1.0f - blockWeight;
-        final float warmBias = estimateWarmLightBias(world, pos);
-
         // MineLights-style read: biome carries distinct hue (forest green, desert sand, etc.) — see
         // https://github.com/megabytesme/MineLights — we sample vanilla grass + foliage tint.
         int grass = BiomeColors.getGrassColor(world, pos);
@@ -172,45 +175,41 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int waterG = (water >> 8) & 0xFF;
         int waterB = water & 0xFF;
 
-        // Clear blue sky bias (not near-white), torch warm when block lights dominate.
-        float skyBiasR = 0.22f + 0.18f * intensity;
-        float skyBiasG = 0.40f + 0.28f * intensity;
-        float skyBiasB = 0.78f + 0.18f * intensity;
-        float blkR = 1.0f;
-        float blkG = 0.50f + 0.22f * intensity;
-        float blkB = 0.15f + 0.22f * intensity;
-
-        float br = bioR / 255.0f;
-        float bg = bioG / 255.0f;
-        float bb = bioB / 255.0f;
-        float amp = 0.58f + 0.42f * intensity;
-        float fr = br * amp + skyBiasR * skyWeight * intensity * 0.82f + blkR * blockWeight * intensity * 0.92f;
-        float fg = bg * amp + skyBiasG * skyWeight * intensity * 0.82f + blkG * blockWeight * intensity * 0.92f;
-        float fb = bb * amp + skyBiasB * skyWeight * intensity * 0.82f + blkB * blockWeight * intensity * 0.92f;
-        if(warmBias > 1e-4f)
-        {
-            final float wr = 1.00f;
-            final float wg = 0.62f;
-            final float wb = 0.12f;
-            final float wm = clamp01(0.24f + 0.62f * warmBias);
-            fr = fr * (1.0f - wm) + wr * wm;
-            fg = fg * (1.0f - wm) + wg * wm;
-            fb = fb * (1.0f - wm) + wb * wm;
-        }
-
-        int r = clamp255(Math.round(fr * 255.0f));
-        int g = clamp255(Math.round(fg * 255.0f));
-        int bl = clamp255(Math.round(fb * 255.0f));
-
         float rain = world.getRainGradient(1.0f);
         float thunder = world.getThunderGradient(1.0f);
-        long dayTicks = world.getTimeOfDay() % 24000L;
-        float sun = 1.0f - Math.min(1.0f, Math.abs((dayTicks - 6000.0f) / 7000.0f));
-        float skyDarken = 1.0f - (0.62f * rain + 0.42f * thunder);
-        float sunset = Math.max(0.0f, 1.0f - Math.abs(dayTicks - 12000.0f) / 2300.0f);
-        float skyBaseR = (0.04f + 0.56f * sun + 0.55f * sunset) * skyDarken;
-        float skyBaseG = (0.06f + 0.60f * sun + 0.24f * sunset) * skyDarken;
-        float skyBaseB = (0.16f + 0.88f * sun + 0.04f * sunset) * skyDarken;
+        int rawSky = sampleRawSkyColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
+        int rawFog = sampleRawFogColor(world, pos, rawSky);
+        int rawSkyR = (rawSky >> 16) & 0xFF;
+        int rawSkyG = (rawSky >> 8) & 0xFF;
+        int rawSkyB = rawSky & 0xFF;
+        int rawFogR = (rawFog >> 16) & 0xFF;
+        int rawFogG = (rawFog >> 8) & 0xFF;
+        int rawFogB = rawFog & 0xFF;
+        int blockColor = sampleLocalBlockLightColor(world, pos, rawFog);
+        int blockR = (blockColor >> 16) & 0xFF;
+        int blockG = (blockColor >> 8) & 0xFF;
+        int blockB = blockColor & 0xFF;
+        int r;
+        int g;
+        int bl;
+        if(combined <= 0)
+        {
+            r = 0;
+            g = 0;
+            bl = 0;
+        }
+        else
+        {
+            float blockWeight = (float)blockLight / (float)combined;
+            float skyWeight = 1.0f - blockWeight;
+            // All components come from game-derived samples: sky/fog + emissive block map colors.
+            float skyAmbientR = rawFogR * 0.62f + rawSkyR * 0.38f;
+            float skyAmbientG = rawFogG * 0.62f + rawSkyG * 0.38f;
+            float skyAmbientB = rawFogB * 0.62f + rawSkyB * 0.38f;
+            r = clamp255(Math.round(skyAmbientR * skyWeight + blockR * blockWeight));
+            g = clamp255(Math.round(skyAmbientG * skyWeight + blockG * blockWeight));
+            bl = clamp255(Math.round(skyAmbientB * skyWeight + blockB * blockWeight));
+        }
         int skyLightHere = world.getLightLevel(LightType.SKY, pos);
         int skyR;
         int skyG;
@@ -231,16 +230,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         else
         {
-            /* Open sky: blend time/rain model with vanilla biome sky tint (BiomeEffects#getSkyColor). */
-            int bskyR = clamp255(Math.round(skyBaseR * 255.0f));
-            int bskyG = clamp255(Math.round(skyBaseG * 255.0f));
-            int bskyB = clamp255(Math.round(skyBaseB * 255.0f));
-            float openR = skyBaseR * 255.0f * 0.42f + bskyR * 0.58f;
-            float openG = skyBaseG * 255.0f * 0.42f + bskyG * 0.58f;
-            float openB = skyBaseB * 255.0f * 0.42f + bskyB * 0.58f;
-            skyR = clamp255(Math.round(openR));
-            skyG = clamp255(Math.round(openG));
-            skyB = clamp255(Math.round(openB));
+            // Use the game's current sky color directly (already includes time/weather/dimension effects).
+            skyR = rawSkyR;
+            skyG = rawSkyG;
+            skyB = rawSkyB;
         }
 
         // World-tint layers are strictly position-based (not camera/crosshair based).
@@ -258,6 +251,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int groundR = (groundColor >> 16) & 0xFF;
         int groundG = (groundColor >> 8) & 0xFF;
         int groundB = groundColor & 0xFF;
+        Vec3d look = player.getRotationVec(1.0f);
+        double fx = look.x;
+        double fz = look.z;
+        double fl = Math.sqrt(fx * fx + fz * fz);
+        if(fl <= 1e-5)
+        {
+            fx = 0.0;
+            fz = 1.0;
+        }
+        else
+        {
+            fx /= fl;
+            fz /= fl;
+        }
+        double rx = -fz;
+        double rz = fx;
         final float waterSubmerge = estimateWaterSubmerge(world, player);
         if(waterSubmerge > 1e-4f)
         {
@@ -295,19 +304,98 @@ public class OpenRGBSenderMod implements ClientModInitializer
         smoothGroundB = lerpInt(smoothGroundB, groundB, 0.18f);
         smoothWorldIntensity = lerpFloat(smoothWorldIntensity, intensity, 0.16f);
 
-        int bioSkyR = clamp255(Math.round(skyBaseR * 255.0f));
-        int bioSkyG = clamp255(Math.round(skyBaseG * 255.0f));
-        int bioSkyB = clamp255(Math.round(skyBaseB * 255.0f));
-        int bioFogR = clamp255(Math.round(bioSkyR * 0.62f));
-        int bioFogG = clamp255(Math.round(bioSkyG * 0.66f));
-        int bioFogB = clamp255(Math.round(bioSkyB * 0.72f));
+        int bioSkyR = rawSkyR;
+        int bioSkyG = rawSkyG;
+        int bioSkyB = rawSkyB;
+        int bioFogR = (rawFog >> 16) & 0xFF;
+        int bioFogG = (rawFog >> 8) & 0xFF;
+        int bioFogB = rawFog & 0xFF;
         int waterFogR = clamp255(Math.round(waterR * 0.25f + 8.0f));
         int waterFogG = clamp255(Math.round(waterG * 0.52f + 10.0f));
         int waterFogB = clamp255(Math.round(waterB * 0.90f + 28.0f));
+        int upperColor = blendRgb(midColor, rawSky, 0.45f);
+        int[] layerFallbacks = {groundColor, midColor, upperColor, rawSky};
+        double[] dirX = {fx, (fx + rx), rx, (-fx + rx), -fx, (-fx - rx), -rx, (fx - rx)};
+        double[] dirZ = {fz, (fz + rz), rz, (-fz + rz), -fz, (-fz - rz), -rz, (fz - rz)};
+        for(int i = 0; i < 8; i++)
+        {
+            double dl = Math.sqrt(dirX[i] * dirX[i] + dirZ[i] * dirZ[i]);
+            if(dl > 1e-6)
+            {
+                dirX[i] /= dl;
+                dirZ[i] /= dl;
+            }
+        }
+        int[][] layeredRaw = new int[4 * 9][3];
+        for(int layer = 0; layer < 4; layer++)
+        {
+            int yOff = layer - 1;
+            int fallback = layerFallbacks[layer];
+            for(int sector = 0; sector < 8; sector++)
+            {
+                int c = sampleDirectionalColor(world, pos, dirX[sector], dirZ[sector], yOff, fallback);
+                int idx = layer * 9 + sector;
+                layeredRaw[idx][0] = (c >> 16) & 0xFF;
+                layeredRaw[idx][1] = (c >> 8) & 0xFF;
+                layeredRaw[idx][2] = c & 0xFF;
+            }
+            int centerIdx = layer * 9 + 8;
+            layeredRaw[centerIdx][0] = (fallback >> 16) & 0xFF;
+            layeredRaw[centerIdx][1] = (fallback >> 8) & 0xFF;
+            layeredRaw[centerIdx][2] = fallback & 0xFF;
+        }
+        if(!hasSmoothLayeredProbeRgb)
+        {
+            for(int i = 0; i < 4 * 9; i++)
+            {
+                smoothLayeredProbeRgb[i][0] = layeredRaw[i][0];
+                smoothLayeredProbeRgb[i][1] = layeredRaw[i][1];
+                smoothLayeredProbeRgb[i][2] = layeredRaw[i][2];
+            }
+            hasSmoothLayeredProbeRgb = true;
+        }
+        else
+        {
+            for(int i = 0; i < 4 * 9; i++)
+            {
+                smoothLayeredProbeRgb[i][0] = lerpInt(smoothLayeredProbeRgb[i][0], layeredRaw[i][0], PROBE_COLOR_SMOOTH);
+                smoothLayeredProbeRgb[i][1] = lerpInt(smoothLayeredProbeRgb[i][1], layeredRaw[i][1], PROBE_COLOR_SMOOTH);
+                smoothLayeredProbeRgb[i][2] = lerpInt(smoothLayeredProbeRgb[i][2], layeredRaw[i][2], PROBE_COLOR_SMOOTH);
+            }
+        }
+        StringBuilder layeredProbeRgbJson = new StringBuilder(4 * 9 * 12);
+        for(int i = 0; i < 4 * 9; i++)
+        {
+            if(i > 0)
+            {
+                layeredProbeRgbJson.append(',');
+            }
+            layeredProbeRgbJson.append(smoothLayeredProbeRgb[i][0]).append(',')
+                               .append(smoothLayeredProbeRgb[i][1]).append(',')
+                               .append(smoothLayeredProbeRgb[i][2]);
+        }
+
+        if(!hasSmoothAmbientRgb)
+        {
+            smoothAmbR = r;
+            smoothAmbG = g;
+            smoothAmbB = bl;
+            hasSmoothAmbientRgb = true;
+        }
+        else
+        {
+            smoothAmbR = lerpInt(smoothAmbR, r, AMBIENT_RGB_SMOOTH);
+            smoothAmbG = lerpInt(smoothAmbG, g, AMBIENT_RGB_SMOOTH);
+            smoothAmbB = lerpInt(smoothAmbB, bl, AMBIENT_RGB_SMOOTH);
+        }
+        r = smoothAmbR;
+        g = smoothAmbG;
+        bl = smoothAmbB;
+
         String dimensionId = sanitizeDimensionKey(world.getRegistryKey());
 
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"biome_sky_r\":%d,\"biome_sky_g\":%d,\"biome_sky_b\":%d,\"biome_fog_r\":%d,\"biome_fog_g\":%d,\"biome_fog_b\":%d,\"water_fog_r\":%d,\"water_fog_g\":%d,\"water_fog_b\":%d,\"water_submerge\":%.4f,\"env_rain\":%.4f,\"env_thunder\":%.4f,\"dimension\":\"%s\"}",
+                "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"biome_sky_r\":%d,\"biome_sky_g\":%d,\"biome_sky_b\":%d,\"biome_fog_r\":%d,\"biome_fog_g\":%d,\"biome_fog_b\":%d,\"water_fog_r\":%d,\"water_fog_g\":%d,\"water_fog_b\":%d,\"water_submerge\":%.4f,\"env_rain\":%.4f,\"env_thunder\":%.4f,\"dimension\":\"%s\",\"probe_layer_profile\":4,\"probe_layer_count\":4,\"probe_sector_count\":9,\"probe_rgb\":[%s]}",
                 System.currentTimeMillis(),
                 player.getX(), player.getY() + 1.0, player.getZ(),
                 lightDir.x, lightDir.y, lightDir.z, lightFocus,
@@ -320,8 +408,42 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 waterFogR, waterFogG, waterFogB,
                 waterSubmerge,
                 rain, thunder,
-                dimensionId);
+                dimensionId,
+                layeredProbeRgbJson.toString());
         sendJson(socket, address, json);
+    }
+
+    private static int sampleDirectionalColor(net.minecraft.world.World world,
+                                              net.minecraft.util.math.BlockPos center,
+                                              double dirX,
+                                              double dirZ,
+                                              int yOffset,
+                                              int fallback)
+    {
+        int[] distances = {2, 4, 6};
+        int sumR = 0;
+        int sumG = 0;
+        int sumB = 0;
+        int count = 0;
+        for(int d : distances)
+        {
+            int ox = (int)Math.round(dirX * d);
+            int oz = (int)Math.round(dirZ * d);
+            net.minecraft.util.math.BlockPos p = center.add(ox, yOffset, oz);
+            int c = getMapColorRgb(world, p, fallback);
+            sumR += (c >> 16) & 0xFF;
+            sumG += (c >> 8) & 0xFF;
+            sumB += c & 0xFF;
+            count++;
+        }
+        if(count <= 0)
+        {
+            return fallback;
+        }
+        int r = clamp255(sumR / count);
+        int g = clamp255(sumG / count);
+        int b = clamp255(sumB / count);
+        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
     private static Vec3d estimateLocalLightDirection(net.minecraft.world.World world, ClientPlayerEntity player, BlockPos center)
@@ -358,6 +480,49 @@ public class OpenRGBSenderMod implements ClientModInitializer
             return Vec3d.ZERO;
         }
         return new Vec3d(ax / aw, ay / aw, az / aw);
+    }
+
+    private static int sampleLocalBlockLightColor(net.minecraft.world.World world, BlockPos center, int fallback)
+    {
+        double sr = 0.0;
+        double sg = 0.0;
+        double sb = 0.0;
+        double sw = 0.0;
+        for(int dx = -4; dx <= 4; dx++)
+        {
+            for(int dy = -2; dy <= 3; dy++)
+            {
+                for(int dz = -4; dz <= 4; dz++)
+                {
+                    BlockPos p = center.add(dx, dy, dz);
+                    var state = world.getBlockState(p);
+                    int lum = state.getLuminance();
+                    if(lum <= 0)
+                    {
+                        continue;
+                    }
+                    int mc = getMapColorRgb(world, p, 0);
+                    if(mc == 0)
+                    {
+                        continue;
+                    }
+                    double dist2 = (double)dx * dx + (double)dy * dy + (double)dz * dz;
+                    double w = (double)lum / (0.35 + dist2);
+                    sr += ((mc >> 16) & 0xFF) * w;
+                    sg += ((mc >> 8) & 0xFF) * w;
+                    sb += (mc & 0xFF) * w;
+                    sw += w;
+                }
+            }
+        }
+        if(sw <= 1e-5)
+        {
+            return fallback;
+        }
+        int r = clamp255((int)Math.round(sr / sw));
+        int g = clamp255((int)Math.round(sg / sw));
+        int b = clamp255((int)Math.round(sb / sw));
+        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
     private static float estimateWaterSubmerge(net.minecraft.world.World world, ClientPlayerEntity player)
@@ -529,9 +694,48 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return Math.max(0, Math.min(255, v));
     }
 
+    private static int sampleRawSkyColor(World world, BlockPos pos, int fallback)
+    {
+        try
+        {
+            return world.getBiome(pos).value().getSkyColor();
+        }
+        catch(Throwable ignored)
+        {
+        }
+        return fallback;
+    }
+
+    private static int sampleRawFogColor(World world, BlockPos pos, int fallback)
+    {
+        try
+        {
+            return world.getBiome(pos).value().getFogColor();
+        }
+        catch(Throwable ignored)
+        {
+        }
+        return fallback;
+    }
+
     private static float clamp01(float v)
     {
         return Math.max(0.0f, Math.min(1.0f, v));
+    }
+
+    private static int blendRgb(int a, int b, float t)
+    {
+        t = clamp01(t);
+        int ar = (a >> 16) & 0xFF;
+        int ag = (a >> 8) & 0xFF;
+        int ab = a & 0xFF;
+        int br = (b >> 16) & 0xFF;
+        int bg = (b >> 8) & 0xFF;
+        int bb = b & 0xFF;
+        int r = clamp255(Math.round(ar + (br - ar) * t));
+        int g = clamp255(Math.round(ag + (bg - ag) * t));
+        int bl = clamp255(Math.round(ab + (bb - ab) * t));
+        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (bl & 0xFF);
     }
 
     private static int lerpInt(int a, int b, float t)
@@ -556,9 +760,13 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             float strength = clamp01(LightningTelemetryState.lastStrength);
             String json = String.format(Locale.US,
-                    "{\"version\":1,\"type\":\"lightning_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"strength\":%.4f}",
+                    "{\"version\":1,\"type\":\"lightning_event\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"strength\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f}",
                     now,
-                    strength);
+                    strength,
+                    LightningTelemetryState.lastDirX,
+                    LightningTelemetryState.lastDirY,
+                    LightningTelemetryState.lastDirZ,
+                    clamp01(LightningTelemetryState.lastDirFocus));
             sendJson(socket, address, json);
             lastLightningSentMs = now;
         }

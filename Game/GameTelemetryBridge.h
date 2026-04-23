@@ -7,6 +7,7 @@
 #include <string>
 #include <atomic>
 #include <thread>
+#include <array>
 
 class ResourceManagerInterface;
 
@@ -39,6 +40,10 @@ public:
 
         bool has_lightning_event = false;
         float lightning_strength = 0.0f;
+        float lightning_dir_x = 0.0f;
+        float lightning_dir_y = 1.0f;
+        float lightning_dir_z = 0.0f;
+        float lightning_dir_focus = 0.0f;
         unsigned long long lightning_received_ms = 0;
 
         bool has_health_state = false;
@@ -77,6 +82,11 @@ public:
         unsigned char world_ground_r = 100;
         unsigned char world_ground_g = 120;
         unsigned char world_ground_b = 80;
+        bool has_layered_world_probes = false;
+        int layered_probe_profile = 0;
+        int layered_probe_layer_count = 0;
+        int layered_probe_sector_count = 0;
+        std::array<unsigned char, 4 * 9 * 3> layered_probe_rgb{};
         bool has_vanilla_biome_colors = false;
         unsigned char biome_sky_r = 128;
         unsigned char biome_sky_g = 180;

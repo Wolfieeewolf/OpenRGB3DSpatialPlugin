@@ -317,6 +317,10 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 {
                     telemetry.has_lightning_event = true;
                     telemetry.lightning_strength = std::clamp(msg.value("strength", 1.0f), 0.0f, 2.0f);
+                    telemetry.lightning_dir_x = msg.value("dir_x", 0.0f);
+                    telemetry.lightning_dir_y = msg.value("dir_y", 1.0f);
+                    telemetry.lightning_dir_z = msg.value("dir_z", 0.0f);
+                    telemetry.lightning_dir_focus = std::clamp(msg.value("dir_focus", 0.0f), 0.0f, 1.0f);
                     telemetry.lightning_received_ms = NowMs();
                 }
                 else if(out_type == "health_state")
@@ -384,6 +388,54 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                         telemetry.world_ground_r = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_r", 100)));
                         telemetry.world_ground_g = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_g", 120)));
                         telemetry.world_ground_b = (unsigned char)(std::max)(0, (std::min)(255, msg.value("ground_b", 80)));
+                    }
+                    if(msg.contains("probe_layer_count") && msg.contains("probe_sector_count") &&
+                       msg.contains("probe_rgb") && msg["probe_rgb"].is_array())
+                    {
+                        const int layer_count = msg.value("probe_layer_count", 0);
+                        const int sector_count = msg.value("probe_sector_count", 0);
+                        const auto& probe_rgb = msg["probe_rgb"];
+                        const int expected = layer_count * sector_count * 3;
+                        if((layer_count == 3 || layer_count == 4) &&
+                           sector_count == 9 &&
+                           expected > 0 &&
+                           (int)probe_rgb.size() >= expected)
+                        {
+                            telemetry.has_layered_world_probes = true;
+                            telemetry.layered_probe_profile = msg.value("probe_layer_profile", layer_count);
+                            telemetry.layered_probe_layer_count = layer_count;
+                            telemetry.layered_probe_sector_count = sector_count;
+                            telemetry.layered_probe_rgb.fill(0);
+                            const int cap = (int)telemetry.layered_probe_rgb.size();
+                            const int copy_n = (std::min)(expected, cap);
+                            for(int i = 0; i < copy_n; i++)
+                            {
+                                int v = 0;
+                                if(probe_rgb[(size_t)i].is_number_integer())
+                                {
+                                    v = probe_rgb[(size_t)i].get<int>();
+                                }
+                                else if(probe_rgb[(size_t)i].is_number_float())
+                                {
+                                    v = (int)probe_rgb[(size_t)i].get<float>();
+                                }
+                                telemetry.layered_probe_rgb[(size_t)i] = (unsigned char)(std::max)(0, (std::min)(255, v));
+                            }
+                        }
+                        else
+                        {
+                            telemetry.has_layered_world_probes = false;
+                            telemetry.layered_probe_profile = 0;
+                            telemetry.layered_probe_layer_count = 0;
+                            telemetry.layered_probe_sector_count = 0;
+                        }
+                    }
+                    else
+                    {
+                        telemetry.has_layered_world_probes = false;
+                        telemetry.layered_probe_profile = 0;
+                        telemetry.layered_probe_layer_count = 0;
+                        telemetry.layered_probe_sector_count = 0;
                     }
                     if(msg.contains("biome_sky_r") && msg.contains("biome_sky_g") && msg.contains("biome_sky_b") &&
                        msg.contains("biome_fog_r") && msg.contains("biome_fog_g") && msg.contains("biome_fog_b") &&

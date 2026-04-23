@@ -74,6 +74,21 @@ public class ClientPlayNetworkHandlerMixin
     {
         if(packet.getEntityType() == EntityType.LIGHTNING_BOLT)
         {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if(client.player != null)
+            {
+                Vec3d eye = client.player.getEyePos();
+                Vec3d strike = new Vec3d(packet.getX(), packet.getY(), packet.getZ());
+                Vec3d toStrike = strike.subtract(eye);
+                double len = toStrike.length();
+                if(len > 1e-5)
+                {
+                    Vec3d dir = toStrike.multiply(1.0 / len);
+                    float focus = (float)Math.max(0.0, Math.min(1.0, 1.0 - (len / 96.0)));
+                    LightningTelemetryState.markLightning(1.0f, (float)dir.x, (float)dir.y, (float)dir.z, focus);
+                    return;
+                }
+            }
             LightningTelemetryState.markLightning(1.0f);
         }
     }

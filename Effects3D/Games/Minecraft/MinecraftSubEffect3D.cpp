@@ -14,6 +14,10 @@ MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* e
       channels_(channels),
       effect_title_(effect_title)
 {
+    // The Minecraft channel blend already carries its own gain controls.
+    // Keep generic post-process intensity neutral-to-slightly-soft by default.
+    effect_intensity = 85;
+    effect_sharpness = 100;
 }
 
 EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const

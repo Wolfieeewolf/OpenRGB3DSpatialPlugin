@@ -8,6 +8,14 @@
 
 #include "LEDPosition3D.h"
 
+/*
+ * Room / grid convention (3D Spatial tab, LEDViewport3D, effects): right-handed scene space with
+ *   X = width (left–right),
+ *   Y = height (floor–ceiling),
+ *   Z = depth (front–back).
+ * ManualRoomSettings and GridBounds use the same mapping: width_mm → span on X, height_mm → span on Y,
+ * depth_mm → span on Z. LED room_position.{x,y,z} and GridContext3D min/max axes follow this.
+ */
 struct ManualRoomSettings
 {
     bool  use_manual;

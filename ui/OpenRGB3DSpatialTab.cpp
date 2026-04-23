@@ -577,7 +577,13 @@ void OpenRGB3DSpatialTab::SetupUI()
     QGridLayout* grid_gl = new QGridLayout(grid_scale_group);
     grid_gl->setSpacing(4);
 
-    grid_gl->addWidget(new QLabel("Layout size (X × Y × Z):"), 0, 0, 1, 2);
+    {
+        QLabel* layout_lbl = new QLabel(QStringLiteral("Layout size (X × Y × Z units):"));
+        layout_lbl->setToolTip(
+            QStringLiteral("New controller LED grids: X = width count, Y = vertical layers, Z = depth count. "
+                           "Matches scene axes (X left/right, Y up, Z front/back)."));
+        grid_gl->addWidget(layout_lbl, 0, 0, 1, 2);
+    }
     grid_gl->addWidget(new QLabel("X:"), 0, 2);
     grid_x_spin = new QSpinBox();
     grid_x_spin->setRange(1, 100);
@@ -830,7 +836,11 @@ void OpenRGB3DSpatialTab::SetupUI()
     QWidget* transform_tab = new QWidget();
     QVBoxLayout* transform_tab_v = new QVBoxLayout(transform_tab);
     transform_tab_v->setSpacing(6);
-    QLabel* transform_help = new QLabel("Moves the selected controller, reference point, or display plane in the room (your layout). Does not change the camera view. Position in mm (same as Room size in Grid Settings). Rotation in degrees.");
+    QLabel* transform_help = new QLabel(
+        "Moves the selected controller, reference point, or display plane in the room (your layout). "
+        "Does not change the camera view. Position in mm (same as Room size in Grid Settings). "
+        "Axes: X = left/right (width), Y = floor→ceiling (height), Z = front→back (depth). "
+        "Rotation in degrees.");
     transform_help->setWordWrap(true);
     transform_help->setForegroundRole(QPalette::PlaceholderText);
     transform_tab_v->addWidget(transform_help);
@@ -845,20 +855,26 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->setSpacing(3);
     position_layout->setContentsMargins(0, 0, 0, 0);
 
-    auto add_position_row = [this, position_layout](int row, const QString& label, QSlider*& sl, QDoubleSpinBox*& sp, int axis, bool clamp_non_negative)
+    auto add_position_row = [this, position_layout](int row,
+                                                    const QString& label,
+                                                    QSlider*& sl,
+                                                    QDoubleSpinBox*& sp,
+                                                    int axis,
+                                                    bool clamp_non_negative,
+                                                    const QString& axis_tip_mm)
     {
         position_layout->addWidget(new QLabel(label), row, 0);
         sl = new QSlider(Qt::Horizontal);
         sl->setRange(-50000, 50000);
         sl->setValue(0);
-        sl->setToolTip("Position in mm (same unit as Room size in Grid Settings).");
+        sl->setToolTip(axis_tip_mm);
         sp = new QDoubleSpinBox();
         sp->setRange(-50000.0, 50000.0);
         sp->setDecimals(0);
         sp->setSingleStep(10.0);
         sp->setMaximumWidth(80);
         sp->setSuffix(" mm");
-        sp->setToolTip("Position in mm (same unit as Room size in Grid Settings).");
+        sp->setToolTip(axis_tip_mm);
         position_layout->addWidget(sl, row, 1);
         position_layout->addWidget(sp, row, 2);
 
@@ -912,9 +928,27 @@ void OpenRGB3DSpatialTab::SetupUI()
         }
     };
 
-    add_position_row(0, "X:", pos_x_slider, pos_x_spin, 0, false);
-    add_position_row(1, "Y:", pos_y_slider, pos_y_spin, 1, true);
-    add_position_row(2, "Z:", pos_z_slider, pos_z_spin, 2, false);
+    add_position_row(0,
+                     "X (width):",
+                     pos_x_slider,
+                     pos_x_spin,
+                     0,
+                     false,
+                     QStringLiteral("Left–right in mm; same axis as room Width (X) and LED spacing X."));
+    add_position_row(1,
+                     "Y (height):",
+                     pos_y_slider,
+                     pos_y_spin,
+                     1,
+                     true,
+                     QStringLiteral("Floor–ceiling in mm; same axis as room Height (Y). This row clamps to ≥0 from the UI."));
+    add_position_row(2,
+                     "Z (depth):",
+                     pos_z_slider,
+                     pos_z_spin,
+                     2,
+                     false,
+                     QStringLiteral("Front–back in mm; same axis as room Depth (Z) and LED spacing Z."));
 
     position_layout->setColumnStretch(1, 1);
 

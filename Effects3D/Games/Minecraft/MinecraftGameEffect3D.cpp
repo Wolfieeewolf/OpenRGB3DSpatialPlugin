@@ -12,6 +12,10 @@ REGISTER_EFFECT_3D(MinecraftGameEffect3D);
 
 MinecraftGameEffect3D::MinecraftGameEffect3D(QWidget* parent) : SpatialEffect3D(parent)
 {
+    // The Minecraft channel blend already carries its own gain controls.
+    // Keep generic post-process intensity neutral-to-slightly-soft by default.
+    effect_intensity = 85;
+    effect_sharpness = 100;
 }
 
 EffectInfo3D MinecraftGameEffect3D::GetEffectInfo()

@@ -31,14 +31,17 @@ struct WorldTintSmoothState
 struct Settings
 {
     float damage_flash_decay_s = 0.35f;
-    float world_light_mix = 0.85f;
+    float world_light_mix = 0.62f;
+    float world_tint_vividness = 1.25f;
     float world_tint_smoothing = 0.72f;
     float world_tint_directional = 0.46f;
     float world_tint_dir_sharpness = 1.8f;
-    float lightning_flash_strength = 0.90f;
+    float lightning_flash_strength = 0.72f;
     float lightning_flash_decay_s = 0.28f;
+    float lightning_directional_mix = 0.65f;
+    float lightning_dir_sharpness = 1.35f;
     float damage_flash_strength = 1.0f;
-    float base_brightness = 1.12f;
+    float base_brightness = 1.0f;
     bool enable_health_gradient = true;
     bool health_per_heart_strip = false;
     bool health_per_heart_indexed = false;
@@ -57,9 +60,23 @@ struct Settings
     bool enable_damage_flash = true;
     bool enable_ambient_world_tint = true;
     bool enable_lightning_flash = true;
-    float tint_layer_ground_end = 0.36f;
-    float tint_layer_sky_start = 0.54f;
-    float biome_sky_overlay = 0.28f;
+    float tint_layer_ground_end = 0.30f;
+    float tint_layer_sky_start = 0.68f;
+    int spatial_mapping_mode = 0; // 0 Compass directional probes, 1 Voxel room mapping, 2 Classic layered world tint
+    int spatial_layer_profile_mode = 0; // 0 Auto, 3 Three-layer, 4 Four-layer
+    float spatial_center_size = 0.14f;
+    float spatial_blend_softness = 0.10f;
+    float spatial_heading_offset_deg = 0.0f;
+    /** Phase for layered compass (N,NE,…): default −45° aligns room front with N for 8-fold probes. */
+    float spatial_compass_offset_deg = -45.0f;
+    float spatial_voxel_room_scale = 0.18f;
+    float spatial_voxel_mix = 0.78f;
+    bool spatial_debug_sweep_enabled = false;
+    float spatial_debug_sweep_hz = 2.0f;
+    float spatial_floor_offset = 0.0f;
+    float spatial_desk_offset = 0.0f;
+    float spatial_upper_offset = 0.0f;
+    float biome_sky_overlay = 0.18f;
     float env_rain_darken_sky = 0.45f;
     float env_thunder_darken_sky = 0.35f;
     float damage_directional_mix = 0.80f;

@@ -24,6 +24,11 @@
 #include "SpatialEffectTypes.h"
 #include <nlohmann/json.hpp>
 
+/*
+ * Effect sampling volume in the same scene convention as GridSpaceUtils / LEDViewport3D:
+ *   X width, Y vertical (floor→ceiling), Z depth (front→back).
+ * width/height/depth are spans (max−min) on those axes.
+ */
 struct GridContext3D
 {
     float min_x, max_x;

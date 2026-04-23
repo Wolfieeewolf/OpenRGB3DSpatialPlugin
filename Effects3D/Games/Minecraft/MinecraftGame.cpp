@@ -2,6 +2,8 @@
 
 #include "MinecraftGame.h"
 #include "MinecraftGameSettings.h"
+#include "Game/SpatialLayerCore.h"
+#include "Game/VoxelRoomCore.h"
 #include "SpatialEffect3D.h"
 
 #include <QCheckBox>
@@ -11,7 +13,10 @@
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTimer>
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 
@@ -22,6 +27,107 @@ namespace
 {
 thread_local int tls_led_index = -1;
 thread_local int tls_led_count = 0;
+
+struct AdaptiveLayerState
+{
+    std::array<unsigned int, 48> y_hist{};
+    unsigned int y_samples = 0;
+    bool has_gamma = false;
+    float gamma = 1.0f;
+    bool has_auto_bounds = false;
+    float auto_floor_end = 0.30f;
+    float auto_desk_end = 0.55f;
+    float auto_upper_end = 0.78f;
+};
+
+thread_local AdaptiveLayerState tls_layer_state;
+
+// Published from the render path when spatial debug sweep is active; read by the settings UI timer.
+std::atomic<int> g_spatial_sweep_live{0};
+std::atomic<int> g_spatial_sweep_step{0};
+std::atomic<int> g_spatial_sweep_step_count{0};
+std::atomic<int> g_spatial_sweep_layer_count{0};
+std::atomic<int> g_spatial_sweep_top_band{0};
+std::atomic<int> g_spatial_sweep_sector{0};
+
+static float QuantileFromHist(const std::array<unsigned int, 48>& hist, unsigned int total, float q)
+{
+    if(total == 0)
+    {
+        return 0.5f;
+    }
+    const float target = std::clamp(q, 0.0f, 1.0f) * (float)total;
+    unsigned int run = 0;
+    for(size_t i = 0; i < hist.size(); i++)
+    {
+        run += hist[i];
+        if((float)run >= target)
+        {
+            const float b0 = (float)i / (float)hist.size();
+            const float b1 = (float)(i + 1) / (float)hist.size();
+            return 0.5f * (b0 + b1);
+        }
+    }
+    return 1.0f;
+}
+
+static void FinalizeAdaptiveLayerState()
+{
+    if(tls_layer_state.y_samples < 8)
+    {
+        tls_layer_state.y_hist.fill(0u);
+        tls_layer_state.y_samples = 0;
+        return;
+    }
+
+    const float q10 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.10f);
+    const float q25 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.25f);
+    const float q50 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.50f);
+    const float q75 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.75f);
+    const float q90 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.90f);
+    const float spread = q90 - q10;
+
+    float target_gamma = 1.0f;
+    if(spread > 0.10f)
+    {
+        // Typical room layouts have dense "desk/mid" LEDs sitting lower than half-height
+        // once floor + ceiling strips are included. Lift that middle mass adaptively.
+        const float target_mid = 0.46f;
+        const float m = std::clamp(q50, 0.05f, 0.95f);
+        target_gamma = std::log(target_mid) / std::log(m);
+        target_gamma = std::clamp(target_gamma, 0.65f, 1.35f);
+    }
+
+    if(!tls_layer_state.has_gamma)
+    {
+        tls_layer_state.gamma = target_gamma;
+        tls_layer_state.has_gamma = true;
+    }
+    else
+    {
+        tls_layer_state.gamma = tls_layer_state.gamma + (target_gamma - tls_layer_state.gamma) * 0.25f;
+    }
+
+    const float floor_target = std::clamp(q25 + 0.02f, 0.10f, 0.48f);
+    const float desk_target = std::clamp(q50 + 0.04f, floor_target + 0.08f, 0.80f);
+    const float upper_target = std::clamp(q75 + 0.03f, desk_target + 0.08f, 0.94f);
+    if(!tls_layer_state.has_auto_bounds)
+    {
+        tls_layer_state.auto_floor_end = floor_target;
+        tls_layer_state.auto_desk_end = desk_target;
+        tls_layer_state.auto_upper_end = upper_target;
+        tls_layer_state.has_auto_bounds = true;
+    }
+    else
+    {
+        tls_layer_state.auto_floor_end += (floor_target - tls_layer_state.auto_floor_end) * 0.25f;
+        tls_layer_state.auto_desk_end += (desk_target - tls_layer_state.auto_desk_end) * 0.25f;
+        tls_layer_state.auto_upper_end += (upper_target - tls_layer_state.auto_upper_end) * 0.25f;
+    }
+
+    tls_layer_state.y_hist.fill(0u);
+    tls_layer_state.y_samples = 0;
+}
 }
 
 void SetRenderSampleIndexContext(int led_index, int led_count)
@@ -32,6 +138,7 @@ void SetRenderSampleIndexContext(int led_index, int led_count)
 
 void ClearRenderSampleIndexContext()
 {
+    FinalizeAdaptiveLayerState();
     tls_led_index = -1;
     tls_led_count = 0;
 }
@@ -109,7 +216,451 @@ RGBColor SuppressWhites(RGBColor c)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
+RGBColor ApplyVividness(RGBColor c, float vividness)
+{
+    const float v = std::clamp(vividness, 0.60f, 2.00f);
+    if(std::fabs(v - 1.0f) < 1e-4f)
+    {
+        return c;
+    }
+    float r = (float)(c & 0xFF) / 255.0f;
+    float g = (float)((c >> 8) & 0xFF) / 255.0f;
+    float b = (float)((c >> 16) & 0xFF) / 255.0f;
+    const float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+    r = luma + (r - luma) * v;
+    g = luma + (g - luma) * v;
+    b = luma + (b - luma) * v;
+    const float value_gain = 1.0f + 0.10f * (v - 1.0f);
+    r = std::clamp(r * value_gain, 0.0f, 1.0f);
+    g = std::clamp(g * value_gain, 0.0f, 1.0f);
+    b = std::clamp(b * value_gain, 0.0f, 1.0f);
+    const int ri = std::clamp((int)std::round(r * 255.0f), 0, 255);
+    const int gi = std::clamp((int)std::round(g * 255.0f), 0, 255);
+    const int bi = std::clamp((int)std::round(b * 255.0f), 0, 255);
+    return (RGBColor)((bi << 16) | (gi << 8) | ri);
+}
+
 static bool ch(std::uint32_t mask, std::uint32_t bit) { return (mask & bit) != 0u; }
+
+static SpatialLayerCore::LayerProfileMode ResolveLayerProfileMode(const Settings& s)
+{
+    if(s.spatial_layer_profile_mode == 3)
+    {
+        return SpatialLayerCore::LayerProfileMode::ThreeLayer;
+    }
+    if(s.spatial_layer_profile_mode == 4)
+    {
+        return SpatialLayerCore::LayerProfileMode::FourLayer;
+    }
+    return SpatialLayerCore::LayerProfileMode::Auto;
+}
+
+static int ResolveLayerCountForDebug(const Settings& s)
+{
+    if(s.spatial_layer_profile_mode == 3)
+    {
+        return 3;
+    }
+    return 4;
+}
+
+static SpatialLayerCore::ProbeInput BuildProbeInput(const GameTelemetryBridge::TelemetrySnapshot& t)
+{
+    SpatialLayerCore::ProbeInput input;
+    if(t.has_layered_world_probes &&
+       (t.layered_probe_layer_count == 3 || t.layered_probe_layer_count == 4) &&
+       t.layered_probe_sector_count == 9)
+    {
+        input.layered.has_layered = true;
+        input.layered.layer_count = t.layered_probe_layer_count;
+        const int count = t.layered_probe_layer_count * t.layered_probe_sector_count;
+        for(int i = 0; i < count; i++)
+        {
+            const int off = i * 3;
+            const unsigned char r = t.layered_probe_rgb[(size_t)off + 0];
+            const unsigned char g = t.layered_probe_rgb[(size_t)off + 1];
+            const unsigned char b = t.layered_probe_rgb[(size_t)off + 2];
+            input.layered.colors[(size_t)i] = MakeRgb(r, g, b);
+        }
+    }
+    return input;
+}
+
+/** Minecraft / layout: Y is up (sky). Compass and horizontal cues follow yaw only, not look pitch. */
+static void MinecraftRoomHorizontalBasis(float look_x,
+                                         float look_y,
+                                         float look_z,
+                                         float heading_offset_deg,
+                                         float& out_ux,
+                                         float& out_uy,
+                                         float& out_uz,
+                                         float& out_fx,
+                                         float& out_fy,
+                                         float& out_fz,
+                                         float& out_rx,
+                                         float& out_ry,
+                                         float& out_rz)
+{
+    out_ux = 0.0f;
+    out_uy = 1.0f;
+    out_uz = 0.0f;
+    float lx = look_x;
+    float ly = look_y;
+    float lz = look_z;
+    float ll = std::sqrt(lx * lx + ly * ly + lz * lz);
+    if(ll <= 1e-5f)
+    {
+        lx = 0.0f;
+        ly = 0.0f;
+        lz = 1.0f;
+    }
+    else
+    {
+        lx /= ll;
+        ly /= ll;
+        lz /= ll;
+    }
+    const float horiz = lx * out_ux + ly * out_uy + lz * out_uz;
+    out_fx = lx - horiz * out_ux;
+    out_fy = ly - horiz * out_uy;
+    out_fz = lz - horiz * out_uz;
+    float fl = std::sqrt(out_fx * out_fx + out_fy * out_fy + out_fz * out_fz);
+    if(fl <= 1e-5f)
+    {
+        out_fx = 0.0f;
+        out_fy = 0.0f;
+        out_fz = 1.0f;
+    }
+    else
+    {
+        out_fx /= fl;
+        out_fy /= fl;
+        out_fz /= fl;
+    }
+    out_rx = out_fy * out_uz - out_fz * out_uy;
+    out_ry = out_fz * out_ux - out_fx * out_uz;
+    out_rz = out_fx * out_uy - out_fy * out_ux;
+    float rl = std::sqrt(out_rx * out_rx + out_ry * out_ry + out_rz * out_rz);
+    if(rl <= 1e-5f)
+    {
+        out_rx = 1.0f;
+        out_ry = 0.0f;
+        out_rz = 0.0f;
+    }
+    else
+    {
+        out_rx /= rl;
+        out_ry /= rl;
+        out_rz /= rl;
+    }
+
+    const float yaw = heading_offset_deg * 0.01745329251f;
+    if(std::fabs(yaw) > 1e-5f)
+    {
+        const float c = std::cos(yaw);
+        const float s = std::sin(yaw);
+        const float fx2 = out_fx * c + out_rx * s;
+        const float fy2 = out_fy * c + out_ry * s;
+        const float fz2 = out_fz * c + out_rz * s;
+        const float rx2 = out_rx * c - out_fx * s;
+        const float ry2 = out_ry * c - out_fy * s;
+        const float rz2 = out_rz * c - out_fz * s;
+        out_fx = fx2; out_fy = fy2; out_fz = fz2;
+        out_rx = rx2; out_ry = ry2; out_rz = rz2;
+    }
+}
+
+/**
+ * Scene / LED layout (Spatial tab, front view): X left–right, Y up–down (floor→ceiling), Z depth
+ * (toward/away). Matches SpatialLayerCore’s Y-up sample space — pass positions through unchanged.
+ * Minecraft camera vectors from telemetry stay in their native Y-up world frame.
+ */
+static inline void RoomLedToSpatialCore(float rx,
+                                        float ry,
+                                        float rz,
+                                        float rox,
+                                        float roy,
+                                        float roz,
+                                        float& sx,
+                                        float& sy,
+                                        float& sz,
+                                        float& sox,
+                                        float& soy,
+                                        float& soz)
+{
+    sx = rx;
+    sy = ry;
+    sz = rz;
+    sox = rox;
+    soy = roy;
+    soz = roz;
+}
+
+// Y is vertical; bounds may increase either toward floor or ceiling. Infer floor vs ceiling from
+// origin proximity (front-left-floor) so 0.0 = floor and 1.0 = ceiling.
+static inline float NormalizeRoomVertical01(float y, const GridContext3D& grid, float origin_y)
+{
+    const float d_min = std::fabs(origin_y - grid.min_y);
+    const float d_max = std::fabs(origin_y - grid.max_y);
+    const float floor_y = (d_min <= d_max) ? grid.min_y : grid.max_y;
+    const float ceil_y = (d_min <= d_max) ? grid.max_y : grid.min_y;
+    if(std::fabs(ceil_y - floor_y) <= 1e-6f)
+    {
+        return 0.5f;
+    }
+    return std::clamp((y - floor_y) / (ceil_y - floor_y), 0.0f, 1.0f);
+}
+
+static void StampPreviewVoxelBox(VoxelRoomCore::VoxelGrid& grid,
+                                 float cx,
+                                 float cy,
+                                 float cz,
+                                 float hx,
+                                 float hy,
+                                 float hz,
+                                 RGBColor c,
+                                 float alpha)
+{
+    const unsigned char rr = (unsigned char)(c & 0xFF);
+    const unsigned char gg = (unsigned char)((c >> 8) & 0xFF);
+    const unsigned char bb = (unsigned char)((c >> 16) & 0xFF);
+    const unsigned char aa = (unsigned char)std::clamp((int)std::lround(alpha * 255.0f), 0, 255);
+    for(int ix = 0; ix < grid.size_x; ix++)
+    {
+        const float x = grid.min_x + ((float)ix + 0.5f) * grid.voxel_size;
+        if(std::fabs(x - cx) > hx)
+        {
+            continue;
+        }
+        for(int iy = 0; iy < grid.size_y; iy++)
+        {
+            const float y = grid.min_y + ((float)iy + 0.5f) * grid.voxel_size;
+            if(std::fabs(y - cy) > hy)
+            {
+                continue;
+            }
+            for(int iz = 0; iz < grid.size_z; iz++)
+            {
+                const float z = grid.min_z + ((float)iz + 0.5f) * grid.voxel_size;
+                if(std::fabs(z - cz) > hz)
+                {
+                    continue;
+                }
+                const int idx = ((ix * grid.size_y + iy) * grid.size_z + iz) * 4;
+                if(idx < 0 || idx + 3 >= (int)grid.rgba.size())
+                {
+                    continue;
+                }
+                grid.rgba[(size_t)(idx + 0)] = rr;
+                grid.rgba[(size_t)(idx + 1)] = gg;
+                grid.rgba[(size_t)(idx + 2)] = bb;
+                grid.rgba[(size_t)(idx + 3)] = aa;
+            }
+        }
+    }
+}
+
+static const VoxelRoomCore::VoxelGrid& GetPreviewVoxelGrid()
+{
+    static VoxelRoomCore::VoxelGrid grid;
+    static bool initialized = false;
+    if(!initialized)
+    {
+        initialized = true;
+        grid.valid = true;
+        grid.size_x = 28;
+        grid.size_y = 18;
+        grid.size_z = 28;
+        grid.voxel_size = 0.25f;
+        grid.min_x = -3.5f;
+        grid.min_y = -0.5f;
+        grid.min_z = -3.5f;
+        grid.rgba.resize((size_t)grid.size_x * (size_t)grid.size_y * (size_t)grid.size_z * 4u, 0u);
+
+        // Left-side "bed" block (purple), right-side warm source, plus a soft ceiling lamp.
+        StampPreviewVoxelBox(grid, -1.35f, 0.30f, -0.15f, 0.55f, 0.20f, 0.90f, (RGBColor)0x00B45CE0, 0.88f);
+        StampPreviewVoxelBox(grid, 1.25f, 1.05f, 0.35f, 0.30f, 0.30f, 0.30f, (RGBColor)0x0040B0FF, 0.85f);
+        StampPreviewVoxelBox(grid, 0.00f, 1.90f, 0.00f, 0.95f, 0.18f, 0.95f, (RGBColor)0x00FFE8CC, 0.38f);
+        StampPreviewVoxelBox(grid, 0.00f, -0.15f, 0.00f, 3.20f, 0.10f, 3.20f, (RGBColor)0x00162A32, 0.22f);
+    }
+    return grid;
+}
+
+static RGBColor RenderVoxelRoomPreviewColor(const GameTelemetryBridge::TelemetrySnapshot& t,
+                                            float grid_x,
+                                            float grid_y,
+                                            float grid_z,
+                                            float origin_x,
+                                            float origin_y,
+                                            float origin_z,
+                                            const Settings& s)
+{
+    const VoxelRoomCore::VoxelGrid& vg = GetPreviewVoxelGrid();
+    if(!vg.valid)
+    {
+        return (RGBColor)0x00000000;
+    }
+
+    VoxelRoomCore::Basis basis;
+    basis.valid = t.has_player_pose;
+    basis.forward_x = t.has_player_pose ? t.forward_x : 0.0f;
+    basis.forward_y = t.has_player_pose ? t.forward_y : 0.0f;
+    basis.forward_z = t.has_player_pose ? t.forward_z : 1.0f;
+    basis.up_x = 0.0f;
+    basis.up_y = 1.0f;
+    basis.up_z = 0.0f;
+
+    VoxelRoomCore::RoomSamplePoint sp;
+    RoomLedToSpatialCore(grid_x,
+                         grid_y,
+                         grid_z,
+                         origin_x,
+                         origin_y,
+                         origin_z,
+                         sp.room_x,
+                         sp.room_y,
+                         sp.room_z,
+                         sp.origin_x,
+                         sp.origin_y,
+                         sp.origin_z);
+
+    VoxelRoomCore::MapperSettings ms;
+    ms.room_to_world_scale = std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f);
+    ms.alpha_cutoff = 0.01f;
+
+    bool used = false;
+    const float ax = t.has_player_pose ? t.player_x : 0.0f;
+    const float ay = t.has_player_pose ? t.player_y : 0.0f;
+    const float az = t.has_player_pose ? t.player_z : 0.0f;
+    RGBColor out = VoxelRoomCore::ComputeRoomMappedVoxelColor(vg, basis, sp, ax, ay, az, ms, &used);
+    if(!used)
+    {
+        return (RGBColor)0x00000000;
+    }
+    return out;
+}
+
+static RGBColor LayerDebugColorByTopIndex(int top_layer_idx, int layer_count)
+{
+    if(layer_count <= 3)
+    {
+        if(top_layer_idx <= 0) return (RGBColor)0x00E0A060; // top
+        if(top_layer_idx == 1) return (RGBColor)0x0060E060; // mid
+        return (RGBColor)0x0060A0E0; // bottom
+    }
+    if(top_layer_idx <= 0) return (RGBColor)0x00E0A060; // ceiling
+    if(top_layer_idx == 1) return (RGBColor)0x0090D060; // upper wall
+    if(top_layer_idx == 2) return (RGBColor)0x0060D0A0; // desk/monitor
+    return (RGBColor)0x0060A0E0; // floor
+}
+
+static RGBColor RenderSpatialLayerSweepDebug(float time,
+                                             const GameTelemetryBridge::TelemetrySnapshot& t,
+                                             float grid_x,
+                                             float grid_y,
+                                             float grid_z,
+                                             float origin_x,
+                                             float origin_y,
+                                             float origin_z,
+                                             float y_norm,
+                                             const Settings& s,
+                                             float floor_end,
+                                             float desk_end,
+                                             float upper_end)
+{
+    const int layer_count = ResolveLayerCountForDebug(s);
+    const int step_count = layer_count * 9;
+    const float hz = std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f);
+    const int step = (int)std::floor(std::max(0.0f, time) * hz);
+    const int active = (step_count > 0) ? (step % step_count) : 0;
+    const int active_top_layer = active / 9;
+    const int active_sector = active % 9;
+    const int active_layer = (layer_count - 1) - active_top_layer;
+
+    g_spatial_sweep_live.store(1, std::memory_order_relaxed);
+    g_spatial_sweep_step.store(active, std::memory_order_relaxed);
+    g_spatial_sweep_step_count.store(step_count, std::memory_order_relaxed);
+    g_spatial_sweep_layer_count.store(layer_count, std::memory_order_relaxed);
+    g_spatial_sweep_top_band.store(active_top_layer, std::memory_order_relaxed);
+    g_spatial_sweep_sector.store(active_sector, std::memory_order_relaxed);
+
+    SpatialLayerCore::ProbeInput probe_input;
+    probe_input.layered.has_layered = true;
+    probe_input.layered.layer_count = layer_count;
+    for(int l = 0; l < layer_count; l++)
+    {
+        for(int sec = 0; sec < 9; sec++)
+        {
+            probe_input.layered.colors[(size_t)(l * 9 + sec)] = (RGBColor)0x00000000;
+        }
+    }
+    probe_input.layered.colors[(size_t)(active_layer * 9 + active_sector)] = LayerDebugColorByTopIndex(active_top_layer, layer_count);
+
+    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
+    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
+    float rx = 1.0f, ry = 0.0f, rz = 0.0f;
+    if(t.has_player_pose)
+    {
+        MinecraftRoomHorizontalBasis(t.forward_x,
+                                     t.forward_y,
+                                     t.forward_z,
+                                     s.spatial_heading_offset_deg,
+                                     ux,
+                                     uy,
+                                     uz,
+                                     fx,
+                                     fy,
+                                     fz,
+                                     rx,
+                                     ry,
+                                     rz);
+    }
+
+    SpatialLayerCore::Basis basis;
+    basis.forward_x = fx;
+    basis.forward_y = fy;
+    basis.forward_z = fz;
+    basis.up_x = ux;
+    basis.up_y = uy;
+    basis.up_z = uz;
+    basis.valid = true;
+
+    SpatialLayerCore::MapperSettings map_settings;
+    map_settings.profile_mode = (layer_count == 3)
+        ? SpatialLayerCore::LayerProfileMode::ThreeLayer
+        : SpatialLayerCore::LayerProfileMode::FourLayer;
+    map_settings.directional_response = 1.0f;
+    map_settings.directional_sharpness = std::max(1.2f, std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f));
+    map_settings.center_size = std::clamp(s.spatial_center_size, 0.02f, 0.65f);
+    map_settings.blend_softness = std::clamp(s.spatial_blend_softness, 0.02f, 0.35f);
+    map_settings.floor_end = floor_end;
+    map_settings.desk_end = desk_end;
+    map_settings.upper_end = upper_end;
+    map_settings.compass_azimuth_offset_rad = s.spatial_compass_offset_deg * 0.01745329252f;
+
+    SpatialLayerCore::SamplePoint sample;
+    RoomLedToSpatialCore(grid_x,
+                         grid_y,
+                         grid_z,
+                         origin_x,
+                         origin_y,
+                         origin_z,
+                         sample.grid_x,
+                         sample.grid_y,
+                         sample.grid_z,
+                         sample.origin_x,
+                         sample.origin_y,
+                         sample.origin_z);
+    sample.y_norm = y_norm;
+
+    bool used_layered = false;
+    RGBColor c = SpatialLayerCore::ComputeProjectedProbeColor(probe_input, basis, sample, map_settings, &used_layered);
+    if(!used_layered)
+    {
+        return (RGBColor)0x00000000;
+    }
+    return c;
+}
 
 static int ResolveHealthStripAxis(const GridContext3D& grid, int axis_in)
 {
@@ -380,6 +931,15 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(mixSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); });
         row++;
 
+        auto* vividLab = new QLabel(QStringLiteral("World tint vividness"));
+        auto* vividSl = new QSlider(Qt::Horizontal);
+        vividSl->setRange(60, 200);
+        vividSl->setValue((int)std::lround(std::clamp(s.world_tint_vividness, 0.60f, 2.00f) * 100.0f));
+        layout->addWidget(vividLab, row, 0);
+        layout->addWidget(vividSl, row, 1);
+        QObject::connect(vividSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_vividness = std::clamp(x / 100.0f, 0.60f, 2.00f); });
+        row++;
+
         auto* smoothLab = new QLabel(QStringLiteral("World tint smoothing"));
         auto* smoothSl = new QSlider(Qt::Horizontal);
         smoothSl->setRange(0, 95);
@@ -405,6 +965,224 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(dirSharpLab, row, 0);
         layout->addWidget(dirSharpSl, row, 1);
         QObject::connect(dirSharpSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_dir_sharpness = std::clamp(x / 100.0f, 0.8f, 3.2f); });
+        row++;
+
+        auto* profileLab = new QLabel(QStringLiteral("Spatial layer profile"));
+        auto* profileCombo = new QComboBox();
+        profileCombo->addItem(QStringLiteral("Auto"), 0);
+        profileCombo->addItem(QStringLiteral("3-layer (floor/mid/ceiling)"), 3);
+        profileCombo->addItem(QStringLiteral("4-layer (floor/desk/upper/ceiling)"), 4);
+        const int profileIdx = std::max(0, profileCombo->findData(s.spatial_layer_profile_mode));
+        profileCombo->setCurrentIndex(profileIdx);
+        layout->addWidget(profileLab, row, 0);
+        layout->addWidget(profileCombo, row, 1);
+        QObject::connect(profileCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, profileCombo](int idx) {
+            const QVariant v = profileCombo->itemData(idx);
+            s.spatial_layer_profile_mode = v.isValid() ? v.toInt() : 0;
+        });
+        row++;
+
+        auto* mapModeLab = new QLabel(QStringLiteral("Spatial mapping mode"));
+        auto* mapModeCombo = new QComboBox();
+        mapModeCombo->addItem(QStringLiteral("Classic world tint (MineLights style)"), 2);
+        mapModeCombo->addItem(QStringLiteral("Compass directional probes"), 0);
+        mapModeCombo->addItem(QStringLiteral("Voxel room mapping (core preview)"), 1);
+        const QString mapModeTip = QStringLiteral(
+            "Choose how ambient world tint is projected: Classic = stable sky/mid/ground layers, "
+            "Compass = directional layered probes around player yaw, Voxel = room-mapped volumetric preview.");
+        mapModeLab->setToolTip(mapModeTip);
+        mapModeCombo->setToolTip(mapModeTip);
+        const int mapModeIdx = std::max(0, mapModeCombo->findData(s.spatial_mapping_mode));
+        mapModeCombo->setCurrentIndex(mapModeIdx);
+        layout->addWidget(mapModeLab, row, 0);
+        layout->addWidget(mapModeCombo, row, 1);
+        QObject::connect(mapModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, mapModeCombo](int idx) {
+            const QVariant v = mapModeCombo->itemData(idx);
+            s.spatial_mapping_mode = v.isValid() ? v.toInt() : 0;
+        });
+        row++;
+
+        auto* centerLab = new QLabel(QStringLiteral("Center sector size"));
+        auto* centerSl = new QSlider(Qt::Horizontal);
+        centerSl->setRange(2, 65);
+        centerSl->setValue((int)std::lround(std::clamp(s.spatial_center_size, 0.02f, 0.65f) * 100.0f));
+        layout->addWidget(centerLab, row, 0);
+        layout->addWidget(centerSl, row, 1);
+        QObject::connect(centerSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_center_size = std::clamp(x / 100.0f, 0.02f, 0.65f); });
+        row++;
+
+        auto* softLab = new QLabel(QStringLiteral("Layer blend softness"));
+        auto* softSl = new QSlider(Qt::Horizontal);
+        softSl->setRange(2, 35);
+        softSl->setValue((int)std::lround(std::clamp(s.spatial_blend_softness, 0.02f, 0.35f) * 100.0f));
+        layout->addWidget(softLab, row, 0);
+        layout->addWidget(softSl, row, 1);
+        QObject::connect(softSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_blend_softness = std::clamp(x / 100.0f, 0.02f, 0.35f); });
+        row++;
+
+        auto* headingLab = new QLabel(QStringLiteral("Room heading offset (deg)"));
+        auto* headingSl = new QSlider(Qt::Horizontal);
+        headingSl->setRange(-180, 180);
+        headingSl->setValue((int)std::lround(std::clamp(s.spatial_heading_offset_deg, -180.0f, 180.0f)));
+        layout->addWidget(headingLab, row, 0);
+        layout->addWidget(headingSl, row, 1);
+        QObject::connect(headingSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_heading_offset_deg = std::clamp((float)x, -180.0f, 180.0f); });
+        row++;
+
+        auto* compassLab = new QLabel(QStringLiteral("Compass sector offset (deg)"));
+        auto* compassSl = new QSlider(Qt::Horizontal);
+        compassSl->setRange(-180, 180);
+        compassSl->setValue((int)std::lround(std::clamp(s.spatial_compass_offset_deg, -180.0f, 180.0f)));
+        const QString compassTip = QStringLiteral(
+            "Rotates which direction maps to layered probe N, NE, … (independent of room heading). "
+            "Default −45° lines North up with the room front wall for the usual 8-sector order.");
+        compassLab->setToolTip(compassTip);
+        compassSl->setToolTip(compassTip);
+        layout->addWidget(compassLab, row, 0);
+        layout->addWidget(compassSl, row, 1);
+        QObject::connect(compassSl, &QSlider::valueChanged, panel, [&s](int x) {
+            s.spatial_compass_offset_deg = std::clamp((float)x, -180.0f, 180.0f);
+        });
+        row++;
+
+        auto* voxScaleLab = new QLabel(QStringLiteral("Voxel room scale"));
+        auto* voxScaleSl = new QSlider(Qt::Horizontal);
+        voxScaleSl->setRange(2, 80); // 0.02 .. 0.80 world units per room unit
+        voxScaleSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f) * 100.0f));
+        const QString voxScaleTip = QStringLiteral("How large the room maps into voxel world space.");
+        voxScaleLab->setToolTip(voxScaleTip);
+        voxScaleSl->setToolTip(voxScaleTip);
+        layout->addWidget(voxScaleLab, row, 0);
+        layout->addWidget(voxScaleSl, row, 1);
+        QObject::connect(voxScaleSl, &QSlider::valueChanged, panel, [&s](int x) {
+            s.spatial_voxel_room_scale = std::clamp(x / 100.0f, 0.02f, 0.80f);
+        });
+        row++;
+
+        auto* voxMixLab = new QLabel(QStringLiteral("Voxel room mix"));
+        auto* voxMixSl = new QSlider(Qt::Horizontal);
+        voxMixSl->setRange(0, 100);
+        voxMixSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f) * 100.0f));
+        layout->addWidget(voxMixLab, row, 0);
+        layout->addWidget(voxMixSl, row, 1);
+        QObject::connect(voxMixSl, &QSlider::valueChanged, panel, [&s](int x) {
+            s.spatial_voxel_mix = std::clamp(x / 100.0f, 0.0f, 1.0f);
+        });
+        row++;
+
+        QCheckBox* dbgSweepToggle = new QCheckBox("Debug layered sweep (step through compass cells)");
+        dbgSweepToggle->setChecked(s.spatial_debug_sweep_enabled);
+        layout->addWidget(dbgSweepToggle, row++, 0, 1, 2);
+        QObject::connect(dbgSweepToggle, &QCheckBox::toggled, panel, [&s](bool v) { s.spatial_debug_sweep_enabled = v; });
+
+        auto* dbgSweepStatus = new QLabel(QStringLiteral("Sweep status: —"));
+        dbgSweepStatus->setWordWrap(true);
+        layout->addWidget(dbgSweepStatus, row++, 0, 1, 2);
+
+        auto* dbgSweepTimer = new QTimer(panel);
+        dbgSweepTimer->setInterval(120);
+        QObject::connect(dbgSweepTimer, &QTimer::timeout, panel, [dbgSweepStatus, &s]() {
+            static const char* kSec[9] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW", "C"};
+            if(!s.spatial_debug_sweep_enabled)
+            {
+                dbgSweepStatus->setText(QStringLiteral("Sweep status: off"));
+                return;
+            }
+            if(!s.enable_ambient_world_tint)
+            {
+                dbgSweepStatus->setText(QStringLiteral("Sweep status: enable Ambient World Tint to run"));
+                return;
+            }
+            if(g_spatial_sweep_live.load(std::memory_order_relaxed) == 0)
+            {
+                dbgSweepStatus->setText(QStringLiteral("Sweep status: waiting for render…"));
+                return;
+            }
+            const int lc = g_spatial_sweep_layer_count.load(std::memory_order_relaxed);
+            const int top = g_spatial_sweep_top_band.load(std::memory_order_relaxed);
+            const int sec = g_spatial_sweep_sector.load(std::memory_order_relaxed);
+            const int step = g_spatial_sweep_step.load(std::memory_order_relaxed);
+            const int sc = g_spatial_sweep_step_count.load(std::memory_order_relaxed);
+            QString band;
+            if(lc <= 3)
+            {
+                if(top <= 0)
+                {
+                    band = QStringLiteral("Top");
+                }
+                else if(top == 1)
+                {
+                    band = QStringLiteral("Mid");
+                }
+                else
+                {
+                    band = QStringLiteral("Bottom");
+                }
+            }
+            else
+            {
+                if(top <= 0)
+                {
+                    band = QStringLiteral("Ceiling");
+                }
+                else if(top == 1)
+                {
+                    band = QStringLiteral("Upper");
+                }
+                else if(top == 2)
+                {
+                    band = QStringLiteral("Desk");
+                }
+                else
+                {
+                    band = QStringLiteral("Floor");
+                }
+            }
+            const char* sn = (sec >= 0 && sec < 9) ? kSec[sec] : "?";
+            dbgSweepStatus->setText(QStringLiteral("Sweep: %1 / %2 — %3 — %4")
+                                        .arg(step + 1)
+                                        .arg(sc)
+                                        .arg(band)
+                                        .arg(QString::fromUtf8(sn)));
+        });
+        dbgSweepTimer->start();
+
+        auto* dbgHzLab = new QLabel(QStringLiteral("Debug sweep speed (cells/sec)"));
+        auto* dbgHzSl = new QSlider(Qt::Horizontal);
+        dbgHzSl->setRange(2, 120); // 0.2 .. 12.0
+        dbgHzSl->setValue((int)std::lround(std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f) * 10.0f));
+        layout->addWidget(dbgHzLab, row, 0);
+        layout->addWidget(dbgHzSl, row, 1);
+        QObject::connect(dbgHzSl, &QSlider::valueChanged, panel, [&s](int x) {
+            s.spatial_debug_sweep_hz = std::clamp(x / 10.0f, 0.2f, 12.0f);
+        });
+        row++;
+
+        auto* floorOffLab = new QLabel(QStringLiteral("Auto floor boundary offset"));
+        auto* floorOffSl = new QSlider(Qt::Horizontal);
+        floorOffSl->setRange(-30, 30);
+        floorOffSl->setValue((int)std::lround(std::clamp(s.spatial_floor_offset, -0.30f, 0.30f) * 100.0f));
+        layout->addWidget(floorOffLab, row, 0);
+        layout->addWidget(floorOffSl, row, 1);
+        QObject::connect(floorOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_floor_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
+        row++;
+
+        auto* deskOffLab = new QLabel(QStringLiteral("Auto desk boundary offset"));
+        auto* deskOffSl = new QSlider(Qt::Horizontal);
+        deskOffSl->setRange(-30, 30);
+        deskOffSl->setValue((int)std::lround(std::clamp(s.spatial_desk_offset, -0.30f, 0.30f) * 100.0f));
+        layout->addWidget(deskOffLab, row, 0);
+        layout->addWidget(deskOffSl, row, 1);
+        QObject::connect(deskOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_desk_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
+        row++;
+
+        auto* upperOffLab = new QLabel(QStringLiteral("Auto upper boundary offset"));
+        auto* upperOffSl = new QSlider(Qt::Horizontal);
+        upperOffSl->setRange(-30, 30);
+        upperOffSl->setValue((int)std::lround(std::clamp(s.spatial_upper_offset, -0.30f, 0.30f) * 100.0f));
+        layout->addWidget(upperOffLab, row, 0);
+        layout->addWidget(upperOffSl, row, 1);
+        QObject::connect(upperOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_upper_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
         row++;
 
         auto* gEndLab = new QLabel(QStringLiteral("Ground-to-mid blend ends (grid Y %)"));
@@ -458,6 +1236,16 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(lDecSl, row, 1);
         QObject::connect(lDecSl, &QSlider::valueChanged, panel, [&s](int x) { s.lightning_flash_decay_s = std::clamp(x / 1000.0f, 0.08f, 0.90f); });
         row++;
+
+        addPctSlider(QStringLiteral("Lightning directional response"), &s.lightning_directional_mix);
+        auto* lDirSharpLab = new QLabel(QStringLiteral("Lightning directional sharpness"));
+        auto* lDirSharpSl = new QSlider(Qt::Horizontal);
+        lDirSharpSl->setRange(50, 500);
+        lDirSharpSl->setValue((int)std::lround(std::clamp(s.lightning_dir_sharpness, 0.5f, 5.0f) * 100.0f));
+        layout->addWidget(lDirSharpLab, row, 0);
+        layout->addWidget(lDirSharpSl, row, 1);
+        QObject::connect(lDirSharpSl, &QSlider::valueChanged, panel, [&s](int x) { s.lightning_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); });
+        row++;
     }
 
     if(all)
@@ -479,7 +1267,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
 }
 
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
-                     float,
+                     float time,
                      float grid_x,
                      float grid_y,
                      float grid_z,
@@ -604,12 +1392,76 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         }
     }
 
-    if(ch(channels, ChWorldTint) && s.enable_ambient_world_tint && t.has_world_light && world_smooth != nullptr)
+    if(ch(channels, ChWorldTint) && s.enable_ambient_world_tint && world_smooth != nullptr)
     {
-        RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
-        if(t.has_world_layers)
+        const float y_norm_raw = NormalizeRoomVertical01(grid_y, grid, origin_y);
+        const int bin_count = (int)tls_layer_state.y_hist.size();
+        const int bin = std::clamp((int)(std::clamp(y_norm_raw, 0.0f, 1.0f) * (float)bin_count), 0, bin_count - 1);
+        tls_layer_state.y_hist[(size_t)bin]++;
+        tls_layer_state.y_samples++;
+        const float gamma = tls_layer_state.has_gamma ? tls_layer_state.gamma : 1.0f;
+        const float y_norm = std::pow(std::clamp(y_norm_raw, 0.0f, 1.0f), gamma);
+
+        float floor_end_dbg = tls_layer_state.has_auto_bounds
+            ? tls_layer_state.auto_floor_end
+            : s.tint_layer_ground_end;
+        float desk_end_dbg = tls_layer_state.has_auto_bounds
+            ? tls_layer_state.auto_desk_end
+            : (s.tint_layer_ground_end + s.tint_layer_sky_start) * 0.5f;
+        float upper_end_dbg = tls_layer_state.has_auto_bounds
+            ? tls_layer_state.auto_upper_end
+            : s.tint_layer_sky_start;
+        floor_end_dbg = std::clamp(floor_end_dbg + s.spatial_floor_offset, 0.08f, 0.52f);
+        desk_end_dbg = std::clamp(desk_end_dbg + s.spatial_desk_offset, floor_end_dbg + 0.06f, 0.88f);
+        upper_end_dbg = std::clamp(upper_end_dbg + s.spatial_upper_offset, desk_end_dbg + 0.06f, 0.95f);
+
+        if(!s.spatial_debug_sweep_enabled)
         {
-            const float y_norm = NormalizeGridAxis01(grid_y, grid.min_y, grid.max_y);
+            g_spatial_sweep_live.store(0, std::memory_order_relaxed);
+        }
+
+        if(s.spatial_debug_sweep_enabled)
+        {
+            out = RenderSpatialLayerSweepDebug(time,
+                                               t,
+                                               grid_x,
+                                               grid_y,
+                                               grid_z,
+                                               origin_x,
+                                               origin_y,
+                                               origin_z,
+                                               y_norm,
+                                               s,
+                                               floor_end_dbg,
+                                               desk_end_dbg,
+                                               upper_end_dbg);
+            const int dr = std::clamp((int)((out & 0xFF) * s.base_brightness), 0, 255);
+            const int dg = std::clamp((int)(((out >> 8) & 0xFF) * s.base_brightness), 0, 255);
+            const int db = std::clamp((int)(((out >> 16) & 0xFF) * s.base_brightness), 0, 255);
+            return (RGBColor)((db << 16) | (dg << 8) | dr);
+        }
+
+        if(s.spatial_mapping_mode == 1)
+        {
+            RGBColor voxel_c = RenderVoxelRoomPreviewColor(t,
+                                                           grid_x,
+                                                           grid_y,
+                                                           grid_z,
+                                                           origin_x,
+                                                           origin_y,
+                                                           origin_z,
+                                                           s);
+            if(voxel_c != (RGBColor)0x00000000)
+            {
+                out = LerpColor(out, voxel_c, std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f));
+            }
+        }
+
+        if(t.has_world_light)
+        {
+            RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
+            if(t.has_world_layers)
+            {
             RGBColor sky = SuppressWhites(MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b));
             RGBColor mid = SuppressWhites(MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b));
             RGBColor ground = SuppressWhites(MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b));
@@ -639,6 +1491,11 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             {
                 sky = LerpColor(sky, (RGBColor)0x00002218, weatherK);
             }
+            const float vivid = std::clamp(s.world_tint_vividness, 0.60f, 2.00f);
+            sky = ApplyVividness(sky, vivid);
+            mid = ApplyVividness(mid, vivid);
+            ground = ApplyVividness(ground, vivid);
+            wl = ApplyVividness(wl, vivid);
             if(t.world_light_received_ms != 0 && t.world_light_received_ms != world_smooth->last_sample_ms)
             {
                 world_smooth->last_sample_ms = t.world_light_received_ms;
@@ -675,39 +1532,124 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                 const float denom = std::max(1e-3f, 1.0f - sStart);
                 projected = LerpColor(mid, sky, (y_norm - sStart) / denom);
             }
-            const float wi_disp = std::max(t.world_light_intensity, 0.22f);
-            const float layer_mix = std::clamp((0.42f + 0.58f * s.world_light_mix) * wi_disp, 0.0f, 1.0f);
-            float dirMul = 1.0f;
-            if(t.has_player_pose && t.world_light_focus > 1e-4f && s.world_tint_directional > 1e-4f)
+            if(s.spatial_mapping_mode == 0 && t.has_layered_world_probes && t.has_player_pose)
             {
-                float fx = t.forward_x, fy = t.forward_y, fz = t.forward_z;
-                float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
-                if(fl > 1e-5f)
+                SpatialLayerCore::ProbeInput probe_input = BuildProbeInput(t);
+                float ux = 0.0f;
+                float uy = 1.0f;
+                float uz = 0.0f;
+                float fx = 0.0f;
+                float fy = 0.0f;
+                float fz = 1.0f;
+                float rx = 1.0f;
+                float ry = 0.0f;
+                float rz = 0.0f;
+                MinecraftRoomHorizontalBasis(t.forward_x,
+                                             t.forward_y,
+                                             t.forward_z,
+                                             s.spatial_heading_offset_deg,
+                                             ux,
+                                             uy,
+                                             uz,
+                                             fx,
+                                             fy,
+                                             fz,
+                                             rx,
+                                             ry,
+                                             rz);
+                SpatialLayerCore::Basis basis;
+                basis.forward_x = fx;
+                basis.forward_y = fy;
+                basis.forward_z = fz;
+                basis.up_x = ux;
+                basis.up_y = uy;
+                basis.up_z = uz;
+                basis.valid = true;
+
+                float floor_end = t.has_layered_world_probes && tls_layer_state.has_auto_bounds
+                    ? tls_layer_state.auto_floor_end
+                    : s.tint_layer_ground_end;
+                float desk_end = tls_layer_state.has_auto_bounds
+                    ? tls_layer_state.auto_desk_end
+                    : (s.tint_layer_ground_end + s.tint_layer_sky_start) * 0.5f;
+                float upper_end = t.has_layered_world_probes && tls_layer_state.has_auto_bounds
+                    ? tls_layer_state.auto_upper_end
+                    : s.tint_layer_sky_start;
+                floor_end = std::clamp(floor_end + s.spatial_floor_offset, 0.08f, 0.52f);
+                desk_end = std::clamp(desk_end + s.spatial_desk_offset, floor_end + 0.06f, 0.88f);
+                upper_end = std::clamp(upper_end + s.spatial_upper_offset, desk_end + 0.06f, 0.95f);
+
+                SpatialLayerCore::MapperSettings map_settings;
+                map_settings.profile_mode = ResolveLayerProfileMode(s);
+                map_settings.directional_response = std::clamp(s.world_tint_directional, 0.0f, 1.0f);
+                map_settings.directional_sharpness = std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f);
+                map_settings.center_size = std::clamp(s.spatial_center_size, 0.02f, 0.65f);
+                map_settings.blend_softness = std::clamp(s.spatial_blend_softness, 0.02f, 0.35f);
+                map_settings.floor_end = floor_end;
+                map_settings.desk_end = desk_end;
+                map_settings.upper_end = upper_end;
+                map_settings.compass_azimuth_offset_rad = s.spatial_compass_offset_deg * 0.01745329252f;
+
+                SpatialLayerCore::SamplePoint sample;
+                RoomLedToSpatialCore(grid_x,
+                                     grid_y,
+                                     grid_z,
+                                     origin_x,
+                                     origin_y,
+                                     origin_z,
+                                     sample.grid_x,
+                                     sample.grid_y,
+                                     sample.grid_z,
+                                     sample.origin_x,
+                                     sample.origin_y,
+                                     sample.origin_z);
+                sample.y_norm = y_norm;
+
+                bool used_layered = false;
+                RGBColor probe_projected = SpatialLayerCore::ComputeProjectedProbeColor(probe_input,
+                                                                                         basis,
+                                                                                         sample,
+                                                                                         map_settings,
+                                                                                         &used_layered);
+                if(probe_input.layered.has_layered)
                 {
-                    fx /= fl; fy /= fl; fz /= fl;
+                    probe_projected = ApplyVividness(SuppressWhites(probe_projected), vivid);
+                    const float layered_bonus = used_layered ? 0.08f : 0.0f;
+                    const float probe_mix = std::clamp(0.20f + 0.60f * s.world_tint_directional + layered_bonus, 0.0f, 0.88f);
+                    projected = LerpColor(projected, probe_projected, probe_mix);
                 }
-                else
-                {
-                    fx = 0.0f; fy = 0.0f; fz = 1.0f;
-                }
-                float ux = t.up_x, uy = t.up_y, uz = t.up_z;
-                float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
-                if(ul > 1e-5f)
-                {
-                    ux /= ul; uy /= ul; uz /= ul;
-                }
-                else
-                {
-                    ux = 0.0f; uy = 1.0f; uz = 0.0f;
-                }
-                float rx = fy * uz - fz * uy;
-                float ry = fz * ux - fx * uz;
-                float rz = fx * uy - fy * ux;
-                float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
-                if(rl > 1e-5f)
-                {
-                    rx /= rl; ry /= rl; rz /= rl;
-                }
+            }
+            const float wi_disp = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
+            const float dark_gate = std::clamp((wi_disp - 0.035f) / 0.215f, 0.0f, 1.0f);
+            const float layer_mix = std::clamp((0.10f + 0.80f * s.world_light_mix) * wi_disp * dark_gate, 0.0f, 1.0f);
+            float dirMul = 1.0f;
+            if(s.spatial_mapping_mode == 0 &&
+               t.has_player_pose &&
+               t.world_light_focus > 1e-4f &&
+               s.world_tint_directional > 1e-4f)
+            {
+                float ux = 0.0f;
+                float uy = 1.0f;
+                float uz = 0.0f;
+                float fx = 0.0f;
+                float fy = 0.0f;
+                float fz = 1.0f;
+                float rx = 1.0f;
+                float ry = 0.0f;
+                float rz = 0.0f;
+                MinecraftRoomHorizontalBasis(t.forward_x,
+                                             t.forward_y,
+                                             t.forward_z,
+                                             s.spatial_heading_offset_deg,
+                                             ux,
+                                             uy,
+                                             uz,
+                                             fx,
+                                             fy,
+                                             fz,
+                                             rx,
+                                             ry,
+                                             rz);
                 float ldx = t.world_light_dir_x, ldy = t.world_light_dir_y, ldz = t.world_light_dir_z;
                 float ll = std::sqrt(ldx * ldx + ldy * ldy + ldz * ldz);
                 if(ll > 1e-5f)
@@ -716,7 +1658,20 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                     const float lx = ldx * rx + ldy * ry + ldz * rz;
                     const float ly = ldx * ux + ldy * uy + ldz * uz;
                     const float lz = ldx * fx + ldy * fy + ldz * fz;
-                    float ox = grid_x - origin_x, oy = grid_y - origin_y, oz = grid_z - origin_z;
+                    float sx, sy, sz, sox, soy, soz;
+                    RoomLedToSpatialCore(grid_x,
+                                         grid_y,
+                                         grid_z,
+                                         origin_x,
+                                         origin_y,
+                                         origin_z,
+                                         sx,
+                                         sy,
+                                         sz,
+                                         sox,
+                                         soy,
+                                         soz);
+                    float ox = sx - sox, oy = sy - soy, oz = sz - soz;
                     float ol = std::sqrt(ox * ox + oy * oy + oz * oz);
                     if(ol > 1e-5f)
                     {
@@ -734,9 +1689,11 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             out = LerpColor(out, projected, std::clamp(layer_mix * dirMul, 0.0f, 1.0f));
             wl = LerpColor(wl, projected, 0.6f);
         }
-        const float wi_disp2 = std::max(t.world_light_intensity, 0.22f);
-        const float wl_mix = std::clamp(s.world_light_mix * wi_disp2, 0.0f, 1.0f);
-        out = LerpColor(out, wl, wl_mix * 0.72f);
+            const float wi_disp2 = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
+            const float dark_gate2 = std::clamp((wi_disp2 - 0.035f) / 0.215f, 0.0f, 1.0f);
+            const float wl_mix = std::clamp((0.05f + 0.35f * s.world_light_mix) * wi_disp2 * dark_gate2, 0.0f, 0.40f);
+            out = LerpColor(out, wl, wl_mix);
+        }
     }
 
     if(ch(channels, ChDamage) && s.enable_damage_flash && t.has_damage_event && t.damage_received_ms > 0)
@@ -837,10 +1794,87 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
         if(lt > 0.0f)
         {
-            const float y_norm = NormalizeGridAxis01(grid_y, grid.min_y, grid.max_y);
+            const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
             const float skyBias = std::pow(y_norm, 1.9f);
             const float layer = 0.20f + 0.80f * skyBias;
-            const float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
+            float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
+            if(s.lightning_directional_mix > 1e-4f && t.has_player_pose)
+            {
+                float dwx = t.lightning_dir_x;
+                float dwy = t.lightning_dir_y;
+                float dwz = t.lightning_dir_z;
+                const float dl = std::sqrt(dwx * dwx + dwy * dwy + dwz * dwz);
+                if(dl > 1e-4f)
+                {
+                    dwx /= dl;
+                    dwy /= dl;
+                    dwz /= dl;
+                    float fx = t.forward_x;
+                    float fy = t.forward_y;
+                    float fz = t.forward_z;
+                    float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+                    if(fl > 1e-4f)
+                    {
+                        fx /= fl;
+                        fy /= fl;
+                        fz /= fl;
+                    }
+                    else
+                    {
+                        fx = 0.0f;
+                        fy = 0.0f;
+                        fz = 1.0f;
+                    }
+                    float ux = t.up_x;
+                    float uy = t.up_y;
+                    float uz = t.up_z;
+                    float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
+                    if(ul > 1e-4f)
+                    {
+                        ux /= ul;
+                        uy /= ul;
+                        uz /= ul;
+                    }
+                    else
+                    {
+                        ux = 0.0f;
+                        uy = 1.0f;
+                        uz = 0.0f;
+                    }
+                    float rx = fy * uz - fz * uy;
+                    float ry = fz * ux - fx * uz;
+                    float rz = fx * uy - fy * ux;
+                    const float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
+                    if(rl > 1e-4f)
+                    {
+                        rx /= rl;
+                        ry /= rl;
+                        rz /= rl;
+                    }
+                    const float lx = dwx * rx + dwy * ry + dwz * rz;
+                    const float ly = dwx * ux + dwy * uy + dwz * uz;
+                    const float lz = dwx * fx + dwy * fy + dwz * fz;
+                    float ox = grid_x - origin_x;
+                    float oy = grid_y - origin_y;
+                    float oz = grid_z - origin_z;
+                    const float olen = std::sqrt(ox * ox + oy * oy + oz * oz);
+                    if(olen > 1e-4f)
+                    {
+                        ox /= olen;
+                        oy /= olen;
+                        oz /= olen;
+                    }
+                    const float signed_align = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
+                    const float hemi = 0.5f * (signed_align + 1.0f);
+                    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, s.lightning_dir_sharpness));
+                    const float dirMix = std::clamp(s.lightning_directional_mix, 0.0f, 1.0f) *
+                                         (0.25f + 0.75f * std::clamp(t.lightning_dir_focus, 0.0f, 1.0f));
+                    const float minFactor = 0.20f;
+                    const float dirFactor = minFactor + (1.0f - minFactor) * shaped;
+                    st *= (1.0f - dirMix) + dirMix * dirFactor;
+                    st = std::clamp(st, 0.0f, 1.0f);
+                }
+            }
             out = LerpColor(out, (RGBColor)0x00FFF0DE, st);
         }
     }

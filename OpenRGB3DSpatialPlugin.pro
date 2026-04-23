@@ -182,6 +182,8 @@ HEADERS +=                                                                      
     QtCompat.h                                                                                  \
     Game/GameTelemetryStatusPanel.h                                                             \
     Game/GameTelemetryBridge.h                                                                  \
+    Game/SpatialLayerCore.h                                                                     \
+    Game/VoxelRoomCore.h                                                                        \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.h                                             \
     Effects3D/Games/Minecraft/MinecraftGame.h                                                   \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h                                           \
@@ -244,6 +246,8 @@ SOURCES +=                                                                      
     ScreenCaptureManager.cpp                                                                    \
     Game/GameTelemetryStatusPanel.cpp                                                           \
     Game/GameTelemetryBridge.cpp                                                                \
+    Game/SpatialLayerCore.cpp                                                                   \
+    Game/VoxelRoomCore.cpp                                                                      \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.cpp                                           \
     Effects3D/Games/Minecraft/MinecraftGame.cpp                                                 \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp                                         \
