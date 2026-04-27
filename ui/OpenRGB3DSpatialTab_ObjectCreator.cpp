@@ -4560,6 +4560,16 @@ DisplayPlane3D* OpenRGB3DSpatialTab::GetSelectedDisplayPlane()
     {
         return display_planes[current_display_plane_index].get();
     }
+
+    if(display_planes_list)
+    {
+        const int selected_row = display_planes_list->currentRow();
+        if(selected_row >= 0 && selected_row < (int)display_planes.size())
+        {
+            current_display_plane_index = selected_row;
+            return display_planes[selected_row].get();
+        }
+    }
     return nullptr;
 }
 
@@ -5541,7 +5551,102 @@ void OpenRGB3DSpatialTab::on_display_plane_visible_toggled(Qt::CheckState state)
 {
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(!plane) return;
-    plane->SetVisible(state == Qt::CheckState::Checked);
+    const bool visible = (state == Qt::CheckState::Checked);
+    plane->SetVisible(visible);
+
+    if(controller_list)
+    {
+        const int plane_id = plane->GetId();
+        if(visible)
+        {
+            bool has_plane_entry = false;
+            for(int row = 0; row < controller_list->count(); row++)
+            {
+                QListWidgetItem* item = controller_list->item(row);
+                if(!item) continue;
+                QVariant data = item->data(Qt::UserRole);
+                if(!data.isValid()) continue;
+                QPair<int, int> metadata = data.value<QPair<int, int>>();
+                if(metadata.first == -3 && metadata.second == plane_id)
+                {
+                    has_plane_entry = true;
+                    break;
+                }
+            }
+            if(!has_plane_entry)
+            {
+                QListWidgetItem* list_item = new QListWidgetItem(
+                    QString("[Display] ") + QString::fromStdString(plane->GetName()));
+                list_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-3, plane_id)));
+                controller_list->addItem(list_item);
+            }
+        }
+        else
+        {
+            RemoveDisplayPlaneControllerEntries(plane_id);
+        }
+    }
+
+    const int linked_ref_idx = plane->GetReferencePointIndex();
+    if(linked_ref_idx >= 0 && linked_ref_idx < (int)reference_points.size())
+    {
+        VirtualReferencePoint3D* ref_pt = reference_points[linked_ref_idx].get();
+        if(ref_pt)
+        {
+            bool keep_ref_visible = false;
+            if(visible)
+            {
+                keep_ref_visible = true;
+            }
+            else
+            {
+                for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
+                {
+                    DisplayPlane3D* other_plane = display_planes[plane_index].get();
+                    if(!other_plane || other_plane == plane)
+                    {
+                        continue;
+                    }
+                    if(other_plane->IsVisible() && other_plane->GetReferencePointIndex() == linked_ref_idx)
+                    {
+                        keep_ref_visible = true;
+                        break;
+                    }
+                }
+            }
+
+            ref_pt->SetVisible(keep_ref_visible);
+            if(controller_list)
+            {
+                bool has_ref_entry = false;
+                for(int row = 0; row < controller_list->count(); row++)
+                {
+                    QListWidgetItem* item = controller_list->item(row);
+                    if(!item) continue;
+                    QVariant data = item->data(Qt::UserRole);
+                    if(!data.isValid()) continue;
+                    QPair<int, int> metadata = data.value<QPair<int, int>>();
+                    if(metadata.first == -2 && metadata.second == linked_ref_idx)
+                    {
+                        has_ref_entry = true;
+                        if(!keep_ref_visible)
+                        {
+                            delete controller_list->takeItem(row);
+                        }
+                        break;
+                    }
+                }
+                if(keep_ref_visible && !has_ref_entry)
+                {
+                    QListWidgetItem* ref_item = new QListWidgetItem(
+                        QString("[Ref] ") + QString::fromStdString(ref_pt->GetName()));
+                    ref_item->setData(Qt::UserRole, QVariant::fromValue(qMakePair(-2, linked_ref_idx)));
+                    controller_list->addItem(ref_item);
+                }
+            }
+        }
+    }
+
     SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
     if(display_planes_list && current_display_plane_index >= 0 &&
@@ -5563,6 +5668,7 @@ void OpenRGB3DSpatialTab::on_display_plane_visible_toggled(Qt::CheckState state)
     NotifyDisplayPlaneChanged();
     emit GridLayoutChanged();
     UpdateAvailableControllersList();
+    RefreshHiddenControllerStates();
 }
 
 void OpenRGB3DSpatialTab::on_led_spacing_preset_changed(int index)

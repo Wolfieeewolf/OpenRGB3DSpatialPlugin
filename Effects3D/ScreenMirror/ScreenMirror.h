@@ -239,6 +239,7 @@ private:
     float               grid_scale_mm_;
 
     bool                        show_test_pattern;
+    bool                        in_parameter_change_;
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
 
@@ -255,6 +256,10 @@ private:
         }
     };
     std::unordered_map<std::string, FrameHistory> capture_history;
+
+    uint64_t                                                             frame_cache_refresh_ms_;
+    std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>      frame_cache_;
+    std::vector<DisplayPlane3D*>                                         frame_cache_planes_;
 
     struct LEDKey
     {

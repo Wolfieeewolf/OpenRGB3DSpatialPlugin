@@ -70,7 +70,9 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , capture_quality(1)
     , capture_quality_combo(nullptr)
     , show_test_pattern(false)
+    , in_parameter_change_(false)
     , reference_points(nullptr)
+    , frame_cache_refresh_ms_(0)
 {
 }
 
@@ -111,6 +113,60 @@ EffectInfo3D ScreenMirror::GetEffectInfo()
 
 void ScreenMirror::SetupCustomUI(QWidget* parent)
 {
+    capture_quality_combo = nullptr;
+    monitor_status_label = nullptr;
+    monitor_help_label = nullptr;
+    monitors_container = nullptr;
+    monitors_layout = nullptr;
+    for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
+        it != monitor_settings.end();
+        ++it)
+    {
+        MonitorSettings& s = it->second;
+        s.group_box = nullptr;
+        s.scale_slider = nullptr;
+        s.scale_label = nullptr;
+        s.scale_invert_check = nullptr;
+        s.smoothing_time_slider = nullptr;
+        s.smoothing_time_label = nullptr;
+        s.brightness_slider = nullptr;
+        s.brightness_label = nullptr;
+        s.brightness_threshold_slider = nullptr;
+        s.brightness_threshold_label = nullptr;
+        s.white_rolloff_slider = nullptr;
+        s.white_rolloff_label = nullptr;
+        s.vibrance_slider = nullptr;
+        s.vibrance_label = nullptr;
+        s.black_bar_letterbox_slider = nullptr;
+        s.black_bar_letterbox_label = nullptr;
+        s.black_bar_pillarbox_slider = nullptr;
+        s.black_bar_pillarbox_label = nullptr;
+        s.softness_slider = nullptr;
+        s.softness_label = nullptr;
+        s.blend_slider = nullptr;
+        s.blend_label = nullptr;
+        s.propagation_speed_slider = nullptr;
+        s.propagation_speed_label = nullptr;
+        s.wave_decay_slider = nullptr;
+        s.wave_decay_label = nullptr;
+        s.wave_time_to_edge_slider = nullptr;
+        s.wave_time_to_edge_label = nullptr;
+        s.falloff_curve_slider = nullptr;
+        s.falloff_curve_label = nullptr;
+        s.front_back_balance_slider = nullptr;
+        s.front_back_balance_label = nullptr;
+        s.left_right_balance_slider = nullptr;
+        s.left_right_balance_label = nullptr;
+        s.top_bottom_balance_slider = nullptr;
+        s.top_bottom_balance_label = nullptr;
+        s.ref_point_combo = nullptr;
+        s.test_pattern_check = nullptr;
+        s.screen_preview_check = nullptr;
+        s.capture_area_preview = nullptr;
+        s.add_zone_button = nullptr;
+        s.capture_zones_widget = nullptr;
+    }
+
     if(rotation_yaw_slider)
     {
         QWidget* rotation_group = rotation_yaw_slider->parentWidget();
@@ -193,6 +249,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         else if(capture_quality == 6) { w = 2560; h = 1440; }
         else if(capture_quality == 7) { w = 3840; h = 2160; }
         ScreenCaptureManager::Instance().SetDownscaleResolution(w, h);
+        OnParameterChanged();
     });
 
     monitors_container = new QGroupBox("Per-Monitor Balance");
@@ -250,8 +307,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(container, parent);
 
     StartCaptureIfNeeded();
-
-    QTimer::singleShot(100, this, &ScreenMirror::OnScreenPreviewChanged);
 }
 
 void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
@@ -359,7 +414,42 @@ namespace
 
 RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    return CalculateColorGridInternal(x, y, z, time, grid, nullptr, nullptr);
+    const uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const uint64_t cache_max_age_ms = 8;
+    if(frame_cache_refresh_ms_ == 0 || (now_ms - frame_cache_refresh_ms_) >= cache_max_age_ms)
+    {
+        frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
+        frame_cache_.clear();
+        ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+        if(!capture_mgr.IsInitialized())
+        {
+            capture_mgr.Initialize();
+        }
+        for(size_t i = 0; i < frame_cache_planes_.size(); i++)
+        {
+            DisplayPlane3D* plane = frame_cache_planes_[i];
+            if(!plane) continue;
+            std::string capture_id = plane->GetCaptureSourceId();
+            if(capture_id.empty()) continue;
+            if(!capture_mgr.IsCapturing(capture_id))
+            {
+                capture_mgr.StartCapture(capture_id);
+            }
+            std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(capture_id);
+            if(frame && frame->valid && !frame->data.empty())
+            {
+                frame_cache_[capture_id] = frame;
+                AddFrameToHistory(capture_id, frame);
+            }
+            else
+            {
+                frame_cache_[capture_id] = nullptr;
+            }
+        }
+        frame_cache_refresh_ms_ = now_ms;
+    }
+    return CalculateColorGridInternal(x, y, z, time, grid, &frame_cache_, &frame_cache_planes_);
 }
 
 RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
@@ -598,7 +688,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
         if(use_wave && (mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.5f))
         {
-            std::unordered_map<std::string, FrameHistory>::iterator history_it;
+            std::unordered_map<std::string, FrameHistory>::iterator history_it = capture_history.end();
             std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator>::iterator cache_it = history_cache.find(capture_id);
             if(cache_it != history_cache.end())
             {
@@ -1658,9 +1748,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             }
     }
 
-    OnScreenPreviewChanged();
-    OnTestPatternChanged();
-
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -1676,10 +1763,18 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
     OnTestPatternChanged();
     
     OnParameterChanged();
+
+    StartCaptureIfNeeded();
 }
 
 void ScreenMirror::OnParameterChanged()
 {
+    if(in_parameter_change_)
+    {
+        return;
+    }
+    in_parameter_change_ = true;
+
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -1739,6 +1834,7 @@ void ScreenMirror::OnParameterChanged()
     RefreshReferencePointDropdowns();
 
     emit ParametersChanged();
+    in_parameter_change_ = false;
 }
 
 void ScreenMirror::OnScreenPreviewChanged()
@@ -1754,7 +1850,6 @@ void ScreenMirror::OnScreenPreviewChanged()
         }
     }
     emit ScreenPreviewChanged(any_enabled);
-    emit ParametersChanged();
 }
 
 void ScreenMirror::OnTestPatternChanged()
@@ -2342,10 +2437,10 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     connect(settings.test_pattern_check,
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
             &QCheckBox::checkStateChanged,
-            this, [this]() { OnParameterChanged(); }
+            this, [this]() { OnParameterChanged(); OnTestPatternChanged(); }
 #else
             &QCheckBox::stateChanged,
-            this, [this](int) { OnParameterChanged(); }
+            this, [this](int) { OnParameterChanged(); OnTestPatternChanged(); }
 #endif
     );
     preview_form->addRow("Test Pattern:", settings.test_pattern_check);
@@ -2566,10 +2661,6 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.add_zone_button)
                 settings.add_zone_button->setEnabled(has_capture_source);
             
-            if(!has_capture_source && !settings.show_test_pattern && settings.group_box->isChecked())
-            {
-                settings.group_box->setChecked(false);
-            }
         }
     }
 

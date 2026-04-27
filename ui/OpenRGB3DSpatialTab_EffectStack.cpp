@@ -490,10 +490,22 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
             if(screen_mirror && viewport)
             {
                 connect(screen_mirror, &ScreenMirror::ScreenPreviewChanged,
-                        viewport, &LEDViewport3D::SetShowScreenPreview);
+                        viewport, &LEDViewport3D::SetShowScreenPreview, Qt::UniqueConnection);
                 connect(screen_mirror, &ScreenMirror::TestPatternChanged,
-                        viewport, &LEDViewport3D::SetShowTestPattern);
+                        viewport, &LEDViewport3D::SetShowTestPattern, Qt::UniqueConnection);
                 screen_mirror->SetReferencePoints(&reference_points);
+
+                QPointer<ScreenMirror> sm_ptr(screen_mirror);
+                viewport->SetPerPlanePreviewQuery(
+                    [sm_ptr](const std::string& name) -> bool {
+                        return sm_ptr ? sm_ptr->ShouldShowScreenPreview(name) : false;
+                    },
+                    [sm_ptr](const std::string& name) -> bool {
+                        return sm_ptr ? sm_ptr->ShouldShowTestPattern(name) : false;
+                    });
+                QPointer<LEDViewport3D> vp_ptr(viewport);
+                connect(screen_mirror, &QObject::destroyed, viewport,
+                        [vp_ptr]() { if(vp_ptr) vp_ptr->ClearPerPlaneQueries(); });
             }
         }
 

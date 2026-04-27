@@ -13,6 +13,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSlider>
+#include <QTimer>
 #include <algorithm>
 #include <functional>
 #include <cmath>
@@ -74,6 +75,13 @@ public:
         setStyleSheet("QWidget { background-color: #1a1a1a; border: 1px solid #444; }");
         setToolTip("Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete.");
         setMouseTracking(true);
+
+        // Keep preview responsive even when no UI interaction occurs.
+        refresh_timer = new QTimer(this);
+        connect(refresh_timer, &QTimer::timeout, this, [this]() {
+            update();
+        });
+        refresh_timer->start(33);
     }
 
     void SetDisplayPlane(DisplayPlane3D* plane)
@@ -153,10 +161,10 @@ protected:
             if(!source_id.empty())
             {
                 ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-                if(capture_mgr.IsInitialized() || capture_mgr.Initialize())
+                // Keep preview paint side-effect free: don't initialize/start capture here.
+                // Capture startup should happen from the effect runtime path.
+                if(capture_mgr.IsInitialized() && capture_mgr.IsCapturing(source_id))
                 {
-                    if(!capture_mgr.IsCapturing(source_id))
-                        capture_mgr.StartCapture(source_id);
                     std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
                     if(frame && frame->valid && !frame->data.empty())
                     {
@@ -507,6 +515,7 @@ private:
     QPoint drag_start_pos;
     CaptureZone drag_start_zone;
     QRect preview_rect;
+    QTimer* refresh_timer = nullptr;
 };
 
 CaptureZonesWidget::CaptureZonesWidget(

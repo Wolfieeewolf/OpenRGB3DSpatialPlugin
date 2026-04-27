@@ -49,6 +49,10 @@ public:
     void SetShowTestPattern(bool show) { show_test_pattern = show; update(); }
     void ClearDisplayPlaneTextures();
 
+    using PerPlaneFlagQuery = std::function<bool(const std::string& plane_name)>;
+    void SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery test_pattern_query);
+    void ClearPerPlaneQueries();
+
     void SetShowRoomGridOverlay(bool show) { show_room_grid_overlay = show; update(); }
     void SetRoomGridBrightness(float brightness) { room_grid_brightness = std::max(0.0f, std::min(1.0f, brightness)); update(); }
     void SetRoomGridPointSize(float size) { room_grid_point_size = std::max(0.5f, std::min(12.0f, size)); update(); }
@@ -185,6 +189,9 @@ private:
     bool                                    room_grid_overlay_colors_dirty;
     std::map<std::string, GLuint>           display_plane_textures;
     QTimer*                                 screen_preview_refresh_timer;
+
+    PerPlaneFlagQuery                       per_plane_preview_query;
+    PerPlaneFlagQuery                       per_plane_test_pattern_query;
 
     float   camera_distance;
     float   camera_yaw;

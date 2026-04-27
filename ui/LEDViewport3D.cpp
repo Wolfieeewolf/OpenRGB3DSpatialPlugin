@@ -174,13 +174,27 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
             screen_preview_refresh_timer = new QTimer(this);
             connect(screen_preview_refresh_timer, &QTimer::timeout, this, [this]() { update(); });
         }
-        screen_preview_refresh_timer->start(33);
+        screen_preview_refresh_timer->start(16);
     }
     else
     {
         if(screen_preview_refresh_timer)
             screen_preview_refresh_timer->stop();
     }
+    update();
+}
+
+void LEDViewport3D::SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery test_pattern_query)
+{
+    per_plane_preview_query = std::move(preview_query);
+    per_plane_test_pattern_query = std::move(test_pattern_query);
+    update();
+}
+
+void LEDViewport3D::ClearPerPlaneQueries()
+{
+    per_plane_preview_query = nullptr;
+    per_plane_test_pattern_query = nullptr;
     update();
 }
 
@@ -412,7 +426,7 @@ void LEDViewport3D::paintGL()
     DrawAxes();
     DrawRoomBoundary();
 
-    if(show_screen_preview && !show_test_pattern)
+    if(show_screen_preview)
     {
         UpdateDisplayPlaneTextures();
     }
@@ -1349,8 +1363,10 @@ void LEDViewport3D::DrawDisplayPlanes()
         float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
 
-        bool plane_test_pattern = show_test_pattern;
-        
+        bool plane_test_pattern = per_plane_test_pattern_query
+            ? per_plane_test_pattern_query(plane_ptr->GetName())
+            : show_test_pattern;
+
         if(plane_test_pattern)
         {
             Vector3D center;
@@ -1407,8 +1423,10 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
             glEnd();
         }
-        bool plane_screen_preview = show_screen_preview;
-        
+        bool plane_screen_preview = per_plane_preview_query
+            ? per_plane_preview_query(plane_ptr->GetName())
+            : show_screen_preview;
+
         if(plane_screen_preview)
         {
             std::string source_id = plane_ptr->GetCaptureSourceId();
