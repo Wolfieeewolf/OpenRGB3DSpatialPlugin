@@ -503,9 +503,6 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
                     [sm_ptr](const std::string& name) -> bool {
                         return sm_ptr ? sm_ptr->ShouldShowTestPattern(name) : false;
                     });
-                QPointer<LEDViewport3D> vp_ptr(viewport);
-                connect(screen_mirror, &QObject::destroyed, viewport,
-                        [vp_ptr]() { if(vp_ptr) vp_ptr->ClearPerPlaneQueries(); });
             }
         }
 

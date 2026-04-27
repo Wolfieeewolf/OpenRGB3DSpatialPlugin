@@ -51,7 +51,6 @@ public:
 
     using PerPlaneFlagQuery = std::function<bool(const std::string& plane_name)>;
     void SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery test_pattern_query);
-    void ClearPerPlaneQueries();
 
     void SetShowRoomGridOverlay(bool show) { show_room_grid_overlay = show; update(); }
     void SetRoomGridBrightness(float brightness) { room_grid_brightness = std::max(0.0f, std::min(1.0f, brightness)); update(); }

@@ -191,13 +191,6 @@ void LEDViewport3D::SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, Per
     update();
 }
 
-void LEDViewport3D::ClearPerPlaneQueries()
-{
-    per_plane_preview_query = nullptr;
-    per_plane_test_pattern_query = nullptr;
-    update();
-}
-
 void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
 {
     controller_transforms = transforms;

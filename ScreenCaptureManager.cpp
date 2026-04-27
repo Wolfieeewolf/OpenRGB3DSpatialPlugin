@@ -617,7 +617,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     std::chrono::steady_clock::time_point last_gdi_force = thread_start_tp;
     std::chrono::steady_clock::time_point last_frame_produced = thread_start_tp;
     std::chrono::steady_clock::time_point last_stuck_warn = thread_start_tp;
-    int consecutive_dxgi_errors = 0;
     LOG_INFO("[ScreenCapture] Capture thread started for '%s' (use_dxgi=%d, %dx%d at (%d,%d), target_fps=%d)",
              source_id.c_str(), (int)use_dxgi, dw, dh, dx, dy, target_fps.load());
     while(active_flag->load())
@@ -647,7 +646,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             if(hr == DXGI_ERROR_WAIT_TIMEOUT)
             {
                 dxgi_timed_out = true;
-                consecutive_dxgi_errors = 0;
             }
             else if(hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
             {
@@ -851,14 +849,19 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             {
                 if(!use_dxgi)
                 {
-                    use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
-                    if(use_dxgi)
+                    std::chrono::steady_clock::time_point retry_tp = std::chrono::steady_clock::now();
+                    if(std::chrono::duration_cast<std::chrono::seconds>(retry_tp - last_dxgi_retry).count() >= 3)
                     {
-                        LOG_INFO("[ScreenCapture] DXGI re-established for '%s'", source_id.c_str());
-                        logged_dxgi_unavailable = false;
+                        last_dxgi_retry = retry_tp;
+                        if(TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state))
+                        {
+                            use_dxgi = true;
+                            logged_dxgi_unavailable = false;
+                            LOG_INFO("[ScreenCapture] DXGI re-established for '%s'", source_id.c_str());
+                        }
                     }
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                std::this_thread::sleep_for(std::chrono::milliseconds(target_frame_time_ms > 0 ? target_frame_time_ms : 2));
                 continue;
             }
         }
