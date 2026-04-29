@@ -1382,11 +1382,6 @@ bool SpatialEffect3D::GetRainbowMode() const
     return rainbow_mode;
 }
 
-void SpatialEffect3D::SetSpatialRoomTintEnabled(bool enabled)
-{
-    SetSpatialMappingMode(enabled ? SpatialMappingMode::SubtleTint : SpatialMappingMode::Off);
-}
-
 void SpatialEffect3D::SetFrequency(unsigned int frequency)
 {
     effect_frequency = frequency;
@@ -2434,7 +2429,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rainbow_mode"] = rainbow_mode;
     j["spatial_mapping_mode"] = (int)spatial_mapping_mode;
     j["compass_layer_spin_preset"] = compass_layer_spin_preset;
-    j["spatial_room_tint"] = (spatial_mapping_mode != SpatialMappingMode::Off);
     j["effect_voxel_volume_mix"] = effect_voxel_volume_mix;
     j["effect_voxel_room_scale_centi"] = effect_voxel_room_scale_centi;
     j["effect_voxel_heading_offset"] = effect_voxel_heading_offset;
@@ -2515,10 +2509,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         const int v = settings["spatial_mapping_mode"].get<int>();
         SetSpatialMappingMode(static_cast<SpatialMappingMode>(std::clamp(v, 0, 3)));
-    }
-    else if(settings.contains("spatial_room_tint"))
-    {
-        SetSpatialRoomTintEnabled(settings["spatial_room_tint"].get<bool>());
     }
 
     if(settings.contains("compass_layer_spin_preset"))

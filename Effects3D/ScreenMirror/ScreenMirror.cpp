@@ -1710,11 +1710,6 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             {
                 msettings.reference_point_id = mon["reference_point_id"].get<int>();
             }
-            else if(mon.contains("reference_point_index"))
-            {
-                int legacy_index = mon["reference_point_index"].get<int>();
-                msettings.reference_point_id = LookupReferencePointIdByIndex(legacy_index);
-            }
 
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);

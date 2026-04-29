@@ -32,7 +32,7 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     }
 
     nlohmann::json profile_json;
-    profile_json["version"] = 6;
+    profile_json["version"] = 7;
 
     nlohmann::json stack_json = nlohmann::json::array();
     for(size_t i = 0; i < effect_stack.size(); i++)
@@ -47,7 +47,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
 
     if(effect_origin_combo)
     {
-        profile_json["origin_index"] = effect_origin_combo->currentIndex();
         profile_json["origin_item_data"] = effect_origin_combo->currentData().toInt();
     }
 
@@ -102,8 +101,8 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     {
         nlohmann::json profile_json = nlohmann::json::parse(json_str.toStdString());
 
-        const int kSupportedVersionMax = 6;
-        const int kSupportedVersionMin = 3;
+        const int kSupportedVersionMax = 7;
+        const int kSupportedVersionMin = 7;
         if(!profile_json.contains("version") || !profile_json["version"].is_number_integer())
         {
             QMessageBox::critical(this, "Invalid Profile",
@@ -151,30 +150,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             if(idx >= 0)
             {
                 effect_origin_combo->setCurrentIndex(idx);
-            }
-        }
-        else if(effect_origin_combo && profile_json.contains("origin_index"))
-        {
-            int origin_idx = profile_json["origin_index"].get<int>();
-            if(version <= 3 && origin_idx >= 2)
-            {
-                /* v3: Room, Target, then refs — two rows inserted before refs */
-                origin_idx += 2;
-            }
-            else if(version == 4 && origin_idx >= 3)
-            {
-                /* v4: added "Lights centroid" before reference points */
-                origin_idx++;
-            }
-            if(version <= 5 && origin_idx >= 0 && origin_idx <= 3)
-            {
-                /* Combo v6 lists mapped-lights first; older profiles used room first */
-                static const int kPreV6RowToV6[4] = { 1, 2, 3, 0 };
-                origin_idx = kPreV6RowToV6[origin_idx];
-            }
-            if(origin_idx >= 0 && origin_idx < effect_origin_combo->count())
-            {
-                effect_origin_combo->setCurrentIndex(origin_idx);
             }
         }
 
