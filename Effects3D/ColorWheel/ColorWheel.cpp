@@ -20,15 +20,6 @@ REGISTER_EFFECT_3D(ColorWheel);
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace
-{
-    const char* kBandName(int i)
-    {
-        static const char* n[] = {"Floor", "Mid", "Ceiling"};
-        return (i >= 0 && i < 3) ? n[i] : "?";
-    }
-}
-
 ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
@@ -151,7 +142,7 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     for(int i = 0; i < 3; i++)
     {
         const int r = i + 1;
-        band_grid->addWidget(new QLabel(QString("%1:").arg(kBandName(i))), r, 0);
+        band_grid->addWidget(new QLabel(QString("%1:").arg(EffectStratumBlend::BandNameUi(i))), r, 0);
 
         QSlider* sp_sl = new QSlider(Qt::Horizontal);
         sp_sl->setRange(0, 200);

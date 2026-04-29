@@ -18,15 +18,6 @@ REGISTER_EFFECT_3D(Spiral);
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace
-{
-const char* BandLabel(int i)
-{
-    static const char* n[] = {"Floor", "Mid", "Ceiling"};
-    return (i >= 0 && i < 3) ? n[i] : "?";
-}
-}
-
 Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
 {
     arms_slider = nullptr;
@@ -175,7 +166,7 @@ void Spiral::SetupCustomUI(QWidget* parent)
     for(int i = 0; i < 3; i++)
     {
         const int r = i + 1;
-        band_grid->addWidget(new QLabel(QString("%1:").arg(BandLabel(i))), r, 0);
+        band_grid->addWidget(new QLabel(QString("%1:").arg(EffectStratumBlend::BandNameUi(i))), r, 0);
 
         QSlider* sp = new QSlider(Qt::Horizontal);
         sp->setRange(0, 200);

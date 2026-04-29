@@ -13,6 +13,13 @@
 namespace EffectStratumBlend
 {
 
+/** Short UI label for vertical band index 0..2 (floor / mid / ceiling). */
+inline const char* BandNameUi(int i)
+{
+    static const char* n[] = {"Floor", "Mid", "Ceiling"};
+    return (i >= 0 && i < 3) ? n[i] : "?";
+}
+
 /** Standard vertical band breaks (matches typical effect mapper UI). */
 inline void InitStratumBreaks(SpatialLayerCore::MapperSettings& m)
 {

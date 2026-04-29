@@ -11,15 +11,6 @@
 #include <QSlider>
 #include <QVBoxLayout>
 
-namespace
-{
-const char* kBandName(int i)
-{
-    static const char* n[] = {"Floor", "Mid", "Ceiling"};
-    return (i >= 0 && i < 3) ? n[i] : "?";
-}
-}
-
 StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
 {
     auto* outer = new QVBoxLayout(this);
@@ -62,7 +53,7 @@ StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
     for(int i = 0; i < 3; i++)
     {
         const int r = i + 1;
-        band_grid->addWidget(new QLabel(QStringLiteral("%1:").arg(kBandName(i))), r, 0);
+        band_grid->addWidget(new QLabel(QStringLiteral("%1:").arg(EffectStratumBlend::BandNameUi(i))), r, 0);
 
         speed_sl_[i] = new QSlider(Qt::Horizontal);
         speed_sl_[i]->setRange(0, 200);

@@ -228,7 +228,7 @@ public:
     virtual std::vector<RGBColor> GetColors() const;
     virtual void SetRainbowMode(bool enabled);
     virtual bool GetRainbowMode() const;
-    /** Legacy: true = SubtleTint, false = Off (see SetSpatialMappingMode). */
+    /** Maps to SubtleTint vs Off; prefer SetSpatialMappingMode for new code (kept for settings JSON and callers). */
     void SetSpatialRoomTintEnabled(bool enabled);
     bool UseSpatialRoomTint() const { return spatial_mapping_mode != SpatialMappingMode::Off; }
 
