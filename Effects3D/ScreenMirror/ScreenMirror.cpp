@@ -78,6 +78,7 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , in_parameter_change_(false)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
+    , frame_cache_last_render_seq_(0)
 {
 }
 
@@ -435,8 +436,25 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
 {
     const uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    const uint64_t cache_max_age_ms = 8;
-    if(frame_cache_refresh_ms_ == 0 || (now_ms - frame_cache_refresh_ms_) >= cache_max_age_ms)
+    bool need_frame_cache_refresh = false;
+    if(grid.render_sequence != 0)
+    {
+        if(grid.render_sequence != frame_cache_last_render_seq_)
+        {
+            need_frame_cache_refresh = true;
+            frame_cache_last_render_seq_ = grid.render_sequence;
+        }
+    }
+    else
+    {
+        const uint64_t cache_max_age_ms = 8;
+        if(frame_cache_refresh_ms_ == 0 || (now_ms - frame_cache_refresh_ms_) >= cache_max_age_ms)
+        {
+            need_frame_cache_refresh = true;
+        }
+    }
+
+    if(need_frame_cache_refresh)
     {
         frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
         std::unordered_set<std::string> seen_capture_ids;
@@ -1480,7 +1498,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
 {
     static const float default_scale = 1.0f;
     static const bool default_scale_inverted = true;
-    static const float default_smoothing_time_ms = 50.0f;
+    static const float default_smoothing_time_ms = 0.0f;
     static const float default_brightness_multiplier = 1.0f;
     static const float default_brightness_threshold = 0.0f;
     static const float default_propagation_speed_mm_per_ms = 0.0f;

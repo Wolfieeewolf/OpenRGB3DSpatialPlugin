@@ -147,7 +147,7 @@ private:
             : enabled(true)
             , scale(1.0f)
             , scale_inverted(true)
-            , smoothing_time_ms(50.0f)
+            , smoothing_time_ms(0.0f)
             , brightness_multiplier(1.0f)
             , brightness_threshold(0.0f)
             , white_rolloff(0.0f)
@@ -260,6 +260,7 @@ private:
     std::unordered_map<std::string, FrameHistory> capture_history;
 
     uint64_t                                                             frame_cache_refresh_ms_;
+    uint64_t                                                             frame_cache_last_render_seq_;
     std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>      frame_cache_;
     std::vector<DisplayPlane3D*>                                         frame_cache_planes_;
 

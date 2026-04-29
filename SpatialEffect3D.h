@@ -45,6 +45,9 @@ struct GridContext3D
     float led_centroid_z = 0.0f;
     bool has_led_centroid = false;
 
+    /** Incremented each main stack render; 0 = unknown (use effect-local fallbacks). */
+    uint64_t render_sequence = 0;
+
     GridContext3D(float minX,
                   float maxX,
                   float minY,

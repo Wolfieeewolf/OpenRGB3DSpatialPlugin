@@ -1080,6 +1080,14 @@ void OpenRGB3DSpatialTab::RenderFrequencyRangeEffects(const GridContext3D& room_
                                        world_grid.grid_scale_mm,
                                        local_room_grid,
                                        local_world_grid);
+            if(local_room_grid)
+            {
+                local_room_grid->render_sequence = room_grid.render_sequence;
+            }
+            if(local_world_grid)
+            {
+                local_world_grid->render_sequence = world_grid.render_sequence;
+            }
         }
         if(effect->UseZoneGrid() && range->zone_index != -1 && (!local_room_grid || !local_world_grid))
         {

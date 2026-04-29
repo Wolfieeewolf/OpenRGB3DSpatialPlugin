@@ -104,6 +104,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         return;
     }
 
+    static uint64_t s_effect_render_sequence = 0;
+    const uint64_t effect_render_sequence = ++s_effect_render_sequence;
 
     ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
                                                               manual_room_width,
@@ -120,6 +122,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             room_bounds.min_y, room_bounds.max_y,
                             room_bounds.min_z, room_bounds.max_z,
                             grid_scale_mm);
+    world_grid.render_sequence = effect_render_sequence;
+    room_grid.render_sequence = effect_render_sequence;
 
     Vector3D led_mu_room{};
     if(TryComputeLedCentroid(controller_transforms, true, &led_mu_room))
@@ -327,6 +331,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                           overlay_slot_grid_overrides[effect_idx].world_grid_local))
             {
                 overlay_slot_grid_overrides[effect_idx].use_zone_grid = true;
+                if(overlay_slot_grid_overrides[effect_idx].room_grid_local)
+                {
+                    overlay_slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
+                }
+                if(overlay_slot_grid_overrides[effect_idx].world_grid_local)
+                {
+                    overlay_slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
+                }
             }
         }
 
@@ -522,6 +534,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                       slot_grid_overrides[effect_idx].world_grid_local))
         {
             slot_grid_overrides[effect_idx].use_zone_grid = true;
+            if(slot_grid_overrides[effect_idx].room_grid_local)
+            {
+                slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
+            }
+            if(slot_grid_overrides[effect_idx].world_grid_local)
+            {
+                slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
+            }
         }
     }
 

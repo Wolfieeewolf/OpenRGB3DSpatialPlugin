@@ -7,6 +7,7 @@
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "ScreenCaptureManager.h"
+#include "ScreenMirror/ScreenMirror.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
@@ -763,6 +764,20 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
                 }
             }
             if(target_fps < 1) target_fps = 30;
+            bool stack_has_screen_mirror = false;
+            for(size_t si = 0; si < effect_stack.size(); si++)
+            {
+                const std::unique_ptr<EffectInstance3D>& inst = effect_stack[si];
+                if(inst && inst->enabled && inst->effect_class_name == "ScreenMirror")
+                {
+                    stack_has_screen_mirror = true;
+                    break;
+                }
+            }
+            if(stack_has_screen_mirror && target_fps < 60u)
+            {
+                target_fps = 60u;
+            }
             int interval_ms = (int)(1000 / target_fps);
             if(interval_ms < 1) interval_ms = 1;
             effect_timer->start(interval_ms);
@@ -796,6 +811,10 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     {
         unsigned int target_fps = current_effect_ui->GetTargetFPSSetting();
         if(target_fps < 1) target_fps = 30;
+        if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 60u)
+        {
+            target_fps = 60u;
+        }
         int interval_ms = (int)(1000 / target_fps);
         if(interval_ms < 1) interval_ms = 1;
         effect_timer->start(interval_ms);
