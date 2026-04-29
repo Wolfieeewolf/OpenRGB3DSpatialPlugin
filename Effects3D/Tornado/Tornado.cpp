@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Tornado.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <QGridLayout>
+#include <QLabel>
+#include <QSlider>
+#include <QVBoxLayout>
+#include <algorithm>
 #include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 REGISTER_EFFECT_3D(Tornado);
 
@@ -23,9 +33,9 @@ Tornado::~Tornado() = default;
 EffectInfo3D Tornado::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Tornado";
-    info.effect_description = "Spinning vortex around the origin";
+    info.effect_description = "Spinning vortex; optional floor/mid/ceiling band tuning (speed, tightness, phase)";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_TORNADO;
     info.is_reversible = true;
@@ -57,8 +67,10 @@ EffectInfo3D Tornado::GetEffectInfo()
 void Tornado::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0,0,0,0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0,0,0,0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
 
     layout->addWidget(new QLabel("Core Radius:"), 0, 0);
     core_radius_slider = new QSlider(Qt::Horizontal);
@@ -80,8 +92,6 @@ void Tornado::SetupCustomUI(QWidget* parent)
     height_label->setMinimumWidth(30);
     layout->addWidget(height_label, 1, 2);
 
-    AddWidgetToParent(w, parent);
-
     connect(core_radius_slider, &QSlider::valueChanged, this, &Tornado::OnTornadoParameterChanged);
     connect(core_radius_slider, &QSlider::valueChanged, core_radius_label, [this](int value) {
         core_radius_label->setText(QString::number(value));
@@ -90,6 +100,15 @@ void Tornado::SetupCustomUI(QWidget* parent)
     connect(height_slider, &QSlider::valueChanged, height_label, [this](int value) {
         height_label->setText(QString::number(value));
     });
+
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Tornado::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(w, parent);
 }
 
 void Tornado::UpdateParams(SpatialEffectParams& params)
@@ -108,6 +127,16 @@ void Tornado::OnTornadoParameterChanged()
     {
         tornado_height = height_slider->value();
         if(height_label) height_label->setText(QString::number(tornado_height));
+    }
+    emit ParametersChanged();
+}
+
+void Tornado::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
     }
     emit ParametersChanged();
 }
@@ -133,7 +162,15 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float rot_rel_z = rotated_pos.z - origin.z;
 
     float axial = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-    
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float swt[3];
+    EffectStratumBlend::WeightsForYNorm(axial, strat_st, swt);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, swt, stratum_tuning_);
+    float progress_e = progress * bb.speed_mul;
+    float detail_e = detail * bb.tight_mul;
+
     float height_center = 0.5f;
     float height_range_val = (tornado_height / 500.0f) * 0.5f;
     float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
@@ -146,7 +183,8 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float a = atan2f(rot_rel_z, rot_rel_x);
     float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
     float along = rot_rel_y;
-    float swirl = a + along * (0.015f * detail) - time * speed * 0.25f;
+    float swirl = a + along * (0.015f * detail_e) - time * speed * 0.25f * bb.speed_mul +
+        bb.phase_deg * (float)(M_PI / 180.0f);
 
     float ring = fabsf(rad - funnel_radius);
     float thickness_base = (ex.hw + ex.hd) * 0.01f;
@@ -155,7 +193,7 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
 
     float arms = 4.0f + 4.0f * size_m;
     float band = 0.5f * (1.0f + cosf(swirl * arms));
-    float band2 = 0.2f * (1.0f + cosf(swirl * arms * 2.0f + progress));
+    float band2 = 0.2f * (1.0f + cosf(swirl * arms * 2.0f + progress_e));
     band = fmin(1.0f, band + band2);
 
     float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range_val + 0.001f));
@@ -165,17 +203,45 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade + radial_glow;
     intensity = fmax(0.0f, fmin(1.0f, intensity));
 
+    SpatialLayerCore::Basis compass_basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), compass_basis);
+    SpatialLayerCore::MapperSettings compass_map;
+    EffectStratumBlend::InitStratumBreaks(compass_map);
+    compass_map.blend_softness =
+        std::clamp(0.09f + 0.04f * (1.0f - detail), 0.05f, 0.20f);
+    compass_map.center_size = std::clamp(0.10f + 0.20f * size_m, 0.06f, 0.50f);
+    compass_map.directional_sharpness = std::clamp(1.0f + detail * 0.1f, 0.85f, 2.3f);
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = axial;
+
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        float hue = 200.0f + swirl * 57.2958f * 0.2f + h_norm * 80.0f + time * rate * 12.0f;
-        final_color = GetRainbowColor(hue);
+        float hue =
+            200.0f + swirl * 57.2958f * 0.2f + h_norm * 80.0f + time * rate * 12.0f * bb.speed_mul;
+        hue = ApplySpatialRainbowHue(hue, std::clamp(h_norm, 0.0f, 1.0f), compass_basis, sp, compass_map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
-        float pos = fmodf(0.5f + 0.5f * intensity + time * rate * 0.02f, 1.0f);
+        float pos = fmodf(0.5f + 0.5f * intensity + time * rate * 0.02f * bb.speed_mul, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
-        final_color = GetColorAtPosition(pos);
+        float p = ApplySpatialPalette01(pos, compass_basis, sp, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
     }
 
     unsigned char r = final_color & 0xFF;
@@ -192,15 +258,41 @@ nlohmann::json Tornado::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["core_radius"] = core_radius;
     j["tornado_height"] = tornado_height;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "tornado_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "tornado_stratum_band_speed_pct",
+                                           "tornado_stratum_band_tight_pct",
+                                           "tornado_stratum_band_phase_deg");
     return j;
 }
 
 void Tornado::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "tornado_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "tornado_stratum_band_speed_pct",
+                                            "tornado_stratum_band_tight_pct",
+                                            "tornado_stratum_band_phase_deg");
     if(settings.contains("core_radius")) core_radius = settings["core_radius"];
     if(settings.contains("tornado_height")) tornado_height = settings["tornado_height"];
 
     if(core_radius_slider) core_radius_slider->setValue(core_radius);
     if(height_slider) height_slider->setValue(tornado_height);
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

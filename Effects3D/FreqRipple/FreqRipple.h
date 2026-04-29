@@ -7,8 +7,11 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <vector>
 #include <limits>
+
+class StratumBandPanel;
 
 class FreqRipple : public SpatialEffect3D
 {
@@ -27,9 +30,12 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     void TickRipples(float time);
-    RGBColor ComputeRippleColor(float dist_norm, float time) const;
+    RGBColor ComputeRippleColor(float dist_norm, float time, const EffectStratumBlend::BandBlendScalars& bb) const;
     float smoothstep(float edge0, float edge1, float x) const;
 
     struct Ripple
@@ -49,6 +55,10 @@ private:
     float decay_rate   = 2.0f;
     float onset_threshold = 0.25f;
     int ripple_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

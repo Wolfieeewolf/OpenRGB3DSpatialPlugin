@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BreathingSphere.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 
 REGISTER_EFFECT_3D(BreathingSphere);
 
@@ -8,6 +10,7 @@ REGISTER_EFFECT_3D(BreathingSphere);
 #include <QComboBox>
 #include <QSlider>
 #include <QLabel>
+#include <QVBoxLayout>
 #include "../EffectHelpers.h"
 
 namespace
@@ -142,7 +145,11 @@ EffectInfo3D BreathingSphere::GetEffectInfo()
 
 void BreathingSphere::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer_w = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer_w);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* breathing_widget = new QWidget();
+    vbox->addWidget(breathing_widget);
     QGridLayout* layout = new QGridLayout(breathing_widget);
     layout->setContentsMargins(0, 0, 0, 0);
     int row = 0;
@@ -211,7 +218,25 @@ void BreathingSphere::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    AddWidgetToParent(breathing_widget, parent);
+    stratum_panel = new StratumBandPanel(outer_w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BreathingSphere::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer_w, parent);
+}
+
+
+void BreathingSphere::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 
@@ -231,13 +256,21 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         return 0x00000000;
 
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
     float rel_x = rot.x - origin.x;
     float rel_y = rot.y - origin.y;
     float rel_z = rot.z - origin.z;
 
     float rate = GetScaledFrequency();
     float detail = std::max(0.05f, GetScaledDetail());
-    progress = CalculateProgress(time);
+    progress = CalculateProgress(time * bb.speed_mul);
     int shape = std::max(0, std::min(breathing_shape, SHAPE_COUNT - 1));
     int edge = std::max(0, std::min(edge_profile, EDGE_COUNT - 1));
     float breath_phase = progress * rate * 0.2f;
@@ -250,14 +283,15 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         float dist_norm = hypotf(rel_x, hypotf(rel_y, rel_z)) / diag;
         float inhale = sinf(breath_phase) * pulse_strength;
         float exhale = sinf(breath_phase + 1.2f) * pulse_strength;
-        float wave = sinf(inhale * 3.14159265f * 1.15f - dist_norm * (9.0f + 5.0f * detail)) * pulse_strength;
-        float ripple = sinf(breath_phase * 2.1f - dist_norm * TWO_PI * 2.2f + rel_y * 0.02f * detail) * pulse_strength;
-        float rush = sinf(exhale * 1.7f + (rel_x + rel_z) * 0.015f * detail) * 0.4f * pulse_strength;
+        const float tm = std::max(0.25f, bb.tight_mul);
+        float wave = sinf(inhale * 3.14159265f * 1.15f - dist_norm * (9.0f + 5.0f * detail) / tm) * pulse_strength;
+        float ripple = sinf(breath_phase * 2.1f * bb.speed_mul - dist_norm * TWO_PI * 2.2f / tm + rel_y * 0.02f * detail / tm) * pulse_strength;
+        float rush = sinf(exhale * 1.7f * bb.speed_mul + (rel_x + rel_z) * 0.015f * detail / tm) * 0.4f * pulse_strength;
 
         RGBColor c;
         if(GetRainbowMode())
         {
-            float hue = time * rate * 12.0f + inhale * 110.0f + wave * 175.0f + ripple * 70.0f + rush * 60.0f + progress * 35.0f;
+            float hue = time * rate * 12.0f * bb.speed_mul + inhale * 110.0f + wave * 175.0f + ripple * 70.0f + rush * 60.0f + progress * 35.0f + bb.phase_deg;
             c = GetRainbowColor(hue);
         }
         else
@@ -327,7 +361,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         float core_intensity = 1.0f - smoothstep(0.0f, R * ec0, distance);
         if(edge == EDGE_RING) core_intensity *= 0.45f;
         float glow_intensity = gk * (1.0f - smoothstep(R * g_lo, R * g_hi, distance));
-        float ripple = rk * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f - progress * 2.0f);
+        float ripple = rk * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f / std::max(0.25f, bb.tight_mul) - progress * 2.0f * bb.speed_mul);
         ripple = (ripple + 1.0f) * 0.5f;
         float ambient = ak * (1.0f - smoothstep(0.0f, R * 2.0f, distance));
         sphere_intensity = core_intensity + glow_intensity + ripple * 0.35f + ambient;
@@ -357,7 +391,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         }
         float shell = inner_open * outer_open * (0.1f + 0.9f * bell);
 
-        float ripple = rk * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f - progress * 2.0f);
+        float ripple = rk * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f / std::max(0.25f, bb.tight_mul) - progress * 2.0f * bb.speed_mul);
         ripple = (ripple + 1.0f) * 0.5f;
         float rip_mix = ripple * 0.38f * inner_open * outer_open;
 
@@ -385,7 +419,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f + time * rate * 12.0f;
+        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f + time * rate * 12.0f * bb.speed_mul + bb.phase_deg;
         final_color = GetRainbowColor(hue);
     }
     else
@@ -406,6 +440,20 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
 nlohmann::json BreathingSphere::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "breathing_sphere_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "breathing_sphere_stratum_band_speed_pct",
+                                           "breathing_sphere_stratum_band_tight_pct",
+                                           "breathing_sphere_stratum_band_phase_deg");
     j["breathing_shape"] = breathing_shape;
     j["edge_profile"] = edge_profile;
     j["breath_pulse_pct"] = breath_pulse_pct;
@@ -416,6 +464,13 @@ nlohmann::json BreathingSphere::SaveSettings() const
 void BreathingSphere::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "breathing_sphere_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "breathing_sphere_stratum_band_speed_pct",
+                                            "breathing_sphere_stratum_band_tight_pct",
+                                            "breathing_sphere_stratum_band_phase_deg");
     if(settings.contains("breathing_shape") && settings["breathing_shape"].is_number_integer())
         breathing_shape = std::max(0, std::min(settings["breathing_shape"].get<int>(), SHAPE_COUNT - 1));
     else if(settings.contains("breathing_mode") && settings["breathing_mode"].is_number_integer())
@@ -429,4 +484,9 @@ void BreathingSphere::LoadSettings(const nlohmann::json& settings)
         breath_pulse_pct = std::max(0, std::min(settings["breath_pulse_pct"].get<int>(), 100));
     if(settings.contains("center_hole_pct") && settings["center_hole_pct"].is_number_integer())
         center_hole_pct = std::max(0, std::min(settings["center_hole_pct"].get<int>(), 100));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

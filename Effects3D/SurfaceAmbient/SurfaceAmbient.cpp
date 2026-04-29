@@ -2,13 +2,14 @@
 
 #include "SurfaceAmbient.h"
 #include "EffectHelpers.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QComboBox>
-
-REGISTER_EFFECT_3D(SurfaceAmbient);
+#include <QVBoxLayout>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -82,9 +83,9 @@ SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D SurfaceAmbient::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Surface Fire/Water/Slime";
-    info.effect_description = "Fire, water, slime, lava, ember, ocean, or steam on floor, ceiling, or walls";
+    info.effect_description = "Fire, water, slime, lava, ember, ocean, or steam on floor, ceiling, or walls; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -109,7 +110,11 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo()
 
 void SurfaceAmbient::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* w = new QWidget();
+    vbox->addWidget(w);
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
     int row = 0;
@@ -166,7 +171,24 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     });
     row++;
 
-    AddWidgetToParent(w, parent);
+    stratum_panel = new StratumBandPanel(outer);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &SurfaceAmbient::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer, parent);
+}
+
+void SurfaceAmbient::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void SurfaceAmbient::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -195,11 +217,22 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    const float tm = std::max(0.25f, bb.tight_mul);
+
     float h_pct = std::max(0.05f, std::min(1.0f, height_pct));
-    float sigma = std::max(thickness * 0.5f, 0.02f);
-    float detail = std::max(0.05f, GetScaledDetail());
+    float sigma = std::max(thickness * 0.5f, 0.02f) / tm;
+    float detail = std::max(0.05f, GetScaledDetail()) * tm;
     float freq = std::max(0.3f, std::min(3.0f, 0.3f + detail * 0.27f));
     float speed = std::max(0.0f, std::min(2.0f, GetScaledSpeed() / 4.0f));
+    const float time_e = time * bb.speed_mul;
     int mask = GetSurfaceMask();
     if(mask == 0) mask = 1;
 
@@ -216,7 +249,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         float dist_norm = (extent > 0.001f) ? (dist / height_ext) : 0.0f;
         float d_sigma = sigma * extent;
         float intensity = expf(-dist * dist / (d_sigma * d_sigma));
-        float plasma = EvalPlasmaStyle(style, u, v, dist_norm, time, freq, speed);
+        float plasma = EvalPlasmaStyle(style, u, v, dist_norm, time_e, freq, speed);
         if(intensity > best_intensity) { best_intensity = intensity; best_plasma = plasma; }
     }
 
@@ -225,7 +258,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     float hue;
     if(GetRainbowMode() && style != STYLE_STEAM)
     {
-        hue = fmodf(best_plasma * 360.0f + time * GetScaledFrequency() * 12.0f, 360.0f);
+        hue = fmodf(best_plasma * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul + bb.phase_deg, 360.0f);
         if(hue < 0.0f) hue += 360.0f;
     }
     else if(style != STYLE_STEAM)
@@ -240,7 +273,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         case STYLE_OCEAN: hue = 200.0f + best_plasma * 30.0f; break;
         default: hue = best_plasma * 360.0f;
         }
-        hue = fmodf(hue + time * GetScaledFrequency() * 12.0f, 360.0f);
+        hue = fmodf(hue + time * GetScaledFrequency() * 12.0f * bb.speed_mul + bb.phase_deg, 360.0f);
         if(hue < 0.0f) hue += 360.0f;
     }
 
@@ -264,6 +297,20 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
 nlohmann::json SurfaceAmbient::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "surfaceambient_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "surfaceambient_stratum_band_speed_pct",
+                                           "surfaceambient_stratum_band_tight_pct",
+                                           "surfaceambient_stratum_band_phase_deg");
     j["style"] = style;
     j["height_pct"] = height_pct;
     j["thickness"] = thickness;
@@ -273,10 +320,24 @@ nlohmann::json SurfaceAmbient::SaveSettings() const
 void SurfaceAmbient::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "surfaceambient_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "surfaceambient_stratum_band_speed_pct",
+                                            "surfaceambient_stratum_band_tight_pct",
+                                            "surfaceambient_stratum_band_phase_deg");
     if(settings.contains("style") && settings["style"].is_number_integer())
         style = std::max(0, std::min(settings["style"].get<int>(), (int)STYLE_COUNT - 1));
     if(settings.contains("height_pct") && settings["height_pct"].is_number())
         height_pct = std::max(0.05f, std::min(1.0f, settings["height_pct"].get<float>()));
     if(settings.contains("thickness") && settings["thickness"].is_number())
         thickness = std::max(0.02f, std::min(0.5f, settings["thickness"].get<float>()));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(SurfaceAmbient);

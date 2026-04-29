@@ -7,8 +7,11 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <vector>
 #include <limits>
+
+class StratumBandPanel;
 
 class SpectrumBars : public SpatialEffect3D
 {
@@ -31,6 +34,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     void RefreshBandRange();
     void EnsureSpectrumCache(float time);
@@ -38,7 +44,15 @@ private:
     float ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const;
     float ResolveHeightNormalized(const GridContext3D* grid, float x, float y, float z) const;
     float ResolveRadialNormalized(const GridContext3D* grid, float x, float y, float z) const;
-    RGBColor ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& user_color) const;
+    RGBColor ComposeColor(float axis_pos,
+                          float height_norm,
+                          float radial_norm,
+                          float time,
+                          float brightness,
+                          const RGBColor& user_color,
+                          float stratum_speed_mul,
+                          float stratum_tight_mul,
+                          float stratum_phase01) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
     float roll_speed = 0.0f;  /* 0 = no roll; >0 = phase advance per second for color/bar position */
@@ -48,6 +62,10 @@ private:
     std::vector<float> smoothed_bands;
     std::vector<float> bands_cache;
     float last_sample_time = std::numeric_limits<float>::lowest();
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif // SPECTRUMBARS_H

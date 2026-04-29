@@ -3,12 +3,56 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "LogManager.h"
-#include <QMessageBox>
-#include <QFont>
-#include <QPalette>
-#include <QSignalBlocker>
+#include "PluginUiUtils.h"
 #include <QAbstractItemView>
+#include <QFont>
 #include <QPointer>
+#include <QScrollArea>
+#include <QSignalBlocker>
+
+namespace
+{
+/** Suppress intermediate native repaints while replacing the whole effect control subtree. */
+struct DeferEffectPanelMapping
+{
+    QPointer<QScrollArea> scroll;
+    QPointer<QWidget> viewport;
+    QPointer<QWidget> content;
+    QPointer<QWidget> panel;
+    bool applied_dont_show_on_screen = false;
+
+    DeferEffectPanelMapping(QScrollArea* sa, QWidget* detail, QWidget* controls)
+        : scroll(sa)
+        , viewport(sa ? sa->viewport() : nullptr)
+        , content(detail)
+        , panel(controls)
+    {
+        if(panel && !panel->testAttribute(Qt::WA_DontShowOnScreen))
+        {
+            panel->setAttribute(Qt::WA_DontShowOnScreen, true);
+            applied_dont_show_on_screen = true;
+        }
+        if(scroll) scroll->setUpdatesEnabled(false);
+        if(viewport) viewport->setUpdatesEnabled(false);
+        if(content) content->setUpdatesEnabled(false);
+        if(panel) panel->setUpdatesEnabled(false);
+    }
+
+    ~DeferEffectPanelMapping()
+    {
+        if(panel) panel->setUpdatesEnabled(true);
+        if(content) content->setUpdatesEnabled(true);
+        if(viewport) viewport->setUpdatesEnabled(true);
+        if(scroll) scroll->setUpdatesEnabled(true);
+        if(applied_dont_show_on_screen && panel)
+        {
+            panel->setAttribute(Qt::WA_DontShowOnScreen, false);
+        }
+        if(panel) panel->update();
+        if(scroll) scroll->update();
+    }
+};
+} // namespace
 
 void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 {
@@ -21,7 +65,6 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     QTabWidget* stack_tabs = new QTabWidget();
     stack_tabs->setTabPosition(QTabWidget::North);
     stack_tabs->setDocumentMode(true);
-    stack_tabs->setStyleSheet("QTabWidget::pane { border: 0; top: -1px; }");
 
     QWidget* active_tab = new QWidget();
     QVBoxLayout* active_layout = new QVBoxLayout(active_tab);
@@ -33,7 +76,7 @@ void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
     active_layout->addWidget(list_label);
 
     QLabel* hint_label = new QLabel("Use the Effect Library to add layers. Checkmark = enabled, X = disabled. Double-click to toggle.");
-    hint_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(hint_label);
     active_layout->addWidget(hint_label);
 
     effect_stack_list = new QListWidget();
@@ -135,8 +178,6 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
 
     if(current_row < 0 || current_row >= (int)effect_stack.size())
     {
-        QMessageBox::information(this, "No Effect Selected",
-                                "Please select an effect to remove from the stack.");
         return;
     }
 
@@ -422,6 +463,9 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
     ClearMinecraftLibraryPanel();
 
+    QWidget* scroll_content = effects_detail_scroll ? effects_detail_scroll->widget() : nullptr;
+    DeferEffectPanelMapping mapping_guard(effects_detail_scroll, scroll_content, effect_controls_widget);
+
     if(current_effect_ui)
     {
         disconnect(current_effect_ui, nullptr, this, nullptr);
@@ -563,9 +607,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         btn_layout->setContentsMargins(0, 0, 0, 0);
 
         direct_start = new QPushButton("Start Effect");
-        direct_start->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
         direct_stop = new QPushButton("Stop Effect");
-        direct_stop->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
         direct_stop->setEnabled(false);
 
         btn_layout->addWidget(direct_start);
@@ -587,9 +629,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         btn_layout->setContentsMargins(0, 0, 0, 0);
 
         direct_start = new QPushButton("Start Effect");
-        direct_start->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }");
         direct_stop = new QPushButton("Stop Effect");
-        direct_stop->setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }");
         direct_stop->setEnabled(false);
 
         btn_layout->addWidget(direct_start);
@@ -626,12 +666,13 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
                 "To build your stack one channel at a time, use the Effect Library: Filter → Game, select "
                 "Minecraft (Fabric), pick a single layer in the dropdown, then Add Minecraft layer."));
             bundled_hint->setWordWrap(true);
-            bundled_hint->setStyleSheet(QStringLiteral("QLabel { background-color: #fff9c4; padding: 8px; border-radius: 4px; }"));
+            PluginUiApplyMutedSecondaryLabel(bundled_hint);
             effect_controls_layout->addWidget(bundled_hint);
         }
 
         ui_effect->CreateCommonEffectControls(effect_controls_widget);
-        ui_effect->SetupCustomUI(effect_controls_widget);
+        QWidget* custom_host = ui_effect->GetCustomSettingsHost();
+        ui_effect->SetupCustomUI(custom_host ? custom_host : effect_controls_widget);
 
         if(effect_zone_label) effect_zone_label->setVisible(true);
         if(effect_zone_combo) effect_zone_combo->setVisible(true);

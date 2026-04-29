@@ -5,7 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <vector>
+
+class StratumBandPanel;
 
 struct PlasmaArc3D
 {
@@ -39,6 +42,7 @@ public:
 
 private slots:
     void OnLightningParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     enum Mode
@@ -76,6 +80,10 @@ private:
     int             mode = MODE_PLASMA_BALL;
     float           flash_rate = 0.15f;
     float           flash_duration = 0.08f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

@@ -72,7 +72,6 @@ public:
     {
         setMinimumHeight(200);
         setMaximumHeight(300);
-        setStyleSheet("QWidget { background-color: #1a1a1a; border: 1px solid #444; }");
         setToolTip("Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete.");
         setMouseTracking(true);
 

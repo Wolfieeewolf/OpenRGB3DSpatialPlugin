@@ -2,6 +2,7 @@
 
 #include "CustomControllerDialog.h"
 #include "ControllerLayout3D.h"
+#include "PluginUiUtils.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -90,12 +91,12 @@ void CustomControllerDialog::SetupUI()
     QLabel* help_label = new QLabel(
         "1. Name and grid size (width x height x depth). 2. Pick a device/zone/LED, then click or double-click a cell to assign. Use layer tabs for depth.");
     help_label->setWordWrap(true);
-    help_label->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(help_label);
     help_label->setContentsMargins(0, 0, 0, 6);
     main_layout->addWidget(help_label);
 
     summary_label = new QLabel("Assigned: 0 cells");
-    summary_label->setStyleSheet("font-weight: bold;");
+    PluginUiApplyBoldLabel(summary_label);
     main_layout->addWidget(summary_label);
 
     QGroupBox* step1_group = new QGroupBox(tr("Name & Grid"));
@@ -302,7 +303,7 @@ void CustomControllerDialog::SetupUI()
 
     QLabel* transform_help = new QLabel("Use when your physical strip order doesn't match the grid. Lock -> rotate or flip -> Apply Preview Remap to commit.");
     transform_help->setWordWrap(true);
-    transform_help->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(transform_help);
     transform_help->setContentsMargins(0, 4, 0, 0);
     transform_grid->addWidget(transform_help, 8, 0, 1, 4);
 

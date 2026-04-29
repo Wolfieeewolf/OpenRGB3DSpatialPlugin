@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "PulseRing.h"
+#include "StratumBandPanel.h"
 #include "EffectHelpers.h"
+#include "SpatialLayerCore.h"
+#include <algorithm>
 #include <cmath>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
-#include <QComboBox>
+#include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(PulseRing);
 
@@ -24,9 +28,10 @@ PulseRing::PulseRing(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D PulseRing::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Pulse Ring";
-    info.effect_description = "Pulsing donut rings that expand from the center outward, leaving a hole in the middle";
+    info.effect_description =
+        "Pulsing donut / radial rainbow; optional floor/mid/ceiling band tuning for motion and spatial freq";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -53,8 +58,10 @@ EffectInfo3D PulseRing::GetEffectInfo()
 void PulseRing::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
     layout->addWidget(new QLabel("Style:"), row, 0);
     QComboBox* style_combo = new QComboBox();
@@ -128,7 +135,23 @@ void PulseRing::SetupCustomUI(QWidget* parent)
         if(dir_label) dir_label->setText(QString::number(v) + "°");
         emit ParametersChanged();
     });
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &PulseRing::OnStratumBandChanged);
+    OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void PulseRing::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void PulseRing::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -141,8 +164,16 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float progress = CalculateProgress(time);
+    float progress_raw = CalculateProgress(time);
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+    float progress = progress_raw * bb.speed_mul;
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     constexpr float kRingHorizontalFill = 1.0f / 3.0f;
     float hw = std::max(1e-6f, e.hw * kRingHorizontalFill);
@@ -167,10 +198,10 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     {
         float phase = progress * (float)(2.0 * M_PI);
         float detail = std::max(0.05f, GetScaledDetail());
-        float freq = std::max(0.3f, std::min(6.0f, GetScaledFrequency() * 0.15f));
+        float freq = std::max(0.3f, std::min(6.0f, GetScaledFrequency() * 0.15f * bb.tight_mul));
         float amp = std::max(0.2f, std::min(2.0f, pulse_amplitude));
         float sigma = std::max(ring_thickness, 0.02f);
-        float phase_offset = direction_deg / 360.0f;
+        float phase_offset = direction_deg / 360.0f + bb.phase_deg * (1.0f / 360.0f);
         float expand_progress = fmodf(progress + phase_offset, 1.0f);
         float ring_center = hole_r + expand_progress * usable;
         float d = fabsf(r - ring_center);
@@ -184,6 +215,24 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     intensity = std::min(1.0f, std::max(0.0f, intensity));
 
     float azimuth_deg = atan2f(rot.z - origin.z, rot.x - origin.x) * 57.2957795f;
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = std::clamp(0.10f, 0.05f, 0.22f);
+    map.center_size = std::clamp(0.11f + 0.24f * GetNormalizedScale(), 0.06f, 0.52f);
+    map.directional_sharpness = std::clamp(1.05f + std::max(0.05f, GetScaledDetail()) * 0.08f, 0.9f, 2.3f);
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     float hue = fmodf(
         pos_norm * 360.0f
         + 0.22f * azimuth_deg
@@ -193,7 +242,25 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         + (style == STYLE_PULSE_RING ? intensity * 55.0f : 0.0f),
         360.0f);
     if(hue < 0.0f) hue += 360.0f;
-    RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pos_norm);
+
+    RGBColor c;
+    if(GetRainbowMode())
+    {
+        hue = ApplySpatialRainbowHue(hue, pos_norm, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(pos_norm, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        c = GetColorAtPosition(p);
+    }
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));
     int g_ = std::min(255, std::max(0, (int)(((c >> 8) & 0xFF) * intensity)));
     int b_ = std::min(255, std::max(0, (int)(((c >> 16) & 0xFF) * intensity)));
@@ -208,12 +275,33 @@ nlohmann::json PulseRing::SaveSettings() const
     j["hole_size"] = hole_size;
     j["pulse_amplitude"] = pulse_amplitude;
     j["direction_deg"] = direction_deg;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "pulsering_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "pulsering_stratum_band_speed_pct",
+                                           "pulsering_stratum_band_tight_pct",
+                                           "pulsering_stratum_band_phase_deg");
     return j;
 }
 
 void PulseRing::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "pulsering_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "pulsering_stratum_band_speed_pct",
+                                            "pulsering_stratum_band_tight_pct",
+                                            "pulsering_stratum_band_phase_deg");
     if(settings.contains("ring_style") && settings["ring_style"].is_number_integer())
         ring_style = std::max(0, std::min(settings["ring_style"].get<int>(), STYLE_COUNT - 1));
     if(settings.contains("ring_thickness") && settings["ring_thickness"].is_number())
@@ -224,4 +312,9 @@ void PulseRing::LoadSettings(const nlohmann::json& settings)
     { float v = settings["pulse_amplitude"].get<float>(); pulse_amplitude = std::max(0.2f, std::min(2.0f, v)); }
     if(settings.contains("direction_deg") && settings["direction_deg"].is_number())
     { float v = settings["direction_deg"].get<float>(); direction_deg = fmodf(v + 360.0f, 360.0f); }
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

@@ -7,7 +7,10 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <limits>
+
+class StratumBandPanel;
 
 class FreqFill : public SpatialEffect3D
 {
@@ -26,6 +29,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     float EvaluateIntensity(float amplitude, float time);
 
@@ -34,6 +40,10 @@ private:
     float last_intensity_time = std::numeric_limits<float>::lowest();
 
     float edge_width = 0.08f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

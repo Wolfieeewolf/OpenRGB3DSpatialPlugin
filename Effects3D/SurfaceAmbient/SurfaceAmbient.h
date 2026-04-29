@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class SurfaceAmbient : public SpatialEffect3D
 {
@@ -22,6 +25,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     enum Style { STYLE_FIRE = 0, STYLE_WATER, STYLE_SLIME, STYLE_LAVA, STYLE_EMBER, STYLE_OCEAN, STYLE_STEAM, STYLE_COUNT };
     enum SurfaceMask {
@@ -38,6 +44,10 @@ private:
     int style = STYLE_FIRE;
     float height_pct = 0.25f;
     float thickness = 0.08f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

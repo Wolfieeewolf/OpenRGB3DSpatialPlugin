@@ -5,8 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 
 class QSpinBox;
+class StratumBandPanel;
 
 class Explosion : public SpatialEffect3D
 {
@@ -31,6 +33,7 @@ public:
 
 private slots:
     void OnExplosionParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     static float explosionHash(unsigned int seed, unsigned int salt);
@@ -51,6 +54,10 @@ private:
     bool            loop;
     int             particle_amount;  /* 0-100, debris/spark strength for standard/bomb */
     static constexpr float CYCLE_DURATION = 2.5f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

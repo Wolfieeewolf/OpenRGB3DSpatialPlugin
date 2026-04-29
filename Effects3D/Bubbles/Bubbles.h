@@ -5,7 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <vector>
+
+class StratumBandPanel;
 
 struct BubbleCenter3D
 {
@@ -32,6 +35,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     int max_bubbles = 12;
     float bubble_thickness = 0.08f;
@@ -40,6 +46,10 @@ private:
     float max_radius = 1.0f;
     float bubble_cache_time = -1e9f;
     std::vector<BubbleCenter3D> bubble_centers_cached;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

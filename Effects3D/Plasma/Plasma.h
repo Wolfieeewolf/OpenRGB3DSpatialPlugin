@@ -5,6 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class QComboBox;
+class StratumBandPanel;
 
 class Plasma : public SpatialEffect3D
 {
@@ -29,12 +33,16 @@ public:
 
 private slots:
     void OnPlasmaParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     QComboBox*      pattern_combo;
+    StratumBandPanel* stratum_panel = nullptr;
 
     int             pattern_type;
     float           progress;
+    int             stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

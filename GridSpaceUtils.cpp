@@ -4,6 +4,7 @@
 
 #include "ControllerLayout3D.h"
 #include <algorithm>
+#include <cstdint>
 
 #define DEFAULT_ROOM_SIZE_MM 1000.0f
 
@@ -146,4 +147,46 @@ GridBounds ComputeRoomAlignedBounds(const ManualRoomSettings& settings,
                                     const std::vector<std::unique_ptr<ControllerTransform>>& transforms)
 {
     return ComputeBoundsInternal(settings, grid_scale_mm, transforms, BoundsSpace::RoomAligned);
+}
+
+bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+                           bool room_aligned,
+                           Vector3D* out_centroid)
+{
+    if(!out_centroid)
+    {
+        return false;
+    }
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    std::uint64_t count = 0;
+    for(unsigned int i = 0; i < transforms.size(); i++)
+    {
+        ControllerTransform* transform = transforms[i].get();
+        if(!transform || transform->hidden_by_virtual)
+        {
+            continue;
+        }
+        if(transform->world_positions_dirty)
+        {
+            ControllerLayout3D::UpdateWorldPositions(transform);
+        }
+        for(unsigned int j = 0; j < transform->led_positions.size(); j++)
+        {
+            const LEDPosition3D& led = transform->led_positions[j];
+            const Vector3D& pos = room_aligned ? led.room_position : led.world_position;
+            sx += pos.x;
+            sy += pos.y;
+            sz += pos.z;
+            count++;
+        }
+    }
+    if(count == 0)
+    {
+        return false;
+    }
+    const double inv = 1.0 / static_cast<double>(count);
+    out_centroid->x = static_cast<float>(sx * inv);
+    out_centroid->y = static_cast<float>(sy * inv);
+    out_centroid->z = static_cast<float>(sz * inv);
+    return true;
 }

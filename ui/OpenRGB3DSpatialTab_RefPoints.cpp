@@ -2,20 +2,9 @@
 
 
 #include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
-
-static QString RGBColorToCssHex(unsigned int color_value)
-{
-    unsigned int red = color_value & 0xFF;
-    unsigned int green = (color_value >> 8) & 0xFF;
-    unsigned int blue = (color_value >> 16) & 0xFF;
-    return QString("#%1%2%3")
-        .arg(red, 2, 16, QChar('0'))
-        .arg(green, 2, 16, QChar('0'))
-        .arg(blue, 2, 16, QChar('0'))
-        .toUpper();
-}
 
 void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 {
@@ -267,7 +256,7 @@ void OpenRGB3DSpatialTab::on_ref_point_color_clicked()
     if(color.isValid())
     {
         selected_ref_point_color = (color.blue() << 16) | (color.green() << 8) | color.red();
-        ref_point_color_button->setStyleSheet(QString("background-color: %1").arg(RGBColorToCssHex(selected_ref_point_color)));
+        PluginUiSetRgbSwatchButton(ref_point_color_button, color.red(), color.green(), color.blue());
     }
 }
 

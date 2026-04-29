@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class Sunrise : public SpatialEffect3D
 {
@@ -22,6 +25,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     enum Mode { MODE_MANUAL = 0, MODE_REALTIME, MODE_SIMULATED, MODE_COUNT };
     enum Preset { PRESET_REALISTIC_SUNRISE = 0, PRESET_REALISTIC_SUNSET, PRESET_DAYTIME, PRESET_NIGHT, PRESET_CUSTOM, PRESET_COUNT };
@@ -38,6 +44,10 @@ private:
     bool weather_fog = false;
     bool weather_cloudy = false;
     bool weather_lightning = false;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

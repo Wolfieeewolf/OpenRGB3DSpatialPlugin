@@ -5,6 +5,7 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 
 #include <QImage>
 #include <QMutex>
@@ -19,6 +20,7 @@ class QMovie;
 class QPushButton;
 class QSlider;
 class QTimer;
+class StratumBandPanel;
 
 class TextureProjection : public SpatialEffect3D
 {
@@ -52,6 +54,7 @@ private slots:
     void OnAmbienceChanged();
     void OnMotionTuningChanged();
     void OnMediaTuningChanged();
+    void OnStratumBandChanged();
 
 private:
     void ClearMovie();
@@ -104,6 +107,10 @@ private:
     int gif_step_interval_ms = 0;
 
     int projection_mode;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

@@ -2,11 +2,7 @@
 
 #include "MinecraftGameEffect3D.h"
 #include "MinecraftGame.h"
-#include "Game/GameTelemetryStatusPanel.h"
 #include "Game/GameTelemetryBridge.h"
-
-#include <QVBoxLayout>
-#include <QGroupBox>
 
 REGISTER_EFFECT_3D(MinecraftGameEffect3D);
 
@@ -55,19 +51,12 @@ void MinecraftGameEffect3D::ApplyControlVisibility()
 
 void MinecraftGameEffect3D::SetupCustomUI(QWidget* parent)
 {
-    QGroupBox* w = new QGroupBox("Minecraft");
-    QVBoxLayout* layout = new QVBoxLayout(w);
-    layout->setContentsMargins(8, 8, 8, 8);
-
-    QWidget* settings = MinecraftGame::CreateSettingsWidget(w, mc_settings_, MinecraftGame::ChAll);
-    if(settings)
-    {
-        layout->addWidget(settings);
-        MinecraftGame::WireChildWidgetsToParametersChanged(settings, [this]() { emit ParametersChanged(); });
-    }
-
-    layout->addWidget(new GameTelemetryStatusPanel(this));
-
+    QWidget* w = MinecraftGame::CreateEffectWidget(parent,
+                                                   QStringLiteral("Minecraft"),
+                                                   mc_settings_,
+                                                   MinecraftGame::ChAll,
+                                                   this,
+                                                   [this]() { emit ParametersChanged(); });
     AddWidgetToParent(w, parent);
 }
 

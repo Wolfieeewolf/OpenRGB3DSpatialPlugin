@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BouncingBall.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
+#include "EffectHelpers.h"
 #include <QGridLayout>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QSlider>
 #include <cmath>
 #include <vector>
-
-REGISTER_EFFECT_3D(BouncingBall);
+#include <algorithm>
 
 namespace
 {
@@ -119,9 +124,10 @@ BouncingBall::~BouncingBall() = default;
 EffectInfo3D BouncingBall::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Bouncing Ball";
-    info.effect_description = "Independent balls bouncing in the room (no ball–ball physics). Physics runs forward without looping; use Speed for motion rate.";
+    info.effect_description =
+        "Independent balls bouncing in the room (no ball–ball physics). Physics runs forward without looping; use Speed for motion rate; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCING_BALL;
     info.is_reversible = false;
@@ -152,7 +158,10 @@ EffectInfo3D BouncingBall::GetEffectInfo()
 void BouncingBall::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     layout->setContentsMargins(0, 0, 0, 0);
 
     layout->addWidget(new QLabel("Balls:"), 0, 0);
@@ -165,9 +174,27 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
     count_label->setMinimumWidth(30);
     layout->addWidget(count_label, 0, 2);
 
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BouncingBall::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     AddWidgetToParent(w, parent);
 
     connect(count_slider, &QSlider::valueChanged, this, &BouncingBall::OnBallParameterChanged);
+}
+
+void BouncingBall::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    ball_last_integrated_wall_time = -1e9f;
+    emit ParametersChanged();
 }
 
 void BouncingBall::UpdateParams(SpatialEffectParams& params)
@@ -192,14 +219,24 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     {
         return 0x00000000;
     }
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
     /* Linear 0..1 from main effect Speed slider (not squared GetNormalizedSpeed) so the control is obvious. */
     const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     constexpr float k_wall_e = 0.987f;
 
     const float size_m = GetNormalizedSize();
-    const float color_cycle = time * GetScaledFrequency() * 12.0f;
-    const float detail = std::max(0.05f, GetScaledDetail());
+    const float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
+    const float tm = std::max(0.25f, bb.tight_mul);
+    const float detail = std::max(0.05f, GetScaledDetail()) * tm;
     const float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
     const float R = radius_basis * (0.04f + 0.24f) * size_m;
 
@@ -301,9 +338,10 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         ball_last_integrated_wall_time = time;
     }
 
-    const float glow_radius = R * 2.0f;
+    const float rad_mul = 1.0f / std::max(0.25f, bb.tight_mul);
+    const float glow_radius = R * 2.0f * rad_mul;
     const float glow_radius_sq = glow_radius * glow_radius;
-    const float core_radius = R * 0.8f;
+    const float core_radius = R * 0.8f * rad_mul;
 
     float max_intensity = 0.0f;
     float hue_for_max = 120.0f;
@@ -337,20 +375,47 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
             const float vh = hypotf(ball.vx, hypotf(ball.vy, ball.vz));
             const float vel_w = fminf(1.0f, vh / fmaxf(1e-4f, radius_basis * 0.35f));
             const float hue_vel = atan2f(ball.vz, ball.vx) * 57.2958f * 0.12f * vel_w;
-            hue_for_max = fmodf(color_cycle + hue_ball + hue_spatial + hue_vel, 360.0f);
+            hue_for_max = fmodf(color_cycle + hue_ball + hue_spatial + hue_vel + bb.phase_deg, 360.0f);
             if(hue_for_max < 0.0f) hue_for_max += 360.0f;
         }
     }
 
+    const float pos_driver = fmodf(0.28f + hue_for_max * (1.0f / 360.0f) + 1.0f, 1.0f);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = std::clamp(0.10f, 0.05f, 0.22f);
+    map.center_size = std::clamp(0.11f + 0.24f * GetNormalizedScale(), 0.06f, 0.52f);
+    map.directional_sharpness = std::clamp(1.05f + std::max(0.05f, detail) * 0.08f, 0.9f, 2.3f);
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     RGBColor final_color;
     if(GetRainbowMode())
     {
-        final_color = GetRainbowColor(hue_for_max);
+        float hue = ApplySpatialRainbowHue(hue_for_max, pos_driver, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
-        const float pos = fmodf(0.28f + hue_for_max * (1.0f / 360.0f), 1.0f);
-        final_color = GetColorAtPosition(pos < 0.0f ? pos + 1.0f : pos);
+        float p = ApplySpatialPalette01(pos_driver, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
     }
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
@@ -364,6 +429,20 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
 nlohmann::json BouncingBall::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "bouncingball_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "bouncingball_stratum_band_speed_pct",
+                                           "bouncingball_stratum_band_tight_pct",
+                                           "bouncingball_stratum_band_phase_deg");
     j["ball_count"] = ball_count;
     return j;
 }
@@ -371,7 +450,22 @@ nlohmann::json BouncingBall::SaveSettings() const
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "bouncingball_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "bouncingball_stratum_band_speed_pct",
+                                            "bouncingball_stratum_band_tight_pct",
+                                            "bouncingball_stratum_band_phase_deg");
     if(settings.contains("ball_count")) ball_count = settings["ball_count"];
 
     if(count_slider) count_slider->setValue(ball_count);
+    ball_last_integrated_wall_time = -1e9f;
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(BouncingBall);

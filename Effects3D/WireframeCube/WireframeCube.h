@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class WireframeCube : public SpatialEffect3D
 {
@@ -22,6 +25,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     static float PointToSegmentDistance(float px, float py, float pz,
                                         float ax, float ay, float az,
@@ -33,6 +39,10 @@ private:
     float cube_cache_time = -1e9f;
     float cube_corners[8][3];
     float cached_angle_deg = 0.0f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

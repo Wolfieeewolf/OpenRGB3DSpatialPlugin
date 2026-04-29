@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class PulseRing : public SpatialEffect3D
 {
@@ -22,6 +25,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     enum Style { STYLE_PULSE_RING = 0, STYLE_RADIAL_RAINBOW, STYLE_COUNT };
     static const char* StyleName(int s);
@@ -30,6 +36,10 @@ private:
     float hole_size = 0.15f;
     float pulse_amplitude = 1.0f;
     float direction_deg = 0.0f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

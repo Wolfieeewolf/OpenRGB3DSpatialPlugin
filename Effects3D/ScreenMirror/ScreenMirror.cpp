@@ -8,6 +8,9 @@
 #include "GridSpaceUtils.h"
 #include "VirtualReferencePoint3D.h"
 #include "OpenRGB3DSpatialTab.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
+#include "PluginUiUtils.h"
 
 REGISTER_EFFECT_3D(ScreenMirror);
 
@@ -19,6 +22,7 @@ REGISTER_EFFECT_3D(ScreenMirror);
 #include <QTimer>
 #include <QDateTime>
 #include <QSignalBlocker>
+#include <QFont>
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
 #include <QMouseEvent>
@@ -30,6 +34,7 @@ REGISTER_EFFECT_3D(ScreenMirror);
 #include <array>
 #include <limits>
 #include <functional>
+#include <unordered_set>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -203,10 +208,15 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
 
     QLabel* info_label = new QLabel("Uses every active display plane automatically.");
     info_label->setWordWrap(true);
-    info_label->setStyleSheet("QLabel { color: #888; font-style: italic; }");
+    PluginUiApplyItalicSecondaryLabel(info_label);
     status_layout->addWidget(info_label);
     monitor_status_label = new QLabel("Calculating...");
-    monitor_status_label->setStyleSheet("QLabel { font-weight: bold; font-size: 14pt; }");
+    {
+        QFont sf = monitor_status_label->font();
+        sf.setBold(true);
+        sf.setPointSizeF(sf.pointSizeF() * 1.15);
+        monitor_status_label->setFont(sf);
+    }
     status_layout->addWidget(monitor_status_label);
     monitor_help_label = nullptr;
 
@@ -268,20 +278,20 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         if(settings_it == monitor_settings.end())
         {
             MonitorSettings new_settings;
-            int plane_ref_index = plane->GetReferencePointIndex();
-            if(plane_ref_index >= 0)
+            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
+            if(plane_ref_id > 0)
             {
-                new_settings.reference_point_index = plane_ref_index;
+                new_settings.reference_point_id = plane_ref_id;
             }
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
-        if(settings.reference_point_index < 0)
+        if(settings.reference_point_id <= 0)
         {
-            int plane_ref_index = plane->GetReferencePointIndex();
-            if(plane_ref_index >= 0)
+            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
+            if(plane_ref_id > 0)
             {
-                settings.reference_point_index = plane_ref_index;
+                settings.reference_point_id = plane_ref_id;
             }
         }
 
@@ -294,7 +304,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     if(monitor_settings.empty())
     {
         QLabel* no_monitors_label = new QLabel("No monitors configured. Set up Display Planes first.");
-        no_monitors_label->setStyleSheet("QLabel { color: #cc6600; font-style: italic; }");
+        PluginUiApplyItalicSecondaryLabel(no_monitors_label);
         monitors_layout->addWidget(no_monitors_label);
     }
 
@@ -302,11 +312,20 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     main_layout->addWidget(monitors_container);
 
     RefreshMonitorStatus();
+
+    stratum_panel = new StratumBandPanel(container);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    main_layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &ScreenMirror::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     main_layout->addStretch();
 
     AddWidgetToParent(container, parent);
 
-    StartCaptureIfNeeded();
+    /* Capture threads start only when the effect runs (CalculateColorGrid). Starting DXGI/GDI here
+     * only to populate the UI caused a brief full-screen compositor flicker on some GPUs. */
 }
 
 void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
@@ -420,18 +439,30 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
     if(frame_cache_refresh_ms_ == 0 || (now_ms - frame_cache_refresh_ms_) >= cache_max_age_ms)
     {
         frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
-        frame_cache_.clear();
+        std::unordered_set<std::string> seen_capture_ids;
         ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
         if(!capture_mgr.IsInitialized())
         {
             capture_mgr.Initialize();
         }
+        capture_mgr.SetTargetFPS(60);
+        int cap_w = 320, cap_h = 180;
+        int q = std::clamp(capture_quality, 0, 7);
+        if(q == 1) { cap_w = 480; cap_h = 270; }
+        else if(q == 2) { cap_w = 640; cap_h = 360; }
+        else if(q == 3) { cap_w = 960; cap_h = 540; }
+        else if(q == 4) { cap_w = 1280; cap_h = 720; }
+        else if(q == 5) { cap_w = 1920; cap_h = 1080; }
+        else if(q == 6) { cap_w = 2560; cap_h = 1440; }
+        else if(q == 7) { cap_w = 3840; cap_h = 2160; }
+        capture_mgr.SetDownscaleResolution(cap_w, cap_h);
         for(size_t i = 0; i < frame_cache_planes_.size(); i++)
         {
             DisplayPlane3D* plane = frame_cache_planes_[i];
             if(!plane) continue;
             std::string capture_id = plane->GetCaptureSourceId();
             if(capture_id.empty()) continue;
+            seen_capture_ids.insert(capture_id);
             if(!capture_mgr.IsCapturing(capture_id))
             {
                 capture_mgr.StartCapture(capture_id);
@@ -442,9 +473,17 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
                 frame_cache_[capture_id] = frame;
                 AddFrameToHistory(capture_id, frame);
             }
+        }
+        for(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::iterator it = frame_cache_.begin();
+            it != frame_cache_.end(); )
+        {
+            if(seen_capture_ids.find(it->first) == seen_capture_ids.end())
+            {
+                it = frame_cache_.erase(it);
+            }
             else
             {
-                frame_cache_[capture_id] = nullptr;
+                ++it;
             }
         }
         frame_cache_refresh_ms_ = now_ms;
@@ -494,14 +533,24 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
     std::vector<MonitorContribution> contributions;
     contributions.reserve(all_planes.size());
-    Vector3D grid_center_ref = {grid.center_x, grid.center_y, grid.center_z};
+    Vector3D grid_anchor_ref = GetReferencePointGrid(grid);
 
     const float scale_mm = (grid.grid_scale_mm > 0.001f) ? grid.grid_scale_mm : 10.0f;
-    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, grid_center_ref, scale_mm);
+    float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, grid_anchor_ref, scale_mm);
     if(base_max_distance_mm <= 0.0f)
     {
         base_max_distance_mm = 3000.0f;
     }
+
+    Vector3D stratum_origin = GetEffectOriginGrid(grid);
+    Vector3D rp_stratum = TransformPointByRotation(x, y, z, stratum_origin);
+    const float stratum_y_norm = NormalizeGridAxis01(rp_stratum.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(stratum_y_norm, strat_st, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
     
     std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator> history_cache;
 
@@ -586,19 +635,16 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             }
         }
 
-        const Vector3D* falloff_ref = &grid_center_ref;
-        if(mon_settings.reference_point_index >= 0 && reference_points &&
-           mon_settings.reference_point_index < (int)reference_points->size())
+        const Vector3D* falloff_ref = &grid_anchor_ref;
+        Vector3D custom_ref;
+        if(mon_settings.reference_point_id > 0 &&
+           ResolveReferencePointById(mon_settings.reference_point_id, custom_ref))
         {
-            Vector3D custom_ref;
-            if(ResolveReferencePoint(mon_settings.reference_point_index, custom_ref))
-            {
-                falloff_ref = &custom_ref;
-            }
+            falloff_ref = &custom_ref;
         }
 
         float reference_max_distance_mm = base_max_distance_mm;
-        if(falloff_ref != &grid_center_ref)
+        if(falloff_ref != &grid_anchor_ref)
         {
             reference_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, *falloff_ref, scale_mm);
             if(reference_max_distance_mm <= 0.0f)
@@ -637,6 +683,11 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
+        {
+            const float ph_uv = (bb.phase_deg / 360.0f) * 0.02f;
+            u = std::clamp(u + ph_uv, 0.0f, 1.0f);
+            v = std::clamp(v + ph_uv * (stratum_y_norm - 0.5f) * 2.0f, 0.0f, 1.0f);
+        }
         
         proj.u = u;
         proj.v = v;
@@ -645,6 +696,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float coverage = monitor_scale;
         float curve_exp = std::clamp(mon_settings.falloff_curve_exponent, 0.5f, 2.0f);
         float distance_falloff = 0.0f;
+        const float edge_soft_stratum = mon_settings.edge_softness / std::max(0.25f, bb.tight_mul);
 
         if(mon_settings.scale_inverted)
         {
@@ -652,12 +704,12 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             {
                 float effective_range = reference_max_distance_mm * coverage;
                 effective_range = std::max(effective_range, 10.0f);
-                distance_falloff = Geometry3D::ComputeFalloff(proj.distance, effective_range, mon_settings.edge_softness);
+                distance_falloff = Geometry3D::ComputeFalloff(proj.distance, effective_range, edge_soft_stratum);
             }
         }
         else
         {
-            distance_falloff = ComputeInvertedShellFalloff(proj.distance, reference_max_distance_mm, coverage, mon_settings.edge_softness, curve_exp);
+            distance_falloff = ComputeInvertedShellFalloff(proj.distance, reference_max_distance_mm, coverage, edge_soft_stratum, curve_exp);
 
             if(coverage >= 1.0f && distance_falloff < 1.0f)
             {
@@ -675,6 +727,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         {
             float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
             speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
+            speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
             speed_mm_per_ms = std::max(speed_mm_per_ms, 0.1f);
             delay_ms = proj.distance / speed_mm_per_ms;
             delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
@@ -682,6 +735,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         else if(use_wave && mon_settings.propagation_speed_mm_per_ms > 0.5f)
         {
             speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
+            speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
             delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
             delay_ms = std::clamp(delay_ms, 0.0f, 15000.0f);
         }
@@ -791,11 +845,13 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
                 {
                     float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
                     speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
+                    speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.1f);
                 }
                 else
                 {
                     speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
+                    speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
                 }
                 delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
@@ -1147,7 +1203,8 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
     }
     else
     {
-        led_states.clear();
+        LEDKey key = MakeLEDKey(x, y, z);
+        led_states.erase(key);
     }
 
     return ToRGBColor((uint8_t)total_r, (uint8_t)total_g, (uint8_t)total_b);
@@ -1187,7 +1244,7 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["left_right_balance"] = mon_settings.left_right_balance;
         mon["top_bottom_balance"] = mon_settings.top_bottom_balance;
         
-        mon["reference_point_index"] = mon_settings.reference_point_index;
+        mon["reference_point_id"] = mon_settings.reference_point_id;
         mon["show_test_pattern"] = mon_settings.show_test_pattern;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
         
@@ -1207,6 +1264,21 @@ nlohmann::json ScreenMirror::SaveSettings() const
         monitors[it->first] = mon;
     }
     settings["monitor_settings"] = monitors;
+
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(settings,
+                                           "screen_mirror_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "screen_mirror_stratum_band_speed_pct",
+                                           "screen_mirror_stratum_band_tight_pct",
+                                           "screen_mirror_stratum_band_phase_deg");
 
     return settings;
 }
@@ -1393,9 +1465,13 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     if(msettings.ref_point_combo)
     {
         QSignalBlocker blocker(msettings.ref_point_combo);
-        int desired = msettings.reference_point_index;
+        int desired = msettings.reference_point_id;
         int idx = msettings.ref_point_combo->findData(desired);
-        if(idx < 0) idx = msettings.ref_point_combo->findData(-1);
+        if(idx < 0)
+        {
+            idx = msettings.ref_point_combo->findData(-1);
+            msettings.reference_point_id = -1;
+        }
         if(idx >= 0) msettings.ref_point_combo->setCurrentIndex(idx);
     }
 }
@@ -1424,8 +1500,21 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
         }
     }
 
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "screen_mirror_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "screen_mirror_stratum_band_speed_pct",
+                                            "screen_mirror_stratum_band_tight_pct",
+                                            "screen_mirror_stratum_band_phase_deg");
+
     if(!settings.contains("monitor_settings"))
     {
+        if(stratum_panel)
+        {
+            stratum_panel->setLayoutMode(stratum_layout_mode);
+            stratum_panel->setTuning(stratum_tuning_);
+        }
         return;
     }
 
@@ -1617,7 +1706,15 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
             }
             
-            if(mon.contains("reference_point_index")) msettings.reference_point_index = mon["reference_point_index"].get<int>();
+            if(mon.contains("reference_point_id"))
+            {
+                msettings.reference_point_id = mon["reference_point_id"].get<int>();
+            }
+            else if(mon.contains("reference_point_index"))
+            {
+                int legacy_index = mon["reference_point_index"].get<int>();
+                msettings.reference_point_id = LookupReferencePointIdByIndex(legacy_index);
+            }
 
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
@@ -1764,7 +1861,21 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
     
     OnParameterChanged();
 
-    StartCaptureIfNeeded();
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
+}
+
+void ScreenMirror::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    OnParameterChanged();
 }
 
 void ScreenMirror::OnParameterChanged()
@@ -1825,7 +1936,7 @@ void ScreenMirror::OnParameterChanged()
             int index = settings.ref_point_combo->currentIndex();
             if(index >= 0)
             {
-                settings.reference_point_index = settings.ref_point_combo->itemData(index).toInt();
+                settings.reference_point_id = settings.ref_point_combo->itemData(index).toInt();
             }
         }
     }
@@ -1926,26 +2037,6 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         return;
     }
 
-    std::vector<QString> ref_point_names;
-    std::vector<int> ref_point_indices;
-    ref_point_names.reserve(reference_points->size() + 1);
-    ref_point_indices.reserve(reference_points->size() + 1);
-    
-    ref_point_names.push_back("Room Center");
-    ref_point_indices.push_back(-1);
-    
-    for(size_t i = 0; i < reference_points->size(); i++)
-    {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
-        if(!ref_point) continue;
-        
-        QString name = QString::fromStdString(ref_point->GetName());
-        QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-        QString display = QString("%1 (%2)").arg(name, type);
-        ref_point_names.push_back(display);
-        ref_point_indices.push_back((int)i);
-    }
-
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
         ++it)
@@ -1956,16 +2047,7 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             continue;
         }
 
-        int current_index = settings.ref_point_combo->currentIndex();
-        int current_data = -1;
-        if(current_index >= 0)
-        {
-            current_data = settings.ref_point_combo->currentData().toInt();
-        }
-        if(current_data < 0 && settings.reference_point_index >= 0)
-        {
-            current_data = settings.reference_point_index;
-        }
+        int desired_id = settings.reference_point_id;
 
         settings.ref_point_combo->blockSignals(true);
         settings.ref_point_combo->clear();
@@ -1983,41 +2065,57 @@ void ScreenMirror::RefreshReferencePointDropdowns()
             QString name = QString::fromStdString(ref_point->GetName());
             QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
             QString display = QString("%1 (%2)").arg(name, type);
-            settings.ref_point_combo->addItem(display, QVariant((int)i));
+            settings.ref_point_combo->addItem(display, QVariant(ref_point->GetId()));
             const int row = settings.ref_point_combo->count() - 1;
             settings.ref_point_combo->setItemData(row,
                 QStringLiteral("Measure reach/falloff from \"%1\" for this monitor.").arg(name),
                 Qt::ToolTipRole);
         }
 
-        if(current_data >= -1)
+        int restore_index = settings.ref_point_combo->findData(QVariant(desired_id));
+        if(restore_index < 0)
         {
-            int restore_index = settings.ref_point_combo->findData(QVariant(current_data));
-            if(restore_index >= 0)
-            {
-                settings.ref_point_combo->setCurrentIndex(restore_index);
-            }
+            // Selected ref point no longer exists; snap state back to "Room Center" so
+            // persisted state stays in sync with what the dropdown shows.
+            settings.reference_point_id = -1;
+            restore_index = settings.ref_point_combo->findData(QVariant(-1));
+        }
+        if(restore_index >= 0)
+        {
+            settings.ref_point_combo->setCurrentIndex(restore_index);
         }
 
         settings.ref_point_combo->blockSignals(false);
     }
 }
 
-bool ScreenMirror::ResolveReferencePoint(int index, Vector3D& out) const
+bool ScreenMirror::ResolveReferencePointById(int id, Vector3D& out) const
+{
+    if(!reference_points || id <= 0)
+    {
+        return false;
+    }
+
+    for(size_t i = 0; i < reference_points->size(); i++)
+    {
+        VirtualReferencePoint3D* ref_point = (*reference_points)[i].get();
+        if(ref_point && ref_point->GetId() == id)
+        {
+            out = ref_point->GetPosition();
+            return true;
+        }
+    }
+    return false;
+}
+
+int ScreenMirror::LookupReferencePointIdByIndex(int index) const
 {
     if(!reference_points || index < 0 || index >= (int)reference_points->size())
     {
-        return false;
+        return -1;
     }
-
     VirtualReferencePoint3D* ref_point = (*reference_points)[index].get();
-    if(!ref_point)
-    {
-        return false;
-    }
-
-    out = ref_point->GetPosition();
-    return true;
+    return ref_point ? ref_point->GetId() : -1;
 }
 
 void ScreenMirror::AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame)
@@ -2151,7 +2249,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     else
     {
         settings.group_box->setToolTip("This monitor needs a capture source assigned in Display Plane settings.");
-        settings.group_box->setStyleSheet("QGroupBox { color: #cc6600; }");
     }
     connect(settings.group_box, &QGroupBox::toggled, this, &ScreenMirror::OnParameterChanged);
 
@@ -2220,9 +2317,14 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
         "Anchor for reach/falloff: room center or a saved reference point. "
         "The list refreshes when reference points change (see 3D layout / reference points).");
     connect(settings.ref_point_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ScreenMirror::OnParameterChanged);
-    int plane_ref_index = plane->GetReferencePointIndex();
-    if(plane_ref_index >= 0 && settings.reference_point_index < 0)
-        settings.reference_point_index = plane_ref_index;
+    if(settings.reference_point_id <= 0)
+    {
+        int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
+        if(plane_ref_id > 0)
+        {
+            settings.reference_point_id = plane_ref_id;
+        }
+    }
     reach_form->addRow("Reference:", settings.ref_point_combo);
 
     QWidget* softness_widget = new QWidget();
@@ -2516,44 +2618,6 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     
 }
 
-void ScreenMirror::StartCaptureIfNeeded()
-{
-    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-
-    if(!capture_mgr.IsInitialized())
-    {
-        capture_mgr.Initialize();
-    }
-    capture_mgr.SetTargetFPS(60);
-
-    int w = 320, h = 180;
-    int q = std::clamp(capture_quality, 0, 7);
-    if(q == 1) { w = 480; h = 270; }
-    else if(q == 2) { w = 640; h = 360; }
-    else if(q == 3) { w = 960; h = 540; }
-    else if(q == 4) { w = 1280; h = 720; }
-    else if(q == 5) { w = 1920; h = 1080; }
-    else if(q == 6) { w = 2560; h = 1440; }
-    else if(q == 7) { w = 3840; h = 2160; }
-    capture_mgr.SetDownscaleResolution(w, h);
-
-    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
-
-    for(size_t plane_index = 0; plane_index < planes.size(); plane_index++)
-    {
-        DisplayPlane3D* plane = planes[plane_index];
-        if(!plane) continue;
-
-        std::string capture_id = plane->GetCaptureSourceId();
-        if(capture_id.empty()) continue;
-
-        if(!capture_mgr.IsCapturing(capture_id))
-        {
-            capture_mgr.StartCapture(capture_id);
-        }
-    }
-}
-
 void ScreenMirror::SetGridScaleMM(float mm)
 {
     float v = (mm > 0.001f) ? mm : 10.0f;
@@ -2586,21 +2650,21 @@ void ScreenMirror::RefreshMonitorStatus()
         if(settings_it == monitor_settings.end())
         {
             MonitorSettings new_settings;
-            int plane_ref_index = plane->GetReferencePointIndex();
-            if(plane_ref_index >= 0)
+            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
+            if(plane_ref_id > 0)
             {
-                new_settings.reference_point_index = plane_ref_index;
+                new_settings.reference_point_id = plane_ref_id;
             }
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
-        
-        if(settings.reference_point_index < 0)
+
+        if(settings.reference_point_id <= 0)
         {
-            int plane_ref_index = plane->GetReferencePointIndex();
-            if(plane_ref_index >= 0)
+            int plane_ref_id = LookupReferencePointIdByIndex(plane->GetReferencePointIndex());
+            if(plane_ref_id > 0)
             {
-                settings.reference_point_index = plane_ref_index;
+                settings.reference_point_id = plane_ref_id;
             }
         }
 
@@ -2621,12 +2685,10 @@ void ScreenMirror::RefreshMonitorStatus()
             if(has_capture_source)
             {
                 settings.group_box->setToolTip("Enable or disable this monitor's influence.");
-                settings.group_box->setStyleSheet("");
             }
             else
             {
                 settings.group_box->setToolTip("This monitor needs a capture source assigned in Display Plane settings.");
-                settings.group_box->setStyleSheet("QGroupBox { color: #cc6600; }");
             }
             
             if(settings.scale_slider) settings.scale_slider->setEnabled(has_capture_source);
@@ -2691,7 +2753,7 @@ void ScreenMirror::RefreshMonitorStatus()
                 {
                     monitor_help_label = new QLabel("Tip: Assign capture sources to Display Planes in the Object Creator tab.");
                     monitor_help_label->setWordWrap(true);
-                    monitor_help_label->setStyleSheet("QLabel { color: #cc6600; font-style: italic; }");
+                    PluginUiApplyItalicSecondaryLabel(monitor_help_label);
                     status_group->layout()->addWidget(monitor_help_label);
                 }
             }

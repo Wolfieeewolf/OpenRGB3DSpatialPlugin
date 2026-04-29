@@ -61,7 +61,14 @@ enum ReferenceMode
     REF_MODE_ROOM_CENTER    = 0,
     REF_MODE_USER_POSITION  = 1,
     REF_MODE_CUSTOM_POINT   = 2,
-    REF_MODE_TARGET_ZONE_CENTER = 3
+    REF_MODE_TARGET_ZONE_CENTER = 3,
+    /** Use (0,0,0) as origin — no room center or virtual ref point; patterns use raw grid coordinates. */
+    REF_MODE_WORLD_ORIGIN   = 4,
+    /**
+     * Average position of mapped LEDs when the grid provides it; else box center.
+     * Default for new effects: patterns follow real hardware, not an abstract room midpoint.
+     */
+    REF_MODE_LED_CENTROID   = 5
 };
 
 enum EffectAxis
@@ -71,6 +78,30 @@ enum EffectAxis
     AXIS_Z      = 2,
     AXIS_RADIAL = 3,
     AXIS_CUSTOM = 4
+};
+
+/** How room compass + vertical strata reshape palette / rainbow (see SpatialEffect3D). */
+enum class SpatialMappingMode : int
+{
+    Off = 0,
+    SubtleTint = 1,
+    CompassPalette = 2,
+    /** Palette follows the full room volume; reference point still biases the mapping. */
+    VoxelVolume = 3,
+};
+
+/**
+ * Extra motion from telemetry voxel / room axes (applied after spatial mapping).
+ * Volume color blend remains on the Mix slider separately.
+ */
+enum class VoxelDriveMode : int
+{
+    Off = 0,
+    LumaField = 1,
+    ScrollRoomX = 2,
+    ScrollRoomY = 3,
+    ScrollRoomZ = 4,
+    VolumeRoll = 5,
 };
 
 enum SurfaceMask

@@ -4,6 +4,8 @@
 
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
+#include "SpatialLayerCore.h"
+#include "StratumBandPanel.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -17,11 +19,10 @@
 #include <QSlider>
 #include <QTimer>
 #include <QDateTime>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
-
-REGISTER_EFFECT_3D(OmniShapeTexture);
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -205,7 +206,7 @@ OmniShapeTexture::~OmniShapeTexture()
 EffectInfo3D OmniShapeTexture::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Omni shape texture";
     info.effect_description =
         "Image or GIF mapped onto a virtual shape at the effect origin; LEDs sample by outward direction (360°). "
@@ -213,7 +214,8 @@ EffectInfo3D OmniShapeTexture::GetEffectInfo()
         "Size zooms the texture on the shape; Scale still adds repeat. "
         "Detail warps UV; Frequency drives warp phase. Motion tuning adds Scroll / Warp / Phase plus media Resolution "
         "(combined with global Output shaping → Sampling); use Smoothing there for GIF frame blending. Morph / Spin as before. "
-        "Ambience: distance dim, falloff curve, edge fade, wave delay vs distance (multiplies the built-in radial rim).";
+        "Ambience: distance dim, falloff curve, edge fade, wave delay vs distance (multiplies the built-in radial rim). "
+        "Stratum bands (Y across the room after rotation) blend speed, tightness, and phase for spin, warp, and radial falloff.";
     info.category = "Media";
     info.effect_type = SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE;
     info.is_reversible = false;
@@ -244,7 +246,11 @@ EffectInfo3D OmniShapeTexture::GetEffectInfo()
 
 void OmniShapeTexture::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* w = new QWidget();
+    vbox->addWidget(w);
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -365,7 +371,14 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
     layout->addWidget(media_tuning, row, 0, 1, 3);
     row++;
 
-    AddWidgetToParent(w, parent);
+    stratum_panel = new StratumBandPanel(outer);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &OmniShapeTexture::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer, parent);
 
     connect(browse_button, &QPushButton::clicked, this, &OmniShapeTexture::OnBrowseMedia);
     connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &OmniShapeTexture::OnShapeChanged);
@@ -378,6 +391,16 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
 void OmniShapeTexture::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE;
+}
+
+void OmniShapeTexture::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void OmniShapeTexture::OnShapeChanged(int index)
@@ -664,6 +687,17 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
         return 0x00000000;
     }
 
+    const Vector3D o_strat = GetEffectOriginGrid(grid);
+    Vector3D rp_bb = TransformPointByRotation(x, y, z, o_strat);
+    float coord2_bb = NormalizeGridAxis01(rp_bb.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st_bb;
+    EffectStratumBlend::InitStratumBreaks(strat_st_bb);
+    float sw_bb[3];
+    EffectStratumBlend::WeightsForYNorm(coord2_bb, strat_st_bb, sw_bb);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw_bb, stratum_tuning_);
+    const float tm = std::max(0.25f, bb.tight_mul);
+
     std::shared_ptr<QImage> snap;
     std::shared_ptr<QImage> prev_snap;
     qint64 step_ms = 0;
@@ -695,14 +729,14 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
           (z - min_z) * inv_d, (max_z - z) * inv_d });
     const float max_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
 
-    const Vector3D o = GetEffectOriginGrid(grid);
+    const Vector3D o = o_strat;
     float dx = x - o.x;
     float dy = y - o.y;
     float dz = z - o.z;
     const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
     const float prop01 = ambience_propagation / 100.0f;
     const float t_anim =
-        time - prop01 * std::min(1.0f, dist / std::max(max_r, 1e-4f)) * 12.0f;
+        time * bb.speed_mul - prop01 * std::min(1.0f, dist / std::max(max_r, 1e-4f)) * 12.0f;
     const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
     const float anim_time = freeze_gif_motion ? 0.0f : t_anim;
     const float scroll_mul = motion_scroll / 100.0f;
@@ -714,7 +748,7 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
             MediaTextureEffect::AmbienceGain(dist_for_gain, max_r, d_face, ambience_dist_falloff, ambience_falloff_curve,
                                              ambience_edge_soft);
         const float basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale());
-        const float r_core = std::max(1e-3f, basis * (0.12f + 0.55f * GetNormalizedSize()));
+        const float r_core = std::max(1e-3f, basis * (0.12f + 0.55f * GetNormalizedSize())) / tm;
         const float r_fade = r_core * 2.25f;
         const float fall = 1.0f - MediaTextureEffect::Smoothstep(r_core * 0.35f, r_fade, dist_for_gain);
         const float g = std::clamp(fall * ag, 0.0f, 1.0f);
@@ -730,7 +764,7 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
     dy /= dist;
     dz /= dist;
 
-    const float spin_w = (0.07f + 0.65f * (spin_percent / 100.0f)) * (0.35f + GetScaledSpeed() * 0.045f) * scroll_mul;
+    const float spin_w = (0.07f + 0.65f * (spin_percent / 100.0f)) * (0.35f + GetScaledSpeed() * 0.045f) * scroll_mul * bb.speed_mul;
     const float yaw = anim_time * spin_w;
     const float pitch = anim_time * spin_w * 0.71f;
     RotateDir(dx, dy, dz, yaw, pitch);
@@ -754,8 +788,8 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
 
     const float detail = std::max(0.05f, GetScaledDetail());
     const float freq = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
-    const float phase = anim_time * freq * 0.12f * phase_mul;
-    const float amp = 0.017f * std::min(3.2f, detail * 0.2f) * warp_mul;
+    const float phase = anim_time * freq * 0.12f * phase_mul + bb.phase_deg * (float)(M_PI / 180.0f) * 0.12f;
+    const float amp = 0.017f * std::min(3.2f, detail * 0.2f) * warp_mul / tm;
     ua += std::sin(phase + ua * 10.5f * detail * 0.07f + va * 6.5f * detail * 0.06f) * amp;
     va += std::cos(phase * 0.89f + ua * 7.8f * detail * 0.06f - va * 9.0f * detail * 0.07f) * amp;
     ub += std::sin(phase * 1.03f + ub * 10.0f * detail * 0.07f + vb * 6.8f * detail * 0.06f) * amp;
@@ -809,6 +843,20 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
 nlohmann::json OmniShapeTexture::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "omnishapetexture_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "omnishapetexture_stratum_band_speed_pct",
+                                           "omnishapetexture_stratum_band_tight_pct",
+                                           "omnishapetexture_stratum_band_phase_deg");
     j["media_path"] = media_path.toStdString();
     j["base_shape"] = base_shape;
     j["morph_percent"] = morph_percent;
@@ -828,6 +876,13 @@ nlohmann::json OmniShapeTexture::SaveSettings() const
 void OmniShapeTexture::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "omnishapetexture_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "omnishapetexture_stratum_band_speed_pct",
+                                            "omnishapetexture_stratum_band_tight_pct",
+                                            "omnishapetexture_stratum_band_phase_deg");
     if(settings.contains("base_shape") && settings["base_shape"].is_number_integer())
     {
         base_shape = std::max(0, std::min(2, settings["base_shape"].get<int>()));
@@ -920,4 +975,11 @@ void OmniShapeTexture::LoadSettings(const nlohmann::json& settings)
             tile_repeat_check->setChecked(tile_repeat_enabled);
         }
     }
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(OmniShapeTexture);

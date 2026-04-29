@@ -1,18 +1,30 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Spiral.h"
+#include "EffectStratumBlend.h"
+#include "SpatialLayerCore.h"
 
 REGISTER_EFFECT_3D(Spiral);
 #include <algorithm>
+#include <QComboBox>
 #include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QSignalBlocker>
+#include <QSlider>
 #include <cmath>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace {
-constexpr int kSpiralPatternCount = 6;
+namespace
+{
+const char* BandLabel(int i)
+{
+    static const char* n[] = {"Floor", "Mid", "Ceiling"};
+    return (i >= 0 && i < 3) ? n[i] : "?";
+}
 }
 
 Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
@@ -26,6 +38,10 @@ Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
     pattern_type = 0;
     gap_size = 30;
     progress = 0.0f;
+    spiral_layout_mode = 0;
+    band_speed_pct = {100, 100, 100};
+    band_tight_pct = {100, 100, 100};
+    band_phase_deg = {0, 0, 0};
 
     SetFrequency(50);
     SetRainbowMode(true);
@@ -42,9 +58,9 @@ Spiral::~Spiral() = default;
 EffectInfo3D Spiral::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Spiral";
-    info.effect_description = "Spiral pattern with configurable arms and gap";
+    info.effect_description = "Spiral pattern with arms/gap; optional per-height-band speed, tightness, and phase";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_SPIRAL;
     info.is_reversible = true;
@@ -120,6 +136,95 @@ void Spiral::SetupCustomUI(QWidget* parent)
     gap_label->setMinimumWidth(30);
     layout->addWidget(gap_label, 2, 2);
 
+    layout->addWidget(new QLabel("Height bands:"), 3, 0);
+    spiral_layout_combo = new QComboBox();
+    spiral_layout_combo->addItem("Single field", 0);
+    spiral_layout_combo->addItem("Per band (floor · mid · ceiling)", 1);
+    spiral_layout_combo->setToolTip(
+        "Single: one spiral everywhere. Per band: each stratum blends its own speed, tightness, and phase "
+        "(same origin; soft transitions at floor/mid/ceiling boundaries).");
+    for(int i = 0; i < spiral_layout_combo->count(); i++)
+    {
+        if(spiral_layout_combo->itemData(i).toInt() == spiral_layout_mode)
+        {
+            spiral_layout_combo->setCurrentIndex(i);
+            break;
+        }
+    }
+    layout->addWidget(spiral_layout_combo, 3, 1, 1, 2);
+    connect(spiral_layout_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        if(spiral_layout_combo)
+        {
+            spiral_layout_mode = std::clamp(spiral_layout_combo->currentData().toInt(), 0, 1);
+        }
+        if(layered_band_widget)
+        {
+            layered_band_widget->setVisible(spiral_layout_mode == 1);
+        }
+        emit ParametersChanged();
+    });
+
+    layered_band_widget = new QGroupBox(QStringLiteral("Band tuning"));
+    layered_band_widget->setToolTip(
+        "Speed % scales motion in that band. Tightness % scales pattern detail. Phase ° twists the spiral.");
+    QGridLayout* band_grid = new QGridLayout(layered_band_widget);
+    band_grid->addWidget(new QLabel(QString()), 0, 0);
+    band_grid->addWidget(new QLabel(QStringLiteral("Speed %")), 0, 1);
+    band_grid->addWidget(new QLabel(QStringLiteral("Tight %")), 0, 3);
+    band_grid->addWidget(new QLabel(QStringLiteral("Phase °")), 0, 5);
+    for(int i = 0; i < 3; i++)
+    {
+        const int r = i + 1;
+        band_grid->addWidget(new QLabel(QString("%1:").arg(BandLabel(i))), r, 0);
+
+        QSlider* sp = new QSlider(Qt::Horizontal);
+        sp->setRange(0, 200);
+        sp->setValue(band_speed_pct[(size_t)i]);
+        QLabel* spl = new QLabel(QString::number(band_speed_pct[(size_t)i]));
+        spl->setMinimumWidth(28);
+        band_speed_slider[i] = sp;
+        band_speed_lbl[i] = spl;
+        band_grid->addWidget(sp, r, 1);
+        band_grid->addWidget(spl, r, 2);
+        connect(sp, &QSlider::valueChanged, this, [this, i, spl](int v) {
+            band_speed_pct[(size_t)i] = std::clamp(v, 0, 200);
+            spl->setText(QString::number(band_speed_pct[(size_t)i]));
+            emit ParametersChanged();
+        });
+
+        QSlider* ti = new QSlider(Qt::Horizontal);
+        ti->setRange(25, 300);
+        ti->setValue(band_tight_pct[(size_t)i]);
+        QLabel* til = new QLabel(QString::number(band_tight_pct[(size_t)i]));
+        til->setMinimumWidth(28);
+        band_tight_slider[i] = ti;
+        band_tight_lbl[i] = til;
+        band_grid->addWidget(ti, r, 3);
+        band_grid->addWidget(til, r, 4);
+        connect(ti, &QSlider::valueChanged, this, [this, i, til](int v) {
+            band_tight_pct[(size_t)i] = std::clamp(v, 25, 300);
+            til->setText(QString::number(band_tight_pct[(size_t)i]));
+            emit ParametersChanged();
+        });
+
+        QSlider* ph = new QSlider(Qt::Horizontal);
+        ph->setRange(-180, 180);
+        ph->setValue(band_phase_deg[(size_t)i]);
+        QLabel* phl = new QLabel(QString::number(band_phase_deg[(size_t)i]));
+        phl->setMinimumWidth(32);
+        band_phase_slider[i] = ph;
+        band_phase_lbl[i] = phl;
+        band_grid->addWidget(ph, r, 5);
+        band_grid->addWidget(phl, r, 6);
+        connect(ph, &QSlider::valueChanged, this, [this, i, phl](int v) {
+            band_phase_deg[(size_t)i] = std::clamp(v, -180, 180);
+            phl->setText(QString::number(band_phase_deg[(size_t)i]));
+            emit ParametersChanged();
+        });
+    }
+    layered_band_widget->setVisible(spiral_layout_mode == 1);
+    layout->addWidget(layered_band_widget, 4, 0, 1, 3);
+
     AddWidgetToParent(spiral_widget, parent);
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral::OnSpiralParameterChanged);
@@ -131,6 +236,40 @@ void Spiral::SetupCustomUI(QWidget* parent)
     connect(gap_slider, &QSlider::valueChanged, gap_label, [this](int value) {
         gap_label->setText(QString::number(value));
     });
+}
+
+void Spiral::SyncLayeredBandWidgets()
+{
+    for(int i = 0; i < 3; i++)
+    {
+        if(band_speed_slider[i])
+        {
+            QSignalBlocker b(band_speed_slider[i]);
+            band_speed_slider[i]->setValue(band_speed_pct[(size_t)i]);
+        }
+        if(band_speed_lbl[i])
+        {
+            band_speed_lbl[i]->setText(QString::number(band_speed_pct[(size_t)i]));
+        }
+        if(band_tight_slider[i])
+        {
+            QSignalBlocker b(band_tight_slider[i]);
+            band_tight_slider[i]->setValue(band_tight_pct[(size_t)i]);
+        }
+        if(band_tight_lbl[i])
+        {
+            band_tight_lbl[i]->setText(QString::number(band_tight_pct[(size_t)i]));
+        }
+        if(band_phase_slider[i])
+        {
+            QSignalBlocker b(band_phase_slider[i]);
+            band_phase_slider[i]->setValue(band_phase_deg[(size_t)i]);
+        }
+        if(band_phase_lbl[i])
+        {
+            band_phase_lbl[i]->setText(QString::number(band_phase_deg[(size_t)i]));
+        }
+    }
 }
 
 void Spiral::UpdateParams(SpatialEffectParams& params)
@@ -173,7 +312,6 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     progress = CalculateProgress(time);
 
     float size_multiplier = GetNormalizedSize();
-    float freq_scale = detail * 0.15f / fmax(0.1f, size_multiplier);
 
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
@@ -186,11 +324,30 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
 
     float norm_twist = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
-    
-    // Keep spiral motion primarily angular. A strong vertical phase term can look
-    // like the pattern is mostly rising instead of rotating in place.
-    float z_twist = norm_twist * (0.35f + 0.25f * detail);
-    float spiral_angle = angle * num_arms + norm_radius * (detail * 6.5f) + z_twist - progress * 1.35f;
+
+    SpatialLayerCore::MapperSettings strat_map;
+    EffectStratumBlend::InitStratumBreaks(strat_map);
+    float layer_w[SpatialLayerCore::kMaxLayerCount]{};
+    SpatialLayerCore::ComputeVerticalStratumWeights(norm_twist, strat_map, 3, layer_w);
+
+    EffectStratumBlend::BandTuningPct strat_bt{};
+    strat_bt.speed = band_speed_pct;
+    strat_bt.tight = band_tight_pct;
+    strat_bt.phase_deg = band_phase_deg;
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(spiral_layout_mode, layer_w, strat_bt);
+    float spd_mul = bb.speed_mul;
+    float tight_mul = bb.tight_mul;
+    float ph_deg = bb.phase_deg;
+
+    const float detail_e = detail * tight_mul;
+    const float rate_e = rate * spd_mul;
+    const float progress_e = progress * spd_mul;
+    const float freq_scale_e = detail_e * 0.15f / fmax(0.1f, size_multiplier);
+    float z_twist = norm_twist * (0.35f + 0.25f * detail_e);
+    float spiral_angle =
+        angle * (float)num_arms + norm_radius * (detail_e * 6.5f) + z_twist - progress_e * 1.35f;
+    spiral_angle += ph_deg * ((float)M_PI / 180.0f);
 
     float spiral_value;
     float gap_factor = gap_size / 100.0f;
@@ -198,8 +355,8 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     switch(pattern_type)
     {
         case 0:
-            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale * 3.0f + progress * 0.7f));
-            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale * 4.5f + progress * 1.2f);
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale_e * 3.0f + progress_e * 0.7f));
+            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale_e * 4.5f + progress_e * 1.2f);
             spiral_value = (spiral_value + 1.5f) / 3.0f;
             spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             break;
@@ -217,7 +374,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
                 {
                     spiral_value = 0.0f;
                 }
-                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail * 0.8f)));
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
                 spiral_value = spiral_value * radial_fade + 0.1f * radial_fade;
             }
             break;
@@ -235,25 +392,25 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
                 {
                     spiral_value = 0.0f;
                 }
-                float energy_pulse = 0.2f * sin(norm_radius * (detail * 1.2f) - progress * 2.0f);
+                float energy_pulse = 0.2f * sin(norm_radius * (detail_e * 1.2f) - progress_e * 2.0f);
                 spiral_value = fmax(0.0f, spiral_value + energy_pulse);
-                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail * 0.8f)));
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
                 spiral_value *= radial_fade;
             }
             break;
         case 3:
             {
-                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress * 2.0f;
-                float ring_phase = norm_radius * (detail * 8.0f) * num_arms - circle_angle * num_arms;
+                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress_e * 2.0f;
+                float ring_phase = norm_radius * (detail_e * 8.0f) * (float)num_arms - circle_angle * (float)num_arms;
                 spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - norm_radius * 0.3f);
                 spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             }
             break;
         case 4:
             {
-                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress * 3.0f;
-                float hyp_radius = norm_radius * (detail * 4.0f);
-                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress * 2.0f) * cos(norm_twist * freq_scale * 3.0f + progress);
+                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress_e * 3.0f;
+                float hyp_radius = norm_radius * (detail_e * 4.0f);
+                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress_e * 2.0f) * cos(norm_twist * freq_scale_e * 3.0f + progress_e);
                 spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
             }
             break;
@@ -280,27 +437,56 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
             break;
     }
 
+    SpatialLayerCore::Basis compass_basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), compass_basis);
+    SpatialLayerCore::MapperSettings compass_map;
+    compass_map.floor_end = 0.30f;
+    compass_map.desk_end = 0.55f;
+    compass_map.upper_end = 0.78f;
+    compass_map.blend_softness =
+        std::clamp(0.08f + 0.05f * (1.0f - detail), 0.05f, 0.20f);
+    compass_map.center_size = std::clamp(0.10f + 0.22f * size_multiplier, 0.06f, 0.50f);
+    compass_map.directional_sharpness = std::clamp(1.0f + detail * 0.15f, 0.85f, 2.4f);
+
+    SpatialLayerCore::SamplePoint compass_sample{};
+    compass_sample.grid_x = x;
+    compass_sample.grid_y = y;
+    compass_sample.grid_z = z;
+    compass_sample.origin_x = origin.x;
+    compass_sample.origin_y = origin.y;
+    compass_sample.origin_z = origin.z;
+    compass_sample.y_norm = norm_twist;
+
     RGBColor final_color;
     if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
     {
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
         if(arm_index < 0) arm_index += num_arms;
-        float pos = fmodf((arm_index / (float)num_arms) + time * rate * 0.02f, 1.0f);
+        float pos = fmodf((arm_index / (float)num_arms) + time * rate_e * 0.02f, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
-        final_color = GetColorAtPosition(pos);
+        float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
     }
     else if(GetRainbowMode())
     {
-        // spiral_value differs per pattern_type; spiral_angle alone is shared across patterns,
-        // so ignoring spiral_value made every pattern look identical in rainbow mode (default).
-        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate * 12.0f;
-        final_color = GetRainbowColor(hue);
+        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate_e * 12.0f;
+        hue = ApplySpatialRainbowHue(hue, fmodf(spiral_value + 0.25f, 1.0f), compass_basis, compass_sample, compass_map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
-        float pos = fmodf(spiral_value + time * rate * 0.02f, 1.0f);
+        float pos = fmodf(spiral_value + time * rate_e * 0.02f, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
-        final_color = GetColorAtPosition(pos);
+        float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
     }
 
     unsigned char r = final_color & 0xFF;
@@ -315,6 +501,10 @@ nlohmann::json Spiral::SaveSettings() const
     j["num_arms"] = num_arms;
     j["pattern_type"] = pattern_type;
     j["gap_size"] = gap_size;
+    j["spiral_layout_mode"] = spiral_layout_mode;
+    j["spiral_band_speed_pct"] = nlohmann::json::array({band_speed_pct[0], band_speed_pct[1], band_speed_pct[2]});
+    j["spiral_band_tight_pct"] = nlohmann::json::array({band_tight_pct[0], band_tight_pct[1], band_tight_pct[2]});
+    j["spiral_band_phase_deg"] = nlohmann::json::array({band_phase_deg[0], band_phase_deg[1], band_phase_deg[2]});
     return j;
 }
 
@@ -326,7 +516,7 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
         num_arms = settings["num_arms"].get<unsigned int>();
         if(arms_slider)
         {
-            arms_slider->setValue(num_arms);
+            arms_slider->setValue((int)num_arms);
         }
     }
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
@@ -342,7 +532,47 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
         gap_size = settings["gap_size"].get<unsigned int>();
         if(gap_slider)
         {
-            gap_slider->setValue(gap_size);
+            gap_slider->setValue((int)gap_size);
         }
     }
+    if(settings.contains("spiral_layout_mode") && settings["spiral_layout_mode"].is_number_integer())
+    {
+        spiral_layout_mode = std::clamp(settings["spiral_layout_mode"].get<int>(), 0, 1);
+    }
+
+    auto load_i3 = [&settings](const char* key, std::array<int, 3>& out, int lo, int hi) {
+        if(!settings.contains(key) || !settings[key].is_array())
+        {
+            return;
+        }
+        const auto& a = settings[key];
+        for(size_t i = 0; i < 3 && i < a.size(); i++)
+        {
+            if(a[i].is_number_integer())
+            {
+                out[i] = std::clamp(a[i].get<int>(), lo, hi);
+            }
+        }
+    };
+    load_i3("spiral_band_speed_pct", band_speed_pct, 0, 200);
+    load_i3("spiral_band_tight_pct", band_tight_pct, 25, 300);
+    load_i3("spiral_band_phase_deg", band_phase_deg, -180, 180);
+
+    if(spiral_layout_combo)
+    {
+        QSignalBlocker b(spiral_layout_combo);
+        for(int i = 0; i < spiral_layout_combo->count(); i++)
+        {
+            if(spiral_layout_combo->itemData(i).toInt() == spiral_layout_mode)
+            {
+                spiral_layout_combo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+    if(layered_band_widget)
+    {
+        layered_band_widget->setVisible(spiral_layout_mode == 1);
+    }
+    SyncLayeredBandWidgets();
 }

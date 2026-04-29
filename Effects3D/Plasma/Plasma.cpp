@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Plasma.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 
 REGISTER_EFFECT_3D(Plasma);
+#include <QComboBox>
 #include <QGridLayout>
+#include <QLabel>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
 
@@ -35,9 +40,9 @@ Plasma::~Plasma() = default;
 EffectInfo3D Plasma::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Plasma";
-    info.effect_description = "Animated plasma clouds with configurable pattern and speed";
+    info.effect_description = "Plasma field with optional floor/mid/ceiling band tuning; respects room mapper";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_PLASMA;
     info.is_reversible = false;
@@ -69,8 +74,10 @@ EffectInfo3D Plasma::GetEffectInfo()
 void Plasma::SetupCustomUI(QWidget* parent)
 {
     QWidget* plasma_widget = new QWidget();
-    QGridLayout* layout = new QGridLayout(plasma_widget);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* vbox = new QVBoxLayout(plasma_widget);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    vbox->addLayout(layout);
 
     layout->addWidget(new QLabel("Pattern:"), 0, 0);
     pattern_combo = new QComboBox();
@@ -105,6 +112,13 @@ void Plasma::SetupCustomUI(QWidget* parent)
     layout->addWidget(pattern_combo, 0, 1);
     pattern_type = pattern_combo->currentIndex();
 
+    stratum_panel = new StratumBandPanel(plasma_widget);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Plasma::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     AddWidgetToParent(plasma_widget, parent);
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -120,6 +134,16 @@ void Plasma::OnPlasmaParameterChanged()
 {
     if(pattern_combo)
         pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kPlasmaPatternCount - 1);
+    emit ParametersChanged();
+}
+
+void Plasma::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
     emit ParametersChanged();
 }
 
@@ -152,56 +176,69 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     float coord3 = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
 
+    SpatialLayerCore::MapperSettings strat_map;
+    EffectStratumBlend::InitStratumBreaks(strat_map);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_map, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+    const float prog = progress * bb.speed_mul;
+    const float freq_scale_e = freq_scale * bb.tight_mul;
+    const float pshift = bb.phase_deg * (1.0f / 360.0f);
+    coord1 = std::fmod(coord1 + pshift + 1.0f, 1.0f);
+    coord2 = std::fmod(coord2 + pshift + 1.0f, 1.0f);
+    coord3 = std::fmod(coord3 + pshift + 1.0f, 1.0f);
+
     float plasma_value;
     switch(pattern_type)
     {
         case 0:
             plasma_value =
-                sin((coord1 + progress * 2.0f) * freq_scale * 10.0f) +
-                sin((coord2 + progress * 1.7f) * freq_scale * 8.0f) +
-                sin((coord1 + coord2 + progress * 1.3f) * freq_scale * 6.0f) +
-                cos((coord1 - coord2 + progress * 2.2f) * freq_scale * 7.0f) +
-                sin(sqrtf(coord1*coord1 + coord2*coord2) * freq_scale * 5.0f + progress * 1.5f) +
-                cos(coord3 * freq_scale * 4.0f + progress * 0.9f);
+                sin((coord1 + prog * 2.0f) * freq_scale_e * 10.0f) +
+                sin((coord2 + prog * 1.7f) * freq_scale_e * 8.0f) +
+                sin((coord1 + coord2 + prog * 1.3f) * freq_scale_e * 6.0f) +
+                cos((coord1 - coord2 + prog * 2.2f) * freq_scale_e * 7.0f) +
+                sin(sqrtf(coord1*coord1 + coord2*coord2) * freq_scale_e * 5.0f + prog * 1.5f) +
+                cos(coord3 * freq_scale_e * 4.0f + prog * 0.9f);
             break;
         case 1:
             {
                 float angle = atan2(coord2 - 0.5f, coord1 - 0.5f);
                 float radius = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
-                    sin(angle * 4.0f + radius * freq_scale * 8.0f + progress * 2.0f) +
-                    sin(angle * 3.0f - radius * freq_scale * 6.0f + progress * 1.5f) +
-                    cos(angle * 5.0f + radius * freq_scale * 4.0f - progress * 1.8f) +
-                    sin(coord3 * freq_scale * 5.0f + progress) +
-                    cos((angle * 2.0f + coord3 * freq_scale * 3.0f) + progress * 1.2f);
+                    sin(angle * 4.0f + radius * freq_scale_e * 8.0f + prog * 2.0f) +
+                    sin(angle * 3.0f - radius * freq_scale_e * 6.0f + prog * 1.5f) +
+                    cos(angle * 5.0f + radius * freq_scale_e * 4.0f - prog * 1.8f) +
+                    sin(coord3 * freq_scale_e * 5.0f + prog) +
+                    cos((angle * 2.0f + coord3 * freq_scale_e * 3.0f) + prog * 1.2f);
             }
             break;
         case 2:
             {
                 float dist_from_center = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f));
                 plasma_value =
-                    sin(dist_from_center * freq_scale * 10.0f - progress * 3.0f) +
-                    sin(dist_from_center * freq_scale * 15.0f - progress * 2.3f) +
-                    cos(dist_from_center * freq_scale * 8.0f + progress * 1.8f) +
-                    sin((coord1 + coord2) * freq_scale * 6.0f + progress * 1.2f) +
-                    cos(coord3 * freq_scale * 5.0f - progress * 0.7f);
+                    sin(dist_from_center * freq_scale_e * 10.0f - prog * 3.0f) +
+                    sin(dist_from_center * freq_scale_e * 15.0f - prog * 2.3f) +
+                    cos(dist_from_center * freq_scale_e * 8.0f + prog * 1.8f) +
+                    sin((coord1 + coord2) * freq_scale_e * 6.0f + prog * 1.2f) +
+                    cos(coord3 * freq_scale_e * 5.0f - prog * 0.7f);
             }
             break;
         case 3:
             {
-                float flow1 = sin(coord1 * freq_scale * 8.0f + sin(coord2 * freq_scale * 12.0f + progress) + progress * 0.5f);
-                float flow2 = cos(coord2 * freq_scale * 9.0f + cos(coord3 * freq_scale * 11.0f + progress * 1.3f));
-                float flow3 = sin(coord3 * freq_scale * 7.0f + sin(coord1 * freq_scale * 13.0f + progress * 0.7f));
-                float flow4 = cos((coord1 + coord2) * freq_scale * 6.0f + sin(progress * 1.5f));
-                float flow5 = sin((coord2 + coord3) * freq_scale * 5.0f + cos(progress * 1.8f));
+                float flow1 = sin(coord1 * freq_scale_e * 8.0f + sin(coord2 * freq_scale_e * 12.0f + prog) + prog * 0.5f);
+                float flow2 = cos(coord2 * freq_scale_e * 9.0f + cos(coord3 * freq_scale_e * 11.0f + prog * 1.3f));
+                float flow3 = sin(coord3 * freq_scale_e * 7.0f + sin(coord1 * freq_scale_e * 13.0f + prog * 0.7f));
+                float flow4 = cos((coord1 + coord2) * freq_scale_e * 6.0f + sin(prog * 1.5f));
+                float flow5 = sin((coord2 + coord3) * freq_scale_e * 5.0f + cos(prog * 1.8f));
                 plasma_value = flow1 + flow2 + flow3 + flow4 + flow5;
             }
             break;
         case 4:
             {
-                float n1 = sin((coord1 + progress * 0.5f) * freq_scale * 40.0f) * sin((coord2 + progress * 0.3f) * freq_scale * 52.0f) * sin((coord3 + progress * 0.7f) * freq_scale * 31.0f);
-                float n2 = sin((coord1 * 2.3f + coord2 + progress) * freq_scale * 20.0f) * cos((coord2 * 1.7f + coord3 + progress * 1.2f) * freq_scale * 25.0f);
-                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * freq_scale * 15.0f + progress * 2.0f);
+                float n1 = sin((coord1 + prog * 0.5f) * freq_scale_e * 40.0f) * sin((coord2 + prog * 0.3f) * freq_scale_e * 52.0f) * sin((coord3 + prog * 0.7f) * freq_scale_e * 31.0f);
+                float n2 = sin((coord1 * 2.3f + coord2 + prog) * freq_scale_e * 20.0f) * cos((coord2 * 1.7f + coord3 + prog * 1.2f) * freq_scale_e * 25.0f);
+                float n3 = cos((coord1 + coord2 * 2.1f + coord3) * freq_scale_e * 15.0f + prog * 2.0f);
                 plasma_value = n1 * 0.5f + n2 * 0.35f + n3 * 0.15f;
             }
             break;
@@ -209,10 +246,10 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
             {
                 float r = sqrtf((coord1 - 0.5f)*(coord1 - 0.5f) + (coord2 - 0.5f)*(coord2 - 0.5f) + (coord3 - 0.5f)*(coord3 - 0.5f));
                 plasma_value =
-                    sin(r * freq_scale * 30.0f - progress * 2.0f) +
-                    sin((coord1 + coord2) * freq_scale * 20.0f + progress * 1.5f) * 0.6f +
-                    cos((coord2 + coord3) * freq_scale * 18.0f - progress * 1.2f) * 0.5f +
-                    sin(coord3 * freq_scale * 25.0f + progress * 0.8f) * 0.4f;
+                    sin(r * freq_scale_e * 30.0f - prog * 2.0f) +
+                    sin((coord1 + coord2) * freq_scale_e * 20.0f + prog * 1.5f) * 0.6f +
+                    cos((coord2 + coord3) * freq_scale_e * 18.0f - prog * 1.2f) * 0.5f +
+                    sin(coord3 * freq_scale_e * 25.0f + prog * 0.8f) * 0.4f;
             }
             break;
         default:
@@ -232,8 +269,42 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
         depth_factor = 0.45f + 0.55f * (1.0f - normalized_dist * 0.6f);
     }
 
-    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(plasma_value * 360.0f + time * rate * 12.0f)
-                                            : GetColorAtPosition(plasma_value);
+    RGBColor final_color;
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
+    if(GetRainbowMode())
+    {
+        float hue = plasma_value * 360.0f + time * rate * 12.0f;
+        hue = ApplySpatialRainbowHue(hue, plasma_value, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(plasma_value, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
+    }
 
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
@@ -248,6 +319,20 @@ nlohmann::json Plasma::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["pattern_type"] = pattern_type;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "plasma_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "plasma_stratum_band_speed_pct",
+                                           "plasma_stratum_band_tight_pct",
+                                           "plasma_stratum_band_phase_deg");
     return j;
 }
 
@@ -257,5 +342,19 @@ void Plasma::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
         pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kPlasmaPatternCount - 1);
 
-    if(pattern_combo) pattern_combo->setCurrentIndex(pattern_type);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "plasma_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "plasma_stratum_band_speed_pct",
+                                            "plasma_stratum_band_tight_pct",
+                                            "plasma_stratum_band_phase_deg");
+
+    if(pattern_combo)
+        pattern_combo->setCurrentIndex(pattern_type);
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

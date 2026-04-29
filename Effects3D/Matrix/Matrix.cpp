@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Matrix.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <QGridLayout>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
-
-REGISTER_EFFECT_3D(Matrix);
 
 Matrix::Matrix(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -38,9 +39,10 @@ Matrix::Matrix(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D Matrix::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Matrix";
-    info.effect_description = "Matrix-style digital rain on all surfaces. Use effect colors or Rainbow for custom/rainbow matrix; Head brightness sets how white the leading character is.";
+    info.effect_description =
+        "Matrix-style digital rain on all surfaces. Use effect colors or Rainbow for custom/rainbow matrix; Head brightness sets how white the leading character is. Optional stratum band tuning.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_MATRIX;
     info.is_reversible = true;
@@ -71,8 +73,10 @@ EffectInfo3D Matrix::GetEffectInfo()
 void Matrix::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0,0,0,0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
 
     layout->addWidget(new QLabel("Density (%):"), 0, 0);
     density_slider = new QSlider(Qt::Horizontal);
@@ -144,6 +148,13 @@ void Matrix::SetupCustomUI(QWidget* parent)
     head_brightness_label->setMinimumWidth(36);
     layout->addWidget(head_brightness_label, 6, 2);
 
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Matrix::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     AddWidgetToParent(w, parent);
 
     connect(density_slider, &QSlider::valueChanged, this, &Matrix::OnMatrixParameterChanged);
@@ -196,6 +207,16 @@ void Matrix::OnMatrixParameterChanged()
     {
         head_brightness = (unsigned int)std::clamp(head_brightness_slider->value(), 0, 100);
         if(head_brightness_label) head_brightness_label->setText(QString::number(head_brightness) + "%");
+    }
+    emit ParametersChanged();
+}
+
+void Matrix::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
     }
     emit ParametersChanged();
 }
@@ -514,13 +535,24 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
     {
         return 0x00000000;
     }
-    float speed = GetScaledSpeed();
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
+    float speed = GetScaledSpeed() * bb.speed_mul;
     float size_m = GetNormalizedSize();
-    float color_cycle = time * GetScaledFrequency() * 0.02f;
+    float t_sample = time + (bb.phase_deg / 360.0f) * (2.0f / std::max(0.1f, speed));
+    float color_cycle = t_sample * GetScaledFrequency() * 0.02f;
     float detail = std::max(0.05f, GetScaledDetail());
 
-    float col_spacing = 1.0f + (100.0f - density) * 0.04f;
-    col_spacing = col_spacing / (0.6f + 0.4f * detail);
+    float col_spacing =(1.0f + (100.0f - density) * 0.04f) / (0.6f + 0.4f * detail);
+    col_spacing /= std::max(0.25f, bb.tight_mul);
 
     float intensity = 0.0f;
     float head = 0.0f;
@@ -528,7 +560,7 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
     for(int face_index = 0; face_index < 6; ++face_index)
     {
         float face_head = 0.0f;
-        float face_value = ComputeFaceIntensity(face_index, x, y, z, time, grid, col_spacing, size_m, speed, &face_head);
+        float face_value = ComputeFaceIntensity(face_index, x, y, z, t_sample, grid, col_spacing, size_m, speed, &face_head);
         if(face_value > intensity)
         {
             intensity = face_value;
@@ -560,6 +592,20 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
 nlohmann::json Matrix::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "matrix_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "matrix_stratum_band_speed_pct",
+                                           "matrix_stratum_band_tight_pct",
+                                           "matrix_stratum_band_phase_deg");
     j["density"] = density;
     j["trail"] = trail;
     j["char_height"] = char_height;
@@ -573,6 +619,13 @@ nlohmann::json Matrix::SaveSettings() const
 void Matrix::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "matrix_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "matrix_stratum_band_speed_pct",
+                                            "matrix_stratum_band_tight_pct",
+                                            "matrix_stratum_band_phase_deg");
     if(settings.contains("density")) density = settings["density"];
     if(settings.contains("trail")) trail = settings["trail"];
     if(settings.contains("char_height")) char_height = settings["char_height"];
@@ -588,4 +641,11 @@ void Matrix::LoadSettings(const nlohmann::json& settings)
     if(char_variation_slider) { char_variation_slider->setValue(char_variation); if(char_variation_label) char_variation_label->setText(QString::number(char_variation) + "%"); }
     if(char_spacing_slider) { char_spacing_slider->setValue(char_spacing); if(char_spacing_label) char_spacing_label->setText(QString::number(char_spacing) + "%"); }
     if(head_brightness_slider) { head_brightness_slider->setValue((int)head_brightness); if(head_brightness_label) head_brightness_label->setText(QString::number(head_brightness) + "%"); }
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(Matrix)

@@ -7,7 +7,10 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <limits>
+
+class StratumBandPanel;
 
 class CubeLayer : public SpatialEffect3D
 {
@@ -26,6 +29,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     float EvaluateIntensity(float amplitude, float time);
     static float AxisPosition(int axis, float x, float y, float z,
@@ -38,6 +44,10 @@ private:
     float layer_thickness = 0.12f;
     int layer_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
     QComboBox* layer_edge_combo = nullptr;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

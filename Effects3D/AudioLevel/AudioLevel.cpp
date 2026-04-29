@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioLevel.h"
+#include "StratumBandPanel.h"
 #include "Colors.h"
+#include "SpatialLayerCore.h"
 #include <cmath>
 #include <algorithm>
 #include <QLabel>
@@ -33,9 +35,10 @@ AudioLevel::AudioLevel(QWidget* parent)
 EffectInfo3D AudioLevel::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Audio Level";
-    info.effect_description = "Level drives a 3D fill surface (like a water level) with optional wave on the boundary";
+    info.effect_description =
+        "Level drives a 3D fill surface (like a water level) with optional wave on the boundary; optional stratum band tuning";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -160,6 +163,23 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
         edge_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+
+    stratum_panel = new StratumBandPanel(parent);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &AudioLevel::OnStratumBandChanged);
+    OnStratumBandChanged();
+}
+
+void AudioLevel::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void AudioLevel::UpdateParams(SpatialEffectParams& /*params*/)
@@ -174,10 +194,18 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
     float amplitude = AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float fill_level = EvaluateIntensity(amplitude, time);
 
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float ax = NormalizeGridAxis01(rotated_pos.x, grid.min_x, grid.max_x);
     float ay = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
     float az = NormalizeGridAxis01(rotated_pos.z, grid.min_z, grid.max_z);
@@ -186,9 +214,12 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float axis_other = (fax == 0) ? ay : ((fax == 1) ? ax : ay);
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
-    float wave = wave_amount * std::sin(time * 4.0f * std::max(0.2f, GetScaledFrequency() * 0.15f) + axis_other * 6.283185f * (0.6f + 0.4f * detail));
+    float wave =
+        wave_amount *
+        std::sin(time * 4.0f * bb.speed_mul * std::max(0.2f, GetScaledFrequency() * 0.15f * bb.tight_mul) +
+                 axis_other * 6.283185f * (0.6f + 0.4f * detail * bb.tight_mul));
     float fill_boundary = std::clamp(fill_level + wave, 0.0f, 1.0f);
-    float edge = std::max(edge_soft, 0.01f) / std::max(0.35f, size_m);
+    float edge = std::max(edge_soft, 0.01f) / std::max(0.35f, size_m * bb.tight_mul);
     float blend = std::clamp((fill_boundary - axis_pos) / edge + 0.5f, 0.0f, 1.0f);
     float intensity = blend;
 
@@ -198,13 +229,43 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float gradient_pos = std::clamp(0.65f * axis_pos + 0.35f * (1.0f - radial_norm), 0.0f, 1.0f);
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(gradient_pos * 360.0f + CalculateProgress(time) * 40.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(gradient_pos);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
+    RGBColor user_color;
+    if(GetRainbowMode())
+    {
+        float hue =
+            gradient_pos * 360.0f + CalculateProgress(time) * 40.0f * bb.speed_mul + time * GetScaledFrequency() * 12.0f * bb.speed_mul
+            + bb.phase_deg * (1.0f / 360.0f) * 50.0f;
+        hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(gradient_pos, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        user_color = GetColorAtPosition(p);
+    }
     return ModulateRGBColors(color, user_color);
 }
-
-REGISTER_EFFECT_3D(AudioLevel)
 
 nlohmann::json AudioLevel::SaveSettings() const
 {
@@ -212,6 +273,20 @@ nlohmann::json AudioLevel::SaveSettings() const
     AudioReactiveSaveToJson(j, audio_settings);
     j["wave_amount"] = wave_amount;
     j["edge_soft"] = edge_soft;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "audiolevel_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "audiolevel_stratum_band_speed_pct",
+                                           "audiolevel_stratum_band_tight_pct",
+                                           "audiolevel_stratum_band_phase_deg");
     return j;
 }
 
@@ -219,8 +294,22 @@ void AudioLevel::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "audiolevel_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "audiolevel_stratum_band_speed_pct",
+                                            "audiolevel_stratum_band_tight_pct",
+                                            "audiolevel_stratum_band_phase_deg");
     if(settings.contains("wave_amount")) wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
-    if(settings.contains("edge_soft"))   edge_soft   = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
+    if(settings.contains("edge_soft")) edge_soft = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(AudioLevel)

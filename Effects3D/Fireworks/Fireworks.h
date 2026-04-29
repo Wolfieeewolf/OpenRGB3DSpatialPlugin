@@ -5,7 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <vector>
+
+class StratumBandPanel;
 
 class Fireworks : public SpatialEffect3D
 {
@@ -22,6 +25,9 @@ public:
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
+
+private slots:
+    void OnStratumBandChanged();
 
 private:
     enum FireworkType { TYPE_SINGLE = 0, TYPE_BIG_EXPLOSION, TYPE_ROMAN_CANDLE, TYPE_SPINNER, TYPE_FOUNTAIN, TYPE_RANDOM, TYPE_COUNT };
@@ -41,6 +47,10 @@ private:
     std::vector<CachedParticle> particle_cache;
     float particle_aabb_min_x = 0, particle_aabb_min_y = 0, particle_aabb_min_z = 0;
     float particle_aabb_max_x = 0, particle_aabb_max_y = 0, particle_aabb_max_z = 0;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

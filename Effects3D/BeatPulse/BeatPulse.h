@@ -7,8 +7,11 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <limits>
 #include <vector>
+
+class StratumBandPanel;
 
 class BeatPulse : public SpatialEffect3D
 {
@@ -31,6 +34,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     struct PulseData
     {
@@ -38,7 +44,10 @@ private:
         float strength   = 0.0f;
     };
     void TickPulses(float time);
-    float SamplePulseField(float radial_norm, float height_norm, float time) const;
+    float SamplePulseField(float radial_norm,
+                           float height_norm,
+                           float time,
+                           const EffectStratumBlend::BandBlendScalars& bb) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
     float EvaluateIntensity(float amplitude, float time);
@@ -51,6 +60,10 @@ private:
     float onset_hold = 0.0f;
     float onset_threshold = 0.35f;
     float last_tick_time = std::numeric_limits<float>::lowest();
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif // BEATPULSE_H

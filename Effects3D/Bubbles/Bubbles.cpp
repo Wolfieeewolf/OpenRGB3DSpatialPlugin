@@ -2,11 +2,14 @@
 
 #include "Bubbles.h"
 #include "EffectHelpers.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
+#include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(Bubbles);
 
@@ -31,9 +34,10 @@ Bubbles::Bubbles(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D Bubbles::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Bubbles";
-    info.effect_description = "Rising expanding spheres (like OpenRGB Bubbles) – bubbles spawn from floor and rise";
+    info.effect_description =
+        "Rising expanding spheres (like OpenRGB Bubbles); optional floor/mid/ceiling band tuning for motion and shell detail";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -60,8 +64,10 @@ EffectInfo3D Bubbles::GetEffectInfo()
 void Bubbles::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
     layout->addWidget(new QLabel("Max bubbles:"), row, 0);
     QSlider* max_slider = new QSlider(Qt::Horizontal);
@@ -122,7 +128,23 @@ void Bubbles::SetupCustomUI(QWidget* parent)
         if(spawn_label) spawn_label->setText(QString::number(spawn_interval, 'f', 2));
         emit ParametersChanged();
     });
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Bubbles::OnStratumBandChanged);
+    OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void Bubbles::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void Bubbles::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -138,30 +160,51 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    const bool strat_on = (stratum_layout_mode == 1);
+
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float h_scale = std::max({e.hw, e.hh, e.hd});
     float speed_scale = GetScaledSpeed() * 0.015f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float color_cycle = time * GetScaledFrequency() * 12.0f;
+    if(strat_on)
+    {
+        color_cycle = color_cycle * bb.speed_mul + bb.phase_deg;
+    }
     int n_bub = std::max(4, std::min(30, max_bubbles));
     float thick = std::max(0.02f, std::min(4.0f, bubble_thickness * h_scale)) / std::max(0.35f, detail);
+    if(strat_on)
+    {
+        thick /= std::max(0.25f, bb.tight_mul);
+    }
     float rise = std::max(0.2f, std::min(2.0f, rise_speed)) * speed_scale * e.hh;
     float interval = std::max(0.3f, std::min(2.0f, spawn_interval));
     float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * h_scale * size_m;
 
-    if(bubble_centers_cached.size() != (size_t)n_bub || fabsf(time - bubble_cache_time) > 0.001f)
+    if(!strat_on)
     {
-        bubble_cache_time = time;
-        bubble_centers_cached.resize(n_bub);
-        for(int i = 0; i < n_bub; i++)
+        if(bubble_centers_cached.size() != (size_t)n_bub || fabsf(time - bubble_cache_time) > 0.001f)
         {
-            float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
-            float radius = (phase / interval) * max_r * 0.4f;
-            float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
-            float cy = origin.y - e.hh * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
-            float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
-            bubble_centers_cached[i] = {cx, cy, cz, radius};
+            bubble_cache_time = time;
+            bubble_centers_cached.resize(n_bub);
+            for(int i = 0; i < n_bub; i++)
+            {
+                float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
+                float radius = (phase / interval) * max_r * 0.4f;
+                float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
+                float cy = origin.y - e.hh * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
+                float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
+                bubble_centers_cached[i] = {cx, cy, cz, radius};
+            }
         }
     }
 
@@ -170,7 +213,20 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
 
     for(int i = 0; i < n_bub; i++)
     {
-        const BubbleCenter3D& b = bubble_centers_cached[i];
+        BubbleCenter3D b;
+        if(strat_on)
+        {
+            float phase = fmodf(time * bb.speed_mul + (float)i * interval, interval * (float)n_bub);
+            b.radius = (phase / interval) * max_r * 0.4f;
+            b.cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
+            b.cy = origin.y - e.hh * 0.5f +
+                   fmodf(time * rise * 0.5f * bb.speed_mul + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
+            b.cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
+        }
+        else
+        {
+            b = bubble_centers_cached[i];
+        }
         float dx = x - b.cx;
         float dy = y - b.cy;
         float dz = z - b.cz;
@@ -203,6 +259,20 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
 nlohmann::json Bubbles::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "bubbles_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "bubbles_stratum_band_speed_pct",
+                                           "bubbles_stratum_band_tight_pct",
+                                           "bubbles_stratum_band_phase_deg");
     j["max_bubbles"] = max_bubbles;
     j["bubble_thickness"] = bubble_thickness;
     j["rise_speed"] = rise_speed;
@@ -214,6 +284,13 @@ nlohmann::json Bubbles::SaveSettings() const
 void Bubbles::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "bubbles_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "bubbles_stratum_band_speed_pct",
+                                            "bubbles_stratum_band_tight_pct",
+                                            "bubbles_stratum_band_phase_deg");
     if(settings.contains("max_bubbles") && settings["max_bubbles"].is_number_integer())
         max_bubbles = std::max(4, std::min(30, settings["max_bubbles"].get<int>()));
     if(settings.contains("bubble_thickness") && settings["bubble_thickness"].is_number())
@@ -224,4 +301,9 @@ void Bubbles::LoadSettings(const nlohmann::json& settings)
         spawn_interval = std::max(0.3f, std::min(2.0f, settings["spawn_interval"].get<float>()));
     if(settings.contains("max_radius") && settings["max_radius"].is_number())
         max_radius = std::max(0.5f, std::min(2.0f, settings["max_radius"].get<float>()));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

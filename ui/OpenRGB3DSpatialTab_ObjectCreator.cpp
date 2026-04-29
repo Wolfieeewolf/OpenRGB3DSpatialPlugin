@@ -10,6 +10,7 @@
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
+#include "PluginUiUtils.h"
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -2102,12 +2103,12 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
 
     QLabel* hint = new QLabel("Select a preset. List shows Brand — Model — name. Matching uses all OpenRGB device fields (name, description, location, vendor, serial, version, type) and preset brand/model so presets work for anyone with the same device.");
     hint->setWordWrap(true);
-    hint->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(hint);
     layout->addWidget(hint);
 
     QHBoxLayout* filter_row = new QHBoxLayout();
     QLabel* filter_label = new QLabel(tr("Filter:"));
-    filter_label->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(filter_label);
     filter_row->addWidget(filter_label);
     QComboBox* category_combo = new QComboBox();
     category_combo->addItem(tr("All"), QString());
@@ -2118,7 +2119,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     filter_row->addWidget(category_combo);
 
     QLabel* sort_label = new QLabel(tr("Sort:"));
-    sort_label->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(sort_label);
     filter_row->addWidget(sort_label);
     QComboBox* sort_combo = new QComboBox();
     sort_combo->addItem(tr("Name"), QString("name"));

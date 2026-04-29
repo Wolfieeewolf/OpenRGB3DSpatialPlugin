@@ -9,6 +9,7 @@
 #include <functional>
 
 class QWidget;
+class QString;
 struct GridContext3D;
 
 namespace MinecraftGame
@@ -17,6 +18,12 @@ void SetRenderSampleIndexContext(int led_index, int led_count);
 void ClearRenderSampleIndexContext();
 void WireChildWidgetsToParametersChanged(QWidget* root, const std::function<void()>& on_changed);
 QWidget* CreateSettingsWidget(QWidget* parent, Settings& settings, std::uint32_t channels);
+QWidget* CreateEffectWidget(QWidget* parent,
+                            const QString& title,
+                            Settings& settings,
+                            std::uint32_t channels,
+                            QWidget* telemetry_owner,
+                            const std::function<void()>& on_changed);
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                      float time,
                      float grid_x,

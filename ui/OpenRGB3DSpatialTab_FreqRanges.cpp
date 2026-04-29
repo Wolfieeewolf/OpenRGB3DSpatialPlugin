@@ -6,6 +6,7 @@
 #include "ZoneGrid3D.h"
 #include "LogManager.h"
 #include "PluginLogOnce.h"
+#include "PluginUiUtils.h"
 #include <algorithm>
 #include <unordered_set>
 #include <QToolTip>
@@ -38,16 +39,16 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     QVBoxLayout* freq_layout = new QVBoxLayout(freq_ranges_group);
     
     QLabel* header = new QLabel("Multi-Band Audio Effects");
-    header->setStyleSheet("font-weight: bold;");
+    PluginUiApplyBoldLabel(header);
     freq_layout->addWidget(header);
     
     QLabel* description = new QLabel("Configure independent audio-reactive effects for specific frequency ranges (e.g., bass floor, treble ceiling).");
     description->setWordWrap(true);
-    description->setStyleSheet("color: gray; font-size: 10px;");
+    PluginUiApplyMutedSecondaryLabel(description);
     freq_layout->addWidget(description);
     
     QLabel* ranges_label = new QLabel("Audio Frequency Ranges:");
-    ranges_label->setStyleSheet("font-weight: bold;");
+    PluginUiApplyBoldLabel(ranges_label);
     freq_layout->addWidget(ranges_label);
     
     freq_ranges_list = new QListWidget();
@@ -925,7 +926,8 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
 
     effect->setParent(ui_wrapper);
     effect->CreateCommonEffectControls(ui_wrapper, false);
-    effect->SetupCustomUI(ui_wrapper);
+    QWidget* custom_host = effect->GetCustomSettingsHost();
+    effect->SetupCustomUI(custom_host ? custom_host : ui_wrapper);
 
     freq_effect_settings_layout->addWidget(ui_wrapper);
 

@@ -2,10 +2,10 @@
 
 
 #include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
 #include "filesystem.h"
 #include <QDesktopServices>
 #include <QUrl>
-#include <QPalette>
 #include <QFrame>
 #include <QMessageBox>
 #include <QTimer>
@@ -24,7 +24,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     QLabel* layout_label = new QLabel("Save/Load controller positions, zones, and reference points:");
     layout_label->setWordWrap(true);
-    layout_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(layout_label);
     layout_layout->addWidget(layout_label);
 
     QHBoxLayout* layout_combo_layout = new QHBoxLayout();
@@ -84,7 +84,7 @@ void OpenRGB3DSpatialTab::SetupProfilesTab(QTabWidget* tab_widget)
 
     QLabel* effect_label = new QLabel("Save/Load single effect configurations. Select a profile below.");
     effect_label->setWordWrap(true);
-    effect_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(effect_label);
     effect_layout->addWidget(effect_label);
 
     if(!effect_profiles_combo)

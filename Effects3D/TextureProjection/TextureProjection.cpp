@@ -4,6 +4,8 @@
 
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -17,11 +19,10 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QDateTime>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
-
-REGISTER_EFFECT_3D(TextureProjection);
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -69,7 +70,7 @@ TextureProjection::~TextureProjection()
 EffectInfo3D TextureProjection::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Texture projection";
     info.effect_description =
         "Map an image or GIF onto your 3D layout using planar or spherical UVs. For GIFs, Speed is frames per second: "
@@ -77,7 +78,8 @@ EffectInfo3D TextureProjection::GetEffectInfo()
         "Size zooms the texture (larger Size = bigger features, fewer repeats). Scale still adds overall repeat. "
         "Detail warps UV; Frequency drives scroll and warp phase. Motion tuning adds Scroll / Warp / Phase plus media Resolution "
         "(combined with global Output shaping → Sampling); use Smoothing there for GIF frame blending. "
-        "Ambience sliders: distance dim, falloff curve, edge fade (room bounds), wave delay (phase vs distance).";
+        "Ambience sliders: distance dim, falloff curve, edge fade (room bounds), wave delay (phase vs distance). "
+        "Stratum bands (Y across the room after rotation) blend speed, tightness, and phase for motion and UV warp.";
     info.category = "Media";
     info.effect_type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
     info.is_reversible = false;
@@ -108,7 +110,11 @@ EffectInfo3D TextureProjection::GetEffectInfo()
 
 void TextureProjection::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* w = new QWidget();
+    vbox->addWidget(w);
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -209,7 +215,14 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
     layout->addWidget(media_tuning, row, 0, 1, 3);
     row++;
 
-    AddWidgetToParent(w, parent);
+    stratum_panel = new StratumBandPanel(outer);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TextureProjection::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer, parent);
 
     connect(browse_button, &QPushButton::clicked, this, &TextureProjection::OnBrowseMedia);
     connect(projection_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -219,6 +232,16 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
 void TextureProjection::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
+}
+
+void TextureProjection::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void TextureProjection::OnProjectionModeChanged(int index)
@@ -485,6 +508,17 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
         return 0x00000000;
     }
 
+    const Vector3D origin_bb = GetEffectOriginGrid(grid);
+    Vector3D rp_bb = TransformPointByRotation(x, y, z, origin_bb);
+    float coord2_bb = NormalizeGridAxis01(rp_bb.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st_bb;
+    EffectStratumBlend::InitStratumBreaks(strat_st_bb);
+    float sw_bb[3];
+    EffectStratumBlend::WeightsForYNorm(coord2_bb, strat_st_bb, sw_bb);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw_bb, stratum_tuning_);
+    const float tm = std::max(0.25f, bb.tight_mul);
+
     std::shared_ptr<QImage> snap;
     std::shared_ptr<QImage> prev_snap;
     qint64 step_ms = 0;
@@ -512,7 +546,7 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     const float inv_h = 1.0f / std::max(1e-4f, max_y - min_y);
     const float inv_d = 1.0f / std::max(1e-4f, max_z - min_z);
 
-    const Vector3D o = GetEffectOriginGrid(grid);
+    const Vector3D o = origin_bb;
     const float ox = x - o.x;
     const float oy = y - o.y;
     const float oz = z - o.z;
@@ -523,7 +557,8 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     const float max_r = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     const float prop01 = ambience_propagation / 100.0f;
     const float t_anim =
-        time - prop01 * std::min(1.0f, dist_o / std::max(max_r, 1e-4f)) * 12.0f;
+        time * bb.speed_mul
+        - prop01 * std::min(1.0f, dist_o / std::max(max_r, 1e-4f)) * 12.0f;
     const bool freeze_gif_motion = media_is_gif && GetSpeed() == 0;
     const float anim_time = freeze_gif_motion ? 0.0f : t_anim;
     const float scroll_mul = motion_scroll / 100.0f;
@@ -532,6 +567,7 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
 
     const float speed_lin = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f);
     const float detail = std::max(0.05f, GetScaledDetail());
+    const float detail_s = detail * tm;
     const float freq = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
     const float scroll = anim_time * (0.022f + 0.07f * speed_lin + 0.09f * freq) * scroll_mul;
     /* Scale = repeat density; Size = zoom (higher Size → fewer repeats, “bigger” GIF on the map). */
@@ -585,10 +621,11 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     u += scroll;
     v += scroll * 0.37f;
 
-    const float phase = anim_time * freq * 0.14f * phase_mul;
-    const float amp = 0.022f * std::min(3.2f, detail * 0.22f) * warp_mul;
-    u += std::sin(phase + u * 11.5f * detail * 0.08f + v * 7.0f * detail * 0.07f) * amp;
-    v += std::cos(phase * 0.91f + u * 8.5f * detail * 0.07f - v * 10.0f * detail * 0.08f) * amp;
+    const float phase =
+        anim_time * freq * 0.14f * phase_mul + bb.phase_deg * (float)(M_PI / 180.0f);
+    const float amp = 0.022f * std::min(3.2f, detail * 0.22f) * warp_mul / tm;
+    u += std::sin(phase + u * 11.5f * detail_s * 0.08f + v * 7.0f * detail_s * 0.07f) * amp;
+    v += std::cos(phase * 0.91f + u * 8.5f * detail_s * 0.07f - v * 10.0f * detail_s * 0.08f) * amp;
 
     if(tile_repeat_enabled)
     {
@@ -633,6 +670,20 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
 nlohmann::json TextureProjection::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "textureprojection_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "textureprojection_stratum_band_speed_pct",
+                                           "textureprojection_stratum_band_tight_pct",
+                                           "textureprojection_stratum_band_phase_deg");
     j["media_path"] = media_path.toStdString();
     j["projection_mode"] = projection_mode;
     j["ambience_dist_falloff"] = ambience_dist_falloff;
@@ -650,6 +701,13 @@ nlohmann::json TextureProjection::SaveSettings() const
 void TextureProjection::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "textureprojection_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "textureprojection_stratum_band_speed_pct",
+                                            "textureprojection_stratum_band_tight_pct",
+                                            "textureprojection_stratum_band_phase_deg");
     if(settings.contains("projection_mode") && settings["projection_mode"].is_number_integer())
     {
         projection_mode = std::max(0, std::min(3, settings["projection_mode"].get<int>()));
@@ -718,4 +776,11 @@ void TextureProjection::LoadSettings(const nlohmann::json& settings)
             tile_repeat_check->setChecked(tile_repeat_enabled);
         }
     }
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(TextureProjection);

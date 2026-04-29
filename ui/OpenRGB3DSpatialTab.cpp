@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
 #include "ControllerLayout3D.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
@@ -18,7 +19,6 @@
 #include <QSignalBlocker>
 #include <QColor>
 #include <QFont>
-#include <QPalette>
 #include <QSplitter>
 #include <QFrame>
 #include <QAbstractItemView>
@@ -71,6 +71,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_config_group = nullptr;
     minecraft_library_panel = nullptr;
     effect_controls_widget = nullptr;
+    effects_detail_scroll = nullptr;
     effect_controls_layout = nullptr;
     current_effect_ui = nullptr;
     start_effect_button = nullptr;
@@ -626,7 +627,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     grid_gl->addWidget(selection_info_label, 1, 6, 1, 2);
 
     QLabel* grid_scale_help = new QLabel("Default size for new LED layouts; scale is mm per grid unit.");
-    grid_scale_help->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(grid_scale_help);
     grid_scale_help->setWordWrap(true);
     grid_gl->addWidget(grid_scale_help, 2, 0, 1, 8);
 
@@ -683,7 +684,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     add_room_dim_spin(room_gl, 1, 4, "Depth (Z, mm):", room_depth_spin, manual_room_depth, "Front to back, in mm");
 
     QLabel* room_help = new QLabel("Origin is front-left-floor. Room dimensions and grid scale are in mm. Positions in grid units × scale = mm.");
-    room_help->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(room_help);
     room_help->setWordWrap(true);
     room_gl->addWidget(room_help, 2, 0, 1, 6);
 
@@ -733,7 +734,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     QLabel* overlay_hint = new QLabel(
         "These match the RoomGrid fields in your plugin settings and are saved when you change them.");
-    overlay_hint->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(overlay_hint);
     overlay_hint->setWordWrap(true);
     overlay_gl->addWidget(overlay_hint, 4, 0, 1, 3);
 
@@ -842,7 +843,7 @@ void OpenRGB3DSpatialTab::SetupUI()
         "Axes: X = left/right (width), Y = floor→ceiling (height), Z = front→back (depth). "
         "Rotation in degrees.");
     transform_help->setWordWrap(true);
-    transform_help->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(transform_help);
     transform_tab_v->addWidget(transform_help);
 
     QHBoxLayout* transform_layout = new QHBoxLayout();
@@ -1038,7 +1039,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     QLabel* empty_label = new QLabel("Choose Custom Controller, Reference Point, or Display Plane above to create objects and add them to the 3D view.");
     empty_label->setWordWrap(true);
     empty_label->setContentsMargins(0, 6, 0, 6);
-    empty_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(empty_label);
     QFont empty_font = empty_label->font();
     empty_font.setItalic(true);
     empty_label->setFont(empty_font);
@@ -1059,7 +1060,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     QLabel* custom_subtitle = new QLabel("Create a grid of LEDs from your physical devices, then add it to the 3D view from the Available Controllers list.");
     custom_subtitle->setWordWrap(true);
-    custom_subtitle->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(custom_subtitle);
     custom_subtitle->setContentsMargins(0, 0, 0, 6);
     custom_layout->addWidget(custom_subtitle);
 
@@ -1071,7 +1072,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     custom_controllers_empty_label = new QLabel("No custom controllers yet. Create one or import from file.");
     custom_controllers_empty_label->setWordWrap(true);
-    custom_controllers_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    PluginUiApplyItalicSecondaryLabel(custom_controllers_empty_label);
     custom_controllers_empty_label->setAlignment(Qt::AlignHCenter);
     custom_controllers_empty_label->setContentsMargins(0, 8, 0, 8);
     custom_layout->addWidget(custom_controllers_empty_label);
@@ -1125,7 +1126,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     QLabel* ref_subtitle = new QLabel("Mark positions in the 3D room (e.g. monitor center). Add to the 3D view from Available Controllers.");
     ref_subtitle->setWordWrap(true);
-    ref_subtitle->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(ref_subtitle);
     ref_subtitle->setContentsMargins(0, 0, 0, 6);
     ref_points_layout->addWidget(ref_subtitle);
 
@@ -1136,7 +1137,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     ref_points_empty_label = new QLabel("No reference points yet. Click Add Reference Point to create one.");
     ref_points_empty_label->setWordWrap(true);
-    ref_points_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    PluginUiApplyItalicSecondaryLabel(ref_points_empty_label);
     ref_points_empty_label->setAlignment(Qt::AlignHCenter);
     ref_points_empty_label->setContentsMargins(0, 8, 0, 8);
     ref_points_layout->addWidget(ref_points_empty_label);
@@ -1167,19 +1168,17 @@ void OpenRGB3DSpatialTab::SetupUI()
     unsigned int default_red = selected_ref_point_color & 0xFF;
     unsigned int default_green = (selected_ref_point_color >> 8) & 0xFF;
     unsigned int default_blue = (selected_ref_point_color >> 16) & 0xFF;
-    QString default_hex = QString("#%1%2%3")
-        .arg(default_red, 2, 16, QChar('0'))
-        .arg(default_green, 2, 16, QChar('0'))
-        .arg(default_blue, 2, 16, QChar('0'))
-        .toUpper();
-    ref_point_color_button->setStyleSheet(QString("background-color: %1").arg(default_hex));
+    PluginUiSetRgbSwatchButton(ref_point_color_button,
+                               (int)default_red,
+                               (int)default_green,
+                               (int)default_blue);
     connect(ref_point_color_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_ref_point_color_clicked);
     color_layout->addWidget(ref_point_color_button);
     color_layout->addStretch();
     ref_points_layout->addLayout(color_layout);
 
     QLabel* help_label = new QLabel("Select a reference point to move it with the \"Scene object: position & rotation\" tab and 3D gizmo.");
-    help_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(help_label);
     help_label->setWordWrap(true);
     ref_points_layout->addWidget(help_label);
 
@@ -1210,7 +1209,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     QLabel* display_subtitle = new QLabel("Add virtual screens for Screen Mirror and other effects. Add to the 3D view from Available Controllers.");
     display_subtitle->setWordWrap(true);
-    display_subtitle->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(display_subtitle);
     display_subtitle->setContentsMargins(0, 0, 0, 6);
     display_layout->addWidget(display_subtitle);
 
@@ -1223,7 +1222,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     display_planes_empty_label = new QLabel("No display planes yet. Click Add Display to create one.");
     display_planes_empty_label->setWordWrap(true);
-    display_planes_empty_label->setStyleSheet("color: gray; font-style: italic;");
+    PluginUiApplyItalicSecondaryLabel(display_planes_empty_label);
     display_planes_empty_label->setAlignment(Qt::AlignHCenter);
     display_planes_empty_label->setContentsMargins(0, 8, 0, 8);
     display_layout->addWidget(display_planes_empty_label);
@@ -1264,8 +1263,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_name_edit, plane_row, 1, 1, 2);
     plane_row++;
 
-    QLabel* monitor_filter_label = new QLabel(tr("Filter:"));
-    monitor_filter_label->setStyleSheet("color: gray; font-size: small;");
+    QLabel*     monitor_filter_label = new QLabel(tr("Filter:"));
+    PluginUiApplyMutedSecondaryLabel(monitor_filter_label);
     plane_form->addWidget(monitor_filter_label, plane_row, 0);
     display_plane_monitor_brand_filter = new QComboBox();
     display_plane_monitor_brand_filter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -1275,7 +1274,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     plane_form->addWidget(display_plane_monitor_brand_filter, plane_row, 1);
 
     QLabel* monitor_sort_label = new QLabel(tr("Sort:"));
-    monitor_sort_label->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(monitor_sort_label);
     plane_form->addWidget(monitor_sort_label, plane_row, 2);
     display_plane_monitor_sort_combo = new QComboBox();
     display_plane_monitor_sort_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -1392,7 +1391,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     main_splitter->addWidget(center_widget);
 
-    QScrollArea* effects_detail_scroll = new QScrollArea();
+    effects_detail_scroll = new QScrollArea();
     effects_detail_scroll->setWidgetResizable(true);
     effects_detail_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     effects_detail_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -1448,14 +1447,18 @@ void OpenRGB3DSpatialTab::SetupUI()
         effect_layout->addLayout(row);
     }
 
-    origin_label = new QLabel(tr("Effect center:"));
+    origin_label = new QLabel(tr("Spatial anchor:"));
     origin_label->setToolTip(tr(
-        "Global reference for the stack at render time (Room Center or a reference point). "
-        "Does not move the camera or scene objects."));
+        "Where patterns attach in space for the whole stack. "
+        "\"Mapped lights center\" (default) uses the average LED position so effects sit in your real layout, not an abstract room middle."));
     effect_origin_combo = new QComboBox();
-    effect_origin_combo->setToolTip(tr("Applied to all running layers when rendering the stack."));
-    effect_origin_combo->addItem("Room Center", QVariant(-1));
-    effect_origin_combo->addItem("Target Zone Center", QVariant(-2));
+    effect_origin_combo->setToolTip(tr(
+        "Applied to every effect layer when rendering. Use \"Mapped lights center\" so origin-based math follows your strips/hardware; "
+        "pick Room box center only when you want the manual room middle."));
+    effect_origin_combo->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
+    effect_origin_combo->addItem(tr("Room box center"), QVariant(-1));
+    effect_origin_combo->addItem(tr("Target zone center"), QVariant(-2));
+    effect_origin_combo->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
     connect(effect_origin_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &OpenRGB3DSpatialTab::on_effect_origin_changed);
     {
@@ -1561,7 +1564,7 @@ void OpenRGB3DSpatialTab::SetupEffectLibraryPanel(QVBoxLayout* parent_layout)
     library_layout->setSpacing(4);
 
     QLabel* category_label = new QLabel(tr("Filter:"));
-    category_label->setStyleSheet("color: gray; font-size: small;");
+    PluginUiApplyMutedSecondaryLabel(category_label);
     library_layout->addWidget(category_label);
 
     effect_category_combo = new QComboBox();
@@ -1960,7 +1963,8 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
 
     effect->setParent(effect_controls_widget);
     effect->CreateCommonEffectControls(effect_controls_widget);
-    effect->SetupCustomUI(effect_controls_widget);
+    QWidget* custom_host = effect->GetCustomSettingsHost();
+    effect->SetupCustomUI(custom_host ? custom_host : effect_controls_widget);
     current_effect_ui = effect;
 
     if(class_name == QLatin1String("ScreenMirror"))
@@ -2012,7 +2016,7 @@ void OpenRGB3DSpatialTab::SetupZonesPanel(QVBoxLayout* parent_layout)
     zones_layout->addWidget(zones_list);
 
     QLabel* zones_help_label = new QLabel("Zones are groups of controllers for targeting effects.\n\nCreate zones like 'Desk', 'Front Wall', 'Ceiling', etc., then select them when configuring effects.");
-    zones_help_label->setForegroundRole(QPalette::PlaceholderText);
+    PluginUiApplyMutedSecondaryLabel(zones_help_label);
     zones_help_label->setWordWrap(true);
     zones_layout->addWidget(zones_help_label);
 
@@ -2380,7 +2384,8 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
 
     effect->setParent(minecraft_hub_preview_holder);
     effect->CreateCommonEffectControls(minecraft_hub_preview_holder);
-    effect->SetupCustomUI(minecraft_hub_preview_holder);
+    QWidget* custom_host = effect->GetCustomSettingsHost();
+    effect->SetupCustomUI(custom_host ? custom_host : minecraft_hub_preview_holder);
 
     hl->addWidget(effect);
 
@@ -2639,8 +2644,10 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     bool restore_signals = effect_origin_combo->blockSignals(true);
     effect_origin_combo->clear();
 
-    effect_origin_combo->addItem("Room Center", QVariant(-1));
-    effect_origin_combo->addItem("Target Zone Center", QVariant(-2));
+    effect_origin_combo->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
+    effect_origin_combo->addItem(tr("Room box center"), QVariant(-1));
+    effect_origin_combo->addItem(tr("Target zone center"), QVariant(-2));
+    effect_origin_combo->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
 
     for(size_t i = 0; i < reference_points.size(); i++)
     {
@@ -2654,6 +2661,10 @@ void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
     }
 
     int restore_index = effect_origin_combo->findData(desired_selection);
+    if(restore_index < 0)
+    {
+        restore_index = effect_origin_combo->findData(QVariant(-4));
+    }
     if(restore_index < 0)
     {
         restore_index = 0;
@@ -2782,6 +2793,14 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
         if(ref_point_idx == -2)
         {
             current_effect_ui->SetReferenceMode(REF_MODE_TARGET_ZONE_CENTER);
+        }
+        else if(ref_point_idx == -3)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_WORLD_ORIGIN);
+        }
+        else if(ref_point_idx == -4)
+        {
+            current_effect_ui->SetReferenceMode(REF_MODE_LED_CENTROID);
         }
         else if(ref_point_idx >= 0)
         {

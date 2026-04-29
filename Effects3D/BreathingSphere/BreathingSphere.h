@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class BreathingSphere : public SpatialEffect3D
 {
@@ -26,6 +29,9 @@ public:
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
+
+private slots:
+    void OnStratumBandChanged();
 
 private:
     enum Shape {
@@ -52,6 +58,10 @@ private:
     int breath_pulse_pct = 40;
     int center_hole_pct = 0;
     float progress;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

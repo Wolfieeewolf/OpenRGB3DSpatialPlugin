@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BandScan.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
@@ -35,9 +37,9 @@ BandScan::BandScan(QWidget* parent)
 EffectInfo3D BandScan::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Band Scan";
-    info.effect_description = "Single moving band of spectrum energy across the room";
+    info.effect_description = "Single moving band of spectrum energy; optional floor/mid/ceiling stratum tuning";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = true;
@@ -45,7 +47,7 @@ EffectInfo3D BandScan::GetEffectInfo()
     info.max_speed = 200;
     info.min_speed = 0;
     info.user_colors = 2;
-    info.has_custom_settings = false;
+    info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.default_speed_scale = 10.0f;
     info.needs_frequency = true;
@@ -121,11 +123,28 @@ void BandScan::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
+
+    stratum_panel = new StratumBandPanel(parent);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BandScan::OnStratumBandChanged);
+    OnStratumBandChanged();
 }
 
 void BandScan::UpdateParams(SpatialEffectParams& /*params*/)
 {
     RefreshBandRange();
+}
+
+void BandScan::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 
@@ -140,25 +159,86 @@ RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, con
 
     EnsureSpectrumCache(time);
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
     float axis_pos = ResolveCoordinateNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float height_norm = ResolveHeightNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float radial_norm = ResolveRadialNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
-    float color_cycle = time * GetScaledFrequency() * 12.0f;
+    float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
     float center = 0.5f;
-    axis_pos = std::clamp(center + (axis_pos - center) * (0.6f + 0.4f * size_m) * (0.7f + 0.3f * detail), 0.0f, 1.0f);
+    axis_pos = std::clamp(center + (axis_pos - center) * (0.6f + 0.4f * size_m) * (0.7f + 0.3f * detail * bb.tight_mul),
+                          0.0f, 1.0f);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     bool rainbow_mode = GetRainbowMode();
-    RGBColor axis_color = rainbow_mode
-        ? GetRainbowColor(axis_pos * 360.0f + color_cycle)
-        : GetColorAtPosition(std::clamp(axis_pos, 0.0f, 1.0f));
-    return ComposeColor(axis_pos, height_norm, radial_norm, time, 1.0f, axis_color, rainbow_mode);
+    RGBColor axis_color;
+    if(rainbow_mode)
+    {
+        float hue = axis_pos * 360.0f + color_cycle;
+        hue = ApplySpatialRainbowHue(hue, axis_pos, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        axis_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(axis_pos, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        axis_color = GetColorAtPosition(std::clamp(p, 0.0f, 1.0f));
+    }
+    return ComposeColor(axis_pos,
+                        height_norm,
+                        radial_norm,
+                        time,
+                        1.0f,
+                        axis_color,
+                        rainbow_mode,
+                        bb.speed_mul,
+                        bb.tight_mul,
+                        bb.phase_deg * (1.0f / 360.0f));
 }
 
 nlohmann::json BandScan::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "bandscan_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "bandscan_stratum_band_speed_pct",
+                                           "bandscan_stratum_band_tight_pct",
+                                           "bandscan_stratum_band_phase_deg");
     return j;
 }
 
@@ -166,9 +246,21 @@ void BandScan::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "bandscan_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "bandscan_stratum_band_speed_pct",
+                                            "bandscan_stratum_band_tight_pct",
+                                            "bandscan_stratum_band_phase_deg");
 
     RefreshBandRange();
     last_sample_time = std::numeric_limits<float>::lowest();
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
 
 void BandScan::RefreshBandRange()
@@ -324,24 +416,34 @@ float BandScan::WrapDistance(float a, float b, int modulo) const
     return std::min(wrapped, static_cast<float>(modulo) - wrapped);
 }
 
-RGBColor BandScan::ComposeColor(float axis_pos, float height_norm, float radial_norm, float time, float brightness, const RGBColor& axis_color, bool rainbow_mode) const
+RGBColor BandScan::ComposeColor(float axis_pos,
+                                float height_norm,
+                                float radial_norm,
+                                float time,
+                                float brightness,
+                                const RGBColor& axis_color,
+                                bool rainbow_mode,
+                                float stratum_speed_mul,
+                                float stratum_tight_mul,
+                                float stratum_phase01) const
 {
+    float ap = std::fmod(axis_pos + stratum_phase01 + 1.0f, 1.0f);
     if(smoothed_bands.empty())
     {
         (void)brightness;
-        RGBColor base = ComposeAudioGradientColor(audio_settings, axis_pos, 0.0f);
+        RGBColor base = ComposeAudioGradientColor(audio_settings, ap, 0.0f);
         return ModulateRGBColors(base, axis_color);
     }
 
     int count = static_cast<int>(smoothed_bands.size());
-    float scaled = axis_pos * count;
+    float scaled = ap * count;
     int idx_local = std::clamp(static_cast<int>(std::floor(scaled)), 0, count - 1);
     float frac = scaled - std::floor(scaled);
     int idx_next = std::min(idx_local + 1, count - 1);
     float band_value = smoothed_bands[idx_local] + (smoothed_bands[idx_next] - smoothed_bands[idx_local]) * frac;
     band_value = std::clamp(band_value, 0.0f, 1.0f);
 
-    float phase = CalculateProgress(time);
+    float phase = CalculateProgress(time) * stratum_speed_mul;
     float scan_phase = std::fmod(phase, 1.0f);
     if(scan_phase < 0.0f)
     {
@@ -349,17 +451,27 @@ RGBColor BandScan::ComposeColor(float axis_pos, float height_norm, float radial_
     }
     float scan_index = scan_phase * count;
     float distance = WrapDistance(scaled, scan_index, count);
-    float highlight = std::exp(-distance * 1.35f);
-    float trail = std::exp(-std::max(distance - 0.6f, 0.0f) * 2.5f);
+    float tm = std::clamp(stratum_tight_mul, 0.25f, 4.0f);
+    float highlight = std::exp(-distance * 1.35f * tm);
+    float trail = std::exp(-std::max(distance - 0.6f, 0.0f) * 2.5f * tm);
 
-    float height_profile = std::pow(std::clamp(height_norm, 0.0f, 1.0f), 1.3f);
+    float height_strata = 1.0f;
+    if(UseSpatialRoomTint())
+    {
+        SpatialLayerCore::MapperSettings smap;
+        SpatialLayerCore::InitAudioEffectMapperSettings(smap, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+        float lw[SpatialLayerCore::kMaxLayerCount]{};
+        SpatialLayerCore::ComputeVerticalStratumWeights(height_norm, smap, 3, lw);
+        height_strata = 0.55f + 0.45f * (lw[0] * 0.68f + lw[1] * 0.92f + lw[2] * 1.0f);
+    }
+    float height_profile = std::pow(std::clamp(height_norm, 0.0f, 1.0f), 1.3f) * height_strata;
     float radial_profile = std::clamp(1.0f - radial_norm, 0.0f, 1.0f);
     float energy = band_value * (0.55f + 0.45f * height_profile) * (0.45f + 0.55f * radial_profile);
     energy *= (0.65f * highlight + 0.35f * trail);
     energy = std::clamp(energy, 0.0f, 1.0f);
     float intensity = ApplyAudioIntensity(energy, audio_settings);
 
-    float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : axis_pos;
+    float gradient_pos = (count > 1) ? (float)idx_local / (float)(count - 1) : ap;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, (0.35f + 0.65f * intensity));
 

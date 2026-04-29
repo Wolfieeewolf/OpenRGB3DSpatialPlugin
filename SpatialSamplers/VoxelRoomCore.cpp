@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "VoxelRoomCore.h"
+#include "SpatialBasisUtils.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 
 namespace VoxelRoomCore
@@ -19,87 +21,14 @@ static inline int ClampByte(int v)
     return std::clamp(v, 0, 255);
 }
 
-static bool ResolveBasis(const Basis& basis,
-                         float& out_rx,
-                         float& out_ry,
-                         float& out_rz,
-                         float& out_ux,
-                         float& out_uy,
-                         float& out_uz,
-                         float& out_fx,
-                         float& out_fy,
-                         float& out_fz)
+static SpatialBasisUtils::BasisVectors ResolveBasis(const Basis& basis)
 {
-    out_ux = basis.up_x;
-    out_uy = basis.up_y;
-    out_uz = basis.up_z;
-    float ul = std::sqrt(out_ux * out_ux + out_uy * out_uy + out_uz * out_uz);
-    if(ul <= 1e-6f)
-    {
-        out_ux = 0.0f;
-        out_uy = 1.0f;
-        out_uz = 0.0f;
-    }
-    else
-    {
-        out_ux /= ul;
-        out_uy /= ul;
-        out_uz /= ul;
-    }
-
-    out_fx = basis.forward_x;
-    out_fy = basis.forward_y;
-    out_fz = basis.forward_z;
-    float fl = std::sqrt(out_fx * out_fx + out_fy * out_fy + out_fz * out_fz);
-    if(fl <= 1e-6f)
-    {
-        out_fx = 0.0f;
-        out_fy = 0.0f;
-        out_fz = 1.0f;
-    }
-    else
-    {
-        out_fx /= fl;
-        out_fy /= fl;
-        out_fz /= fl;
-    }
-
-    const float proj = out_fx * out_ux + out_fy * out_uy + out_fz * out_uz;
-    out_fx -= proj * out_ux;
-    out_fy -= proj * out_uy;
-    out_fz -= proj * out_uz;
-    fl = std::sqrt(out_fx * out_fx + out_fy * out_fy + out_fz * out_fz);
-    if(fl <= 1e-6f)
-    {
-        out_fx = 0.0f;
-        out_fy = 0.0f;
-        out_fz = 1.0f;
-    }
-    else
-    {
-        out_fx /= fl;
-        out_fy /= fl;
-        out_fz /= fl;
-    }
-
-    out_rx = out_fy * out_uz - out_fz * out_uy;
-    out_ry = out_fz * out_ux - out_fx * out_uz;
-    out_rz = out_fx * out_uy - out_fy * out_ux;
-    float rl = std::sqrt(out_rx * out_rx + out_ry * out_ry + out_rz * out_rz);
-    if(rl <= 1e-6f)
-    {
-        out_rx = 1.0f;
-        out_ry = 0.0f;
-        out_rz = 0.0f;
-    }
-    else
-    {
-        out_rx /= rl;
-        out_ry /= rl;
-        out_rz /= rl;
-    }
-
-    return basis.valid;
+    return SpatialBasisUtils::BuildOrthonormalBasis(basis.forward_x,
+                                                     basis.forward_y,
+                                                     basis.forward_z,
+                                                     basis.up_x,
+                                                     basis.up_y,
+                                                     basis.up_z);
 }
 
 static bool FetchVoxelRgba(const VoxelGrid& grid, int ix, int iy, int iz, float& r, float& g, float& b, float& a)
@@ -109,16 +38,32 @@ static bool FetchVoxelRgba(const VoxelGrid& grid, int ix, int iy, int iz, float&
         return false;
     }
 
-    const int idx = ((ix * grid.size_y + iy) * grid.size_z + iz) * 4;
-    if(idx < 0 || idx + 3 >= (int)grid.rgba.size())
+    const size_t sx = (size_t)grid.size_x;
+    const size_t sy = (size_t)grid.size_y;
+    const size_t sz = (size_t)grid.size_z;
+    const size_t ux = (size_t)ix;
+    const size_t uy = (size_t)iy;
+    const size_t uz = (size_t)iz;
+    if(sx == 0 || sy == 0 || sz == 0 || ux >= sx || uy >= sy || uz >= sz)
     {
         return false;
     }
 
-    r = (float)grid.rgba[(size_t)(idx + 0)] / 255.0f;
-    g = (float)grid.rgba[(size_t)(idx + 1)] / 255.0f;
-    b = (float)grid.rgba[(size_t)(idx + 2)] / 255.0f;
-    a = (float)grid.rgba[(size_t)(idx + 3)] / 255.0f;
+    const size_t voxel_index = ((ux * sy + uy) * sz + uz);
+    if(voxel_index > (SIZE_MAX / 4u))
+    {
+        return false;
+    }
+    const size_t idx = voxel_index * 4u;
+    if(idx + 3u >= grid.rgba.size())
+    {
+        return false;
+    }
+
+    r = (float)grid.rgba[idx + 0u] / 255.0f;
+    g = (float)grid.rgba[idx + 1u] / 255.0f;
+    b = (float)grid.rgba[idx + 2u] / 255.0f;
+    a = (float)grid.rgba[idx + 3u] / 255.0f;
     return true;
 }
 }
@@ -132,29 +77,56 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
                                      const MapperSettings& settings,
                                      bool* out_used_voxel)
 {
+    auto expected_rgba_bytes = [](const VoxelGrid& g, size_t& out_count) -> bool {
+        if(g.size_x <= 0 || g.size_y <= 0 || g.size_z <= 0)
+        {
+            return false;
+        }
+        const size_t sx = (size_t)g.size_x;
+        const size_t sy = (size_t)g.size_y;
+        const size_t sz = (size_t)g.size_z;
+        if(sx > (SIZE_MAX / sy))
+        {
+            return false;
+        }
+        const size_t xy = sx * sy;
+        if(xy > (SIZE_MAX / sz))
+        {
+            return false;
+        }
+        const size_t xyz = xy * sz;
+        if(xyz > (SIZE_MAX / 4u))
+        {
+            return false;
+        }
+        out_count = xyz * 4u;
+        return true;
+    };
+
     if(out_used_voxel)
     {
         *out_used_voxel = false;
     }
 
+    size_t expected_bytes = 0;
     if(!grid.valid ||
        grid.size_x <= 1 || grid.size_y <= 1 || grid.size_z <= 1 ||
        grid.voxel_size <= 1e-6f ||
-       grid.rgba.size() < (size_t)(grid.size_x * grid.size_y * grid.size_z * 4))
+       !expected_rgba_bytes(grid, expected_bytes) ||
+       grid.rgba.size() < expected_bytes)
     {
         return (RGBColor)0x00000000;
     }
 
-    float rx, ry, rz, ux, uy, uz, fx, fy, fz;
-    ResolveBasis(basis, rx, ry, rz, ux, uy, uz, fx, fy, fz);
+    const SpatialBasisUtils::BasisVectors b = ResolveBasis(basis);
 
     const float dx = (sample.room_x - sample.origin_x) * settings.room_to_world_scale;
     const float dy = (sample.room_y - sample.origin_y) * settings.room_to_world_scale;
     const float dz = (sample.room_z - sample.origin_z) * settings.room_to_world_scale;
 
-    const float world_x = anchor_world_x + dx * rx + dy * ux + dz * fx;
-    const float world_y = anchor_world_y + dx * ry + dy * uy + dz * fy;
-    const float world_z = anchor_world_z + dx * rz + dy * uz + dz * fz;
+    const float world_x = anchor_world_x + dx * b.right_x + dy * b.up_x + dz * b.forward_x;
+    const float world_y = anchor_world_y + dx * b.right_y + dy * b.up_y + dz * b.forward_y;
+    const float world_z = anchor_world_z + dx * b.right_z + dy * b.up_z + dz * b.forward_z;
 
     const float gx = (world_x - grid.min_x) / grid.voxel_size;
     const float gy = (world_y - grid.min_y) / grid.voxel_size;
@@ -163,18 +135,19 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
     const int ix0 = (int)std::floor(gx);
     const int iy0 = (int)std::floor(gy);
     const int iz0 = (int)std::floor(gz);
-    const int ix1 = ix0 + 1;
-    const int iy1 = iy0 + 1;
-    const int iz1 = iz0 + 1;
-    const float tx = gx - (float)ix0;
-    const float ty = gy - (float)iy0;
-    const float tz = gz - (float)iz0;
 
     if(ix0 < 0 || iy0 < 0 || iz0 < 0 ||
-       ix1 >= grid.size_x || iy1 >= grid.size_y || iz1 >= grid.size_z)
+       ix0 >= grid.size_x || iy0 >= grid.size_y || iz0 >= grid.size_z)
     {
         return (RGBColor)0x00000000;
     }
+
+    const int ix1 = std::min(ix0 + 1, grid.size_x - 1);
+    const int iy1 = std::min(iy0 + 1, grid.size_y - 1);
+    const int iz1 = std::min(iz0 + 1, grid.size_z - 1);
+    const float tx = gx - (float)ix0;
+    const float ty = gy - (float)iy0;
+    const float tz = gz - (float)iz0;
 
     float out_r = 0.0f;
     float out_g = 0.0f;

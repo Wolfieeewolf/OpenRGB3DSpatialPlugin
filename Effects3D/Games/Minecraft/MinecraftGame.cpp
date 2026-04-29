@@ -2,8 +2,10 @@
 
 #include "MinecraftGame.h"
 #include "MinecraftGameSettings.h"
-#include "Game/SpatialLayerCore.h"
-#include "Game/VoxelRoomCore.h"
+#include "Game/GameTelemetryStatusPanel.h"
+#include "SpatialBasisUtils.h"
+#include "SpatialLayerCore.h"
+#include "VoxelRoomCore.h"
 #include "SpatialEffect3D.h"
 
 #include <QCheckBox>
@@ -14,6 +16,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -411,6 +414,156 @@ static inline float NormalizeRoomVertical01(float y, const GridContext3D& grid, 
     return std::clamp((y - floor_y) / (ceil_y - floor_y), 0.0f, 1.0f);
 }
 
+enum class SpatialMappingMode : int
+{
+    Compass = 0,
+    Voxel = 1,
+    Classic = 2
+};
+
+static SpatialMappingMode ResolveSpatialMappingMode(const Settings& s)
+{
+    if(s.spatial_mapping_mode == 1)
+    {
+        return SpatialMappingMode::Voxel;
+    }
+    if(s.spatial_mapping_mode == 2)
+    {
+        return SpatialMappingMode::Classic;
+    }
+    return SpatialMappingMode::Compass;
+}
+
+static bool ComputeNormalizedSampleVector(float grid_x,
+                                          float grid_y,
+                                          float grid_z,
+                                          float origin_x,
+                                          float origin_y,
+                                          float origin_z,
+                                          float& out_x,
+                                          float& out_y,
+                                          float& out_z)
+{
+    float sx, sy, sz, sox, soy, soz;
+    RoomLedToSpatialCore(grid_x,
+                         grid_y,
+                         grid_z,
+                         origin_x,
+                         origin_y,
+                         origin_z,
+                         sx,
+                         sy,
+                         sz,
+                         sox,
+                         soy,
+                         soz);
+    return SpatialBasisUtils::NormalizeDirection(sx - sox, sy - soy, sz - soz, out_x, out_y, out_z);
+}
+
+static float ComputeDirectionalFactorHorizontalPose(const GameTelemetryBridge::TelemetrySnapshot& t,
+                                                    float dir_x,
+                                                    float dir_y,
+                                                    float dir_z,
+                                                    float grid_x,
+                                                    float grid_y,
+                                                    float grid_z,
+                                                    float origin_x,
+                                                    float origin_y,
+                                                    float origin_z,
+                                                    float heading_offset_deg,
+                                                    float mix,
+                                                    float sharpness,
+                                                    float min_factor)
+{
+    if(!t.has_player_pose || mix <= 1e-4f)
+    {
+        return 1.0f;
+    }
+
+    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
+    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
+    float rx = 1.0f, ry = 0.0f, rz = 0.0f;
+    MinecraftRoomHorizontalBasis(t.forward_x,
+                                 t.forward_y,
+                                 t.forward_z,
+                                 heading_offset_deg,
+                                 ux,
+                                 uy,
+                                 uz,
+                                 fx,
+                                 fy,
+                                 fz,
+                                 rx,
+                                 ry,
+                                 rz);
+
+    float ldx, ldy, ldz;
+    if(!SpatialBasisUtils::NormalizeDirection(dir_x, dir_y, dir_z, ldx, ldy, ldz))
+    {
+        return 1.0f;
+    }
+
+    const float lx = ldx * rx + ldy * ry + ldz * rz;
+    const float ly = ldx * ux + ldy * uy + ldz * uz;
+    const float lz = ldx * fx + ldy * fy + ldz * fz;
+
+    float ox, oy, oz;
+    if(!ComputeNormalizedSampleVector(grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, ox, oy, oz))
+    {
+        return 1.0f;
+    }
+
+    const float sa = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
+    const float hemi = 0.5f * (sa + 1.0f);
+    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.8f, sharpness));
+    return (1.0f - mix) + mix * (min_factor + (1.0f - min_factor) * shaped);
+}
+
+static float ComputeDirectionalFactorFullPose(const GameTelemetryBridge::TelemetrySnapshot& t,
+                                              float dir_x,
+                                              float dir_y,
+                                              float dir_z,
+                                              float grid_x,
+                                              float grid_y,
+                                              float grid_z,
+                                              float origin_x,
+                                              float origin_y,
+                                              float origin_z,
+                                              float mix,
+                                              float sharpness,
+                                              float min_factor)
+{
+    if(!t.has_player_pose || mix <= 1e-4f)
+    {
+        return 1.0f;
+    }
+
+    SpatialBasisUtils::BasisVectors basis = SpatialBasisUtils::BuildOrthonormalBasis(t.forward_x,
+                                                                                      t.forward_y,
+                                                                                      t.forward_z,
+                                                                                      t.up_x,
+                                                                                      t.up_y,
+                                                                                      t.up_z);
+
+    float ldx, ldy, ldz;
+    if(!SpatialBasisUtils::NormalizeDirection(dir_x, dir_y, dir_z, ldx, ldy, ldz))
+    {
+        return 1.0f;
+    }
+    float lx, ly, lz;
+    SpatialBasisUtils::ToLocal(basis, ldx, ldy, ldz, lx, ly, lz);
+
+    float ox, oy, oz;
+    if(!ComputeNormalizedSampleVector(grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, ox, oy, oz))
+    {
+        return 1.0f;
+    }
+    const float signed_align = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
+    const float hemi = 0.5f * (signed_align + 1.0f);
+    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, sharpness));
+    return (1.0f - mix) + mix * (min_factor + (1.0f - min_factor) * shaped);
+}
+
 static void StampPreviewVoxelBox(VoxelRoomCore::VoxelGrid& grid,
                                  float cx,
                                  float cy,
@@ -495,20 +648,70 @@ static RGBColor RenderVoxelRoomPreviewColor(const GameTelemetryBridge::Telemetry
                                             float origin_z,
                                             const Settings& s)
 {
-    const VoxelRoomCore::VoxelGrid& vg = GetPreviewVoxelGrid();
+    VoxelRoomCore::VoxelGrid vg = GetPreviewVoxelGrid();
+    if(t.voxel_frame.has_voxel_frame &&
+       t.voxel_frame.size_x > 0 &&
+       t.voxel_frame.size_y > 0 &&
+       t.voxel_frame.size_z > 0)
+    {
+        vg.valid = true;
+        vg.size_x = t.voxel_frame.size_x;
+        vg.size_y = t.voxel_frame.size_y;
+        vg.size_z = t.voxel_frame.size_z;
+        vg.min_x = t.voxel_frame.origin_x;
+        vg.min_y = t.voxel_frame.origin_y;
+        vg.min_z = t.voxel_frame.origin_z;
+        vg.voxel_size = std::max(1e-4f, t.voxel_frame.voxel_size);
+        vg.rgba = t.voxel_frame.rgba;
+    }
     if(!vg.valid)
     {
         return (RGBColor)0x00000000;
     }
 
     VoxelRoomCore::Basis basis;
-    basis.valid = t.has_player_pose;
-    basis.forward_x = t.has_player_pose ? t.forward_x : 0.0f;
-    basis.forward_y = t.has_player_pose ? t.forward_y : 0.0f;
-    basis.forward_z = t.has_player_pose ? t.forward_z : 1.0f;
-    basis.up_x = 0.0f;
-    basis.up_y = 1.0f;
-    basis.up_z = 0.0f;
+    basis.valid = true;
+    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
+    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
+    float rx = 0.0f, ry = 0.0f, rz = 0.0f;
+    if(t.has_player_pose)
+    {
+        MinecraftRoomHorizontalBasis(t.forward_x,
+                                     t.forward_y,
+                                     t.forward_z,
+                                     s.spatial_heading_offset_deg,
+                                     ux,
+                                     uy,
+                                     uz,
+                                     fx,
+                                     fy,
+                                     fz,
+                                     rx,
+                                     ry,
+                                     rz);
+    }
+    else
+    {
+        MinecraftRoomHorizontalBasis(0.0f,
+                                     0.0f,
+                                     1.0f,
+                                     s.spatial_heading_offset_deg,
+                                     ux,
+                                     uy,
+                                     uz,
+                                     fx,
+                                     fy,
+                                     fz,
+                                     rx,
+                                     ry,
+                                     rz);
+    }
+    basis.forward_x = fx;
+    basis.forward_y = fy;
+    basis.forward_z = fz;
+    basis.up_x = ux;
+    basis.up_y = uy;
+    basis.up_z = uz;
 
     VoxelRoomCore::RoomSamplePoint sp;
     RoomLedToSpatialCore(grid_x,
@@ -989,7 +1192,9 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         mapModeCombo->addItem(QStringLiteral("Voxel room mapping (core preview)"), 1);
         const QString mapModeTip = QStringLiteral(
             "Choose how ambient world tint is projected: Classic = stable sky/mid/ground layers, "
-            "Compass = directional layered probes around player yaw, Voxel = room-mapped volumetric preview.");
+            "Compass = directional layered probes around horizontal player yaw (matches Room heading offset), "
+            "Voxel = sample an RGBA volume: built-in preview boxes, or live frames from UDP "
+            "(voxel_size_*, voxel_origin_* corner, voxel_cell_size, voxel_rgba x-major).");
         mapModeLab->setToolTip(mapModeTip);
         mapModeCombo->setToolTip(mapModeTip);
         const int mapModeIdx = std::max(0, mapModeCombo->findData(s.spatial_mapping_mode));
@@ -1049,7 +1254,9 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         auto* voxScaleSl = new QSlider(Qt::Horizontal);
         voxScaleSl->setRange(2, 80); // 0.02 .. 0.80 world units per room unit
         voxScaleSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f) * 100.0f));
-        const QString voxScaleTip = QStringLiteral("How large the room maps into voxel world space.");
+        const QString voxScaleTip = QStringLiteral(
+            "How large the room maps into voxel world space (LED offset → world ray into the volume). "
+            "Tune with live frames if the mod sends voxel_origin_* as the grid corner in the same units as player position.");
         voxScaleLab->setToolTip(voxScaleTip);
         voxScaleSl->setToolTip(voxScaleTip);
         layout->addWidget(voxScaleLab, row, 0);
@@ -1063,6 +1270,11 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         auto* voxMixSl = new QSlider(Qt::Horizontal);
         voxMixSl->setRange(0, 100);
         voxMixSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f) * 100.0f));
+        const QString voxMixTip = QStringLiteral(
+            "Blend live voxel RGBA into ambient tint. Requires UDP events with voxel_size_x/y/z, voxel_origin_x/y/z, "
+            "voxel_cell_size, and voxel_rgba byte array in x-major order ((x*sy+y)*sz+z)*4 — see GameTelemetryBridge.");
+        voxMixLab->setToolTip(voxMixTip);
+        voxMixSl->setToolTip(voxMixTip);
         layout->addWidget(voxMixLab, row, 0);
         layout->addWidget(voxMixSl, row, 1);
         QObject::connect(voxMixSl, &QSlider::valueChanged, panel, [&s](int x) {
@@ -1266,6 +1478,122 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
     return panel;
 }
 
+QWidget* CreateEffectWidget(QWidget* parent,
+                            const QString& title,
+                            Settings& settings,
+                            std::uint32_t channels,
+                            QWidget* telemetry_owner,
+                            const std::function<void()>& on_changed)
+{
+    QGroupBox* w = new QGroupBox(title, parent);
+    QVBoxLayout* layout = new QVBoxLayout(w);
+    layout->setContentsMargins(8, 8, 8, 8);
+
+    QWidget* settings_widget = CreateSettingsWidget(w, settings, channels);
+    if(settings_widget)
+    {
+        layout->addWidget(settings_widget);
+        WireChildWidgetsToParametersChanged(settings_widget, on_changed);
+    }
+
+    layout->addWidget(new GameTelemetryStatusPanel(telemetry_owner));
+    return w;
+}
+
+static RGBColor ApplyDamageFlashChannel(RGBColor in_color,
+                                        const GameTelemetryBridge::TelemetrySnapshot& t,
+                                        float grid_x,
+                                        float grid_y,
+                                        float grid_z,
+                                        float origin_x,
+                                        float origin_y,
+                                        float origin_z,
+                                        const Settings& s)
+{
+    if(!s.enable_damage_flash || !t.has_damage_event || t.damage_received_ms == 0)
+    {
+        return in_color;
+    }
+    const unsigned long long now = NowMs();
+    const unsigned long long elapsed_ms = (now > t.damage_received_ms) ? (now - t.damage_received_ms) : 0;
+    const float decay_ms = std::max(100.0f, s.damage_flash_decay_s * 1000.0f);
+    const float damage_t = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
+    if(damage_t <= 0.0f)
+    {
+        return in_color;
+    }
+    const float damage_strength = std::clamp(t.damage_amount / 20.0f, 0.0f, 1.0f);
+    float flash_mix = std::clamp(s.damage_flash_strength * damage_t * (0.2f + 0.8f * damage_strength), 0.0f, 1.0f);
+    if(s.damage_directional_mix > 1e-4f && t.has_player_pose)
+    {
+        const float dir_factor = ComputeDirectionalFactorFullPose(t,
+                                                                  t.damage_dir_x,
+                                                                  t.damage_dir_y,
+                                                                  t.damage_dir_z,
+                                                                  grid_x,
+                                                                  grid_y,
+                                                                  grid_z,
+                                                                  origin_x,
+                                                                  origin_y,
+                                                                  origin_z,
+                                                                  std::clamp(s.damage_directional_mix, 0.0f, 1.0f),
+                                                                  s.damage_dir_sharpness,
+                                                                  0.10f);
+        flash_mix = std::clamp(flash_mix * dir_factor, 0.0f, 1.0f);
+    }
+    return LerpColor(in_color, (RGBColor)0x000000FF, flash_mix);
+}
+
+static RGBColor ApplyLightningFlashChannel(RGBColor in_color,
+                                           const GameTelemetryBridge::TelemetrySnapshot& t,
+                                           float grid_x,
+                                           float grid_y,
+                                           float grid_z,
+                                           float origin_x,
+                                           float origin_y,
+                                           float origin_z,
+                                           const GridContext3D& grid,
+                                           const Settings& s)
+{
+    if(!s.enable_lightning_flash || !t.has_lightning_event || t.lightning_received_ms == 0)
+    {
+        return in_color;
+    }
+    const unsigned long long now = NowMs();
+    const unsigned long long elapsed_ms = (now > t.lightning_received_ms) ? (now - t.lightning_received_ms) : 0;
+    const float decay_ms = std::max(80.0f, s.lightning_flash_decay_s * 1000.0f);
+    const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
+    if(lt <= 0.0f)
+    {
+        return in_color;
+    }
+
+    const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
+    const float skyBias = std::pow(y_norm, 1.9f);
+    const float layer = 0.20f + 0.80f * skyBias;
+    float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
+    if(s.lightning_directional_mix > 1e-4f && t.has_player_pose)
+    {
+        const float dir_mix = std::clamp(s.lightning_directional_mix, 0.0f, 1.0f) *
+                              (0.25f + 0.75f * std::clamp(t.lightning_dir_focus, 0.0f, 1.0f));
+        const float dir_factor = ComputeDirectionalFactorFullPose(t,
+                                                                  t.lightning_dir_x,
+                                                                  t.lightning_dir_y,
+                                                                  t.lightning_dir_z,
+                                                                  grid_x,
+                                                                  grid_y,
+                                                                  grid_z,
+                                                                  origin_x,
+                                                                  origin_y,
+                                                                  origin_z,
+                                                                  dir_mix,
+                                                                  s.lightning_dir_sharpness,
+                                                                  0.20f);
+        st = std::clamp(st * dir_factor, 0.0f, 1.0f);
+    }
+    return LerpColor(in_color, (RGBColor)0x00FFF0DE, st);
+}
+
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                      float time,
                      float grid_x,
@@ -1394,6 +1722,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
 
     if(ch(channels, ChWorldTint) && s.enable_ambient_world_tint && world_smooth != nullptr)
     {
+        const SpatialMappingMode mapping_mode = ResolveSpatialMappingMode(s);
         const float y_norm_raw = NormalizeRoomVertical01(grid_y, grid, origin_y);
         const int bin_count = (int)tls_layer_state.y_hist.size();
         const int bin = std::clamp((int)(std::clamp(y_norm_raw, 0.0f, 1.0f) * (float)bin_count), 0, bin_count - 1);
@@ -1441,7 +1770,9 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             return (RGBColor)((db << 16) | (dg << 8) | dr);
         }
 
-        if(s.spatial_mapping_mode == 1)
+        switch(mapping_mode)
+        {
+        case SpatialMappingMode::Voxel:
         {
             RGBColor voxel_c = RenderVoxelRoomPreviewColor(t,
                                                            grid_x,
@@ -1455,13 +1786,15 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             {
                 out = LerpColor(out, voxel_c, std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f));
             }
+            break;
         }
-
-        if(t.has_world_light)
-        {
-            RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
-            if(t.has_world_layers)
+        case SpatialMappingMode::Classic:
+        case SpatialMappingMode::Compass:
+            if(t.has_world_light)
             {
+                RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
+                if(t.has_world_layers)
+                {
             RGBColor sky = SuppressWhites(MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b));
             RGBColor mid = SuppressWhites(MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b));
             RGBColor ground = SuppressWhites(MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b));
@@ -1532,7 +1865,17 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                 const float denom = std::max(1e-3f, 1.0f - sStart);
                 projected = LerpColor(mid, sky, (y_norm - sStart) / denom);
             }
-            if(s.spatial_mapping_mode == 0 && t.has_layered_world_probes && t.has_player_pose)
+            // Keep ceiling LEDs reading as "sky" even when directional/world-light mixes push
+            // the palette toward ground/mid hues.
+            if(t.has_vanilla_biome_colors)
+            {
+                RGBColor bioSky = SuppressWhites(MakeRgb(t.biome_sky_r, t.biome_sky_g, t.biome_sky_b));
+                const float sky_top = std::clamp((y_norm - (sStart - 0.03f)) / std::max(1e-3f, 1.0f - (sStart - 0.03f)), 0.0f, 1.0f);
+                const float sky_focus = sky_top * sky_top;
+                const float sky_keep = std::clamp((0.25f + 0.75f * s.biome_sky_overlay) * sky_focus, 0.0f, 0.85f);
+                projected = LerpColor(projected, bioSky, sky_keep);
+            }
+            if(mapping_mode == SpatialMappingMode::Compass && t.has_layered_world_probes && t.has_player_pose)
             {
                 SpatialLayerCore::ProbeInput probe_input = BuildProbeInput(t);
                 float ux = 0.0f;
@@ -1623,68 +1966,26 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             const float dark_gate = std::clamp((wi_disp - 0.035f) / 0.215f, 0.0f, 1.0f);
             const float layer_mix = std::clamp((0.10f + 0.80f * s.world_light_mix) * wi_disp * dark_gate, 0.0f, 1.0f);
             float dirMul = 1.0f;
-            if(s.spatial_mapping_mode == 0 &&
-               t.has_player_pose &&
+            if(mapping_mode == SpatialMappingMode::Compass &&
                t.world_light_focus > 1e-4f &&
                s.world_tint_directional > 1e-4f)
             {
-                float ux = 0.0f;
-                float uy = 1.0f;
-                float uz = 0.0f;
-                float fx = 0.0f;
-                float fy = 0.0f;
-                float fz = 1.0f;
-                float rx = 1.0f;
-                float ry = 0.0f;
-                float rz = 0.0f;
-                MinecraftRoomHorizontalBasis(t.forward_x,
-                                             t.forward_y,
-                                             t.forward_z,
-                                             s.spatial_heading_offset_deg,
-                                             ux,
-                                             uy,
-                                             uz,
-                                             fx,
-                                             fy,
-                                             fz,
-                                             rx,
-                                             ry,
-                                             rz);
-                float ldx = t.world_light_dir_x, ldy = t.world_light_dir_y, ldz = t.world_light_dir_z;
-                float ll = std::sqrt(ldx * ldx + ldy * ldy + ldz * ldz);
-                if(ll > 1e-5f)
-                {
-                    ldx /= ll; ldy /= ll; ldz /= ll;
-                    const float lx = ldx * rx + ldy * ry + ldz * rz;
-                    const float ly = ldx * ux + ldy * uy + ldz * uz;
-                    const float lz = ldx * fx + ldy * fy + ldz * fz;
-                    float sx, sy, sz, sox, soy, soz;
-                    RoomLedToSpatialCore(grid_x,
-                                         grid_y,
-                                         grid_z,
-                                         origin_x,
-                                         origin_y,
-                                         origin_z,
-                                         sx,
-                                         sy,
-                                         sz,
-                                         sox,
-                                         soy,
-                                         soz);
-                    float ox = sx - sox, oy = sy - soy, oz = sz - soz;
-                    float ol = std::sqrt(ox * ox + oy * oy + oz * oz);
-                    if(ol > 1e-5f)
-                    {
-                        ox /= ol; oy /= ol; oz /= ol;
-                        const float sa = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
-                        const float hemi = 0.5f * (sa + 1.0f);
-                        const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.8f, s.world_tint_dir_sharpness));
-                        const float focus = std::clamp(t.world_light_focus, 0.0f, 1.0f);
-                        const float dm = std::clamp(s.world_tint_directional * (0.25f + 0.75f * focus), 0.0f, 1.0f);
-                        const float floor = 0.30f;
-                        dirMul = (1.0f - dm) + dm * (floor + (1.0f - floor) * shaped);
-                    }
-                }
+                const float focus = std::clamp(t.world_light_focus, 0.0f, 1.0f);
+                const float dm = std::clamp(s.world_tint_directional * (0.25f + 0.75f * focus), 0.0f, 1.0f);
+                dirMul = ComputeDirectionalFactorHorizontalPose(t,
+                                                                t.world_light_dir_x,
+                                                                t.world_light_dir_y,
+                                                                t.world_light_dir_z,
+                                                                grid_x,
+                                                                grid_y,
+                                                                grid_z,
+                                                                origin_x,
+                                                                origin_y,
+                                                                origin_z,
+                                                                s.spatial_heading_offset_deg,
+                                                                dm,
+                                                                s.world_tint_dir_sharpness,
+                                                                0.30f);
             }
             out = LerpColor(out, projected, std::clamp(layer_mix * dirMul, 0.0f, 1.0f));
             wl = LerpColor(wl, projected, 0.6f);
@@ -1692,191 +1993,22 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             const float wi_disp2 = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
             const float dark_gate2 = std::clamp((wi_disp2 - 0.035f) / 0.215f, 0.0f, 1.0f);
             const float wl_mix = std::clamp((0.05f + 0.35f * s.world_light_mix) * wi_disp2 * dark_gate2, 0.0f, 0.40f);
-            out = LerpColor(out, wl, wl_mix);
+                out = LerpColor(out, wl, wl_mix);
+            }
+            break;
+        default:
+            break;
         }
     }
 
-    if(ch(channels, ChDamage) && s.enable_damage_flash && t.has_damage_event && t.damage_received_ms > 0)
+    if(ch(channels, ChDamage))
     {
-        const unsigned long long now = NowMs();
-        const unsigned long long elapsed_ms = (now > t.damage_received_ms) ? (now - t.damage_received_ms) : 0;
-        const float decay_ms = std::max(100.0f, s.damage_flash_decay_s * 1000.0f);
-        const float damage_t = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
-        if(damage_t > 0.0f)
-        {
-            const float damage_strength = std::clamp(t.damage_amount / 20.0f, 0.0f, 1.0f);
-            float flash_mix = std::clamp(s.damage_flash_strength * damage_t * (0.2f + 0.8f * damage_strength), 0.0f, 1.0f);
-            if(s.damage_directional_mix > 1e-4f && t.has_player_pose)
-            {
-                float dwx = t.damage_dir_x;
-                float dwy = t.damage_dir_y;
-                float dwz = t.damage_dir_z;
-                const float dl = std::sqrt(dwx * dwx + dwy * dwy + dwz * dwz);
-                if(dl > 1e-4f)
-                {
-                    dwx /= dl;
-                    dwy /= dl;
-                    dwz /= dl;
-                    float fx = t.forward_x;
-                    float fy = t.forward_y;
-                    float fz = t.forward_z;
-                    float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
-                    if(fl > 1e-4f)
-                    {
-                        fx /= fl;
-                        fy /= fl;
-                        fz /= fl;
-                    }
-                    else
-                    {
-                        fx = 0.0f;
-                        fy = 0.0f;
-                        fz = 1.0f;
-                    }
-                    float ux = t.up_x;
-                    float uy = t.up_y;
-                    float uz = t.up_z;
-                    float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
-                    if(ul > 1e-4f)
-                    {
-                        ux /= ul;
-                        uy /= ul;
-                        uz /= ul;
-                    }
-                    else
-                    {
-                        ux = 0.0f;
-                        uy = 1.0f;
-                        uz = 0.0f;
-                    }
-                    float rx = fy * uz - fz * uy;
-                    float ry = fz * ux - fx * uz;
-                    float rz = fx * uy - fy * ux;
-                    const float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
-                    if(rl > 1e-4f)
-                    {
-                        rx /= rl;
-                        ry /= rl;
-                        rz /= rl;
-                    }
-                    const float lx = dwx * rx + dwy * ry + dwz * rz;
-                    const float ly = dwx * ux + dwy * uy + dwz * uz;
-                    const float lz = dwx * fx + dwy * fy + dwz * fz;
-                    float ox = grid_x - origin_x;
-                    float oy = grid_y - origin_y;
-                    float oz = grid_z - origin_z;
-                    const float olen = std::sqrt(ox * ox + oy * oy + oz * oz);
-                    if(olen > 1e-4f)
-                    {
-                        ox /= olen;
-                        oy /= olen;
-                        oz /= olen;
-                    }
-                    const float signed_align = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
-                    const float hemi = 0.5f * (signed_align + 1.0f);
-                    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, s.damage_dir_sharpness));
-                    const float dirMix = std::clamp(s.damage_directional_mix, 0.0f, 1.0f);
-                    const float minFactor = 0.10f;
-                    const float dirFactor = minFactor + (1.0f - minFactor) * shaped;
-                    flash_mix *= (1.0f - dirMix) + dirMix * dirFactor;
-                    flash_mix = std::clamp(flash_mix, 0.0f, 1.0f);
-                }
-            }
-            out = LerpColor(out, (RGBColor)0x000000FF, flash_mix);
-        }
+        out = ApplyDamageFlashChannel(out, t, grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, s);
     }
 
-    if(ch(channels, ChLightning) && s.enable_lightning_flash && t.has_lightning_event && t.lightning_received_ms > 0)
+    if(ch(channels, ChLightning))
     {
-        const unsigned long long now = NowMs();
-        const unsigned long long elapsed_ms = (now > t.lightning_received_ms) ? (now - t.lightning_received_ms) : 0;
-        const float decay_ms = std::max(80.0f, s.lightning_flash_decay_s * 1000.0f);
-        const float lt = std::clamp(1.0f - (elapsed_ms / decay_ms), 0.0f, 1.0f);
-        if(lt > 0.0f)
-        {
-            const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
-            const float skyBias = std::pow(y_norm, 1.9f);
-            const float layer = 0.20f + 0.80f * skyBias;
-            float st = std::clamp(s.lightning_flash_strength * t.lightning_strength * lt * layer, 0.0f, 1.0f);
-            if(s.lightning_directional_mix > 1e-4f && t.has_player_pose)
-            {
-                float dwx = t.lightning_dir_x;
-                float dwy = t.lightning_dir_y;
-                float dwz = t.lightning_dir_z;
-                const float dl = std::sqrt(dwx * dwx + dwy * dwy + dwz * dwz);
-                if(dl > 1e-4f)
-                {
-                    dwx /= dl;
-                    dwy /= dl;
-                    dwz /= dl;
-                    float fx = t.forward_x;
-                    float fy = t.forward_y;
-                    float fz = t.forward_z;
-                    float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
-                    if(fl > 1e-4f)
-                    {
-                        fx /= fl;
-                        fy /= fl;
-                        fz /= fl;
-                    }
-                    else
-                    {
-                        fx = 0.0f;
-                        fy = 0.0f;
-                        fz = 1.0f;
-                    }
-                    float ux = t.up_x;
-                    float uy = t.up_y;
-                    float uz = t.up_z;
-                    float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
-                    if(ul > 1e-4f)
-                    {
-                        ux /= ul;
-                        uy /= ul;
-                        uz /= ul;
-                    }
-                    else
-                    {
-                        ux = 0.0f;
-                        uy = 1.0f;
-                        uz = 0.0f;
-                    }
-                    float rx = fy * uz - fz * uy;
-                    float ry = fz * ux - fx * uz;
-                    float rz = fx * uy - fy * ux;
-                    const float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
-                    if(rl > 1e-4f)
-                    {
-                        rx /= rl;
-                        ry /= rl;
-                        rz /= rl;
-                    }
-                    const float lx = dwx * rx + dwy * ry + dwz * rz;
-                    const float ly = dwx * ux + dwy * uy + dwz * uz;
-                    const float lz = dwx * fx + dwy * fy + dwz * fz;
-                    float ox = grid_x - origin_x;
-                    float oy = grid_y - origin_y;
-                    float oz = grid_z - origin_z;
-                    const float olen = std::sqrt(ox * ox + oy * oy + oz * oz);
-                    if(olen > 1e-4f)
-                    {
-                        ox /= olen;
-                        oy /= olen;
-                        oz /= olen;
-                    }
-                    const float signed_align = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
-                    const float hemi = 0.5f * (signed_align + 1.0f);
-                    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, s.lightning_dir_sharpness));
-                    const float dirMix = std::clamp(s.lightning_directional_mix, 0.0f, 1.0f) *
-                                         (0.25f + 0.75f * std::clamp(t.lightning_dir_focus, 0.0f, 1.0f));
-                    const float minFactor = 0.20f;
-                    const float dirFactor = minFactor + (1.0f - minFactor) * shaped;
-                    st *= (1.0f - dirMix) + dirMix * dirFactor;
-                    st = std::clamp(st, 0.0f, 1.0f);
-                }
-            }
-            out = LerpColor(out, (RGBColor)0x00FFF0DE, st);
-        }
+        out = ApplyLightningFlashChannel(out, t, grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, grid, s);
     }
 
     const int r = std::clamp((int)((out & 0xFF) * s.base_brightness), 0, 255);
@@ -1903,9 +2035,9 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), true);
     effect->SetControlGroupVisibility(effect->sharpness_slider, effect->sharpness_label, QStringLiteral("Sharpness:"), true);
 
-    if(effect->color_controls_group)
+    if(effect->voxel_volume_group)
     {
-        effect->color_controls_group->setVisible(false);
+        effect->voxel_volume_group->setVisible(false);
     }
     if(effect->surfaces_group)
     {

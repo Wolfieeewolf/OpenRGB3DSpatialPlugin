@@ -5,6 +5,12 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
+class QComboBox;
+class QSlider;
+class QLabel;
 
 class Wave : public SpatialEffect3D
 {
@@ -30,6 +36,7 @@ public:
 private slots:
     void OnWaveParameterChanged();
     void OnModeChanged();
+    void OnStratumBandChanged();
 
 private:
     enum Mode { MODE_LINE = 0, MODE_SURFACE, MODE_COUNT };
@@ -71,6 +78,10 @@ private:
     float surface_edge_fade = 18.0f;
 
     float progress = 0.0f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

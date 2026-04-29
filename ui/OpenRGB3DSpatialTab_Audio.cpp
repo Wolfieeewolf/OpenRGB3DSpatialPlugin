@@ -2,10 +2,12 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
+#include "PluginUiUtils.h"
 #include "SettingsManager.h"
 #include "LogManager.h"
 #include <QToolTip>
 #include <QPainter>
+#include <QFrame>
 
 void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
 {
@@ -44,7 +46,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_bass_bar->setValue(0);
     audio_bass_bar->setTextVisible(false);
     audio_bass_bar->setFixedHeight(12);
-    audio_bass_bar->setStyleSheet("QProgressBar::chunk { background-color: #2060c0; }");
     bmh_row->addWidget(audio_bass_bar, 1);
     bmh_row->addWidget(new QLabel("Mid:"));
     audio_mid_bar = new QProgressBar();
@@ -52,7 +53,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_mid_bar->setValue(0);
     audio_mid_bar->setTextVisible(false);
     audio_mid_bar->setFixedHeight(12);
-    audio_mid_bar->setStyleSheet("QProgressBar::chunk { background-color: #20a020; }");
     bmh_row->addWidget(audio_mid_bar, 1);
     bmh_row->addWidget(new QLabel("High:"));
     audio_high_bar = new QProgressBar();
@@ -60,7 +60,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_high_bar->setValue(0);
     audio_high_bar->setTextVisible(false);
     audio_high_bar->setFixedHeight(12);
-    audio_high_bar->setStyleSheet("QProgressBar::chunk { background-color: #c06020; }");
     bmh_row->addWidget(audio_high_bar, 1);
     layout->addLayout(bmh_row);
 
@@ -69,7 +68,6 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     audio_spectrum_label->setFixedSize(280, 48);
     audio_spectrum_label->setMinimumHeight(48);
     audio_spectrum_label->setFrameStyle(QFrame::StyledPanel);
-    audio_spectrum_label->setStyleSheet("background-color: #1a1a1a;");
     audio_spectrum_label->setAlignment(Qt::AlignCenter);
     audio_spectrum_label->setText("Start listening to see spectrum");
     layout->addWidget(audio_spectrum_label);
@@ -138,7 +136,7 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     layout->addLayout(fft_layout);
 
     QLabel* help = new QLabel("Gain up to 50x. Use per-range EQ in each frequency range to isolate bass/mids/highs (dump other bands).");
-    help->setStyleSheet("color: gray; font-size: 10px;");
+    PluginUiApplyMutedSecondaryLabel(help);
     help->setWordWrap(true);
     layout->addWidget(help);
     SetupFrequencyRangeEffectsUI(layout);

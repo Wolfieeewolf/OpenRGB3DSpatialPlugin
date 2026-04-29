@@ -2,12 +2,15 @@
 
 #include "Starfield.h"
 #include "EffectHelpers.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QComboBox>
+#include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(Starfield);
 
@@ -29,9 +32,10 @@ Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D Starfield::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Starfield";
-    info.effect_description = "Moving stars (Mega-Cube style): points in 3D, move along Z, wrap, rotate";
+    info.effect_description =
+        "Moving stars (Mega-Cube style): points in 3D, move along Z, wrap, rotate; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -58,8 +62,10 @@ EffectInfo3D Starfield::GetEffectInfo()
 void Starfield::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
     layout->addWidget(new QLabel("Mode:"), row, 0);
     QComboBox* mode_combo = new QComboBox();
@@ -132,7 +138,23 @@ void Starfield::SetupCustomUI(QWidget* parent)
         if(twinkle_label) twinkle_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Starfield::OnStratumBandChanged);
+    OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void Starfield::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void Starfield::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -145,58 +167,92 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    const bool strat_on = (stratum_layout_mode == 1);
+
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float h_scale = std::max({e.hw, e.hh, e.hd});
-    float speed = GetScaledSpeed() * 0.5f;
+    float speed_base = GetScaledSpeed() * 0.5f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
-    float sigma = std::max(star_size * 0.5f * size_m, 0.02f);
+    float sigma = std::max(star_size * 0.5f * size_m / std::max(0.25f, strat_on ? bb.tight_mul : 1.0f), 0.02f);
     float sigma_sq = sigma * sigma * h_scale * h_scale;
     const float d2_cutoff = 9.0f * sigma_sq;
     float color_cycle = time * GetScaledFrequency() * 12.0f;
+    if(strat_on)
+    {
+        color_cycle = color_cycle * bb.speed_mul + bb.phase_deg;
+    }
 
     const int n_stars = std::max(1, std::min(200, num_stars));
 
-    if(star_positions_cached.size() != (size_t)n_stars || fabsf(time - star_cache_time) > 0.001f)
+    if(!strat_on)
     {
-        star_cache_time = time;
-        star_cache_count = n_stars;
-        star_positions_cached.resize(n_stars);
-        float drift = std::max(0.0f, std::min(1.0f, drift_amount));
-        float margin = 3.0f * sigma * h_scale;
-        float min_x = 1e9f, min_y = 1e9f, min_z = 1e9f;
-        float max_x = -1e9f, max_y = -1e9f, max_z = -1e9f;
-        for(int i = 0; i < n_stars; i++)
+        if(star_positions_cached.size() != (size_t)n_stars || fabsf(time - star_cache_time) > 0.001f)
+        {
+            star_cache_time = time;
+            star_cache_count = n_stars;
+            star_positions_cached.resize(n_stars);
+            float drift = std::max(0.0f, std::min(1.0f, drift_amount));
+            float margin = 3.0f * sigma * h_scale;
+            float min_x = 1e9f, min_y = 1e9f, min_z = 1e9f;
+            float max_x = -1e9f, max_y = -1e9f, max_z = -1e9f;
+            for(int i = 0; i < n_stars; i++)
+            {
+                float sx = hash_float((unsigned int)i, 1u);
+                float sy = hash_float((unsigned int)i, 2u);
+                float sz0 = hash_float((unsigned int)i, 3u);
+                float sz = fmodf(sz0 + time * speed_base, 2.0f) - 1.0f;
+                float sx_d = sx + drift * 0.3f * sinf(time * 2.0f + (float)i * 0.1f);
+                float sy_d = sy + drift * 0.3f * cosf(time * 1.7f + (float)i * 0.07f);
+                Vector3D star_local{sx_d * e.hw + origin.x, sy_d * e.hh + origin.y, sz * e.hd + origin.z};
+                Vector3D rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
+                star_positions_cached[i] = rot;
+                if(rot.x < min_x) min_x = rot.x; if(rot.x > max_x) max_x = rot.x;
+                if(rot.y < min_y) min_y = rot.y; if(rot.y > max_y) max_y = rot.y;
+                if(rot.z < min_z) min_z = rot.z; if(rot.z > max_z) max_z = rot.z;
+            }
+            star_aabb_min_x = min_x - margin; star_aabb_max_x = max_x + margin;
+            star_aabb_min_y = min_y - margin; star_aabb_max_y = max_y + margin;
+            star_aabb_min_z = min_z - margin; star_aabb_max_z = max_z + margin;
+        }
+
+        if(x < star_aabb_min_x || x > star_aabb_max_x ||
+           y < star_aabb_min_y || y > star_aabb_max_y ||
+           z < star_aabb_min_z || z > star_aabb_max_z)
+            return 0x00000000;
+    }
+
+    float sum_r = 0.0f, sum_g = 0.0f, sum_b = 0.0f;
+    float sum_intensity = 0.0f;
+    float drift = std::max(0.0f, std::min(1.0f, drift_amount));
+    const float twinkle_time_scale = strat_on ? bb.speed_mul : 1.0f;
+
+    for(int i = 0; i < n_stars; i++)
+    {
+        Vector3D star_rot;
+        if(strat_on)
         {
             float sx = hash_float((unsigned int)i, 1u);
             float sy = hash_float((unsigned int)i, 2u);
             float sz0 = hash_float((unsigned int)i, 3u);
-            float sz = fmodf(sz0 + time * speed, 2.0f) - 1.0f;
-            float sx_d = sx + drift * 0.3f * sinf(time * 2.0f + (float)i * 0.1f);
-            float sy_d = sy + drift * 0.3f * cosf(time * 1.7f + (float)i * 0.07f);
+            float sz = fmodf(sz0 + time * speed_base * bb.speed_mul, 2.0f) - 1.0f;
+            float sx_d = sx + drift * 0.3f * sinf(time * 2.0f * twinkle_time_scale + (float)i * 0.1f);
+            float sy_d = sy + drift * 0.3f * cosf(time * 1.7f * twinkle_time_scale + (float)i * 0.07f);
             Vector3D star_local{sx_d * e.hw + origin.x, sy_d * e.hh + origin.y, sz * e.hd + origin.z};
-            Vector3D rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
-            star_positions_cached[i] = rot;
-            if(rot.x < min_x) min_x = rot.x; if(rot.x > max_x) max_x = rot.x;
-            if(rot.y < min_y) min_y = rot.y; if(rot.y > max_y) max_y = rot.y;
-            if(rot.z < min_z) min_z = rot.z; if(rot.z > max_z) max_z = rot.z;
+            star_rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
         }
-        star_aabb_min_x = min_x - margin; star_aabb_max_x = max_x + margin;
-        star_aabb_min_y = min_y - margin; star_aabb_max_y = max_y + margin;
-        star_aabb_min_z = min_z - margin; star_aabb_max_z = max_z + margin;
-    }
-
-    if(x < star_aabb_min_x || x > star_aabb_max_x ||
-       y < star_aabb_min_y || y > star_aabb_max_y ||
-       z < star_aabb_min_z || z > star_aabb_max_z)
-        return 0x00000000;
-
-    float sum_r = 0.0f, sum_g = 0.0f, sum_b = 0.0f;
-    float sum_intensity = 0.0f;
-
-    for(int i = 0; i < n_stars; i++)
-    {
-        const Vector3D& star_rot = star_positions_cached[i];
+        else
+        {
+            star_rot = star_positions_cached[i];
+        }
         float dx = x - star_rot.x, dy = y - star_rot.y, dz = z - star_rot.z;
         float d2 = dx*dx + dy*dy + dz*dz;
         if(d2 > d2_cutoff) continue;
@@ -204,7 +260,14 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         float twinkle = std::max(0.0f, std::min(1.0f, twinkle_speed));
         if(this->mode == MODE_TWINKLE) twinkle = std::max(0.5f, twinkle);
         if(twinkle > 0.01f)
-            intensity *= 0.5f + 0.5f * sinf(time * (3.0f + twinkle * (this->mode == MODE_TWINKLE ? 8.0f : 5.0f)) * (0.6f + 0.06f * GetScaledFrequency()) + (float)i);
+        {
+            float tw_ph = time * (3.0f + twinkle * (this->mode == MODE_TWINKLE ? 8.0f : 5.0f)) * (0.6f + 0.06f * GetScaledFrequency()) * twinkle_time_scale + (float)i;
+            if(strat_on)
+            {
+                tw_ph += bb.phase_deg * 0.05f;
+            }
+            intensity *= 0.5f + 0.5f * sinf(tw_ph);
+        }
         if(intensity < 0.01f) continue;
 
         float hue = fmodf((float)i * 2.0f * (0.6f + 0.4f * detail) + color_cycle, 360.0f);
@@ -228,6 +291,20 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
 nlohmann::json Starfield::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "starfield_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "starfield_stratum_band_speed_pct",
+                                           "starfield_stratum_band_tight_pct",
+                                           "starfield_stratum_band_phase_deg");
     j["mode"] = this->mode;
     j["star_size"] = star_size;
     j["num_stars"] = num_stars;
@@ -239,6 +316,13 @@ nlohmann::json Starfield::SaveSettings() const
 void Starfield::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "starfield_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "starfield_stratum_band_speed_pct",
+                                            "starfield_stratum_band_tight_pct",
+                                            "starfield_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         this->mode = std::max(0, std::min(settings["mode"].get<int>(), MODE_COUNT - 1));
     if(settings.contains("star_size") && settings["star_size"].is_number())
@@ -249,4 +333,9 @@ void Starfield::LoadSettings(const nlohmann::json& settings)
         drift_amount = std::max(0.0f, std::min(1.0f, settings["drift_amount"].get<float>()));
     if(settings.contains("twinkle_speed") && settings["twinkle_speed"].is_number())
         twinkle_speed = std::max(0.0f, std::min(1.0f, settings["twinkle_speed"].get<float>()));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

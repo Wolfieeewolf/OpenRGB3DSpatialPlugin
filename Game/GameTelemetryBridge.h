@@ -8,14 +8,66 @@
 #include <atomic>
 #include <thread>
 #include <array>
+#include <vector>
+#include <cstdint>
 
 class ResourceManagerInterface;
 
 class GameTelemetryBridge
 {
 public:
+    struct PoseChannel
+    {
+        bool has_pose = false;
+        float player_x = 0.0f;
+        float player_y = 0.0f;
+        float player_z = 0.0f;
+        float forward_x = 0.0f;
+        float forward_y = 0.0f;
+        float forward_z = 1.0f;
+        float up_x = 0.0f;
+        float up_y = 1.0f;
+        float up_z = 0.0f;
+    };
+
+    struct HealthChannel
+    {
+        bool has_health = false;
+        float health = 100.0f;
+        float health_max = 100.0f;
+        float hearts = 10.0f;
+        float hearts_max = 10.0f;
+        float hunger = 20.0f;
+        float hunger_max = 20.0f;
+        float air = 300.0f;
+        float air_max = 300.0f;
+        bool has_item_durability = false;
+        float item_durability = 0.0f;
+        float item_durability_max = 1.0f;
+    };
+
+    struct VoxelFrameChannel
+    {
+        bool has_voxel_frame = false;
+        unsigned int frame_id = 0;
+        int size_x = 0;
+        int size_y = 0;
+        int size_z = 0;
+        float origin_x = 0.0f;
+        float origin_y = 0.0f;
+        float origin_z = 0.0f;
+        float voxel_size = 1.0f;
+        // RGBA bytes (x-major): ((x * sy + y) * sz + z) * 4
+        std::vector<unsigned char> rgba;
+        unsigned long long received_ms = 0;
+    };
+
     struct TelemetrySnapshot
     {
+        PoseChannel pose;
+        HealthChannel health_state;
+        VoxelFrameChannel voxel_frame;
+
         bool has_player_pose = false;
         float player_blocks_per_m = 1.0f;
         bool has_player_blocks_per_m = false;
@@ -118,6 +170,9 @@ public:
                          std::string& last_source,
                          std::string& last_type);
     static TelemetrySnapshot GetTelemetrySnapshot();
+
+    /** Increments on each applied telemetry JSON message (pose, voxel, world_light, …). For coarse caching of GetTelemetrySnapshot(). */
+    static std::uint64_t TelemetryDataRevision();
 
 private:
     void StartUdpListener();

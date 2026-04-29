@@ -7,9 +7,12 @@
 #include "EffectRegisterer3D.h"
 #include "Audio/AudioInputManager.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "EffectStratumBlend.h"
 #include <vector>
 #include <limits>
 #include <random>
+
+class StratumBandPanel;
 
 class DiscoFlash : public SpatialEffect3D
 {
@@ -28,9 +31,12 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     void TickFlashes(float time);
-    RGBColor SampleFlashField(float nx, float ny, float nz, float time);
+    RGBColor SampleFlashField(float nx, float ny, float nz, float time, const EffectStratumBlend::BandBlendScalars& bb);
 
     struct Flash
     {
@@ -56,6 +62,10 @@ private:
     int flash_mode = MODE_BEAT;
 
     std::mt19937 rng{42};
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

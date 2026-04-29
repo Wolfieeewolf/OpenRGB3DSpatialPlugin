@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Explosion.h"
-
-REGISTER_EFFECT_3D(Explosion);
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QSlider>
 #include <QVBoxLayout>
 #include <QSpinBox>
 #include <QCheckBox>
@@ -55,9 +56,9 @@ Explosion::Explosion(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D Explosion::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Explosion";
-    info.effect_description = "Expanding shockwave from origin";
+    info.effect_description = "Expanding shockwave from origin; optional floor/mid/ceiling band tuning for motion and detail";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_EXPLOSION;
     info.is_reversible = false;
@@ -88,7 +89,11 @@ EffectInfo3D Explosion::GetEffectInfo()
 
 void Explosion::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer_w = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer_w);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* explosion_widget = new QWidget();
+    vbox->addWidget(explosion_widget);
     QGridLayout* layout = new QGridLayout(explosion_widget);
     layout->setContentsMargins(0, 0, 0, 0);
     int row = 0;
@@ -147,7 +152,14 @@ void Explosion::SetupCustomUI(QWidget* parent)
     layout->addWidget(loop_check, row, 0, 1, 3);
     row++;
 
-    AddWidgetToParent(explosion_widget, parent);
+    stratum_panel = new StratumBandPanel(outer_w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Explosion::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer_w, parent);
 
     connect(intensity_slider, &QSlider::valueChanged, this, &Explosion::OnExplosionParameterChanged);
     connect(intensity_slider, &QSlider::valueChanged, intensity_label, [this](int value) {
@@ -180,10 +192,34 @@ void Explosion::OnExplosionParameterChanged()
     emit ParametersChanged();
 }
 
+void Explosion::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
+}
+
 
 nlohmann::json Explosion::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "explosion_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "explosion_stratum_band_speed_pct",
+                                           "explosion_stratum_band_tight_pct",
+                                           "explosion_stratum_band_phase_deg");
     j["explosion_intensity"] = explosion_intensity;
     j["explosion_type"] = explosion_type;
     j["burst_count"] = burst_count;
@@ -195,6 +231,13 @@ nlohmann::json Explosion::SaveSettings() const
 void Explosion::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "explosion_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "explosion_stratum_band_speed_pct",
+                                            "explosion_stratum_band_tight_pct",
+                                            "explosion_stratum_band_phase_deg");
     if(settings.contains("explosion_intensity")) explosion_intensity = settings["explosion_intensity"];
     if(settings.contains("explosion_type")) explosion_type = settings["explosion_type"];
     if(settings.contains("burst_count")) burst_count = std::max(0, std::min(10, (int)settings["burst_count"]));
@@ -207,6 +250,11 @@ void Explosion::LoadSettings(const nlohmann::json& settings)
     if(loop_check) loop_check->setChecked(loop);
     if(particle_slider) particle_slider->setValue(particle_amount);
     if(particle_label) particle_label->setText(QString::number(particle_amount) + "%");
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
 
 float Explosion::particleDebrisAt(float x, float y, float z, float burst_phase, float distance, float radius, int type_id) const
@@ -233,7 +281,16 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float raw_progress = time * GetScaledSpeed();
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
+    float raw_progress = time * GetScaledSpeed() * bb.speed_mul;
     float progress_in_cycle = fmodf(raw_progress, CYCLE_DURATION);
     float burst_phase = progress_in_cycle / CYCLE_DURATION;
     int burst_index = (int)(raw_progress / CYCLE_DURATION);
@@ -249,12 +306,11 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float rate = GetScaledFrequency();
     float detail = std::max(0.05f, GetScaledDetail());
     float size_multiplier = GetNormalizedSize();
-    float freq_scale = detail * 0.01f / (size_multiplier > 0.001f ? size_multiplier : 1.0f);
+    float freq_scale = detail * bb.tight_mul * 0.01f / (size_multiplier > 0.001f ? size_multiplier : 1.0f);
     constexpr float kExplosionGridFill = 3.0f;
     float radius_basis = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f * kExplosionGridFill;
     radius_basis = std::max(radius_basis, 1e-3f);
 
-    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
@@ -265,8 +321,9 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float intensity_norm = std::clamp(explosion_intensity / 200.0f, 0.05f, 1.0f);
     float explosion_radius = burst_phase * radius_basis * (0.15f + 0.85f * intensity_norm) * size_multiplier;
     float wave_thickness = radius_basis * (0.03f + 0.07f * intensity_norm) * size_multiplier;
+    wave_thickness /= std::max(0.25f, bb.tight_mul);
     float explosion_intensity_final = 0.0f;
-    float hue_base = 60.0f + time * rate * 12.0f;
+    float hue_base = 60.0f + time * rate * 12.0f * bb.speed_mul + bb.phase_deg;
 
     if(explosion_type == TYPE_NUKE)
     {
@@ -289,7 +346,7 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
         float flash_core = (distance < explosion_radius * 0.2f) ? (1.0f - distance / (explosion_radius * 0.2f)) : 0.0f;
         explosion_intensity_final = fmax(fmax(in_stem, in_cap), flash_core * 1.2f);
         explosion_intensity_final = fmin(1.0f, explosion_intensity_final + flash_core * 0.5f);
-        hue_base = 35.0f;
+        hue_base = 35.0f + bb.phase_deg;
     }
     else if(explosion_type == TYPE_LANDMINE)
     {
@@ -302,7 +359,7 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
         float secondary_radius = explosion_radius * 0.65f;
         float secondary = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.4f, secondary_radius + wave_thickness * 0.5f, ground_dist);
         secondary *= expf(-fabsf(ground_dist - secondary_radius) * 0.15f) * 0.6f * cone_up;
-        float dust = 0.12f * sinf(ground_dist * freq_scale * 6.0f - burst_phase * 6.0f) * expf(-ground_dist * 0.06f) * cone_up;
+        float dust = 0.12f * sinf(ground_dist * freq_scale * 6.0f - burst_phase * 6.0f + bb.phase_deg * (float)(M_PI / 180.0f)) * expf(-ground_dist * 0.06f) * cone_up;
         float core = (ground_dist < explosion_radius * 0.25f && rot_rel_y < explosion_radius * 0.3f)
             ? (1.0f - ground_dist / (explosion_radius * 0.25f)) * 0.9f : 0.0f;
         explosion_intensity_final = fmin(1.0f, primary + secondary + dust + core);
@@ -316,7 +373,9 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
         secondary *= expf(-fabsf(distance - secondary_radius) * 0.12f) * 0.7f;
         float ang = atan2f(rot_rel_y, horiz + 0.001f);
         float lobe = 0.65f + 0.35f * fabsf(cosf(ang * 3.0f));
-        float shock = (0.2f * sinf(distance * freq_scale * 8.0f - burst_phase * 4.0f) + 0.1f * sinf(distance * freq_scale * 12.0f - burst_phase * 6.0f)) * expf(-distance * 0.07f) * lobe;
+        float shock = (0.2f * sinf(distance * freq_scale * 8.0f - burst_phase * 4.0f + bb.phase_deg * (float)(M_PI / 180.0f)) +
+                       0.1f * sinf(distance * freq_scale * 12.0f - burst_phase * 6.0f + bb.phase_deg * (float)(M_PI / 180.0f))) *
+                      expf(-distance * 0.07f) * lobe;
         float core = (distance < explosion_radius * 0.28f) ? (1.0f - distance / (explosion_radius * 0.28f)) * 0.85f : 0.0f;
         explosion_intensity_final = fmin(1.0f, primary + secondary + shock + core);
         explosion_intensity_final = fmax(explosion_intensity_final, particleDebrisAt(x, y, z, burst_phase, distance, explosion_radius, TYPE_BOMB));
@@ -340,7 +399,8 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
         float secondary_radius = explosion_radius * 0.7f;
         float secondary = 1.0f - smoothstep(secondary_radius - wave_thickness * 0.5f, secondary_radius + wave_thickness * 0.5f, distance);
         secondary *= expf(-fabsf(distance - secondary_radius) * 0.12f) * 0.7f;
-        float shock = 0.25f * sinf(distance * freq_scale * 8.0f - burst_phase * 4.0f * 6.28f) + 0.15f * sinf(distance * freq_scale * 12.0f - burst_phase * 6.0f * 6.28f);
+        float shock = 0.25f * sinf(distance * freq_scale * 8.0f - burst_phase * 4.0f * 6.28f + bb.phase_deg * (float)(M_PI / 180.0f)) +
+                      0.15f * sinf(distance * freq_scale * 12.0f - burst_phase * 6.0f * 6.28f + bb.phase_deg * (float)(M_PI / 180.0f));
         shock *= expf(-distance * 0.08f);
         float core = (distance < explosion_radius * 0.3f) ? (1.0f - distance / (explosion_radius * 0.3f)) * 0.85f : 0.0f;
         explosion_intensity_final = fmin(1.0f, primary + secondary + shock + core);
@@ -365,3 +425,5 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
 
     return (b << 16) | (g << 8) | r;
 }
+
+REGISTER_EFFECT_3D(Explosion);

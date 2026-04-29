@@ -125,6 +125,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpaci
         positions[i].local_position.y *= scale_y;
         positions[i].local_position.z *= scale_z;
         positions[i].world_position = positions[i].local_position;
+        positions[i].room_position = positions[i].local_position;
         positions[i].preview_color = 0x00FFFFFF;
     }
 

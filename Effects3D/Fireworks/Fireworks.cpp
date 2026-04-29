@@ -2,12 +2,15 @@
 
 #include "Fireworks.h"
 #include "EffectHelpers.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QComboBox>
+#include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(Fireworks);
 
@@ -38,9 +41,10 @@ Fireworks::Fireworks(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D Fireworks::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Fireworks";
-    info.effect_description = "Missile launches and explodes into debris (Mega-Cube style); gravity and decay";
+    info.effect_description =
+        "Missile launches and explodes into debris (Mega-Cube style); gravity, decay, and optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -67,8 +71,10 @@ EffectInfo3D Fireworks::GetEffectInfo()
 void Fireworks::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
     layout->addWidget(new QLabel("Type:"), row, 0);
     QComboBox* type_combo = new QComboBox();
@@ -161,7 +167,23 @@ void Fireworks::SetupCustomUI(QWidget* parent)
         if(decay_label) decay_label->setText(QString::number(decay_speed, 'f', 1));
         emit ParametersChanged();
     });
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Fireworks::OnStratumBandChanged);
+    OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void Fireworks::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void Fireworks::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -174,6 +196,15 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float hw = e.hw, hh = e.hh, hd = e.hd;
     float h_scale = std::max({hw, hh, hd});
@@ -181,12 +212,13 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     float speed_scale = GetScaledSpeed() * 0.015f * kFireworkGridFill;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
-    float color_cycle = time * GetScaledFrequency() * 12.0f;
+    float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
     float sigma = std::max(particle_size * h_scale * size_m, 5.0f) / std::max(0.35f, detail);
     const float sigma_cap = h_scale * 1.0f;
     if(sigma > sigma_cap) sigma = sigma_cap;
     float sigma_sq = sigma * sigma;
-    const float d2_cutoff = 9.0f * sigma_sq;
+    const float sigma_sq_use = sigma_sq / std::max(0.0625f, bb.tight_mul * bb.tight_mul);
+    const float d2_cutoff = 9.0f * sigma_sq_use;
     float grav_mult = std::max(0.0f, std::min(2.0f, gravity_strength));
     float decay_mult = std::max(0.5f, std::min(6.0f, decay_speed));
     int n_sim = std::max(1, std::min(5, num_simultaneous));
@@ -379,9 +411,11 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
         float dx = x - p.px, dy = y - p.py, dz = z - p.pz;
         float d2 = dx*dx + dy*dy + dz*dz;
         if(d2 > d2_cutoff) continue;
-        float intensity = expf(-d2 / sigma_sq) * p.decay;
+        float intensity = expf(-d2 / sigma_sq_use) * p.decay;
         if(intensity < 0.01f) continue;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(p.hue) : GetColorAtPosition(p.hue / 360.0f);
+        float hue_use = fmodf(p.hue + bb.phase_deg + time * GetScaledFrequency() * 6.0f * (bb.speed_mul - 1.0f), 360.0f);
+        if(hue_use < 0.0f) hue_use += 360.0f;
+        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue_use) : GetColorAtPosition(hue_use / 360.0f);
         sum_r += ((c & 0xFF) / 255.0f) * intensity;
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
@@ -398,6 +432,20 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
 nlohmann::json Fireworks::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "fireworks_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "fireworks_stratum_band_speed_pct",
+                                           "fireworks_stratum_band_tight_pct",
+                                           "fireworks_stratum_band_phase_deg");
     j["particle_size"] = particle_size;
     j["num_debris"] = num_debris;
     j["firework_type"] = firework_type;
@@ -410,6 +458,13 @@ nlohmann::json Fireworks::SaveSettings() const
 void Fireworks::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "fireworks_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "fireworks_stratum_band_speed_pct",
+                                            "fireworks_stratum_band_tight_pct",
+                                            "fireworks_stratum_band_phase_deg");
     if(settings.contains("particle_size") && settings["particle_size"].is_number())
         particle_size = std::max(0.02f, std::min(1.0f, settings["particle_size"].get<float>()));
     if(settings.contains("num_debris") && settings["num_debris"].is_number())
@@ -422,4 +477,9 @@ void Fireworks::LoadSettings(const nlohmann::json& settings)
         gravity_strength = std::max(0.0f, std::min(2.0f, settings["gravity_strength"].get<float>()));
     if(settings.contains("decay_speed") && settings["decay_speed"].is_number())
         decay_speed = std::max(0.5f, std::min(6.0f, settings["decay_speed"].get<float>()));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

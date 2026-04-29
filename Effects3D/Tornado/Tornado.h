@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class Tornado : public SpatialEffect3D
 {
@@ -29,6 +32,7 @@ public:
 
 private slots:
     void OnTornadoParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     QSlider* core_radius_slider;
@@ -37,6 +41,10 @@ private:
     QLabel* height_label;
     unsigned int core_radius;
     unsigned int tornado_height;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

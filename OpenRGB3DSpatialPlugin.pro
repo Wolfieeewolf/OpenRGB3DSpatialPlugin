@@ -24,6 +24,12 @@ CONFIG +=                                                                       
     plugin                                                                                      \
     silent
 
+# MSVC defaults to a legacy code page for .cpp unless told otherwise; UTF-8 in strings (— … × →)
+# would compile to wrong bytes and show garbage in the UI.
+msvc {
+    QMAKE_CXXFLAGS += /utf-8
+}
+
 #-----------------------------------------------------------------------------------------------#
 # Application Configuration                                                                     #
 #-----------------------------------------------------------------------------------------------#
@@ -156,6 +162,7 @@ INCLUDEPATH +=                                                                  
     ui                                                                                          \
     Effects3D                                                                                   \
     Game                                                                                        \
+    SpatialSamplers                                                                             \
 
 HEADERS +=                                                                                      \
     OpenRGB3DSpatialPlugin.h                                                                    \
@@ -182,8 +189,10 @@ HEADERS +=                                                                      
     QtCompat.h                                                                                  \
     Game/GameTelemetryStatusPanel.h                                                             \
     Game/GameTelemetryBridge.h                                                                  \
-    Game/SpatialLayerCore.h                                                                     \
-    Game/VoxelRoomCore.h                                                                        \
+    SpatialSamplers/SpatialBasisUtils.h                                                         \
+    SpatialSamplers/SpatialLayerCore.h                                                          \
+    SpatialSamplers/VoxelRoomCore.h                                                             \
+    SpatialSamplers/VoxelMapping.h                                                              \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.h                                             \
     Effects3D/Games/Minecraft/MinecraftGame.h                                                   \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h                                           \
@@ -195,7 +204,9 @@ HEADERS +=                                                                      
     ui/CustomControllerDialog.h                                                                 \
     ui/Gizmo3D.h                                                                                \
     ui/CaptureZonesWidget.h                                                                     \
-    Effects3D/Wave/Wave.h                                                                       \
+    ui/PluginUiUtils.h                                                                         \
+    Effects3D/EffectStratumBlend.h                                                             \
+    Effects3D/StratumBandPanel.h                                                               \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
     Effects3D/BandScan/BandScan.h                                                               \
@@ -211,6 +222,7 @@ HEADERS +=                                                                      
     Effects3D/Spiral/Spiral.h                                                                   \
     Effects3D/Explosion/Explosion.h                                                             \
     Effects3D/TravelingLight/TravelingLight.h                                                    \
+    Effects3D/Wave/Wave.h                                                                        \
     Effects3D/BreathingSphere/BreathingSphere.h                                                 \
     Effects3D/DNAHelix/DNAHelix.h                                                               \
     Effects3D/Tornado/Tornado.h                                                                  \
@@ -246,8 +258,9 @@ SOURCES +=                                                                      
     ScreenCaptureManager.cpp                                                                    \
     Game/GameTelemetryStatusPanel.cpp                                                           \
     Game/GameTelemetryBridge.cpp                                                                \
-    Game/SpatialLayerCore.cpp                                                                   \
-    Game/VoxelRoomCore.cpp                                                                      \
+    SpatialSamplers/SpatialLayerCore.cpp                                                        \
+    SpatialSamplers/VoxelRoomCore.cpp                                                           \
+    SpatialSamplers/VoxelMapping.cpp                                                            \
     Effects3D/Games/Minecraft/MinecraftGameEffect3D.cpp                                           \
     Effects3D/Games/Minecraft/MinecraftGame.cpp                                                 \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp                                         \
@@ -270,11 +283,12 @@ SOURCES +=                                                                      
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \
     ui/CaptureZonesWidget.cpp                                                                   \
-    Effects3D/Wave/Wave.cpp                                                                 \
+    Effects3D/StratumBandPanel.cpp                                                             \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
     Effects3D/Explosion/Explosion.cpp                                                       \
     Effects3D/TravelingLight/TravelingLight.cpp                                              \
+    Effects3D/Wave/Wave.cpp                                                                  \
     Effects3D/BreathingSphere/BreathingSphere.cpp                                           \
     Effects3D/DNAHelix/DNAHelix.cpp                                                         \
     Effects3D/Tornado/Tornado.cpp                                                           \

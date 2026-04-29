@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "FreqRipple.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <cmath>
 #include <algorithm>
 #include <QLabel>
@@ -19,9 +21,9 @@ FreqRipple::FreqRipple(QWidget* parent)
 EffectInfo3D FreqRipple::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Frequency Ripple";
-    info.effect_description = "Beat-triggered expanding ring from origin";
+    info.effect_description = "Beat-triggered expanding ring from origin; optional stratum band tuning";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -138,6 +140,23 @@ void FreqRipple::SetupCustomUI(QWidget* parent)
         ripple_edge_shape = std::clamp(idx, 0, 2);
         emit ParametersChanged();
     });
+
+    stratum_panel = new StratumBandPanel(parent);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqRipple::OnStratumBandChanged);
+    OnStratumBandChanged();
+}
+
+void FreqRipple::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 float FreqRipple::smoothstep(float edge0, float edge1, float x) const
@@ -186,11 +205,13 @@ void FreqRipple::TickRipples(float time)
         }), ripples.end());
 }
 
-RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time) const
+RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time, const EffectStratumBlend::BandBlendScalars& bb) const
 {
     RGBColor result = ToRGBColor(0, 0, 0);
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
+    float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
+    float phase_shift = bb.phase_deg * (1.0f / 360.0f);
 
     for(unsigned int i = 0; i < ripples.size(); i++)
     {
@@ -198,10 +219,10 @@ RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time) const
         float age = time - r.birth_time;
         if(age < 0.0f) continue;
 
-        float expand = 0.2f + GetScaledSpeed() * 0.95f;
-        float front = expand * age;
+        float expand = (0.2f + GetScaledSpeed() * 0.95f) * bb.speed_mul;
+        float front = expand * age + phase_shift * 0.35f;
         float ring_dist = std::fabs(dist_norm - front);
-        float half_w = std::max(trail_width * 0.5f * size_m, 1e-3f) / (0.6f + 0.4f * detail);
+        float half_w = std::max(trail_width * 0.5f * size_m, 1e-3f) / ((0.6f + 0.4f * detail) * tm);
 
         float ring_bright = 0.0f;
         switch(ripple_edge_shape)
@@ -245,17 +266,55 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
     TickRipples(time);
 
     Vector3D origin = GetEffectOriginGrid(grid);
-    float dx = x - origin.x;
-    float dy = y - origin.y;
-    float dz = z - origin.z;
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    float dx = rp.x - origin.x;
+    float dy = rp.y - origin.y;
+    float dz = rp.z - origin.z;
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float dist_norm = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 2.0f);
 
-    RGBColor color = ComputeRippleColor(dist_norm, time);
+    RGBColor color = ComputeRippleColor(dist_norm, time, bb);
 
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(dist_norm * 180.0f + CalculateProgress(time) * 50.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(std::min(dist_norm * 0.5f, 1.0f));
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
+    RGBColor user_color;
+    if(GetRainbowMode())
+    {
+        float hue =
+            dist_norm * 180.0f + CalculateProgress(time) * 50.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul;
+        hue = ApplySpatialRainbowHue(hue, std::min(dist_norm * 0.5f, 1.0f), basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(std::min(dist_norm * 0.5f, 1.0f), basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        user_color = GetColorAtPosition(std::min(p, 1.0f));
+    }
     return ModulateRGBColors(color, user_color);
 }
 
@@ -267,6 +326,20 @@ nlohmann::json FreqRipple::SaveSettings() const
     j["decay_rate"]       = decay_rate;
     j["onset_threshold"]  = onset_threshold;
     j["ripple_edge_shape"] = ripple_edge_shape;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "freqripple_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "freqripple_stratum_band_speed_pct",
+                                           "freqripple_stratum_band_tight_pct",
+                                           "freqripple_stratum_band_phase_deg");
     return j;
 }
 
@@ -274,6 +347,13 @@ void FreqRipple::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "freqripple_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "freqripple_stratum_band_speed_pct",
+                                            "freqripple_stratum_band_tight_pct",
+                                            "freqripple_stratum_band_phase_deg");
     if(settings.contains("trail_width"))     trail_width     = settings["trail_width"].get<float>();
     if(settings.contains("decay_rate"))      decay_rate      = settings["decay_rate"].get<float>();
     if(settings.contains("onset_threshold")) onset_threshold = settings["onset_threshold"].get<float>();
@@ -282,6 +362,11 @@ void FreqRipple::LoadSettings(const nlohmann::json& settings)
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
 
 REGISTER_EFFECT_3D(FreqRipple)

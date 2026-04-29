@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Wave.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
+#include <QComboBox>
 #include <QGridLayout>
+#include <QLabel>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -49,9 +53,10 @@ Wave::~Wave() = default;
 EffectInfo3D Wave::GetEffectInfo()
 {
     EffectInfo3D info;
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Wave";
-    info.effect_description = "Wave line (circles/lines/diagonal) or 3D wave surface with configurable style";
+    info.effect_description =
+        "Wave line or 3D surface; optional floor/mid/ceiling band tuning; room mapper and voxel drive on output";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_WAVE;
     info.is_reversible = true;
@@ -241,6 +246,13 @@ void Wave::SetupCustomUI(QWidget* parent)
     if(line_controls) line_controls->setVisible(mode == MODE_LINE);
     if(surface_controls) surface_controls->setVisible(mode == MODE_SURFACE);
 
+    stratum_panel = new StratumBandPanel(wave_widget);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    main_layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Wave::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     AddWidgetToParent(wave_widget, parent);
 }
 
@@ -266,6 +278,16 @@ void Wave::OnWaveParameterChanged()
     emit ParametersChanged();
 }
 
+void Wave::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
+}
+
 float Wave::smoothstep(float edge0, float edge1, float x) const
 {
     float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
@@ -283,8 +305,19 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
 
     if(mode == MODE_SURFACE)
     {
-        float progress_val = CalculateProgress(time);
+        Vector3D rot = TransformPointByRotation(x, y, z, origin);
+        float coord_y01 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+        SpatialLayerCore::MapperSettings strat_map_s;
+        EffectStratumBlend::InitStratumBreaks(strat_map_s);
+        float swt[3];
+        EffectStratumBlend::WeightsForYNorm(coord_y01, strat_map_s, swt);
+        const EffectStratumBlend::BandBlendScalars bb =
+            EffectStratumBlend::BlendBands(stratum_layout_mode, swt, stratum_tuning_);
+
+        float progress_val = CalculateProgress(time) * bb.speed_mul;
         float phase = progress_val * (float)(2.0 * M_PI);
+        float phase_rad = bb.phase_deg * (float)(M_PI / 180.0f);
+        float travel = phase + phase_rad;
         float scale_eff = std::max(0.05f, GetNormalizedScale());
         float sw = grid.width * 0.5f * scale_eff;
         float sh = grid.height * 0.5f * scale_eff;
@@ -293,17 +326,15 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         if(sh < 1e-5f) sh = 1.0f;
         if(sd < 1e-5f) sd = 1.0f;
 
-        Vector3D rot = TransformPointByRotation(x, y, z, origin);
         float lx = (rot.x - origin.x) / sw;
         float ly = (rot.y - origin.y) / sh;
         float lz = (rot.z - origin.z) / sd;
 
         float r = sqrtf(lx*lx + lz*lz);
-        float freq = std::max(0.2f, std::min(4.0f, wave_frequency));
+        float freq = std::max(0.2f, std::min(4.0f, wave_frequency * bb.tight_mul));
         float amp = std::max(0.2f, std::min(2.0f, wave_amplitude));
         float dir_rad = wave_direction_deg * (float)(M_PI / 180.0);
         float wave_pos = (float)(cos(dir_rad) * lx + sin(dir_rad) * lz);
-        float travel = phase;
 
         float surface_y;
         int style = std::max(0, std::min(wave_style, STYLE_COUNT - 1));
@@ -316,7 +347,10 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
             surface_y = amp * sinf(phase + freq * wave_pos * 4.0f + travel);
             break;
         case STYLE_PACIFICA:
-            surface_y = amp * (sinf(phase + freq * r + travel) * 0.5f + sinf(phase * 0.7f + freq * r * 1.5f + travel * 1.2f) * 0.3f + sinf(phase * 0.5f + r * 2.0f + travel * 0.8f) * 0.2f);
+            surface_y =
+                amp * (sinf(phase + freq * r + travel) * 0.5f +
+                       sinf(phase * 0.7f + freq * r * 1.5f + travel * 1.2f) * 0.3f +
+                       sinf(phase * 0.5f + r * 2.0f + travel * 0.8f) * 0.2f);
             break;
         case STYLE_GRADIENT:
             surface_y = amp * (0.5f + 0.5f * sinf(phase + freq * r + wave_pos * 2.0f + travel));
@@ -347,8 +381,41 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float rate = GetScaledFrequency();
         float pos_color = fmodf(pos_norm + time * rate * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue + time * rate * 12.0f)
-                                      : GetColorAtPosition(std::max(0.0f, std::min(1.0f, pos_color)));
+
+        float detail = std::max(0.05f, GetScaledDetail());
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        EffectStratumBlend::InitStratumBreaks(map);
+        map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+        map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+        map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = coord_y01;
+
+        RGBColor c;
+        if(GetRainbowMode())
+        {
+            float hue2 = fmodf(hue + time * rate * 12.0f, 360.0f);
+            if(hue2 < 0.0f) hue2 += 360.0f;
+            hue2 = ApplySpatialRainbowHue(hue2, pos_norm, basis, sp, map, time, &grid);
+            float p01 = std::fmod(hue2 / 360.0f, 1.0f);
+            if(p01 < 0.0f) p01 += 1.0f;
+            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+            c = GetRainbowColor(p01 * 360.0f);
+        }
+        else
+        {
+            float p = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
+            p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+            c = GetColorAtPosition(p);
+        }
         int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));
         int g_ = std::min(255, std::max(0, (int)(((c >> 8) & 0xFF) * intensity)));
         int b_ = std::min(255, std::max(0, (int)(((c >> 16) & 0xFF) * intensity)));
@@ -359,12 +426,20 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     float detail = std::max(0.05f, GetScaledDetail());
     progress = CalculateProgress(time);
     Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_map;
+    EffectStratumBlend::InitStratumBreaks(strat_map);
+    float stratum_w[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_map, stratum_w);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+    const float prog = progress * bb.speed_mul;
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
     float rot_rel_z = rotated_pos.z - origin.z;
     float wave_value = 0.0f;
     float size_multiplier = GetNormalizedSize();
-    float freq_scale = detail * 0.1f / size_multiplier;
+    float freq_scale_e = detail * 0.1f / size_multiplier * bb.tight_mul;
     float normalized_position = 0.0f;
     if(shape_type == 0)
     {
@@ -383,7 +458,9 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         normalized_position = 0.5f * (nx + nz);
     }
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
-    wave_value = sin(normalized_position * freq_scale * 10.0f - progress);
+    const float pshift = bb.phase_deg * (1.0f / 360.0f);
+    normalized_position = std::fmod(normalized_position + pshift + 1.0f, 1.0f);
+    wave_value = sin(normalized_position * freq_scale_e * 10.0f - prog);
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float depth_factor = 1.0f;
@@ -392,19 +469,47 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float normalized_dist = fmin(1.0f, radial_distance / max_radius);
         depth_factor = 0.4f + 0.6f * (1.0f - normalized_dist * 0.7f);
     }
-    float wave_enhanced = wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale * 20.0f - progress * 1.5f);
+    float wave_enhanced =
+        wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale_e * 20.0f - prog * 1.5f);
     wave_enhanced = fmax(-1.0f, fmin(1.0f, wave_enhanced));
-    float hue = (wave_enhanced + 1.0f) * 180.0f;
-    hue = fmod(hue, 360.0f);
-    if(hue < 0.0f) hue += 360.0f;
+    float pos_for_spatial = (wave_enhanced + 1.0f) * 0.5f;
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     RGBColor final_color;
     if(GetRainbowMode())
-        final_color = GetRainbowColor(hue + time * rate * 12.0f);
+    {
+        float hue = (wave_enhanced + 1.0f) * 180.0f;
+        hue = fmodf(hue, 360.0f);
+        if(hue < 0.0f) hue += 360.0f;
+        hue = fmodf(hue + time * rate * 12.0f, 360.0f);
+        if(hue < 0.0f) hue += 360.0f;
+        hue = ApplySpatialRainbowHue(hue, pos_for_spatial, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f) p01 += 1.0f;
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
+    }
     else
     {
-        float pos = fmodf(hue / 360.0f + time * rate * 0.02f, 1.0f);
-        if(pos < 0.0f) pos += 1.0f;
-        final_color = GetColorAtPosition(pos);
+        float pos_color = fmodf(pos_for_spatial + time * rate * 0.02f, 1.0f);
+        if(pos_color < 0.0f) pos_color += 1.0f;
+        float p = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
     }
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
@@ -445,12 +550,33 @@ nlohmann::json Wave::SaveSettings() const
     j["wave_frequency"] = wave_frequency;
     j["wave_amplitude"] = wave_amplitude;
     j["wave_direction_deg"] = wave_direction_deg;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "wave_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "wave_stratum_band_speed_pct",
+                                           "wave_stratum_band_tight_pct",
+                                           "wave_stratum_band_phase_deg");
     return j;
 }
 
 void Wave::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "wave_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "wave_stratum_band_speed_pct",
+                                            "wave_stratum_band_tight_pct",
+                                            "wave_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("shape_type") && settings["shape_type"].is_number_integer())
@@ -513,5 +639,10 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     {
         surface_edge_fade_slider->setValue((int)surface_edge_fade);
         if(surface_edge_fade_label) surface_edge_fade_label->setText(QString::number((int)surface_edge_fade) + "%");
+    }
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
     }
 }

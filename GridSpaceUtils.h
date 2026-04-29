@@ -80,4 +80,9 @@ GridBounds ComputeRoomAlignedBounds(const ManualRoomSettings& settings,
                                     float grid_scale_mm,
                                     const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
 
+/** Centroid of all LED positions in room or world space (skips hidden_by_virtual). False if no LEDs. */
+bool TryComputeLedCentroid(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
+                           bool room_aligned,
+                           Vector3D* out_centroid);
+
 #endif // GRIDSPACEUTILS_H

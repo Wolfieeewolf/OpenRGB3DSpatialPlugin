@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class DNAHelix : public SpatialEffect3D
 {
@@ -29,6 +32,7 @@ public:
 
 private slots:
     void OnDNAParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     QSlider*        radius_slider;
@@ -36,6 +40,10 @@ private:
 
     unsigned int    helix_radius;
     float           progress;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

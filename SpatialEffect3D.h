@@ -22,6 +22,7 @@
 
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
+#include "SpatialLayerCore.h"
 #include <nlohmann/json.hpp>
 
 /*
@@ -37,6 +38,12 @@ struct GridContext3D
     float width, height, depth;
     float center_x, center_y, center_z;
     float grid_scale_mm;
+
+    /** Average position of mapped LEDs in this grid’s coordinate space (room vs world); optional. */
+    float led_centroid_x = 0.0f;
+    float led_centroid_y = 0.0f;
+    float led_centroid_z = 0.0f;
+    bool has_led_centroid = false;
 
     GridContext3D(float minX,
                   float maxX,
@@ -57,6 +64,14 @@ struct GridContext3D
         center_x = (min_x + max_x) / 2.0f;
         center_y = (min_y + max_y) / 2.0f;
         center_z = (min_z + max_z) / 2.0f;
+    }
+
+    void SetLedCentroid(float cx, float cy, float cz)
+    {
+        led_centroid_x = cx;
+        led_centroid_y = cy;
+        led_centroid_z = cz;
+        has_led_centroid = true;
     }
 };
 
@@ -213,6 +228,14 @@ public:
     virtual std::vector<RGBColor> GetColors() const;
     virtual void SetRainbowMode(bool enabled);
     virtual bool GetRainbowMode() const;
+    /** Legacy: true = SubtleTint, false = Off (see SetSpatialMappingMode). */
+    void SetSpatialRoomTintEnabled(bool enabled);
+    bool UseSpatialRoomTint() const { return spatial_mapping_mode != SpatialMappingMode::Off; }
+
+    SpatialMappingMode GetSpatialMappingMode() const { return spatial_mapping_mode; }
+    void SetSpatialMappingMode(SpatialMappingMode mode);
+    VoxelDriveMode GetVoxelDriveMode() const { return effect_voxel_drive_mode; }
+    void SetVoxelDriveMode(VoxelDriveMode mode);
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
@@ -236,6 +259,9 @@ public:
 
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
+
+    /** Set after CreateCommonEffectControls: add per-effect controls here from SetupCustomUI. */
+    QWidget* GetCustomSettingsHost() const { return custom_effect_settings_host; }
 
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
@@ -268,7 +294,8 @@ protected:
 
     friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
 
-    QGroupBox*          effect_controls_group;
+    QWidget*            effect_controls_group;
+    QWidget*            custom_effect_settings_host;
     QSlider*            speed_slider;
     QSlider*            brightness_slider;
     QSlider*            frequency_slider;
@@ -324,8 +351,26 @@ protected:
     QLabel*             axis_scale_rot_roll_label;
     QPushButton*        axis_scale_rot_reset_button;
 
-    QGroupBox*          color_controls_group;
+    QWidget*            color_controls_group;
     QCheckBox*          rainbow_mode_check;
+
+    QWidget*            sampler_mapper_group;
+    QGroupBox*          compass_sampler_group;
+    QComboBox*          spatial_mapping_combo;
+    QComboBox*          compass_layer_spin_combo;
+    QSlider*            sampler_influence_slider;
+    QLabel*             sampler_influence_label;
+    QSlider*            sampler_compass_north_slider;
+    QLabel*             sampler_compass_north_label;
+
+    QGroupBox*          voxel_volume_group;
+    QSlider*            voxel_volume_mix_slider;
+    QLabel*             voxel_volume_mix_label;
+    QSlider*            voxel_volume_scale_slider;
+    QLabel*             voxel_volume_scale_label;
+    QSlider*            voxel_volume_heading_slider;
+    QLabel*             voxel_volume_heading_label;
+    QComboBox*          voxel_drive_combo;
     QWidget*            color_buttons_widget;
     QHBoxLayout*        color_buttons_layout;
     QPushButton*        add_color_button;
@@ -348,7 +393,18 @@ protected:
     int                 effect_bounds_mode;
     unsigned int        effect_fps;
     bool                rainbow_mode;
+    SpatialMappingMode  spatial_mapping_mode;
+    int                 compass_layer_spin_preset;
     float               rainbow_progress;
+
+    unsigned int        effect_voxel_volume_mix;
+    int                 effect_voxel_room_scale_centi;
+    int                 effect_voxel_heading_offset;
+    VoxelDriveMode      effect_voxel_drive_mode;
+    /** 25–250, default 100: scales room-map and voxel palette drive strength. */
+    int                 effect_sampler_influence_centi;
+    /** −180…180°: rotates compass sector indexing (room “north” vs effect forward). */
+    int                 effect_sampler_compass_north_offset_deg;
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;
@@ -415,6 +471,24 @@ protected:
     float GetScaledDetail() const;
     float CalculateProgress(float time) const;
 
+    /** Solid palette 0..1 after room mapping (Off / Subtle / Compass / Voxel volume). */
+    float ApplySpatialPalette01(float base_pos01,
+                                const SpatialLayerCore::Basis& basis,
+                                const SpatialLayerCore::SamplePoint& sp,
+                                const SpatialLayerCore::MapperSettings& map,
+                                float time,
+                                const GridContext3D* grid = nullptr) const;
+    /** Rainbow hue (deg) after room mapping; plane_pos01 is the effect's local wedge position 0..1. */
+    float ApplySpatialRainbowHue(float hue_deg,
+                                 float plane_pos01,
+                                 const SpatialLayerCore::Basis& basis,
+                                 const SpatialLayerCore::SamplePoint& sp,
+                                 const SpatialLayerCore::MapperSettings& map,
+                                 float time,
+                                 const GridContext3D* grid = nullptr) const;
+    /** Apply voxel/room scroll drive to an already-mapped palette coordinate. */
+    float ApplyVoxelDriveToPalette01(float palette01, float x, float y, float z, float time, const GridContext3D& grid) const;
+
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
 
     Vector3D TransformPointByRotation(float x, float y, float z,
@@ -425,6 +499,9 @@ protected:
 private slots:
     void OnParameterChanged();
     void OnRainbowModeChanged();
+    void OnSpatialMappingComboChanged();
+    void OnCompassLayerSpinComboChanged();
+    void OnVoxelDriveComboChanged();
     void OnAddColorClicked();
     void OnRemoveColorClicked();
     void OnColorButtonClicked();
@@ -437,8 +514,11 @@ private slots:
 
 private:
     void CreateColorControls();
+    void CreateSamplerMapperControls();
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
+    bool SampleVoxelRgbAtRoom(float x, float y, float z, const GridContext3D& grid, RGBColor& out_rgb, bool& got_hit) const;
+    void SyncSpatialMappingControlVisibility();
 };
 
 #endif

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Sunrise.h"
+#include "StratumBandPanel.h"
+#include "EffectStratumBlend.h"
+#include "SpatialLayerCore.h"
+#include <algorithm>
 #include <cmath>
 #include <ctime>
 #include <QGridLayout>
@@ -8,6 +12,7 @@
 #include <QSlider>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(Sunrise);
 
@@ -151,8 +156,10 @@ EffectInfo3D Sunrise::GetEffectInfo()
 void Sunrise::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
 
     layout->addWidget(new QLabel("Time mode:"), row, 0);
@@ -232,7 +239,24 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     connect(lightning_cb, &QCheckBox::toggled, this, [this](bool on){ weather_lightning = on; emit ParametersChanged(); });
     row++;
 
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Sunrise::OnStratumBandChanged);
+    OnStratumBandChanged();
+
     AddWidgetToParent(w, parent);
+}
+
+void Sunrise::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void Sunrise::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -259,11 +283,21 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
     float progress = GetTimeOfDayProgress(time);
-    float spd = std::max(0.5f, std::min(3.0f, 0.5f + GetScaledSpeed() * 0.3f));
+    float spd = std::max(0.5f, std::min(3.0f, 0.5f + GetScaledSpeed() * 0.3f)) * bb.speed_mul;
     float size_m = GetNormalizedSize();
     float weather_freq = std::max(0.2f, std::min(8.0f, GetScaledFrequency() * 0.15f));
     float detail = std::max(0.05f, GetScaledDetail());
+    const float time_w = time * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f);
 
     float norm_y = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
 
@@ -275,15 +309,42 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
 
     if(GetRainbowMode())
     {
-        float hue = progress * 60.0f + norm_y * 40.0f * (0.6f + 0.4f * detail) + time * weather_freq * 12.0f;
-        c0 = GetRainbowColor(hue);
-        c1 = GetRainbowColor(hue + 30.0f);
-        c2 = GetRainbowColor(hue + 60.0f);
-        c3 = GetRainbowColor(hue + 90.0f);
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings smap;
+        smap.floor_end = 0.30f;
+        smap.desk_end = 0.55f;
+        smap.upper_end = 0.78f;
+        smap.blend_softness = 0.10f;
+        smap.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+        smap.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = coord2;
+        float hue = progress * 60.0f + norm_y * 40.0f * (0.6f + 0.4f * detail) + time_w * weather_freq * 12.0f + bb.phase_deg;
+        hue = ApplySpatialRainbowHue(hue, norm_y, basis, sp, smap, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        const float hub = p01 * 360.0f;
+        c0 = GetRainbowColor(hub);
+        c1 = GetRainbowColor(hub + 30.0f);
+        c2 = GetRainbowColor(hub + 60.0f);
+        c3 = GetRainbowColor(hub + 90.0f);
     }
 
-    float horizon_y = 0.12f + 0.28f * powf(progress, 0.15f * spd);
-    float sun_y = horizon_y + 0.15f + 0.35f * powf(progress, 0.12f * spd);
+    float exp_h = (0.15f * spd) / std::max(0.25f, bb.tight_mul);
+    float exp_s = (0.12f * spd) / std::max(0.25f, bb.tight_mul);
+    float horizon_y = 0.12f + 0.28f * powf(progress, exp_h);
+    float sun_y = horizon_y + 0.15f / std::max(0.25f, bb.tight_mul) + 0.35f * powf(progress, exp_s);
     float y_scale = 0.6f + 0.4f * size_m;
     horizon_y *= y_scale;
     sun_y *= y_scale;
@@ -314,7 +375,7 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
 
     if(weather_rain)
     {
-        float rain_noise = fmodf(sinf(x * 47.0f + z * 31.0f + time * 8.0f * weather_freq) * 0.5f + 0.5f, 1.0f);
+        float rain_noise = fmodf(sinf(x * 47.0f + z * 31.0f + time_w * 8.0f * weather_freq) * 0.5f + 0.5f, 1.0f);
         if(rain_noise > 0.92f)
         {
             int r = result & 0xFF, g = (result >> 8) & 0xFF, b = (result >> 16) & 0xFF;
@@ -326,7 +387,7 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
 
     if(weather_lightning)
     {
-        float flash = fmodf(time * 0.3f * weather_freq, 4.0f);
+        float flash = fmodf(time_w * 0.3f * weather_freq, 4.0f);
         if(flash < 0.08f)
         {
             float t = flash / 0.08f;
@@ -343,6 +404,20 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
 nlohmann::json Sunrise::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "sunrise_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "sunrise_stratum_band_speed_pct",
+                                           "sunrise_stratum_band_tight_pct",
+                                           "sunrise_stratum_band_phase_deg");
     j["time_mode"] = time_mode;
     j["color_preset"] = color_preset;
     j["day_length_minutes"] = day_length_minutes;
@@ -356,6 +431,13 @@ nlohmann::json Sunrise::SaveSettings() const
 void Sunrise::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "sunrise_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "sunrise_stratum_band_speed_pct",
+                                            "sunrise_stratum_band_tight_pct",
+                                            "sunrise_stratum_band_phase_deg");
     if(settings.contains("time_mode") && settings["time_mode"].is_number_integer())
         time_mode = std::max(0, std::min(settings["time_mode"].get<int>(), MODE_COUNT - 1));
     if(settings.contains("color_preset") && settings["color_preset"].is_number_integer())
@@ -370,4 +452,9 @@ void Sunrise::LoadSettings(const nlohmann::json& settings)
         weather_cloudy = settings["weather_cloudy"].get<bool>();
     if(settings.contains("weather_lightning") && settings["weather_lightning"].is_boolean())
         weather_lightning = settings["weather_lightning"].get<bool>();
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }

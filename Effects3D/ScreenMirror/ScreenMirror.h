@@ -5,6 +5,7 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -15,6 +16,7 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
+class StratumBandPanel;
 struct CaptureSourceInfo;
 struct CapturedFrame;
 
@@ -63,6 +65,7 @@ private slots:
     void OnParameterChanged();
     void OnScreenPreviewChanged();
     void OnTestPatternChanged();
+    void OnStratumBandChanged();
 
 private:
     struct MonitorSettings
@@ -90,7 +93,7 @@ private:
         float left_right_balance;
         float top_bottom_balance;
 
-        int reference_point_index;
+        int reference_point_id;
 
         bool show_test_pattern;
         bool show_screen_preview;
@@ -160,7 +163,7 @@ private:
             , front_back_balance(0.0f)
             , left_right_balance(0.0f)
             , top_bottom_balance(0.0f)
-            , reference_point_index(-1)
+            , reference_point_id(-1)
             , show_test_pattern(false)
             , show_screen_preview(false)
             , group_box(nullptr)
@@ -210,7 +213,6 @@ private:
         }
     };
 
-    void StartCaptureIfNeeded();
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
 
@@ -282,7 +284,8 @@ private:
     };
     std::map<LEDKey, LEDState> led_states;
 
-    bool ResolveReferencePoint(int index, Vector3D& out) const;
+    bool ResolveReferencePointById(int id, Vector3D& out) const;
+    int LookupReferencePointIdByIndex(int index) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
     std::shared_ptr<CapturedFrame> GetFrameForDelay(const std::string& capture_id, float delay_ms) const;
     float GetHistoryRetentionMs() const;
@@ -291,6 +294,10 @@ private:
     RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
                                        const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
                                        const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr);
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif // SCREENMIRROR_H

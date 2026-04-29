@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BeatPulse.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
 #include <QLabel>
@@ -36,9 +38,10 @@ BeatPulse::BeatPulse(QWidget* parent)
 EffectInfo3D BeatPulse::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Beat Pulse";
-    info.effect_description = "Beat-triggered waves expand from center; onset detection drives new pulses";
+    info.effect_description =
+        "Beat-triggered waves expand from center; onset detection drives new pulses; optional stratum band tuning";
     info.category = "Audio";
     info.is_reversible = false;
     info.supports_random = false;
@@ -139,6 +142,23 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
         sens_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+
+    stratum_panel = new StratumBandPanel(parent);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BeatPulse::OnStratumBandChanged);
+    OnStratumBandChanged();
+}
+
+void BeatPulse::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void BeatPulse::TickPulses(float time)
@@ -171,23 +191,44 @@ void BeatPulse::TickPulses(float time)
     }), pulses.end());
 }
 
-float BeatPulse::SamplePulseField(float radial_norm, float height_norm, float time) const
+float BeatPulse::SamplePulseField(float radial_norm,
+                                  float height_norm,
+                                  float time,
+                                  const EffectStratumBlend::BandBlendScalars& bb) const
 {
-    float pulse_speed = 2.0f + GetScaledSpeed();
+    float pulse_speed = (2.0f + GetScaledSpeed()) * bb.speed_mul;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
-    float width_k = (36.0f * (0.6f + 0.4f * detail)) / std::max(0.35f, size_m);
+    float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
+    float width_k =
+        ((36.0f * (0.6f + 0.4f * detail)) / std::max(0.35f, size_m)) * tm;
+    float phase_radial = bb.phase_deg * (1.0f / 360.0f);
+
+    float height_fade = 1.0f - std::clamp(height_norm, 0.0f, 1.0f);
+    if(UseSpatialRoomTint())
+    {
+        SpatialLayerCore::MapperSettings stratum_map;
+        stratum_map.floor_end = 0.30f;
+        stratum_map.desk_end = 0.55f;
+        stratum_map.upper_end = 0.78f;
+        stratum_map.blend_softness = 0.10f;
+        float layer_w[SpatialLayerCore::kMaxLayerCount]{};
+        SpatialLayerCore::ComputeVerticalStratumWeights(height_norm, stratum_map, 3, layer_w);
+        height_fade = 0.55f + 0.45f * (layer_w[0] * 1.0f + layer_w[1] * 0.72f + layer_w[2] * 0.48f);
+    }
+
     float total = 0.0f;
     for(const PulseData& p : pulses)
     {
         float age = time - p.birth_time;
         if(age < 0.0f) continue;
         float front = std::min(1.2f, age * pulse_speed);
-        float distance = std::fabs(radial_norm - front);
+        float rn = std::fmod(radial_norm + phase_radial + 1.0f, 1.0f);
+        float distance = std::fabs(rn - front);
         float pulse = std::exp(-distance * distance * width_k);
         float tail = std::exp(-std::max(distance - 0.2f, 0.0f) * 6.0f);
         float fade = p.strength * std::exp(-2.5f * age);
-        float contrib = fade * (0.7f * pulse + 0.3f * tail) * (0.55f + 0.45f * (1.0f - height_norm));
+        float contrib = fade * (0.7f * pulse + 0.3f * tail) * height_fade;
         total += contrib;
     }
     return std::clamp(total, 0.0f, 1.0f);
@@ -206,34 +247,86 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
         return 0x00000000;
 
     TickPulses(time);
-    float dx = x - origin.x;
-    float dy = y - origin.y;
-    float dz = z - origin.z;
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    float dx = rotated_pos.x - origin.x;
+    float dy = rotated_pos.y - origin.y;
+    float dz = rotated_pos.z - origin.z;
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
-    float height_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-    float energy = SamplePulseField(radial_norm, height_norm, time);
+    float height_norm = coord2;
+    float energy = SamplePulseField(radial_norm, height_norm, time, bb);
     float ambient = EvaluateIntensity(
         AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz), time);
     energy = std::clamp(energy + 0.15f * ambient, 0.0f, 1.0f);
 
     float gradient_pos = std::clamp(radial_norm, 0.0f, 1.0f);
+
+    float detail = std::max(0.05f, GetScaledDetail());
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, energy);
     color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
-    RGBColor user_color = GetRainbowMode()
-        ? GetRainbowColor(gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f)
-        : GetColorAtPosition(gradient_pos);
+    RGBColor user_color;
+    if(GetRainbowMode())
+    {
+        float hue = gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul
+                    + bb.phase_deg * (1.0f / 360.0f) * 40.0f;
+        hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float p = ApplySpatialPalette01(gradient_pos, basis, sp, map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        user_color = GetColorAtPosition(p);
+    }
     return ModulateRGBColors(color, user_color);
 }
-
-REGISTER_EFFECT_3D(BeatPulse)
 
 nlohmann::json BeatPulse::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["onset_threshold"] = onset_threshold;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "beatpulse_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "beatpulse_stratum_band_speed_pct",
+                                           "beatpulse_stratum_band_tight_pct",
+                                           "beatpulse_stratum_band_phase_deg");
     return j;
 }
 
@@ -241,6 +334,13 @@ void BeatPulse::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "beatpulse_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "beatpulse_stratum_band_speed_pct",
+                                            "beatpulse_stratum_band_tight_pct",
+                                            "beatpulse_stratum_band_phase_deg");
     if(settings.contains("onset_threshold")) onset_threshold = std::clamp(settings["onset_threshold"].get<float>(), 0.05f, 0.95f);
     envelope = 0.0f;
     smoothed = 0.0f;
@@ -249,4 +349,11 @@ void BeatPulse::LoadSettings(const nlohmann::json& settings)
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
     last_tick_time = std::numeric_limits<float>::lowest();
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(BeatPulse)

@@ -5,7 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <vector>
+
+class StratumBandPanel;
 
 struct CachedBall3D
 {
@@ -37,6 +40,7 @@ public:
 
 private slots:
     void OnBallParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     QSlider* count_slider;
@@ -49,6 +53,10 @@ private:
     /* Monotonic simulation time (effect time * phase rate); no wrap — state advances forever. */
     float ball_physics_sim_t = 0.f;
     float ball_last_integrated_wall_time = -1e9f;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

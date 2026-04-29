@@ -5,6 +5,9 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class StratumBandPanel;
 
 class Matrix : public SpatialEffect3D
 {
@@ -29,6 +32,7 @@ public:
 
 private slots:
     void OnMatrixParameterChanged();
+    void OnStratumBandChanged();
 
 private:
     QSlider*        density_slider;
@@ -52,6 +56,10 @@ private:
     unsigned int    char_variation;
     unsigned int    char_spacing;
     unsigned int    head_brightness;  /* 0..100: how much the leading LED is whitish (0=no white, 100=full white tip) */
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 
     /* Returns intensity 0..1; if out_head is non-null, sets *out_head to 0..1 for leading edge blend (only very tip is head). */
     float ComputeFaceIntensity(int face,

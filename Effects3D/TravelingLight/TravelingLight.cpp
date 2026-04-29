@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TravelingLight.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include "../EffectHelpers.h"
 #include <QComboBox>
 #include <QSlider>
 #include <QLabel>
 #include <QGridLayout>
+#include <QVBoxLayout>
 #include <cmath>
 #include <algorithm>
 
@@ -31,8 +34,6 @@ static RGBColor lerp_color(RGBColor a, RGBColor b, float t)
     b_ = std::max(0, std::min(255, b_));
     return (RGBColor)((b_ << 16) | (g << 8) | r);
 }
-
-REGISTER_EFFECT_3D(TravelingLight);
 
 const char* TravelingLight::ModeName(int m)
 {
@@ -69,9 +70,10 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D TravelingLight::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Traveling Light";
-    info.effect_description = "Comet, Chase, Marquee, ZigZag, KITT, Wipe, Moving Panes, Crossing Beams, or Rotating Beam";
+    info.effect_description =
+        "Comet, Chase, Marquee, ZigZag, KITT, Wipe, Moving Panes, Crossing Beams, or Rotating Beam; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_COMET;
     info.is_reversible = true;
@@ -98,8 +100,10 @@ EffectInfo3D TravelingLight::GetEffectInfo()
 void TravelingLight::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    QGridLayout* layout = new QGridLayout(w);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
     int row = 0;
 
     layout->addWidget(new QLabel("Style:"), row, 0);
@@ -171,7 +175,23 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
         if(glow_label) glow_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+    stratum_panel = new StratumBandPanel(w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    outer->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TravelingLight::OnStratumBandChanged);
+    OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void TravelingLight::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void TravelingLight::UpdateParams(SpatialEffectParams& params)
@@ -188,13 +208,22 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    float progress = CalculateProgress(time);
+    float coord2 = NormalizeGridAxis01(rotated.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
+    float progress = CalculateProgress(time) * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f);
     if(progress > 1.0f) progress = std::fmod(progress, 1.0f);
     if(progress < 0.0f) progress = std::fmod(progress, 1.0f) + 1.0f;
 
     float size_scale = GetNormalizedSize() / 1.5f;
-    float detail = std::max(0.05f, GetScaledDetail());
+    float detail = std::max(0.05f, std::min(3.0f, GetScaledDetail() * bb.tight_mul));
     float color_cycle = progress * GetScaledFrequency() * 3.0f;
+    const float tight_inv = 1.0f / std::max(0.25f, bb.tight_mul);
 
     int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
     int ax = GetPathAxis();
@@ -208,7 +237,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         bool step = (progress < 0.5f);
         float p_step = step ? (2.0f * progress) : (2.0f * (1.0f - progress));
         float beam_center = axis_min + p_step * span;
-        float w = std::max(0.05f, std::min(0.5f, 0.15f * size_scale)) * span;
+        float w = std::max(0.05f, std::min(0.5f, 0.15f * size_scale)) * span * tight_inv;
         float hw = w * 0.5f;
         float dist = beam_center - axis_val;
         float intensity = 0.0f;
@@ -250,7 +279,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float rot_rel_z = rotated.z - origin.z;
         float position = NormalizeGridAxis01(rotated.x, grid.min_x, grid.max_x);
         float edge_distance = fabsf(position - prog);
-        float thickness_factor = 0.2f * size_scale;
+        float thickness_factor = 0.2f * size_scale * tight_inv;
         float intensity;
         switch(wipe_edge_shape) {
         case 0: {
@@ -312,7 +341,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float y_progress = origin.y + sine_y * half_h;
         float dist_x = fabsf(x - x_progress);
         float dist_y = fabsf(y - y_progress);
-        float thick = std::max(0.02f, std::min(0.2f, 0.08f * size_scale)) * std::max(grid.width, grid.height);
+        float thick = std::max(0.02f, std::min(0.2f, 0.08f * size_scale)) * std::max(grid.width, grid.height) * tight_inv;
         float glow_val = std::max(0.1f, std::min(1.0f, glow));
         float dx_pct = (dist_x > thick) ? powf(dist_x / std::max(0.001f, grid.width), 0.01f * glow_val * 100.0f) : 0.0f;
         float dy_pct = (dist_y > thick) ? powf(dist_y / std::max(0.001f, grid.height), 0.01f * glow_val * 100.0f) : 0.0f;
@@ -351,7 +380,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(diff < 0.0f) diff += (float)(2.0 * M_PI);
         diff -= (float)M_PI;
         float abs_diff = fabsf(diff);
-        float width = std::max(0.05f, std::min(0.5f, 0.15f * size_scale)) * (float)M_PI;
+        float width = std::max(0.05f, std::min(0.5f, 0.15f * size_scale)) * (float)M_PI * tight_inv;
         float glow_val = std::max(0.1f, std::min(1.0f, glow));
         float intensity = (abs_diff <= width * 0.5f) ? 1.0f :
             (abs_diff <= width) ? (1.0f - (abs_diff - width * 0.5f) / (width * 0.5f)) :
@@ -372,7 +401,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     float axis_min = (ax == 0) ? grid.min_x : (ax == 1) ? grid.min_y : grid.min_z;
     float axis_max = (ax == 0) ? grid.max_x : (ax == 1) ? grid.max_y : grid.max_z;
     float span = std::max(axis_max - axis_min, 1e-5f);
-    float tail_len = 0.25f * span * size_scale;
+    float tail_len = 0.25f * span * size_scale * tight_inv;
 
     if(m == MODE_CHASE)
     {
@@ -449,7 +478,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float local = (seg % 2 == 0) ? row_cont : ((float)n_rows - row_cont);
         float path_pos = ((float)(seg * n_rows) + local) / (float)(n_cols * n_rows);
         path_pos = std::max(0.0f, std::min(1.0f, path_pos));
-        float tail = std::max(0.1f, std::min(0.8f, 0.25f * size_scale));
+        float tail = std::max(0.1f, std::min(0.8f, 0.25f * size_scale)) * tight_inv;
         float distance = 1.0f;
         if(path_pos > progress) return 0x00000000;
         float dist_in_tail = progress - path_pos;
@@ -495,6 +524,20 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
 nlohmann::json TravelingLight::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "travelinglight_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "travelinglight_stratum_band_speed_pct",
+                                           "travelinglight_stratum_band_tight_pct",
+                                           "travelinglight_stratum_band_phase_deg");
     j["mode"] = this->mode;
     j["glow"] = glow;
     j["wipe_edge_shape"] = wipe_edge_shape;
@@ -505,6 +548,13 @@ nlohmann::json TravelingLight::SaveSettings() const
 void TravelingLight::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "travelinglight_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "travelinglight_stratum_band_speed_pct",
+                                            "travelinglight_stratum_band_tight_pct",
+                                            "travelinglight_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         this->mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("glow") && settings["glow"].is_number())
@@ -515,4 +565,11 @@ void TravelingLight::LoadSettings(const nlohmann::json& settings)
         wipe_edge_shape = std::clamp(settings["edge_shape"].get<int>(), 0, 2);
     if(settings.contains("num_divisions") && settings["num_divisions"].is_number_integer())
         num_divisions = std::max(2, std::min(16, settings["num_divisions"].get<int>()));
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(TravelingLight);

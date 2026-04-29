@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DiscoFlash.h"
+#include "StratumBandPanel.h"
+#include "EffectStratumBlend.h"
+#include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
 #include <cmath>
 #include <algorithm>
@@ -19,9 +22,9 @@ DiscoFlash::DiscoFlash(QWidget* parent)
 EffectInfo3D DiscoFlash::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 2;
+    info.info_version = 3;
     info.effect_name = "Disco Flash";
-    info.effect_description = "Beat-triggered random colour flashes";
+    info.effect_description = "Beat-triggered random colour flashes; optional stratum band tuning";
     info.category = "Audio";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -157,6 +160,23 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
+
+    stratum_panel = new StratumBandPanel(parent);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    layout->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &DiscoFlash::OnStratumBandChanged);
+    OnStratumBandChanged();
+}
+
+void DiscoFlash::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
+    }
+    emit ParametersChanged();
 }
 
 void DiscoFlash::UpdateParams(SpatialEffectParams& /*params*/)
@@ -214,10 +234,11 @@ void DiscoFlash::TickFlashes(float time)
         }), flashes.end());
 }
 
-RGBColor DiscoFlash::SampleFlashField(float nx, float ny, float nz, float time)
+RGBColor DiscoFlash::SampleFlashField(float nx, float ny, float nz, float time, const EffectStratumBlend::BandBlendScalars& bb)
 {
     RGBColor result = ToRGBColor(0, 0, 0);
-    float color_cycle = time * GetScaledFrequency() * 12.0f;
+    float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
+    float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
 
     for(unsigned int i = 0; i < flashes.size(); i++)
     {
@@ -229,7 +250,7 @@ RGBColor DiscoFlash::SampleFlashField(float nx, float ny, float nz, float time)
         float dy = ny - f.ny;
         float dz = nz - f.nz;
         float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-        float sz = std::max(f.size, 1e-3f);
+        float sz = std::max(f.size / tm, 1e-3f);
 
         float spatial = std::exp(-(dist * dist) / (sz * sz));
         float fade = std::exp(-flash_decay * age);
@@ -237,7 +258,7 @@ RGBColor DiscoFlash::SampleFlashField(float nx, float ny, float nz, float time)
 
         if(contribution < 0.004f) continue;
 
-        RGBColor flash_color = GetRainbowColor(f.hue + color_cycle);
+        RGBColor flash_color = GetRainbowColor(f.hue + color_cycle + bb.phase_deg);
         flash_color = ScaleRGBColor(flash_color, contribution);
 
         int rr = std::clamp((int)(result & 0xFF)         + (int)(flash_color & 0xFF),         0, 255);
@@ -257,6 +278,15 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
         return 0x00000000;
     }
     Vector3D o = GetEffectOriginGrid(grid);
+    Vector3D rot = TransformPointByRotation(x, y, z, o);
+    float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
     int mode = std::max(0, std::min(flash_mode, MODE_COUNT - 1));
     if(mode == MODE_SPARKLE)
     {
@@ -266,14 +296,16 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
         float ny = (grid.height > 1e-5f) ? (y - o.y) / (grid.height * 0.5f) : 0.0f;
         float nz = (grid.depth  > 1e-5f) ? (z - o.z) / (grid.depth  * 0.5f) : 0.0f;
         unsigned int h = (unsigned int)((nx * 1000 + ny * 2000 + nz * 3000) * 1000);
-        h = h * 73856093u ^ (unsigned int)(time * 100) * 19349663u;
+        h = h * 73856093u ^ (unsigned int)(time * 100.f * bb.speed_mul) * 19349663u;
         h = (h << 13) ^ h;
         float sparkle = ((h & 0xFFFFu) / 65535.0f);
-        float phase = fmodf(time * (3.0f + sparkle * 5.0f) + sparkle * 6.28f, 6.28f);
+        float phase = fmodf(time * bb.speed_mul * (3.0f + sparkle * 5.0f) + sparkle * 6.28f, 6.28f);
         float intensity = (phase < 1.0f) ? (0.3f + 0.7f * phase) : (phase > 5.28f) ? (1.0f - (phase - 5.28f)) : 1.0f;
         intensity = std::max(0.0f, std::min(1.0f, intensity));
         if(intensity < 0.01f) return ToRGBColor(0, 0, 0);
-        float hue = fmodf(sparkle * 360.0f * (0.6f + 0.4f * detail) + time * rate * 12.0f, 360.0f);
+        float hue = fmodf(sparkle * 360.0f * (0.6f + 0.4f * detail * bb.tight_mul) + time * rate * 12.0f * bb.speed_mul
+                          + bb.phase_deg,
+                      360.0f);
         if(hue < 0.0f) hue += 360.0f;
         RGBColor c = GetRainbowColor(hue);
         unsigned char r = (unsigned char)((c & 0xFF) * intensity);
@@ -288,7 +320,7 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
     float ny = (grid.height > 1e-5f) ? (y - o.y) / (grid.height * 0.5f) : 0.0f;
     float nz = (grid.depth  > 1e-5f) ? (z - o.z) / (grid.depth  * 0.5f) : 0.0f;
 
-    return SampleFlashField(nx, ny, nz, time);
+    return SampleFlashField(nx, ny, nz, time, bb);
 }
 
 nlohmann::json DiscoFlash::SaveSettings() const
@@ -300,6 +332,20 @@ nlohmann::json DiscoFlash::SaveSettings() const
     j["flash_size"]       = flash_size;
     j["onset_threshold"]  = onset_threshold;
     j["flash_mode"]       = flash_mode;
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "discoflash_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "discoflash_stratum_band_speed_pct",
+                                           "discoflash_stratum_band_tight_pct",
+                                           "discoflash_stratum_band_phase_deg");
     return j;
 }
 
@@ -307,6 +353,13 @@ void DiscoFlash::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "discoflash_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "discoflash_stratum_band_speed_pct",
+                                            "discoflash_stratum_band_tight_pct",
+                                            "discoflash_stratum_band_phase_deg");
     if(settings.contains("flash_decay"))      flash_decay      = settings["flash_decay"].get<float>();
     if(settings.contains("flash_density"))    flash_density    = settings["flash_density"].get<float>();
     if(settings.contains("flash_size"))       flash_size       = settings["flash_size"].get<float>();
@@ -317,6 +370,11 @@ void DiscoFlash::LoadSettings(const nlohmann::json& settings)
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
 
 REGISTER_EFFECT_3D(DiscoFlash)

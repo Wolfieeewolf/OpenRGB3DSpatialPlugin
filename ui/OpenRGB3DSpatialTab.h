@@ -363,6 +363,8 @@ private:
     QComboBox*                  effect_bounds_combo = nullptr;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
+    /** Right-hand effect settings scroll; used to defer repaints while rebuilding controls. */
+    QScrollArea*                effects_detail_scroll = nullptr;
 
     QListWidget*                reference_points_list;
     QLabel*                     ref_points_empty_label;

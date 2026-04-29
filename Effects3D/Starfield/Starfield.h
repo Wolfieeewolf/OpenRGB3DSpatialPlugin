@@ -5,7 +5,10 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
 #include <vector>
+
+class StratumBandPanel;
 
 class Starfield : public SpatialEffect3D
 {
@@ -23,6 +26,9 @@ public:
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
 
+private slots:
+    void OnStratumBandChanged();
+
 private:
     enum Mode { MODE_STARFIELD = 0, MODE_TWINKLE, MODE_COUNT };
     static const char* ModeName(int m);
@@ -36,6 +42,10 @@ private:
     std::vector<Vector3D> star_positions_cached;
     float star_aabb_min_x = 0, star_aabb_min_y = 0, star_aabb_min_z = 0;
     float star_aabb_max_x = 0, star_aabb_max_y = 0, star_aabb_max_z = 0;
+
+    StratumBandPanel* stratum_panel = nullptr;
+    int stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

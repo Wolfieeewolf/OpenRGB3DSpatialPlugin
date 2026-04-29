@@ -121,6 +121,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             room_bounds.min_z, room_bounds.max_z,
                             grid_scale_mm);
 
+    Vector3D led_mu_room{};
+    if(TryComputeLedCentroid(controller_transforms, true, &led_mu_room))
+    {
+        room_grid.SetLedCentroid(led_mu_room.x, led_mu_room.y, led_mu_room.z);
+    }
+    Vector3D led_mu_world{};
+    if(TryComputeLedCentroid(controller_transforms, false, &led_mu_world))
+    {
+        world_grid.SetLedCentroid(led_mu_world.x, led_mu_world.y, led_mu_world.z);
+    }
+
     ReferenceMode stack_origin_mode = REF_MODE_USER_POSITION;
     Vector3D stack_ref_origin = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
     if(effect_origin_combo)
@@ -132,6 +143,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             if(ref_idx == -2)
             {
                 stack_origin_mode = REF_MODE_TARGET_ZONE_CENTER;
+            }
+            else if(ref_idx == -3)
+            {
+                stack_origin_mode = REF_MODE_WORLD_ORIGIN;
+            }
+            else if(ref_idx == -4)
+            {
+                stack_origin_mode = REF_MODE_LED_CENTROID;
             }
             else if(ref_idx >= 0 && ref_idx < (int)reference_points.size() && reference_points[ref_idx])
             {

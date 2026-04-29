@@ -2,6 +2,7 @@
 
 #include "GameTelemetryStatusPanel.h"
 #include "GameTelemetryBridge.h"
+#include "PluginUiUtils.h"
 
 #include <QLabel>
 #include <QVBoxLayout>
@@ -17,7 +18,7 @@ GameTelemetryStatusPanel::GameTelemetryStatusPanel(QWidget* parent) : QGroupBox(
         "You do not need a separate 'OpenRGB server' for this. "
         "Enable the 3D Spatial plugin; counters should increase while the game runs with the sender mod.");
     game_help->setWordWrap(true);
-    game_help->setStyleSheet("color: gray; font-size: 10px;");
+    PluginUiApplyMutedSecondaryLabel(game_help);
     game_layout->addWidget(game_help);
 
     status_label = new QLabel("Listener: waiting");

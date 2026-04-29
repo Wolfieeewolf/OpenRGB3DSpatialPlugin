@@ -13,6 +13,9 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <climits>
+#include <atomic>
+#include <cstdint>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -31,6 +34,8 @@ namespace
 {
 static const unsigned short kGameUdpPort = 9876;
 
+std::atomic<std::uint64_t> g_telemetry_data_revision{0};
+
 static unsigned long long NowMs()
 {
     return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -40,6 +45,203 @@ static unsigned long long NowMs()
 static float LerpFloat(float a, float b, float t)
 {
     return a + (b - a) * t;
+}
+
+static void ApplyPlayerPoseEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
+{
+    if(msg.contains("x") && msg.contains("y") && msg.contains("z") &&
+       msg.contains("fx") && msg.contains("fy") && msg.contains("fz") &&
+       msg.contains("ux") && msg.contains("uy") && msg.contains("uz"))
+    {
+        float nx = msg["x"].get<float>();
+        float ny = msg["y"].get<float>();
+        float nz = msg["z"].get<float>();
+        float nfx = msg["fx"].get<float>();
+        float nfy = msg["fy"].get<float>();
+        float nfz = msg["fz"].get<float>();
+        float nux = msg["ux"].get<float>();
+        float nuy = msg["uy"].get<float>();
+        float nuz = msg["uz"].get<float>();
+        if(!telemetry.has_player_pose)
+        {
+            telemetry.player_x = nx;
+            telemetry.player_y = ny;
+            telemetry.player_z = nz;
+            telemetry.forward_x = nfx;
+            telemetry.forward_y = nfy;
+            telemetry.forward_z = nfz;
+            telemetry.up_x = nux;
+            telemetry.up_y = nuy;
+            telemetry.up_z = nuz;
+        }
+        else
+        {
+            const float alpha = 0.35f;
+            telemetry.player_x = LerpFloat(telemetry.player_x, nx, alpha);
+            telemetry.player_y = LerpFloat(telemetry.player_y, ny, alpha);
+            telemetry.player_z = LerpFloat(telemetry.player_z, nz, alpha);
+            telemetry.forward_x = LerpFloat(telemetry.forward_x, nfx, alpha);
+            telemetry.forward_y = LerpFloat(telemetry.forward_y, nfy, alpha);
+            telemetry.forward_z = LerpFloat(telemetry.forward_z, nfz, alpha);
+            telemetry.up_x = LerpFloat(telemetry.up_x, nux, alpha);
+            telemetry.up_y = LerpFloat(telemetry.up_y, nuy, alpha);
+            telemetry.up_z = LerpFloat(telemetry.up_z, nuz, alpha);
+        }
+        telemetry.has_player_pose = true;
+        telemetry.pose.has_pose = true;
+        telemetry.pose.player_x = telemetry.player_x;
+        telemetry.pose.player_y = telemetry.player_y;
+        telemetry.pose.player_z = telemetry.player_z;
+        telemetry.pose.forward_x = telemetry.forward_x;
+        telemetry.pose.forward_y = telemetry.forward_y;
+        telemetry.pose.forward_z = telemetry.forward_z;
+        telemetry.pose.up_x = telemetry.up_x;
+        telemetry.pose.up_y = telemetry.up_y;
+        telemetry.pose.up_z = telemetry.up_z;
+    }
+    if(msg.contains("blocks_per_m") && msg["blocks_per_m"].is_number())
+    {
+        telemetry.player_blocks_per_m = (std::max)(0.05f, msg["blocks_per_m"].get<float>());
+        telemetry.has_player_blocks_per_m = true;
+    }
+    if(msg.contains("camera_mode") && msg["camera_mode"].is_string())
+    {
+        std::string cm = msg["camera_mode"].get<std::string>();
+        if(cm == "first_person")
+        {
+            telemetry.camera_mode = 1;
+            telemetry.has_camera_mode = true;
+        }
+        else if(cm == "third_person")
+        {
+            telemetry.camera_mode = 2;
+            telemetry.has_camera_mode = true;
+        }
+    }
+}
+
+static void ApplyHealthStateEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
+{
+    telemetry.has_health_state = true;
+    telemetry.health = msg.value("health", 100.0f);
+    telemetry.health_max = (std::max)(1.0f, msg.value("health_max", 100.0f));
+    const float hp_per_heart = (std::max)(0.01f, msg.value("hp_per_heart", 2.0f));
+    if(msg.contains("hearts") && msg["hearts"].is_number() && msg.contains("hearts_max") && msg["hearts_max"].is_number())
+    {
+        telemetry.hearts = msg.value("hearts", 0.0f);
+        telemetry.hearts_max = (std::max)(1e-3f, msg.value("hearts_max", 1.0f));
+    }
+    else
+    {
+        telemetry.hearts = telemetry.health / hp_per_heart;
+        telemetry.hearts_max = (std::max)(1e-3f, telemetry.health_max / hp_per_heart);
+    }
+    telemetry.hunger = msg.value("hunger", 20.0f);
+    telemetry.hunger_max = (std::max)(1.0f, msg.value("hunger_max", 20.0f));
+    telemetry.air = msg.value("air", 300.0f);
+    telemetry.air_max = (std::max)(1.0f, msg.value("air_max", 300.0f));
+    telemetry.has_item_durability = msg.value("item_durability_valid", false);
+    telemetry.item_durability = msg.value("item_durability", 0.0f);
+    telemetry.item_durability_max = (std::max)(1.0f, msg.value("item_durability_max", 1.0f));
+
+    telemetry.health_state.has_health = true;
+    telemetry.health_state.health = telemetry.health;
+    telemetry.health_state.health_max = telemetry.health_max;
+    telemetry.health_state.hearts = telemetry.hearts;
+    telemetry.health_state.hearts_max = telemetry.hearts_max;
+    telemetry.health_state.hunger = telemetry.hunger;
+    telemetry.health_state.hunger_max = telemetry.hunger_max;
+    telemetry.health_state.air = telemetry.air;
+    telemetry.health_state.air_max = telemetry.air_max;
+    telemetry.health_state.has_item_durability = telemetry.has_item_durability;
+    telemetry.health_state.item_durability = telemetry.item_durability;
+    telemetry.health_state.item_durability_max = telemetry.item_durability_max;
+}
+
+static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
+{
+    auto clear_voxel = [&telemetry]() {
+        telemetry.voxel_frame.has_voxel_frame = false;
+        telemetry.voxel_frame.rgba.clear();
+    };
+
+    auto try_compute_rgba_bytes = [](int x, int y, int z, size_t& out_bytes) -> bool {
+        if(x <= 0 || y <= 0 || z <= 0)
+        {
+            return false;
+        }
+        const size_t sx = (size_t)x;
+        const size_t sy = (size_t)y;
+        const size_t sz = (size_t)z;
+        if(sx > (SIZE_MAX / sy))
+        {
+            return false;
+        }
+        const size_t xy = sx * sy;
+        if(xy > (SIZE_MAX / sz))
+        {
+            return false;
+        }
+        const size_t xyz = xy * sz;
+        if(xyz > (SIZE_MAX / 4u))
+        {
+            return false;
+        }
+        out_bytes = xyz * 4u;
+        return true;
+    };
+
+    const int sx = msg.value("voxel_size_x", 0);
+    const int sy = msg.value("voxel_size_y", 0);
+    const int sz = msg.value("voxel_size_z", 0);
+    if(sx <= 0 || sy <= 0 || sz <= 0)
+    {
+        clear_voxel();
+        return;
+    }
+    if(!msg.contains("voxel_rgba") || !msg["voxel_rgba"].is_array())
+    {
+        clear_voxel();
+        return;
+    }
+
+    size_t expected = 0;
+    if(!try_compute_rgba_bytes(sx, sy, sz, expected) || expected == 0 || expected > (size_t)INT_MAX)
+    {
+        clear_voxel();
+        return;
+    }
+    const auto& rgba = msg["voxel_rgba"];
+    if(rgba.size() < expected)
+    {
+        clear_voxel();
+        return;
+    }
+
+    telemetry.voxel_frame.has_voxel_frame = true;
+    telemetry.voxel_frame.frame_id = (unsigned int)msg.value("voxel_frame_id", 0);
+    telemetry.voxel_frame.size_x = sx;
+    telemetry.voxel_frame.size_y = sy;
+    telemetry.voxel_frame.size_z = sz;
+    telemetry.voxel_frame.origin_x = msg.value("voxel_origin_x", 0.0f);
+    telemetry.voxel_frame.origin_y = msg.value("voxel_origin_y", 0.0f);
+    telemetry.voxel_frame.origin_z = msg.value("voxel_origin_z", 0.0f);
+    telemetry.voxel_frame.voxel_size = (std::max)(1e-4f, msg.value("voxel_cell_size", 1.0f));
+    telemetry.voxel_frame.rgba.resize(expected);
+    for(size_t i = 0; i < expected; i++)
+    {
+        int v = 0;
+        if(rgba[i].is_number_integer())
+        {
+            v = rgba[i].get<int>();
+        }
+        else if(rgba[i].is_number_float())
+        {
+            v = (int)rgba[i].get<float>();
+        }
+        telemetry.voxel_frame.rgba[i] = (unsigned char)(std::max)(0, (std::min)(255, v));
+    }
+    telemetry.voxel_frame.received_ms = NowMs();
 }
 
 static void CloseSocketFd(int& fd)
@@ -244,65 +446,7 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 telemetry.last_event_ms = NowMs();
                 if(out_type == "player_pose")
                 {
-                    if(msg.contains("x") && msg.contains("y") && msg.contains("z") &&
-                       msg.contains("fx") && msg.contains("fy") && msg.contains("fz") &&
-                       msg.contains("ux") && msg.contains("uy") && msg.contains("uz"))
-                    {
-                        float nx = msg["x"].get<float>();
-                        float ny = msg["y"].get<float>();
-                        float nz = msg["z"].get<float>();
-                        float nfx = msg["fx"].get<float>();
-                        float nfy = msg["fy"].get<float>();
-                        float nfz = msg["fz"].get<float>();
-                        float nux = msg["ux"].get<float>();
-                        float nuy = msg["uy"].get<float>();
-                        float nuz = msg["uz"].get<float>();
-                        if(!telemetry.has_player_pose)
-                        {
-                            telemetry.player_x = nx;
-                            telemetry.player_y = ny;
-                            telemetry.player_z = nz;
-                            telemetry.forward_x = nfx;
-                            telemetry.forward_y = nfy;
-                            telemetry.forward_z = nfz;
-                            telemetry.up_x = nux;
-                            telemetry.up_y = nuy;
-                            telemetry.up_z = nuz;
-                        }
-                        else
-                        {
-                            const float alpha = 0.35f;
-                            telemetry.player_x = LerpFloat(telemetry.player_x, nx, alpha);
-                            telemetry.player_y = LerpFloat(telemetry.player_y, ny, alpha);
-                            telemetry.player_z = LerpFloat(telemetry.player_z, nz, alpha);
-                            telemetry.forward_x = LerpFloat(telemetry.forward_x, nfx, alpha);
-                            telemetry.forward_y = LerpFloat(telemetry.forward_y, nfy, alpha);
-                            telemetry.forward_z = LerpFloat(telemetry.forward_z, nfz, alpha);
-                            telemetry.up_x = LerpFloat(telemetry.up_x, nux, alpha);
-                            telemetry.up_y = LerpFloat(telemetry.up_y, nuy, alpha);
-                            telemetry.up_z = LerpFloat(telemetry.up_z, nuz, alpha);
-                        }
-                        telemetry.has_player_pose = true;
-                    }
-                    if(msg.contains("blocks_per_m") && msg["blocks_per_m"].is_number())
-                    {
-                        telemetry.player_blocks_per_m = (std::max)(0.05f, msg["blocks_per_m"].get<float>());
-                        telemetry.has_player_blocks_per_m = true;
-                    }
-                    if(msg.contains("camera_mode") && msg["camera_mode"].is_string())
-                    {
-                        std::string cm = msg["camera_mode"].get<std::string>();
-                        if(cm == "first_person")
-                        {
-                            telemetry.camera_mode = 1;
-                            telemetry.has_camera_mode = true;
-                        }
-                        else if(cm == "third_person")
-                        {
-                            telemetry.camera_mode = 2;
-                            telemetry.has_camera_mode = true;
-                        }
-                    }
+                    ApplyPlayerPoseEvent(telemetry, msg);
                 }
                 else if(out_type == "damage_event")
                 {
@@ -325,27 +469,11 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 }
                 else if(out_type == "health_state")
                 {
-                    telemetry.has_health_state = true;
-                    telemetry.health = msg.value("health", 100.0f);
-                    telemetry.health_max = (std::max)(1.0f, msg.value("health_max", 100.0f));
-                    const float hp_per_heart = (std::max)(0.01f, msg.value("hp_per_heart", 2.0f));
-                    if(msg.contains("hearts") && msg["hearts"].is_number() && msg.contains("hearts_max") && msg["hearts_max"].is_number())
-                    {
-                        telemetry.hearts = msg.value("hearts", 0.0f);
-                        telemetry.hearts_max = (std::max)(1e-3f, msg.value("hearts_max", 1.0f));
-                    }
-                    else
-                    {
-                        telemetry.hearts = telemetry.health / hp_per_heart;
-                        telemetry.hearts_max = (std::max)(1e-3f, telemetry.health_max / hp_per_heart);
-                    }
-                    telemetry.hunger = msg.value("hunger", 20.0f);
-                    telemetry.hunger_max = (std::max)(1.0f, msg.value("hunger_max", 20.0f));
-                    telemetry.air = msg.value("air", 300.0f);
-                    telemetry.air_max = (std::max)(1.0f, msg.value("air_max", 300.0f));
-                    telemetry.has_item_durability = msg.value("item_durability_valid", false);
-                    telemetry.item_durability = msg.value("item_durability", 0.0f);
-                    telemetry.item_durability_max = (std::max)(1.0f, msg.value("item_durability_max", 1.0f));
+                    ApplyHealthStateEvent(telemetry, msg);
+                }
+                else if(out_type == "voxel_frame")
+                {
+                    ApplyVoxelFrameEvent(telemetry, msg);
                 }
                 else if(out_type == "world_light")
                 {
@@ -474,6 +602,7 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                     }
                     telemetry.world_light_received_ms = NowMs();
                 }
+                g_telemetry_data_revision.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
         }
@@ -496,6 +625,11 @@ GameTelemetryBridge::TelemetrySnapshot GameTelemetryBridge::GetTelemetrySnapshot
 {
     std::lock_guard<std::mutex> guard(stats_mutex);
     return telemetry;
+}
+
+std::uint64_t GameTelemetryBridge::TelemetryDataRevision()
+{
+    return g_telemetry_data_revision.load(std::memory_order_relaxed);
 }
 
 void GameTelemetryBridge::GetStats(unsigned int& packets_total,

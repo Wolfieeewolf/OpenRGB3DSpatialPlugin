@@ -2,14 +2,15 @@
 
 #include "Lightning.h"
 #include "../EffectHelpers.h"
+#include "StratumBandPanel.h"
+#include "SpatialLayerCore.h"
 #include <QGridLayout>
+#include <QVBoxLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QComboBox>
 #include <algorithm>
 #include <cmath>
-
-REGISTER_EFFECT_3D(Lightning);
 
 const char* Lightning::ModeName(int m)
 {
@@ -82,7 +83,11 @@ EffectInfo3D Lightning::GetEffectInfo()
 
 void Lightning::SetupCustomUI(QWidget* parent)
 {
+    QWidget* outer_w = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(outer_w);
+    vbox->setContentsMargins(0, 0, 0, 0);
     QWidget* w = new QWidget();
+    vbox->addWidget(w);
     QGridLayout* layout = new QGridLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -156,7 +161,14 @@ void Lightning::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    AddWidgetToParent(w, parent);
+    stratum_panel = new StratumBandPanel(outer_w);
+    stratum_panel->setLayoutMode(stratum_layout_mode);
+    stratum_panel->setTuning(stratum_tuning_);
+    vbox->addWidget(stratum_panel);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Lightning::OnStratumBandChanged);
+    OnStratumBandChanged();
+
+    AddWidgetToParent(outer_w, parent);
 
     connect(strike_rate_slider, &QSlider::valueChanged, this, &Lightning::OnLightningParameterChanged);
     connect(branch_slider, &QSlider::valueChanged, this, &Lightning::OnLightningParameterChanged);
@@ -178,6 +190,17 @@ void Lightning::OnLightningParameterChanged()
     {
         branches = branch_slider->value();
         if(branch_label) branch_label->setText(QString::number(branches));
+    }
+    cache_time = -1e9f;
+    emit ParametersChanged();
+}
+
+void Lightning::OnStratumBandChanged()
+{
+    if(stratum_panel)
+    {
+        stratum_layout_mode = stratum_panel->layoutMode();
+        stratum_tuning_ = stratum_panel->tuning();
     }
     cache_time = -1e9f;
     emit ParametersChanged();
@@ -303,17 +326,28 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     {
         return 0x00000000;
     }
-    float color_cycle = time * GetScaledFrequency() * 12.0f;
+    Vector3D origin = GetEffectOriginGrid(grid);
+    Vector3D rp = TransformPointByRotation(x, y, z, origin);
+    float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+    const float tm = std::max(0.25f, bb.tight_mul);
+    float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
     float detail = std::max(0.05f, GetScaledDetail());
     if(mode != MODE_PLASMA_BALL)
     {
+        float time_m = time * bb.speed_mul;
         float rate = std::max(0.05f, std::min(0.5f, flash_rate));
         float interval = 1.0f / rate;
         float dur = std::max(0.02f, std::min(0.25f, flash_duration));
 
-        float cycle = floorf(time / interval);
+        float cycle = floorf(time_m / interval);
         float flash_offset = hash11(cycle) * interval * 0.6f;
-        float phase_in_cycle = time - cycle * interval;
+        float phase_in_cycle = time_m - cycle * interval;
         float flash_phase = phase_in_cycle - flash_offset;
 
         float flash_env = 0.0f;
@@ -327,12 +361,12 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         if(flash_env <= 0.001f)
             return 0x00000000;
 
-        float norm_y = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+        float norm_y = coord2;
         float sky_factor = 0.5f + 0.5f * norm_y;
 
         RGBColor base;
         if(GetRainbowMode())
-            base = GetRainbowColor(color_cycle + norm_y * 100.0f * (0.6f + 0.4f * detail));
+            base = GetRainbowColor(color_cycle + norm_y * 100.0f * (0.6f + 0.4f * detail) + bb.phase_deg);
         else
         {
             const std::vector<RGBColor>& cols = GetColors();
@@ -350,8 +384,8 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         }
 
         float room_avg = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
-        float bolt_core = room_avg * (0.010f + 0.008f * GetNormalizedSize());
-        float bolt_glow = room_avg * (0.035f + 0.020f * GetNormalizedSize());
+        float bolt_core = room_avg * (0.010f + 0.008f * GetNormalizedSize()) / tm;
+        float bolt_glow = room_avg * (0.035f + 0.020f * GetNormalizedSize()) / tm;
         int main_bolts = (mode == MODE_SKY_BOLT) ? 1 : (mode == MODE_SKY_FORKED ? 2 : 3);
         int branch_count = (mode == MODE_SKY_BOLT) ? 0 : (mode == MODE_SKY_FORKED ? 2 : 4);
         float bolt_intensity = 0.0f;
@@ -402,16 +436,18 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         return (RGBColor)((b << 16) | (g << 8) | r);
     }
 
-    Vector3D origin = GetEffectOriginGrid(grid);
     float rx = x - origin.x, ry = y - origin.y, rz = z - origin.z;
+    if(!IsWithinEffectBoundary(rx, ry, rz, grid))
+        return 0x00000000;
+
     float dist_from_center = sqrtf(rx*rx + ry*ry + rz*rz);
 
     float size_m = GetNormalizedSize();
     float room_avg = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
-    float core_radius = room_avg * (0.04f + 0.06f * size_m);
-    float core_glow = room_avg * (0.08f + 0.10f * size_m);
-    float arc_core = room_avg * (0.015f + 0.02f * size_m);
-    float arc_glow = room_avg * (0.06f + 0.08f * size_m);
+    float core_radius = room_avg * (0.04f + 0.06f * size_m) / tm;
+    float core_glow = room_avg * (0.08f + 0.10f * size_m) / tm;
+    float arc_core = room_avg * (0.015f + 0.02f * size_m) / tm;
+    float arc_glow = room_avg * (0.06f + 0.08f * size_m) / tm;
 
     float center_intensity = 0.0f;
     if(dist_from_center < core_glow * 2.0f)
@@ -426,7 +462,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     UpdateArchCache(time, grid);
 
     float arc_intensity = 0.0f;
-    RGBColor arc_color = GetRainbowMode() ? GetRainbowColor(220.0f + color_cycle) : GetColorAtPosition(0.5f);
+    RGBColor arc_color = GetRainbowMode() ? GetRainbowColor(220.0f + color_cycle + bb.phase_deg) : GetColorAtPosition(0.5f);
 
     bool in_arc_aabb = (cached_arches.empty()) ||
         (x >= arc_aabb_min_x && x <= arc_aabb_max_x &&
@@ -439,7 +475,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         const PlasmaArc3D& arc = cached_arches[i];
         float age = time - arc.birth_time;
         float decay = std::max(0.0f, 1.0f - age / arc.duration);
-        float flicker = 0.7f + 0.3f * sinf(age * 80.0f + (float)arc.seed);
+        float flicker = 0.7f + 0.3f * sinf(age * 80.0f * bb.speed_mul + bb.phase_deg * (float)(M_PI / 180.0f) + (float)arc.seed);
         float a_int = decay * flicker;
         if(a_int < 0.02f) continue;
 
@@ -454,7 +490,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         {
             arc_intensity = contrib;
             if(GetRainbowMode())
-                arc_color = GetRainbowColor(220.0f + age * 100.0f + (float)arc.seed * 0.1f + color_cycle);
+                arc_color = GetRainbowColor(220.0f + age * 100.0f * bb.speed_mul + (float)arc.seed * 0.1f + color_cycle + bb.phase_deg);
         }
     }
 
@@ -473,6 +509,20 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
 nlohmann::json Lightning::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
+    int sm = stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
+    if(stratum_panel)
+    {
+        sm = stratum_panel->layoutMode();
+        st = stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j,
+                                           "lightning_stratum_layout_mode",
+                                           sm,
+                                           st,
+                                           "lightning_stratum_band_speed_pct",
+                                           "lightning_stratum_band_tight_pct",
+                                           "lightning_stratum_band_phase_deg");
     j["mode"] = mode;
     j["strike_rate"] = strike_rate;
     j["branches"] = branches;
@@ -484,6 +534,13 @@ nlohmann::json Lightning::SaveSettings() const
 void Lightning::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    EffectStratumBlend::LoadBandTuningJson(settings,
+                                            "lightning_stratum_layout_mode",
+                                            stratum_layout_mode,
+                                            stratum_tuning_,
+                                            "lightning_stratum_band_speed_pct",
+                                            "lightning_stratum_band_tight_pct",
+                                            "lightning_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("strike_rate") && settings["strike_rate"].is_number_integer())
@@ -498,4 +555,11 @@ void Lightning::LoadSettings(const nlohmann::json& settings)
     if(strike_rate_slider) { strike_rate_slider->setValue((int)strike_rate); }
     if(branch_slider) { branch_slider->setValue((int)branches); }
     cache_time = -1e9f;
+    if(stratum_panel)
+    {
+        stratum_panel->setLayoutMode(stratum_layout_mode);
+        stratum_panel->setTuning(stratum_tuning_);
+    }
 }
+
+REGISTER_EFFECT_3D(Lightning);
