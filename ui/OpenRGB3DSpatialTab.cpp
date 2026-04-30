@@ -537,6 +537,17 @@ void OpenRGB3DSpatialTab::SetupUI()
     viewport->SetDisplayPlanes(&display_planes);
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+    viewport->SetScreenPreviewTickCallback([this]() {
+        if(!effect_running)
+        {
+            return;
+        }
+        if(!viewport || !viewport->GetShowRoomGridOverlay() || !viewport->GetShowScreenPreview())
+        {
+            return;
+        }
+        RenderEffectStack();
+    });
 
     try
     {

@@ -537,8 +537,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float blend_t;
         float weight;
         float blend;
-        float delay_ms;
-        uint64_t sample_timestamp;
         float brightness_multiplier;
         float brightness_threshold;
         float white_rolloff;
@@ -750,7 +748,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             delay_ms = proj.distance / speed_mm_per_ms;
             delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
         }
-        else if(use_wave && mon_settings.propagation_speed_mm_per_ms > 0.5f)
+        else if(use_wave && mon_settings.propagation_speed_mm_per_ms >= 5.0f)
         {
             speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
             speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
@@ -758,7 +756,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             delay_ms = std::clamp(delay_ms, 0.0f, 15000.0f);
         }
 
-        if(use_wave && (mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.5f))
+        if(use_wave && (mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms >= 5.0f))
         {
             std::unordered_map<std::string, FrameHistory>::iterator history_it = capture_history.end();
             std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator>::iterator cache_it = history_cache.find(capture_id);
@@ -855,7 +853,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         }
 
         float wave_envelope = 1.0f;
-        if((mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms > 0.5f) && mon_settings.wave_decay_ms > 0.1f)
+        if((mon_settings.wave_time_to_edge_sec > 0.4f || mon_settings.propagation_speed_mm_per_ms >= 5.0f) && mon_settings.wave_decay_ms > 0.1f)
         {
             if(delay_ms <= 0.0f && use_wave)
             {
@@ -911,9 +909,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             contrib.blend_t = sampling_blend_t;
             contrib.weight = weight;
             contrib.blend = mon_settings.blend;
-            contrib.delay_ms = delay_ms;
-            contrib.sample_timestamp = sampling_frame ? sampling_frame->timestamp_ms :
-                                       (frame ? frame->timestamp_ms : 0);
             contrib.brightness_multiplier = mon_settings.brightness_multiplier;
             contrib.brightness_threshold = mon_settings.brightness_threshold;
             contrib.white_rolloff = mon_settings.white_rolloff;
@@ -985,7 +980,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
     float total_r = 0.0f, total_g = 0.0f, total_b = 0.0f;
     float total_weight = 0.0f;
-    uint64_t latest_timestamp = 0;
 
     for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
@@ -1146,11 +1140,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         total_g += g * adjusted_weight;
         total_b += b * adjusted_weight;
         total_weight += adjusted_weight;
-
-        if(contrib.sample_timestamp > latest_timestamp)
-        {
-            latest_timestamp = contrib.sample_timestamp;
-        }
     }
 
     if(total_weight > 0.0f)
@@ -1186,24 +1175,25 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         LEDKey key = MakeLEDKey(x, y, z);
         LEDState& state = led_states[key];
 
-        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-        static std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-        uint64_t sample_time_ms = latest_timestamp ? latest_timestamp : now_ms;
+        static const std::chrono::steady_clock::time_point smooth_clock_start = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
+        uint64_t tick_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 now_tp - smooth_clock_start)
+                                 .count();
 
-        if(state.last_update_ms == 0)
+        if(state.smooth_last_tick_ms == 0)
         {
             state.r = total_r;
             state.g = total_g;
             state.b = total_b;
-            state.last_update_ms = sample_time_ms;
+            state.smooth_last_tick_ms = tick_ms;
         }
         else
         {
-            uint64_t dt_ms_u64 = (sample_time_ms > state.last_update_ms) ? (sample_time_ms - state.last_update_ms) : 0;
+            uint64_t dt_ms_u64 = (tick_ms > state.smooth_last_tick_ms) ? (tick_ms - state.smooth_last_tick_ms) : 0;
             if(dt_ms_u64 == 0)
             {
-                dt_ms_u64 = 16;
+                dt_ms_u64 = 1;
             }
             float dt = (float)dt_ms_u64;
             float tau = max_smoothing_time;
@@ -1212,7 +1202,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             state.r += alpha * (total_r - state.r);
             state.g += alpha * (total_g - state.g);
             state.b += alpha * (total_b - state.b);
-            state.last_update_ms = sample_time_ms;
+            state.smooth_last_tick_ms = tick_ms;
 
             total_r = state.r;
             total_g = state.g;
@@ -2204,7 +2194,7 @@ float ScreenMirror::GetHistoryRetentionMs() const
         if(!mon_settings.enabled) continue;
         
         float monitor_retention = std::max(mon_settings.wave_decay_ms * 3.0f, mon_settings.smoothing_time_ms * 3.0f);
-        if(mon_settings.propagation_speed_mm_per_ms > 0.5f || mon_settings.wave_time_to_edge_sec > 0.4f)
+        if(mon_settings.propagation_speed_mm_per_ms >= 5.0f || mon_settings.wave_time_to_edge_sec > 0.4f)
         {
             float max_distance_mm = 5000.0f;
             if(mon_settings.wave_time_to_edge_sec > 0.4f)

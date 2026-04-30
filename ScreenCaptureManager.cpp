@@ -884,7 +884,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
         {
-            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
         }
         if(image.format() != QImage::Format_RGBA8888)
         {
@@ -938,9 +938,14 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         std::chrono::steady_clock::time_point frame_end = last_frame_produced;
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
         int sleep_time = target_frame_time_ms - elapsed;
-        if(sleep_time < 2)
-            sleep_time = 2;
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+        if(sleep_time > 0)
+        {
+            if(sleep_time < 1)
+            {
+                sleep_time = 1;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+        }
     }
 
     LOG_INFO("[ScreenCapture] Capture thread stopped for '%s' (produced %llu frames)",
@@ -1086,7 +1091,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
         {
-            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
         }
         image = image.convertToFormat(QImage::Format_RGBA8888);
 
@@ -1117,11 +1122,14 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
         int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_end - frame_start).count();
         int sleep_time = target_frame_time_ms - elapsed;
-        if(sleep_time < 2)
+        if(sleep_time > 0)
         {
-            sleep_time = 2;
+            if(sleep_time < 1)
+            {
+                sleep_time = 1;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
     }
 }
 

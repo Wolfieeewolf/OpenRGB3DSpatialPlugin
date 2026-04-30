@@ -5,6 +5,7 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
+#include <QTimer>
 
 #include <vector>
 #include <memory>
@@ -21,7 +22,6 @@
 
 class QKeyEvent;
 class QMouseEvent;
-class QTimer;
 class QWheelEvent;
 
 class LEDViewport3D : public QOpenGLWidget, protected QOpenGLFunctions
@@ -46,6 +46,13 @@ public:
     void SelectDisplayPlane(int index);
     void NotifyDisplayPlaneChanged();
     void SetShowScreenPreview(bool show);
+    /** Optional: invoked each tick of the ~60 Hz screen preview timer (before repaint). */
+    void SetScreenPreviewTickCallback(std::function<void()> cb) { screen_preview_tick_cb = std::move(cb); }
+    bool GetShowScreenPreview() const { return show_screen_preview; }
+    bool IsScreenPreviewRefreshActive() const
+    {
+        return screen_preview_refresh_timer && screen_preview_refresh_timer->isActive();
+    }
     void SetShowTestPattern(bool show) { show_test_pattern = show; update(); }
     void ClearDisplayPlaneTextures();
 
@@ -188,6 +195,7 @@ private:
     bool                                    room_grid_overlay_colors_dirty;
     std::map<std::string, GLuint>           display_plane_textures;
     QTimer*                                 screen_preview_refresh_timer;
+    std::function<void()>                   screen_preview_tick_cb;
 
     PerPlaneFlagQuery                       per_plane_preview_query;
     PerPlaneFlagQuery                       per_plane_test_pattern_query;

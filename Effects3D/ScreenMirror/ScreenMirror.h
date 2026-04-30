@@ -281,7 +281,8 @@ private:
     struct LEDState
     {
         float r, g, b;
-        uint64_t last_update_ms;
+        /** Steady-clock ms since first use of this smoother; advances each render tick. */
+        uint64_t smooth_last_tick_ms;
     };
     std::map<LEDKey, LEDState> led_states;
 

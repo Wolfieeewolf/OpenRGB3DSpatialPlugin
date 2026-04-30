@@ -593,7 +593,9 @@ CaptureZonesWidget::CaptureZonesWidget(
     propagation_speed_slider->setValue((int)std::lround(propagation_speed));
     propagation_speed_slider->setTickPosition(QSlider::TicksBelow);
     propagation_speed_slider->setTickInterval(10);
-    propagation_speed_slider->setToolTip("Wave strength (0-100%). 0 = instant, 50% = moderate trail, 100% = long trail.");
+    propagation_speed_slider->setToolTip(
+        "Wave / trail (5-100% enables delayed sampling along distance). 0-4%: instant mirror (no wave). "
+        "Higher % = slower wave = more latency for far LEDs.");
     propagation_layout->addWidget(propagation_speed_slider);
     propagation_speed_label = new QLabel(QString::number((int)std::lround(propagation_speed)) + "%");
     propagation_speed_label->setMinimumWidth(45);
@@ -623,7 +625,8 @@ CaptureZonesWidget::CaptureZonesWidget(
     wave_time_to_edge_slider->setValue((int)(wave_time_to_edge_sec * 10.0f));
     wave_time_to_edge_slider->setTickPosition(QSlider::TicksBelow);
     wave_time_to_edge_slider->setTickInterval(10);
-    wave_time_to_edge_slider->setToolTip("Time for wave to reach farthest LED (0-10s). 0 = use Wave Intensity.");
+    wave_time_to_edge_slider->setToolTip(
+        "Seconds for the wave to cross the layout (replaces Wave Intensity when >0.4s). Large values add visible latency; use Off for real-time mirror.");
     wave_time_layout->addWidget(wave_time_to_edge_slider);
     wave_time_to_edge_label = new QLabel(wave_time_to_edge_sec <= 0.0f ? "Off" : QString::number(wave_time_to_edge_sec, 'f', 1) + "s");
     wave_time_to_edge_label->setMinimumWidth(45);

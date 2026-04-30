@@ -172,7 +172,13 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
         if(!screen_preview_refresh_timer)
         {
             screen_preview_refresh_timer = new QTimer(this);
-            connect(screen_preview_refresh_timer, &QTimer::timeout, this, [this]() { update(); });
+            connect(screen_preview_refresh_timer, &QTimer::timeout, this, [this]() {
+                if(screen_preview_tick_cb)
+                {
+                    screen_preview_tick_cb();
+                }
+                update();
+            });
         }
         screen_preview_refresh_timer->start(16);
     }
