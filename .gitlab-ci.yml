@@ -1,3 +1,9 @@
+# GitLab CI — Qt 5 and Qt 6 builds (aligned with OpenRGB upstream CI matrix).
+# See OpenRGB/.gitlab-ci.yml: "Windows 64" (Qt 5.15 + MSVC 2019) vs "Windows 64 Qt6"
+# (Qt 6.8.x + MSVC 2022), and parallel Linux AppImage / Qt6 jobs.
+#
+# Adjust QT_WINDOWS_BIN paths on runners if your Qt install versions differ.
+
 stages:
   - build
   - release
@@ -5,55 +11,99 @@ stages:
 variables:
   GIT_DEPTH: 0
 
-build-windows:
+#-----------------------------------------------------------------------------
+# Windows — MSVC 2022 + Qt from PATH (same layout as OpenRGB build-windows.bat)
+#-----------------------------------------------------------------------------
+.windows_plugin_build:
   stage: build
   tags:
     - windows
     - shared-windows
-  script:
+  before_script:
     - call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+    - set "PATH=%QT_WINDOWS_BIN%;%PATH%"
+    - qmake -v
+  script:
     - qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
     - nmake
   artifacts:
+    name: "${CI_JOB_NAME}_${CI_COMMIT_SHORT_SHA}"
     paths:
       - release/OpenRGB3DSpatialPlugin.dll
     expire_in: 30 days
-  only:
-    - master
-    - tags
-    - merge_requests
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-build-linux:
-  stage: build
+build-windows-qt5:
+  extends: .windows_plugin_build
+  variables:
+    QT_WINDOWS_BIN: "C:\\Qt\\5.15.0\\msvc2019_64\\bin"
+
+build-windows-qt6:
+  extends: .windows_plugin_build
+  variables:
+    QT_WINDOWS_BIN: "C:\\Qt\\6.8.3\\msvc2022_64\\bin"
+
+#-----------------------------------------------------------------------------
+# Linux — Ubuntu 22.04 (Qt 5 default packages vs Qt 6)
+#-----------------------------------------------------------------------------
+.linux_plugin_common:
   image: ubuntu:22.04
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq qtbase5-dev qt5-qmake qtbase5-dev-tools libusb-1.0-0-dev libhidapi-dev build-essential
-  script:
-    - qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
-    - make -j$(nproc)
+  stage: build
   artifacts:
+    name: "${CI_JOB_NAME}_${CI_COMMIT_SHORT_SHA}"
     paths:
       - libOpenRGB3DSpatialPlugin.so
     expire_in: 30 days
-  only:
-    - master
-    - tags
-    - merge_requests
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+build-linux-qt5:
+  extends: .linux_plugin_common
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qtbase5-dev qt5-qmake qtbase5-dev-tools libgl1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
+  script:
+    - qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+    - make -j$(nproc)
+
+build-linux-qt6:
+  extends: .linux_plugin_common
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qt6-base-dev qt6-qmake libgl1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
+  script:
+    - |
+      if command -v qmake6 >/dev/null 2>&1; then
+        export QM=qmake6
+      else
+        export QM=/usr/lib/qt6/bin/qmake
+      fi
+      "$QM" -v
+      "$QM" OpenRGB3DSpatialPlugin.pro PREFIX=/usr
+    - make -j$(nproc)
 
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
-    - job: build-windows
+    - job: build-windows-qt5
       artifacts: true
-    - job: build-linux
+    - job: build-windows-qt6
+      artifacts: true
+    - job: build-linux-qt5
+      artifacts: true
+    - job: build-linux-qt6
       artifacts: true
   script:
     - echo "Creating GitLab release for $CI_COMMIT_TAG"
   release:
     tag_name: $CI_COMMIT_TAG
     name: $CI_COMMIT_TAG
-    description: "Release $CI_COMMIT_TAG"
-  only:
-    - tags
+    description: "Release $CI_COMMIT_TAG (Qt 5 and Qt 6 build artifacts)"
+  rules:
+    - if: $CI_COMMIT_TAG

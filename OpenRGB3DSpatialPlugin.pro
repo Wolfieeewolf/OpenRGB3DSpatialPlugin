@@ -17,6 +17,8 @@ greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY
 TEMPLATE = lib
 
+message("OpenRGB3DSpatialPlugin: Qt $$QT_VERSION (QT_MAJOR_VERSION=$$QT_MAJOR_VERSION)")
+
 #-----------------------------------------------------------------------------------------------#
 # Build Configuration                                                                           #
 #-----------------------------------------------------------------------------------------------#
@@ -28,6 +30,9 @@ CONFIG +=                                                                       
 # would compile to wrong bytes and show garbage in the UI.
 msvc {
     QMAKE_CXXFLAGS += /utf-8
+    # Qt 6.11+ headers still use Q{Gui,Core}Application::compressEvent (deprecated; removed in Qt 7),
+    # which floods the build with C4996 from qguiapplication.h / qapplication.h — not application code.
+    greaterThan(QT_MAJOR_VERSION, 5): QMAKE_CXXFLAGS += /wd4996
 }
 
 #-----------------------------------------------------------------------------------------------#
