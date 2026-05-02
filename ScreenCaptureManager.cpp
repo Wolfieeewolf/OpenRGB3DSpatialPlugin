@@ -395,35 +395,6 @@ static uint8_t LinearHdrToSdr8(float v)
 static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_width, int screen_height, DXGICaptureState& out)
 {
     out.Release();
-    ID3D11Device* device = nullptr;
-    ID3D11DeviceContext* context = nullptr;
-    D3D_FEATURE_LEVEL feature_level;
-    HRESULT hr = D3D11CreateDevice(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0,
-        D3D11_SDK_VERSION, &device, &feature_level, &context);
-    if(FAILED(hr) || !device || !context)
-        return false;
-
-    IDXGIDevice* dxgi_device = nullptr;
-    hr = device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi_device);
-    if(FAILED(hr) || !dxgi_device)
-    {
-        context->Release();
-        device->Release();
-        return false;
-    }
-
-    IDXGIAdapter* adapter = nullptr;
-    hr = dxgi_device->GetAdapter(&adapter);
-    dxgi_device->Release();
-    if(FAILED(hr) || !adapter)
-    {
-        context->Release();
-        device->Release();
-        return false;
-    }
-
-    IDXGIOutput* output = nullptr;
     IDXGIOutput1* output1 = nullptr;
     IDXGIOutputDuplication* duplication = nullptr;
     ID3D11Texture2D* staging_texture = nullptr;
@@ -447,47 +418,98 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     const int target_y1 = screen_y + screen_height;
     const long long target_area = RectArea(screen_width, screen_height);
 
-    long long best_overlap = -1;
-    DXGI_OUTPUT_DESC best_desc = {};
-    IDXGIOutput* best_output = nullptr;
+    IDXGIFactory1* factory = nullptr;
+    HRESULT hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory);
+    if(FAILED(hr) || !factory)
+        return false;
 
-    for(UINT i = 0; adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND; i++)
+    long long best_overlap = -1;
+    IDXGIOutput* best_output = nullptr;
+    IDXGIAdapter* best_adapter = nullptr;
+
+    for(UINT adapter_index = 0; ; adapter_index++)
     {
-        if(!output) continue;
-        DXGI_OUTPUT_DESC desc;
-        if(FAILED(output->GetDesc(&desc)))
-        {
-            output->Release();
+        IDXGIAdapter* adapter = nullptr;
+        if(factory->EnumAdapters(adapter_index, &adapter) == DXGI_ERROR_NOT_FOUND)
+            break;
+        if(!adapter)
             continue;
-        }
-        RECT& r = desc.DesktopCoordinates;
-        int left = r.left, top = r.top, right = r.right, bottom = r.bottom;
-        long long overlap = IntersectArea(left, top, right, bottom, target_x0, target_y0, target_x1, target_y1);
-        if(overlap > best_overlap)
+
+        for(UINT output_index = 0; ; output_index++)
         {
-            if(best_output) best_output->Release();
-            best_output = output; // take ownership
-            best_desc = desc;
-            best_overlap = overlap;
-            continue;
+            IDXGIOutput* output = nullptr;
+            HRESULT e = adapter->EnumOutputs(output_index, &output);
+            if(e == DXGI_ERROR_NOT_FOUND)
+                break;
+            if(FAILED(e) || !output)
+                continue;
+
+            DXGI_OUTPUT_DESC desc;
+            if(FAILED(output->GetDesc(&desc)))
+            {
+                output->Release();
+                continue;
+            }
+            RECT& r = desc.DesktopCoordinates;
+            int left = r.left;
+            int top = r.top;
+            int right = r.right;
+            int bottom = r.bottom;
+            long long overlap = IntersectArea(left, top, right, bottom, target_x0, target_y0, target_x1, target_y1);
+            if(overlap > best_overlap)
+            {
+                if(best_output)
+                    best_output->Release();
+                if(best_adapter)
+                    best_adapter->Release();
+                adapter->AddRef();
+                best_adapter = adapter;
+                best_output = output;
+                best_overlap = overlap;
+            }
+            else
+            {
+                output->Release();
+            }
         }
-        output->Release();
+        adapter->Release();
     }
 
-    if(!best_output || best_overlap <= 0 || (target_area > 0 && best_overlap < target_area / 4))
+    factory->Release();
+    factory = nullptr;
+
+    if(!best_output || !best_adapter || best_overlap <= 0 || (target_area > 0 && best_overlap < target_area / 4))
     {
-        if(best_output) best_output->Release();
-        adapter->Release();
-        context->Release();
-        device->Release();
+        if(best_output)
+            best_output->Release();
+        if(best_adapter)
+            best_adapter->Release();
+        return false;
+    }
+
+    ID3D11Device* device = nullptr;
+    ID3D11DeviceContext* context = nullptr;
+    D3D_FEATURE_LEVEL feature_level;
+    hr = D3D11CreateDevice(
+        best_adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0,
+        D3D11_SDK_VERSION, &device, &feature_level, &context);
+    if(best_adapter)
+    {
+        best_adapter->Release();
+        best_adapter = nullptr;
+    }
+    if(FAILED(hr) || !device || !context)
+    {
+        if(best_output)
+            best_output->Release();
         return false;
     }
 
     hr = best_output->QueryInterface(__uuidof(IDXGIOutput1), (void**)&output1);
     best_output->Release();
+    best_output = nullptr;
     if(FAILED(hr) || !output1)
     {
-        adapter->Release();
         context->Release();
         device->Release();
         return false;
@@ -495,9 +517,9 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
 
     hr = output1->DuplicateOutput(device, &duplication);
     output1->Release();
+    output1 = nullptr;
     if(FAILED(hr) || !duplication)
     {
-        adapter->Release();
         context->Release();
         device->Release();
         return false;
@@ -514,7 +536,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
        dup_desc.ModeDesc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT)
     {
         duplication->Release();
-        adapter->Release();
         context->Release();
         device->Release();
         return false;
@@ -536,7 +557,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     if(FAILED(hr) || !staging_texture)
     {
         duplication->Release();
-        adapter->Release();
         context->Release();
         device->Release();
         return false;
@@ -549,7 +569,6 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.format = dup_desc.ModeDesc.Format;
     out.width = out_width;
     out.height = out_height;
-    adapter->Release();
     return true;
 }
 
