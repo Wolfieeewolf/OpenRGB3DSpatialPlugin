@@ -1338,7 +1338,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
         }
 
-        // Light temporal blend per capture thread (reduces DXGI/HDR sparkles and GDI/DXGI boundary pops).
+        // Temporal blend (tames DXGI/HDR sparkles).
         thread_local std::vector<uint8_t> capture_blend_prev;
         const size_t px_bytes = frame->data.size();
         if(!capture_blend_prev.empty() && capture_blend_prev.size() == px_bytes)

@@ -2,6 +2,7 @@
 
 #include "CaptureZonesWidget.h"
 #include "DisplayPlane3D.h"
+#include "QtCompat.h"
 #include "ScreenCaptureManager.h"
 
 #include <QVBoxLayout>
@@ -105,7 +106,7 @@ public:
             }
             update();
         });
-        refresh_timer->start(33);
+        refresh_timer->start(OpenRGB3DUi::kScreenPreviewTimerIntervalMs);
     }
 
     void SetDisplayPlane(DisplayPlane3D* plane)

@@ -210,7 +210,7 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
                 update();
             });
         }
-        screen_preview_refresh_timer->start(33);
+        screen_preview_refresh_timer->start(OpenRGB3DUi::kScreenPreviewTimerIntervalMs);
     }
     else
     {

@@ -53,7 +53,6 @@ public:
     bool IsCapturing(const std::string& source_id) const;
     std::shared_ptr<CapturedFrame> GetLatestFrame(const std::string& source_id) const;
 
-    /** Copy current latest_frames under lock; GetLatestFrame reads this until EndRenderTickSnapshot. */
     void BeginRenderTickSnapshot();
     void EndRenderTickSnapshot();
     void SetDownscaleResolution(int width, int height);

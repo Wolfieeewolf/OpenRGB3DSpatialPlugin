@@ -46,10 +46,9 @@ public:
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
     void SelectDisplayPlane(int index);
     void NotifyDisplayPlaneChanged();
-    /** While ScreenCaptureManager render-tick snapshot is active, uploads plane textures from that snapshot (main thread). */
     void UploadDisplayPlaneCaptureTexturesDuringEffectTick();
     void SetShowScreenPreview(bool show);
-    /** Optional: invoked each tick of the ~120 Hz screen preview timer (before repaint). */
+    /** Optional: invoked each tick of the screen preview timer (before repaint). */
     void SetScreenPreviewTickCallback(std::function<void()> cb) { screen_preview_tick_cb = std::move(cb); }
     bool GetShowScreenPreview() const { return show_screen_preview; }
     bool IsScreenPreviewRefreshActive() const

@@ -5,6 +5,12 @@
 
 #include <QtGlobal>
 
+namespace OpenRGB3DUi
+{
+/** Interval for live capture preview repaints (~30 Hz). */
+inline constexpr int kScreenPreviewTimerIntervalMs = 33;
+}
+
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     #define MOUSE_EVENT_X(event) ((event)->position().x())
     #define MOUSE_EVENT_Y(event) ((event)->position().y())
