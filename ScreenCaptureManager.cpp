@@ -1049,6 +1049,22 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
             else if(SUCCEEDED(hr) && resource)
             {
+                // LastPresentTime == 0: pointer moved or desktop unchanged (no new present). Processing
+                // still produces a new frame_id and re-runs tonemap/temporal blend — visible flicker on
+                // taskbar hover / cross-display mouse moves. Release and keep the last published frame.
+                // If AccumulatedFrames > 0, the compositor aggregated real updates — always process.
+                if(frame_info.LastPresentTime.QuadPart == 0 && frame_info.AccumulatedFrames == 0 &&
+                   frame_counter > 0)
+                {
+                    resource->Release();
+                    dxgi_state.desktop_frame_acquired = true;
+                    SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
+                    last_frame_produced = std::chrono::steady_clock::now();
+                    int skip_sleep = target_frame_time_ms > 0 ? target_frame_time_ms : 2;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(skip_sleep));
+                    continue;
+                }
+
                 dxgi_state.desktop_frame_acquired = true;
                 ID3D11Texture2D* tex = nullptr;
                 hr = resource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);
