@@ -35,6 +35,7 @@ ScreenCaptureManager::ScreenCaptureManager()
     , target_width(480)
     , target_height(270)
     , target_fps(30)
+    , render_tick_snapshot_active(false)
 {
 }
 
@@ -106,6 +107,8 @@ void ScreenCaptureManager::Shutdown()
     {
         std::lock_guard<std::mutex> lock(frames_mutex);
         latest_frames.clear();
+        render_tick_snapshot.clear();
+        render_tick_snapshot_active = false;
     }
 
     initialized.store(false);
@@ -239,12 +242,35 @@ bool ScreenCaptureManager::IsCapturing(const std::string& source_id) const
 std::shared_ptr<CapturedFrame> ScreenCaptureManager::GetLatestFrame(const std::string& source_id) const
 {
     std::lock_guard<std::mutex> lock(frames_mutex);
+    if(render_tick_snapshot_active)
+    {
+        std::map<std::string, std::shared_ptr<CapturedFrame>>::const_iterator snap_it =
+            render_tick_snapshot.find(source_id);
+        if(snap_it != render_tick_snapshot.end())
+        {
+            return snap_it->second;
+        }
+    }
     std::map<std::string, std::shared_ptr<CapturedFrame>>::const_iterator it = latest_frames.find(source_id);
     if(it != latest_frames.end())
     {
         return it->second;
     }
     return nullptr;
+}
+
+void ScreenCaptureManager::BeginRenderTickSnapshot()
+{
+    std::lock_guard<std::mutex> lock(frames_mutex);
+    render_tick_snapshot = latest_frames;
+    render_tick_snapshot_active = true;
+}
+
+void ScreenCaptureManager::EndRenderTickSnapshot()
+{
+    std::lock_guard<std::mutex> lock(frames_mutex);
+    render_tick_snapshot_active = false;
+    render_tick_snapshot.clear();
 }
 
 void ScreenCaptureManager::SetDownscaleResolution(int width, int height)
@@ -1230,7 +1256,9 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 std::vector<uint8_t> buffer((size_t)dw * (size_t)dh * 4);
                                 if(GetDIBits(mem_dc, bmp, 0, (UINT)dh, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
                                 {
-                                    image = QImage(buffer.data(), dw, dh, dw * 4, QImage::Format_RGBA8888).copy();
+                                    // 32-bit BI_RGB DIBs are BGR (B,G,R,x) in memory — same byte order as Qt's ARGB32.
+                                    image = QImage(buffer.data(), dw, dh, dw * 4, QImage::Format_ARGB32)
+                                                .convertToFormat(QImage::Format_RGBA8888);
                                 }
                             }
                             SelectObject(mem_dc, old_obj);
@@ -1309,6 +1337,23 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 src += src_stride;
             }
         }
+
+        // Light temporal blend per capture thread (reduces DXGI/HDR sparkles and GDI/DXGI boundary pops).
+        thread_local std::vector<uint8_t> capture_blend_prev;
+        const size_t px_bytes = frame->data.size();
+        if(!capture_blend_prev.empty() && capture_blend_prev.size() == px_bytes)
+        {
+            constexpr int new_pct = 85;
+            constexpr int old_pct = 100 - new_pct;
+            uint8_t* px = frame->data.data();
+            for(size_t i = 0; i < px_bytes; i++)
+            {
+                px[i] = (uint8_t)(((int)px[i] * new_pct + (int)capture_blend_prev[i] * old_pct + 50) / 100);
+            }
+        }
+        capture_blend_prev.resize(px_bytes);
+        std::memcpy(capture_blend_prev.data(), frame->data.data(), px_bytes);
+
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();

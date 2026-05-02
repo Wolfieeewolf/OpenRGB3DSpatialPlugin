@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QFont>
 #include <QTimer>
+#include <QSurfaceFormat>
 
 #include <cmath>
 #include <cfloat>
@@ -139,6 +140,9 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , dragging_pan(false)
     , dragging_grab(false)
 {
+    QSurfaceFormat fmt = format();
+    fmt.setSwapInterval(1);
+    setFormat(fmt);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
 }
@@ -159,7 +163,33 @@ LEDViewport3D::~LEDViewport3D()
         glDeleteTextures(1, &it->second);
     }
     display_plane_textures.clear();
+    display_plane_tex_upload_state.clear();
     doneCurrent();
+}
+
+bool LEDViewport3D::AnyDisplayPlaneWantsScreenPreview() const
+{
+    if(show_screen_preview)
+    {
+        return true;
+    }
+    if(!per_plane_preview_query || !display_planes)
+    {
+        return false;
+    }
+    for(const std::unique_ptr<DisplayPlane3D>& plane_ptr : *display_planes)
+    {
+        DisplayPlane3D* plane = plane_ptr.get();
+        if(!plane || !plane->IsVisible())
+        {
+            continue;
+        }
+        if(per_plane_preview_query(plane->GetName()))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void LEDViewport3D::SetShowScreenPreview(bool show)
@@ -180,7 +210,7 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
                 update();
             });
         }
-        screen_preview_refresh_timer->start(8);
+        screen_preview_refresh_timer->start(33);
     }
     else
     {
@@ -305,6 +335,20 @@ void LEDViewport3D::UpdateColors()
     update();
 }
 
+void LEDViewport3D::UploadDisplayPlaneCaptureTexturesDuringEffectTick()
+{
+    if(!AnyDisplayPlaneWantsScreenPreview())
+    {
+        return;
+    }
+    makeCurrent();
+    if(isValid())
+    {
+        UpdateDisplayPlaneTextures();
+    }
+    doneCurrent();
+}
+
 void LEDViewport3D::SetGridDimensions(int x, int y, int z)
 {
     grid_x = x;
@@ -425,7 +469,7 @@ void LEDViewport3D::paintGL()
     DrawAxes();
     DrawRoomBoundary();
 
-    if(show_screen_preview)
+    if(AnyDisplayPlaneWantsScreenPreview())
     {
         UpdateDisplayPlaneTextures();
     }
@@ -1572,6 +1616,12 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
         if(!frame || !frame->valid || frame->data.empty()) continue;
 
+        DisplayPlaneTexUploadState& up = display_plane_tex_upload_state[source_id];
+        if(up.frame_id == frame->frame_id && up.width == frame->width && up.height == frame->height)
+        {
+            continue;
+        }
+
         GLuint texture_id = 0;
         std::map<std::string, GLuint>::iterator texture_it = display_plane_textures.find(source_id);
         if(texture_it != display_plane_textures.end())
@@ -1585,13 +1635,28 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
         }
 
         glBindTexture(GL_TEXTURE_2D, texture_id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame->width, frame->height,
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
+        const bool same_size = (up.width == frame->width && up.height == frame->height && texture_id != 0);
+        if(same_size)
+        {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame->width, frame->height,
+                            GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
+        }
+        else
+        {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame->width, frame->height,
+                         0, GL_RGBA, GL_UNSIGNED_BYTE, frame->data.data());
+        }
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        up.frame_id = frame->frame_id;
+        up.width = frame->width;
+        up.height = frame->height;
     }
 }
 
@@ -1606,6 +1671,7 @@ void LEDViewport3D::ClearDisplayPlaneTextures()
         }
     }
     display_plane_textures.clear();
+    display_plane_tex_upload_state.clear();
 }
 
 void LEDViewport3D::DrawControllers()

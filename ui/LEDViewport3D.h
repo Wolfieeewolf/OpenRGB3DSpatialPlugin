@@ -10,6 +10,7 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <cstdint>
 #include <functional>
 
 #include "LEDPosition3D.h"
@@ -45,6 +46,8 @@ public:
     void SetDisplayPlanes(std::vector<std::unique_ptr<DisplayPlane3D>>* planes);
     void SelectDisplayPlane(int index);
     void NotifyDisplayPlaneChanged();
+    /** While ScreenCaptureManager render-tick snapshot is active, uploads plane textures from that snapshot (main thread). */
+    void UploadDisplayPlaneCaptureTexturesDuringEffectTick();
     void SetShowScreenPreview(bool show);
     /** Optional: invoked each tick of the ~120 Hz screen preview timer (before repaint). */
     void SetScreenPreviewTickCallback(std::function<void()> cb) { screen_preview_tick_cb = std::move(cb); }
@@ -138,6 +141,7 @@ private:
     void DrawRoomGridOverlay();
     void DrawDisplayPlanes();
     void UpdateDisplayPlaneTextures();
+    bool AnyDisplayPlaneWantsScreenPreview() const;
 
     int PickController(int mouse_x, int mouse_y);
     int PickReferencePoint(int mouse_x, int mouse_y);
@@ -193,7 +197,14 @@ private:
     float                                   room_grid_overlay_min_y, room_grid_overlay_max_y;
     float                                   room_grid_overlay_min_z, room_grid_overlay_max_z;
     bool                                    room_grid_overlay_colors_dirty;
+    struct DisplayPlaneTexUploadState
+    {
+        std::uint64_t frame_id = 0;
+        int width = 0;
+        int height = 0;
+    };
     std::map<std::string, GLuint>           display_plane_textures;
+    std::map<std::string, DisplayPlaneTexUploadState> display_plane_tex_upload_state;
     QTimer*                                 screen_preview_refresh_timer;
     std::function<void()>                   screen_preview_tick_cb;
 

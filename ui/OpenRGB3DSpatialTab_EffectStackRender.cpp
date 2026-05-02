@@ -5,6 +5,7 @@
 #include "ZoneGrid3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "ScreenCaptureManager.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginLogOnce.h"
 #include <set>
@@ -295,6 +296,23 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
         return;
     }
+
+    struct RenderTickSnapshotGuard
+    {
+        ScreenCaptureManager& mgr;
+        explicit RenderTickSnapshotGuard(ScreenCaptureManager& m)
+            : mgr(m)
+        {
+            mgr.BeginRenderTickSnapshot();
+        }
+        ~RenderTickSnapshotGuard()
+        {
+            mgr.EndRenderTickSnapshot();
+        }
+        RenderTickSnapshotGuard(const RenderTickSnapshotGuard&) = delete;
+        RenderTickSnapshotGuard& operator=(const RenderTickSnapshotGuard&) = delete;
+    };
+    RenderTickSnapshotGuard render_tick_snapshot_guard(ScreenCaptureManager::Instance());
 
     for(size_t idx = 0; idx < active_effects.size(); idx++)
     {
@@ -870,9 +888,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     MinecraftGame::ClearRenderSampleIndexContext();
 
     RenderFrequencyRangeEffects(room_grid, world_grid);
-    
+
     if(viewport)
     {
+        viewport->UploadDisplayPlaneCaptureTexturesDuringEffectTick();
         viewport->UpdateColors();
     }
 }

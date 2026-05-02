@@ -52,6 +52,10 @@ public:
     void StopCapture(const std::string& source_id);
     bool IsCapturing(const std::string& source_id) const;
     std::shared_ptr<CapturedFrame> GetLatestFrame(const std::string& source_id) const;
+
+    /** Copy current latest_frames under lock; GetLatestFrame reads this until EndRenderTickSnapshot. */
+    void BeginRenderTickSnapshot();
+    void EndRenderTickSnapshot();
     void SetDownscaleResolution(int width, int height);
     void GetDownscaleResolution(int& width, int& height) const
     {
@@ -84,6 +88,8 @@ private:
 
     mutable std::mutex                      frames_mutex;
     std::map<std::string, std::shared_ptr<CapturedFrame>> latest_frames;
+    mutable bool                            render_tick_snapshot_active;
+    mutable std::map<std::string, std::shared_ptr<CapturedFrame>> render_tick_snapshot;
 
     mutable std::mutex                      threads_mutex;
     std::map<std::string, std::thread>      capture_threads;

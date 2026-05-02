@@ -15,8 +15,10 @@
 #include <QSlider>
 #include <QTimer>
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <cmath>
+#include <limits>
 
 CaptureZone::CaptureZone()
     : u_min(0.0f)
@@ -69,6 +71,7 @@ public:
         , selected_zone_index(-1)
         , dragging(false)
         , drag_handle(None)
+        , preview_last_frame_id_(std::numeric_limits<std::uint64_t>::max())
     {
         setMinimumHeight(200);
         setMaximumHeight(300);
@@ -78,9 +81,31 @@ public:
         // Keep preview responsive even when no UI interaction occurs.
         refresh_timer = new QTimer(this);
         connect(refresh_timer, &QTimer::timeout, this, [this]() {
+            const bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr &&
+                                    !(show_test_pattern_ptr && *show_test_pattern_ptr);
+            if(show_preview && display_plane)
+            {
+                const std::string sid = display_plane->GetCaptureSourceId();
+                if(!sid.empty())
+                {
+                    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+                    if(capture_mgr.IsInitialized() && capture_mgr.IsCapturing(sid))
+                    {
+                        std::shared_ptr<CapturedFrame> fr = capture_mgr.GetLatestFrame(sid);
+                        if(fr && fr->valid && !fr->data.empty() && fr->frame_id == preview_last_frame_id_)
+                        {
+                            return;
+                        }
+                        if(fr && fr->valid && !fr->data.empty())
+                        {
+                            preview_last_frame_id_ = fr->frame_id;
+                        }
+                    }
+                }
+            }
             update();
         });
-        refresh_timer->start(16);
+        refresh_timer->start(33);
     }
 
     void SetDisplayPlane(DisplayPlane3D* plane)
@@ -167,7 +192,10 @@ protected:
                     std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);
                     if(frame && frame->valid && !frame->data.empty())
                     {
-                        QImage image(frame->data.data(), frame->width, frame->height, QImage::Format_RGBA8888);
+                        const int stride = frame->width * 4;
+                        QImage wrapped((const uchar*)frame->data.data(), frame->width, frame->height, stride,
+                                       QImage::Format_RGBA8888);
+                        QImage image = wrapped.copy();
                         if(!image.isNull())
                         {
                             painter.drawImage(rect, image);
@@ -515,6 +543,7 @@ private:
     CaptureZone drag_start_zone;
     QRect preview_rect;
     QTimer* refresh_timer = nullptr;
+    std::uint64_t preview_last_frame_id_;
 };
 
 CaptureZonesWidget::CaptureZonesWidget(
