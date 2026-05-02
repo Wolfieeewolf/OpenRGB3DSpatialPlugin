@@ -432,7 +432,76 @@ namespace
     }
 }
 
-RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+namespace
+{
+    size_t MirrorOverlayCoarseIndex(int i, int j, int k, int cy, int cz)
+    {
+        return (size_t)i * (size_t)cy * (size_t)cz + (size_t)j * (size_t)cz + (size_t)k;
+    }
+
+    float LerpF(float a, float b, float t)
+    {
+        return (1.0f - t) * a + t * b;
+    }
+
+    RGBColor TrilinearMirrorCoarse(const std::vector<RGBColor>& vol, int cx, int cy, int cz, float fx, float fy, float fz)
+    {
+        if(vol.empty() || cx < 1 || cy < 1 || cz < 1)
+        {
+            return ToRGBColor(0, 0, 0);
+        }
+        fx = std::clamp(fx, 0.0f, (float)(std::max(0, cx - 1)));
+        fy = std::clamp(fy, 0.0f, (float)(std::max(0, cy - 1)));
+        fz = std::clamp(fz, 0.0f, (float)(std::max(0, cz - 1)));
+        const int x0 = (std::min)((int)std::floor(fx), std::max(0, cx - 2));
+        const int y0 = (std::min)((int)std::floor(fy), std::max(0, cy - 2));
+        const int z0 = (std::min)((int)std::floor(fz), std::max(0, cz - 2));
+        const int x1 = (cx > 1) ? (std::min)(x0 + 1, cx - 1) : x0;
+        const int y1 = (cy > 1) ? (std::min)(y0 + 1, cy - 1) : y0;
+        const int z1 = (cz > 1) ? (std::min)(z0 + 1, cz - 1) : z0;
+        const float tx = (cx > 1) ? (fx - (float)x0) : 0.0f;
+        const float ty = (cy > 1) ? (fy - (float)y0) : 0.0f;
+        const float tz = (cz > 1) ? (fz - (float)z0) : 0.0f;
+
+        RGBColor c000 = vol[MirrorOverlayCoarseIndex(x0, y0, z0, cy, cz)];
+        RGBColor c100 = vol[MirrorOverlayCoarseIndex(x1, y0, z0, cy, cz)];
+        RGBColor c010 = vol[MirrorOverlayCoarseIndex(x0, y1, z0, cy, cz)];
+        RGBColor c110 = vol[MirrorOverlayCoarseIndex(x1, y1, z0, cy, cz)];
+        RGBColor c001 = vol[MirrorOverlayCoarseIndex(x0, y0, z1, cy, cz)];
+        RGBColor c101 = vol[MirrorOverlayCoarseIndex(x1, y0, z1, cy, cz)];
+        RGBColor c011 = vol[MirrorOverlayCoarseIndex(x0, y1, z1, cy, cz)];
+        RGBColor c111 = vol[MirrorOverlayCoarseIndex(x1, y1, z1, cy, cz)];
+
+        const float r00 = LerpF((float)RGBGetRValue(c000), (float)RGBGetRValue(c100), tx);
+        const float g00 = LerpF((float)RGBGetGValue(c000), (float)RGBGetGValue(c100), tx);
+        const float b00 = LerpF((float)RGBGetBValue(c000), (float)RGBGetBValue(c100), tx);
+        const float r10 = LerpF((float)RGBGetRValue(c010), (float)RGBGetRValue(c110), tx);
+        const float g10 = LerpF((float)RGBGetGValue(c010), (float)RGBGetGValue(c110), tx);
+        const float b10 = LerpF((float)RGBGetBValue(c010), (float)RGBGetBValue(c110), tx);
+        const float r01 = LerpF((float)RGBGetRValue(c001), (float)RGBGetRValue(c101), tx);
+        const float g01 = LerpF((float)RGBGetGValue(c001), (float)RGBGetGValue(c101), tx);
+        const float b01 = LerpF((float)RGBGetBValue(c001), (float)RGBGetBValue(c101), tx);
+        const float r11 = LerpF((float)RGBGetRValue(c011), (float)RGBGetRValue(c111), tx);
+        const float g11 = LerpF((float)RGBGetGValue(c011), (float)RGBGetGValue(c111), tx);
+        const float b11 = LerpF((float)RGBGetBValue(c011), (float)RGBGetBValue(c111), tx);
+
+        const float r0 = LerpF(r00, r10, ty);
+        const float g0 = LerpF(g00, g10, ty);
+        const float b0 = LerpF(b00, b10, ty);
+        const float r1 = LerpF(r01, r11, ty);
+        const float g1 = LerpF(g01, g11, ty);
+        const float b1 = LerpF(b01, b11, ty);
+
+        const float rf = LerpF(r0, r1, tz);
+        const float gf = LerpF(g0, g1, tz);
+        const float bf = LerpF(b0, b1, tz);
+        return ToRGBColor((uint8_t)std::clamp((int)std::lround(rf), 0, 255),
+                          (uint8_t)std::clamp((int)std::lround(gf), 0, 255),
+                          (uint8_t)std::clamp((int)std::lround(bf), 0, 255));
+    }
+}
+
+void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
 {
     const uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -454,64 +523,175 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         }
     }
 
-    if(need_frame_cache_refresh)
+    if(!need_frame_cache_refresh)
     {
-        frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
-        std::unordered_set<std::string> seen_capture_ids;
-        ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-        if(!capture_mgr.IsInitialized())
-        {
-            capture_mgr.Initialize();
-        }
-        capture_mgr.SetTargetFPS(120);
-        int cap_w = 320, cap_h = 180;
-        int q = std::clamp(capture_quality, 0, 7);
-        if(q == 1) { cap_w = 480; cap_h = 270; }
-        else if(q == 2) { cap_w = 640; cap_h = 360; }
-        else if(q == 3) { cap_w = 960; cap_h = 540; }
-        else if(q == 4) { cap_w = 1280; cap_h = 720; }
-        else if(q == 5) { cap_w = 1920; cap_h = 1080; }
-        else if(q == 6) { cap_w = 2560; cap_h = 1440; }
-        else if(q == 7) { cap_w = 3840; cap_h = 2160; }
-        capture_mgr.SetDownscaleResolution(cap_w, cap_h);
-        for(size_t i = 0; i < frame_cache_planes_.size(); i++)
-        {
-            DisplayPlane3D* plane = frame_cache_planes_[i];
-            if(!plane) continue;
-            std::string capture_id = plane->GetCaptureSourceId();
-            if(capture_id.empty()) continue;
-            seen_capture_ids.insert(capture_id);
-            if(!capture_mgr.IsCapturing(capture_id))
-            {
-                capture_mgr.StartCapture(capture_id);
-            }
-            std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(capture_id);
-            if(frame && frame->valid && !frame->data.empty())
-            {
-                frame_cache_[capture_id] = frame;
-                AddFrameToHistory(capture_id, frame);
-            }
-        }
-        for(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::iterator it = frame_cache_.begin();
-            it != frame_cache_.end(); )
-        {
-            if(seen_capture_ids.find(it->first) == seen_capture_ids.end())
-            {
-                it = frame_cache_.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
-        frame_cache_refresh_ms_ = now_ms;
+        return;
     }
+
+    frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
+    std::unordered_set<std::string> seen_capture_ids;
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+    if(!capture_mgr.IsInitialized())
+    {
+        capture_mgr.Initialize();
+    }
+    capture_mgr.SetTargetFPS(120);
+    int cap_w = 320, cap_h = 180;
+    int q = std::clamp(capture_quality, 0, 7);
+    if(q == 1) { cap_w = 480; cap_h = 270; }
+    else if(q == 2) { cap_w = 640; cap_h = 360; }
+    else if(q == 3) { cap_w = 960; cap_h = 540; }
+    else if(q == 4) { cap_w = 1280; cap_h = 720; }
+    else if(q == 5) { cap_w = 1920; cap_h = 1080; }
+    else if(q == 6) { cap_w = 2560; cap_h = 1440; }
+    else if(q == 7) { cap_w = 3840; cap_h = 2160; }
+    capture_mgr.SetDownscaleResolution(cap_w, cap_h);
+    for(size_t i = 0; i < frame_cache_planes_.size(); i++)
+    {
+        DisplayPlane3D* plane = frame_cache_planes_[i];
+        if(!plane) continue;
+        std::string capture_id = plane->GetCaptureSourceId();
+        if(capture_id.empty()) continue;
+        seen_capture_ids.insert(capture_id);
+        if(!capture_mgr.IsCapturing(capture_id))
+        {
+            capture_mgr.StartCapture(capture_id);
+        }
+        std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(capture_id);
+        if(frame && frame->valid && !frame->data.empty())
+        {
+            frame_cache_[capture_id] = frame;
+            AddFrameToHistory(capture_id, frame);
+        }
+    }
+    for(std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::iterator it = frame_cache_.begin();
+        it != frame_cache_.end(); )
+    {
+        if(seen_capture_ids.find(it->first) == seen_capture_ids.end())
+        {
+            it = frame_cache_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    frame_cache_refresh_ms_ = now_ms;
+}
+
+void ScreenMirror::PrepareMirrorRoomGridOverlay(uint64_t render_sequence,
+                                                 float time,
+                                                 int nx,
+                                                 int ny,
+                                                 int nz,
+                                                 float /*room_min_x*/,
+                                                 float /*room_max_x*/,
+                                                 float /*room_min_y*/,
+                                                 float /*room_max_y*/,
+                                                 float /*room_min_z*/,
+                                                 float /*room_max_z*/,
+                                                 const GridContext3D& world_grid,
+                                                 const GridContext3D& /*room_grid*/)
+{
+    GridContext3D wg = world_grid;
+    if(render_sequence != 0)
+    {
+        wg.render_sequence = render_sequence;
+    }
+    RefreshFrameCacheForRenderSequence(wg);
+
+    if(nx < 1 || ny < 1 || nz < 1)
+    {
+        mirror_overlay_coarse_.clear();
+        mirror_overlay_cx_ = mirror_overlay_cy_ = mirror_overlay_cz_ = 0;
+        mirror_overlay_pass_seq_ = 0;
+        return;
+    }
+
+    const int denom_x = (std::max)(nx - 1, 1);
+    const int denom_y = (std::max)(ny - 1, 1);
+    const int denom_z = (std::max)(nz - 1, 1);
+
+    int stride = 1;
+    const long long fine_total = (long long)nx * (long long)ny * (long long)nz;
+    if(fine_total > 12000) { stride = 2; }
+    if(fine_total > 48000) { stride = 3; }
+    if(fine_total > 120000) { stride = 4; }
+
+    mirror_overlay_stride_ = stride;
+    mirror_overlay_cx_ = (nx + stride - 1) / stride;
+    mirror_overlay_cy_ = (ny + stride - 1) / stride;
+    mirror_overlay_cz_ = (nz + stride - 1) / stride;
+    mirror_overlay_nx_ = nx;
+    mirror_overlay_ny_ = ny;
+    mirror_overlay_nz_ = nz;
+    mirror_overlay_pass_seq_ = render_sequence;
+
+    const size_t nc = (size_t)mirror_overlay_cx_ * (size_t)mirror_overlay_cy_ * (size_t)mirror_overlay_cz_;
+    mirror_overlay_coarse_.resize(nc);
+
+    for(int ic = 0; ic < mirror_overlay_cx_; ic++)
+    {
+        const int ix_lo = ic * stride;
+        const int ix_hi = (std::min)(ix_lo + stride - 1, nx - 1);
+        const int ix_c = (ix_lo + ix_hi) / 2;
+        const float u = (float)ix_c / (float)denom_x;
+        const float wx = world_grid.min_x + u * (world_grid.max_x - world_grid.min_x);
+        for(int jc = 0; jc < mirror_overlay_cy_; jc++)
+        {
+            const int iy_lo = jc * stride;
+            const int iy_hi = (std::min)(iy_lo + stride - 1, ny - 1);
+            const int iy_c = (iy_lo + iy_hi) / 2;
+            const float v = (float)iy_c / (float)denom_y;
+            const float wy = world_grid.min_y + v * (world_grid.max_y - world_grid.min_y);
+            for(int kc = 0; kc < mirror_overlay_cz_; kc++)
+            {
+                const int iz_lo = kc * stride;
+                const int iz_hi = (std::min)(iz_lo + stride - 1, nz - 1);
+                const int iz_c = (iz_lo + iz_hi) / 2;
+                const float wn = (float)iz_c / (float)denom_z;
+                const float wz = world_grid.min_z + wn * (world_grid.max_z - world_grid.min_z);
+
+                const size_t idx =
+                    (size_t)ic * (size_t)mirror_overlay_cy_ * (size_t)mirror_overlay_cz_ +
+                    (size_t)jc * (size_t)mirror_overlay_cz_ + (size_t)kc;
+                mirror_overlay_coarse_[idx] =
+                    CalculateColorGridInternal(wx, wy, wz, time, world_grid, &frame_cache_, &frame_cache_planes_, false);
+            }
+        }
+    }
+}
+
+RGBColor ScreenMirror::SampleMirrorRoomGridOverlay(uint64_t render_sequence, int ix, int iy, int iz, int nx, int ny, int nz) const
+{
+    if(render_sequence != mirror_overlay_pass_seq_ || mirror_overlay_coarse_.empty())
+    {
+        return ToRGBColor(0, 0, 0);
+    }
+    if(nx != mirror_overlay_nx_ || ny != mirror_overlay_ny_ || nz != mirror_overlay_nz_)
+    {
+        return ToRGBColor(0, 0, 0);
+    }
+    if(ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz)
+    {
+        return ToRGBColor(0, 0, 0);
+    }
+    const float fx = ((float)ix + 0.5f) * (float)mirror_overlay_cx_ / (float)nx - 0.5f;
+    const float fy = ((float)iy + 0.5f) * (float)mirror_overlay_cy_ / (float)ny - 0.5f;
+    const float fz = ((float)iz + 0.5f) * (float)mirror_overlay_cz_ / (float)nz - 0.5f;
+    return TrilinearMirrorCoarse(mirror_overlay_coarse_, mirror_overlay_cx_, mirror_overlay_cy_, mirror_overlay_cz_, fx, fy, fz);
+}
+
+RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    RefreshFrameCacheForRenderSequence(grid);
     return CalculateColorGridInternal(x, y, z, time, grid, &frame_cache_, &frame_cache_planes_);
 }
 
 RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
                                                      const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
-                                                     const std::vector<DisplayPlane3D*>* pre_fetched_planes)
+                                                     const std::vector<DisplayPlane3D*>* pre_fetched_planes,
+                                                     bool apply_led_smoothing)
 {
     (void)time;
     std::vector<DisplayPlane3D*> all_planes;
@@ -1154,65 +1334,68 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
     if(total_g > 255.0f) total_g = 255.0f;
     if(total_b > 255.0f) total_b = 255.0f;
 
-    float max_smoothing_time = 0.0f;
-    if(contributions.size() == 1)
+    if(apply_led_smoothing)
     {
-        max_smoothing_time = contributions[0].smoothing_time_ms;
-    }
-    else
-    {
-        for(size_t i = 0; i < contributions.size(); i++)
+        float max_smoothing_time = 0.0f;
+        if(contributions.size() == 1)
         {
-            if(contributions[i].smoothing_time_ms > max_smoothing_time)
-            {
-                max_smoothing_time = contributions[i].smoothing_time_ms;
-            }
-        }
-    }
-    
-    if(max_smoothing_time > 0.1f)
-    {
-        LEDKey key = MakeLEDKey(x, y, z);
-        LEDState& state = led_states[key];
-
-        static const std::chrono::steady_clock::time_point smooth_clock_start = std::chrono::steady_clock::now();
-        std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
-        uint64_t tick_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 now_tp - smooth_clock_start)
-                                 .count();
-
-        if(state.smooth_last_tick_ms == 0)
-        {
-            state.r = total_r;
-            state.g = total_g;
-            state.b = total_b;
-            state.smooth_last_tick_ms = tick_ms;
+            max_smoothing_time = contributions[0].smoothing_time_ms;
         }
         else
         {
-            uint64_t dt_ms_u64 = (tick_ms > state.smooth_last_tick_ms) ? (tick_ms - state.smooth_last_tick_ms) : 0;
-            if(dt_ms_u64 == 0)
+            for(size_t i = 0; i < contributions.size(); i++)
             {
-                dt_ms_u64 = 1;
+                if(contributions[i].smoothing_time_ms > max_smoothing_time)
+                {
+                    max_smoothing_time = contributions[i].smoothing_time_ms;
+                }
             }
-            float dt = (float)dt_ms_u64;
-            float tau = max_smoothing_time;
-            float alpha = dt / (tau + dt);
-
-            state.r += alpha * (total_r - state.r);
-            state.g += alpha * (total_g - state.g);
-            state.b += alpha * (total_b - state.b);
-            state.smooth_last_tick_ms = tick_ms;
-
-            total_r = state.r;
-            total_g = state.g;
-            total_b = state.b;
         }
-    }
-    else
-    {
-        LEDKey key = MakeLEDKey(x, y, z);
-        led_states.erase(key);
+        
+        if(max_smoothing_time > 0.1f)
+        {
+            LEDKey key = MakeLEDKey(x, y, z);
+            LEDState& state = led_states[key];
+
+            static const std::chrono::steady_clock::time_point smooth_clock_start = std::chrono::steady_clock::now();
+            std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
+            uint64_t tick_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     now_tp - smooth_clock_start)
+                                     .count();
+
+            if(state.smooth_last_tick_ms == 0)
+            {
+                state.r = total_r;
+                state.g = total_g;
+                state.b = total_b;
+                state.smooth_last_tick_ms = tick_ms;
+            }
+            else
+            {
+                uint64_t dt_ms_u64 = (tick_ms > state.smooth_last_tick_ms) ? (tick_ms - state.smooth_last_tick_ms) : 0;
+                if(dt_ms_u64 == 0)
+                {
+                    dt_ms_u64 = 1;
+                }
+                float dt = (float)dt_ms_u64;
+                float tau = max_smoothing_time;
+                float alpha = dt / (tau + dt);
+
+                state.r += alpha * (total_r - state.r);
+                state.g += alpha * (total_g - state.g);
+                state.b += alpha * (total_b - state.b);
+                state.smooth_last_tick_ms = tick_ms;
+
+                total_r = state.r;
+                total_g = state.g;
+                total_b = state.b;
+            }
+        }
+        else
+        {
+            LEDKey key = MakeLEDKey(x, y, z);
+            led_states.erase(key);
+        }
     }
 
     return ToRGBColor((uint8_t)total_r, (uint8_t)total_g, (uint8_t)total_b);

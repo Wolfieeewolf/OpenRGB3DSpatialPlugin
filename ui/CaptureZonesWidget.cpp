@@ -80,7 +80,7 @@ public:
         connect(refresh_timer, &QTimer::timeout, this, [this]() {
             update();
         });
-        refresh_timer->start(33);
+        refresh_timer->start(16);
     }
 
     void SetDisplayPlane(DisplayPlane3D* plane)

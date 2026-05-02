@@ -61,6 +61,24 @@ public:
     bool ShouldShowTestPattern(const std::string& plane_name) const;
     bool ShouldShowScreenPreview(const std::string& plane_name) const;
 
+    /** Pull latest capture into frame_cache for this render pass (call before LED + overlay sampling). */
+    void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
+    /** Build subsampled mirror colors for the room-grid overlay; pairs with SampleMirrorRoomGridOverlay. */
+    void PrepareMirrorRoomGridOverlay(uint64_t render_sequence,
+                                      float time,
+                                      int nx,
+                                      int ny,
+                                      int nz,
+                                      float room_min_x,
+                                      float room_max_x,
+                                      float room_min_y,
+                                      float room_max_y,
+                                      float room_min_z,
+                                      float room_max_z,
+                                      const GridContext3D& world_grid,
+                                      const GridContext3D& room_grid);
+    RGBColor SampleMirrorRoomGridOverlay(uint64_t render_sequence, int ix, int iy, int iz, int nx, int ny, int nz) const;
+
 private slots:
     void OnParameterChanged();
     void OnScreenPreviewChanged();
@@ -286,6 +304,16 @@ private:
     };
     std::map<LEDKey, LEDState> led_states;
 
+    std::vector<RGBColor>               mirror_overlay_coarse_;
+    int                                 mirror_overlay_cx_ = 0;
+    int                                 mirror_overlay_cy_ = 0;
+    int                                 mirror_overlay_cz_ = 0;
+    int                                 mirror_overlay_nx_ = 0;
+    int                                 mirror_overlay_ny_ = 0;
+    int                                 mirror_overlay_nz_ = 0;
+    int                                 mirror_overlay_stride_ = 1;
+    uint64_t                            mirror_overlay_pass_seq_ = 0;
+
     bool ResolveReferencePointById(int id, Vector3D& out) const;
     int LookupReferencePointIdByIndex(int index) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
@@ -295,7 +323,8 @@ private:
 
     RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
                                        const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
-                                       const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr);
+                                       const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr,
+                                       bool apply_led_smoothing = true);
 
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;

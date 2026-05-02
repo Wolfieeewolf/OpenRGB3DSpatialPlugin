@@ -14,10 +14,14 @@
     #include <Windows.h>
     #include <d3d11.h>
     #include <dxgi1_2.h>
+    #include <dxgi1_6.h>
+    #include <d3dcompiler.h>
     #include <cmath>
+    #include <cstring>
 
     #pragma comment(lib, "d3d11.lib")
     #pragma comment(lib, "dxgi.lib")
+    #pragma comment(lib, "d3dcompiler.lib")
 #endif
 
 ScreenCaptureManager& ScreenCaptureManager::Instance()
@@ -331,36 +335,6 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-struct DXGICaptureState
-{
-    ID3D11Device* device = nullptr;
-    ID3D11DeviceContext* context = nullptr;
-    IDXGIOutputDuplication* duplication = nullptr;
-    ID3D11Texture2D* staging_texture = nullptr;
-    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    UINT width = 0;
-    UINT height = 0;
-    bool desktop_frame_acquired = false;
-
-    void Release()
-    {
-        if(duplication && desktop_frame_acquired)
-        {
-            duplication->ReleaseFrame();
-            desktop_frame_acquired = false;
-        }
-        if(staging_texture) { staging_texture->Release(); staging_texture = nullptr; }
-        if(duplication) { duplication->Release(); duplication = nullptr; }
-        if(context) { context->Release(); context = nullptr; }
-        if(device) { device->Release(); device = nullptr; }
-        format = DXGI_FORMAT_UNKNOWN;
-        width = 0;
-        height = 0;
-    }
-
-    bool IsValid() const { return device && context && duplication && staging_texture && width > 0 && height > 0; }
-};
-
 static float HalfToFloat(uint16_t value)
 {
     const uint16_t sign = (value >> 15) & 0x1;
@@ -392,6 +366,326 @@ static uint8_t LinearHdrToSdr8(float v)
     return (uint8_t)std::lround(srgb * 255.0f);
 }
 
+static void UnpackR10G10B10A2(uint32_t packed, float& rf, float& gf, float& bf)
+{
+    rf = (float)((packed >> 0) & 0x3FF) * (1.0f / 1023.0f);
+    gf = (float)((packed >> 10) & 0x3FF) * (1.0f / 1023.0f);
+    bf = (float)((packed >> 20) & 0x3FF) * (1.0f / 1023.0f);
+}
+
+#ifdef _MSC_VER
+static void SafeDupReleaseFrame(IDXGIOutputDuplication* dup, bool& acquired_flag)
+{
+    if(!dup || !acquired_flag)
+        return;
+    __try
+    {
+        dup->ReleaseFrame();
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+    }
+    acquired_flag = false;
+}
+#else
+static void SafeDupReleaseFrame(IDXGIOutputDuplication* dup, bool& acquired_flag)
+{
+    if(!dup || !acquired_flag)
+        return;
+    dup->ReleaseFrame();
+    acquired_flag = false;
+}
+#endif
+
+struct HdrGpuConverter
+{
+    ID3D11Device* device_ref = nullptr;
+    ID3D11Texture2D* tonemap_rt = nullptr;
+    ID3D11RenderTargetView* tonemap_rtv = nullptr;
+    ID3D11VertexShader* vs = nullptr;
+    ID3D11PixelShader* ps = nullptr;
+    ID3D11Buffer* cbuf = nullptr;
+    ID3D11SamplerState* samp = nullptr;
+    UINT width = 0;
+    UINT height = 0;
+    DXGI_FORMAT src_format = DXGI_FORMAT_UNKNOWN;
+
+    void Release()
+    {
+        if(tonemap_rtv)
+        {
+            tonemap_rtv->Release();
+            tonemap_rtv = nullptr;
+        }
+        if(tonemap_rt)
+        {
+            tonemap_rt->Release();
+            tonemap_rt = nullptr;
+        }
+        if(vs)
+        {
+            vs->Release();
+            vs = nullptr;
+        }
+        if(ps)
+        {
+            ps->Release();
+            ps = nullptr;
+        }
+        if(cbuf)
+        {
+            cbuf->Release();
+            cbuf = nullptr;
+        }
+        if(samp)
+        {
+            samp->Release();
+            samp = nullptr;
+        }
+        device_ref = nullptr;
+        width = 0;
+        height = 0;
+        src_format = DXGI_FORMAT_UNKNOWN;
+    }
+
+    bool Init(ID3D11Device* device, UINT w, UINT h, DXGI_FORMAT srcFmt)
+    {
+        Release();
+        device_ref = device;
+        width = w;
+        height = h;
+        src_format = srcFmt;
+
+        static const char kHlsl[] =
+            "cbuffer Params : register(b0) { float g_hdrScale; float3 g_pad; };\n"
+            "Texture2D g_tex : register(t0);\n"
+            "SamplerState g_sam : register(s0);\n"
+            "struct VS_OUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };\n"
+            "VS_OUT vs_main(uint vid : SV_VertexID) {\n"
+            "  VS_OUT o;\n"
+            "  float2 uv = float2((vid << 1) & 2, vid & 2);\n"
+            "  o.pos = float4(uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
+            "  o.uv = float2(uv.x, 1.0f - uv.y);\n"
+            "  return o;\n"
+            "}\n"
+            "float4 ps_main(VS_OUT i) : SV_Target {\n"
+            "  float4 c = g_tex.Sample(g_sam, i.uv);\n"
+            "  float3 rgb = c.rgb * g_hdrScale;\n"
+            "  rgb = rgb / (1.0f + rgb);\n"
+            "  rgb = pow(saturate(rgb), 1.0f / 2.2f);\n"
+            "  return float4(rgb, 1.0f);\n"
+            "}\n";
+
+        ID3DBlob* vs_blob = nullptr;
+        ID3DBlob* ps_blob = nullptr;
+        ID3DBlob* err = nullptr;
+        HRESULT hr = D3DCompile(kHlsl, std::strlen(kHlsl), nullptr, nullptr, nullptr, "vs_main", "vs_5_0", 0, 0, &vs_blob, &err);
+        if(err)
+        {
+            err->Release();
+            err = nullptr;
+        }
+        if(FAILED(hr) || !vs_blob)
+            return false;
+        hr = D3DCompile(kHlsl, std::strlen(kHlsl), nullptr, nullptr, nullptr, "ps_main", "ps_5_0", 0, 0, &ps_blob, &err);
+        if(err)
+        {
+            err->Release();
+        }
+        if(FAILED(hr) || !ps_blob)
+        {
+            vs_blob->Release();
+            return false;
+        }
+
+        hr = device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &vs);
+        vs_blob->Release();
+        if(FAILED(hr))
+            return false;
+        hr = device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps);
+        ps_blob->Release();
+        if(FAILED(hr))
+        {
+            Release();
+            return false;
+        }
+
+        D3D11_BUFFER_DESC bd = {};
+        bd.ByteWidth = 16;
+        bd.Usage = D3D11_USAGE_DYNAMIC;
+        bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        hr = device->CreateBuffer(&bd, nullptr, &cbuf);
+        if(FAILED(hr))
+        {
+            Release();
+            return false;
+        }
+
+        D3D11_SAMPLER_DESC sd = {};
+        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        hr = device->CreateSamplerState(&sd, &samp);
+        if(FAILED(hr))
+        {
+            Release();
+            return false;
+        }
+
+        D3D11_TEXTURE2D_DESC td = {};
+        td.Width = w;
+        td.Height = h;
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Usage = D3D11_USAGE_DEFAULT;
+        td.BindFlags = D3D11_BIND_RENDER_TARGET;
+        hr = device->CreateTexture2D(&td, nullptr, &tonemap_rt);
+        if(FAILED(hr))
+        {
+            Release();
+            return false;
+        }
+        hr = device->CreateRenderTargetView(tonemap_rt, nullptr, &tonemap_rtv);
+        if(FAILED(hr))
+        {
+            Release();
+            return false;
+        }
+        return true;
+    }
+
+    bool TonemapFrame(ID3D11DeviceContext* ctx, ID3D11Texture2D* src_dupl_tex, bool wide_gamut_hdr)
+    {
+        if(!ctx || !src_dupl_tex || !tonemap_rtv || !vs || !ps || !cbuf || !samp || !device_ref)
+            return false;
+        D3D11_TEXTURE2D_DESC src_desc = {};
+        src_dupl_tex->GetDesc(&src_desc);
+        if(src_desc.Width != width || src_desc.Height != height)
+            return false;
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvd = {};
+        srvd.Format = src_format;
+        srvd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvd.Texture2D.MipLevels = 1;
+        ID3D11ShaderResourceView* srv = nullptr;
+        HRESULT hr = device_ref->CreateShaderResourceView(src_dupl_tex, &srvd, &srv);
+        if(FAILED(hr) || !srv)
+            return false;
+
+        const bool is_r10 = (src_format == DXGI_FORMAT_R10G10B10A2_UNORM);
+        float hdr_scale = 1.0f;
+        if(wide_gamut_hdr)
+            hdr_scale = is_r10 ? 6.0f : 1.0f;
+        else
+            hdr_scale = is_r10 ? 1.5f : 1.0f;
+
+        struct CbParams
+        {
+            float scale;
+            float pad[3];
+        } params = { hdr_scale, { 0.0f, 0.0f, 0.0f } };
+
+        D3D11_MAPPED_SUBRESOURCE mr = {};
+        if(FAILED(ctx->Map(cbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr)))
+        {
+            srv->Release();
+            return false;
+        }
+        std::memcpy(mr.pData, &params, sizeof(params));
+        ctx->Unmap(cbuf, 0);
+
+        D3D11_VIEWPORT vp = {};
+        vp.Width = (FLOAT)width;
+        vp.Height = (FLOAT)height;
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+        ctx->RSSetViewports(1, &vp);
+
+        const float clear[4] = { 0, 0, 0, 0 };
+        ctx->ClearRenderTargetView(tonemap_rtv, clear);
+        ctx->OMSetRenderTargets(1, &tonemap_rtv, nullptr);
+        ctx->IASetInputLayout(nullptr);
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ctx->VSSetShader(vs, nullptr, 0);
+        ctx->PSSetShader(ps, nullptr, 0);
+        ctx->PSSetConstantBuffers(0, 1, &cbuf);
+        ctx->PSSetSamplers(0, 1, &samp);
+        ctx->PSSetShaderResources(0, 1, &srv);
+        ctx->Draw(3, 0);
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        ctx->PSSetShaderResources(0, 1, &null_srv);
+        srv->Release();
+
+        ID3D11RenderTargetView* null_rtv = nullptr;
+        ctx->OMSetRenderTargets(0, &null_rtv, nullptr);
+        ctx->Flush();
+        return true;
+    }
+
+    bool CopyTonemapToStaging(ID3D11DeviceContext* ctx, ID3D11Texture2D* staging_bgra8) const
+    {
+        if(!ctx || !tonemap_rt || !staging_bgra8)
+            return false;
+        ctx->CopyResource(staging_bgra8, tonemap_rt);
+        return true;
+    }
+};
+
+struct DXGICaptureState
+{
+    ID3D11Device* device = nullptr;
+    ID3D11DeviceContext* context = nullptr;
+    IDXGIOutputDuplication* duplication = nullptr;
+    ID3D11Texture2D* staging_texture = nullptr;
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+    UINT width = 0;
+    UINT height = 0;
+    bool desktop_frame_acquired = false;
+    bool wide_gamut_hdr = false;
+    bool use_gpu_hdr_tonemap = false;
+    HdrGpuConverter hdr_gpu;
+
+    void Release()
+    {
+        hdr_gpu.Release();
+        use_gpu_hdr_tonemap = false;
+        wide_gamut_hdr = false;
+        if(duplication && desktop_frame_acquired)
+        {
+            SafeDupReleaseFrame(duplication, desktop_frame_acquired);
+        }
+        if(staging_texture)
+        {
+            staging_texture->Release();
+            staging_texture = nullptr;
+        }
+        if(duplication)
+        {
+            duplication->Release();
+            duplication = nullptr;
+        }
+        if(context)
+        {
+            context->Release();
+            context = nullptr;
+        }
+        if(device)
+        {
+            device->Release();
+            device = nullptr;
+        }
+        format = DXGI_FORMAT_UNKNOWN;
+        width = 0;
+        height = 0;
+    }
+
+    bool IsValid() const { return device && context && duplication && staging_texture && width > 0 && height > 0; }
+};
+
 static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_width, int screen_height, DXGICaptureState& out)
 {
     out.Release();
@@ -399,6 +693,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     IDXGIOutputDuplication* duplication = nullptr;
     ID3D11Texture2D* staging_texture = nullptr;
     UINT out_width = 0, out_height = 0;
+    bool wide_gamut = false;
 
     auto RectArea = [](int w, int h) -> long long {
         if(w <= 0 || h <= 0) return 0;
@@ -490,8 +785,9 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     ID3D11Device* device = nullptr;
     ID3D11DeviceContext* context = nullptr;
     D3D_FEATURE_LEVEL feature_level;
+    const UINT dev_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     hr = D3D11CreateDevice(
-        best_adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0,
+        best_adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, dev_flags, nullptr, 0,
         D3D11_SDK_VERSION, &device, &feature_level, &context);
     if(best_adapter)
     {
@@ -515,7 +811,32 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         return false;
     }
 
-    hr = output1->DuplicateOutput(device, &duplication);
+    IDXGIOutput6* output6 = nullptr;
+    if(SUCCEEDED(output1->QueryInterface(__uuidof(IDXGIOutput6), (void**)&output6)) && output6)
+    {
+        DXGI_OUTPUT_DESC1 desc1 = {};
+        if(SUCCEEDED(output6->GetDesc1(&desc1)))
+        {
+            wide_gamut = (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+        }
+        const DXGI_FORMAT prefer_formats[] = {
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R10G10B10A2_UNORM,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+        };
+        hr = output6->DuplicateOutput1(device, 0, 3, prefer_formats, &duplication);
+        output6->Release();
+        output6 = nullptr;
+    }
+    else
+    {
+        hr = E_FAIL;
+    }
+
+    if(FAILED(hr) || !duplication)
+    {
+        hr = output1->DuplicateOutput(device, &duplication);
+    }
     output1->Release();
     output1 = nullptr;
     if(FAILED(hr) || !duplication)
@@ -525,15 +846,14 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         return false;
     }
 
-    DXGI_OUTDUPL_DESC dup_desc;
+    DXGI_OUTDUPL_DESC dup_desc = {};
     duplication->GetDesc(&dup_desc);
     out_width = dup_desc.ModeDesc.Width;
     out_height = dup_desc.ModeDesc.Height;
-    if(dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM &&
-       dup_desc.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB &&
-       dup_desc.ModeDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
-       dup_desc.ModeDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
-       dup_desc.ModeDesc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT)
+    const DXGI_FORMAT dup_fmt = dup_desc.ModeDesc.Format;
+    if(dup_fmt != DXGI_FORMAT_B8G8R8A8_UNORM && dup_fmt != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB &&
+       dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM && dup_fmt != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
+       dup_fmt != DXGI_FORMAT_R16G16B16A16_FLOAT && dup_fmt != DXGI_FORMAT_R10G10B10A2_UNORM)
     {
         duplication->Release();
         context->Release();
@@ -541,12 +861,24 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
         return false;
     }
 
+    const bool needs_hdr_tonemap =
+        (dup_fmt == DXGI_FORMAT_R16G16B16A16_FLOAT || dup_fmt == DXGI_FORMAT_R10G10B10A2_UNORM);
+    bool gpu_tonemap_ok = false;
+    if(needs_hdr_tonemap)
+    {
+        gpu_tonemap_ok = out.hdr_gpu.Init(device, out_width, out_height, dup_fmt);
+        if(!gpu_tonemap_ok)
+        {
+            LOG_WARNING("[ScreenCapture] GPU HDR tonemap init failed; using CPU path for format %u", (unsigned)dup_fmt);
+        }
+    }
+
     D3D11_TEXTURE2D_DESC tex_desc = {};
     tex_desc.Width = out_width;
     tex_desc.Height = out_height;
     tex_desc.MipLevels = 1;
     tex_desc.ArraySize = 1;
-    tex_desc.Format = dup_desc.ModeDesc.Format;
+    tex_desc.Format = (gpu_tonemap_ok && needs_hdr_tonemap) ? DXGI_FORMAT_B8G8R8A8_UNORM : dup_fmt;
     tex_desc.SampleDesc.Count = 1;
     tex_desc.SampleDesc.Quality = 0;
     tex_desc.Usage = D3D11_USAGE_STAGING;
@@ -557,6 +889,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     if(FAILED(hr) || !staging_texture)
     {
         duplication->Release();
+        out.hdr_gpu.Release();
         context->Release();
         device->Release();
         return false;
@@ -566,9 +899,21 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     out.context = context;
     out.duplication = duplication;
     out.staging_texture = staging_texture;
-    out.format = dup_desc.ModeDesc.Format;
+    out.format = dup_fmt;
     out.width = out_width;
     out.height = out_height;
+    out.wide_gamut_hdr = wide_gamut;
+    out.use_gpu_hdr_tonemap = gpu_tonemap_ok && needs_hdr_tonemap;
+    if(out.use_gpu_hdr_tonemap)
+    {
+        LOG_INFO("[ScreenCapture] DXGI HDR path: format=%u wide_gamut=%d GPU tonemap=1 %ux%u",
+                 (unsigned)dup_fmt, (int)wide_gamut, (int)out_width, (int)out_height);
+    }
+    else if(needs_hdr_tonemap)
+    {
+        LOG_INFO("[ScreenCapture] DXGI HDR path: format=%u wide_gamut=%d CPU tonemap %ux%u",
+                 (unsigned)dup_fmt, (int)wide_gamut, (int)out_width, (int)out_height);
+    }
     return true;
 }
 
@@ -684,38 +1029,58 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 resource->Release();
                 if(SUCCEEDED(hr) && tex)
                 {
-                    dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
+                    bool mapped_ok = false;
+                    if(dxgi_state.use_gpu_hdr_tonemap)
+                    {
+                        if(dxgi_state.hdr_gpu.TonemapFrame(dxgi_state.context, tex, dxgi_state.wide_gamut_hdr) &&
+                           dxgi_state.hdr_gpu.CopyTonemapToStaging(dxgi_state.context, dxgi_state.staging_texture))
+                        {
+                            mapped_ok = true;
+                        }
+                    }
+                    else
+                    {
+                        dxgi_state.context->CopyResource(dxgi_state.staging_texture, tex);
+                        mapped_ok = true;
+                    }
                     tex->Release();
 
                     D3D11_MAPPED_SUBRESOURCE mapped;
-                    hr = dxgi_state.context->Map(dxgi_state.staging_texture, 0, D3D11_MAP_READ, 0, &mapped);
+                    if(mapped_ok)
+                        hr = dxgi_state.context->Map(dxgi_state.staging_texture, 0, D3D11_MAP_READ, 0, &mapped);
+                    else
+                        hr = E_FAIL;
                     if(SUCCEEDED(hr))
                     {
                         const uint8_t* src = (const uint8_t*)mapped.pData;
-                        const UINT expected_row_bytes = (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT)
-                                                        ? (dxgi_state.width * 8)
-                                                        : (dxgi_state.width * 4);
+                        const bool staging_is_bgra8 = dxgi_state.use_gpu_hdr_tonemap ||
+                            (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+                        const UINT expected_row_bytes = staging_is_bgra8 ? (dxgi_state.width * 4)
+                            : (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) ? (dxgi_state.width * 8)
+                                                                                   : (dxgi_state.width * 4);
                         if(mapped.RowPitch < expected_row_bytes)
                         {
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
                             if(dxgi_state.desktop_frame_acquired)
-                            {
-                                dxgi_state.duplication->ReleaseFrame();
-                                dxgi_state.desktop_frame_acquired = false;
-                            }
+                                SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
                             use_dxgi = false;
                             continue;
                         }
                         const bool src_is_bgra =
                             (dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
-                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
-                        const bool src_is_fp16 = (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT);
+                             dxgi_state.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) ||
+                            dxgi_state.use_gpu_hdr_tonemap;
+                        const bool src_is_fp16 = (dxgi_state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) &&
+                                                 !dxgi_state.use_gpu_hdr_tonemap;
+                        const bool src_is_r10 = (dxgi_state.format == DXGI_FORMAT_R10G10B10A2_UNORM) &&
+                                                !dxgi_state.use_gpu_hdr_tonemap;
 
                         const int target_w = target_width.load();
                         const int target_h = target_height.load();
                         const bool needs_downscale = ((int)dxgi_state.width != target_w || (int)dxgi_state.height != target_h);
 
-                        if(src_is_fp16)
+                        if(src_is_fp16 || src_is_r10)
                         {
                             const int out_w = needs_downscale ? target_w : (int)dxgi_state.width;
                             const int out_h = needs_downscale ? target_h : (int)dxgi_state.height;
@@ -723,23 +1088,37 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                             if(dxgi_rgba_buffer.size() < out_need)
                                 dxgi_rgba_buffer.resize(out_need);
                             uint8_t* out_dst = dxgi_rgba_buffer.data();
+                            const float r10_scale = dxgi_state.wide_gamut_hdr ? 8.0f : 1.5f;
 
                             for(int y = 0; y < out_h; y++)
                             {
                                 const UINT src_y = needs_downscale
                                     ? (UINT)(((uint64_t)y * dxgi_state.height) / (uint64_t)out_h)
                                     : (UINT)y;
-                                const uint16_t* src_row = (const uint16_t*)(src + (size_t)src_y * mapped.RowPitch);
+                                const uint8_t* row_base = src + (size_t)src_y * mapped.RowPitch;
                                 uint8_t* row_dst = out_dst + (size_t)y * out_w * 4;
                                 for(int x = 0; x < out_w; x++)
                                 {
                                     const UINT src_x = needs_downscale
                                         ? (UINT)(((uint64_t)x * dxgi_state.width) / (uint64_t)out_w)
                                         : (UINT)x;
-                                    const uint16_t* px = src_row + (size_t)src_x * 4;
-                                    row_dst[0] = LinearHdrToSdr8(HalfToFloat(px[0]));
-                                    row_dst[1] = LinearHdrToSdr8(HalfToFloat(px[1]));
-                                    row_dst[2] = LinearHdrToSdr8(HalfToFloat(px[2]));
+                                    if(src_is_r10)
+                                    {
+                                        const uint32_t packed = ((const uint32_t*)row_base)[src_x];
+                                        float rf, gf, bf;
+                                        UnpackR10G10B10A2(packed, rf, gf, bf);
+                                        row_dst[0] = LinearHdrToSdr8(rf * r10_scale);
+                                        row_dst[1] = LinearHdrToSdr8(gf * r10_scale);
+                                        row_dst[2] = LinearHdrToSdr8(bf * r10_scale);
+                                    }
+                                    else
+                                    {
+                                        const uint16_t* src_row = (const uint16_t*)row_base;
+                                        const uint16_t* px = src_row + (size_t)src_x * 4;
+                                        row_dst[0] = LinearHdrToSdr8(HalfToFloat(px[0]));
+                                        row_dst[1] = LinearHdrToSdr8(HalfToFloat(px[1]));
+                                        row_dst[2] = LinearHdrToSdr8(HalfToFloat(px[2]));
+                                    }
                                     row_dst[3] = 255;
                                     row_dst += 4;
                                 }
@@ -779,18 +1158,12 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                         }
                     }
                     if(dxgi_state.desktop_frame_acquired)
-                    {
-                        dxgi_state.duplication->ReleaseFrame();
-                        dxgi_state.desktop_frame_acquired = false;
-                    }
+                        SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
                 }
                 else
                 {
                     if(dxgi_state.desktop_frame_acquired)
-                    {
-                        dxgi_state.duplication->ReleaseFrame();
-                        dxgi_state.desktop_frame_acquired = false;
-                    }
+                        SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
                 }
             }
             else
@@ -799,10 +1172,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                             (unsigned long)hr, source_id.c_str(), (void*)resource);
                 if(resource) { resource->Release(); resource = nullptr; }
                 if(dxgi_state.desktop_frame_acquired)
-                {
-                    dxgi_state.duplication->ReleaseFrame();
-                    dxgi_state.desktop_frame_acquired = false;
-                }
+                    SafeDupReleaseFrame(dxgi_state.duplication, dxgi_state.desktop_frame_acquired);
                 dxgi_state.Release();
                 use_dxgi = false;
             }
@@ -810,11 +1180,13 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         if(image.isNull())
         {
             std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
-            const int gdi_force_threshold_ms = 250;
-            const int idle_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_frame_produced).count();
-            const bool should_force_gdi = dxgi_timed_out &&
-                idle_ms >= gdi_force_threshold_ms &&
-                std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count() >= gdi_force_threshold_ms;
+            // DXGI duplication often stops delivering frames while video uses hardware overlay /
+            // DWM optimization — the compositor may not "present" updates until something like
+            // a cursor crosses a display. BitBlt the desktop on a timer when DXGI times out so we
+            // still see full-motion video on the captured monitor.
+            const int gdi_poll_interval_ms = 33;
+            const int ms_since_last_gdi = (int)std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count();
+            const bool should_force_gdi = dxgi_timed_out && ms_since_last_gdi >= gdi_poll_interval_ms;
             if(dxgi_timed_out && !should_force_gdi)
             {
                 // Brief yield — sleeping a full frame here stacked with AcquireNextFrame wait

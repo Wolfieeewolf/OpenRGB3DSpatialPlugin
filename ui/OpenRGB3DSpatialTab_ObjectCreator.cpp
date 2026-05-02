@@ -873,12 +873,7 @@ void OpenRGB3DSpatialTab::on_effect_timer_timeout()
     if(dt > 0.1f) dt = 0.1f;
     effect_time += dt;
 
-    const bool preview_drives_overlay = viewport && viewport->GetShowRoomGridOverlay() && viewport->GetShowScreenPreview() &&
-                                          viewport->IsScreenPreviewRefreshActive();
-    if(!preview_drives_overlay)
-    {
-        RenderEffectStack();
-    }
+    RenderEffectStack();
 }
 
 void OpenRGB3DSpatialTab::on_granularity_changed(int)

@@ -338,7 +338,8 @@ win32:LIBS += \
     -lgdi32 \
     -luser32 \
     -ld3d11 \
-    -ldxgi
+    -ldxgi \
+    -ld3dcompiler
 
 win32:CONFIG(debug, debug|release) {
     win32:DESTDIR = debug
