@@ -180,7 +180,7 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
                 update();
             });
         }
-        screen_preview_refresh_timer->start(16);
+        screen_preview_refresh_timer->start(8);
     }
     else
     {

@@ -251,7 +251,7 @@ void ScreenCaptureManager::SetDownscaleResolution(int width, int height)
 
 void ScreenCaptureManager::SetTargetFPS(int fps)
 {
-    target_fps.store((std::max)(1, (std::min)(fps, 60)));
+    target_fps.store((std::max)(1, (std::min)(fps, 120)));
 }
 
 #ifdef _WIN32
@@ -661,7 +661,9 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         {
             DXGI_OUTDUPL_FRAME_INFO frame_info;
             IDXGIResource* resource = nullptr;
-            HRESULT hr = dxgi_state.duplication->AcquireNextFrame(8, &frame_info, &resource);
+            // Wait long enough for the next compositor frame at typical refresh rates; short
+            // timeouts plus a full-frame sleep on miss caused visibly laggy LED updates.
+            HRESULT hr = dxgi_state.duplication->AcquireNextFrame(32, &frame_info, &resource);
             if(hr == DXGI_ERROR_WAIT_TIMEOUT)
             {
                 dxgi_timed_out = true;
@@ -815,7 +817,11 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count() >= gdi_force_threshold_ms;
             if(dxgi_timed_out && !should_force_gdi)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(target_frame_time_ms > 0 ? target_frame_time_ms : 2));
+                // Brief yield — sleeping a full frame here stacked with AcquireNextFrame wait
+                // and often landed between vsyncs, cutting effective capture rate ~in half.
+                int backoff_ms = target_frame_time_ms > 0 ? (target_frame_time_ms / 8) : 1;
+                backoff_ms = (std::clamp)(backoff_ms, 1, 4);
+                std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
                 continue;
             }
             if(should_force_gdi)

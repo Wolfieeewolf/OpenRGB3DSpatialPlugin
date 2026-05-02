@@ -463,7 +463,7 @@ RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time,
         {
             capture_mgr.Initialize();
         }
-        capture_mgr.SetTargetFPS(60);
+        capture_mgr.SetTargetFPS(120);
         int cap_w = 320, cap_h = 180;
         int q = std::clamp(capture_quality, 0, 7);
         if(q == 1) { cap_w = 480; cap_h = 270; }
