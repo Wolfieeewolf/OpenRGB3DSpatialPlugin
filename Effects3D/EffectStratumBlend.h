@@ -74,6 +74,29 @@ inline BandBlendScalars BlendBands(int layout_mode,
     return o;
 }
 
+namespace
+{
+inline void LoadJsonIntArray3Clamp(const nlohmann::json& settings,
+                                   const char* key,
+                                   std::array<int, 3>& out,
+                                   int lo,
+                                   int hi)
+{
+    if(!settings.contains(key) || !settings[key].is_array())
+    {
+        return;
+    }
+    const nlohmann::json& a = settings[key];
+    for(size_t i = 0; i < 3 && i < a.size(); i++)
+    {
+        if(a[i].is_number_integer())
+        {
+            out[i] = std::clamp(a[i].get<int>(), lo, hi);
+        }
+    }
+}
+} // namespace
+
 inline void LoadBandTuningJson(const nlohmann::json& settings,
                                const char* key_mode,
                                int& layout_mode,
@@ -86,23 +109,9 @@ inline void LoadBandTuningJson(const nlohmann::json& settings,
     {
         layout_mode = std::clamp(settings[key_mode].get<int>(), 0, 1);
     }
-    auto load3 = [&](const char* key, std::array<int, 3>& out, int lo, int hi) {
-        if(!settings.contains(key) || !settings[key].is_array())
-        {
-            return;
-        }
-        const auto& a = settings[key];
-        for(size_t i = 0; i < 3 && i < a.size(); i++)
-        {
-            if(a[i].is_number_integer())
-            {
-                out[i] = std::clamp(a[i].get<int>(), lo, hi);
-            }
-        }
-    };
-    load3(key_speed, b.speed, 0, 200);
-    load3(key_tight, b.tight, 25, 300);
-    load3(key_phase, b.phase_deg, -180, 180);
+    LoadJsonIntArray3Clamp(settings, key_speed, b.speed, 0, 200);
+    LoadJsonIntArray3Clamp(settings, key_tight, b.tight, 25, 300);
+    LoadJsonIntArray3Clamp(settings, key_phase, b.phase_deg, -180, 180);
 }
 
 inline void SaveBandTuningJson(nlohmann::json& j,

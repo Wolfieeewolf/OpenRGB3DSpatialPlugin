@@ -393,7 +393,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
     }
     catch(const std::exception& e)
     {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to auto-load effect profile: %s", e.what());
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load effect profile: %s", e.what());
     }
 }
 

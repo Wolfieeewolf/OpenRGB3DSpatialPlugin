@@ -104,7 +104,7 @@ struct FrequencyRangeEffect3D
         if(j.contains("decay")) decay = j["decay"].get<float>();
         if(j.contains("eq") && j["eq"].is_array())
         {
-            auto& arr = j["eq"];
+            const nlohmann::json& arr = j["eq"];
             for(size_t i = 0; i < (size_t)EQ_BANDS && i < arr.size(); i++)
                 eq_gain[i] = std::max(0.0f, std::min(2.0f, arr[i].get<float>()));
         }

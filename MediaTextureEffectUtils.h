@@ -53,6 +53,13 @@ inline float AmbienceGain(float dist_origin, float max_r, float d_face,
     return std::clamp(g, 0.0f, 1.0f);
 }
 
+inline int BilinearChannelSample(int a00, int a10, int a01, int a11, float ttx, float tty)
+{
+    const float top = (float)a00 * (1.0f - ttx) + (float)a10 * ttx;
+    const float bot = (float)a01 * (1.0f - ttx) + (float)a11 * ttx;
+    return (int)(top * (1.0f - tty) + bot * tty + 0.5f);
+}
+
 inline RGBColor SampleImageBilinear(const QImage& img, float u, float v)
 {
     if(img.isNull() || img.width() < 1 || img.height() < 1)
@@ -84,15 +91,9 @@ inline RGBColor SampleImageBilinear(const QImage& img, float u, float v)
     const QRgb p01 = img.pixel(x0, y1);
     const QRgb p11 = img.pixel(x1, y1);
 
-    auto ch = [](int a00, int a10, int a01, int a11, float ttx, float tty) -> int {
-        const float top = (float)a00 * (1.0f - ttx) + (float)a10 * ttx;
-        const float bot = (float)a01 * (1.0f - ttx) + (float)a11 * ttx;
-        return (int)(top * (1.0f - tty) + bot * tty + 0.5f);
-    };
-
-    const int r = ch(qRed(p00), qRed(p10), qRed(p01), qRed(p11), tx, ty);
-    const int g = ch(qGreen(p00), qGreen(p10), qGreen(p01), qGreen(p11), tx, ty);
-    const int b = ch(qBlue(p00), qBlue(p10), qBlue(p01), qBlue(p11), tx, ty);
+    const int r = BilinearChannelSample(qRed(p00), qRed(p10), qRed(p01), qRed(p11), tx, ty);
+    const int g = BilinearChannelSample(qGreen(p00), qGreen(p10), qGreen(p01), qGreen(p11), tx, ty);
+    const int b = BilinearChannelSample(qBlue(p00), qBlue(p10), qBlue(p01), qBlue(p11), tx, ty);
     return ToRGBColor(r, g, b);
 }
 

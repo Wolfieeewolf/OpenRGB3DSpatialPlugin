@@ -98,9 +98,9 @@ public:
                 result[it->second.category].push_back(it->second);
             }
         }
-        for(auto& pair : result)
+        for(std::pair<const std::string, std::vector<EffectRegistration3D>>& entry : result)
         {
-            std::sort(pair.second.begin(), pair.second.end(),
+            std::sort(entry.second.begin(), entry.second.end(),
                       [](const EffectRegistration3D& a, const EffectRegistration3D& b) { return a.ui_name < b.ui_name; });
         }
         return result;
