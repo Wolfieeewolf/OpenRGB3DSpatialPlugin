@@ -68,6 +68,33 @@ static bool FetchVoxelRgba(const VoxelGrid& grid, int ix, int iy, int iz, float&
 }
 }
 
+static bool ExpectedVoxelRgbaByteCount(const VoxelGrid& g, size_t& out_count)
+{
+    if(g.size_x <= 0 || g.size_y <= 0 || g.size_z <= 0)
+    {
+        return false;
+    }
+    const size_t sx = (size_t)g.size_x;
+    const size_t sy = (size_t)g.size_y;
+    const size_t sz = (size_t)g.size_z;
+    if(sx > (SIZE_MAX / sy))
+    {
+        return false;
+    }
+    const size_t xy = sx * sy;
+    if(xy > (SIZE_MAX / sz))
+    {
+        return false;
+    }
+    const size_t xyz = xy * sz;
+    if(xyz > (SIZE_MAX / 4u))
+    {
+        return false;
+    }
+    out_count = xyz * 4u;
+    return true;
+}
+
 RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
                                      const Basis& basis,
                                      const RoomSamplePoint& sample,
@@ -77,32 +104,6 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
                                      const MapperSettings& settings,
                                      bool* out_used_voxel)
 {
-    auto expected_rgba_bytes = [](const VoxelGrid& g, size_t& out_count) -> bool {
-        if(g.size_x <= 0 || g.size_y <= 0 || g.size_z <= 0)
-        {
-            return false;
-        }
-        const size_t sx = (size_t)g.size_x;
-        const size_t sy = (size_t)g.size_y;
-        const size_t sz = (size_t)g.size_z;
-        if(sx > (SIZE_MAX / sy))
-        {
-            return false;
-        }
-        const size_t xy = sx * sy;
-        if(xy > (SIZE_MAX / sz))
-        {
-            return false;
-        }
-        const size_t xyz = xy * sz;
-        if(xyz > (SIZE_MAX / 4u))
-        {
-            return false;
-        }
-        out_count = xyz * 4u;
-        return true;
-    };
-
     if(out_used_voxel)
     {
         *out_used_voxel = false;
@@ -112,7 +113,7 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
     if(!grid.valid ||
        grid.size_x <= 1 || grid.size_y <= 1 || grid.size_z <= 1 ||
        grid.voxel_size <= 1e-6f ||
-       !expected_rgba_bytes(grid, expected_bytes) ||
+       !ExpectedVoxelRgbaByteCount(grid, expected_bytes) ||
        grid.rgba.size() < expected_bytes)
     {
         return (RGBColor)0x00000000;

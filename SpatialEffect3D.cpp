@@ -19,7 +19,7 @@ namespace
                         const QString& tip,
                         QWidget* body)
     {
-        auto* heading = new QLabel(title);
+        QLabel* heading = new QLabel(title);
         QFont f = heading->font();
         f.setBold(true);
         heading->setFont(f);
@@ -242,7 +242,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     QVBoxLayout* main_layout = new QVBoxLayout(effect_controls_group);
 
     {
-        auto* layer_heading = new QLabel(QStringLiteral("Layer controls"));
+        QLabel* layer_heading = new QLabel(QStringLiteral("Layer controls"));
         QFont hf = layer_heading->font();
         hf.setBold(true);
         layer_heading->setFont(hf);
@@ -663,7 +663,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    color_controls_group);
 
     custom_effect_settings_host = new QWidget();
-    auto* custom_host_layout = new QVBoxLayout(custom_effect_settings_host);
+    QVBoxLayout* custom_host_layout = new QVBoxLayout(custom_effect_settings_host);
     custom_host_layout->setContentsMargins(0, 0, 0, 0);
     custom_host_layout->setSpacing(4);
     AddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
@@ -1961,15 +1961,24 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
     if(effect_sharpness != 100)
     {
         const float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
-        auto apply = [gamma](int c) -> int {
-            if(c <= 0) return 0;
-            float n = std::pow((float)c / 255.0f, gamma);
-            int out = (int)(n * 255.0f + 0.5f);
-            return out > 255 ? 255 : out;
-        };
-        rr = apply(rr);
-        gg = apply(gg);
-        bb = apply(bb);
+        if(rr > 0)
+        {
+            float n = std::pow((float)rr / 255.0f, gamma);
+            rr = (int)(n * 255.0f + 0.5f);
+            if(rr > 255) rr = 255;
+        }
+        if(gg > 0)
+        {
+            float n = std::pow((float)gg / 255.0f, gamma);
+            gg = (int)(n * 255.0f + 0.5f);
+            if(gg > 255) gg = 255;
+        }
+        if(bb > 0)
+        {
+            float n = std::pow((float)bb / 255.0f, gamma);
+            bb = (int)(n * 255.0f + 0.5f);
+            if(bb > 255) bb = 255;
+        }
     }
 
     return (bb << 16) | (gg << 8) | rr;
