@@ -19,6 +19,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -987,9 +988,9 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
     int row = 0;
     const bool all = (channels == ChAll);
 
-    auto addPctSlider = [&](const QString& name, float* v) {
-        auto* lab = new QLabel(name);
-        auto* sl = new QSlider(Qt::Horizontal);
+    std::function<void(const QString&, float*)> addPctSlider = [&](const QString& name, float* v) {
+        QLabel* lab = new QLabel(name);
+        QSlider* sl = new QSlider(Qt::Horizontal);
         sl->setRange(0, 100);
         sl->setValue((int)std::lround(std::clamp(*v, 0.0f, 1.0f) * 100.0f));
         layout->addWidget(lab, row, 0);
@@ -1019,8 +1020,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(index_toggle, row++, 0, 1, 2);
         QObject::connect(index_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.health_per_heart_indexed = v; });
 
-        auto* lph_lab = new QLabel(QStringLiteral("LEDs per heart"));
-        auto* lph_spin = new QSpinBox();
+        QLabel* lph_lab = new QLabel(QStringLiteral("LEDs per heart"));
+        QSpinBox* lph_spin = new QSpinBox();
         lph_spin->setRange(1, 32);
         lph_spin->setValue(std::clamp(s.health_leds_per_heart, 1, 32));
         layout->addWidget(lph_lab, row, 0);
@@ -1028,8 +1029,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(lph_spin, QOverload<int>::of(&QSpinBox::valueChanged), panel, [&s](int v) { s.health_leds_per_heart = std::clamp(v, 1, 32); });
         row++;
 
-        auto* axis_lab = new QLabel(QStringLiteral("Heart strip axis"));
-        auto* axis_combo = new QComboBox();
+        QLabel* axis_lab = new QLabel(QStringLiteral("Heart strip axis"));
+        QComboBox* axis_combo = new QComboBox();
         axis_combo->addItem(QStringLiteral("Auto (longest span)"));
         axis_combo->addItem(QStringLiteral("Along X"));
         axis_combo->addItem(QStringLiteral("Along Y"));
@@ -1098,16 +1099,16 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(damage_toggle, row++, 0, 1, 2);
         QObject::connect(damage_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_damage_flash = v; });
         addPctSlider(QStringLiteral("Directional hit (vs uniform)"), &s.damage_directional_mix);
-        auto* dSharpLab = new QLabel(QStringLiteral("Damage direction sharpness"));
-        auto* dSharpSl = new QSlider(Qt::Horizontal);
+        QLabel* dSharpLab = new QLabel(QStringLiteral("Damage direction sharpness"));
+        QSlider* dSharpSl = new QSlider(Qt::Horizontal);
         dSharpSl->setRange(50, 400);
         dSharpSl->setValue((int)std::lround(s.damage_dir_sharpness * 100.0f));
         layout->addWidget(dSharpLab, row, 0);
         layout->addWidget(dSharpSl, row, 1);
         QObject::connect(dSharpSl, &QSlider::valueChanged, panel, [&s](int x) { s.damage_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); });
         row++;
-        auto* dDecLab = new QLabel(QStringLiteral("Damage flash decay (ms)"));
-        auto* dDecSl = new QSlider(Qt::Horizontal);
+        QLabel* dDecLab = new QLabel(QStringLiteral("Damage flash decay (ms)"));
+        QSlider* dDecSl = new QSlider(Qt::Horizontal);
         dDecSl->setRange(100, 900);
         dDecSl->setValue((int)std::lround(std::clamp(s.damage_flash_decay_s, 0.10f, 0.90f) * 1000.0f));
         layout->addWidget(dDecLab, row, 0);
@@ -1125,8 +1126,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(world_tint_toggle, row++, 0, 1, 2);
         QObject::connect(world_tint_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_ambient_world_tint = v; });
 
-        auto* mixLab = new QLabel(QStringLiteral("World tint strength"));
-        auto* mixSl = new QSlider(Qt::Horizontal);
+        QLabel* mixLab = new QLabel(QStringLiteral("World tint strength"));
+        QSlider* mixSl = new QSlider(Qt::Horizontal);
         mixSl->setRange(0, 100);
         mixSl->setValue((int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f));
         layout->addWidget(mixLab, row, 0);
@@ -1134,8 +1135,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(mixSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); });
         row++;
 
-        auto* vividLab = new QLabel(QStringLiteral("World tint vividness"));
-        auto* vividSl = new QSlider(Qt::Horizontal);
+        QLabel* vividLab = new QLabel(QStringLiteral("World tint vividness"));
+        QSlider* vividSl = new QSlider(Qt::Horizontal);
         vividSl->setRange(60, 200);
         vividSl->setValue((int)std::lround(std::clamp(s.world_tint_vividness, 0.60f, 2.00f) * 100.0f));
         layout->addWidget(vividLab, row, 0);
@@ -1143,8 +1144,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(vividSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_vividness = std::clamp(x / 100.0f, 0.60f, 2.00f); });
         row++;
 
-        auto* smoothLab = new QLabel(QStringLiteral("World tint smoothing"));
-        auto* smoothSl = new QSlider(Qt::Horizontal);
+        QLabel* smoothLab = new QLabel(QStringLiteral("World tint smoothing"));
+        QSlider* smoothSl = new QSlider(Qt::Horizontal);
         smoothSl->setRange(0, 95);
         smoothSl->setValue((int)std::lround(std::clamp(s.world_tint_smoothing, 0.0f, 0.95f) * 100.0f));
         layout->addWidget(smoothLab, row, 0);
@@ -1152,8 +1153,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(smoothSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_smoothing = std::clamp(x / 100.0f, 0.0f, 0.95f); });
         row++;
 
-        auto* dirLab = new QLabel(QStringLiteral("World tint directional response"));
-        auto* dirSl = new QSlider(Qt::Horizontal);
+        QLabel* dirLab = new QLabel(QStringLiteral("World tint directional response"));
+        QSlider* dirSl = new QSlider(Qt::Horizontal);
         dirSl->setRange(0, 100);
         dirSl->setValue((int)std::lround(std::clamp(s.world_tint_directional, 0.0f, 1.0f) * 100.0f));
         layout->addWidget(dirLab, row, 0);
@@ -1161,8 +1162,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(dirSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_directional = std::clamp(x / 100.0f, 0.0f, 1.0f); });
         row++;
 
-        auto* dirSharpLab = new QLabel(QStringLiteral("World tint directional sharpness"));
-        auto* dirSharpSl = new QSlider(Qt::Horizontal);
+        QLabel* dirSharpLab = new QLabel(QStringLiteral("World tint directional sharpness"));
+        QSlider* dirSharpSl = new QSlider(Qt::Horizontal);
         dirSharpSl->setRange(80, 320);
         dirSharpSl->setValue((int)std::lround(std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f) * 100.0f));
         layout->addWidget(dirSharpLab, row, 0);
@@ -1170,8 +1171,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(dirSharpSl, &QSlider::valueChanged, panel, [&s](int x) { s.world_tint_dir_sharpness = std::clamp(x / 100.0f, 0.8f, 3.2f); });
         row++;
 
-        auto* profileLab = new QLabel(QStringLiteral("Spatial layer profile"));
-        auto* profileCombo = new QComboBox();
+        QLabel* profileLab = new QLabel(QStringLiteral("Spatial layer profile"));
+        QComboBox* profileCombo = new QComboBox();
         profileCombo->addItem(QStringLiteral("Auto"), 0);
         profileCombo->addItem(QStringLiteral("3-layer (floor/mid/ceiling)"), 3);
         profileCombo->addItem(QStringLiteral("4-layer (floor/desk/upper/ceiling)"), 4);
@@ -1185,8 +1186,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         row++;
 
-        auto* mapModeLab = new QLabel(QStringLiteral("Spatial mapping mode"));
-        auto* mapModeCombo = new QComboBox();
+        QLabel* mapModeLab = new QLabel(QStringLiteral("Spatial mapping mode"));
+        QComboBox* mapModeCombo = new QComboBox();
         mapModeCombo->addItem(QStringLiteral("Classic world tint (MineLights style)"), 2);
         mapModeCombo->addItem(QStringLiteral("Compass directional probes"), 0);
         mapModeCombo->addItem(QStringLiteral("Voxel room mapping (core preview)"), 1);
@@ -1207,8 +1208,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         row++;
 
-        auto* centerLab = new QLabel(QStringLiteral("Center sector size"));
-        auto* centerSl = new QSlider(Qt::Horizontal);
+        QLabel* centerLab = new QLabel(QStringLiteral("Center sector size"));
+        QSlider* centerSl = new QSlider(Qt::Horizontal);
         centerSl->setRange(2, 65);
         centerSl->setValue((int)std::lround(std::clamp(s.spatial_center_size, 0.02f, 0.65f) * 100.0f));
         layout->addWidget(centerLab, row, 0);
@@ -1216,8 +1217,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(centerSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_center_size = std::clamp(x / 100.0f, 0.02f, 0.65f); });
         row++;
 
-        auto* softLab = new QLabel(QStringLiteral("Layer blend softness"));
-        auto* softSl = new QSlider(Qt::Horizontal);
+        QLabel* softLab = new QLabel(QStringLiteral("Layer blend softness"));
+        QSlider* softSl = new QSlider(Qt::Horizontal);
         softSl->setRange(2, 35);
         softSl->setValue((int)std::lround(std::clamp(s.spatial_blend_softness, 0.02f, 0.35f) * 100.0f));
         layout->addWidget(softLab, row, 0);
@@ -1225,8 +1226,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(softSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_blend_softness = std::clamp(x / 100.0f, 0.02f, 0.35f); });
         row++;
 
-        auto* headingLab = new QLabel(QStringLiteral("Room heading offset (deg)"));
-        auto* headingSl = new QSlider(Qt::Horizontal);
+        QLabel* headingLab = new QLabel(QStringLiteral("Room heading offset (deg)"));
+        QSlider* headingSl = new QSlider(Qt::Horizontal);
         headingSl->setRange(-180, 180);
         headingSl->setValue((int)std::lround(std::clamp(s.spatial_heading_offset_deg, -180.0f, 180.0f)));
         layout->addWidget(headingLab, row, 0);
@@ -1234,8 +1235,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(headingSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_heading_offset_deg = std::clamp((float)x, -180.0f, 180.0f); });
         row++;
 
-        auto* compassLab = new QLabel(QStringLiteral("Compass sector offset (deg)"));
-        auto* compassSl = new QSlider(Qt::Horizontal);
+        QLabel* compassLab = new QLabel(QStringLiteral("Compass sector offset (deg)"));
+        QSlider* compassSl = new QSlider(Qt::Horizontal);
         compassSl->setRange(-180, 180);
         compassSl->setValue((int)std::lround(std::clamp(s.spatial_compass_offset_deg, -180.0f, 180.0f)));
         const QString compassTip = QStringLiteral(
@@ -1250,8 +1251,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         row++;
 
-        auto* voxScaleLab = new QLabel(QStringLiteral("Voxel room scale"));
-        auto* voxScaleSl = new QSlider(Qt::Horizontal);
+        QLabel* voxScaleLab = new QLabel(QStringLiteral("Voxel room scale"));
+        QSlider* voxScaleSl = new QSlider(Qt::Horizontal);
         voxScaleSl->setRange(2, 80); // 0.02 .. 0.80 world units per room unit
         voxScaleSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f) * 100.0f));
         const QString voxScaleTip = QStringLiteral(
@@ -1266,8 +1267,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         row++;
 
-        auto* voxMixLab = new QLabel(QStringLiteral("Voxel room mix"));
-        auto* voxMixSl = new QSlider(Qt::Horizontal);
+        QLabel* voxMixLab = new QLabel(QStringLiteral("Voxel room mix"));
+        QSlider* voxMixSl = new QSlider(Qt::Horizontal);
         voxMixSl->setRange(0, 100);
         voxMixSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f) * 100.0f));
         const QString voxMixTip = QStringLiteral(
@@ -1287,11 +1288,11 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(dbgSweepToggle, row++, 0, 1, 2);
         QObject::connect(dbgSweepToggle, &QCheckBox::toggled, panel, [&s](bool v) { s.spatial_debug_sweep_enabled = v; });
 
-        auto* dbgSweepStatus = new QLabel(QStringLiteral("Sweep status: —"));
+        QLabel* dbgSweepStatus = new QLabel(QStringLiteral("Sweep status: —"));
         dbgSweepStatus->setWordWrap(true);
         layout->addWidget(dbgSweepStatus, row++, 0, 1, 2);
 
-        auto* dbgSweepTimer = new QTimer(panel);
+        QTimer* dbgSweepTimer = new QTimer(panel);
         dbgSweepTimer->setInterval(120);
         QObject::connect(dbgSweepTimer, &QTimer::timeout, panel, [dbgSweepStatus, &s]() {
             static const char* kSec[9] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW", "C"};
@@ -1359,8 +1360,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         dbgSweepTimer->start();
 
-        auto* dbgHzLab = new QLabel(QStringLiteral("Debug sweep speed (cells/sec)"));
-        auto* dbgHzSl = new QSlider(Qt::Horizontal);
+        QLabel* dbgHzLab = new QLabel(QStringLiteral("Debug sweep speed (cells/sec)"));
+        QSlider* dbgHzSl = new QSlider(Qt::Horizontal);
         dbgHzSl->setRange(2, 120); // 0.2 .. 12.0
         dbgHzSl->setValue((int)std::lround(std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f) * 10.0f));
         layout->addWidget(dbgHzLab, row, 0);
@@ -1370,8 +1371,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         row++;
 
-        auto* floorOffLab = new QLabel(QStringLiteral("Auto floor boundary offset"));
-        auto* floorOffSl = new QSlider(Qt::Horizontal);
+        QLabel* floorOffLab = new QLabel(QStringLiteral("Auto floor boundary offset"));
+        QSlider* floorOffSl = new QSlider(Qt::Horizontal);
         floorOffSl->setRange(-30, 30);
         floorOffSl->setValue((int)std::lround(std::clamp(s.spatial_floor_offset, -0.30f, 0.30f) * 100.0f));
         layout->addWidget(floorOffLab, row, 0);
@@ -1379,8 +1380,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(floorOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_floor_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
         row++;
 
-        auto* deskOffLab = new QLabel(QStringLiteral("Auto desk boundary offset"));
-        auto* deskOffSl = new QSlider(Qt::Horizontal);
+        QLabel* deskOffLab = new QLabel(QStringLiteral("Auto desk boundary offset"));
+        QSlider* deskOffSl = new QSlider(Qt::Horizontal);
         deskOffSl->setRange(-30, 30);
         deskOffSl->setValue((int)std::lround(std::clamp(s.spatial_desk_offset, -0.30f, 0.30f) * 100.0f));
         layout->addWidget(deskOffLab, row, 0);
@@ -1388,8 +1389,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(deskOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_desk_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
         row++;
 
-        auto* upperOffLab = new QLabel(QStringLiteral("Auto upper boundary offset"));
-        auto* upperOffSl = new QSlider(Qt::Horizontal);
+        QLabel* upperOffLab = new QLabel(QStringLiteral("Auto upper boundary offset"));
+        QSlider* upperOffSl = new QSlider(Qt::Horizontal);
         upperOffSl->setRange(-30, 30);
         upperOffSl->setValue((int)std::lround(std::clamp(s.spatial_upper_offset, -0.30f, 0.30f) * 100.0f));
         layout->addWidget(upperOffLab, row, 0);
@@ -1397,8 +1398,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(upperOffSl, &QSlider::valueChanged, panel, [&s](int x) { s.spatial_upper_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); });
         row++;
 
-        auto* gEndLab = new QLabel(QStringLiteral("Ground-to-mid blend ends (grid Y %)"));
-        auto* gEndSl = new QSlider(Qt::Horizontal);
+        QLabel* gEndLab = new QLabel(QStringLiteral("Ground-to-mid blend ends (grid Y %)"));
+        QSlider* gEndSl = new QSlider(Qt::Horizontal);
         gEndSl->setRange(10, 55);
         gEndSl->setValue((int)std::lround(std::clamp(s.tint_layer_ground_end, 0.10f, 0.55f) * 100.0f));
         layout->addWidget(gEndLab, row, 0);
@@ -1406,8 +1407,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(gEndSl, &QSlider::valueChanged, panel, [&s](int x) { s.tint_layer_ground_end = std::clamp(x / 100.0f, 0.08f, 0.55f); });
         row++;
 
-        auto* sStartLab = new QLabel(QStringLiteral("Mid-to-sky blend starts (grid Y %)"));
-        auto* sStartSl = new QSlider(Qt::Horizontal);
+        QLabel* sStartLab = new QLabel(QStringLiteral("Mid-to-sky blend starts (grid Y %)"));
+        QSlider* sStartSl = new QSlider(Qt::Horizontal);
         sStartSl->setRange(40, 85);
         sStartSl->setValue((int)std::lround(std::clamp(s.tint_layer_sky_start, 0.40f, 0.85f) * 100.0f));
         layout->addWidget(sStartLab, row, 0);
@@ -1431,8 +1432,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(lightning_toggle, row++, 0, 1, 2);
         QObject::connect(lightning_toggle, &QCheckBox::toggled, panel, [&s](bool v) { s.enable_lightning_flash = v; });
 
-        auto* lStrLab = new QLabel(QStringLiteral("Lightning flash strength"));
-        auto* lStrSl = new QSlider(Qt::Horizontal);
+        QLabel* lStrLab = new QLabel(QStringLiteral("Lightning flash strength"));
+        QSlider* lStrSl = new QSlider(Qt::Horizontal);
         lStrSl->setRange(0, 150);
         lStrSl->setValue((int)std::lround(std::clamp(s.lightning_flash_strength, 0.0f, 1.5f) * 100.0f));
         layout->addWidget(lStrLab, row, 0);
@@ -1440,8 +1441,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QObject::connect(lStrSl, &QSlider::valueChanged, panel, [&s](int x) { s.lightning_flash_strength = std::clamp(x / 100.0f, 0.0f, 1.5f); });
         row++;
 
-        auto* lDecLab = new QLabel(QStringLiteral("Lightning decay (ms)"));
-        auto* lDecSl = new QSlider(Qt::Horizontal);
+        QLabel* lDecLab = new QLabel(QStringLiteral("Lightning decay (ms)"));
+        QSlider* lDecSl = new QSlider(Qt::Horizontal);
         lDecSl->setRange(80, 900);
         lDecSl->setValue((int)std::lround(std::clamp(s.lightning_flash_decay_s, 0.08f, 0.90f) * 1000.0f));
         layout->addWidget(lDecLab, row, 0);
@@ -1450,8 +1451,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         row++;
 
         addPctSlider(QStringLiteral("Lightning directional response"), &s.lightning_directional_mix);
-        auto* lDirSharpLab = new QLabel(QStringLiteral("Lightning directional sharpness"));
-        auto* lDirSharpSl = new QSlider(Qt::Horizontal);
+        QLabel* lDirSharpLab = new QLabel(QStringLiteral("Lightning directional sharpness"));
+        QSlider* lDirSharpSl = new QSlider(Qt::Horizontal);
         lDirSharpSl->setRange(50, 500);
         lDirSharpSl->setValue((int)std::lround(std::clamp(s.lightning_dir_sharpness, 0.5f, 5.0f) * 100.0f));
         layout->addWidget(lDirSharpLab, row, 0);
@@ -1465,8 +1466,8 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         layout->addWidget(new QLabel(QStringLiteral("Output")), row++, 0, 1, 2);
     }
     {
-        auto* bLab = new QLabel(QStringLiteral("Base brightness"));
-        auto* bSl = new QSlider(Qt::Horizontal);
+        QLabel* bLab = new QLabel(QStringLiteral("Base brightness"));
+        QSlider* bSl = new QSlider(Qt::Horizontal);
         bSl->setRange(80, 150);
         bSl->setValue((int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f));
         layout->addWidget(bLab, row, 0);
@@ -1621,7 +1622,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         s.health_per_heart_indexed && tls_led_count > 0 && tls_led_index >= 0 && tls_led_index < tls_led_count;
     const bool have_spatial =
         !s.health_per_heart_indexed && HealthStripMappingUsable(grid, s.health_strip_axis);
-    const auto strip_brightness_for = [&](float fill_end, float max_units) -> float {
+    const std::function<float(float, float)> strip_brightness_for = [&](float fill_end, float max_units) -> float {
         const float total_slots = max_units * (float)lph;
         if(total_slots < 0.01f || (!have_indexed && !have_spatial))
         {
