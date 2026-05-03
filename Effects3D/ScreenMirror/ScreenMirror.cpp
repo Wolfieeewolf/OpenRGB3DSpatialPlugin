@@ -349,9 +349,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     main_layout->addStretch();
 
     AddWidgetToParent(container, parent);
-
-    /* Capture threads start only when the effect runs (CalculateColorGrid). Starting DXGI/GDI here
-     * only to populate the UI caused a brief full-screen compositor flicker on some GPUs. */
 }
 
 void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
@@ -830,7 +827,8 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             }
             if(frame_cache)
             {
-                auto it = frame_cache->find(capture_id);
+                std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>::const_iterator it =
+                    frame_cache->find(capture_id);
                 frame = (it != frame_cache->end()) ? it->second : nullptr;
             }
             else
@@ -1901,8 +1899,10 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             if(mon.contains("capture_zones") && mon["capture_zones"].is_array())
             {
                 msettings.capture_zones.clear();
-                for(const auto& zone_json : mon["capture_zones"])
+                const nlohmann::json& zones_arr = mon["capture_zones"];
+                for(size_t zi = 0; zi < zones_arr.size(); zi++)
                 {
+                    const nlohmann::json& zone_json = zones_arr[zi];
                     CaptureZone zone;
                     zone.u_min = zone_json.value("u_min", 0.0f);
                     zone.u_max = zone_json.value("u_max", 1.0f);
@@ -2296,8 +2296,6 @@ void ScreenMirror::RefreshReferencePointDropdowns()
         int restore_index = settings.ref_point_combo->findData(QVariant(desired_id));
         if(restore_index < 0)
         {
-            // Selected ref point no longer exists; snap state back to "Room Center" so
-            // persisted state stays in sync with what the dropdown shows.
             settings.reference_point_id = -1;
             restore_index = settings.ref_point_combo->findData(QVariant(-1));
         }

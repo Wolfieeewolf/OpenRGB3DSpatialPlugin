@@ -25,7 +25,7 @@ void Zone3D::AddController(int controller_idx)
 
 void Zone3D::RemoveController(int controller_idx)
 {
-    auto it = std::find(controller_indices.begin(), controller_indices.end(), controller_idx);
+    std::vector<int>::iterator it = std::find(controller_indices.begin(), controller_indices.end(), controller_idx);
     if(it != controller_indices.end())
     {
         controller_indices.erase(it);

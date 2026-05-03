@@ -158,63 +158,65 @@ static void ApplyHealthStateEvent(GameTelemetryBridge::TelemetrySnapshot& teleme
     telemetry.health_state.item_durability_max = telemetry.item_durability_max;
 }
 
+static void ClearVoxelFrame(GameTelemetryBridge::TelemetrySnapshot& telemetry)
+{
+    telemetry.voxel_frame.has_voxel_frame = false;
+    telemetry.voxel_frame.rgba.clear();
+}
+
+static bool TryComputeVoxelRgbaBytes(int x, int y, int z, size_t& out_bytes)
+{
+    if(x <= 0 || y <= 0 || z <= 0)
+    {
+        return false;
+    }
+    const size_t sx = (size_t)x;
+    const size_t sy = (size_t)y;
+    const size_t sz = (size_t)z;
+    if(sx > (SIZE_MAX / sy))
+    {
+        return false;
+    }
+    const size_t xy = sx * sy;
+    if(xy > (SIZE_MAX / sz))
+    {
+        return false;
+    }
+    const size_t xyz = xy * sz;
+    if(xyz > (SIZE_MAX / 4u))
+    {
+        return false;
+    }
+    out_bytes = xyz * 4u;
+    return true;
+}
+
 static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
 {
-    auto clear_voxel = [&telemetry]() {
-        telemetry.voxel_frame.has_voxel_frame = false;
-        telemetry.voxel_frame.rgba.clear();
-    };
-
-    auto try_compute_rgba_bytes = [](int x, int y, int z, size_t& out_bytes) -> bool {
-        if(x <= 0 || y <= 0 || z <= 0)
-        {
-            return false;
-        }
-        const size_t sx = (size_t)x;
-        const size_t sy = (size_t)y;
-        const size_t sz = (size_t)z;
-        if(sx > (SIZE_MAX / sy))
-        {
-            return false;
-        }
-        const size_t xy = sx * sy;
-        if(xy > (SIZE_MAX / sz))
-        {
-            return false;
-        }
-        const size_t xyz = xy * sz;
-        if(xyz > (SIZE_MAX / 4u))
-        {
-            return false;
-        }
-        out_bytes = xyz * 4u;
-        return true;
-    };
-
     const int sx = msg.value("voxel_size_x", 0);
     const int sy = msg.value("voxel_size_y", 0);
     const int sz = msg.value("voxel_size_z", 0);
     if(sx <= 0 || sy <= 0 || sz <= 0)
     {
-        clear_voxel();
+        ClearVoxelFrame(telemetry);
         return;
     }
     if(!msg.contains("voxel_rgba") || !msg["voxel_rgba"].is_array())
     {
-        clear_voxel();
+        ClearVoxelFrame(telemetry);
         return;
     }
 
     size_t expected = 0;
-    if(!try_compute_rgba_bytes(sx, sy, sz, expected) || expected == 0 || expected > (size_t)INT_MAX)
+    if(!TryComputeVoxelRgbaBytes(sx, sy, sz, expected) || expected == 0 || expected > (size_t)INT_MAX)
     {
-        clear_voxel();
+        ClearVoxelFrame(telemetry);
         return;
     }
-    const auto& rgba = msg["voxel_rgba"];
+    const nlohmann::json& rgba = msg["voxel_rgba"];
     if(rgba.size() < expected)
     {
-        clear_voxel();
+        ClearVoxelFrame(telemetry);
         return;
     }
 
@@ -522,7 +524,7 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                     {
                         const int layer_count = msg.value("probe_layer_count", 0);
                         const int sector_count = msg.value("probe_sector_count", 0);
-                        const auto& probe_rgb = msg["probe_rgb"];
+                        const nlohmann::json& probe_rgb = msg["probe_rgb"];
                         const int expected = layer_count * sector_count * 3;
                         if((layer_count == 3 || layer_count == 4) &&
                            sector_count == 9 &&
