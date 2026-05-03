@@ -35,7 +35,7 @@ ScreenCaptureManager::ScreenCaptureManager()
     , target_width(480)
     , target_height(270)
     , target_fps(30)
-    , windows_capture_backend_mode(0)
+    , windows_capture_backend_mode(1)
     , render_tick_snapshot_active(false)
 {
 }

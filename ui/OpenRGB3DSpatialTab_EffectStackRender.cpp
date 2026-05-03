@@ -4,7 +4,6 @@
 #include "GridSpaceUtils.h"
 #include "ZoneGrid3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
-#include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginLogOnce.h"
@@ -429,24 +428,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 }
             }
 
-            ScreenMirror* room_grid_mirror = nullptr;
-            for(size_t ei = 0; ei < active_effects.size(); ei++)
-            {
-                if(ScreenMirror* sm = dynamic_cast<ScreenMirror*>(active_effects[ei].effect))
-                {
-                    room_grid_mirror = sm;
-                    break;
-                }
-            }
-            if(room_grid_mirror)
-            {
-                room_grid_mirror->PrepareMirrorRoomGridOverlay(effect_render_sequence, time_val, nx, ny, nz,
-                                                               room_bounds.min_x, room_bounds.max_x,
-                                                               room_bounds.min_y, room_bounds.max_y,
-                                                               room_bounds.min_z, room_bounds.max_z,
-                                                               world_grid, room_grid);
-            }
-
             for(int ix = 0; ix < nx; ix++)
             {
                 const float px = room_bounds.min_x + (float)ix / (float)denom_x * span_x;
@@ -491,23 +472,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             float spz = sample_grid.min_z + w * (sample_grid.max_z - sample_grid.min_z);
                             slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
                             slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
-                            RGBColor effect_color;
-                            if(ScreenMirror* sm = dynamic_cast<ScreenMirror*>(slot.effect))
-                            {
-                                if(sm == room_grid_mirror && room_grid_mirror)
-                                {
-                                    effect_color =
-                                        sm->SampleMirrorRoomGridOverlay(effect_render_sequence, ix, iy, iz, nx, ny, nz);
-                                }
-                                else
-                                {
-                                    effect_color = sm->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
-                                }
-                            }
-                            else
-                            {
-                                effect_color = slot.effect->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
-                            }
+                            RGBColor effect_color =
+                                slot.effect->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
                             if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
                                 effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);

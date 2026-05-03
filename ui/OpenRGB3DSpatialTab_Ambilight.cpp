@@ -34,8 +34,8 @@ void OpenRGB3DSpatialTab::ConfigureAmbilightRuntimeEffect(SpatialEffect3D* effec
     {
         connect(screen_mirror, &ScreenMirror::ScreenPreviewChanged,
                 viewport, &LEDViewport3D::SetShowScreenPreview, Qt::UniqueConnection);
-        connect(screen_mirror, &ScreenMirror::TestPatternChanged,
-                viewport, &LEDViewport3D::SetShowTestPattern, Qt::UniqueConnection);
+        connect(screen_mirror, &ScreenMirror::CalibrationPatternChanged,
+                viewport, &LEDViewport3D::SetShowCalibrationPattern, Qt::UniqueConnection);
         screen_mirror->SetReferencePoints(&reference_points);
 
         QPointer<ScreenMirror> sm_ptr(screen_mirror);
@@ -44,7 +44,7 @@ void OpenRGB3DSpatialTab::ConfigureAmbilightRuntimeEffect(SpatialEffect3D* effec
                 return sm_ptr ? sm_ptr->ShouldShowScreenPreview(name) : false;
             },
             [sm_ptr](const std::string& name) -> bool {
-                return sm_ptr ? sm_ptr->ShouldShowTestPattern(name) : false;
+                return sm_ptr ? sm_ptr->ShouldShowCalibrationPattern(name) : false;
             });
     }
 }

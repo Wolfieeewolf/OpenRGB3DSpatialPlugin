@@ -4,6 +4,7 @@
 #include "DisplayPlane3D.h"
 #include "QtCompat.h"
 #include "ScreenCaptureManager.h"
+#include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -53,14 +54,14 @@ public:
     DisplayPlane3D* display_plane = nullptr;
     std::vector<CaptureZone>* capture_zones = nullptr;
     std::function<void()> on_value_changed;
-    bool* show_test_pattern_ptr = nullptr;
+    bool* show_calibration_pattern_ptr = nullptr;
     bool* show_screen_preview_ptr = nullptr;
     float* black_bar_letterbox_percent_ptr = nullptr;
     float* black_bar_pillarbox_percent_ptr = nullptr;
 
     CaptureAreaPreviewWidget(std::vector<CaptureZone>* zones,
                              DisplayPlane3D* plane,
-                             bool* test_pattern,
+                             bool* calibration_pattern,
                              bool* screen_preview,
                              float* black_bar_letterbox_percent,
                              float* black_bar_pillarbox_percent,
@@ -68,7 +69,7 @@ public:
         : QWidget(parent)
         , display_plane(plane)
         , capture_zones(zones)
-        , show_test_pattern_ptr(test_pattern)
+        , show_calibration_pattern_ptr(calibration_pattern)
         , show_screen_preview_ptr(screen_preview)
         , black_bar_letterbox_percent_ptr(black_bar_letterbox_percent)
         , black_bar_pillarbox_percent_ptr(black_bar_pillarbox_percent)
@@ -85,7 +86,7 @@ public:
         refresh_timer = new QTimer(this);
         connect(refresh_timer, &QTimer::timeout, this, [this]() {
             const bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr &&
-                                    !(show_test_pattern_ptr && *show_test_pattern_ptr);
+                                    !(show_calibration_pattern_ptr && *show_calibration_pattern_ptr);
             if(show_preview && display_plane)
             {
                 const std::string sid = display_plane->GetCaptureSourceId();
@@ -170,17 +171,31 @@ protected:
         painter.setBrush(QBrush(QColor(30, 30, 30)));
         painter.drawRect(rect);
 
-        bool show_test = show_test_pattern_ptr && *show_test_pattern_ptr;
-        bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr && !show_test;
+        bool show_calibration = show_calibration_pattern_ptr && *show_calibration_pattern_ptr;
+        bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr && !show_calibration;
 
-        if(show_test)
+        if(show_calibration)
         {
-            int center_x = rect.left() + rect.width() / 2;
-            int center_y = rect.top() + rect.height() / 2;
-            painter.fillRect(QRect(rect.left(), center_y, center_x - rect.left(), rect.bottom() - center_y), QColor(255, 0, 0, 200));
-            painter.fillRect(QRect(center_x, center_y, rect.right() - center_x, rect.bottom() - center_y), QColor(0, 255, 0, 200));
-            painter.fillRect(QRect(center_x, rect.top(), rect.right() - center_x, center_y - rect.top()), QColor(0, 0, 255, 200));
-            painter.fillRect(QRect(rect.left(), rect.top(), center_x - rect.left(), center_y - rect.top()), QColor(255, 255, 0, 200));
+            static QImage cal_image;
+            static std::once_flag cal_init;
+            std::call_once(cal_init, []() {
+                std::vector<uint8_t> buf;
+                ScreenMirrorFillCalibrationPatternBuffer(buf);
+                cal_image = QImage(kScreenMirrorCalibrationPatternW, kScreenMirrorCalibrationPatternH, QImage::Format_RGBA8888);
+                if(!cal_image.isNull())
+                {
+                    for(int y = 0; y < kScreenMirrorCalibrationPatternH; y++)
+                    {
+                        memcpy(cal_image.scanLine(y),
+                               buf.data() + (size_t)y * (size_t)kScreenMirrorCalibrationPatternW * 4u,
+                               (size_t)kScreenMirrorCalibrationPatternW * 4u);
+                    }
+                }
+            });
+            if(!cal_image.isNull())
+            {
+                painter.drawImage(rect, cal_image);
+            }
         }
         else if(show_preview && display_plane)
         {
@@ -568,7 +583,7 @@ private:
 CaptureZonesWidget::CaptureZonesWidget(
     std::vector<CaptureZone>* zones,
     DisplayPlane3D* plane,
-    bool* show_test_pattern,
+    bool* show_calibration_pattern,
     bool* show_screen_preview,
     float* black_bar_letterbox_percent,
     float* black_bar_pillarbox_percent,
@@ -692,7 +707,7 @@ CaptureZonesWidget::CaptureZonesWidget(
 
     zones_layout->addWidget(new QLabel("Capture area (zones):"));
     preview_widget = new CaptureAreaPreviewWidget(
-        zones, plane, show_test_pattern, show_screen_preview,
+        zones, plane, show_calibration_pattern, show_screen_preview,
         black_bar_letterbox_percent, black_bar_pillarbox_percent, this);
     preview_widget->SetValueChangedCallback([this]() { onInternalChange(); });
     zones_layout->addWidget(preview_widget);

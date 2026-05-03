@@ -116,7 +116,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , selected_display_plane_idx(-1)
     , selected_ref_point_idx(-1)
     , show_screen_preview(false)
-    , show_test_pattern(false)
+    , show_calibration_pattern(false)
     , show_room_grid_overlay(false)
     , room_grid_brightness(0.35f)
     , room_grid_point_size(3.0f)
@@ -167,20 +167,46 @@ LEDViewport3D::~LEDViewport3D()
     doneCurrent();
 }
 
+bool LEDViewport3D::PlaneWantsScreenPreview(DisplayPlane3D* plane) const
+{
+    if(!plane)
+    {
+        return false;
+    }
+    if(per_plane_preview_query)
+    {
+        return per_plane_preview_query(plane->GetName());
+    }
+    return show_screen_preview;
+}
+
+bool LEDViewport3D::PlaneWantsCalibrationPattern(DisplayPlane3D* plane) const
+{
+    if(!plane)
+    {
+        return false;
+    }
+    if(per_plane_calibration_pattern_query)
+    {
+        return per_plane_calibration_pattern_query(plane->GetName());
+    }
+    return show_calibration_pattern;
+}
+
 bool LEDViewport3D::AnyDisplayPlaneWantsScreenPreview() const
 {
-    if(show_screen_preview)
+    if(!per_plane_preview_query)
     {
-        return true;
+        return show_screen_preview;
     }
-    if(!per_plane_preview_query || !display_planes)
+    if(!display_planes)
     {
         return false;
     }
     for(const std::unique_ptr<DisplayPlane3D>& plane_ptr : *display_planes)
     {
         DisplayPlane3D* plane = plane_ptr.get();
-        if(!plane || !plane->IsVisible())
+        if(!plane)
         {
             continue;
         }
@@ -220,10 +246,10 @@ void LEDViewport3D::SetShowScreenPreview(bool show)
     update();
 }
 
-void LEDViewport3D::SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery test_pattern_query)
+void LEDViewport3D::SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery calibration_pattern_query)
 {
     per_plane_preview_query = std::move(preview_query);
-    per_plane_test_pattern_query = std::move(test_pattern_query);
+    per_plane_calibration_pattern_query = std::move(calibration_pattern_query);
     update();
 }
 
@@ -1379,7 +1405,11 @@ void LEDViewport3D::DrawDisplayPlanes()
     for(size_t plane_index = 0; plane_index < display_planes->size(); plane_index++)
     {
         DisplayPlane3D* plane_ptr = (*display_planes)[plane_index].get();
-        if(!plane_ptr || !plane_ptr->IsVisible()) continue;
+        if(!plane_ptr) continue;
+
+        const bool wants_cal = PlaneWantsCalibrationPattern(plane_ptr);
+        const bool wants_prev = PlaneWantsScreenPreview(plane_ptr);
+        if(!plane_ptr->IsVisible() && !wants_cal && !wants_prev) continue;
 
         float width_units = MMToGridUnits(plane_ptr->GetWidthMM(), grid_scale_mm);
         float height_units = MMToGridUnits(plane_ptr->GetHeightMM(), grid_scale_mm);
@@ -1406,11 +1436,7 @@ void LEDViewport3D::DrawDisplayPlanes()
         float fill_color[4]   = { selected ? 0.35f : 0.2f,  selected ? 0.80f : 0.60f, 1.0f, selected ? 0.30f : 0.18f };
         float border_color[4] = { selected ? 0.65f : 0.35f, selected ? 0.90f : 0.70f, 1.0f, selected ? 1.00f : 0.85f };
 
-        bool plane_test_pattern = per_plane_test_pattern_query
-            ? per_plane_test_pattern_query(plane_ptr->GetName())
-            : show_test_pattern;
-
-        if(plane_test_pattern)
+        if(wants_cal)
         {
             Vector3D center;
             center.x = (world_corners[0].x + world_corners[2].x) * 0.5f;
@@ -1466,11 +1492,7 @@ void LEDViewport3D::DrawDisplayPlanes()
             glVertex3f(world_corners[3].x, world_corners[3].y, world_corners[3].z);
             glEnd();
         }
-        bool plane_screen_preview = per_plane_preview_query
-            ? per_plane_preview_query(plane_ptr->GetName())
-            : show_screen_preview;
-
-        if(plane_screen_preview)
+        else if(wants_prev)
         {
             std::string source_id = plane_ptr->GetCaptureSourceId();
             GLuint texture_id = 0;
@@ -1603,7 +1625,8 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
     for(size_t i = 0; i < display_planes->size(); i++)
     {
         DisplayPlane3D* plane = (*display_planes)[i].get();
-        if(!plane || !plane->IsVisible()) continue;
+        if(!plane) continue;
+        if(!plane->IsVisible() && !PlaneWantsScreenPreview(plane)) continue;
 
         std::string source_id = plane->GetCaptureSourceId();
         if(source_id.empty()) continue;

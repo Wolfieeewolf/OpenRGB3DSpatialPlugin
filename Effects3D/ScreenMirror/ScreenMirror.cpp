@@ -8,15 +8,15 @@
 #include "GridSpaceUtils.h"
 #include "VirtualReferencePoint3D.h"
 #include "OpenRGB3DSpatialTab.h"
-#include "StratumBandPanel.h"
-#include "SpatialLayerCore.h"
 #include "PluginUiUtils.h"
+#include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
 
 REGISTER_EFFECT_3D(ScreenMirror);
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
+#include <QChar>
 #include <QFormLayout>
 #include <QSlider>
 #include <QTimer>
@@ -34,7 +34,9 @@ REGISTER_EFFECT_3D(ScreenMirror);
 #include <array>
 #include <limits>
 #include <functional>
+#include <mutex>
 #include <unordered_set>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -51,6 +53,85 @@ REGISTER_EFFECT_3D(ScreenMirror);
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+namespace
+{
+const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
+{
+    static std::vector<uint8_t> buffer;
+    static std::once_flag init_once;
+    std::call_once(init_once, []() { ScreenMirrorFillCalibrationPatternBuffer(buffer); });
+    out_w = kScreenMirrorCalibrationPatternW;
+    out_h = kScreenMirrorCalibrationPatternH;
+    return buffer.data();
+}
+
+/** Slider integer = degrees × this (one slider step = 0.5°). */
+constexpr int kScreenMapRollTicksPerDegree = 2;
+constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
+inline float RadialMapUiToInternal(int ui_0_100)
+{
+    return (float)std::clamp(ui_0_100, 0, 100) - 50.0f;
+}
+
+bool CaptureSourceIdIsPrimary(const std::string& source_id)
+{
+    if(source_id.empty())
+    {
+        return false;
+    }
+    ScreenCaptureManager& mgr = ScreenCaptureManager::Instance();
+    if(!mgr.IsInitialized())
+    {
+        return false;
+    }
+    for(const CaptureSourceInfo& info : mgr.GetAvailableSources())
+    {
+        if(info.id == source_id)
+        {
+            return info.is_primary;
+        }
+    }
+    return false;
+}
+
+/** Primary capture wins; if none marked, first plane in manager order. */
+bool DefaultMonitorEnabledForPlane(DisplayPlane3D* plane)
+{
+    std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
+    if(!plane || planes.empty())
+    {
+        return true;
+    }
+    DisplayPlane3D* primary_plane = nullptr;
+    for(DisplayPlane3D* p : planes)
+    {
+        if(!p) continue;
+        if(CaptureSourceIdIsPrimary(p->GetCaptureSourceId()))
+        {
+            primary_plane = p;
+            break;
+        }
+    }
+    if(primary_plane)
+    {
+        return plane == primary_plane;
+    }
+    return plane == planes[0];
+}
+
+DisplayPlane3D* FindDisplayPlaneByName(const std::string& name)
+{
+    for(DisplayPlane3D* p : DisplayPlaneManager::instance()->GetDisplayPlanes())
+    {
+        if(p && p->GetName() == name)
+        {
+            return p;
+        }
+    }
+    return nullptr;
+}
+}
 
 ScreenMirror::ScreenMirror(QWidget* parent)
     : SpatialEffect3D(parent)
@@ -74,9 +155,9 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , grid_scale_mm_(10.0f)
     , capture_quality(1)
     , capture_quality_combo(nullptr)
-    , capture_backend_mode(0)
+    , capture_backend_mode(1)
     , capture_backend_combo(nullptr)
-    , show_test_pattern(false)
+    , show_calibration_pattern(false)
     , in_parameter_change_(false)
     , reference_points(nullptr)
     , frame_cache_refresh_ms_(0)
@@ -169,11 +250,27 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.top_bottom_balance_slider = nullptr;
         s.top_bottom_balance_label = nullptr;
         s.ref_point_combo = nullptr;
-        s.test_pattern_check = nullptr;
+        s.calibration_pattern_check = nullptr;
         s.screen_preview_check = nullptr;
         s.capture_area_preview = nullptr;
         s.add_zone_button = nullptr;
         s.capture_zones_widget = nullptr;
+        s.screen_map_roll_slider = nullptr;
+        s.screen_map_roll_label = nullptr;
+        s.radial_corner_expansion_slider = nullptr;
+        s.radial_corner_expansion_label = nullptr;
+        s.radial_corner_bias_tl_slider = nullptr;
+        s.radial_corner_bias_tl_label = nullptr;
+        s.radial_corner_bias_tr_slider = nullptr;
+        s.radial_corner_bias_tr_label = nullptr;
+        s.radial_corner_bias_bl_slider = nullptr;
+        s.radial_corner_bias_bl_label = nullptr;
+        s.radial_corner_bias_br_slider = nullptr;
+        s.radial_corner_bias_br_label = nullptr;
+        s.corner_blend_strength_slider = nullptr;
+        s.corner_blend_strength_label = nullptr;
+        s.corner_blend_zone_slider = nullptr;
+        s.corner_blend_zone_label = nullptr;
     }
 
     if(rotation_yaw_slider)
@@ -266,8 +363,10 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     backend_layout->addWidget(capture_backend_label);
     backend_layout->addWidget(capture_backend_combo, 1);
     capture_outer->addLayout(backend_layout);
+
     capture_group->setLayout(capture_outer);
     main_layout->addWidget(capture_group);
+
     ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
     connect(capture_backend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         capture_backend_mode = std::clamp(index, 0, 2);
@@ -309,6 +408,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
             {
                 new_settings.reference_point_id = plane_ref_id;
             }
+            new_settings.enabled = DefaultMonitorEnabledForPlane(plane);
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
@@ -339,13 +439,6 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
 
     RefreshMonitorStatus();
 
-    stratum_panel = new StratumBandPanel(container);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    main_layout->addWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &ScreenMirror::OnStratumBandChanged);
-    OnStratumBandChanged();
-
     main_layout->addStretch();
 
     AddWidgetToParent(container, parent);
@@ -367,6 +460,87 @@ namespace
         float t = (x - edge0) / (edge1 - edge0);
         t = std::clamp(t, 0.0f, 1.0f);
         return t * t * (3.0f - 2.0f * t);
+    }
+
+    /** Near image corners, blend center UV with vertical-edge and horizontal-edge samples (HyperHDR-style 2D idea in UV space). */
+    inline RGBColor SampleFrameWithCornerBlend(const uint8_t* frame_data,
+                                               int frame_w,
+                                               int frame_h,
+                                               float u_s,
+                                               float v_s,
+                                               float u_min,
+                                               float u_max,
+                                               float v_min,
+                                               float v_max,
+                                               unsigned int samp,
+                                               float corner_strength_01,
+                                               float corner_zone_01)
+    {
+        if(!frame_data || frame_w <= 0 || frame_h <= 0)
+        {
+            return ToRGBColor(0, 0, 0);
+        }
+
+        auto quant = [&](float& u, float& v) {
+            if(samp < 100u)
+            {
+                Geometry3D::QuantizeMediaUV01(u, v, frame_w, frame_h, samp);
+            }
+        };
+
+        const float strength = std::clamp(corner_strength_01, 0.0f, 1.0f);
+        if(strength <= 0.004f)
+        {
+            float um = u_s, vm = v_s;
+            quant(um, vm);
+            return Geometry3D::SampleFrame(frame_data, frame_w, frame_h, um, vm, true);
+        }
+
+        const float zone = std::clamp(corner_zone_01, 0.0f, 0.32f);
+        const float span_u = std::max(1e-6f, u_max - u_min);
+        const float span_v = std::max(1e-6f, v_max - v_min);
+        const float u_n = std::clamp((u_s - u_min) / span_u, 0.0f, 1.0f);
+        const float v_n = std::clamp((v_s - v_min) / span_v, 0.0f, 1.0f);
+        const float edge_u = std::min(u_n, 1.0f - u_n);
+        const float edge_v = std::min(v_n, 1.0f - v_n);
+        const float near_u = 1.0f - Smoothstep(0.0f, zone, edge_u);
+        const float near_v = 1.0f - Smoothstep(0.0f, zone, edge_v);
+        const float corner_w = std::min(near_u, near_v);
+
+        float um = u_s, vm = v_s;
+        quant(um, vm);
+        RGBColor c_mid = Geometry3D::SampleFrame(frame_data, frame_w, frame_h, um, vm, true);
+        if(corner_w <= 0.004f)
+        {
+            return c_mid;
+        }
+
+        const float w = corner_w * strength;
+        if(w <= 0.004f)
+        {
+            return c_mid;
+        }
+
+        const float snap_u = (u_n < 0.5f) ? u_min : u_max;
+        const float snap_v = (v_n < 0.5f) ? v_min : v_max;
+
+        float uv_u = snap_u, uv_v = v_s;
+        quant(uv_u, uv_v);
+        RGBColor c_vert = Geometry3D::SampleFrame(frame_data, frame_w, frame_h, uv_u, uv_v, true);
+
+        float uh_u = u_s, uh_v = snap_v;
+        quant(uh_u, uh_v);
+        RGBColor c_horiz = Geometry3D::SampleFrame(frame_data, frame_w, frame_h, uh_u, uh_v, true);
+
+        const float r =
+            (1.0f - w) * (float)RGBGetRValue(c_mid) + w * 0.5f * ((float)RGBGetRValue(c_vert) + (float)RGBGetRValue(c_horiz));
+        const float g =
+            (1.0f - w) * (float)RGBGetGValue(c_mid) + w * 0.5f * ((float)RGBGetGValue(c_vert) + (float)RGBGetGValue(c_horiz));
+        const float b =
+            (1.0f - w) * (float)RGBGetBValue(c_mid) + w * 0.5f * ((float)RGBGetBValue(c_vert) + (float)RGBGetBValue(c_horiz));
+        return ToRGBColor((uint8_t)std::clamp((int)std::lround(r), 0, 255),
+                          (uint8_t)std::clamp((int)std::lround(g), 0, 255),
+                          (uint8_t)std::clamp((int)std::lround(b), 0, 255));
     }
 
     float ComputeMaxReferenceDistanceMm(const GridContext3D& grid, const Vector3D& reference, float grid_scale_mm)
@@ -454,75 +628,6 @@ namespace
     }
 }
 
-namespace
-{
-    size_t MirrorOverlayCoarseIndex(int i, int j, int k, int cy, int cz)
-    {
-        return (size_t)i * (size_t)cy * (size_t)cz + (size_t)j * (size_t)cz + (size_t)k;
-    }
-
-    float LerpF(float a, float b, float t)
-    {
-        return (1.0f - t) * a + t * b;
-    }
-
-    RGBColor TrilinearMirrorCoarse(const std::vector<RGBColor>& vol, int cx, int cy, int cz, float fx, float fy, float fz)
-    {
-        if(vol.empty() || cx < 1 || cy < 1 || cz < 1)
-        {
-            return ToRGBColor(0, 0, 0);
-        }
-        fx = std::clamp(fx, 0.0f, (float)(std::max(0, cx - 1)));
-        fy = std::clamp(fy, 0.0f, (float)(std::max(0, cy - 1)));
-        fz = std::clamp(fz, 0.0f, (float)(std::max(0, cz - 1)));
-        const int x0 = (std::min)((int)std::floor(fx), std::max(0, cx - 2));
-        const int y0 = (std::min)((int)std::floor(fy), std::max(0, cy - 2));
-        const int z0 = (std::min)((int)std::floor(fz), std::max(0, cz - 2));
-        const int x1 = (cx > 1) ? (std::min)(x0 + 1, cx - 1) : x0;
-        const int y1 = (cy > 1) ? (std::min)(y0 + 1, cy - 1) : y0;
-        const int z1 = (cz > 1) ? (std::min)(z0 + 1, cz - 1) : z0;
-        const float tx = (cx > 1) ? (fx - (float)x0) : 0.0f;
-        const float ty = (cy > 1) ? (fy - (float)y0) : 0.0f;
-        const float tz = (cz > 1) ? (fz - (float)z0) : 0.0f;
-
-        RGBColor c000 = vol[MirrorOverlayCoarseIndex(x0, y0, z0, cy, cz)];
-        RGBColor c100 = vol[MirrorOverlayCoarseIndex(x1, y0, z0, cy, cz)];
-        RGBColor c010 = vol[MirrorOverlayCoarseIndex(x0, y1, z0, cy, cz)];
-        RGBColor c110 = vol[MirrorOverlayCoarseIndex(x1, y1, z0, cy, cz)];
-        RGBColor c001 = vol[MirrorOverlayCoarseIndex(x0, y0, z1, cy, cz)];
-        RGBColor c101 = vol[MirrorOverlayCoarseIndex(x1, y0, z1, cy, cz)];
-        RGBColor c011 = vol[MirrorOverlayCoarseIndex(x0, y1, z1, cy, cz)];
-        RGBColor c111 = vol[MirrorOverlayCoarseIndex(x1, y1, z1, cy, cz)];
-
-        const float r00 = LerpF((float)RGBGetRValue(c000), (float)RGBGetRValue(c100), tx);
-        const float g00 = LerpF((float)RGBGetGValue(c000), (float)RGBGetGValue(c100), tx);
-        const float b00 = LerpF((float)RGBGetBValue(c000), (float)RGBGetBValue(c100), tx);
-        const float r10 = LerpF((float)RGBGetRValue(c010), (float)RGBGetRValue(c110), tx);
-        const float g10 = LerpF((float)RGBGetGValue(c010), (float)RGBGetGValue(c110), tx);
-        const float b10 = LerpF((float)RGBGetBValue(c010), (float)RGBGetBValue(c110), tx);
-        const float r01 = LerpF((float)RGBGetRValue(c001), (float)RGBGetRValue(c101), tx);
-        const float g01 = LerpF((float)RGBGetGValue(c001), (float)RGBGetGValue(c101), tx);
-        const float b01 = LerpF((float)RGBGetBValue(c001), (float)RGBGetBValue(c101), tx);
-        const float r11 = LerpF((float)RGBGetRValue(c011), (float)RGBGetRValue(c111), tx);
-        const float g11 = LerpF((float)RGBGetGValue(c011), (float)RGBGetGValue(c111), tx);
-        const float b11 = LerpF((float)RGBGetBValue(c011), (float)RGBGetBValue(c111), tx);
-
-        const float r0 = LerpF(r00, r10, ty);
-        const float g0 = LerpF(g00, g10, ty);
-        const float b0 = LerpF(b00, b10, ty);
-        const float r1 = LerpF(r01, r11, ty);
-        const float g1 = LerpF(g01, g11, ty);
-        const float b1 = LerpF(b01, b11, ty);
-
-        const float rf = LerpF(r0, r1, tz);
-        const float gf = LerpF(g0, g1, tz);
-        const float bf = LerpF(b0, b1, tz);
-        return ToRGBColor((uint8_t)std::clamp((int)std::lround(rf), 0, 255),
-                          (uint8_t)std::clamp((int)std::lround(gf), 0, 255),
-                          (uint8_t)std::clamp((int)std::lround(bf), 0, 255));
-    }
-}
-
 void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
 {
     const uint64_t now_ms = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -601,109 +706,6 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
     frame_cache_refresh_ms_ = now_ms;
 }
 
-void ScreenMirror::PrepareMirrorRoomGridOverlay(uint64_t render_sequence,
-                                                 float time,
-                                                 int nx,
-                                                 int ny,
-                                                 int nz,
-                                                 float /*room_min_x*/,
-                                                 float /*room_max_x*/,
-                                                 float /*room_min_y*/,
-                                                 float /*room_max_y*/,
-                                                 float /*room_min_z*/,
-                                                 float /*room_max_z*/,
-                                                 const GridContext3D& world_grid,
-                                                 const GridContext3D& /*room_grid*/)
-{
-    GridContext3D wg = world_grid;
-    if(render_sequence != 0)
-    {
-        wg.render_sequence = render_sequence;
-    }
-    RefreshFrameCacheForRenderSequence(wg);
-
-    if(nx < 1 || ny < 1 || nz < 1)
-    {
-        mirror_overlay_coarse_.clear();
-        mirror_overlay_cx_ = mirror_overlay_cy_ = mirror_overlay_cz_ = 0;
-        mirror_overlay_pass_seq_ = 0;
-        return;
-    }
-
-    const int denom_x = (std::max)(nx - 1, 1);
-    const int denom_y = (std::max)(ny - 1, 1);
-    const int denom_z = (std::max)(nz - 1, 1);
-
-    int stride = 1;
-    const long long fine_total = (long long)nx * (long long)ny * (long long)nz;
-    if(fine_total > 12000) { stride = 2; }
-    if(fine_total > 48000) { stride = 3; }
-    if(fine_total > 120000) { stride = 4; }
-
-    mirror_overlay_stride_ = stride;
-    mirror_overlay_cx_ = (nx + stride - 1) / stride;
-    mirror_overlay_cy_ = (ny + stride - 1) / stride;
-    mirror_overlay_cz_ = (nz + stride - 1) / stride;
-    mirror_overlay_nx_ = nx;
-    mirror_overlay_ny_ = ny;
-    mirror_overlay_nz_ = nz;
-    mirror_overlay_pass_seq_ = render_sequence;
-
-    const size_t nc = (size_t)mirror_overlay_cx_ * (size_t)mirror_overlay_cy_ * (size_t)mirror_overlay_cz_;
-    mirror_overlay_coarse_.resize(nc);
-
-    for(int ic = 0; ic < mirror_overlay_cx_; ic++)
-    {
-        const int ix_lo = ic * stride;
-        const int ix_hi = (std::min)(ix_lo + stride - 1, nx - 1);
-        const int ix_c = (ix_lo + ix_hi) / 2;
-        const float u = (float)ix_c / (float)denom_x;
-        const float wx = world_grid.min_x + u * (world_grid.max_x - world_grid.min_x);
-        for(int jc = 0; jc < mirror_overlay_cy_; jc++)
-        {
-            const int iy_lo = jc * stride;
-            const int iy_hi = (std::min)(iy_lo + stride - 1, ny - 1);
-            const int iy_c = (iy_lo + iy_hi) / 2;
-            const float v = (float)iy_c / (float)denom_y;
-            const float wy = world_grid.min_y + v * (world_grid.max_y - world_grid.min_y);
-            for(int kc = 0; kc < mirror_overlay_cz_; kc++)
-            {
-                const int iz_lo = kc * stride;
-                const int iz_hi = (std::min)(iz_lo + stride - 1, nz - 1);
-                const int iz_c = (iz_lo + iz_hi) / 2;
-                const float wn = (float)iz_c / (float)denom_z;
-                const float wz = world_grid.min_z + wn * (world_grid.max_z - world_grid.min_z);
-
-                const size_t idx =
-                    (size_t)ic * (size_t)mirror_overlay_cy_ * (size_t)mirror_overlay_cz_ +
-                    (size_t)jc * (size_t)mirror_overlay_cz_ + (size_t)kc;
-                mirror_overlay_coarse_[idx] =
-                    CalculateColorGridInternal(wx, wy, wz, time, world_grid, &frame_cache_, &frame_cache_planes_, false);
-            }
-        }
-    }
-}
-
-RGBColor ScreenMirror::SampleMirrorRoomGridOverlay(uint64_t render_sequence, int ix, int iy, int iz, int nx, int ny, int nz) const
-{
-    if(render_sequence != mirror_overlay_pass_seq_ || mirror_overlay_coarse_.empty())
-    {
-        return ToRGBColor(0, 0, 0);
-    }
-    if(nx != mirror_overlay_nx_ || ny != mirror_overlay_ny_ || nz != mirror_overlay_nz_)
-    {
-        return ToRGBColor(0, 0, 0);
-    }
-    if(ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz)
-    {
-        return ToRGBColor(0, 0, 0);
-    }
-    const float fx = ((float)ix + 0.5f) * (float)mirror_overlay_cx_ / (float)nx - 0.5f;
-    const float fy = ((float)iy + 0.5f) * (float)mirror_overlay_cy_ / (float)ny - 0.5f;
-    const float fz = ((float)iz + 0.5f) * (float)mirror_overlay_cz_ / (float)nz - 0.5f;
-    return TrilinearMirrorCoarse(mirror_overlay_coarse_, mirror_overlay_cx_, mirror_overlay_cy_, mirror_overlay_cz_, fx, fy, fz);
-}
-
 RGBColor ScreenMirror::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     RefreshFrameCacheForRenderSequence(grid);
@@ -746,7 +748,9 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float black_bar_letterbox_percent;
         float black_bar_pillarbox_percent;
         float smoothing_time_ms;
-        bool use_test_pattern;
+        bool use_calibration_pattern;
+        float corner_blend_strength_01;
+        float corner_blend_zone_01;
     };
 
     std::vector<MonitorContribution> contributions;
@@ -760,16 +764,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         base_max_distance_mm = 3000.0f;
     }
 
-    Vector3D stratum_origin = GetEffectOriginGrid(grid);
-    Vector3D rp_stratum = TransformPointByRotation(x, y, z, stratum_origin);
-    const float stratum_y_norm = NormalizeGridAxis01(rp_stratum.y, grid.min_y, grid.max_y);
-    SpatialLayerCore::MapperSettings strat_st;
-    EffectStratumBlend::InitStratumBreaks(strat_st);
-    float stratum_w[3];
-    EffectStratumBlend::WeightsForYNorm(stratum_y_norm, strat_st, stratum_w);
-    const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
-    
     std::map<std::string, std::unordered_map<std::string, FrameHistory>::iterator> history_cache;
 
     for(size_t plane_index = 0; plane_index < all_planes.size(); plane_index++)
@@ -782,6 +776,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         if(settings_it == monitor_settings.end())
         {
             settings_it = monitor_settings.emplace(plane_name, MonitorSettings()).first;
+            settings_it->second.enabled = DefaultMonitorEnabledForPlane(plane);
             if(settings_it->second.capture_zones.empty())
             {
                 settings_it->second.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
@@ -814,12 +809,12 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             continue;
         }
 
-        bool monitor_test_pattern = mon_settings.show_test_pattern;
+        bool monitor_calibration_pattern = mon_settings.show_calibration_pattern;
         
         std::string capture_id = plane->GetCaptureSourceId();
         std::shared_ptr<CapturedFrame> frame = nullptr;
 
-        if(!monitor_test_pattern)
+        if(!monitor_calibration_pattern)
         {
             if(capture_id.empty())
             {
@@ -872,12 +867,19 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             }
         }
 
-        Geometry3D::PlaneProjection proj = Geometry3D::SpatialMapToScreen(led_pos, *plane, 0.0f, falloff_ref, scale_mm, true);
+        Geometry3D::PlaneProjection proj =
+            Geometry3D::SpatialMapToScreen(led_pos, *plane, 0.0f, falloff_ref, scale_mm);
 
         if(!proj.is_valid) continue;
 
         float u = proj.u;
         float v = proj.v;
+        Geometry3D::ApplyRadialCornerMapping01(u, v,
+                                               RadialMapUiToInternal(mon_settings.radial_corner_expansion_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tl_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tr_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_bl_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_br_ui));
         
         if(mon_settings.capture_zones.empty())
         {
@@ -902,12 +904,9 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
-        {
-            const float ph_uv = (bb.phase_deg / 360.0f) * 0.02f;
-            u = std::clamp(u + ph_uv, 0.0f, 1.0f);
-            v = std::clamp(v + ph_uv * (stratum_y_norm - 0.5f) * 2.0f, 0.0f, 1.0f);
-        }
-        
+
+        Geometry3D::ApplyUVRotationDegrees01(u, v, mon_settings.screen_map_roll_deg);
+
         proj.u = u;
         proj.v = v;
 
@@ -915,7 +914,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float coverage = monitor_scale;
         float curve_exp = std::clamp(mon_settings.falloff_curve_exponent, 0.5f, 2.0f);
         float distance_falloff = 0.0f;
-        const float edge_soft_stratum = mon_settings.edge_softness / std::max(0.25f, bb.tight_mul);
+        const float edge_softness = mon_settings.edge_softness;
 
         if(mon_settings.scale_inverted)
         {
@@ -923,12 +922,12 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             {
                 float effective_range = reference_max_distance_mm * coverage;
                 effective_range = std::max(effective_range, 10.0f);
-                distance_falloff = Geometry3D::ComputeFalloff(proj.distance, effective_range, edge_soft_stratum);
+                distance_falloff = Geometry3D::ComputeFalloff(proj.distance, effective_range, edge_softness);
             }
         }
         else
         {
-            distance_falloff = ComputeInvertedShellFalloff(proj.distance, reference_max_distance_mm, coverage, edge_soft_stratum, curve_exp);
+            distance_falloff = ComputeInvertedShellFalloff(proj.distance, reference_max_distance_mm, coverage, edge_softness, curve_exp);
 
             if(coverage >= 1.0f && distance_falloff < 1.0f)
             {
@@ -941,12 +940,11 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float sampling_blend_t = 0.0f;
         float delay_ms = 0.0f;
         float speed_mm_per_ms = 0.0f;
-        bool use_wave = !monitor_test_pattern && !capture_id.empty();
+        bool use_wave = !monitor_calibration_pattern && !capture_id.empty();
         if(use_wave && mon_settings.wave_time_to_edge_sec > 0.4f)
         {
             float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
             speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
-            speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
             speed_mm_per_ms = std::max(speed_mm_per_ms, 0.1f);
             delay_ms = proj.distance / speed_mm_per_ms;
             delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
@@ -954,7 +952,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         else if(use_wave && mon_settings.propagation_speed_mm_per_ms >= 5.0f)
         {
             speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
-            speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
             delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
             delay_ms = std::clamp(delay_ms, 0.0f, 15000.0f);
         }
@@ -1064,13 +1061,11 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
                 {
                     float t_sec = std::clamp(mon_settings.wave_time_to_edge_sec, 0.5f, 10.0f);
                     speed_mm_per_ms = reference_max_distance_mm / (t_sec * 1000.0f);
-                    speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.1f);
                 }
                 else
                 {
                     speed_mm_per_ms = WaveIntensityToSpeedMmPerMs(mon_settings.propagation_speed_mm_per_ms);
-                    speed_mm_per_ms *= std::max(0.05f, bb.speed_mul);
                     delay_ms = proj.distance / std::max(speed_mm_per_ms, 0.5f);
                 }
                 delay_ms = std::clamp(delay_ms, 0.0f, 60000.0f);
@@ -1119,14 +1114,18 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             contrib.black_bar_letterbox_percent = mon_settings.black_bar_letterbox_percent;
             contrib.black_bar_pillarbox_percent = mon_settings.black_bar_pillarbox_percent;
             contrib.smoothing_time_ms = mon_settings.smoothing_time_ms;
-            contrib.use_test_pattern = mon_settings.show_test_pattern;
+            contrib.use_calibration_pattern = mon_settings.show_calibration_pattern;
+            contrib.corner_blend_strength_01 =
+                std::clamp(mon_settings.corner_blend_strength_pct / 100.0f, 0.0f, 1.0f);
+            contrib.corner_blend_zone_01 =
+                std::clamp(mon_settings.corner_blend_zone_pct / 100.0f, 0.0f, 0.32f);
             contributions.push_back(contrib);
         }
     }
 
     if(contributions.empty())
     {
-        if(show_test_pattern)
+        if(show_calibration_pattern)
         {
             return ToRGBColor(0, 0, 0);
         }
@@ -1189,46 +1188,41 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         MonitorContribution& contrib = contributions[contrib_index];
         float sample_u = contrib.proj.u;
         float sample_v = contrib.proj.v;
+        const float corner_strength_01 = contrib.corner_blend_strength_01;
+        const float corner_zone_01 = contrib.corner_blend_zone_01;
 
         float r, g, b;
 
-        if(contrib.use_test_pattern)
+        if(contrib.use_calibration_pattern)
         {
-            float clamped_u = std::clamp(sample_u, 0.0f, 1.0f);
-            float clamped_v = std::clamp(sample_v, 0.0f, 1.0f);
+            int cal_w = 0;
+            int cal_h = 0;
+            const uint8_t* cal_data = GetCalibrationPatternBuffer(cal_w, cal_h);
+            float lp = std::clamp(contrib.black_bar_letterbox_percent, 0.0f, 49.0f) / 100.0f;
+            float pp = std::clamp(contrib.black_bar_pillarbox_percent, 0.0f, 49.0f) / 100.0f;
+            float u_min = pp;
+            float u_max = 1.0f - pp;
+            float v_min = lp;
+            float v_max = 1.0f - lp;
+            float sample_u_clamped = std::clamp(sample_u, u_min, u_max);
+            /* Procedural calibration texture uses the same v axis as SpatialMapToScreen (not DXGI row order). */
+            float tex_v = std::clamp(sample_v, v_min, v_max);
             const unsigned int samp = GetSamplingResolution();
-            if(samp < 100u)
-            {
-                Geometry3D::QuantizeMediaUV01(clamped_u, clamped_v, 256, 256, samp);
-            }
-
-            bool left_half = (clamped_u < 0.5f);
-            bool bottom_half = (clamped_v < 0.5f);
-
-            if(bottom_half && left_half)
-            {
-                r = 255.0f;
-                g = 0.0f;
-                b = 0.0f;
-            }
-            else if(bottom_half && !left_half)
-            {
-                r = 0.0f;
-                g = 255.0f;
-                b = 0.0f;
-            }
-            else if(!bottom_half && !left_half)
-            {
-                r = 0.0f;
-                g = 0.0f;
-                b = 255.0f;
-            }
-            else
-            {
-                r = 255.0f;
-                g = 255.0f;
-                b = 0.0f;
-            }
+            RGBColor sampled_cal = SampleFrameWithCornerBlend(cal_data,
+                                                              cal_w,
+                                                              cal_h,
+                                                              sample_u_clamped,
+                                                              tex_v,
+                                                              u_min,
+                                                              u_max,
+                                                              v_min,
+                                                              v_max,
+                                                              samp,
+                                                              corner_strength_01,
+                                                              corner_zone_01);
+            r = (float)RGBGetRValue(sampled_cal);
+            g = (float)RGBGetGValue(sampled_cal);
+            b = (float)RGBGetBValue(sampled_cal);
         }
         else
         {
@@ -1245,21 +1239,21 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             float flipped_v = 1.0f - sample_v;
             flipped_v = std::clamp(flipped_v, v_min, v_max);
             const unsigned int samp = GetSamplingResolution();
-            float u_s = sample_u_clamped;
-            float v_s = flipped_v;
-            if(samp < 100u)
-            {
-                Geometry3D::QuantizeMediaUV01(u_s, v_s, contrib.frame->width, contrib.frame->height, samp);
-            }
+            const float u_s = sample_u_clamped;
+            const float v_s = flipped_v;
 
-            RGBColor sampled_color = Geometry3D::SampleFrame(
-                contrib.frame->data.data(),
-                contrib.frame->width,
-                contrib.frame->height,
-                u_s,
-                v_s,
-                true
-            );
+            RGBColor sampled_color = SampleFrameWithCornerBlend(contrib.frame->data.data(),
+                                                                contrib.frame->width,
+                                                                contrib.frame->height,
+                                                                u_s,
+                                                                v_s,
+                                                                u_min,
+                                                                u_max,
+                                                                v_min,
+                                                                v_max,
+                                                                samp,
+                                                                corner_strength_01,
+                                                                corner_zone_01);
 
             r = (float)RGBGetRValue(sampled_color);
             g = (float)RGBGetGValue(sampled_color);
@@ -1267,18 +1261,20 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
             if(contrib.frame_blend && !contrib.frame_blend->data.empty() && contrib.blend_t > 0.01f)
             {
-                float u_b = std::clamp(sample_u, u_min, u_max);
-                float v_b = std::clamp(flipped_v, v_min, v_max);
-                if(samp < 100u)
-                {
-                    Geometry3D::QuantizeMediaUV01(u_b, v_b, contrib.frame_blend->width, contrib.frame_blend->height, samp);
-                }
-                RGBColor sampled_blend = Geometry3D::SampleFrame(
-                    contrib.frame_blend->data.data(),
-                    contrib.frame_blend->width,
-                    contrib.frame_blend->height,
-                    u_b, v_b, true
-                );
+                const float u_b = sample_u_clamped;
+                const float v_b = flipped_v;
+                RGBColor sampled_blend = SampleFrameWithCornerBlend(contrib.frame_blend->data.data(),
+                                                                      contrib.frame_blend->width,
+                                                                      contrib.frame_blend->height,
+                                                                      u_b,
+                                                                      v_b,
+                                                                      u_min,
+                                                                      u_max,
+                                                                      v_min,
+                                                                      v_max,
+                                                                      samp,
+                                                                      corner_strength_01,
+                                                                      corner_zone_01);
                 float r2 = (float)RGBGetRValue(sampled_blend);
                 float g2 = (float)RGBGetGValue(sampled_blend);
                 float b2 = (float)RGBGetBValue(sampled_blend);
@@ -1460,8 +1456,17 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["top_bottom_balance"] = mon_settings.top_bottom_balance;
         
         mon["reference_point_id"] = mon_settings.reference_point_id;
-        mon["show_test_pattern"] = mon_settings.show_test_pattern;
+        mon["show_calibration_pattern"] = mon_settings.show_calibration_pattern;
         mon["show_screen_preview"] = mon_settings.show_screen_preview;
+
+        mon["radial_map_roll_deg"] = std::clamp(mon_settings.screen_map_roll_deg, -180.0f, 180.0f);
+        mon["radial_map_expansion"] = std::clamp(mon_settings.radial_corner_expansion_ui, 0, 100);
+        mon["radial_map_bias_tl"] = std::clamp(mon_settings.radial_corner_bias_tl_ui, 0, 100);
+        mon["radial_map_bias_tr"] = std::clamp(mon_settings.radial_corner_bias_tr_ui, 0, 100);
+        mon["radial_map_bias_bl"] = std::clamp(mon_settings.radial_corner_bias_bl_ui, 0, 100);
+        mon["radial_map_bias_br"] = std::clamp(mon_settings.radial_corner_bias_br_ui, 0, 100);
+        mon["sample_corner_blend_strength_pct"] = std::clamp(mon_settings.corner_blend_strength_pct, 0.0f, 100.0f);
+        mon["sample_corner_blend_zone_pct"] = std::clamp(mon_settings.corner_blend_zone_pct, 0.0f, 32.0f);
         
         nlohmann::json zones_array = nlohmann::json::array();
         for(const CaptureZone& zone : mon_settings.capture_zones)
@@ -1479,21 +1484,6 @@ nlohmann::json ScreenMirror::SaveSettings() const
         monitors[it->first] = mon;
     }
     settings["monitor_settings"] = monitors;
-
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(settings,
-                                           "screen_mirror_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "screen_mirror_stratum_band_speed_pct",
-                                           "screen_mirror_stratum_band_tight_pct",
-                                           "screen_mirror_stratum_band_phase_deg");
 
     return settings;
 }
@@ -1663,10 +1653,10 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     {
         msettings.top_bottom_balance_label->setText(QString::number((int)std::lround(msettings.top_bottom_balance)));
     }
-    if(msettings.test_pattern_check)
+    if(msettings.calibration_pattern_check)
     {
-        QSignalBlocker blocker(msettings.test_pattern_check);
-        msettings.test_pattern_check->setChecked(msettings.show_test_pattern);
+        QSignalBlocker blocker(msettings.calibration_pattern_check);
+        msettings.calibration_pattern_check->setChecked(msettings.show_calibration_pattern);
     }
     if(msettings.screen_preview_check)
     {
@@ -1676,6 +1666,84 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     if(msettings.capture_area_preview)
     {
         msettings.capture_area_preview->update();
+    }
+    if(msettings.screen_map_roll_slider)
+    {
+        QSignalBlocker blocker(msettings.screen_map_roll_slider);
+        msettings.screen_map_roll_slider->setValue(
+            (int)std::lround(std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f) *
+                             (float)kScreenMapRollTicksPerDegree));
+    }
+    if(msettings.screen_map_roll_label)
+    {
+        msettings.screen_map_roll_label->setText(
+            QString::number((double)std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f), 'f', 1) +
+            QChar(0x00B0));
+    }
+    if(msettings.radial_corner_expansion_slider)
+    {
+        QSignalBlocker blocker(msettings.radial_corner_expansion_slider);
+        msettings.radial_corner_expansion_slider->setValue(msettings.radial_corner_expansion_ui);
+    }
+    if(msettings.radial_corner_expansion_label)
+    {
+        msettings.radial_corner_expansion_label->setText(QString::number(msettings.radial_corner_expansion_ui) + "%");
+    }
+    if(msettings.radial_corner_bias_tl_slider)
+    {
+        QSignalBlocker blocker(msettings.radial_corner_bias_tl_slider);
+        msettings.radial_corner_bias_tl_slider->setValue(msettings.radial_corner_bias_tl_ui);
+    }
+    if(msettings.radial_corner_bias_tl_label)
+    {
+        msettings.radial_corner_bias_tl_label->setText(QString::number(msettings.radial_corner_bias_tl_ui) + "%");
+    }
+    if(msettings.radial_corner_bias_tr_slider)
+    {
+        QSignalBlocker blocker(msettings.radial_corner_bias_tr_slider);
+        msettings.radial_corner_bias_tr_slider->setValue(msettings.radial_corner_bias_tr_ui);
+    }
+    if(msettings.radial_corner_bias_tr_label)
+    {
+        msettings.radial_corner_bias_tr_label->setText(QString::number(msettings.radial_corner_bias_tr_ui) + "%");
+    }
+    if(msettings.radial_corner_bias_bl_slider)
+    {
+        QSignalBlocker blocker(msettings.radial_corner_bias_bl_slider);
+        msettings.radial_corner_bias_bl_slider->setValue(msettings.radial_corner_bias_bl_ui);
+    }
+    if(msettings.radial_corner_bias_bl_label)
+    {
+        msettings.radial_corner_bias_bl_label->setText(QString::number(msettings.radial_corner_bias_bl_ui) + "%");
+    }
+    if(msettings.radial_corner_bias_br_slider)
+    {
+        QSignalBlocker blocker(msettings.radial_corner_bias_br_slider);
+        msettings.radial_corner_bias_br_slider->setValue(msettings.radial_corner_bias_br_ui);
+    }
+    if(msettings.radial_corner_bias_br_label)
+    {
+        msettings.radial_corner_bias_br_label->setText(QString::number(msettings.radial_corner_bias_br_ui) + "%");
+    }
+    if(msettings.corner_blend_strength_slider)
+    {
+        QSignalBlocker blocker(msettings.corner_blend_strength_slider);
+        msettings.corner_blend_strength_slider->setValue((int)std::lround(msettings.corner_blend_strength_pct));
+    }
+    if(msettings.corner_blend_strength_label)
+    {
+        msettings.corner_blend_strength_label->setText(
+            QString::number((int)std::lround(msettings.corner_blend_strength_pct)) + "%");
+    }
+    if(msettings.corner_blend_zone_slider)
+    {
+        QSignalBlocker blocker(msettings.corner_blend_zone_slider);
+        msettings.corner_blend_zone_slider->setValue((int)std::lround(msettings.corner_blend_zone_pct));
+    }
+    if(msettings.corner_blend_zone_label)
+    {
+        msettings.corner_blend_zone_label->setText(
+            QString::number((int)std::lround(msettings.corner_blend_zone_pct)) + "%");
     }
     if(msettings.ref_point_combo)
     {
@@ -1724,21 +1792,8 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
         ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
     }
 
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "screen_mirror_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "screen_mirror_stratum_band_speed_pct",
-                                            "screen_mirror_stratum_band_tight_pct",
-                                            "screen_mirror_stratum_band_phase_deg");
-
     if(!settings.contains("monitor_settings"))
     {
-        if(stratum_panel)
-        {
-            stratum_panel->setLayoutMode(stratum_layout_mode);
-            stratum_panel->setTuning(stratum_tuning_);
-        }
         return;
     }
 
@@ -1788,11 +1843,27 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             QLabel* existing_left_right_balance_label = nullptr;
             QSlider* existing_top_bottom_balance_slider = nullptr;
             QLabel* existing_top_bottom_balance_label = nullptr;
-            QCheckBox* existing_test_pattern_check = nullptr;
+            QCheckBox* existing_calibration_pattern_check = nullptr;
             QCheckBox* existing_screen_preview_check = nullptr;
             QWidget* existing_capture_area_preview = nullptr;
             QPushButton* existing_add_zone_button = nullptr;
             CaptureZonesWidget* existing_capture_zones_widget = nullptr;
+            QSlider* existing_screen_map_roll_slider = nullptr;
+            QLabel* existing_screen_map_roll_label = nullptr;
+            QSlider* existing_radial_corner_expansion_slider = nullptr;
+            QLabel* existing_radial_corner_expansion_label = nullptr;
+            QSlider* existing_radial_corner_bias_tl_slider = nullptr;
+            QLabel* existing_radial_corner_bias_tl_label = nullptr;
+            QSlider* existing_radial_corner_bias_tr_slider = nullptr;
+            QLabel* existing_radial_corner_bias_tr_label = nullptr;
+            QSlider* existing_radial_corner_bias_bl_slider = nullptr;
+            QLabel* existing_radial_corner_bias_bl_label = nullptr;
+            QSlider* existing_radial_corner_bias_br_slider = nullptr;
+            QLabel* existing_radial_corner_bias_br_label = nullptr;
+            QSlider* existing_corner_blend_strength_slider = nullptr;
+            QLabel* existing_corner_blend_strength_label = nullptr;
+            QSlider* existing_corner_blend_zone_slider = nullptr;
+            QLabel* existing_corner_blend_zone_label = nullptr;
 
             if(had_existing)
             {
@@ -1836,6 +1907,22 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 existing_capture_area_preview = existing_it->second.capture_area_preview;
                 existing_add_zone_button = existing_it->second.add_zone_button;
                 existing_capture_zones_widget = existing_it->second.capture_zones_widget;
+                existing_screen_map_roll_slider = existing_it->second.screen_map_roll_slider;
+                existing_screen_map_roll_label = existing_it->second.screen_map_roll_label;
+                existing_radial_corner_expansion_slider = existing_it->second.radial_corner_expansion_slider;
+                existing_radial_corner_expansion_label = existing_it->second.radial_corner_expansion_label;
+                existing_radial_corner_bias_tl_slider = existing_it->second.radial_corner_bias_tl_slider;
+                existing_radial_corner_bias_tl_label = existing_it->second.radial_corner_bias_tl_label;
+                existing_radial_corner_bias_tr_slider = existing_it->second.radial_corner_bias_tr_slider;
+                existing_radial_corner_bias_tr_label = existing_it->second.radial_corner_bias_tr_label;
+                existing_radial_corner_bias_bl_slider = existing_it->second.radial_corner_bias_bl_slider;
+                existing_radial_corner_bias_bl_label = existing_it->second.radial_corner_bias_bl_label;
+                existing_radial_corner_bias_br_slider = existing_it->second.radial_corner_bias_br_slider;
+                existing_radial_corner_bias_br_label = existing_it->second.radial_corner_bias_br_label;
+                existing_corner_blend_strength_slider = existing_it->second.corner_blend_strength_slider;
+                existing_corner_blend_strength_label = existing_it->second.corner_blend_strength_label;
+                existing_corner_blend_zone_slider = existing_it->second.corner_blend_zone_slider;
+                existing_corner_blend_zone_label = existing_it->second.corner_blend_zone_label;
             }
             else
             {
@@ -1844,8 +1931,16 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             }
             MonitorSettings& msettings = existing_it->second;
 
-            if(mon.contains("enabled")) msettings.enabled = mon["enabled"].get<bool>();
-            
+            if(mon.contains("enabled"))
+            {
+                msettings.enabled = mon["enabled"].get<bool>();
+            }
+            else if(!had_existing)
+            {
+                DisplayPlane3D* loaded_plane = FindDisplayPlaneByName(monitor_name);
+                msettings.enabled = loaded_plane ? DefaultMonitorEnabledForPlane(loaded_plane) : false;
+            }
+
             if(mon.contains("scale")) msettings.scale = mon["scale"].get<float>();
             else msettings.scale = default_scale;
             if(mon.contains("scale_inverted")) msettings.scale_inverted = mon["scale_inverted"].get<bool>();
@@ -1857,9 +1952,7 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             else msettings.brightness_multiplier = default_brightness_multiplier;
             if(mon.contains("brightness_threshold"))
             {
-                float v = mon["brightness_threshold"].get<float>();
-                if(v > 255.0f) v = v * 255.0f / 1020.0f;
-                msettings.brightness_threshold = v;
+                msettings.brightness_threshold = mon["brightness_threshold"].get<float>();
             }
             else msettings.brightness_threshold = default_brightness_threshold;
             if(mon.contains("white_rolloff")) msettings.white_rolloff = mon["white_rolloff"].get<float>();
@@ -1872,12 +1965,12 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             else msettings.black_bar_pillarbox_percent = 0.0f;
 
             if(mon.contains("edge_softness")) msettings.edge_softness = mon["edge_softness"].get<float>();
+            else msettings.edge_softness = 0.0f;
             if(mon.contains("blend")) msettings.blend = mon["blend"].get<float>();
+            else msettings.blend = 0.0f;
             if(mon.contains("propagation_speed_mm_per_ms"))
             {
-                float v = mon["propagation_speed_mm_per_ms"].get<float>();
-                if(v > 100.0f) v = v * 100.0f / 800.0f;
-                msettings.propagation_speed_mm_per_ms = v;
+                msettings.propagation_speed_mm_per_ms = mon["propagation_speed_mm_per_ms"].get<float>();
             }
             else msettings.propagation_speed_mm_per_ms = default_propagation_speed_mm_per_ms;
             if(mon.contains("wave_decay_ms")) msettings.wave_decay_ms = mon["wave_decay_ms"].get<float>();
@@ -1893,7 +1986,10 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             if(mon.contains("top_bottom_balance")) msettings.top_bottom_balance = mon["top_bottom_balance"].get<float>();
             else msettings.top_bottom_balance = default_top_bottom_balance;
             
-            if(mon.contains("show_test_pattern")) msettings.show_test_pattern = mon["show_test_pattern"].get<bool>();
+            if(mon.contains("show_calibration_pattern"))
+            {
+                msettings.show_calibration_pattern = mon["show_calibration_pattern"].get<bool>();
+            }
             if(mon.contains("show_screen_preview")) msettings.show_screen_preview = mon["show_screen_preview"].get<bool>();
             
             if(mon.contains("capture_zones") && mon["capture_zones"].is_array())
@@ -1937,6 +2033,42 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.reference_point_id = mon["reference_point_id"].get<int>();
             }
 
+            if(mon.contains("radial_map_roll_deg"))
+            {
+                msettings.screen_map_roll_deg =
+                    std::clamp(static_cast<float>(mon["radial_map_roll_deg"].get<double>()), -180.0f, 180.0f);
+            }
+            if(mon.contains("radial_map_expansion"))
+            {
+                msettings.radial_corner_expansion_ui = std::clamp(mon["radial_map_expansion"].get<int>(), 0, 100);
+            }
+            if(mon.contains("radial_map_bias_tl"))
+            {
+                msettings.radial_corner_bias_tl_ui = std::clamp(mon["radial_map_bias_tl"].get<int>(), 0, 100);
+            }
+            if(mon.contains("radial_map_bias_tr"))
+            {
+                msettings.radial_corner_bias_tr_ui = std::clamp(mon["radial_map_bias_tr"].get<int>(), 0, 100);
+            }
+            if(mon.contains("radial_map_bias_bl"))
+            {
+                msettings.radial_corner_bias_bl_ui = std::clamp(mon["radial_map_bias_bl"].get<int>(), 0, 100);
+            }
+            if(mon.contains("radial_map_bias_br"))
+            {
+                msettings.radial_corner_bias_br_ui = std::clamp(mon["radial_map_bias_br"].get<int>(), 0, 100);
+            }
+            if(mon.contains("sample_corner_blend_strength_pct"))
+            {
+                msettings.corner_blend_strength_pct = std::clamp(
+                    static_cast<float>(mon["sample_corner_blend_strength_pct"].get<double>()), 0.0f, 100.0f);
+            }
+            if(mon.contains("sample_corner_blend_zone_pct"))
+            {
+                msettings.corner_blend_zone_pct = std::clamp(
+                    static_cast<float>(mon["sample_corner_blend_zone_pct"].get<double>()), 0.0f, 32.0f);
+            }
+
             msettings.scale = std::clamp(msettings.scale, 0.0f, 3.0f);
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
@@ -1954,6 +2086,14 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.front_back_balance = std::clamp(msettings.front_back_balance, -100.0f, 100.0f);
             msettings.left_right_balance = std::clamp(msettings.left_right_balance, -100.0f, 100.0f);
             msettings.top_bottom_balance = std::clamp(msettings.top_bottom_balance, -100.0f, 100.0f);
+            msettings.screen_map_roll_deg = std::clamp(msettings.screen_map_roll_deg, -180.0f, 180.0f);
+            msettings.radial_corner_expansion_ui = std::clamp(msettings.radial_corner_expansion_ui, 0, 100);
+            msettings.radial_corner_bias_tl_ui = std::clamp(msettings.radial_corner_bias_tl_ui, 0, 100);
+            msettings.radial_corner_bias_tr_ui = std::clamp(msettings.radial_corner_bias_tr_ui, 0, 100);
+            msettings.radial_corner_bias_bl_ui = std::clamp(msettings.radial_corner_bias_bl_ui, 0, 100);
+            msettings.radial_corner_bias_br_ui = std::clamp(msettings.radial_corner_bias_br_ui, 0, 100);
+            msettings.corner_blend_strength_pct = std::clamp(msettings.corner_blend_strength_pct, 0.0f, 100.0f);
+            msettings.corner_blend_zone_pct = std::clamp(msettings.corner_blend_zone_pct, 0.0f, 32.0f);
             
             if(had_existing)
             {
@@ -1994,11 +2134,27 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.left_right_balance_label = existing_left_right_balance_label;
                 msettings.top_bottom_balance_slider = existing_top_bottom_balance_slider;
                 msettings.top_bottom_balance_label = existing_top_bottom_balance_label;
-                msettings.test_pattern_check = existing_test_pattern_check;
+                msettings.calibration_pattern_check = existing_calibration_pattern_check;
                 msettings.screen_preview_check = existing_screen_preview_check;
                 msettings.capture_area_preview = existing_capture_area_preview;
                 msettings.add_zone_button = existing_add_zone_button;
                 msettings.capture_zones_widget = existing_capture_zones_widget;
+                msettings.screen_map_roll_slider = existing_screen_map_roll_slider;
+                msettings.screen_map_roll_label = existing_screen_map_roll_label;
+                msettings.radial_corner_expansion_slider = existing_radial_corner_expansion_slider;
+                msettings.radial_corner_expansion_label = existing_radial_corner_expansion_label;
+                msettings.radial_corner_bias_tl_slider = existing_radial_corner_bias_tl_slider;
+                msettings.radial_corner_bias_tl_label = existing_radial_corner_bias_tl_label;
+                msettings.radial_corner_bias_tr_slider = existing_radial_corner_bias_tr_slider;
+                msettings.radial_corner_bias_tr_label = existing_radial_corner_bias_tr_label;
+                msettings.radial_corner_bias_bl_slider = existing_radial_corner_bias_bl_slider;
+                msettings.radial_corner_bias_bl_label = existing_radial_corner_bias_bl_label;
+                msettings.radial_corner_bias_br_slider = existing_radial_corner_bias_br_slider;
+                msettings.radial_corner_bias_br_label = existing_radial_corner_bias_br_label;
+                msettings.corner_blend_strength_slider = existing_corner_blend_strength_slider;
+                msettings.corner_blend_strength_label = existing_corner_blend_strength_label;
+                msettings.corner_blend_zone_slider = existing_corner_blend_zone_slider;
+                msettings.corner_blend_zone_label = existing_corner_blend_zone_label;
 
                 if(msettings.capture_zones_widget)
                 {
@@ -2078,24 +2234,8 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
     RefreshMonitorStatus();
     
     OnScreenPreviewChanged();
-    OnTestPatternChanged();
+    OnCalibrationPatternChanged();
     
-    OnParameterChanged();
-
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
-}
-
-void ScreenMirror::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
     OnParameterChanged();
 }
 
@@ -2134,19 +2274,61 @@ void ScreenMirror::OnParameterChanged()
         if(settings.front_back_balance_slider) settings.front_back_balance = std::clamp((float)settings.front_back_balance_slider->value(), -100.0f, 100.0f);
         if(settings.left_right_balance_slider) settings.left_right_balance = std::clamp((float)settings.left_right_balance_slider->value(), -100.0f, 100.0f);
         if(settings.top_bottom_balance_slider) settings.top_bottom_balance = std::clamp((float)settings.top_bottom_balance_slider->value(), -100.0f, 100.0f);
+
+        if(settings.screen_map_roll_slider)
+        {
+            settings.screen_map_roll_deg = std::clamp(
+                (float)settings.screen_map_roll_slider->value() / (float)kScreenMapRollTicksPerDegree, -180.0f, 180.0f);
+        }
+        if(settings.radial_corner_expansion_slider)
+        {
+            settings.radial_corner_expansion_ui = std::clamp(settings.radial_corner_expansion_slider->value(), 0, 100);
+        }
+        if(settings.radial_corner_bias_tl_slider)
+        {
+            settings.radial_corner_bias_tl_ui = std::clamp(settings.radial_corner_bias_tl_slider->value(), 0, 100);
+        }
+        if(settings.radial_corner_bias_tr_slider)
+        {
+            settings.radial_corner_bias_tr_ui = std::clamp(settings.radial_corner_bias_tr_slider->value(), 0, 100);
+        }
+        if(settings.radial_corner_bias_bl_slider)
+        {
+            settings.radial_corner_bias_bl_ui = std::clamp(settings.radial_corner_bias_bl_slider->value(), 0, 100);
+        }
+        if(settings.radial_corner_bias_br_slider)
+        {
+            settings.radial_corner_bias_br_ui = std::clamp(settings.radial_corner_bias_br_slider->value(), 0, 100);
+        }
+        if(settings.corner_blend_strength_slider)
+        {
+            settings.corner_blend_strength_pct =
+                std::clamp((float)settings.corner_blend_strength_slider->value(), 0.0f, 100.0f);
+        }
+        if(settings.corner_blend_zone_slider)
+        {
+            settings.corner_blend_zone_pct =
+                std::clamp((float)settings.corner_blend_zone_slider->value(), 0.0f, 32.0f);
+        }
         
-        bool old_test_pattern = settings.show_test_pattern;
+        bool old_calibration_pattern = settings.show_calibration_pattern;
         bool old_screen_preview = settings.show_screen_preview;
-        if(settings.test_pattern_check) settings.show_test_pattern = settings.test_pattern_check->isChecked();
+        if(settings.calibration_pattern_check) settings.show_calibration_pattern = settings.calibration_pattern_check->isChecked();
         if(settings.screen_preview_check) settings.show_screen_preview = settings.screen_preview_check->isChecked();
-        if(settings.show_test_pattern && settings.group_box && !settings.group_box->isChecked())
+        if(settings.show_calibration_pattern && settings.group_box && !settings.group_box->isChecked())
         {
             QSignalBlocker block(settings.group_box);
             settings.group_box->setChecked(true);
             settings.enabled = true;
         }
-        
-        if((old_test_pattern != settings.show_test_pattern || old_screen_preview != settings.show_screen_preview) 
+        if(settings.show_screen_preview && settings.group_box && !settings.group_box->isChecked())
+        {
+            QSignalBlocker block(settings.group_box);
+            settings.group_box->setChecked(true);
+            settings.enabled = true;
+        }
+
+        if((old_calibration_pattern != settings.show_calibration_pattern || old_screen_preview != settings.show_screen_preview) 
            && settings.capture_area_preview)
         {
             settings.capture_area_preview->update();
@@ -2184,19 +2366,19 @@ void ScreenMirror::OnScreenPreviewChanged()
     emit ScreenPreviewChanged(any_enabled);
 }
 
-void ScreenMirror::OnTestPatternChanged()
+void ScreenMirror::OnCalibrationPatternChanged()
 {
     bool any_enabled = false;
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end() && !any_enabled;
         ++it)
     {
-        if(it->second.show_test_pattern && it->second.enabled)
+        if(it->second.show_calibration_pattern && it->second.enabled)
         {
             any_enabled = true;
         }
     }
-    emit TestPatternChanged(any_enabled);
+    emit CalibrationPatternChanged(any_enabled);
     
     for(std::map<std::string, MonitorSettings>::iterator it = monitor_settings.begin();
         it != monitor_settings.end();
@@ -2210,12 +2392,14 @@ void ScreenMirror::OnTestPatternChanged()
     }
 }
 
-bool ScreenMirror::ShouldShowTestPattern(const std::string& plane_name) const
+bool ScreenMirror::ShouldShowCalibrationPattern(const std::string& plane_name) const
 {
     std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.find(plane_name);
     if(it != monitor_settings.end())
     {
-        return it->second.show_test_pattern && it->second.enabled;
+        const MonitorSettings& m = it->second;
+        const bool row_on = m.group_box ? m.group_box->isChecked() : m.enabled;
+        return m.show_calibration_pattern && row_on;
     }
     return false;
 }
@@ -2225,7 +2409,9 @@ bool ScreenMirror::ShouldShowScreenPreview(const std::string& plane_name) const
     std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.find(plane_name);
     if(it != monitor_settings.end())
     {
-        return it->second.show_screen_preview && it->second.enabled;
+        const MonitorSettings& m = it->second;
+        const bool row_on = m.group_box ? m.group_box->isChecked() : m.enabled;
+        return m.show_screen_preview && row_on;
     }
     return false;
 }
@@ -2459,8 +2645,9 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     }
     settings.group_box = new QGroupBox(display_name);
     settings.group_box->setCheckable(true);
-    settings.group_box->setChecked(settings.enabled && (has_capture_source || settings.show_test_pattern));
-    settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern);
+    settings.group_box->setChecked(settings.enabled &&
+                                   (has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview));
+    settings.group_box->setEnabled(has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview);
     if(has_capture_source)
     {
         settings.group_box->setToolTip("Enable or disable this monitor's influence.");
@@ -2701,6 +2888,147 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
 
     main_layout->addWidget(blackbars_group);
 
+    QGroupBox* radial_corner_group = new QGroupBox("Radial corner mapping");
+    QVBoxLayout* radial_corner_outer = new QVBoxLayout();
+    QLabel* radial_corner_info = new QLabel(
+        "Per-display UV tweak after radial sampling. Directional mapping is calibrated in geometry (panel basis vs. capture); "
+        "Map roll is only extra twist. Corner sliders 0–100%: 0% = tuned baseline; 50% ≈ neutral warp.");
+    radial_corner_info->setWordWrap(true);
+    PluginUiApplyItalicSecondaryLabel(radial_corner_info);
+    radial_corner_outer->addWidget(radial_corner_info);
+
+    {
+        QWidget* roll_row = new QWidget();
+        QHBoxLayout* roll_layout = new QHBoxLayout(roll_row);
+        roll_layout->setContentsMargins(0, 0, 0, 0);
+        roll_layout->addWidget(new QLabel("Map roll:"));
+        settings.screen_map_roll_slider = new QSlider(Qt::Horizontal);
+        settings.screen_map_roll_slider->setRange(-kScreenMapRollSliderMax, kScreenMapRollSliderMax);
+        settings.screen_map_roll_slider->setSingleStep(1);
+        settings.screen_map_roll_slider->setPageStep(4);
+        settings.screen_map_roll_slider->setEnabled(has_capture_source);
+        settings.screen_map_roll_slider->setValue(
+            (int)std::lround(std::clamp(settings.screen_map_roll_deg, -180.0f, 180.0f) *
+                             (float)kScreenMapRollTicksPerDegree));
+        settings.screen_map_roll_slider->setToolTip(
+            "Optional extra twist in the capture plane after calibrated directional mapping. 0° = geometry only. Steps 0.5°.");
+        settings.screen_map_roll_label = new QLabel(
+            QString::number(std::clamp(settings.screen_map_roll_deg, -180.0f, 180.0f), 'f', 1) + QChar(0x00B0));
+        settings.screen_map_roll_label->setMinimumWidth(52);
+        roll_layout->addWidget(settings.screen_map_roll_slider, 1);
+        roll_layout->addWidget(settings.screen_map_roll_label);
+        connect(settings.screen_map_roll_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+        connect(settings.screen_map_roll_slider, &QSlider::valueChanged, this, [&settings](int v) {
+            if(settings.screen_map_roll_label)
+            {
+                const float deg = (float)v / (float)kScreenMapRollTicksPerDegree;
+                settings.screen_map_roll_label->setText(QString::number(deg, 'f', 1) + QChar(0x00B0));
+            }
+        });
+        radial_corner_outer->addWidget(roll_row);
+    }
+
+    auto add_radial_pct_row = [&](const char* title, QSlider*& slider, QLabel*& label, int stored_ui, const char* tip) {
+        QWidget* row = new QWidget();
+        QHBoxLayout* row_layout = new QHBoxLayout(row);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        row_layout->addWidget(new QLabel(title));
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(0, 100);
+        slider->setValue(std::clamp(stored_ui, 0, 100));
+        slider->setEnabled(has_capture_source);
+        slider->setToolTip(tip);
+        label = new QLabel(QString::number(std::clamp(stored_ui, 0, 100)) + "%");
+        label->setMinimumWidth(44);
+        QLabel* lp = label;
+        row_layout->addWidget(slider, 1);
+        row_layout->addWidget(label);
+        connect(slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+        connect(slider, &QSlider::valueChanged, this, [lp](int v) { lp->setText(QString::number(v) + "%"); });
+        radial_corner_outer->addWidget(row);
+    };
+
+    add_radial_pct_row("Corner expansion:",
+                       settings.radial_corner_expansion_slider,
+                       settings.radial_corner_expansion_label,
+                       settings.radial_corner_expansion_ui,
+                       "0% = baseline mapping; raise to push toward corners or lower to pinch (internal −50…+50).");
+    add_radial_pct_row("Bottom-left:",
+                       settings.radial_corner_bias_tl_slider,
+                       settings.radial_corner_bias_tl_label,
+                       settings.radial_corner_bias_tl_ui,
+                       "Bias toward capture bottom-left in that quadrant; 0% = baseline.");
+    add_radial_pct_row("Bottom-right:",
+                       settings.radial_corner_bias_tr_slider,
+                       settings.radial_corner_bias_tr_label,
+                       settings.radial_corner_bias_tr_ui,
+                       "Bias toward capture bottom-right in that quadrant; 0% = baseline.");
+    add_radial_pct_row("Top-left:",
+                       settings.radial_corner_bias_bl_slider,
+                       settings.radial_corner_bias_bl_label,
+                       settings.radial_corner_bias_bl_ui,
+                       "Bias toward capture top-left in that quadrant; 0% = baseline.");
+    add_radial_pct_row("Top-right:",
+                       settings.radial_corner_bias_br_slider,
+                       settings.radial_corner_bias_br_label,
+                       settings.radial_corner_bias_br_ui,
+                       "Bias toward capture top-right in that quadrant; 0% = baseline.");
+
+    radial_corner_group->setLayout(radial_corner_outer);
+    main_layout->addWidget(radial_corner_group);
+
+    QGroupBox* corner_sample_group = new QGroupBox("Corner blend (sampling)");
+    QVBoxLayout* corner_sample_outer = new QVBoxLayout();
+    QWidget* corner_strength_row = new QWidget();
+    QHBoxLayout* corner_strength_layout = new QHBoxLayout(corner_strength_row);
+    corner_strength_layout->setContentsMargins(0, 0, 0, 0);
+    corner_strength_layout->addWidget(new QLabel("Strength:"));
+    settings.corner_blend_strength_slider = new QSlider(Qt::Horizontal);
+    settings.corner_blend_strength_slider->setRange(0, 100);
+    settings.corner_blend_strength_slider->setValue((int)std::lround(settings.corner_blend_strength_pct));
+    settings.corner_blend_strength_slider->setEnabled(has_capture_source);
+    settings.corner_blend_strength_slider->setToolTip(
+        "Mix edge colors near frame corners when reading the capture. 0% = off (center sample only); 100% = full blend.");
+    settings.corner_blend_strength_label =
+        new QLabel(QString::number((int)std::lround(settings.corner_blend_strength_pct)) + "%");
+    settings.corner_blend_strength_label->setMinimumWidth(40);
+    corner_strength_layout->addWidget(settings.corner_blend_strength_slider, 1);
+    corner_strength_layout->addWidget(settings.corner_blend_strength_label);
+    connect(settings.corner_blend_strength_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    connect(settings.corner_blend_strength_slider, &QSlider::valueChanged, this, [&settings](int v) {
+        if(settings.corner_blend_strength_label)
+        {
+            settings.corner_blend_strength_label->setText(QString::number(v) + "%");
+        }
+    });
+    corner_sample_outer->addWidget(corner_strength_row);
+
+    QWidget* corner_zone_row = new QWidget();
+    QHBoxLayout* corner_zone_layout = new QHBoxLayout(corner_zone_row);
+    corner_zone_layout->setContentsMargins(0, 0, 0, 0);
+    corner_zone_layout->addWidget(new QLabel("Zone width:"));
+    settings.corner_blend_zone_slider = new QSlider(Qt::Horizontal);
+    settings.corner_blend_zone_slider->setRange(0, 32);
+    settings.corner_blend_zone_slider->setValue((int)std::lround(settings.corner_blend_zone_pct));
+    settings.corner_blend_zone_slider->setEnabled(has_capture_source);
+    settings.corner_blend_zone_slider->setToolTip(
+        "0% = off. Otherwise corner transition size as % of half the active image (after letterbox). Higher = wider, softer corner.");
+    settings.corner_blend_zone_label =
+        new QLabel(QString::number((int)std::lround(settings.corner_blend_zone_pct)) + "%");
+    settings.corner_blend_zone_label->setMinimumWidth(40);
+    corner_zone_layout->addWidget(settings.corner_blend_zone_slider, 1);
+    corner_zone_layout->addWidget(settings.corner_blend_zone_label);
+    connect(settings.corner_blend_zone_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+    connect(settings.corner_blend_zone_slider, &QSlider::valueChanged, this, [&settings](int v) {
+        if(settings.corner_blend_zone_label)
+        {
+            settings.corner_blend_zone_label->setText(QString::number(v) + "%");
+        }
+    });
+    corner_sample_outer->addWidget(corner_zone_row);
+    corner_sample_group->setLayout(corner_sample_outer);
+    main_layout->addWidget(corner_sample_group);
+
     QGroupBox* blend_group = new QGroupBox("Blend & Smoothing");
     QFormLayout* blend_form = new QFormLayout(blend_group);
     blend_form->setContentsMargins(8, 12, 8, 8);
@@ -2747,24 +3075,26 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
 
     main_layout->addWidget(blend_group);
 
-    QGroupBox* preview_group = new QGroupBox("Preview & Test");
+    QGroupBox* preview_group = new QGroupBox("Preview & Calibration");
     QFormLayout* preview_form = new QFormLayout(preview_group);
     preview_form->setContentsMargins(8, 12, 8, 8);
 
-    settings.test_pattern_check = new QCheckBox("Show Test Pattern");
-    settings.test_pattern_check->setEnabled(true);
-    settings.test_pattern_check->setChecked(settings.show_test_pattern);
-    settings.test_pattern_check->setToolTip("Display a fixed color quadrant pattern for calibration.");
-    connect(settings.test_pattern_check,
+    settings.calibration_pattern_check = new QCheckBox("Show calibration pattern");
+    settings.calibration_pattern_check->setEnabled(true);
+    settings.calibration_pattern_check->setChecked(settings.show_calibration_pattern);
+    settings.calibration_pattern_check->setToolTip(
+        "LEDs use a grid, rings, spokes, and quadrant colors (same as the zone preview). "
+        "Tune radial corners, map roll, and corner blend until geometry looks straight and corners behave like the preview.");
+    connect(settings.calibration_pattern_check,
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
             &QCheckBox::checkStateChanged,
-            this, [this]() { OnParameterChanged(); OnTestPatternChanged(); }
+            this, [this]() { OnParameterChanged(); OnCalibrationPatternChanged(); }
 #else
             &QCheckBox::stateChanged,
-            this, [this](int) { OnParameterChanged(); OnTestPatternChanged(); }
+            this, [this](int) { OnParameterChanged(); OnCalibrationPatternChanged(); }
 #endif
     );
-    preview_form->addRow("Test Pattern:", settings.test_pattern_check);
+    preview_form->addRow("Calibration pattern:", settings.calibration_pattern_check);
 
     settings.screen_preview_check = new QCheckBox("Show Screen Preview");
     settings.screen_preview_check->setEnabled(has_capture_source);
@@ -2786,7 +3116,7 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     CaptureZonesWidget* zones_widget = new CaptureZonesWidget(
         &settings.capture_zones,
         plane,
-        &settings.show_test_pattern,
+        &settings.show_calibration_pattern,
         &settings.show_screen_preview,
         &settings.black_bar_letterbox_percent,
         &settings.black_bar_pillarbox_percent,
@@ -2874,6 +3204,7 @@ void ScreenMirror::RefreshMonitorStatus()
             {
                 new_settings.reference_point_id = plane_ref_id;
             }
+            new_settings.enabled = DefaultMonitorEnabledForPlane(plane);
             settings_it = monitor_settings.emplace(plane_name, new_settings).first;
         }
         MonitorSettings& settings = settings_it->second;
@@ -2899,7 +3230,7 @@ void ScreenMirror::RefreshMonitorStatus()
                 display_name += " (No Capture Source)";
             }
             settings.group_box->setTitle(display_name);
-            settings.group_box->setEnabled(has_capture_source || settings.show_test_pattern);
+            settings.group_box->setEnabled(has_capture_source || settings.show_calibration_pattern || settings.show_screen_preview);
             
             if(has_capture_source)
             {
@@ -2931,7 +3262,7 @@ void ScreenMirror::RefreshMonitorStatus()
             if(settings.left_right_balance_slider) settings.left_right_balance_slider->setEnabled(has_capture_source);
             if(settings.top_bottom_balance_slider) settings.top_bottom_balance_slider->setEnabled(has_capture_source);
             if(settings.ref_point_combo) settings.ref_point_combo->setEnabled(has_capture_source);
-            if(settings.test_pattern_check) settings.test_pattern_check->setEnabled(true);
+            if(settings.calibration_pattern_check) settings.calibration_pattern_check->setEnabled(true);
             if(settings.screen_preview_check) settings.screen_preview_check->setEnabled(has_capture_source);
             if(settings.capture_zones_widget)
             {

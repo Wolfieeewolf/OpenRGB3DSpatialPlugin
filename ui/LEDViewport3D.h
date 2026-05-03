@@ -55,11 +55,11 @@ public:
     {
         return screen_preview_refresh_timer && screen_preview_refresh_timer->isActive();
     }
-    void SetShowTestPattern(bool show) { show_test_pattern = show; update(); }
+    void SetShowCalibrationPattern(bool show) { show_calibration_pattern = show; update(); }
     void ClearDisplayPlaneTextures();
 
     using PerPlaneFlagQuery = std::function<bool(const std::string& plane_name)>;
-    void SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery test_pattern_query);
+    void SetPerPlanePreviewQuery(PerPlaneFlagQuery preview_query, PerPlaneFlagQuery calibration_pattern_query);
 
     void SetShowRoomGridOverlay(bool show) { show_room_grid_overlay = show; update(); }
     void SetRoomGridBrightness(float brightness) { room_grid_brightness = std::max(0.0f, std::min(1.0f, brightness)); update(); }
@@ -141,6 +141,8 @@ private:
     void DrawDisplayPlanes();
     void UpdateDisplayPlaneTextures();
     bool AnyDisplayPlaneWantsScreenPreview() const;
+    bool PlaneWantsScreenPreview(DisplayPlane3D* plane) const;
+    bool PlaneWantsCalibrationPattern(DisplayPlane3D* plane) const;
 
     int PickController(int mouse_x, int mouse_y);
     int PickReferencePoint(int mouse_x, int mouse_y);
@@ -179,7 +181,7 @@ private:
     int                                     selected_display_plane_idx;
     int                                     selected_ref_point_idx;
     bool                                    show_screen_preview;
-    bool                                    show_test_pattern;
+    bool                                    show_calibration_pattern;
     bool                                    show_room_grid_overlay;
     float                                   room_grid_brightness;
     float                                   room_grid_point_size;
@@ -208,7 +210,7 @@ private:
     std::function<void()>                   screen_preview_tick_cb;
 
     PerPlaneFlagQuery                       per_plane_preview_query;
-    PerPlaneFlagQuery                       per_plane_test_pattern_query;
+    PerPlaneFlagQuery                       per_plane_calibration_pattern_query;
 
     float   camera_distance;
     float   camera_yaw;

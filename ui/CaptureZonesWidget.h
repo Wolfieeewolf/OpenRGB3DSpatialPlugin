@@ -37,7 +37,7 @@ public:
     explicit CaptureZonesWidget(
         std::vector<CaptureZone>* zones,
         DisplayPlane3D* plane,
-        bool* show_test_pattern = nullptr,
+        bool* show_calibration_pattern = nullptr,
         bool* show_screen_preview = nullptr,
         float* black_bar_letterbox_percent = nullptr,
         float* black_bar_pillarbox_percent = nullptr,

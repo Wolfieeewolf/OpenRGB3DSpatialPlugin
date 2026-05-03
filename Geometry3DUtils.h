@@ -81,7 +81,84 @@ namespace Geometry3D
     }
 
 
-    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f, bool directional_uv = false)
+    /** Quadrant weights for per-corner UV bias (1 at that corner, 0 along center lines and other quadrants). */
+    inline float RadialCornerQuadWeightTL(float u, float v)
+    {
+        if(u > 0.5f || v > 0.5f) return 0.f;
+        return (1.f - 2.f * u) * (1.f - 2.f * v);
+    }
+    inline float RadialCornerQuadWeightTR(float u, float v)
+    {
+        if(u < 0.5f || v > 0.5f) return 0.f;
+        return (2.f * u - 1.f) * (1.f - 2.f * v);
+    }
+    inline float RadialCornerQuadWeightBL(float u, float v)
+    {
+        if(u > 0.5f || v < 0.5f) return 0.f;
+        return (1.f - 2.f * u) * (2.f * v - 1.f);
+    }
+    inline float RadialCornerQuadWeightBR(float u, float v)
+    {
+        if(u < 0.5f || v < 0.5f) return 0.f;
+        return (2.f * u - 1.f) * (2.f * v - 1.f);
+    }
+
+    /**
+     * Post-process UVs from directional (radial) screen mapping: corner expansion and per-corner pull.
+     * Percent values are typically ±50 from UI; zero = identity.
+     */
+    inline void ApplyRadialCornerMapping01(float& u, float& v,
+                                          float expansion_pct,
+                                          float bias_tl_pct, float bias_tr_pct, float bias_bl_pct, float bias_br_pct)
+    {
+        const bool idle = (expansion_pct > -0.05f && expansion_pct < 0.05f &&
+                           bias_tl_pct > -0.05f && bias_tl_pct < 0.05f &&
+                           bias_tr_pct > -0.05f && bias_tr_pct < 0.05f &&
+                           bias_bl_pct > -0.05f && bias_bl_pct < 0.05f &&
+                           bias_br_pct > -0.05f && bias_br_pct < 0.05f);
+        if(idle)
+        {
+            return;
+        }
+
+        float du = u - 0.5f;
+        float dv = v - 0.5f;
+        const float wexp = 4.0f * std::fabs(du) * std::fabs(dv);
+        const float g = expansion_pct / 100.0f;
+        u = 0.5f + du * (1.0f + wexp * g);
+        v = 0.5f + dv * (1.0f + wexp * g);
+
+        const float k = 0.28f / 100.0f;
+        const float wtl = RadialCornerQuadWeightTL(u, v);
+        const float wtr = RadialCornerQuadWeightTR(u, v);
+        const float wbl = RadialCornerQuadWeightBL(u, v);
+        const float wbr = RadialCornerQuadWeightBR(u, v);
+
+        u += k * (-wtl * bias_tl_pct + wtr * bias_tr_pct - wbl * bias_bl_pct + wbr * bias_br_pct);
+        v += k * (-wtl * bias_tl_pct - wtr * bias_tr_pct + wbl * bias_bl_pct + wbr * bias_br_pct);
+
+        u = std::clamp(u, 0.0f, 1.0f);
+        v = std::clamp(v, 0.0f, 1.0f);
+    }
+
+    /** Rotate UV around center (0.5, 0.5), degrees CCW in u-right / v-down space; clamps to [0,1]. */
+    inline void ApplyUVRotationDegrees01(float& u, float& v, float roll_deg)
+    {
+        if(roll_deg > -0.005f && roll_deg < 0.005f)
+        {
+            return;
+        }
+        const float rad = roll_deg * 3.14159265359f / 180.0f;
+        const float c = std::cos(rad);
+        const float s = std::sin(rad);
+        const float du = u - 0.5f;
+        const float dv = v - 0.5f;
+        u = std::clamp(0.5f + c * du - s * dv, 0.0f, 1.0f);
+        v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
+    }
+
+    /** Bearing from reference toward LED → panel UV (immersive / wrap-friendly). For flat desk-style mapping use 2D ambilight paths instead. */
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
     {
         PlaneProjection result;
         result.is_valid = false;
@@ -104,55 +181,36 @@ namespace Geometry3D
 
         Vector3D plane_right  = { rotation_matrix[0], rotation_matrix[3], rotation_matrix[6] };
         Vector3D plane_up     = { rotation_matrix[1], rotation_matrix[4], rotation_matrix[7] };
-        Vector3D plane_normal = { rotation_matrix[2], rotation_matrix[5], rotation_matrix[8] };
 
-        if (directional_uv)
+        float len_sq = ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z;
+        float len = sqrtf(len_sq);
+        const float eps = 1e-6f;
+        if (len < eps)
         {
-            float len_sq = ref_to_led.x * ref_to_led.x + ref_to_led.y * ref_to_led.y + ref_to_led.z * ref_to_led.z;
-            float len = sqrtf(len_sq);
-            const float eps = 1e-6f;
-            if (len < eps)
-            {
-                result.u = 0.5f;
-                result.v = 0.5f;
-                result.is_valid = true;
-                return result;
-            }
-            float inv_len = 1.0f / len;
-            float dir_x = ref_to_led.x * inv_len;
-            float dir_y = ref_to_led.y * inv_len;
-            float dir_z = ref_to_led.z * inv_len;
-            float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
-            float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
-            static const float inv_half_sqrt2 = 1.414213562373095f;
-            result.u = 0.5f + 0.5f * dir_right * inv_half_sqrt2;
-            result.v = 0.5f + 0.5f * dir_up * inv_half_sqrt2;
+            result.u = 0.5f;
+            result.v = 0.5f;
+            result.is_valid = true;
+            return result;
         }
-        else
-        {
-            Vector3D world_offset;
-            world_offset.x = led_position.x - transform.position.x;
-            world_offset.y = led_position.y - transform.position.y;
-            world_offset.z = led_position.z - transform.position.z;
-
-            Vector3D local_offset;
-            local_offset.x = world_offset.x * plane_right.x  + world_offset.y * plane_right.y  + world_offset.z * plane_right.z;
-            local_offset.y = world_offset.x * plane_up.x     + world_offset.y * plane_up.y     + world_offset.z * plane_up.z;
-            local_offset.z = world_offset.x * plane_normal.x + world_offset.y * plane_normal.y + world_offset.z * plane_normal.z;
-
-            std::swap(local_offset.y, local_offset.z);
-
-            float screen_width_units = MMToGridUnits(plane.GetWidthMM(), grid_scale_mm);
-            float screen_height_units = MMToGridUnits(plane.GetHeightMM(), grid_scale_mm);
-
-            if (screen_width_units <= 0.0f || screen_height_units <= 0.0f)
-            {
-                result.is_valid = false;
-                return result;
-            }
-            result.u = (local_offset.x + screen_width_units * 0.5f) / screen_width_units;
-            result.v = (local_offset.z + screen_height_units * 0.5f) / screen_height_units;
-        }
+        float inv_len = 1.0f / len;
+        float dir_x = ref_to_led.x * inv_len;
+        float dir_y = ref_to_led.y * inv_len;
+        float dir_z = ref_to_led.z * inv_len;
+        float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
+        float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
+        /**
+         * Rotate direction in the panel (right, up) plane so UVs match capture orientation.
+         * Same effect as a post-map UV roll; kept here so “map roll” UI starts at 0° for a calibrated baseline.
+         */
+        static constexpr float kDirectionalMapBasisRotationDeg = -25.5f;
+        const float calib_rad = kDirectionalMapBasisRotationDeg * 3.14159265359f / 180.0f;
+        const float cc = std::cos(calib_rad);
+        const float ss = std::sin(calib_rad);
+        const float dir_r_rot = dir_right * cc - dir_up * ss;
+        const float dir_u_rot = dir_right * ss + dir_up * cc;
+        static const float inv_half_sqrt2 = 1.414213562373095f;
+        result.u = 0.5f + 0.5f * dir_r_rot * inv_half_sqrt2;
+        result.v = 0.5f + 0.5f * dir_u_rot * inv_half_sqrt2;
 
         if (result.u < 0.0f) result.u = 0.0f;
         if (result.u > 1.0f) result.u = 1.0f;

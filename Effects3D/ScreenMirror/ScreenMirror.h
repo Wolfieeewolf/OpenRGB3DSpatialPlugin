@@ -5,7 +5,6 @@
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
-#include "EffectStratumBlend.h"
 #include <map>
 #include <unordered_map>
 #include <deque>
@@ -16,7 +15,6 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
-class StratumBandPanel;
 struct CaptureSourceInfo;
 struct CapturedFrame;
 
@@ -55,33 +53,18 @@ public:
 
 signals:
     void ScreenPreviewChanged(bool enabled);
-    void TestPatternChanged(bool enabled);
+    void CalibrationPatternChanged(bool enabled);
     
 public:
-    bool ShouldShowTestPattern(const std::string& plane_name) const;
+    bool ShouldShowCalibrationPattern(const std::string& plane_name) const;
     bool ShouldShowScreenPreview(const std::string& plane_name) const;
 
     void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
-    void PrepareMirrorRoomGridOverlay(uint64_t render_sequence,
-                                      float time,
-                                      int nx,
-                                      int ny,
-                                      int nz,
-                                      float room_min_x,
-                                      float room_max_x,
-                                      float room_min_y,
-                                      float room_max_y,
-                                      float room_min_z,
-                                      float room_max_z,
-                                      const GridContext3D& world_grid,
-                                      const GridContext3D& room_grid);
-    RGBColor SampleMirrorRoomGridOverlay(uint64_t render_sequence, int ix, int iy, int iz, int nx, int ny, int nz) const;
 
 private slots:
     void OnParameterChanged();
     void OnScreenPreviewChanged();
-    void OnTestPatternChanged();
-    void OnStratumBandChanged();
+    void OnCalibrationPatternChanged();
 
 private:
     struct MonitorSettings
@@ -111,8 +94,19 @@ private:
 
         int reference_point_id;
 
-        bool show_test_pattern;
+        bool show_calibration_pattern;
         bool show_screen_preview;
+
+        /** Extra roll on top of built-in calibration (degrees); 0 = use default −25.5° correction only. */
+        float screen_map_roll_deg;
+        /** 0–100 UI: 0 = baseline internal −50 (previous default “feel”); 50 = internal 0; 100 = +50. */
+        int radial_corner_expansion_ui;
+        int radial_corner_bias_tl_ui;
+        int radial_corner_bias_tr_ui;
+        int radial_corner_bias_bl_ui;
+        int radial_corner_bias_br_ui;
+        float corner_blend_strength_pct;
+        float corner_blend_zone_pct;
 
         std::vector<CaptureZone> capture_zones;
 
@@ -153,14 +147,31 @@ private:
         QSlider* top_bottom_balance_slider;
         QLabel* top_bottom_balance_label;
         QComboBox* ref_point_combo;
-        QCheckBox* test_pattern_check;
+        QCheckBox* calibration_pattern_check;
         QCheckBox* screen_preview_check;
         QWidget* capture_area_preview;
         QPushButton* add_zone_button;
         CaptureZonesWidget* capture_zones_widget;
 
+        QSlider* screen_map_roll_slider;
+        QLabel* screen_map_roll_label;
+        QSlider* radial_corner_expansion_slider;
+        QLabel* radial_corner_expansion_label;
+        QSlider* radial_corner_bias_tl_slider;
+        QLabel* radial_corner_bias_tl_label;
+        QSlider* radial_corner_bias_tr_slider;
+        QLabel* radial_corner_bias_tr_label;
+        QSlider* radial_corner_bias_bl_slider;
+        QLabel* radial_corner_bias_bl_label;
+        QSlider* radial_corner_bias_br_slider;
+        QLabel* radial_corner_bias_br_label;
+        QSlider* corner_blend_strength_slider;
+        QLabel* corner_blend_strength_label;
+        QSlider* corner_blend_zone_slider;
+        QLabel* corner_blend_zone_label;
+
         MonitorSettings()
-            : enabled(true)
+            : enabled(false)
             , scale(1.0f)
             , scale_inverted(true)
             , smoothing_time_ms(0.0f)
@@ -170,8 +181,8 @@ private:
             , vibrance(1.0f)
             , black_bar_letterbox_percent(0.0f)
             , black_bar_pillarbox_percent(0.0f)
-            , edge_softness(30.0f)
-            , blend(50.0f)
+            , edge_softness(0.0f)
+            , blend(0.0f)
             , propagation_speed_mm_per_ms(0.0f)
             , wave_decay_ms(0.0f)
             , wave_time_to_edge_sec(0.0f)
@@ -180,8 +191,16 @@ private:
             , left_right_balance(0.0f)
             , top_bottom_balance(0.0f)
             , reference_point_id(-1)
-            , show_test_pattern(false)
+            , show_calibration_pattern(false)
             , show_screen_preview(false)
+            , screen_map_roll_deg(0.0f)
+            , radial_corner_expansion_ui(0)
+            , radial_corner_bias_tl_ui(0)
+            , radial_corner_bias_tr_ui(0)
+            , radial_corner_bias_bl_ui(0)
+            , radial_corner_bias_br_ui(0)
+            , corner_blend_strength_pct(0.0f)
+            , corner_blend_zone_pct(0.0f)
             , group_box(nullptr)
             , scale_slider(nullptr)
             , scale_label(nullptr)
@@ -219,11 +238,27 @@ private:
             , top_bottom_balance_slider(nullptr)
             , top_bottom_balance_label(nullptr)
             , ref_point_combo(nullptr)
-            , test_pattern_check(nullptr)
+            , calibration_pattern_check(nullptr)
             , screen_preview_check(nullptr)
             , capture_area_preview(nullptr)
             , add_zone_button(nullptr)
             , capture_zones_widget(nullptr)
+            , screen_map_roll_slider(nullptr)
+            , screen_map_roll_label(nullptr)
+            , radial_corner_expansion_slider(nullptr)
+            , radial_corner_expansion_label(nullptr)
+            , radial_corner_bias_tl_slider(nullptr)
+            , radial_corner_bias_tl_label(nullptr)
+            , radial_corner_bias_tr_slider(nullptr)
+            , radial_corner_bias_tr_label(nullptr)
+            , radial_corner_bias_bl_slider(nullptr)
+            , radial_corner_bias_bl_label(nullptr)
+            , radial_corner_bias_br_slider(nullptr)
+            , radial_corner_bias_br_label(nullptr)
+            , corner_blend_strength_slider(nullptr)
+            , corner_blend_strength_label(nullptr)
+            , corner_blend_zone_slider(nullptr)
+            , corner_blend_zone_label(nullptr)
         {
             capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
@@ -258,7 +293,7 @@ private:
 
     float               grid_scale_mm_;
 
-    bool                        show_test_pattern;
+    bool                        show_calibration_pattern;
     bool                        in_parameter_change_;
 
     std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
@@ -303,16 +338,6 @@ private:
     };
     std::map<LEDKey, LEDState> led_states;
 
-    std::vector<RGBColor>               mirror_overlay_coarse_;
-    int                                 mirror_overlay_cx_ = 0;
-    int                                 mirror_overlay_cy_ = 0;
-    int                                 mirror_overlay_cz_ = 0;
-    int                                 mirror_overlay_nx_ = 0;
-    int                                 mirror_overlay_ny_ = 0;
-    int                                 mirror_overlay_nz_ = 0;
-    int                                 mirror_overlay_stride_ = 1;
-    uint64_t                            mirror_overlay_pass_seq_ = 0;
-
     bool ResolveReferencePointById(int id, Vector3D& out) const;
     int LookupReferencePointIdByIndex(int index) const;
     void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
@@ -324,10 +349,6 @@ private:
                                        const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
                                        const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr,
                                        bool apply_led_smoothing = true);
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif // SCREENMIRROR_H

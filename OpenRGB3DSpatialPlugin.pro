@@ -243,6 +243,7 @@ HEADERS +=                                                                      
     Effects3D/ColorWheel/ColorWheel.h                                                            \
     Effects3D/Sunrise/Sunrise.h                                                                  \
     Effects3D/ScreenMirror/ScreenMirror.h                                                       \
+    Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h                                     \
     Effects3D/TextureProjection/TextureProjection.h                                             \
     Effects3D/OmniShapeTexture/OmniShapeTexture.h                                                \
 
