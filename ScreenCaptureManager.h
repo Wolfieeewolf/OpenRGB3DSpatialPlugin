@@ -33,7 +33,6 @@ struct CapturedFrame
     uint64_t                frame_id;
     uint64_t                timestamp_ms;
     bool                    valid;
-    /** Windows: GDI BitBlt vs DXGI dup; always false on other platforms. */
     bool                    used_gdi_capture;
 
     CapturedFrame()
@@ -66,7 +65,6 @@ public:
     void SetTargetFPS(int fps);
     int GetTargetFPS() const { return target_fps; }
 
-    /** Windows: 0 Auto, 1 DXGI only, 2 GDI only (no-op elsewhere). */
     void SetWindowsCaptureBackendMode(int mode);
     int GetWindowsCaptureBackendMode() const { return windows_capture_backend_mode.load(); }
 

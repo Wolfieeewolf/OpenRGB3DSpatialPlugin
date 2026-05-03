@@ -82,7 +82,6 @@ public:
         setToolTip("Click and drag corner handles to resize zones. Click and drag zone to move it. Right-click to delete.");
         setMouseTracking(true);
 
-        // Keep preview responsive even when no UI interaction occurs.
         refresh_timer = new QTimer(this);
         connect(refresh_timer, &QTimer::timeout, this, [this]() {
             const bool show_preview = show_screen_preview_ptr && *show_screen_preview_ptr &&
@@ -189,8 +188,6 @@ protected:
             if(!source_id.empty())
             {
                 ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
-                // Keep preview paint side-effect free: don't initialize/start capture here.
-                // Capture startup should happen from the effect runtime path.
                 if(capture_mgr.IsInitialized() && capture_mgr.IsCapturing(source_id))
                 {
                     std::shared_ptr<CapturedFrame> frame = capture_mgr.GetLatestFrame(source_id);

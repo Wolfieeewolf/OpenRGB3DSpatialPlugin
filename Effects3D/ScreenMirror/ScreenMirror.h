@@ -61,9 +61,7 @@ public:
     bool ShouldShowTestPattern(const std::string& plane_name) const;
     bool ShouldShowScreenPreview(const std::string& plane_name) const;
 
-    /** Pull latest capture into frame_cache for this render pass (call before LED + overlay sampling). */
     void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
-    /** Build subsampled mirror colors for the room-grid overlay; pairs with SampleMirrorRoomGridOverlay. */
     void PrepareMirrorRoomGridOverlay(uint64_t render_sequence,
                                       float time,
                                       int nx,
@@ -301,7 +299,6 @@ private:
     struct LEDState
     {
         float r, g, b;
-        /** Steady-clock ms since first use of this smoother; advances each render tick. */
         uint64_t smooth_last_tick_ms;
     };
     std::map<LEDKey, LEDState> led_states;
