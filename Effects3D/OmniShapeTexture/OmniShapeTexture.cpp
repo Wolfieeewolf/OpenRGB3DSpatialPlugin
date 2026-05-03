@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -299,7 +300,8 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
     QGridLayout* ag = new QGridLayout(amb);
     ag->setContentsMargins(4, 8, 4, 4);
     int ar = 0;
-    auto add_amb_row = [&](const QString& cap, QSlider*& sl, QLabel*& lab, int val, const QString& tip) {
+    std::function<void(const QString&, QSlider*&, QLabel*&, int, const QString&)> add_amb_row =
+        [&](const QString& cap, QSlider*& sl, QLabel*& lab, int val, const QString& tip) {
         ag->addWidget(new QLabel(cap), ar, 0);
         sl = new QSlider(Qt::Horizontal);
         sl->setRange(0, 100);
@@ -327,7 +329,8 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
     QGridLayout* mg = new QGridLayout(motion);
     mg->setContentsMargins(4, 8, 4, 4);
     int mr = 0;
-    auto add_motion_row = [&](const QString& cap, QSlider*& sl, QLabel*& lab, int val, const QString& tip) {
+    std::function<void(const QString&, QSlider*&, QLabel*&, int, const QString&)> add_motion_row =
+        [&](const QString& cap, QSlider*& sl, QLabel*& lab, int val, const QString& tip) {
         mg->addWidget(new QLabel(cap), mr, 0);
         sl = new QSlider(Qt::Horizontal);
         sl->setRange(0, 200);
@@ -558,7 +561,7 @@ void OmniShapeTexture::PublishDisplayFrame(const QImage& src)
         conv = conv.scaled(kMaxSampleEdge, kMaxSampleEdge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         conv = conv.convertToFormat(QImage::Format_ARGB32);
     }
-    auto shot = std::make_shared<QImage>(std::move(conv));
+    std::shared_ptr<QImage> shot = std::make_shared<QImage>(std::move(conv));
     QMutexLocker lock(&display_mutex);
     display_frame = std::move(shot);
 }
@@ -743,7 +746,7 @@ RGBColor OmniShapeTexture::CalculateColorGrid(float x, float y, float z, float t
     const float warp_mul = motion_warp / 100.0f;
     const float phase_mul = motion_phase / 100.0f;
 
-    auto apply_ambience = [&](RGBColor base, float dist_for_gain) -> RGBColor {
+    std::function<RGBColor(RGBColor, float)> apply_ambience = [&](RGBColor base, float dist_for_gain) -> RGBColor {
         const float ag =
             MediaTextureEffect::AmbienceGain(dist_for_gain, max_r, d_face, ambience_dist_falloff, ambience_falloff_curve,
                                              ambience_edge_soft);
@@ -920,7 +923,8 @@ void OmniShapeTexture::LoadSettings(const nlohmann::json& settings)
         const QString p = QString::fromStdString(settings["media_path"].get<std::string>());
         LoadMediaFile(p);
     }
-    auto load_u = [&](const char* key, unsigned int& out, QSlider* sl, QLabel* lab) {
+    std::function<void(const char*, unsigned int&, QSlider*, QLabel*)> load_u =
+        [&](const char* key, unsigned int& out, QSlider* sl, QLabel* lab) {
         if(settings.contains(key) && settings[key].is_number_integer())
         {
             out = (unsigned int)std::clamp(settings[key].get<int>(), 0, 100);
@@ -938,7 +942,8 @@ void OmniShapeTexture::LoadSettings(const nlohmann::json& settings)
     load_u("ambience_falloff_curve", ambience_falloff_curve, ambience_curve_slider, ambience_curve_label);
     load_u("ambience_edge_soft", ambience_edge_soft, ambience_edge_slider, ambience_edge_label);
     load_u("ambience_propagation", ambience_propagation, ambience_prop_slider, ambience_prop_label);
-    auto load_motion = [&](const char* key, unsigned int& out, QSlider* sl, QLabel* lab) {
+    std::function<void(const char*, unsigned int&, QSlider*, QLabel*)> load_motion =
+        [&](const char* key, unsigned int& out, QSlider* sl, QLabel* lab) {
         if(settings.contains(key) && settings[key].is_number_integer())
         {
             out = (unsigned int)std::clamp(settings[key].get<int>(), 0, 200);

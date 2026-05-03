@@ -8,6 +8,7 @@
 #include "PluginLogOnce.h"
 #include "PluginUiUtils.h"
 #include <algorithm>
+#include <functional>
 #include <unordered_set>
 #include <QToolTip>
 
@@ -170,7 +171,8 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
 
     QGroupBox* response_group = new QGroupBox("Response (smoothing & sensitivity)");
     QVBoxLayout* response_layout = new QVBoxLayout(response_group);
-    auto addSliderRow = [&response_layout](const QString& label, QSlider*& slider, QLabel*& valueLabel, int minVal, int maxVal, int defaultVal) {
+    std::function<void(const QString&, QSlider*&, QLabel*&, int, int, int)> addSliderRow =
+        [&response_layout](const QString& label, QSlider*& slider, QLabel*& valueLabel, int minVal, int maxVal, int defaultVal) {
         QHBoxLayout* row = new QHBoxLayout();
         row->addWidget(new QLabel(label));
         slider = new QSlider(Qt::Horizontal);
