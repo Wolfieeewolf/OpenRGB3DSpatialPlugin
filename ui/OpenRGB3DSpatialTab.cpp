@@ -15,6 +15,8 @@
 #include <QMessageBox>
 #include <fstream>
 #include <algorithm>
+#include <functional>
+#include <map>
 #include <QList>
 #include <QSignalBlocker>
 #include <QColor>
@@ -360,7 +362,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     spacing_layout->setSpacing(2);
     spacing_layout->setContentsMargins(0, 0, 0, 0);
 
-    auto create_spacing_row = [](const QString& label_text, QDoubleSpinBox*& spin, bool enabled = true) -> QHBoxLayout*
+    std::function<QHBoxLayout*(const QString&, QDoubleSpinBox*&, bool)> create_spacing_row =
+        [](const QString& label_text, QDoubleSpinBox*& spin, bool enabled) -> QHBoxLayout*
     {
         QHBoxLayout* row = new QHBoxLayout();
         row->setSpacing(3);
@@ -667,7 +670,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     use_manual_room_size_checkbox->setToolTip("Off: room size is derived from LED positions. On: set width, height, depth below.");
     room_gl->addWidget(use_manual_room_size_checkbox, 0, 0, 1, 6);
 
-    auto add_room_dim_spin = [this](QGridLayout* lo, int row, int col, const QString& label, QDoubleSpinBox*& spin, double value, const QString& tooltip)
+    std::function<void(QGridLayout*, int, int, const QString&, QDoubleSpinBox*&, double, const QString&)> add_room_dim_spin =
+        [this](QGridLayout* lo, int row, int col, const QString& label, QDoubleSpinBox*& spin, double value, const QString& tooltip)
     {
         lo->addWidget(new QLabel(label), row, col);
         spin = new QDoubleSpinBox();
@@ -857,13 +861,14 @@ void OpenRGB3DSpatialTab::SetupUI()
     position_layout->setSpacing(3);
     position_layout->setContentsMargins(0, 0, 0, 0);
 
-    auto add_position_row = [this, position_layout](int row,
-                                                    const QString& label,
-                                                    QSlider*& sl,
-                                                    QDoubleSpinBox*& sp,
-                                                    int axis,
-                                                    bool clamp_non_negative,
-                                                    const QString& axis_tip_mm)
+    std::function<void(int, const QString&, QSlider*&, QDoubleSpinBox*&, int, bool, const QString&)> add_position_row =
+        [this, position_layout](int row,
+                                const QString& label,
+                                QSlider*& sl,
+                                QDoubleSpinBox*& sp,
+                                int axis,
+                                bool clamp_non_negative,
+                                const QString& axis_tip_mm)
     {
         position_layout->addWidget(new QLabel(label), row, 0);
         sl = new QSlider(Qt::Horizontal);
@@ -960,7 +965,8 @@ void OpenRGB3DSpatialTab::SetupUI()
     rotation_layout->setSpacing(3);
     rotation_layout->setContentsMargins(0, 0, 0, 0);
 
-    auto add_rotation_row = [this, rotation_layout](int row, const QString& label, QSlider*& sl, QDoubleSpinBox*& sp, int axis)
+    std::function<void(int, const QString&, QSlider*&, QDoubleSpinBox*&, int)> add_rotation_row =
+        [this, rotation_layout](int row, const QString& label, QSlider*& sl, QDoubleSpinBox*& sp, int axis)
     {
         rotation_layout->addWidget(new QLabel(label), row, 0);
         sl = new QSlider(Qt::Horizontal);
@@ -997,7 +1003,7 @@ void OpenRGB3DSpatialTab::SetupUI()
 
     transform_tab_v->addLayout(transform_layout);
 
-    auto wrap_tab_in_scroll = [](QWidget* content) {
+    std::function<QScrollArea*(QWidget*)> wrap_tab_in_scroll = [](QWidget* content) {
         QScrollArea* sa = new QScrollArea();
         sa->setWidget(content);
         sa->setWidgetResizable(true);
@@ -1613,9 +1619,11 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
     effect_category_combo->addItem(tr("Select Category"), QVariant());
 
     std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
-    for(const auto& entry : categorized)
+    for(std::map<std::string, std::vector<EffectRegistration3D>>::const_iterator cit = categorized.begin();
+        cit != categorized.end();
+        ++cit)
     {
-        effect_category_combo->addItem(QString::fromStdString(entry.first), QString::fromStdString(entry.first));
+        effect_category_combo->addItem(QString::fromStdString(cit->first), QString::fromStdString(cit->first));
     }
     effect_category_combo->blockSignals(restore_signals);
     effect_category_combo->setCurrentIndex(0);
@@ -1737,7 +1745,8 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     QString search = effect_library_search ? effect_library_search->text().trimmed() : QString();
 
     std::map<std::string, std::vector<EffectRegistration3D>> categorized = EffectListManager3D::get()->GetCategorizedEffects();
-    auto cat_it = categorized.find(selected_category.toStdString());
+    std::map<std::string, std::vector<EffectRegistration3D>>::iterator cat_it =
+        categorized.find(selected_category.toStdString());
     if(cat_it == categorized.end())
     {
         effect_library_list->blockSignals(restore_signals);
@@ -2223,7 +2232,7 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
         origin_label->setVisible(true);
     }
 
-    auto* ml = qobject_cast<QVBoxLayout*>(minecraft_library_panel->layout());
+    QVBoxLayout* ml = qobject_cast<QVBoxLayout*>(minecraft_library_panel->layout());
     if(!ml)
     {
         return;
@@ -2265,7 +2274,7 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
     hub_settings_scroll->setMaximumHeight(520);
 
     minecraft_hub_preview_holder = new QWidget();
-    auto* holder_lay = new QVBoxLayout(minecraft_hub_preview_holder);
+    QVBoxLayout* holder_lay = new QVBoxLayout(minecraft_hub_preview_holder);
     holder_lay->setContentsMargins(4, 4, 4, 4);
     holder_lay->setSizeConstraint(QLayout::SetMinAndMaxSize);
     hub_settings_scroll->setWidget(minecraft_hub_preview_holder);
@@ -2334,7 +2343,7 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
         return;
     }
 
-    auto* hl = qobject_cast<QVBoxLayout*>(minecraft_hub_preview_holder->layout());
+    QVBoxLayout* hl = qobject_cast<QVBoxLayout*>(minecraft_hub_preview_holder->layout());
     if(!hl)
     {
         return;
