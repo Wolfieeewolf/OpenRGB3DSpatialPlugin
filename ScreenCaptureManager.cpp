@@ -148,10 +148,12 @@ bool ScreenCaptureManager::StartCapture(const std::string& source_id)
             if(warned_unknown_sources.insert(source_id).second)
             {
                 std::string available;
-                for(const auto& kv : sources)
+                for(std::map<std::string, CaptureSourceInfo>::const_iterator sit = sources.begin();
+                    sit != sources.end();
+                    ++sit)
                 {
                     if(!available.empty()) available += ", ";
-                    available += kv.first;
+                    available += sit->first;
                 }
                 LOG_WARNING("[ScreenCapture] StartCapture rejected unknown source '%s' (available: [%s])",
                             source_id.c_str(), available.c_str());
@@ -292,9 +294,7 @@ void ScreenCaptureManager::SetWindowsCaptureBackendMode(int mode)
 
 #ifdef _WIN32
 
-// AcquireNextFrame timeout (ms); larger values reduce Auto-mode GDI fallback on static desktops.
 static constexpr UINT k_dxgi_acquire_timeout_ms = 100;
-// Auto mode: min ms since last GDI poll before BitBlt after DXGI timeout (reduces DXGI/GDI flicker).
 static constexpr int k_gdi_poll_after_dxgi_timeout_ms = 200;
 
 bool ScreenCaptureManager::InitializePlatform()
@@ -723,6 +723,23 @@ struct DXGICaptureState
     bool IsValid() const { return device && context && duplication && staging_texture && width > 0 && height > 0; }
 };
 
+static long long dxgi_rect_area(int w, int h)
+{
+    if(w <= 0 || h <= 0)
+        return 0;
+    return (long long)w * (long long)h;
+}
+
+static long long dxgi_intersect_area(int ax0, int ay0, int ax1, int ay1,
+                                     int bx0, int by0, int bx1, int by1)
+{
+    int ix0 = (std::max)(ax0, bx0);
+    int iy0 = (std::max)(ay0, by0);
+    int ix1 = (std::min)(ax1, bx1);
+    int iy1 = (std::min)(ay1, by1);
+    return dxgi_rect_area(ix1 - ix0, iy1 - iy0);
+}
+
 static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_width, int screen_height, DXGICaptureState& out)
 {
     out.Release();
@@ -732,23 +749,11 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
     UINT out_width = 0, out_height = 0;
     bool wide_gamut = false;
 
-    auto RectArea = [](int w, int h) -> long long {
-        if(w <= 0 || h <= 0) return 0;
-        return (long long)w * (long long)h;
-    };
-    auto IntersectArea = [&](int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) -> long long {
-        int ix0 = (std::max)(ax0, bx0);
-        int iy0 = (std::max)(ay0, by0);
-        int ix1 = (std::min)(ax1, bx1);
-        int iy1 = (std::min)(ay1, by1);
-        return RectArea(ix1 - ix0, iy1 - iy0);
-    };
-
     const int target_x0 = screen_x;
     const int target_y0 = screen_y;
     const int target_x1 = screen_x + screen_width;
     const int target_y1 = screen_y + screen_height;
-    const long long target_area = RectArea(screen_width, screen_height);
+    const long long target_area = dxgi_rect_area(screen_width, screen_height);
 
     IDXGIFactory1* factory = nullptr;
     HRESULT hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory);
@@ -787,7 +792,7 @@ static bool TryCreateDXGIDuplication(int screen_x, int screen_y, int screen_widt
             int top = r.top;
             int right = r.right;
             int bottom = r.bottom;
-            long long overlap = IntersectArea(left, top, right, bottom, target_x0, target_y0, target_x1, target_y1);
+            long long overlap = dxgi_intersect_area(left, top, right, bottom, target_x0, target_y0, target_x1, target_y1);
             if(overlap > best_overlap)
             {
                 if(best_output)
@@ -1087,7 +1092,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
             else if(SUCCEEDED(hr) && resource)
             {
-                // No new present (e.g. pointer-only): skip to avoid blend flicker; AccumulatedFrames>0 is real work.
                 if(frame_info.LastPresentTime.QuadPart == 0 && frame_info.AccumulatedFrames == 0 &&
                    frame_counter > 0)
                 {
@@ -1361,7 +1365,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             image = image.convertToFormat(QImage::Format_RGBA8888);
         }
 
-        // DXGI desktop dup is vertically flipped vs BitBlt; normalize before packing pixels.
         if(!frame_from_gdi)
         {
             image = image.mirrored(false, true);
@@ -1390,7 +1393,6 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
         }
 
-        // Temporal blend (HDR/DXGI noise); clear history on DXGI/GDI switch to avoid a brightness flash.
         thread_local std::vector<uint8_t> capture_blend_prev;
         thread_local bool blend_backend_known = false;
         thread_local bool blend_last_was_gdi = false;
