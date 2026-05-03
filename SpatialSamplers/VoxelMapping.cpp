@@ -124,7 +124,7 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
         return (RGBColor)0;
     }
 
-    const auto& vf = telemetry.voxel_frame;
+    const GameTelemetryBridge::VoxelFrameChannel& vf = telemetry.voxel_frame;
     const std::uint64_t vkey =
         (std::uint64_t)vf.frame_id << 32 | (std::uint32_t)(vf.received_ms & 0xFFFFFFFFu);
 
