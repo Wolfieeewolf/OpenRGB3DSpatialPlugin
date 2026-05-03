@@ -5,6 +5,7 @@
 #include "EffectHelpers.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <QComboBox>
 #include <QGridLayout>
@@ -19,6 +20,25 @@ REGISTER_EFFECT_3D(ColorWheel);
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+namespace
+{
+static void LoadBandInt3FromJson(const nlohmann::json& settings,
+                                 const char* key,
+                                 std::array<int, 3>& out,
+                                 int lo,
+                                 int hi)
+{
+    if(!settings.contains(key) || !settings[key].is_array())
+        return;
+    const nlohmann::json& a = settings[key];
+    for(size_t i = 0; i < 3 && i < a.size(); i++)
+    {
+        if(a[i].is_number_integer())
+            out[i] = std::clamp(a[i].get<int>(), lo, hi);
+    }
+}
+}
 
 ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -358,19 +378,9 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("wheel_layout_mode") && settings["wheel_layout_mode"].is_number_integer())
         wheel_layout_mode = std::clamp(settings["wheel_layout_mode"].get<int>(), 0, 1);
 
-    auto load_int3 = [&settings](const char* key, std::array<int, 3>& out, int lo, int hi) {
-        if(!settings.contains(key) || !settings[key].is_array())
-            return;
-        const auto& a = settings[key];
-        for(size_t i = 0; i < 3 && i < a.size(); i++)
-        {
-            if(a[i].is_number_integer())
-                out[i] = std::clamp(a[i].get<int>(), lo, hi);
-        }
-    };
-    load_int3("band_speed_pct", band_speed_pct, 0, 200);
-    load_int3("band_size_pct", band_size_pct, 25, 300);
-    load_int3("band_phase_deg", band_phase_deg, -180, 180);
+    LoadBandInt3FromJson(settings, "band_speed_pct", band_speed_pct, 0, 200);
+    LoadBandInt3FromJson(settings, "band_size_pct", band_size_pct, 25, 300);
+    LoadBandInt3FromJson(settings, "band_phase_deg", band_phase_deg, -180, 180);
 
     if(wheel_layout_combo)
     {

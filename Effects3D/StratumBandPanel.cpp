@@ -13,11 +13,11 @@
 
 StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
 {
-    auto* outer = new QVBoxLayout(this);
+    QVBoxLayout* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(4);
 
-    auto* row = new QHBoxLayout();
+    QHBoxLayout* row = new QHBoxLayout();
     row->addWidget(new QLabel(QStringLiteral("Height bands:")));
     layout_combo_ = new QComboBox();
     layout_combo_->addItem(QStringLiteral("Single field"), 0);
@@ -44,7 +44,7 @@ StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
     group_->setToolTip(
         QStringLiteral("Speed %% scales time motion in that band. Tightness %% scales spatial detail. "
                        "Phase ° adds hue / pattern twist per band."));
-    auto* band_grid = new QGridLayout(group_);
+    QGridLayout* band_grid = new QGridLayout(group_);
     band_grid->addWidget(new QLabel(QString()), 0, 0);
     band_grid->addWidget(new QLabel(QStringLiteral("Speed %")), 0, 1);
     band_grid->addWidget(new QLabel(QStringLiteral("Tight %")), 0, 3);

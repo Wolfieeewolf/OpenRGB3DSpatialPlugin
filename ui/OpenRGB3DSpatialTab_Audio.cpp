@@ -295,7 +295,7 @@ void OpenRGB3DSpatialTab::on_audio_level_updated(float level)
         int w = audio_spectrum_label->width();
         int h = audio_spectrum_label->height();
         if(w < 16 || h < 8) return;
-        auto snapshot = AudioInputManager::instance()->getSpectrumSnapshot(64);
+        AudioInputManager::SpectrumSnapshot snapshot = AudioInputManager::instance()->getSpectrumSnapshot(64);
         if(snapshot.bins.empty())
         {
             std::vector<float> bands;

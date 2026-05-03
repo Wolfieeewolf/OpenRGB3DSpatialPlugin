@@ -6,6 +6,7 @@
 
 REGISTER_EFFECT_3D(Spiral);
 #include <algorithm>
+#include <array>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -17,6 +18,29 @@ REGISTER_EFFECT_3D(Spiral);
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+namespace
+{
+static void LoadBandInt3FromJson(const nlohmann::json& settings,
+                                 const char* key,
+                                 std::array<int, 3>& out,
+                                 int lo,
+                                 int hi)
+{
+    if(!settings.contains(key) || !settings[key].is_array())
+    {
+        return;
+    }
+    const nlohmann::json& a = settings[key];
+    for(size_t i = 0; i < 3 && i < a.size(); i++)
+    {
+        if(a[i].is_number_integer())
+        {
+            out[i] = std::clamp(a[i].get<int>(), lo, hi);
+        }
+    }
+}
+}
 
 Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -531,23 +555,9 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
         spiral_layout_mode = std::clamp(settings["spiral_layout_mode"].get<int>(), 0, 1);
     }
 
-    auto load_i3 = [&settings](const char* key, std::array<int, 3>& out, int lo, int hi) {
-        if(!settings.contains(key) || !settings[key].is_array())
-        {
-            return;
-        }
-        const auto& a = settings[key];
-        for(size_t i = 0; i < 3 && i < a.size(); i++)
-        {
-            if(a[i].is_number_integer())
-            {
-                out[i] = std::clamp(a[i].get<int>(), lo, hi);
-            }
-        }
-    };
-    load_i3("spiral_band_speed_pct", band_speed_pct, 0, 200);
-    load_i3("spiral_band_tight_pct", band_tight_pct, 25, 300);
-    load_i3("spiral_band_phase_deg", band_phase_deg, -180, 180);
+    LoadBandInt3FromJson(settings, "spiral_band_speed_pct", band_speed_pct, 0, 200);
+    LoadBandInt3FromJson(settings, "spiral_band_tight_pct", band_tight_pct, 25, 300);
+    LoadBandInt3FromJson(settings, "spiral_band_phase_deg", band_phase_deg, -180, 180);
 
     if(spiral_layout_combo)
     {
