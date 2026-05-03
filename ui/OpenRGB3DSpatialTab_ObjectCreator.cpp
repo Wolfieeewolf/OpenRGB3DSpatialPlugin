@@ -36,6 +36,7 @@
 #include <system_error>
 #include <limits>
 #include <functional>
+#include <unordered_map>
 
 namespace filesystem = std::filesystem;
 
@@ -2031,10 +2032,11 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         {"other", QObject::tr("Other")},
     };
 
-    auto categoryLabel = [](const std::string& key) -> QString
+    std::function<QString(const std::string&)> categoryLabel = [](const std::string& key) -> QString
     {
-        for(const auto& p : kPresetCategories)
+        for(size_t pi = 0; pi < kPresetCategories.size(); ++pi)
         {
+            const std::pair<std::string, QString>& p = kPresetCategories[pi];
             if(p.first == key) return p.second;
         }
         return QObject::tr("Other");
@@ -2053,8 +2055,9 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
 
     try
     {
-        for(const auto& entry : filesystem::directory_iterator(dir_path))
+        for(filesystem::directory_iterator dir_it(dir_path); dir_it != filesystem::directory_iterator(); ++dir_it)
         {
+            const filesystem::directory_entry& entry = *dir_it;
             if(entry.path().extension() != ".json")
             {
                 continue;
@@ -2131,8 +2134,9 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     filter_row->addWidget(filter_label);
     QComboBox* category_combo = new QComboBox();
     category_combo->addItem(tr("All"), QString());
-    for(const auto& p : kPresetCategories)
+    for(size_t pi = 0; pi < kPresetCategories.size(); ++pi)
     {
+        const std::pair<std::string, QString>& p = kPresetCategories[pi];
         category_combo->addItem(p.second, QString::fromStdString(p.first));
     }
     filter_row->addWidget(category_combo);
@@ -2152,7 +2156,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     QListWidget* list = new QListWidget();
     list->setMinimumHeight(200);
 
-    auto buildPresetList = [list, &presets, category_combo, sort_combo, &categoryLabel]()
+    std::function<void()> buildPresetList = [list, &presets, category_combo, sort_combo, &categoryLabel]()
     {
         QString filter = category_combo->currentData().toString();
         QString sort_key = sort_combo->currentData().toString();
@@ -2230,7 +2234,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
 
-    auto updateOkAndList = [buildPresetList, list, buttons]()
+    std::function<void()> updateOkAndList = [buildPresetList, list, buttons]()
     {
         buildPresetList();
         QPushButton* ok_btn = buttons->button(QDialogButtonBox::Ok);
@@ -2312,13 +2316,13 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
         cat_prefix = categoryLabel(category).toStdString() + " - ";
     }
 
-    auto truncate = [](const std::string& s, size_t max_len) -> std::string
+    std::function<std::string(const std::string&, size_t)> truncate = [](const std::string& s, size_t max_len) -> std::string
     {
         if(s.length() <= max_len) return s;
         return s.substr(0, max_len - 3) + "...";
     };
 
-    auto device_label = [&brand_model, &truncate](RGBController* c, size_t max_len) -> std::string
+    std::function<std::string(RGBController*, size_t)> device_label = [&brand_model, &truncate](RGBController* c, size_t max_len) -> std::string
     {
         if(!brand_model.empty())
         {
@@ -2330,7 +2334,7 @@ void OpenRGB3DSpatialTab::on_add_from_preset_clicked()
     std::string preset_location = j["mappings"].empty() ? std::string() : j["mappings"][0].value("controller_location", std::string());
     std::string preset_brand = brand;
 
-    auto controllerSearchText = [](RGBController* c) -> QString
+    std::function<QString(RGBController*)> controllerSearchText = [](RGBController* c) -> QString
     {
         std::string t;
         const std::string nm = c->GetName();
@@ -3276,7 +3280,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
             if(!is_virtual && controller)
             {
-                auto it = physical_spacing_by_controller.find(controller);
+                std::unordered_map<RGBController*, Vector3D>::iterator it = physical_spacing_by_controller.find(controller);
                 if(it != physical_spacing_by_controller.end())
                 {
                     ctrl_transform->led_spacing_mm_x = it->second.x;
@@ -4009,7 +4013,7 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
     }
 
     std::vector<bool> used_leds(controller->leds.size(), false);
-    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
     {
         unsigned int global_led_idx = 0;
         if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
@@ -4098,7 +4102,7 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBController* controller)
     }
 
     std::vector<bool> used_leds(controller->leds.size(), false);
-    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
     {
         unsigned int global_led_idx = 0;
         if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
@@ -4167,7 +4171,7 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBController* controller)
     }
 
     std::vector<bool> used_leds(controller->leds.size(), false);
-    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
     {
         unsigned int global_led_idx = 0;
         if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
