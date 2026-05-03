@@ -35,6 +35,7 @@ ScreenCaptureManager::ScreenCaptureManager()
     , target_width(480)
     , target_height(270)
     , target_fps(30)
+    , windows_capture_backend_mode(0)
     , render_tick_snapshot_active(false)
 {
 }
@@ -284,7 +285,17 @@ void ScreenCaptureManager::SetTargetFPS(int fps)
     target_fps.store((std::max)(1, (std::min)(fps, 120)));
 }
 
+void ScreenCaptureManager::SetWindowsCaptureBackendMode(int mode)
+{
+    windows_capture_backend_mode.store((std::clamp)(mode, 0, 2));
+}
+
 #ifdef _WIN32
+
+// AcquireNextFrame timeout (ms); larger values reduce Auto-mode GDI fallback on static desktops.
+static constexpr UINT k_dxgi_acquire_timeout_ms = 100;
+// Auto mode: min ms since last GDI poll before BitBlt after DXGI timeout (reduces DXGI/GDI flicker).
+static constexpr int k_gdi_poll_after_dxgi_timeout_ms = 200;
 
 bool ScreenCaptureManager::InitializePlatform()
 {
@@ -997,7 +1008,11 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     const int dw = source_info.width;
     const int dh = source_info.height;
     DXGICaptureState dxgi_state;
-    bool use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
+    bool use_dxgi = false;
+    if(windows_capture_backend_mode.load() != 2)
+    {
+        use_dxgi = TryCreateDXGIDuplication(dx, dy, dw, dh, dxgi_state);
+    }
     bool logged_dxgi_unavailable = false;
 
     uint64_t frame_counter = 0;
@@ -1007,10 +1022,18 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
     std::chrono::steady_clock::time_point last_gdi_force = thread_start_tp;
     std::chrono::steady_clock::time_point last_frame_produced = thread_start_tp;
     std::chrono::steady_clock::time_point last_stuck_warn = thread_start_tp;
-    LOG_INFO("[ScreenCapture] Capture thread started for '%s' (use_dxgi=%d, %dx%d at (%d,%d), target_fps=%d)",
-             source_id.c_str(), (int)use_dxgi, dw, dh, dx, dy, target_fps.load());
+    LOG_INFO("[ScreenCapture] Capture thread started for '%s' (use_dxgi=%d, backend_mode=%d, %dx%d at (%d,%d), target_fps=%d)",
+             source_id.c_str(), (int)use_dxgi, windows_capture_backend_mode.load(), dw, dh, dx, dy, target_fps.load());
     while(active_flag->load())
     {
+        const int backend_mode = windows_capture_backend_mode.load();
+        const bool allow_gdi = (backend_mode != 1);
+        if(backend_mode == 2 && use_dxgi)
+        {
+            dxgi_state.Release();
+            use_dxgi = false;
+        }
+
         const int loop_fps = target_fps.load();
         const int target_frame_time_ms = 1000 / (loop_fps > 0 ? loop_fps : 1);
         std::chrono::steady_clock::time_point frame_start = std::chrono::steady_clock::now();
@@ -1019,40 +1042,52 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             int since_warn_ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(frame_start - last_stuck_warn).count();
             if(idle_ms >= 2000 && since_warn_ms >= 5000)
             {
-                LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, use_dxgi=%d). Forcing GDI capture.",
-                            source_id.c_str(), idle_ms, (unsigned long long)frame_counter, (int)use_dxgi);
+                if(allow_gdi)
+                {
+                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, use_dxgi=%d). Forcing GDI capture.",
+                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter, (int)use_dxgi);
+                    last_gdi_force = frame_start - std::chrono::milliseconds(target_frame_time_ms);
+                }
+                else
+                {
+                    LOG_WARNING("[ScreenCapture] '%s' has not produced a frame for %d ms (frames=%llu, DXGI-only; no GDI fallback).",
+                                source_id.c_str(), idle_ms, (unsigned long long)frame_counter);
+                }
                 last_stuck_warn = frame_start;
-                last_gdi_force = frame_start - std::chrono::milliseconds(target_frame_time_ms);
             }
         }
 
         QImage image;
         bool dxgi_timed_out = false;
+        bool frame_from_gdi = false;
         if(use_dxgi && dxgi_state.IsValid())
         {
             DXGI_OUTDUPL_FRAME_INFO frame_info;
             IDXGIResource* resource = nullptr;
-            // Wait long enough for the next compositor frame at typical refresh rates; short
-            // timeouts plus a full-frame sleep on miss caused visibly laggy LED updates.
-            HRESULT hr = dxgi_state.duplication->AcquireNextFrame(32, &frame_info, &resource);
+            HRESULT hr = dxgi_state.duplication->AcquireNextFrame(k_dxgi_acquire_timeout_ms, &frame_info, &resource);
             if(hr == DXGI_ERROR_WAIT_TIMEOUT)
             {
                 dxgi_timed_out = true;
             }
             else if(hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_DEVICE_REMOVED)
             {
-                LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx), falling back to GDI",
-                            source_id.c_str(), (unsigned long)hr);
+                if(windows_capture_backend_mode.load() == 1)
+                {
+                    LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx); releasing duplication (DXGI-only, will retry)",
+                                source_id.c_str(), (unsigned long)hr);
+                }
+                else
+                {
+                    LOG_WARNING("[ScreenCapture] DXGI access lost for '%s' (hr=0x%08lx), falling back to GDI",
+                                source_id.c_str(), (unsigned long)hr);
+                }
                 if(resource) { resource->Release(); resource = nullptr; }
                 dxgi_state.Release();
                 use_dxgi = false;
             }
             else if(SUCCEEDED(hr) && resource)
             {
-                // LastPresentTime == 0: pointer moved or desktop unchanged (no new present). Processing
-                // still produces a new frame_id and re-runs tonemap/temporal blend — visible flicker on
-                // taskbar hover / cross-display mouse moves. Release and keep the last published frame.
-                // If AccumulatedFrames > 0, the compositor aggregated real updates — always process.
+                // No new present (e.g. pointer-only): skip to avoid blend flicker; AccumulatedFrames>0 is real work.
                 if(frame_info.LastPresentTime.QuadPart == 0 && frame_info.AccumulatedFrames == 0 &&
                    frame_counter > 0)
                 {
@@ -1222,17 +1257,11 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         if(image.isNull())
         {
             std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
-            // DXGI duplication often stops delivering frames while video uses hardware overlay /
-            // DWM optimization — the compositor may not "present" updates until something like
-            // a cursor crosses a display. BitBlt the desktop on a timer when DXGI times out so we
-            // still see full-motion video on the captured monitor.
-            const int gdi_poll_interval_ms = 33;
             const int ms_since_last_gdi = (int)std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - last_gdi_force).count();
-            const bool should_force_gdi = dxgi_timed_out && ms_since_last_gdi >= gdi_poll_interval_ms;
+            const bool should_force_gdi =
+                allow_gdi && dxgi_timed_out && ms_since_last_gdi >= k_gdi_poll_after_dxgi_timeout_ms;
             if(dxgi_timed_out && !should_force_gdi)
             {
-                // Brief yield — sleeping a full frame here stacked with AcquireNextFrame wait
-                // and often landed between vsyncs, cutting effective capture rate ~in half.
                 int backoff_ms = target_frame_time_ms > 0 ? (target_frame_time_ms / 8) : 1;
                 backoff_ms = (std::clamp)(backoff_ms, 1, 4);
                 std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
@@ -1242,9 +1271,9 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             {
                 last_gdi_force = now_tp;
             }
-            if(!use_dxgi || should_force_gdi)
+            if(allow_gdi && (!use_dxgi || should_force_gdi))
             {
-                if(!use_dxgi && !logged_dxgi_unavailable)
+                if(!use_dxgi && !logged_dxgi_unavailable && backend_mode == 0)
                 {
                     LOG_WARNING("[ScreenCapture] DXGI unavailable for '%s' (screen %d), falling back to GDI", source_id.c_str(), screen_index);
                     logged_dxgi_unavailable = true;
@@ -1272,9 +1301,9 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                                 std::vector<uint8_t> buffer((size_t)dw * (size_t)dh * 4);
                                 if(GetDIBits(mem_dc, bmp, 0, (UINT)dh, buffer.data(), &bmi, DIB_RGB_COLORS) > 0)
                                 {
-                                    // 32-bit BI_RGB DIBs are BGR (B,G,R,x) in memory — same byte order as Qt's ARGB32.
                                     image = QImage(buffer.data(), dw, dh, dw * 4, QImage::Format_ARGB32)
                                                 .convertToFormat(QImage::Format_RGBA8888);
+                                    frame_from_gdi = true;
                                 }
                             }
                             SelectObject(mem_dc, old_obj);
@@ -1288,7 +1317,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
 
             if(image.isNull())
             {
-                if(!use_dxgi)
+                if(!use_dxgi && backend_mode != 2)
                 {
                     std::chrono::steady_clock::time_point retry_tp = std::chrono::steady_clock::now();
                     if(std::chrono::duration_cast<std::chrono::seconds>(retry_tp - last_dxgi_retry).count() >= 3)
@@ -1306,7 +1335,7 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                 continue;
             }
         }
-        else if(!use_dxgi)
+        else if(!use_dxgi && backend_mode != 2)
         {
             std::chrono::steady_clock::time_point now_tp = std::chrono::steady_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(now_tp - last_dxgi_retry).count() >= 3)
@@ -1332,7 +1361,14 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             image = image.convertToFormat(QImage::Format_RGBA8888);
         }
 
+        // DXGI desktop dup is vertically flipped vs BitBlt; normalize before packing pixels.
+        if(!frame_from_gdi)
+        {
+            image = image.mirrored(false, true);
+        }
+
         std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
+        frame->used_gdi_capture = frame_from_gdi;
         frame->width = image.width();
         frame->height = image.height();
         frame->data.resize(frame->width * frame->height * 4);
@@ -1354,12 +1390,20 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             }
         }
 
-        // Temporal blend (tames DXGI/HDR sparkles).
+        // Temporal blend (HDR/DXGI noise); clear history on DXGI/GDI switch to avoid a brightness flash.
         thread_local std::vector<uint8_t> capture_blend_prev;
+        thread_local bool blend_backend_known = false;
+        thread_local bool blend_last_was_gdi = false;
+        const bool backend_switched = blend_backend_known && (blend_last_was_gdi != frame_from_gdi);
+        if(backend_switched)
+        {
+            capture_blend_prev.clear();
+        }
+
         const size_t px_bytes = frame->data.size();
         if(!capture_blend_prev.empty() && capture_blend_prev.size() == px_bytes)
         {
-            constexpr int new_pct = 85;
+            constexpr int new_pct = 90;
             constexpr int old_pct = 100 - new_pct;
             uint8_t* px = frame->data.data();
             for(size_t i = 0; i < px_bytes; i++)
@@ -1369,6 +1413,8 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         }
         capture_blend_prev.resize(px_bytes);
         std::memcpy(capture_blend_prev.data(), frame->data.data(), px_bytes);
+        blend_last_was_gdi = frame_from_gdi;
+        blend_backend_known = true;
 
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

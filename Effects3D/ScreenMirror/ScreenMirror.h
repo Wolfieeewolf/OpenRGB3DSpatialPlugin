@@ -236,6 +236,8 @@ private:
 
     int                 capture_quality;
     QComboBox*          capture_quality_combo;
+    int                 capture_backend_mode;
+    QComboBox*          capture_backend_combo;
 
     QSlider*            global_scale_slider;
     QLabel*             global_scale_label;

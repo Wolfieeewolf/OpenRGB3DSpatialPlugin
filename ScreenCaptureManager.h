@@ -33,9 +33,11 @@ struct CapturedFrame
     uint64_t                frame_id;
     uint64_t                timestamp_ms;
     bool                    valid;
+    /** Windows: GDI BitBlt vs DXGI dup; always false on other platforms. */
+    bool                    used_gdi_capture;
 
     CapturedFrame()
-        : width(0), height(0), frame_id(0), timestamp_ms(0), valid(false)
+        : width(0), height(0), frame_id(0), timestamp_ms(0), valid(false), used_gdi_capture(false)
     {}
 };
 
@@ -64,6 +66,10 @@ public:
     void SetTargetFPS(int fps);
     int GetTargetFPS() const { return target_fps; }
 
+    /** Windows: 0 Auto, 1 DXGI only, 2 GDI only (no-op elsewhere). */
+    void SetWindowsCaptureBackendMode(int mode);
+    int GetWindowsCaptureBackendMode() const { return windows_capture_backend_mode.load(); }
+
 private:
     ScreenCaptureManager();
     ~ScreenCaptureManager();
@@ -81,6 +87,7 @@ private:
     std::atomic<int>                        target_width;
     std::atomic<int>                        target_height;
     std::atomic<int>                        target_fps;
+    std::atomic<int>                        windows_capture_backend_mode;
 
     mutable std::mutex                      sources_mutex;
     std::map<std::string, CaptureSourceInfo> sources;

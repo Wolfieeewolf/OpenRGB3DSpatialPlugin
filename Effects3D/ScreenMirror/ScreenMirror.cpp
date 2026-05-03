@@ -74,6 +74,8 @@ ScreenMirror::ScreenMirror(QWidget* parent)
     , grid_scale_mm_(10.0f)
     , capture_quality(1)
     , capture_quality_combo(nullptr)
+    , capture_backend_mode(0)
+    , capture_backend_combo(nullptr)
     , show_test_pattern(false)
     , in_parameter_change_(false)
     , reference_points(nullptr)
@@ -120,6 +122,7 @@ EffectInfo3D ScreenMirror::GetEffectInfo()
 void ScreenMirror::SetupCustomUI(QWidget* parent)
 {
     capture_quality_combo = nullptr;
+    capture_backend_combo = nullptr;
     monitor_status_label = nullptr;
     monitor_help_label = nullptr;
     monitors_container = nullptr;
@@ -224,6 +227,7 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     status_group->setLayout(status_layout);
     main_layout->addWidget(status_group);
     QGroupBox* capture_group = new QGroupBox("Capture Quality");
+    QVBoxLayout* capture_outer = new QVBoxLayout();
     QHBoxLayout* capture_layout = new QHBoxLayout();
     QLabel* capture_quality_label = new QLabel("Resolution:");
     capture_quality_combo = new QComboBox();
@@ -247,8 +251,29 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     capture_quality_combo->setItemData(7, "4K; only if you need maximum edge fidelity.", Qt::ToolTipRole);
     capture_layout->addWidget(capture_quality_label);
     capture_layout->addWidget(capture_quality_combo, 1);
-    capture_group->setLayout(capture_layout);
+    capture_outer->addLayout(capture_layout);
+
+    QHBoxLayout* backend_layout = new QHBoxLayout();
+    QLabel* capture_backend_label = new QLabel("Capture API:");
+    capture_backend_combo = new QComboBox();
+    capture_backend_combo->addItem("Auto (GDI if DXGI stalls)", QVariant(0));
+    capture_backend_combo->addItem("DXGI only", QVariant(1));
+    capture_backend_combo->addItem("GDI only", QVariant(2));
+    capture_backend_combo->setCurrentIndex(std::clamp(capture_backend_mode, 0, 2));
+    capture_backend_combo->setToolTip(
+        "Windows: Auto uses GDI when DXGI stalls (static pages). Lock DXGI or GDI to reduce API-mix flicker. "
+        "DXGI-only skips BitBlt (idle desktop may barely update). No effect on Linux/macOS.");
+    backend_layout->addWidget(capture_backend_label);
+    backend_layout->addWidget(capture_backend_combo, 1);
+    capture_outer->addLayout(backend_layout);
+    capture_group->setLayout(capture_outer);
     main_layout->addWidget(capture_group);
+    ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
+    connect(capture_backend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        capture_backend_mode = std::clamp(index, 0, 2);
+        ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
+        OnParameterChanged();
+    });
     connect(capture_quality_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         capture_quality = std::clamp(index, 0, 7);
         int w = 320, h = 180;
@@ -1405,6 +1430,7 @@ nlohmann::json ScreenMirror::SaveSettings() const
 {
     nlohmann::json settings;
     settings["capture_quality"] = std::clamp(capture_quality, 0, 7);
+    settings["capture_backend_mode"] = std::clamp(capture_backend_mode, 0, 2);
     nlohmann::json monitors = nlohmann::json::object();
     for(std::map<std::string, MonitorSettings>::const_iterator it = monitor_settings.begin();
         it != monitor_settings.end();
@@ -1689,6 +1715,15 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
         {
             capture_quality_combo->setCurrentIndex(capture_quality);
         }
+    }
+    if(settings.contains("capture_backend_mode"))
+    {
+        capture_backend_mode = std::clamp(settings["capture_backend_mode"].get<int>(), 0, 2);
+        if(capture_backend_combo)
+        {
+            capture_backend_combo->setCurrentIndex(capture_backend_mode);
+        }
+        ScreenCaptureManager::Instance().SetWindowsCaptureBackendMode(capture_backend_mode);
     }
 
     EffectStratumBlend::LoadBandTuningJson(settings,
