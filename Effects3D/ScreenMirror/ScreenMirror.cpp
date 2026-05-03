@@ -874,18 +874,12 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
         float u = proj.u;
         float v = proj.v;
-        Geometry3D::ApplyRadialCornerMapping01(u, v,
-                                               RadialMapUiToInternal(mon_settings.radial_corner_expansion_ui),
-                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tl_ui),
-                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tr_ui),
-                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_bl_ui),
-                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_br_ui));
-        
+
         if(mon_settings.capture_zones.empty())
         {
             mon_settings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
-        
+        /* Zones match the rectilinear preview (before radial warp and map roll). */
         bool in_zone = false;
         for(size_t zone_idx = 0; zone_idx < mon_settings.capture_zones.size(); zone_idx++)
         {
@@ -896,12 +890,18 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
                 break;
             }
         }
-        
         if(!in_zone)
         {
             continue;
         }
-        
+
+        Geometry3D::ApplyRadialCornerMapping01(u, v,
+                                               RadialMapUiToInternal(mon_settings.radial_corner_expansion_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tl_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_tr_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_bl_ui),
+                                               RadialMapUiToInternal(mon_settings.radial_corner_bias_br_ui));
+
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
 
