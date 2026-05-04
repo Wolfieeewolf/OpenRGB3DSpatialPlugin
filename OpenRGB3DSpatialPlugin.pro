@@ -193,7 +193,7 @@ HEADERS +=                                                                      
     Geometry3DUtils.h                                                                           \
     MediaTextureEffectUtils.h                                                                   \
     QtCompat.h                                                                                  \
-    Game/GameTelemetryStatusPanel.h                                                             \
+    ui/widgets/GameTelemetryStatusPanel.h                                                       \
     Game/GameTelemetryBridge.h                                                                  \
     Game/LedLayoutCoordinateMap.h                                                               \
     SpatialSamplers/SpatialBasisUtils.h                                                         \
@@ -279,7 +279,7 @@ SOURCES +=                                                                      
     ZoneManager3D.cpp                                                                           \
     DisplayPlane3D.cpp                                                                          \
     ScreenCaptureManager.cpp                                                                    \
-    Game/GameTelemetryStatusPanel.cpp                                                           \
+    ui/widgets/GameTelemetryStatusPanel.cpp                                                     \
     Game/GameTelemetryBridge.cpp                                                                \
     SpatialSamplers/SpatialLayerCore.cpp                                                        \
     SpatialSamplers/VoxelRoomCore.cpp                                                           \

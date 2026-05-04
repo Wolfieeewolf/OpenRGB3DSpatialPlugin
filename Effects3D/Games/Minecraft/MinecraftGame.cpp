@@ -2,7 +2,7 @@
 
 #include "MinecraftGame.h"
 #include "MinecraftGameSettings.h"
-#include "Game/GameTelemetryStatusPanel.h"
+#include "GameTelemetryStatusPanel.h"
 #include "SpatialBasisUtils.h"
 #include "SpatialLayerCore.h"
 #include "VoxelRoomCore.h"
