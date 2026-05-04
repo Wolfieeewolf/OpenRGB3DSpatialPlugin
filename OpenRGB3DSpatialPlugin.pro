@@ -165,6 +165,7 @@ SOURCES +=                                                                      
 #-------------------------------------------------------------------#
 INCLUDEPATH +=                                                                                  \
     ui                                                                                          \
+    ui/widgets                                                                                  \
     Effects3D                                                                                   \
     Game                                                                                        \
     SpatialSamplers                                                                             \
@@ -213,7 +214,7 @@ HEADERS +=                                                                      
     ui/PluginUiUtils.h                                                                         \
     Effects3D/EffectStratumBlend.h                                                             \
     Effects3D/SpatialKernelColormap.h                                                          \
-    Effects3D/StripKernelColormapPanel.h                                                       \
+    ui/widgets/StripKernelColormapPanel.h                                                       \
     Effects3D/StratumBandPanel.h                                                               \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
@@ -306,7 +307,7 @@ SOURCES +=                                                                      
     ui/Gizmo3D.cpp                                                                              \
     ui/CaptureZonesWidget.cpp                                                                   \
     Effects3D/StratumBandPanel.cpp                                                             \
-    Effects3D/StripKernelColormapPanel.cpp                                                     \
+    ui/widgets/StripKernelColormapPanel.cpp                                                     \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
     Effects3D/Explosion/Explosion.cpp                                                       \
