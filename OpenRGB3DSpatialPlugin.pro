@@ -215,7 +215,7 @@ HEADERS +=                                                                      
     Effects3D/EffectStratumBlend.h                                                             \
     Effects3D/SpatialKernelColormap.h                                                          \
     ui/widgets/StripKernelColormapPanel.h                                                       \
-    Effects3D/StratumBandPanel.h                                                               \
+    ui/widgets/StratumBandPanel.h                                                               \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
     Effects3D/BeatKernelSnap/BeatKernelSnap.h                                                 \
@@ -306,7 +306,7 @@ SOURCES +=                                                                      
     ui/CustomControllerDialog.cpp                                                               \
     ui/Gizmo3D.cpp                                                                              \
     ui/CaptureZonesWidget.cpp                                                                   \
-    Effects3D/StratumBandPanel.cpp                                                             \
+    ui/widgets/StratumBandPanel.cpp                                                             \
     ui/widgets/StripKernelColormapPanel.cpp                                                     \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
