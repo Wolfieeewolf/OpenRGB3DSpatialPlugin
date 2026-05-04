@@ -259,3 +259,27 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJsonForController(
 
     return std::make_unique<VirtualController3D>(display_name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
 }
+
+std::vector<GridLEDMapping> VirtualController3D::ImportMappingsFromCoordinateMapJson(
+    const json& map_json,
+    LedLayoutCoordinateMap::NormalizationMode mode,
+    int grid_w,
+    int grid_h,
+    int grid_d,
+    RGBController* controller,
+    unsigned int zone_idx,
+    int granularity,
+    std::string* out_error)
+{
+    LedLayoutCoordinateMap::ImportResult r =
+        LedLayoutCoordinateMap::ImportCoordinateMapForGrid(map_json, mode, grid_w, grid_h, grid_d, controller, zone_idx, granularity);
+    if(r.error)
+    {
+        if(out_error)
+        {
+            *out_error = *r.error;
+        }
+        return {};
+    }
+    return std::move(r.mappings);
+}

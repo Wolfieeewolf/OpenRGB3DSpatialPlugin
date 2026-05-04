@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Explosion.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
@@ -152,6 +154,16 @@ void Explosion::SetupCustomUI(QWidget* parent)
     layout->addWidget(loop_check, row, 0, 1, 3);
     row++;
 
+    strip_cmap_panel = new StripKernelColormapPanel(outer_w);
+    strip_cmap_panel->mirrorStateFromEffect(explosion_strip_cmap_on,
+                                            explosion_strip_cmap_kernel,
+                                            explosion_strip_cmap_rep,
+                                            explosion_strip_cmap_unfold,
+                                            explosion_strip_cmap_dir,
+                                            explosion_strip_cmap_color_style);
+    vbox->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Explosion::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(outer_w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -202,6 +214,19 @@ void Explosion::OnStratumBandChanged()
     emit ParametersChanged();
 }
 
+void Explosion::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    explosion_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    explosion_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    explosion_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    explosion_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    explosion_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    explosion_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
+}
+
 
 nlohmann::json Explosion::SaveSettings() const
 {
@@ -225,6 +250,9 @@ nlohmann::json Explosion::SaveSettings() const
     j["burst_count"] = burst_count;
     j["loop"] = loop;
     j["particle_amount"] = particle_amount;
+    StripColormapSaveJson(j, "explosion", explosion_strip_cmap_on, explosion_strip_cmap_kernel, explosion_strip_cmap_rep,
+                          explosion_strip_cmap_unfold, explosion_strip_cmap_dir,
+                          explosion_strip_cmap_color_style);
     return j;
 }
 
@@ -238,6 +266,19 @@ void Explosion::LoadSettings(const nlohmann::json& settings)
                                             "explosion_stratum_band_speed_pct",
                                             "explosion_stratum_band_tight_pct",
                                             "explosion_stratum_band_phase_deg");
+    StripColormapLoadJson(settings, "explosion", explosion_strip_cmap_on, explosion_strip_cmap_kernel, explosion_strip_cmap_rep,
+                          explosion_strip_cmap_unfold, explosion_strip_cmap_dir,
+                          explosion_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(explosion_strip_cmap_on,
+                                                explosion_strip_cmap_kernel,
+                                                explosion_strip_cmap_rep,
+                                                explosion_strip_cmap_unfold,
+                                                explosion_strip_cmap_dir,
+                                                explosion_strip_cmap_color_style);
+    }
     if(settings.contains("explosion_intensity")) explosion_intensity = settings["explosion_intensity"];
     if(settings.contains("explosion_type")) explosion_type = settings["explosion_type"];
     if(settings.contains("burst_count")) burst_count = std::max(0, std::min(10, (int)settings["burst_count"]));
@@ -411,9 +452,35 @@ RGBColor Explosion::CalculateColorGrid(float x, float y, float z, float time, co
     float ambient = 0.08f * (1.0f - fmin(1.0f, distance / (explosion_radius * 2.0f + 1.0f)));
     explosion_intensity_final = fmin(1.0f, explosion_intensity_final + ambient);
 
-    RGBColor final_color = GetRainbowMode()
-        ? GetRainbowColor(hue_base + hue_offset - (explosion_intensity_final * 50.0f) + burst_phase * 15.0f)
-        : GetColorAtPosition(explosion_intensity_final);
+    const float ex_phase01 = std::fmod(burst_phase + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(explosion_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(explosion_strip_cmap_kernel,
+                                               explosion_strip_cmap_rep,
+                                               explosion_strip_cmap_unfold,
+                                               explosion_strip_cmap_dir,
+                                               ex_phase01,
+                                               time,
+                                               grid,
+                                               size_multiplier,
+                                               origin,
+                                               rotated_pos);
+    }
+
+    RGBColor final_color;
+    if(explosion_strip_cmap_on)
+    {
+        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        final_color = ResolveStripKernelFinalColor(*this, explosion_strip_cmap_kernel, p01v, explosion_strip_cmap_color_style, time,
+                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else
+    {
+        final_color = GetRainbowMode()
+            ? GetRainbowColor(hue_base + hue_offset - (explosion_intensity_final * 50.0f) + burst_phase * 15.0f)
+            : GetColorAtPosition(explosion_intensity_final);
+    }
 
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;

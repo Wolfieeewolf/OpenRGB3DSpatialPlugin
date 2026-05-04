@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Starfield.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "EffectHelpers.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
@@ -138,6 +140,15 @@ void Starfield::SetupCustomUI(QWidget* parent)
         if(twinkle_label) twinkle_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(starfield_strip_cmap_on,
+                                            starfield_strip_cmap_kernel,
+                                            starfield_strip_cmap_rep,
+                                            starfield_strip_cmap_unfold,
+                                            starfield_strip_cmap_dir,
+                                            starfield_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Starfield::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -154,6 +165,19 @@ void Starfield::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void Starfield::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    starfield_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    starfield_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    starfield_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    starfield_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    starfield_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    starfield_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -192,6 +216,22 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
     }
 
     const int n_stars = std::max(1, std::min(200, num_stars));
+
+    const float sf_phase01 = std::fmod(color_cycle * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(starfield_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(starfield_strip_cmap_kernel,
+                                             starfield_strip_cmap_rep,
+                                             starfield_strip_cmap_unfold,
+                                             starfield_strip_cmap_dir,
+                                             sf_phase01,
+                                             time,
+                                             grid,
+                                             size_m,
+                                             origin,
+                                             rp);
+    }
 
     if(!strat_on)
     {
@@ -270,9 +310,10 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         }
         if(intensity < 0.01f) continue;
 
-        float hue = fmodf((float)i * 2.0f * (0.6f + 0.4f * detail) + color_cycle, 360.0f);
+        float hue = fmodf((float)i * 2.0f * (0.6f + 0.4f * detail) + (starfield_strip_cmap_on ? strip_p01 * 360.0f : color_cycle), 360.0f);
         if(hue < 0.0f) hue += 360.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition((float)i / (float)n_stars);
+        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue)
+                                    : GetColorAtPosition(starfield_strip_cmap_on ? strip_p01 : ((float)i / (float)n_stars));
         sum_r += ((c & 0xFF) / 255.0f) * intensity;
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
@@ -310,6 +351,9 @@ nlohmann::json Starfield::SaveSettings() const
     j["num_stars"] = num_stars;
     j["drift_amount"] = drift_amount;
     j["twinkle_speed"] = twinkle_speed;
+    StripColormapSaveJson(j, "starfield", starfield_strip_cmap_on, starfield_strip_cmap_kernel, starfield_strip_cmap_rep,
+                          starfield_strip_cmap_unfold, starfield_strip_cmap_dir,
+                          starfield_strip_cmap_color_style);
     return j;
 }
 
@@ -323,6 +367,19 @@ void Starfield::LoadSettings(const nlohmann::json& settings)
                                             "starfield_stratum_band_speed_pct",
                                             "starfield_stratum_band_tight_pct",
                                             "starfield_stratum_band_phase_deg");
+    StripColormapLoadJson(settings, "starfield", starfield_strip_cmap_on, starfield_strip_cmap_kernel, starfield_strip_cmap_rep,
+                          starfield_strip_cmap_unfold, starfield_strip_cmap_dir,
+                          starfield_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(starfield_strip_cmap_on,
+                                                starfield_strip_cmap_kernel,
+                                                starfield_strip_cmap_rep,
+                                                starfield_strip_cmap_unfold,
+                                                starfield_strip_cmap_dir,
+                                                starfield_strip_cmap_color_style);
+    }
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         this->mode = std::max(0, std::min(settings["mode"].get<int>(), MODE_COUNT - 1));
     if(settings.contains("star_size") && settings["star_size"].is_number())

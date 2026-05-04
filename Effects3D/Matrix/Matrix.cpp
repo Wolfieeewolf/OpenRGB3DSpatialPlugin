@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Matrix.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QGridLayout>
@@ -148,6 +150,16 @@ void Matrix::SetupCustomUI(QWidget* parent)
     head_brightness_label->setMinimumWidth(36);
     layout->addWidget(head_brightness_label, 6, 2);
 
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(matrix_strip_cmap_on,
+                                            matrix_strip_cmap_kernel,
+                                            matrix_strip_cmap_rep,
+                                            matrix_strip_cmap_unfold,
+                                            matrix_strip_cmap_dir,
+                                            matrix_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Matrix::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -218,6 +230,19 @@ void Matrix::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void Matrix::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    matrix_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    matrix_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    matrix_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    matrix_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    matrix_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    matrix_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -568,8 +593,26 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
         }
     }
 
+    const float mtx_phase01 = std::fmod(color_cycle + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(matrix_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(matrix_strip_cmap_kernel,
+                                               matrix_strip_cmap_rep,
+                                               matrix_strip_cmap_unfold,
+                                               matrix_strip_cmap_dir,
+                                               mtx_phase01,
+                                               time,
+                                               grid,
+                                               size_m,
+                                               origin,
+                                               rp);
+    }
+
     /* Trail uses effect colors (green default) or rainbow when enabled */
     float color_pos = fmodf(color_cycle + (float)(((int)(x * 31 + y * 17 + z * 7) % 1000)) / 1000.0f, 1.0f);
+    if(matrix_strip_cmap_on)
+        color_pos = strip_p01;
     if(color_pos < 0.0f) color_pos += 1.0f;
     RGBColor trail_color = GetColorAtPosition(color_pos);
     unsigned char tr = (unsigned char)(trail_color & 0xFF);
@@ -613,6 +656,9 @@ nlohmann::json Matrix::SaveSettings() const
     j["char_variation"] = char_variation;
     j["char_spacing"] = char_spacing;
     j["head_brightness"] = head_brightness;
+    StripColormapSaveJson(j, "matrix", matrix_strip_cmap_on, matrix_strip_cmap_kernel, matrix_strip_cmap_rep,
+                          matrix_strip_cmap_unfold, matrix_strip_cmap_dir,
+                          matrix_strip_cmap_color_style);
     return j;
 }
 
@@ -634,6 +680,19 @@ void Matrix::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("char_spacing")) char_spacing = settings["char_spacing"];
     if(settings.contains("head_brightness")) head_brightness = std::clamp(settings["head_brightness"].get<unsigned int>(), 0u, 100u);
 
+    StripColormapLoadJson(settings, "matrix", matrix_strip_cmap_on, matrix_strip_cmap_kernel, matrix_strip_cmap_rep,
+                          matrix_strip_cmap_unfold, matrix_strip_cmap_dir,
+                          matrix_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(matrix_strip_cmap_on,
+                                                matrix_strip_cmap_kernel,
+                                                matrix_strip_cmap_rep,
+                                                matrix_strip_cmap_unfold,
+                                                matrix_strip_cmap_dir,
+                                                matrix_strip_cmap_color_style);
+    }
     if(density_slider) { density_slider->setValue(density); if(density_label) density_label->setText(QString::number(density) + "%"); }
     if(trail_slider) { trail_slider->setValue(trail); if(trail_label) trail_label->setText(QString::number(trail) + "%"); }
     if(char_height_slider) { char_height_slider->setValue(char_height); if(char_height_label) char_height_label->setText(QString::number(char_height) + "%"); }

@@ -12,6 +12,7 @@ class QSlider;
 class QLabel;
 class QWidget;
 class QComboBox;
+class StripKernelColormapPanel;
 
 class Spiral : public SpatialEffect3D
 {
@@ -36,6 +37,7 @@ public:
 
 private slots:
     void OnSpiralParameterChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     static constexpr int kSpiralPatternCount = 6;
@@ -66,6 +68,14 @@ private:
     std::array<int, 3> band_speed_pct{{100, 100, 100}};
     std::array<int, 3> band_tight_pct{{100, 100, 100}};
     std::array<int, 3> band_phase_deg{{0, 0, 0}};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool spiral_strip_cmap_on = false;
+    int spiral_strip_cmap_kernel = 0;
+    float spiral_strip_cmap_rep = 4.0f;
+    int spiral_strip_cmap_unfold = 0;
+    float spiral_strip_cmap_dir = 0.0f;
+    int spiral_strip_cmap_color_style = 0;
 };
 
 #endif

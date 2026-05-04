@@ -7,6 +7,7 @@
 #include <vector>
 #include "RGBController.h"
 #include "ui/CustomControllerDialog.h"
+#include "Game/LedLayoutCoordinateMap.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -43,6 +44,21 @@ public:
     json ToJson() const;
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
     static std::unique_ptr<VirtualController3D> FromJsonForController(const json& j, RGBController* controller, const std::string& display_name);
+
+    /**
+     * Convert a JSON array of per-LED [x,y] or [x,y,z] coordinates into grid mappings.
+     * On failure, returns empty vector and optionally writes a message to out_error.
+     */
+    static std::vector<GridLEDMapping> ImportMappingsFromCoordinateMapJson(
+        const json& map_json,
+        LedLayoutCoordinateMap::NormalizationMode mode,
+        int grid_w,
+        int grid_h,
+        int grid_d,
+        RGBController* controller,
+        unsigned int zone_idx,
+        int granularity = 1,
+        std::string* out_error = nullptr);
 
 private:
     std::string name;

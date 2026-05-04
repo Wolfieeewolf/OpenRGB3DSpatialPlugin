@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpectrumBars.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -146,12 +148,35 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
+    strip_cmap_panel = new StripKernelColormapPanel(parent);
+    strip_cmap_panel->mirrorStateFromEffect(spectrumbars_strip_cmap_on,
+                                            spectrumbars_strip_cmap_kernel,
+                                            spectrumbars_strip_cmap_rep,
+                                            spectrumbars_strip_cmap_unfold,
+                                            spectrumbars_strip_cmap_dir,
+                                            spectrumbars_strip_cmap_color_style);
+    layout->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SpectrumBars::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
     layout->addWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &SpectrumBars::OnStratumBandChanged);
     OnStratumBandChanged();
+}
+
+void SpectrumBars::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    spectrumbars_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    spectrumbars_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    spectrumbars_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    spectrumbars_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    spectrumbars_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    spectrumbars_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void SpectrumBars::UpdateParams(SpatialEffectParams& /*params*/)
@@ -212,7 +237,26 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(GetRainbowMode())
+    if(spectrumbars_strip_cmap_on)
+    {
+        const float ph01 =
+            std::fmod(CalculateProgress(time) * 0.29f + axis_pos * 0.22f + color_cycle * (1.f / 360.f) + 1.f, 1.f);
+        float p01 = SampleStripKernelPalette01(spectrumbars_strip_cmap_kernel,
+                                               spectrumbars_strip_cmap_rep,
+                                               spectrumbars_strip_cmap_unfold,
+                                               spectrumbars_strip_cmap_dir,
+                                               ph01,
+                                               time,
+                                               grid,
+                                               size_m,
+                                               origin,
+                                               rotated_pos);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = ResolveStripKernelFinalColor(*this, spectrumbars_strip_cmap_kernel, std::clamp(p01, 0.0f, 1.0f),
+                                                  spectrumbars_strip_cmap_color_style, time,
+                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else if(GetRainbowMode())
     {
         float hue = axis_pos * 360.0f + color_cycle;
         hue = ApplySpatialRainbowHue(hue, axis_pos, basis, sp, map, time, &grid);
@@ -260,6 +304,14 @@ nlohmann::json SpectrumBars::SaveSettings() const
                                            "spectrumbars_stratum_band_speed_pct",
                                            "spectrumbars_stratum_band_tight_pct",
                                            "spectrumbars_stratum_band_phase_deg");
+    StripColormapSaveJson(j,
+                          "spectrumbars",
+                          spectrumbars_strip_cmap_on,
+                          spectrumbars_strip_cmap_kernel,
+                          spectrumbars_strip_cmap_rep,
+                          spectrumbars_strip_cmap_unfold,
+                          spectrumbars_strip_cmap_dir,
+                          spectrumbars_strip_cmap_color_style);
     return j;
 }
 
@@ -278,6 +330,24 @@ void SpectrumBars::LoadSettings(const nlohmann::json& settings)
 
     RefreshBandRange();
     last_sample_time = std::numeric_limits<float>::lowest();
+    StripColormapLoadJson(settings,
+                          "spectrumbars",
+                          spectrumbars_strip_cmap_on,
+                          spectrumbars_strip_cmap_kernel,
+                          spectrumbars_strip_cmap_rep,
+                          spectrumbars_strip_cmap_unfold,
+                          spectrumbars_strip_cmap_dir,
+                          spectrumbars_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(spectrumbars_strip_cmap_on,
+                                                spectrumbars_strip_cmap_kernel,
+                                                spectrumbars_strip_cmap_rep,
+                                                spectrumbars_strip_cmap_unfold,
+                                                spectrumbars_strip_cmap_dir,
+                                                spectrumbars_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

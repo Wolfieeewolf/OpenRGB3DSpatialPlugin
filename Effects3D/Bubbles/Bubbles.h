@@ -9,6 +9,7 @@
 #include <vector>
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 struct BubbleCenter3D
 {
@@ -37,6 +38,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     int max_bubbles = 12;
@@ -50,6 +52,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool bubbles_strip_cmap_on = false;
+    int bubbles_strip_cmap_kernel = 0;
+    float bubbles_strip_cmap_rep = 4.0f;
+    int bubbles_strip_cmap_unfold = 0;
+    float bubbles_strip_cmap_dir = 0.0f;
+    int bubbles_strip_cmap_color_style = 0;
 };
 
 #endif

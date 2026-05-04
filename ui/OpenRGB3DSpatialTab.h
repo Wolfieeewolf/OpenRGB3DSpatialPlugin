@@ -197,9 +197,14 @@ private:
     void RemoveWidgetFromParentLayout(QWidget* w);
 
     bool effectLibraryRowIsMinecraftHub(int row) const;
+    bool effectLibraryRowIsAudioHub(int row) const;
     void ShowMinecraftHubConfigurator();
     void rebuildMinecraftHubPreviewEffect();
     void ClearMinecraftLibraryPanel();
+    void ShowAudioHubConfigurator();
+    void rebuildAudioHubPreviewEffect();
+    void ClearAudioLibraryPanel();
+    void EnsureAudioContainerLayerOnStack();
     void UpdateEffectStackRowSelectorVisibility();
 
     void SetupEffectStackPanel(QVBoxLayout* parent_layout);
@@ -299,6 +304,18 @@ private:
     SpatialEffect3D*            minecraft_hub_preview_effect = nullptr;
     QComboBox*                  minecraft_library_layer_combo = nullptr;
     QWidget*                    minecraft_hub_preview_holder = nullptr;
+
+    bool                        audio_library_hub_active = false;
+    QGroupBox*                  audio_library_panel = nullptr;
+    SpatialEffect3D*            audio_hub_preview_effect = nullptr;
+    QComboBox*                  audio_hub_layer_combo = nullptr;
+    QWidget*                    audio_hub_preview_holder = nullptr;
+    QSlider*                    audio_hub_low_slider = nullptr;
+    QSlider*                    audio_hub_high_slider = nullptr;
+    QLabel*                     audio_hub_low_label = nullptr;
+    QLabel*                     audio_hub_high_label = nullptr;
+    QComboBox*                  audio_hub_zone_combo = nullptr;
+    QComboBox*                  audio_hub_origin_combo = nullptr;
 
     QComboBox*                  effect_type_combo;
     QPushButton*                start_effect_button;
@@ -421,7 +438,6 @@ private:
     
     QGroupBox*      freq_ranges_group = nullptr;
     QListWidget*    freq_ranges_list = nullptr;
-    QPushButton*    add_freq_range_btn = nullptr;
     QPushButton*    remove_freq_range_btn = nullptr;
     QPushButton*    duplicate_freq_range_btn = nullptr;
     
@@ -459,9 +475,12 @@ private slots:
     void on_audio_fft_changed(int index);
     void on_audio_restore_defaults_clicked();
     
-    void SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout);
+    void EnsureFrequencyRangeEditorBuilt();
+    void AttachFrequencyRangeEditorToHub(QVBoxLayout* hub_layout);
     void UpdateFrequencyRangesList();
     void PopulateFreqEffectCombo(QComboBox* combo);
+    void FillFrequencyRangeZoneCombo(QComboBox* combo, const QVariant& desired_selection);
+    void FillFrequencyRangeOriginCombo(QComboBox* combo, const QVariant& desired_selection);
     void UpdateFreqOriginCombo();
     void UpdateFreqZoneCombo();
     void LoadFreqRangeDetails(FrequencyRangeEffect3D* range);
@@ -470,7 +489,6 @@ private slots:
     void ClearFreqRangeEffectUI();
     void SaveFrequencyRanges();
     void LoadFrequencyRanges();
-    void on_add_freq_range_clicked();
     void on_remove_freq_range_clicked();
     void on_duplicate_freq_range_clicked();
     void on_freq_range_selected(int row);
@@ -492,6 +510,8 @@ private slots:
     void on_freq_decay_changed(int value);
     void OnFreqRangeEffectParamsChanged();
     void RenderFrequencyRangeEffects(const GridContext3D& room_grid, const GridContext3D& world_grid);
+    void on_audio_hub_layer_combo_changed(int index);
+    void on_audio_hub_add_range_clicked();
 
     void on_display_plane_selected(int index);
     void on_add_display_plane_clicked();

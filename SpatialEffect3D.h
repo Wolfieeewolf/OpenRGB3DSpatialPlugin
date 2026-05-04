@@ -294,6 +294,12 @@ protected:
     void SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible);
 
     friend void MinecraftGame::ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
+    friend RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
+                                                 int kernel_id,
+                                                 float palette01,
+                                                 int color_style,
+                                                 float time_sec,
+                                                 float rainbow_time_hue_mul);
 
     QWidget*            effect_controls_group;
     QWidget*            custom_effect_settings_host;

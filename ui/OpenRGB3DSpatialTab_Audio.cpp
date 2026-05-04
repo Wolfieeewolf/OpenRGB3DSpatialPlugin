@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "AudioContainer/AudioEffectLibrary.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginUiUtils.h"
 #include "SettingsManager.h"
@@ -135,11 +136,14 @@ void OpenRGB3DSpatialTab::SetupAudioPanel(QVBoxLayout* parent_layout)
     fft_layout->addStretch();
     layout->addLayout(fft_layout);
 
-    QLabel* help = new QLabel("Gain up to 50x. Use per-range EQ in each frequency range to isolate bass/mids/highs (dump other bands).");
+    QLabel* help = new QLabel(tr(
+        "Gain up to 50x. Add and edit per-frequency bands under Effect Library → Audio Effect (hub): "
+        "\"Add audio range to stack\" and the ranges list there."));
     PluginUiApplyMutedSecondaryLabel(help);
     help->setWordWrap(true);
     layout->addWidget(help);
-    SetupFrequencyRangeEffectsUI(layout);
+
+    LoadFrequencyRanges();
 
     nlohmann::json settings = GetPluginSettings();
     if(audio_device_combo && audio_device_combo->isEnabled() && settings.contains("AudioDeviceIndex"))
@@ -409,20 +413,28 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
 
 void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
 {
-    if(!effect_stack_list || !audio_panel_group)
+    if(!audio_panel_group)
     {
         return;
     }
 
-    int row = effect_stack_list->currentRow();
+    const std::string hub = AudioEffectLibrary::HubClassName();
     bool show = false;
 
-    if(row >= 0 && row < (int)effect_stack.size())
+    if(audio_library_hub_active)
     {
-        EffectInstance3D* inst = effect_stack[row].get();
-        if(inst)
+        show = true;
+    }
+    else if(!minecraft_library_hub_active && effect_stack_list)
+    {
+        int row = effect_stack_list->currentRow();
+        if(row >= 0 && row < (int)effect_stack.size())
         {
-            show = IsAudioEffectClass(inst->effect_class_name);
+            EffectInstance3D* inst = effect_stack[row].get();
+            if(inst && inst->effect_class_name == hub)
+            {
+                show = true;
+            }
         }
     }
 

@@ -1,13 +1,9 @@
 # Master Effect Grouping (Current Status)
 
-This is the current grouping map for 3D effects. It is focused on what is implemented today and what still needs polish.
-
----
-
 ## Implemented Groups
 
 ### Wave family
-- `Wave`: line/surface modes, with Sinus/Radial/Linear/Pacifica/Gradient variants.
+- `Wave`: line/surface modes, with Sinus/Radial/Linear/Ocean drift/Gradient variants.
 
 ### Fire / ambient family
 - `SurfaceAmbient`: Fire/Water/Slime/Lava/Ember/Ocean/Steam styles.
@@ -38,15 +34,8 @@ This is the current grouping map for 3D effects. It is focused on what is implem
 
 ## Priority Polish Backlog
 
-1. Improve visual quality and defaults for weaker effects (color balance, speed, falloff, edge softness).
-2. Fix effects with rendering artifacts or weak output on sparse layouts/strips.
-3. Standardize parameter ranges and labels so similar effects behave consistently.
-4. Audit each effect for Save/Load completeness and UI control sync.
-5. Add lightweight regression checks for stack/preset/profile loading with mixed effect types.
-
----
-
-## Notes
-
-- Some legacy plans referred to separate effect classes that are now implemented as modes inside existing effects.
-- This file is a living status tracker; keep it focused on current implementation and actionable polish work.
+1. Visual quality / defaults (color, speed, falloff).
+2. Artifacts on sparse layouts.
+3. Consistent parameter ranges and labels.
+4. Save/Load and UI sync audit.
+5. Regression checks for stacks/presets.

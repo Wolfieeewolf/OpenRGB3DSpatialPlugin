@@ -8,6 +8,7 @@
 #include "EffectStratumBlend.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class PulseRing : public SpatialEffect3D
 {
@@ -27,6 +28,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     enum Style { STYLE_PULSE_RING = 0, STYLE_RADIAL_RAINBOW, STYLE_COUNT };
@@ -40,6 +42,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool pulsering_strip_cmap_on = false;
+    int pulsering_strip_cmap_kernel = 0;
+    float pulsering_strip_cmap_rep = 4.0f;
+    int pulsering_strip_cmap_unfold = 0;
+    float pulsering_strip_cmap_dir = 0.0f;
+    int pulsering_strip_cmap_color_style = 0;
 };
 
 #endif

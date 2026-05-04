@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "PulseRing.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "EffectHelpers.h"
 #include "SpatialLayerCore.h"
@@ -135,6 +137,15 @@ void PulseRing::SetupCustomUI(QWidget* parent)
         if(dir_label) dir_label->setText(QString::number(v) + "°");
         emit ParametersChanged();
     });
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(pulsering_strip_cmap_on,
+                                            pulsering_strip_cmap_kernel,
+                                            pulsering_strip_cmap_rep,
+                                            pulsering_strip_cmap_unfold,
+                                            pulsering_strip_cmap_dir,
+                                            pulsering_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &PulseRing::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -151,6 +162,19 @@ void PulseRing::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void PulseRing::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    pulsering_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    pulsering_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    pulsering_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    pulsering_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    pulsering_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    pulsering_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -233,19 +257,40 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     sp.origin_z = origin.z;
     sp.y_norm = coord2;
 
-    float hue = fmodf(
-        pos_norm * 360.0f
-        + 0.22f * azimuth_deg
-        + progress * (style == STYLE_RADIAL_RAINBOW ? 36.0f : 84.0f)
-        + (float)style * 52.0f
-        + direction_deg * (style == STYLE_PULSE_RING ? 0.85f : 0.30f)
-        + (style == STYLE_PULSE_RING ? intensity * 55.0f : 0.0f),
-        360.0f);
-    if(hue < 0.0f) hue += 360.0f;
+    const float pr_phase01 = std::fmod(progress + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(pulsering_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(pulsering_strip_cmap_kernel,
+                                               pulsering_strip_cmap_rep,
+                                               pulsering_strip_cmap_unfold,
+                                               pulsering_strip_cmap_dir,
+                                               pr_phase01,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rot);
+    }
 
     RGBColor c;
-    if(GetRainbowMode())
+    if(pulsering_strip_cmap_on)
     {
+        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        c = ResolveStripKernelFinalColor(*this, pulsering_strip_cmap_kernel, p01v, pulsering_strip_cmap_color_style, time,
+                                          GetScaledFrequency() * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        float hue = fmodf(
+            pos_norm * 360.0f
+            + 0.22f * azimuth_deg
+            + progress * (style == STYLE_RADIAL_RAINBOW ? 36.0f : 84.0f)
+            + (float)style * 52.0f
+            + direction_deg * (style == STYLE_PULSE_RING ? 0.85f : 0.30f)
+            + (style == STYLE_PULSE_RING ? intensity * 55.0f : 0.0f),
+            360.0f);
+        if(hue < 0.0f) hue += 360.0f;
         hue = ApplySpatialRainbowHue(hue, pos_norm, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -289,6 +334,9 @@ nlohmann::json PulseRing::SaveSettings() const
                                            "pulsering_stratum_band_speed_pct",
                                            "pulsering_stratum_band_tight_pct",
                                            "pulsering_stratum_band_phase_deg");
+    StripColormapSaveJson(j, "pulsering", pulsering_strip_cmap_on, pulsering_strip_cmap_kernel, pulsering_strip_cmap_rep,
+                          pulsering_strip_cmap_unfold, pulsering_strip_cmap_dir,
+                          pulsering_strip_cmap_color_style);
     return j;
 }
 
@@ -302,6 +350,19 @@ void PulseRing::LoadSettings(const nlohmann::json& settings)
                                             "pulsering_stratum_band_speed_pct",
                                             "pulsering_stratum_band_tight_pct",
                                             "pulsering_stratum_band_phase_deg");
+    StripColormapLoadJson(settings, "pulsering", pulsering_strip_cmap_on, pulsering_strip_cmap_kernel, pulsering_strip_cmap_rep,
+                          pulsering_strip_cmap_unfold, pulsering_strip_cmap_dir,
+                          pulsering_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(pulsering_strip_cmap_on,
+                                                pulsering_strip_cmap_kernel,
+                                                pulsering_strip_cmap_rep,
+                                                pulsering_strip_cmap_unfold,
+                                                pulsering_strip_cmap_dir,
+                                                pulsering_strip_cmap_color_style);
+    }
     if(settings.contains("ring_style") && settings["ring_style"].is_number_integer())
         ring_style = std::max(0, std::min(settings["ring_style"].get<int>(), STYLE_COUNT - 1));
     if(settings.contains("ring_thickness") && settings["ring_thickness"].is_number())

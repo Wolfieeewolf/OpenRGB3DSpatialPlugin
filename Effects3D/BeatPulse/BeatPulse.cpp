@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "BeatPulse.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -143,12 +145,35 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
+    strip_cmap_panel = new StripKernelColormapPanel(parent);
+    strip_cmap_panel->mirrorStateFromEffect(beatpulse_strip_cmap_on,
+                                            beatpulse_strip_cmap_kernel,
+                                            beatpulse_strip_cmap_rep,
+                                            beatpulse_strip_cmap_unfold,
+                                            beatpulse_strip_cmap_dir,
+                                            beatpulse_strip_cmap_color_style);
+    layout->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BeatPulse::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
     layout->addWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BeatPulse::OnStratumBandChanged);
     OnStratumBandChanged();
+}
+
+void BeatPulse::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    beatpulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    beatpulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    beatpulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    beatpulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    beatpulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    beatpulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void BeatPulse::OnStratumBandChanged()
@@ -286,7 +311,28 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
     color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color;
-    if(GetRainbowMode())
+    if(beatpulse_strip_cmap_on)
+    {
+        const float size_m = GetNormalizedSize();
+        const float ph01 =
+            std::fmod(CalculateProgress(time) * 0.31f + gradient_pos * 0.18f +
+                          time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) + 1.f,
+                      1.f);
+        float p01 = SampleStripKernelPalette01(beatpulse_strip_cmap_kernel,
+                                               beatpulse_strip_cmap_rep,
+                                               beatpulse_strip_cmap_unfold,
+                                               beatpulse_strip_cmap_dir,
+                                               ph01,
+                                               time,
+                                               grid,
+                                               size_m,
+                                               origin,
+                                               rotated_pos);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = ResolveStripKernelFinalColor(*this, beatpulse_strip_cmap_kernel, p01, beatpulse_strip_cmap_color_style, time,
+                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else if(GetRainbowMode())
     {
         float hue = gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul
                     + bb.phase_deg * (1.0f / 360.0f) * 40.0f;
@@ -327,6 +373,14 @@ nlohmann::json BeatPulse::SaveSettings() const
                                            "beatpulse_stratum_band_speed_pct",
                                            "beatpulse_stratum_band_tight_pct",
                                            "beatpulse_stratum_band_phase_deg");
+    StripColormapSaveJson(j,
+                          "beatpulse",
+                          beatpulse_strip_cmap_on,
+                          beatpulse_strip_cmap_kernel,
+                          beatpulse_strip_cmap_rep,
+                          beatpulse_strip_cmap_unfold,
+                          beatpulse_strip_cmap_dir,
+                          beatpulse_strip_cmap_color_style);
     return j;
 }
 
@@ -349,6 +403,24 @@ void BeatPulse::LoadSettings(const nlohmann::json& settings)
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
     last_tick_time = std::numeric_limits<float>::lowest();
+    StripColormapLoadJson(settings,
+                          "beatpulse",
+                          beatpulse_strip_cmap_on,
+                          beatpulse_strip_cmap_kernel,
+                          beatpulse_strip_cmap_rep,
+                          beatpulse_strip_cmap_unfold,
+                          beatpulse_strip_cmap_dir,
+                          beatpulse_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(beatpulse_strip_cmap_on,
+                                                beatpulse_strip_cmap_kernel,
+                                                beatpulse_strip_cmap_rep,
+                                                beatpulse_strip_cmap_unfold,
+                                                beatpulse_strip_cmap_dir,
+                                                beatpulse_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

@@ -47,6 +47,7 @@
 #include "Audio/AudioInputManager.h"
 #include "Zone3D.h"
 #include "Effects3D/Games/Minecraft/MinecraftEffectLibrary.h"
+#include "AudioContainer/AudioEffectLibrary.h"
 
 namespace
 {
@@ -94,6 +95,17 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     minecraft_hub_preview_effect = nullptr;
     minecraft_library_layer_combo = nullptr;
     minecraft_hub_preview_holder = nullptr;
+    audio_library_hub_active = false;
+    audio_library_panel = nullptr;
+    audio_hub_preview_effect = nullptr;
+    audio_hub_layer_combo = nullptr;
+    audio_hub_preview_holder = nullptr;
+    audio_hub_low_slider = nullptr;
+    audio_hub_high_slider = nullptr;
+    audio_hub_low_label = nullptr;
+    audio_hub_high_label = nullptr;
+    audio_hub_zone_combo = nullptr;
+    audio_hub_origin_combo = nullptr;
     effect_stack_row_label = nullptr;
     effect_combo = nullptr;
     effect_type_combo = nullptr;
@@ -1412,6 +1424,10 @@ void OpenRGB3DSpatialTab::SetupUI()
     minecraft_library_panel->setVisible(false);
     new QVBoxLayout(minecraft_library_panel);
 
+    audio_library_panel = new QGroupBox(tr("Audio Effect — configure a range, then add to the stack"));
+    audio_library_panel->setVisible(false);
+    new QVBoxLayout(audio_library_panel);
+
     effect_config_group = new QGroupBox(tr("Effect global settings"));
     effect_config_group->setToolTip(tr(
         "Same controls as other stack effects: stack layer and zone apply to the selected layer. "
@@ -1540,6 +1556,7 @@ void OpenRGB3DSpatialTab::SetupUI()
     detail_layout->addWidget(effect_config_group);
     detail_layout->addWidget(effect_controls_widget);
     detail_layout->addWidget(minecraft_library_panel);
+    detail_layout->addWidget(audio_library_panel);
 
     SetupAudioPanel(detail_layout);
 
@@ -1764,10 +1781,15 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     };
     std::vector<LibRow> rows;
     const bool game_category = (selected_category.compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0);
+    const bool audio_category = (selected_category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) == 0);
     const bool show_minecraft_panel = game_category && MinecraftEffectLibrary::SearchMatchesFamily(search);
 
     for(const EffectRegistration3D& reg : effects)
     {
+        if(audio_category && reg.class_name != AudioEffectLibrary::HubClassName())
+        {
+            continue;
+        }
         if(MinecraftEffectLibrary::IsCollapsedClass(reg.class_name))
         {
             continue;
@@ -1797,6 +1819,12 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
             item->setToolTip(tr(
                 "Single-click opens the hub on the right; double-click opens it again if the panel switched away. "
                 "Configure, then use Add Minecraft layer or Add To Stack to append a layer (the hub stays open)."));
+        }
+        else if(r.class_name == QString::fromUtf8(AudioEffectLibrary::HubClassName()))
+        {
+            item->setToolTip(tr(
+                "Frequency ranges and per-range effects are configured inside this layer. "
+                "Add it once; individual audio algorithms are not separate library entries."));
         }
         else
         {
@@ -2062,6 +2090,10 @@ void OpenRGB3DSpatialTab::on_effect_library_selection_changed(int row)
     {
         ShowMinecraftHubConfigurator();
     }
+    else if(effectLibraryRowIsAudioHub(row))
+    {
+        ShowAudioHubConfigurator();
+    }
     else
     {
         const int si = effect_stack_list ? effect_stack_list->currentRow() : -1;
@@ -2104,6 +2136,11 @@ void OpenRGB3DSpatialTab::on_effect_library_add_clicked()
         on_minecraft_library_add_clicked();
         return;
     }
+    if(effectLibraryRowIsAudioHub(current_row))
+    {
+        on_audio_hub_add_range_clicked();
+        return;
+    }
 
     QListWidgetItem* item = effect_library_list->item(current_row);
     if(!item)
@@ -2132,6 +2169,11 @@ void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem*
         ShowMinecraftHubConfigurator();
         return;
     }
+    if(item->data(Qt::UserRole).toString() == QString::fromUtf8(AudioEffectLibrary::HubClassName()))
+    {
+        ShowAudioHubConfigurator();
+        return;
+    }
 
     QString class_name;
     QString ui_name;
@@ -2151,6 +2193,61 @@ bool OpenRGB3DSpatialTab::effectLibraryRowIsMinecraftHub(int row) const
     }
     QListWidgetItem* it = effect_library_list->item(row);
     return it && it->data(Qt::UserRole).toString() == QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId());
+}
+
+bool OpenRGB3DSpatialTab::effectLibraryRowIsAudioHub(int row) const
+{
+    if(row < 0 || !effect_library_list)
+    {
+        return false;
+    }
+    QListWidgetItem* it = effect_library_list->item(row);
+    return it && it->data(Qt::UserRole).toString() == QString::fromUtf8(AudioEffectLibrary::HubClassName());
+}
+
+void OpenRGB3DSpatialTab::ClearAudioLibraryPanel()
+{
+    if(audio_hub_preview_effect)
+    {
+        disconnect(audio_hub_preview_effect, nullptr, this, nullptr);
+    }
+    audio_hub_preview_effect = nullptr;
+    audio_hub_layer_combo = nullptr;
+    audio_hub_preview_holder = nullptr;
+    audio_hub_low_slider = nullptr;
+    audio_hub_high_slider = nullptr;
+    audio_hub_low_label = nullptr;
+    audio_hub_high_label = nullptr;
+    audio_hub_zone_combo = nullptr;
+    audio_hub_origin_combo = nullptr;
+    audio_library_hub_active = false;
+
+    if(!audio_library_panel)
+    {
+        return;
+    }
+
+    if(freq_ranges_group && freq_ranges_group->parentWidget() == audio_library_panel && audio_library_panel->layout())
+    {
+        audio_library_panel->layout()->removeWidget(freq_ranges_group);
+        freq_ranges_group->setParent(nullptr);
+        freq_ranges_group->hide();
+    }
+
+    if(QLayout* lay = audio_library_panel->layout())
+    {
+        QLayoutItem* item = nullptr;
+        while((item = lay->takeAt(0)) != nullptr)
+        {
+            if(QWidget* w = item->widget())
+            {
+                w->deleteLater();
+            }
+            delete item;
+        }
+    }
+    audio_library_panel->setVisible(false);
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::ClearMinecraftLibraryPanel()
@@ -2183,6 +2280,7 @@ void OpenRGB3DSpatialTab::ClearMinecraftLibraryPanel()
 
     if(!minecraft_library_panel)
     {
+        UpdateAudioPanelVisibility();
         return;
     }
 
@@ -2199,6 +2297,7 @@ void OpenRGB3DSpatialTab::ClearMinecraftLibraryPanel()
         }
     }
     minecraft_library_panel->setVisible(false);
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
@@ -2320,6 +2419,7 @@ void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
     });
 
     UpdateEffectStackRowSelectorVisibility();
+    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
@@ -2459,6 +2559,382 @@ void OpenRGB3DSpatialTab::on_minecraft_library_add_clicked()
     {
         AddEffectInstanceToStack(class_name, ui_name, zone_index, BlendMode::NO_BLEND, nullptr, true, true);
     }
+}
+
+void OpenRGB3DSpatialTab::EnsureAudioContainerLayerOnStack()
+{
+    const std::string hub = AudioEffectLibrary::HubClassName();
+    for(const std::unique_ptr<EffectInstance3D>& inst_ptr : effect_stack)
+    {
+        EffectInstance3D* inst = inst_ptr.get();
+        if(inst && inst->effect_class_name == hub)
+        {
+            return;
+        }
+    }
+
+    EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(hub);
+    const QString ui_name = info.ui_name.empty() ? QStringLiteral("Audio Effect")
+                                                 : QString::fromStdString(info.ui_name);
+    AddEffectInstanceToStack(QString::fromStdString(hub), ui_name);
+}
+
+void OpenRGB3DSpatialTab::ShowAudioHubConfigurator()
+{
+    if(!audio_library_panel)
+    {
+        return;
+    }
+
+    if(run_setup_tab_widget && run_setup_tab_widget->currentIndex() != 0)
+    {
+        run_setup_tab_widget->setCurrentIndex(0);
+    }
+
+    LoadStackEffectControls(nullptr);
+
+    if(effect_config_group)
+    {
+        effect_config_group->setVisible(true);
+    }
+    if(effect_zone_combo)
+    {
+        effect_zone_combo->setEnabled(true);
+    }
+    if(effect_origin_combo)
+    {
+        effect_origin_combo->setEnabled(true);
+    }
+    if(origin_label)
+    {
+        origin_label->setVisible(true);
+    }
+    if(effect_bounds_label)
+    {
+        effect_bounds_label->setVisible(true);
+    }
+    if(effect_bounds_combo)
+    {
+        effect_bounds_combo->setVisible(true);
+        effect_bounds_combo->setEnabled(true);
+    }
+
+    QVBoxLayout* ml = qobject_cast<QVBoxLayout*>(audio_library_panel->layout());
+    if(!ml)
+    {
+        return;
+    }
+
+    audio_library_hub_active = true;
+
+    QLabel* intro = new QLabel(tr(
+        "Pick an audio-reactive effect, set its options below, choose the frequency band and output zone, then use "
+        "\"Add To Stack\" (or the button here) to append a range. That also adds an \"Audio Effect\" layer if the stack "
+        "does not have one yet. Start listening, then run the stack."));
+    intro->setWordWrap(true);
+    ml->addWidget(intro);
+
+    QWidget* layer_row = new QWidget(audio_library_panel);
+    QHBoxLayout* layer_l = new QHBoxLayout(layer_row);
+    layer_l->setContentsMargins(0, 0, 0, 0);
+    layer_l->addWidget(new QLabel(tr("Effect type:"), layer_row));
+    audio_hub_layer_combo = new QComboBox(layer_row);
+    audio_hub_layer_combo->setMinimumWidth(220);
+    PopulateFreqEffectCombo(audio_hub_layer_combo);
+    layer_l->addWidget(audio_hub_layer_combo, 1);
+    ml->addWidget(layer_row);
+
+    QGroupBox* band_group = new QGroupBox(tr("Frequency band (Hz)"), audio_library_panel);
+    QVBoxLayout* band_l = new QVBoxLayout(band_group);
+    QHBoxLayout* low_row = new QHBoxLayout();
+    low_row->addWidget(new QLabel(tr("Low:")));
+    audio_hub_low_slider = new QSlider(Qt::Horizontal);
+    audio_hub_low_slider->setRange(20, 20000);
+    audio_hub_low_slider->setValue(20);
+    audio_hub_low_label = new QLabel(QStringLiteral("20 Hz"));
+    audio_hub_low_label->setMinimumWidth(56);
+    connect(audio_hub_low_slider, &QSlider::valueChanged, this, [this](int v) {
+        if(audio_hub_high_slider && v > audio_hub_high_slider->value())
+        {
+            QSignalBlocker b(*audio_hub_high_slider);
+            audio_hub_high_slider->setValue(v);
+            if(audio_hub_high_label)
+            {
+                audio_hub_high_label->setText(QStringLiteral("%1 Hz").arg(v));
+            }
+        }
+        if(audio_hub_low_label)
+        {
+            audio_hub_low_label->setText(QStringLiteral("%1 Hz").arg(v));
+        }
+    });
+    low_row->addWidget(audio_hub_low_slider, 1);
+    low_row->addWidget(audio_hub_low_label);
+    band_l->addLayout(low_row);
+
+    QHBoxLayout* high_row = new QHBoxLayout();
+    high_row->addWidget(new QLabel(tr("High:")));
+    audio_hub_high_slider = new QSlider(Qt::Horizontal);
+    audio_hub_high_slider->setRange(20, 20000);
+    audio_hub_high_slider->setValue(200);
+    audio_hub_high_label = new QLabel(QStringLiteral("200 Hz"));
+    audio_hub_high_label->setMinimumWidth(56);
+    connect(audio_hub_high_slider, &QSlider::valueChanged, this, [this](int v) {
+        if(audio_hub_low_slider && v < audio_hub_low_slider->value())
+        {
+            QSignalBlocker b(*audio_hub_low_slider);
+            audio_hub_low_slider->setValue(v);
+            if(audio_hub_low_label)
+            {
+                audio_hub_low_label->setText(QStringLiteral("%1 Hz").arg(v));
+            }
+        }
+        if(audio_hub_high_label)
+        {
+            audio_hub_high_label->setText(QStringLiteral("%1 Hz").arg(v));
+        }
+    });
+    high_row->addWidget(audio_hub_high_slider, 1);
+    high_row->addWidget(audio_hub_high_label);
+    band_l->addLayout(high_row);
+    ml->addWidget(band_group);
+
+    QWidget* zone_row = new QWidget(audio_library_panel);
+    QHBoxLayout* zl = new QHBoxLayout(zone_row);
+    zl->setContentsMargins(0, 0, 0, 0);
+    zl->addWidget(new QLabel(tr("Zone / target:"), zone_row));
+    audio_hub_zone_combo = new QComboBox(zone_row);
+    FillFrequencyRangeZoneCombo(audio_hub_zone_combo, QVariant(-1));
+    zl->addWidget(audio_hub_zone_combo, 1);
+    ml->addWidget(zone_row);
+
+    QWidget* origin_row = new QWidget(audio_library_panel);
+    QHBoxLayout* ol = new QHBoxLayout(origin_row);
+    ol->setContentsMargins(0, 0, 0, 0);
+    ol->addWidget(new QLabel(tr("Pattern origin:"), origin_row));
+    audio_hub_origin_combo = new QComboBox(origin_row);
+    FillFrequencyRangeOriginCombo(audio_hub_origin_combo, QVariant(-1));
+    ol->addWidget(audio_hub_origin_combo, 1);
+    ml->addWidget(origin_row);
+
+    QScrollArea* hub_scroll = new QScrollArea(audio_library_panel);
+    hub_scroll->setWidgetResizable(true);
+    hub_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    hub_scroll->setMinimumHeight(200);
+    audio_hub_preview_holder = new QWidget();
+    new QVBoxLayout(audio_hub_preview_holder);
+    hub_scroll->setWidget(audio_hub_preview_holder);
+    ml->addWidget(hub_scroll);
+
+    rebuildAudioHubPreviewEffect();
+
+    AttachFrequencyRangeEditorToHub(ml);
+
+    QPushButton* add_range = new QPushButton(tr("Add audio range to stack"), audio_library_panel);
+    add_range->setToolTip(tr("Appends this band to the stack ranges list and ensures an Audio Effect layer exists."));
+    connect(add_range, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_audio_hub_add_range_clicked);
+    ml->addWidget(add_range);
+
+    connect(audio_hub_layer_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &OpenRGB3DSpatialTab::on_audio_hub_layer_combo_changed);
+
+    audio_library_panel->setVisible(true);
+    audio_library_panel->updateGeometry();
+
+    if(effect_controls_widget)
+    {
+        effect_controls_widget->setVisible(false);
+    }
+
+    QTimer::singleShot(0, this, [this]() {
+        if(!audio_library_panel || !audio_library_panel->isVisible())
+        {
+            return;
+        }
+        QWidget* detail = audio_library_panel->parentWidget();
+        if(!detail)
+        {
+            return;
+        }
+        QWidget* viewport_w = detail->parentWidget();
+        if(!viewport_w)
+        {
+            return;
+        }
+        if(QScrollArea* sa = qobject_cast<QScrollArea*>(viewport_w->parentWidget()))
+        {
+            sa->ensureWidgetVisible(audio_library_panel, 0, 32);
+        }
+    });
+
+    UpdateEffectStackRowSelectorVisibility();
+    UpdateAudioPanelVisibility();
+}
+
+void OpenRGB3DSpatialTab::rebuildAudioHubPreviewEffect()
+{
+    if(!audio_library_hub_active || !audio_hub_layer_combo || !audio_hub_preview_holder)
+    {
+        return;
+    }
+
+    QVBoxLayout* hl = qobject_cast<QVBoxLayout*>(audio_hub_preview_holder->layout());
+    if(!hl)
+    {
+        return;
+    }
+
+    while(QLayoutItem* item = hl->takeAt(0))
+    {
+        if(QWidget* w = item->widget())
+        {
+            w->setVisible(false);
+            w->setParent(nullptr);
+            w->deleteLater();
+        }
+        delete item;
+    }
+
+    if(audio_hub_preview_effect)
+    {
+        disconnect(audio_hub_preview_effect, nullptr, this, nullptr);
+        audio_hub_preview_effect = nullptr;
+    }
+
+    const QString class_name = audio_hub_layer_combo->currentData(kEffectRoleClassName).toString();
+    if(class_name.isEmpty())
+    {
+        return;
+    }
+
+    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
+    if(!effect)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] Audio hub: failed to create effect: %s", class_name.toStdString().c_str());
+        return;
+    }
+
+    QWidget* ui_wrapper = new QWidget(audio_hub_preview_holder);
+    QVBoxLayout* wrapper_layout = new QVBoxLayout(ui_wrapper);
+    wrapper_layout->setContentsMargins(0, 0, 0, 0);
+    effect->setParent(ui_wrapper);
+    effect->CreateCommonEffectControls(ui_wrapper, false);
+    QWidget* custom_host = effect->GetCustomSettingsHost();
+    effect->SetupCustomUI(custom_host ? custom_host : ui_wrapper);
+    hl->addWidget(ui_wrapper);
+
+    audio_hub_preview_effect = effect;
+    connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]() {
+        RefreshEffectDisplay();
+    });
+
+    effect->adjustSize();
+    audio_hub_preview_holder->adjustSize();
+    if(audio_library_panel)
+    {
+        audio_library_panel->updateGeometry();
+    }
+}
+
+void OpenRGB3DSpatialTab::on_audio_hub_layer_combo_changed(int)
+{
+    rebuildAudioHubPreviewEffect();
+}
+
+void OpenRGB3DSpatialTab::on_audio_hub_add_range_clicked()
+{
+    if(!audio_library_hub_active || !audio_hub_layer_combo)
+    {
+        return;
+    }
+    const QString class_name = audio_hub_layer_combo->currentData(kEffectRoleClassName).toString();
+    if(class_name.isEmpty())
+    {
+        QMessageBox::information(this, tr("Audio Effect"),
+                                 tr("Choose an audio effect type (not \"None\") before adding a range."));
+        return;
+    }
+
+    EnsureAudioContainerLayerOnStack();
+
+    int zone_index = -1;
+    if(audio_hub_zone_combo && audio_hub_zone_combo->currentIndex() >= 0)
+    {
+        zone_index = audio_hub_zone_combo->currentData().toInt();
+    }
+
+    int origin_ref_index = -1;
+    if(audio_hub_origin_combo && audio_hub_origin_combo->currentIndex() >= 0)
+    {
+        origin_ref_index = audio_hub_origin_combo->currentData().toInt();
+    }
+
+    int low_hz = 20;
+    int high_hz = 200;
+    if(audio_hub_low_slider)
+    {
+        low_hz = audio_hub_low_slider->value();
+    }
+    if(audio_hub_high_slider)
+    {
+        high_hz = audio_hub_high_slider->value();
+    }
+    if(high_hz < low_hz)
+    {
+        std::swap(low_hz, high_hz);
+    }
+
+    std::unique_ptr<FrequencyRangeEffect3D> range = std::make_unique<FrequencyRangeEffect3D>();
+    range->id = next_freq_range_id++;
+    range->low_hz = (float)low_hz;
+    range->high_hz = (float)high_hz;
+    range->zone_index = zone_index;
+    range->origin_ref_index = origin_ref_index;
+    range->effect_class_name = class_name.toStdString();
+    EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(range->effect_class_name);
+    QString base_name = info.ui_name.empty() ? class_name : QString::fromStdString(info.ui_name);
+    range->name = QStringLiteral("%1 %2").arg(base_name).arg((int)frequency_ranges.size() + 1).toStdString();
+
+    if(audio_hub_preview_effect)
+    {
+        range->effect_settings = audio_hub_preview_effect->SaveSettings();
+    }
+    else
+    {
+        range->effect_settings = nlohmann::json::object();
+    }
+    range->effect_instance.reset();
+
+    frequency_ranges.push_back(std::move(range));
+    UpdateFrequencyRangesList();
+    SaveFrequencyRanges();
+
+    if(freq_ranges_list)
+    {
+        const QSignalBlocker b(freq_ranges_list);
+        freq_ranges_list->setCurrentRow((int)frequency_ranges.size() - 1);
+    }
+    if(!frequency_ranges.empty())
+    {
+        on_freq_range_selected((int)frequency_ranges.size() - 1);
+    }
+
+    for(int i = 0; i < (int)effect_stack.size(); i++)
+    {
+        if(effect_stack[i] && effect_stack[i]->effect_class_name == AudioEffectLibrary::HubClassName())
+        {
+            if(effect_stack_list)
+            {
+                const QSignalBlocker sb(effect_stack_list);
+                effect_stack_list->setCurrentRow(i);
+            }
+            break;
+        }
+    }
+
+    UpdateAudioPanelVisibility();
+    UpdateEffectCombo();
+    SaveEffectStack();
 }
 
 void OpenRGB3DSpatialTab::SetupStackPresetUI()

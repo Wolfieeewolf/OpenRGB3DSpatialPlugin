@@ -12,6 +12,7 @@ class QSlider;
 class QWidget;
 class QComboBox;
 class QLabel;
+class StripKernelColormapPanel;
 
 class ColorWheel : public SpatialEffect3D
 {
@@ -28,6 +29,9 @@ public:
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
+
+private slots:
+    void SyncStripColormapFromPanel();
 
 private:
     int direction = 0;
@@ -48,6 +52,14 @@ private:
     QLabel* band_speed_value_lbl[3]{};
     QLabel* band_size_value_lbl[3]{};
     QLabel* band_phase_value_lbl[3]{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool colorwheel_strip_cmap_on = false;
+    int colorwheel_strip_cmap_kernel = 0;
+    float colorwheel_strip_cmap_rep = 4.0f;
+    int colorwheel_strip_cmap_unfold = 0;
+    float colorwheel_strip_cmap_dir = 0.0f;
+    int colorwheel_strip_cmap_color_style = 0;
 
     void SyncLayeredSliderWidgets();
 };

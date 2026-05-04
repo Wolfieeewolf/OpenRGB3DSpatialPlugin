@@ -1,14 +1,12 @@
 # Effect Conversion Guide: 2D/1D → 3D Spatial
 
-This guide explains how to convert effects from OpenRGB Effects, FastLED, WLED, and NightDriverStrip into 3D spatial effects for OpenRGB3DSpatialPlugin.
-
 ## Architecture Comparison
 
 | Source | API | Position Model |
 |--------|-----|----------------|
 | **OpenRGB Effects** | `StepEffect(zones)` → `SetLED(LedID, color)` | Linear: LedID. Matrix: (col, row) |
-| **FastLED** | `renderLed(index, point)` | 1D index or Point3D |
-| **WLED/WS2812FX** | Per-LED index | 1D strip index |
+| **Typical strip code** | Per-LED index or `renderLed`-style callback | 1D index or optional 3D point |
+| **Typical matrix firmware** | Per-LED index along wired order | 1D strip index |
 | **OpenRGB3DSpatial** | `CalculateColorGrid(x, y, z, time, grid)` | 3D room coordinates |
 
 ## Conversion Strategies
@@ -69,8 +67,8 @@ For snake/zigzag/marquee (LEDs along a path):
 | Visor | (new) | Beam sweeping in 3D |
 | NoiseMap | Plasma3D | ✓ Similar |
 
-## FastLED / WLED / NightDriver
+## Porting strip / matrix math
 
-- **FastLED examples**: Often use `sin/cos` of position + time. Map `coord1, coord2` to `(x,y)` or `(x,z)` in room.
-- **WLED WS2812FX**: 1D index. Use `position = index/count` or map to room axis.
-- **NightDriver**: Similar to FastLED; extract the `renderLed` math and replace coords with 3D position.
+- **Sinusoidal patterns**: Often use `sin/cos` of position + time. Map `coord1, coord2` to `(x,y)` or `(x,z)` in room.
+- **Indexed strip loops**: Use `position = index/count` or map to a room axis.
+- **Other frameworks**: Extract the per-LED color math and replace coordinates with 3D position.

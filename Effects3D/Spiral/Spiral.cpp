@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Spiral.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
 
@@ -11,6 +13,7 @@ REGISTER_EFFECT_3D(Spiral);
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
+#include <QVBoxLayout>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <cmath>
@@ -107,8 +110,10 @@ EffectInfo3D Spiral::GetEffectInfo()
 void Spiral::SetupCustomUI(QWidget* parent)
 {
     QWidget* spiral_widget = new QWidget();
-    QGridLayout* layout = new QGridLayout(spiral_widget);
-    layout->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout* outer = new QVBoxLayout(spiral_widget);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* layout = new QGridLayout();
+    outer->addLayout(layout);
 
     layout->addWidget(new QLabel("Pattern:"), 0, 0);
     pattern_combo = new QComboBox();
@@ -240,6 +245,16 @@ void Spiral::SetupCustomUI(QWidget* parent)
     layered_band_widget->setVisible(spiral_layout_mode == 1);
     layout->addWidget(layered_band_widget, 4, 0, 1, 3);
 
+    strip_cmap_panel = new StripKernelColormapPanel(spiral_widget);
+    strip_cmap_panel->mirrorStateFromEffect(spiral_strip_cmap_on,
+                                            spiral_strip_cmap_kernel,
+                                            spiral_strip_cmap_rep,
+                                            spiral_strip_cmap_unfold,
+                                            spiral_strip_cmap_dir,
+                                            spiral_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Spiral::SyncStripColormapFromPanel);
+
     AddWidgetToParent(spiral_widget, parent);
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral::OnSpiralParameterChanged);
@@ -290,6 +305,19 @@ void Spiral::SyncLayeredBandWidgets()
 void Spiral::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_SPIRAL;
+}
+
+void Spiral::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    spiral_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    spiral_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    spiral_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    spiral_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    spiral_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    spiral_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Spiral::OnSpiralParameterChanged()
@@ -452,6 +480,22 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
             break;
     }
 
+    const float phase01 = std::fmod(progress_e * 0.25f + ph_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(spiral_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(spiral_strip_cmap_kernel,
+                                               spiral_strip_cmap_rep,
+                                               spiral_strip_cmap_unfold,
+                                               spiral_strip_cmap_dir,
+                                               phase01,
+                                               time,
+                                               grid,
+                                               size_multiplier,
+                                               origin,
+                                               rotated_pos);
+    }
+
     SpatialLayerCore::Basis compass_basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), compass_basis);
     SpatialLayerCore::MapperSettings compass_map;
@@ -473,7 +517,13 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     compass_sample.y_norm = norm_twist;
 
     RGBColor final_color;
-    if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
+    if(spiral_strip_cmap_on)
+    {
+        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        final_color = ResolveStripKernelFinalColor(*this, spiral_strip_cmap_kernel, p01v, spiral_strip_cmap_color_style, time,
+                                                   rate_e * 12.0f);
+    }
+    else if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
     {
         float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
         if(arm_index < 0) arm_index += num_arms;
@@ -520,6 +570,12 @@ nlohmann::json Spiral::SaveSettings() const
     j["spiral_band_speed_pct"] = nlohmann::json::array({band_speed_pct[0], band_speed_pct[1], band_speed_pct[2]});
     j["spiral_band_tight_pct"] = nlohmann::json::array({band_tight_pct[0], band_tight_pct[1], band_tight_pct[2]});
     j["spiral_band_phase_deg"] = nlohmann::json::array({band_phase_deg[0], band_phase_deg[1], band_phase_deg[2]});
+    j["spiral_strip_cmap_on"] = spiral_strip_cmap_on;
+    j["spiral_strip_cmap_kernel"] = spiral_strip_cmap_kernel;
+    j["spiral_strip_cmap_rep"] = spiral_strip_cmap_rep;
+    j["spiral_strip_cmap_unfold"] = spiral_strip_cmap_unfold;
+    j["spiral_strip_cmap_dir"] = spiral_strip_cmap_dir;
+    j["spiral_strip_cmap_color_style"] = spiral_strip_cmap_color_style;
     return j;
 }
 
@@ -559,6 +615,32 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
     LoadBandInt3FromJson(settings, "spiral_band_tight_pct", band_tight_pct, 25, 300);
     LoadBandInt3FromJson(settings, "spiral_band_phase_deg", band_phase_deg, -180, 180);
 
+    if(settings.contains("spiral_strip_cmap_on") && settings["spiral_strip_cmap_on"].is_boolean())
+        spiral_strip_cmap_on = settings["spiral_strip_cmap_on"].get<bool>();
+    else if(settings.contains("spiral_strip_cmap_on") && settings["spiral_strip_cmap_on"].is_number_integer())
+        spiral_strip_cmap_on = settings["spiral_strip_cmap_on"].get<int>() != 0;
+    if(settings.contains("spiral_strip_cmap_kernel") && settings["spiral_strip_cmap_kernel"].is_number_integer())
+        spiral_strip_cmap_kernel = std::clamp(settings["spiral_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+    if(settings.contains("spiral_strip_cmap_rep") && settings["spiral_strip_cmap_rep"].is_number())
+        spiral_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["spiral_strip_cmap_rep"].get<float>()));
+    if(settings.contains("spiral_strip_cmap_unfold") && settings["spiral_strip_cmap_unfold"].is_number_integer())
+        spiral_strip_cmap_unfold = std::clamp(settings["spiral_strip_cmap_unfold"].get<int>(), 0, 6);
+    if(settings.contains("spiral_strip_cmap_dir") && settings["spiral_strip_cmap_dir"].is_number())
+        spiral_strip_cmap_dir = std::fmod(settings["spiral_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
+    if(settings.contains("spiral_strip_cmap_color_style") && settings["spiral_strip_cmap_color_style"].is_number_integer())
+        spiral_strip_cmap_color_style = std::clamp(settings["spiral_strip_cmap_color_style"].get<int>(), 0, 2);
+    else
+        spiral_strip_cmap_color_style = GetRainbowMode() ? 2 : 1;
+
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(spiral_strip_cmap_on,
+                                                spiral_strip_cmap_kernel,
+                                                spiral_strip_cmap_rep,
+                                                spiral_strip_cmap_unfold,
+                                                spiral_strip_cmap_dir,
+                                                spiral_strip_cmap_color_style);
+    }
     if(spiral_layout_combo)
     {
         QSignalBlocker b(spiral_layout_combo);

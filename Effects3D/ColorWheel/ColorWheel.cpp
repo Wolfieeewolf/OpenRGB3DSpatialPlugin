@@ -3,6 +3,8 @@
 #include "ColorWheel.h"
 #include "EffectStratumBlend.h"
 #include "EffectHelpers.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <array>
@@ -216,7 +218,30 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
     layered_settings_widget->setVisible(wheel_layout_mode == 1);
     outer->addWidget(layered_settings_widget);
 
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(colorwheel_strip_cmap_on,
+                                            colorwheel_strip_cmap_kernel,
+                                            colorwheel_strip_cmap_rep,
+                                            colorwheel_strip_cmap_unfold,
+                                            colorwheel_strip_cmap_dir,
+                                            colorwheel_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &ColorWheel::SyncStripColormapFromPanel);
+
     AddWidgetToParent(w, parent);
+}
+
+void ColorWheel::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    colorwheel_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    colorwheel_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    colorwheel_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    colorwheel_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    colorwheel_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    colorwheel_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void ColorWheel::SyncLayeredSliderWidgets()
@@ -351,6 +376,21 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     {
         palette01 += 1.0f;
     }
+    if(colorwheel_strip_cmap_on)
+    {
+        const float size_m = GetNormalizedSize();
+        const float ph01 = std::fmod(plane01 + progress * 0.17f + time * GetScaledFrequency() * 0.05f + 1.f, 1.f);
+        palette01 = SampleStripKernelPalette01(colorwheel_strip_cmap_kernel,
+                                               colorwheel_strip_cmap_rep,
+                                               colorwheel_strip_cmap_unfold,
+                                               colorwheel_strip_cmap_dir,
+                                               ph01,
+                                               time,
+                                               grid,
+                                               size_m,
+                                               origin,
+                                               rot);
+    }
     palette01 = ApplyVoxelDriveToPalette01(palette01, x, y, z, time, grid);
 
     return GetRainbowMode() ? GetRainbowColor(palette01 * 360.0f) : GetColorAtPosition(palette01);
@@ -365,6 +405,14 @@ nlohmann::json ColorWheel::SaveSettings() const
     j["band_speed_pct"] = nlohmann::json::array({band_speed_pct[0], band_speed_pct[1], band_speed_pct[2]});
     j["band_size_pct"] = nlohmann::json::array({band_size_pct[0], band_size_pct[1], band_size_pct[2]});
     j["band_phase_deg"] = nlohmann::json::array({band_phase_deg[0], band_phase_deg[1], band_phase_deg[2]});
+    StripColormapSaveJson(j,
+                          "colorwheel",
+                          colorwheel_strip_cmap_on,
+                          colorwheel_strip_cmap_kernel,
+                          colorwheel_strip_cmap_rep,
+                          colorwheel_strip_cmap_unfold,
+                          colorwheel_strip_cmap_dir,
+                          colorwheel_strip_cmap_color_style);
     return j;
 }
 
@@ -397,6 +445,25 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
     if(layered_settings_widget)
     {
         layered_settings_widget->setVisible(wheel_layout_mode == 1);
+    }
+
+    StripColormapLoadJson(settings,
+                          "colorwheel",
+                          colorwheel_strip_cmap_on,
+                          colorwheel_strip_cmap_kernel,
+                          colorwheel_strip_cmap_rep,
+                          colorwheel_strip_cmap_unfold,
+                          colorwheel_strip_cmap_dir,
+                          colorwheel_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(colorwheel_strip_cmap_on,
+                                                colorwheel_strip_cmap_kernel,
+                                                colorwheel_strip_cmap_rep,
+                                                colorwheel_strip_cmap_unfold,
+                                                colorwheel_strip_cmap_dir,
+                                                colorwheel_strip_cmap_color_style);
     }
 
     SyncLayeredSliderWidgets();

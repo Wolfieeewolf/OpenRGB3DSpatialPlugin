@@ -194,6 +194,7 @@ HEADERS +=                                                                      
     QtCompat.h                                                                                  \
     Game/GameTelemetryStatusPanel.h                                                             \
     Game/GameTelemetryBridge.h                                                                  \
+    Game/LedLayoutCoordinateMap.h                                                               \
     SpatialSamplers/SpatialBasisUtils.h                                                         \
     SpatialSamplers/SpatialLayerCore.h                                                          \
     SpatialSamplers/VoxelRoomCore.h                                                             \
@@ -211,12 +212,24 @@ HEADERS +=                                                                      
     ui/CaptureZonesWidget.h                                                                     \
     ui/PluginUiUtils.h                                                                         \
     Effects3D/EffectStratumBlend.h                                                             \
+    Effects3D/SpatialKernelColormap.h                                                          \
+    Effects3D/StripKernelColormapPanel.h                                                       \
     Effects3D/StratumBandPanel.h                                                               \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
+    Effects3D/BeatKernelSnap/BeatKernelSnap.h                                                 \
     Effects3D/BandScan/BandScan.h                                                               \
+    Effects3D/DualKernelBlend/DualKernelBlend.h                                                \
+    Effects3D/KernelFogWash/KernelFogWash.h                                                    \
+    Effects3D/KernelHueRipple/KernelHueRipple.h                                                \
+    Effects3D/LightningKernelFlash/LightningKernelFlash.h                                      \
+    Effects3D/ParticleKernelTrail/ParticleKernelTrail.h                                        \
+    Effects3D/RoomScannerKernel/RoomScannerKernel.h                                             \
+    Effects3D/SpiralStaircaseKernel/SpiralStaircaseKernel.h                                   \
+    Effects3D/TravelingUnfoldKernel/TravelingUnfoldKernel.h                                   \
     Effects3D/AudioLevel/AudioLevel.h                                                            \
     Effects3D/AudioContainer/AudioContainer.h                                                    \
+    Effects3D/AudioContainer/AudioEffectLibrary.h                                                \
     Effects3D/AudioPulse/AudioPulse.h                                                           \
     Effects3D/FreqFill/FreqFill.h                                                               \
     Effects3D/FreqRipple/FreqRipple.h                                                          \
@@ -246,6 +259,9 @@ HEADERS +=                                                                      
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h                                     \
     Effects3D/TextureProjection/TextureProjection.h                                             \
     Effects3D/OmniShapeTexture/OmniShapeTexture.h                                                \
+    Effects3D/StripShellPattern/StripShellPattern.h                                              \
+    Effects3D/StripShellPattern/StripKernelPatternPalettes.h                                    \
+    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights3D.h                                  \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -290,6 +306,7 @@ SOURCES +=                                                                      
     ui/Gizmo3D.cpp                                                                              \
     ui/CaptureZonesWidget.cpp                                                                   \
     Effects3D/StratumBandPanel.cpp                                                             \
+    Effects3D/StripKernelColormapPanel.cpp                                                     \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
     Effects3D/Explosion/Explosion.cpp                                                       \
@@ -303,7 +320,16 @@ SOURCES +=                                                                      
     Effects3D/BouncingBall/BouncingBall.cpp                                                 \
     Effects3D/SpectrumBars/SpectrumBars.cpp                                                 \
     Effects3D/BeatPulse/BeatPulse.cpp                                                       \
+    Effects3D/BeatKernelSnap/BeatKernelSnap.cpp                                             \
     Effects3D/BandScan/BandScan.cpp                                                         \
+    Effects3D/DualKernelBlend/DualKernelBlend.cpp                                           \
+    Effects3D/KernelFogWash/KernelFogWash.cpp                                               \
+    Effects3D/KernelHueRipple/KernelHueRipple.cpp                                           \
+    Effects3D/LightningKernelFlash/LightningKernelFlash.cpp                                 \
+    Effects3D/ParticleKernelTrail/ParticleKernelTrail.cpp                                   \
+    Effects3D/RoomScannerKernel/RoomScannerKernel.cpp                                       \
+    Effects3D/SpiralStaircaseKernel/SpiralStaircaseKernel.cpp                               \
+    Effects3D/TravelingUnfoldKernel/TravelingUnfoldKernel.cpp                               \
     Effects3D/AudioLevel/AudioLevel.cpp                                                     \
     Effects3D/AudioContainer/AudioContainer.cpp                                             \
     Effects3D/AudioPulse/AudioPulse.cpp                                                     \
@@ -322,6 +348,10 @@ SOURCES +=                                                                      
     Effects3D/ScreenMirror/ScreenMirror.cpp                                                \
     Effects3D/TextureProjection/TextureProjection.cpp                                      \
     Effects3D/OmniShapeTexture/OmniShapeTexture.cpp                                        \
+    Effects3D/StripShellPattern/StripShellPattern.cpp                                      \
+    Effects3D/StripShellPattern/StripShellPatternKernels.cpp                               \
+    Effects3D/StripShellPattern/StripKernelPatternPalettes.cpp                               \
+    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights3D.cpp                            \
     Audio/AudioInputManager.cpp                                                                 \
 
 

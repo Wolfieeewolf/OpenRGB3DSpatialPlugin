@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Plasma.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
@@ -112,6 +114,16 @@ void Plasma::SetupCustomUI(QWidget* parent)
     layout->addWidget(pattern_combo, 0, 1);
     pattern_type = pattern_combo->currentIndex();
 
+    strip_cmap_panel = new StripKernelColormapPanel(plasma_widget);
+    strip_cmap_panel->mirrorStateFromEffect(plasma_strip_cmap_on,
+                                            plasma_strip_cmap_kernel,
+                                            plasma_strip_cmap_rep,
+                                            plasma_strip_cmap_unfold,
+                                            plasma_strip_cmap_dir,
+                                            plasma_strip_cmap_color_style);
+    vbox->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Plasma::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(plasma_widget);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -144,6 +156,19 @@ void Plasma::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void Plasma::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    plasma_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    plasma_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    plasma_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    plasma_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    plasma_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    plasma_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -287,7 +312,29 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
     sp.origin_z = origin.z;
     sp.y_norm = coord2;
 
-    if(GetRainbowMode())
+    const float phase01 = std::fmod(prog + pshift + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(plasma_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(plasma_strip_cmap_kernel,
+                                                 plasma_strip_cmap_rep,
+                                                 plasma_strip_cmap_unfold,
+                                                 plasma_strip_cmap_dir,
+                                                 phase01,
+                                                 time,
+                                                 grid,
+                                                 size_multiplier,
+                                                 origin,
+                                                 rotated_pos);
+    }
+
+    if(plasma_strip_cmap_on)
+    {
+        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        final_color = ResolveStripKernelFinalColor(*this, plasma_strip_cmap_kernel, p01v, plasma_strip_cmap_color_style, time,
+                                                   rate * 12.0f);
+    }
+    else if(GetRainbowMode())
     {
         float hue = plasma_value * 360.0f + time * rate * 12.0f;
         hue = ApplySpatialRainbowHue(hue, plasma_value, basis, sp, map, time, &grid);
@@ -333,6 +380,12 @@ nlohmann::json Plasma::SaveSettings() const
                                            "plasma_stratum_band_speed_pct",
                                            "plasma_stratum_band_tight_pct",
                                            "plasma_stratum_band_phase_deg");
+    j["plasma_strip_cmap_on"] = plasma_strip_cmap_on;
+    j["plasma_strip_cmap_kernel"] = plasma_strip_cmap_kernel;
+    j["plasma_strip_cmap_rep"] = plasma_strip_cmap_rep;
+    j["plasma_strip_cmap_unfold"] = plasma_strip_cmap_unfold;
+    j["plasma_strip_cmap_dir"] = plasma_strip_cmap_dir;
+    j["plasma_strip_cmap_color_style"] = plasma_strip_cmap_color_style;
     return j;
 }
 
@@ -349,7 +402,32 @@ void Plasma::LoadSettings(const nlohmann::json& settings)
                                             "plasma_stratum_band_speed_pct",
                                             "plasma_stratum_band_tight_pct",
                                             "plasma_stratum_band_phase_deg");
+    if(settings.contains("plasma_strip_cmap_on") && settings["plasma_strip_cmap_on"].is_boolean())
+        plasma_strip_cmap_on = settings["plasma_strip_cmap_on"].get<bool>();
+    else if(settings.contains("plasma_strip_cmap_on") && settings["plasma_strip_cmap_on"].is_number_integer())
+        plasma_strip_cmap_on = settings["plasma_strip_cmap_on"].get<int>() != 0;
+    if(settings.contains("plasma_strip_cmap_kernel") && settings["plasma_strip_cmap_kernel"].is_number_integer())
+        plasma_strip_cmap_kernel = std::clamp(settings["plasma_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+    if(settings.contains("plasma_strip_cmap_rep") && settings["plasma_strip_cmap_rep"].is_number())
+        plasma_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["plasma_strip_cmap_rep"].get<float>()));
+    if(settings.contains("plasma_strip_cmap_unfold") && settings["plasma_strip_cmap_unfold"].is_number_integer())
+        plasma_strip_cmap_unfold = std::clamp(settings["plasma_strip_cmap_unfold"].get<int>(), 0, 6);
+    if(settings.contains("plasma_strip_cmap_dir") && settings["plasma_strip_cmap_dir"].is_number())
+        plasma_strip_cmap_dir = std::fmod(settings["plasma_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
+    if(settings.contains("plasma_strip_cmap_color_style") && settings["plasma_strip_cmap_color_style"].is_number_integer())
+        plasma_strip_cmap_color_style = std::clamp(settings["plasma_strip_cmap_color_style"].get<int>(), 0, 2);
+    else
+        plasma_strip_cmap_color_style = GetRainbowMode() ? 2 : 1;
 
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(plasma_strip_cmap_on,
+                                                plasma_strip_cmap_kernel,
+                                                plasma_strip_cmap_rep,
+                                                plasma_strip_cmap_unfold,
+                                                plasma_strip_cmap_dir,
+                                                plasma_strip_cmap_color_style);
+    }
     if(pattern_combo)
         pattern_combo->setCurrentIndex(pattern_type);
     if(stratum_panel)

@@ -57,7 +57,6 @@ public:
         float origin_y = 0.0f;
         float origin_z = 0.0f;
         float voxel_size = 1.0f;
-        // RGBA bytes (x-major): ((x * sy + y) * sz + z) * 4
         std::vector<unsigned char> rgba;
         unsigned long long received_ms = 0;
     };
@@ -171,7 +170,6 @@ public:
                          std::string& last_type);
     static TelemetrySnapshot GetTelemetrySnapshot();
 
-    /** Increments on each applied telemetry JSON message (pose, voxel, world_light, …). For coarse caching of GetTelemetrySnapshot(). */
     static std::uint64_t TelemetryDataRevision();
 
 private:

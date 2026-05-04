@@ -462,6 +462,7 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
     ClearMinecraftLibraryPanel();
+    ClearAudioLibraryPanel();
 
     QWidget* scroll_content = effects_detail_scroll ? effects_detail_scroll->widget() : nullptr;
     DeferEffectPanelMapping mapping_guard(effects_detail_scroll, scroll_content, effect_controls_widget);
@@ -592,13 +593,21 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         return;
     }
 
-    ui_effect->setParent(effect_controls_widget);
     current_effect_ui = ui_effect;
 
     bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
     bool is_screen_mirror = (instance->effect_class_name == "ScreenMirror");
     QPushButton* direct_start = nullptr;
     QPushButton* direct_stop  = nullptr;
+
+    auto make_stack_effect_body = [this, ui_effect]() -> QWidget* {
+        QWidget* body = new QWidget(effect_controls_widget);
+        QVBoxLayout* body_layout = new QVBoxLayout(body);
+        body_layout->setContentsMargins(0, 0, 0, 0);
+        body_layout->setSpacing(4);
+        ui_effect->setParent(body);
+        return body;
+    };
 
     if(is_audio)
     {
@@ -615,12 +624,18 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         btn_layout->addStretch();
         effect_controls_layout->addWidget(btn_widget);
 
-        if(effect_zone_label)   effect_zone_label->setVisible(false);
-        if(effect_zone_combo)   effect_zone_combo->setVisible(false);
-        if(origin_label)        origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
-        if(effect_bounds_label) effect_bounds_label->setVisible(false);
-        if(effect_bounds_combo) effect_bounds_combo->setVisible(false);
+        QWidget* stack_effect_body = make_stack_effect_body();
+        ui_effect->CreateCommonEffectControls(stack_effect_body, false);
+        QWidget* custom_host = ui_effect->GetCustomSettingsHost();
+        ui_effect->SetupCustomUI(custom_host ? custom_host : stack_effect_body);
+        effect_controls_layout->addWidget(stack_effect_body);
+
+        if(effect_zone_label)   effect_zone_label->setVisible(true);
+        if(effect_zone_combo)   effect_zone_combo->setVisible(true);
+        if(origin_label)         origin_label->setVisible(true);
+        if(effect_origin_combo)  effect_origin_combo->setVisible(true);
+        if(effect_bounds_label)  effect_bounds_label->setVisible(true);
+        if(effect_bounds_combo)  effect_bounds_combo->setVisible(true);
     }
     else if(is_screen_mirror)
     {
@@ -637,7 +652,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         btn_layout->addStretch();
         effect_controls_layout->addWidget(btn_widget);
 
-        ui_effect->SetupCustomUI(effect_controls_widget);
+        QWidget* stack_effect_body = make_stack_effect_body();
+        ui_effect->SetupCustomUI(stack_effect_body);
 
         ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(ui_effect);
         if(screen_mirror)
@@ -648,14 +664,14 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
             QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
         }
 
+        effect_controls_layout->addWidget(stack_effect_body);
+
         if(effect_zone_label)   effect_zone_label->setVisible(false);
         if(effect_zone_combo)   effect_zone_combo->setVisible(false);
         if(origin_label)        origin_label->setVisible(false);
         if(effect_origin_combo) effect_origin_combo->setVisible(false);
         if(effect_bounds_label) effect_bounds_label->setVisible(false);
         if(effect_bounds_combo) effect_bounds_combo->setVisible(false);
-
-        effect_controls_layout->addWidget(ui_effect);
     }
     else
     {
@@ -670,9 +686,11 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
             effect_controls_layout->addWidget(bundled_hint);
         }
 
-        ui_effect->CreateCommonEffectControls(effect_controls_widget);
+        QWidget* stack_effect_body = make_stack_effect_body();
+        ui_effect->CreateCommonEffectControls(stack_effect_body);
         QWidget* custom_host = ui_effect->GetCustomSettingsHost();
-        ui_effect->SetupCustomUI(custom_host ? custom_host : effect_controls_widget);
+        ui_effect->SetupCustomUI(custom_host ? custom_host : stack_effect_body);
+        effect_controls_layout->addWidget(stack_effect_body);
 
         if(effect_zone_label) effect_zone_label->setVisible(true);
         if(effect_zone_combo) effect_zone_combo->setVisible(true);
@@ -680,8 +698,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(effect_origin_combo) effect_origin_combo->setVisible(true);
         if(effect_bounds_label) effect_bounds_label->setVisible(true);
         if(effect_bounds_combo) effect_bounds_combo->setVisible(true);
-
-        effect_controls_layout->addWidget(ui_effect);
     }
 
     nlohmann::json settings;

@@ -8,6 +8,7 @@
 #include "EffectStratumBlend.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 class QComboBox;
 class QSlider;
 class QLabel;
@@ -37,10 +38,11 @@ private slots:
     void OnWaveParameterChanged();
     void OnModeChanged();
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     enum Mode { MODE_LINE = 0, MODE_SURFACE, MODE_COUNT };
-    enum WaveStyle { STYLE_SINUS = 0, STYLE_RADIAL, STYLE_LINEAR, STYLE_PACIFICA, STYLE_GRADIENT, STYLE_COUNT };
+    enum WaveStyle { STYLE_SINUS = 0, STYLE_RADIAL, STYLE_LINEAR, STYLE_OCEAN_DRIFT, STYLE_GRADIENT, STYLE_COUNT };
     static const char* ModeName(int m);
     static const char* WaveStyleName(int s);
 
@@ -82,6 +84,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool wave_strip_cmap_on = false;
+    int wave_strip_cmap_kernel = 0;
+    float wave_strip_cmap_rep = 4.0f;
+    int wave_strip_cmap_unfold = 0;
+    float wave_strip_cmap_dir = 0.0f;
+    int wave_strip_cmap_color_style = 0;
 };
 
 #endif

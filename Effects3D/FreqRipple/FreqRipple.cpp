@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "FreqRipple.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
@@ -141,12 +143,35 @@ void FreqRipple::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
+    strip_cmap_panel = new StripKernelColormapPanel(parent);
+    strip_cmap_panel->mirrorStateFromEffect(freqripple_strip_cmap_on,
+                                            freqripple_strip_cmap_kernel,
+                                            freqripple_strip_cmap_rep,
+                                            freqripple_strip_cmap_unfold,
+                                            freqripple_strip_cmap_dir,
+                                            freqripple_strip_cmap_color_style);
+    layout->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqRipple::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
     layout->addWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqRipple::OnStratumBandChanged);
     OnStratumBandChanged();
+}
+
+void FreqRipple::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    freqripple_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    freqripple_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    freqripple_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    freqripple_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    freqripple_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    freqripple_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void FreqRipple::OnStratumBandChanged()
@@ -296,7 +321,29 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(GetRainbowMode())
+    if(freqripple_strip_cmap_on)
+    {
+        const float size_m = GetNormalizedSize();
+        const float ph01 =
+            std::fmod(CalculateProgress(time) * 0.37f + dist_norm * 0.21f +
+                          time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) + 1.f,
+                      1.f);
+        float p01 = SampleStripKernelPalette01(freqripple_strip_cmap_kernel,
+                                                 freqripple_strip_cmap_rep,
+                                                 freqripple_strip_cmap_unfold,
+                                                 freqripple_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rp);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = ResolveStripKernelFinalColor(*this, freqripple_strip_cmap_kernel, std::min(p01, 1.0f),
+                                                  freqripple_strip_cmap_color_style, time,
+                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else if(GetRainbowMode())
     {
         float hue =
             dist_norm * 180.0f + CalculateProgress(time) * 50.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul;
@@ -340,6 +387,14 @@ nlohmann::json FreqRipple::SaveSettings() const
                                            "freqripple_stratum_band_speed_pct",
                                            "freqripple_stratum_band_tight_pct",
                                            "freqripple_stratum_band_phase_deg");
+    StripColormapSaveJson(j,
+                          "freqripple",
+                          freqripple_strip_cmap_on,
+                          freqripple_strip_cmap_kernel,
+                          freqripple_strip_cmap_rep,
+                          freqripple_strip_cmap_unfold,
+                          freqripple_strip_cmap_dir,
+                          freqripple_strip_cmap_color_style);
     return j;
 }
 
@@ -358,6 +413,24 @@ void FreqRipple::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("decay_rate"))      decay_rate      = settings["decay_rate"].get<float>();
     if(settings.contains("onset_threshold")) onset_threshold = settings["onset_threshold"].get<float>();
     if(settings.contains("ripple_edge_shape")) ripple_edge_shape = std::clamp(settings["ripple_edge_shape"].get<int>(), 0, 2);
+    StripColormapLoadJson(settings,
+                          "freqripple",
+                          freqripple_strip_cmap_on,
+                          freqripple_strip_cmap_kernel,
+                          freqripple_strip_cmap_rep,
+                          freqripple_strip_cmap_unfold,
+                          freqripple_strip_cmap_dir,
+                          freqripple_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(freqripple_strip_cmap_on,
+                                                freqripple_strip_cmap_kernel,
+                                                freqripple_strip_cmap_rep,
+                                                freqripple_strip_cmap_unfold,
+                                                freqripple_strip_cmap_dir,
+                                                freqripple_strip_cmap_color_style);
+    }
     ripples.clear();
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;

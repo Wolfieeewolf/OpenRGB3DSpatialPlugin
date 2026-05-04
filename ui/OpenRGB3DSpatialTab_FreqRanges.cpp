@@ -34,44 +34,47 @@ static bool TryGetGlobalLedIndexForRange(RGBController* controller,
     return (*global_idx < controller->colors.size());
 }
 
-void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layout)
+void OpenRGB3DSpatialTab::EnsureFrequencyRangeEditorBuilt()
 {
-    freq_ranges_group = new QGroupBox("Frequency Range Effects");
+    if(freq_ranges_group)
+    {
+        return;
+    }
+
+    freq_ranges_group = new QGroupBox(tr("Stack audio ranges"));
     QVBoxLayout* freq_layout = new QVBoxLayout(freq_ranges_group);
-    
-    QLabel* header = new QLabel("Multi-Band Audio Effects");
+
+    QLabel* header = new QLabel(tr("Bands driving the Audio Effect layer"));
     PluginUiApplyBoldLabel(header);
     freq_layout->addWidget(header);
-    
-    QLabel* description = new QLabel("Configure independent audio-reactive effects for specific frequency ranges (e.g., bass floor, treble ceiling).");
+
+    QLabel* description = new QLabel(tr(
+        "Select a range to edit EQ, response, zone, and effect settings. New bands are added with the button below "
+        "(effect type, Hz band, zone, and preview must be set first)."));
     description->setWordWrap(true);
     PluginUiApplyMutedSecondaryLabel(description);
     freq_layout->addWidget(description);
-    
-    QLabel* ranges_label = new QLabel("Audio Frequency Ranges:");
+
+    QLabel* ranges_label = new QLabel(tr("Saved ranges:"));
     PluginUiApplyBoldLabel(ranges_label);
     freq_layout->addWidget(ranges_label);
-    
+
     freq_ranges_list = new QListWidget();
     freq_ranges_list->setMinimumHeight(120);
     freq_ranges_list->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(freq_ranges_list, &QListWidget::currentRowChanged,
             this, &OpenRGB3DSpatialTab::on_freq_range_selected);
     freq_layout->addWidget(freq_ranges_list);
-    
+
     QHBoxLayout* range_buttons = new QHBoxLayout();
-    add_freq_range_btn = new QPushButton("Add Range");
-    remove_freq_range_btn = new QPushButton("Remove Selected");
-    duplicate_freq_range_btn = new QPushButton("Duplicate");
-    
-    connect(add_freq_range_btn, &QPushButton::clicked,
-            this, &OpenRGB3DSpatialTab::on_add_freq_range_clicked);
+    remove_freq_range_btn = new QPushButton(tr("Remove selected"));
+    duplicate_freq_range_btn = new QPushButton(tr("Duplicate"));
+
     connect(remove_freq_range_btn, &QPushButton::clicked,
             this, &OpenRGB3DSpatialTab::on_remove_freq_range_clicked);
     connect(duplicate_freq_range_btn, &QPushButton::clicked,
             this, &OpenRGB3DSpatialTab::on_duplicate_freq_range_clicked);
-    
-    range_buttons->addWidget(add_freq_range_btn);
+
     range_buttons->addWidget(remove_freq_range_btn);
     range_buttons->addWidget(duplicate_freq_range_btn);
     range_buttons->addStretch();
@@ -228,10 +231,31 @@ void OpenRGB3DSpatialTab::SetupFrequencyRangeEffectsUI(QVBoxLayout* parent_layou
     
     freq_layout->addWidget(freq_range_details);
     freq_range_details->setVisible(false);
-    
-    parent_layout->addWidget(freq_ranges_group);
-    
-    LoadFrequencyRanges();
+}
+
+void OpenRGB3DSpatialTab::AttachFrequencyRangeEditorToHub(QVBoxLayout* hub_layout)
+{
+    if(!hub_layout)
+    {
+        return;
+    }
+    EnsureFrequencyRangeEditorBuilt();
+    if(!freq_ranges_group)
+    {
+        return;
+    }
+
+    QWidget* hub_parent = qobject_cast<QWidget*>(hub_layout->parent());
+    if(freq_ranges_group->parentWidget() != nullptr)
+    {
+        if(QLayout* old_lay = freq_ranges_group->parentWidget()->layout())
+        {
+            old_lay->removeWidget(freq_ranges_group);
+        }
+    }
+    freq_ranges_group->setParent(hub_parent);
+    hub_layout->addWidget(freq_ranges_group);
+    freq_ranges_group->show();
     UpdateFrequencyRangesList();
 }
 
@@ -261,15 +285,17 @@ void OpenRGB3DSpatialTab::PopulateFreqEffectCombo(QComboBox* combo)
     }
 }
 
-void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
+void OpenRGB3DSpatialTab::FillFrequencyRangeOriginCombo(QComboBox* combo, const QVariant& desired_selection)
 {
-    if(!freq_origin_combo) return;
+    if(!combo)
+    {
+        return;
+    }
 
-    QVariant desired_selection = freq_origin_combo->currentData();
-    bool restore_signals = freq_origin_combo->blockSignals(true);
-    freq_origin_combo->clear();
+    bool restore_signals = combo->blockSignals(true);
+    combo->clear();
 
-    freq_origin_combo->addItem("Room Center", QVariant(-1));
+    combo->addItem("Room Center", QVariant(-1));
 
     for(size_t i = 0; i < reference_points.size(); i++)
     {
@@ -277,28 +303,30 @@ void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
         if(!ref_point) continue;
         QString name = QString::fromStdString(ref_point->GetName());
         QString type = QString(VirtualReferencePoint3D::GetTypeName(ref_point->GetType()));
-        freq_origin_combo->addItem(QString("%1 (%2)").arg(name, type), QVariant((int)i));
+        combo->addItem(QString("%1 (%2)").arg(name, type), QVariant((int)i));
     }
 
-    int restore_index = freq_origin_combo->findData(desired_selection);
+    int restore_index = combo->findData(desired_selection);
     if(restore_index < 0)
     {
         restore_index = 0;
     }
-    freq_origin_combo->setCurrentIndex(restore_index);
-    freq_origin_combo->blockSignals(restore_signals);
+    combo->setCurrentIndex(restore_index);
+    combo->blockSignals(restore_signals);
 }
 
-void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
+void OpenRGB3DSpatialTab::FillFrequencyRangeZoneCombo(QComboBox* combo, const QVariant& desired_selection)
 {
-    if(!freq_zone_combo) return;
-    
-    QVariant desired_selection = freq_zone_combo->currentData();
-    bool restore_signals = freq_zone_combo->blockSignals(true);
-    freq_zone_combo->clear();
-    
-    freq_zone_combo->addItem("All Controllers", QVariant(-1));
-    
+    if(!combo)
+    {
+        return;
+    }
+
+    bool restore_signals = combo->blockSignals(true);
+    combo->clear();
+
+    combo->addItem("All Controllers", QVariant(-1));
+
     if(zone_manager)
     {
         for(int i = 0; i < zone_manager->GetZoneCount(); i++)
@@ -307,11 +335,11 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
             if(zone)
             {
                 QString zone_name = QString::fromStdString(zone->GetName());
-                freq_zone_combo->addItem(zone_name, QVariant(i));
+                combo->addItem(zone_name, QVariant(i));
             }
         }
     }
-    
+
     for(unsigned int ci = 0; ci < controller_transforms.size(); ci++)
     {
         ControllerTransform* t = controller_transforms[ci].get();
@@ -328,16 +356,40 @@ void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
         {
             name = QString("Controller %1").arg((int)ci);
         }
-        freq_zone_combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
+        combo->addItem(QString("(Controller) %1").arg(name), QVariant(-(int)ci - 1000));
     }
-    
-    int restore_index = freq_zone_combo->findData(desired_selection);
+
+    int restore_index = combo->findData(desired_selection);
     if(restore_index < 0)
     {
         restore_index = 0;
     }
-    freq_zone_combo->setCurrentIndex(restore_index);
-    freq_zone_combo->blockSignals(restore_signals);
+    combo->setCurrentIndex(restore_index);
+    combo->blockSignals(restore_signals);
+}
+
+void OpenRGB3DSpatialTab::UpdateFreqOriginCombo()
+{
+    if(freq_origin_combo)
+    {
+        FillFrequencyRangeOriginCombo(freq_origin_combo, freq_origin_combo->currentData());
+    }
+    if(audio_library_hub_active && audio_hub_origin_combo)
+    {
+        FillFrequencyRangeOriginCombo(audio_hub_origin_combo, audio_hub_origin_combo->currentData());
+    }
+}
+
+void OpenRGB3DSpatialTab::UpdateFreqZoneCombo()
+{
+    if(freq_zone_combo)
+    {
+        FillFrequencyRangeZoneCombo(freq_zone_combo, freq_zone_combo->currentData());
+    }
+    if(audio_library_hub_active && audio_hub_zone_combo)
+    {
+        FillFrequencyRangeZoneCombo(audio_hub_zone_combo, audio_hub_zone_combo->currentData());
+    }
 }
 
 void OpenRGB3DSpatialTab::UpdateFrequencyRangesList()
@@ -366,25 +418,6 @@ void OpenRGB3DSpatialTab::UpdateFrequencyRangesList()
     {
         freq_ranges_list->setCurrentRow(selected_row);
     }
-}
-
-void OpenRGB3DSpatialTab::on_add_freq_range_clicked()
-{
-    std::unique_ptr<FrequencyRangeEffect3D> range = std::make_unique<FrequencyRangeEffect3D>();
-    range->id = next_freq_range_id++;
-    range->name = "Range " + std::to_string(range->id);
-    range->low_hz = 20.0f;
-    range->high_hz = 200.0f;
-    range->effect_class_name = "";
-    range->zone_index = -1;
-    range->enabled = true;
-    
-    frequency_ranges.push_back(std::move(range));
-    UpdateFrequencyRangesList();
-    
-    freq_ranges_list->setCurrentRow((int)frequency_ranges.size() - 1);
-    
-    SaveFrequencyRanges();
 }
 
 void OpenRGB3DSpatialTab::on_remove_freq_range_clicked()

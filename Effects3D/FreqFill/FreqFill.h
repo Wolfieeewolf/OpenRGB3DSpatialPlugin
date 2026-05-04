@@ -11,6 +11,7 @@
 #include <limits>
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class FreqFill : public SpatialEffect3D
 {
@@ -31,6 +32,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     float EvaluateIntensity(float amplitude, float time);
@@ -44,6 +46,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool freqfill_strip_cmap_on = false;
+    int freqfill_strip_cmap_kernel = 0;
+    float freqfill_strip_cmap_rep = 4.0f;
+    int freqfill_strip_cmap_unfold = 0;
+    float freqfill_strip_cmap_dir = 0.0f;
+    int freqfill_strip_cmap_color_style = 0;
 };
 
 #endif

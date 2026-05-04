@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "FreqFill.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
@@ -123,12 +125,35 @@ void FreqFill::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
+    strip_cmap_panel = new StripKernelColormapPanel(parent);
+    strip_cmap_panel->mirrorStateFromEffect(freqfill_strip_cmap_on,
+                                            freqfill_strip_cmap_kernel,
+                                            freqfill_strip_cmap_rep,
+                                            freqfill_strip_cmap_unfold,
+                                            freqfill_strip_cmap_dir,
+                                            freqfill_strip_cmap_color_style);
+    layout->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqFill::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
     layout->addWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqFill::OnStratumBandChanged);
     OnStratumBandChanged();
+}
+
+void FreqFill::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    freqfill_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    freqfill_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    freqfill_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    freqfill_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    freqfill_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    freqfill_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void FreqFill::OnStratumBandChanged()
@@ -213,7 +238,25 @@ RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, con
     sp.y_norm = coord2;
 
     RGBColor lit_color;
-    if(GetRainbowMode())
+    if(freqfill_strip_cmap_on)
+    {
+        const float ph01 =
+            std::fmod(CalculateProgress(time) * 0.28f + pos * 0.15f + pos_color * 0.12f + 1.f, 1.f);
+        float p01 = SampleStripKernelPalette01(freqfill_strip_cmap_kernel,
+                                                 freqfill_strip_cmap_rep,
+                                                 freqfill_strip_cmap_unfold,
+                                                 freqfill_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 o,
+                                                 rot);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        lit_color = ResolveStripKernelFinalColor(*this, freqfill_strip_cmap_kernel, p01, freqfill_strip_cmap_color_style, time,
+                                                 GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else if(GetRainbowMode())
     {
         float hue = pos_color * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul;
         hue = ApplySpatialRainbowHue(hue, pos_color, basis, sp, map, time, &grid);
@@ -256,6 +299,14 @@ nlohmann::json FreqFill::SaveSettings() const
                                            "freqfill_stratum_band_speed_pct",
                                            "freqfill_stratum_band_tight_pct",
                                            "freqfill_stratum_band_phase_deg");
+    StripColormapSaveJson(j,
+                          "freqfill",
+                          freqfill_strip_cmap_on,
+                          freqfill_strip_cmap_kernel,
+                          freqfill_strip_cmap_rep,
+                          freqfill_strip_cmap_unfold,
+                          freqfill_strip_cmap_dir,
+                          freqfill_strip_cmap_color_style);
     return j;
 }
 
@@ -273,6 +324,24 @@ void FreqFill::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("edge_width")) edge_width = settings["edge_width"].get<float>();
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
+    StripColormapLoadJson(settings,
+                          "freqfill",
+                          freqfill_strip_cmap_on,
+                          freqfill_strip_cmap_kernel,
+                          freqfill_strip_cmap_rep,
+                          freqfill_strip_cmap_unfold,
+                          freqfill_strip_cmap_dir,
+                          freqfill_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(freqfill_strip_cmap_on,
+                                                freqfill_strip_cmap_kernel,
+                                                freqfill_strip_cmap_rep,
+                                                freqfill_strip_cmap_unfold,
+                                                freqfill_strip_cmap_dir,
+                                                freqfill_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

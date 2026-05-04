@@ -9,6 +9,7 @@
 #include <vector>
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class Fireworks : public SpatialEffect3D
 {
@@ -28,6 +29,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     enum FireworkType { TYPE_SINGLE = 0, TYPE_BIG_EXPLOSION, TYPE_ROMAN_CANDLE, TYPE_SPINNER, TYPE_FOUNTAIN, TYPE_RANDOM, TYPE_COUNT };
@@ -51,6 +53,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool fireworks_strip_cmap_on = false;
+    int fireworks_strip_cmap_kernel = 0;
+    float fireworks_strip_cmap_rep = 4.0f;
+    int fireworks_strip_cmap_unfold = 0;
+    float fireworks_strip_cmap_dir = 0.0f;
+    int fireworks_strip_cmap_color_style = 0;
 };
 
 #endif

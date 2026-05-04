@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "TravelingLight.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "../EffectHelpers.h"
@@ -175,6 +177,15 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
         if(glow_label) glow_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(travelinglight_strip_cmap_on,
+                                            travelinglight_strip_cmap_kernel,
+                                            travelinglight_strip_cmap_rep,
+                                            travelinglight_strip_cmap_unfold,
+                                            travelinglight_strip_cmap_dir,
+                                            travelinglight_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &TravelingLight::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -182,6 +193,19 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TravelingLight::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void TravelingLight::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    travelinglight_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    travelinglight_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    travelinglight_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    travelinglight_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    travelinglight_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    travelinglight_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void TravelingLight::OnStratumBandChanged()
@@ -225,6 +249,39 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     float color_cycle = progress * GetScaledFrequency() * 3.0f;
     const float tight_inv = 1.0f / std::max(0.25f, bb.tight_mul);
 
+    const float size_m_tl = GetNormalizedSize();
+    const float tl_phase01 = std::fmod(progress + color_cycle * (1.f / 360.f) + 1.f, 1.f);
+    float tl_strip_p01 = 0.f;
+    if(travelinglight_strip_cmap_on)
+    {
+        tl_strip_p01 = SampleStripKernelPalette01(travelinglight_strip_cmap_kernel,
+                                                  travelinglight_strip_cmap_rep,
+                                                  travelinglight_strip_cmap_unfold,
+                                                  travelinglight_strip_cmap_dir,
+                                                  tl_phase01,
+                                                  time,
+                                                  grid,
+                                                  size_m_tl,
+                                                  origin,
+                                                  rotated);
+    }
+    const float tl_rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
+    auto tl_strip_rgb = [&](float p01_k) -> RGBColor {
+        float pv = ApplyVoxelDriveToPalette01(p01_k, x, y, z, time, grid);
+        return ResolveStripKernelFinalColor(*this, travelinglight_strip_cmap_kernel, pv, travelinglight_strip_cmap_color_style, time,
+                                             tl_rbow_mul);
+    };
+    auto tl_rainbow = [&](float hue_deg) -> RGBColor {
+        if(travelinglight_strip_cmap_on)
+            return tl_strip_rgb(tl_strip_p01);
+        return GetRainbowColor(hue_deg);
+    };
+    auto tl_palette = [&](float p01) -> RGBColor {
+        if(travelinglight_strip_cmap_on)
+            return tl_strip_rgb(tl_strip_p01);
+        return GetColorAtPosition(p01);
+    };
+
     int m = std::max(0, std::min(this->mode, MODE_COUNT - 1));
     int ax = GetPathAxis();
 
@@ -246,16 +303,23 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         {
             float hue = fmodf(progress * 360.0f * (0.6f + 0.4f * detail) + color_cycle, 360.0f);
             if(hue < 0.0f) hue += 360.0f;
-            c = GetRainbowColor(hue);
+            c = tl_rainbow(hue);
         }
         else if(dist < -hw)
-            c = GetColorAtPosition(step ? 1.0f : 0.0f);
+            c = travelinglight_strip_cmap_on
+                    ? tl_strip_rgb(step ? tl_strip_p01 : std::fmod(tl_strip_p01 + 0.5f, 1.0f))
+                    : GetColorAtPosition(step ? 1.0f : 0.0f);
         else if(dist > hw)
-            c = GetColorAtPosition(step ? 0.0f : 1.0f);
+            c = travelinglight_strip_cmap_on
+                    ? tl_strip_rgb(step ? std::fmod(tl_strip_p01 + 0.5f, 1.0f) : tl_strip_p01)
+                    : GetColorAtPosition(step ? 0.0f : 1.0f);
         else
         {
             float interp = std::max(0.0f, std::min(1.0f, (hw - dist) / w));
-            c = GetColorAtPosition(step ? interp : (1.0f - interp));
+            c = travelinglight_strip_cmap_on
+                    ? tl_strip_rgb(step ? std::fmod(tl_strip_p01 + interp * 0.35f, 1.0f)
+                                        : std::fmod(tl_strip_p01 + (1.0f - interp) * 0.35f, 1.0f))
+                    : GetColorAtPosition(step ? interp : (1.0f - interp));
         }
         if(dist < -hw)
             intensity = std::max(0.0f, std::min(1.0f, (w + dist) / w));
@@ -295,7 +359,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float depth_factor = (max_radius > 0.001f) ? (0.5f + 0.5f * (1.0f - std::min(1.0f, radial_distance / max_radius) * 0.5f)) : 1.0f;
         float pos_color = std::fmod(prog + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor final_color = GetRainbowMode() ? GetRainbowColor(prog * 360.0f + color_cycle) : GetColorAtPosition(pos_color);
+        RGBColor final_color =
+            GetRainbowMode() ? tl_rainbow(prog * 360.0f + color_cycle) : tl_palette(pos_color);
         unsigned char r = (unsigned char)((final_color & 0xFF) * intensity * depth_factor);
         unsigned char g = (unsigned char)(((final_color >> 8) & 0xFF) * intensity * depth_factor);
         unsigned char b = (unsigned char)(((final_color >> 16) & 0xFF) * intensity * depth_factor);
@@ -320,10 +385,18 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float t = progress;
         float s = 0.5f * (1.0f + sinf(sec * (float)M_PI * 4.0f + (zone_id ? 1.0f : -1.0f) * t * (float)(2.0 * M_PI) + (float)M_PI * 0.25f));
         RGBColor c0, c1;
-        if(GetRainbowMode()) {
+        if(travelinglight_strip_cmap_on)
+        {
+            c0 = tl_strip_rgb(tl_strip_p01);
+            c1 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
+        }
+        else if(GetRainbowMode())
+        {
             c0 = GetRainbowColor(progress * 60.0f + zone * 30.0f + color_cycle);
             c1 = GetRainbowColor(progress * 60.0f + zone * 30.0f + 180.0f + color_cycle);
-        } else {
+        }
+        else
+        {
             const std::vector<RGBColor>& cols = GetColors();
             c0 = (cols.size() > 0) ? cols[0] : 0x000000FF;
             c1 = (cols.size() > 1) ? cols[1] : 0x00FF0000;
@@ -348,10 +421,18 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         dx_pct = std::min(1.0f, dx_pct);
         dy_pct = std::min(1.0f, dy_pct);
         RGBColor c1, c2;
-        if(GetRainbowMode()) {
+        if(travelinglight_strip_cmap_on)
+        {
+            c1 = tl_strip_rgb(tl_strip_p01);
+            c2 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
+        }
+        else if(GetRainbowMode())
+        {
             c1 = GetRainbowColor(progress * 120.0f + color_cycle);
             c2 = GetRainbowColor(progress * 120.0f + 180.0f + color_cycle);
-        } else {
+        }
+        else
+        {
             const std::vector<RGBColor>& cols = GetColors();
             c1 = (cols.size() > 0) ? cols[0] : 0x000000FF;
             c2 = (cols.size() > 1) ? cols[1] : 0x0000FF00;
@@ -390,7 +471,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(hue < 0.0f) hue += 360.0f;
         float pos_color = std::fmod(progress + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pos_color);
+        RGBColor c = GetRainbowMode() ? tl_rainbow(hue) : tl_palette(pos_color);
         unsigned char r = (unsigned char)((c & 0xFF) * intensity);
         unsigned char g = (unsigned char)(((c >> 8) & 0xFF) * intensity);
         unsigned char b = (unsigned char)(((c >> 16) & 0xFF) * intensity);
@@ -428,9 +509,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(intensity <= 0.0f) return 0x00000000;
         float pos_color = std::fmod(progress + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor color = GetRainbowMode()
-            ? GetRainbowColor(progress * 360.0f + hue_offset + color_cycle)
-            : GetColorAtPosition(pos_color);
+        RGBColor color =
+            GetRainbowMode() ? tl_rainbow(progress * 360.0f + hue_offset + color_cycle) : tl_palette(pos_color);
         unsigned char r = (unsigned char)((color & 0xFF) * intensity);
         unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * intensity);
         unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * intensity);
@@ -450,9 +530,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(intensity <= 0.0f) return 0x00000000;
         float pos_color = std::fmod(progress + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor color = GetRainbowMode()
-            ? GetRainbowColor(progress * 360.0f + color_cycle)
-            : GetColorAtPosition(pos_color);
+        RGBColor color =
+            GetRainbowMode() ? tl_rainbow(progress * 360.0f + color_cycle) : tl_palette(pos_color);
         unsigned char r = (unsigned char)((color & 0xFF) * intensity);
         unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * intensity);
         unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * intensity);
@@ -489,7 +568,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         if(hue < 0.0f) hue += 360.0f;
         float pos_color = std::fmod(path_pos + progress * GetScaledFrequency() * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pos_color);
+        RGBColor c = GetRainbowMode() ? tl_rainbow(hue) : tl_palette(pos_color);
         int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * distance)));
         int g_ = std::min(255, std::max(0, (int)(((c >> 8) & 0xFF) * distance)));
         int b_ = std::min(255, std::max(0, (int)(((c >> 16) & 0xFF) * distance)));
@@ -512,9 +591,8 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     if(intensity <= 0.0f) return 0x00000000;
     float pos_color = std::fmod(progress + progress * GetScaledFrequency() * 0.02f, 1.0f);
     if(pos_color < 0.0f) pos_color += 1.0f;
-    RGBColor color = GetRainbowMode()
-        ? GetRainbowColor(progress * 360.0f + hue_offset + color_cycle)
-        : GetColorAtPosition(pos_color);
+    RGBColor color =
+        GetRainbowMode() ? tl_rainbow(progress * 360.0f + hue_offset + color_cycle) : tl_palette(pos_color);
     unsigned char r = (unsigned char)((color & 0xFF) * intensity);
     unsigned char g = (unsigned char)(((color >> 8) & 0xFF) * intensity);
     unsigned char b = (unsigned char)(((color >> 16) & 0xFF) * intensity);
@@ -542,6 +620,14 @@ nlohmann::json TravelingLight::SaveSettings() const
     j["glow"] = glow;
     j["wipe_edge_shape"] = wipe_edge_shape;
     j["num_divisions"] = num_divisions;
+    StripColormapSaveJson(j,
+                          "travelinglight",
+                          travelinglight_strip_cmap_on,
+                          travelinglight_strip_cmap_kernel,
+                          travelinglight_strip_cmap_rep,
+                          travelinglight_strip_cmap_unfold,
+                          travelinglight_strip_cmap_dir,
+                          travelinglight_strip_cmap_color_style);
     return j;
 }
 
@@ -565,6 +651,24 @@ void TravelingLight::LoadSettings(const nlohmann::json& settings)
         wipe_edge_shape = std::clamp(settings["edge_shape"].get<int>(), 0, 2);
     if(settings.contains("num_divisions") && settings["num_divisions"].is_number_integer())
         num_divisions = std::max(2, std::min(16, settings["num_divisions"].get<int>()));
+    StripColormapLoadJson(settings,
+                          "travelinglight",
+                          travelinglight_strip_cmap_on,
+                          travelinglight_strip_cmap_kernel,
+                          travelinglight_strip_cmap_rep,
+                          travelinglight_strip_cmap_unfold,
+                          travelinglight_strip_cmap_dir,
+                          travelinglight_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(travelinglight_strip_cmap_on,
+                                                travelinglight_strip_cmap_kernel,
+                                                travelinglight_strip_cmap_rep,
+                                                travelinglight_strip_cmap_unfold,
+                                                travelinglight_strip_cmap_dir,
+                                                travelinglight_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

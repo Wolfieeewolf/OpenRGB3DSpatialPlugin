@@ -8,6 +8,7 @@
 #include "EffectStratumBlend.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class SurfaceAmbient : public SpatialEffect3D
 {
@@ -27,6 +28,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     enum Style { STYLE_FIRE = 0, STYLE_WATER, STYLE_SLIME, STYLE_LAVA, STYLE_EMBER, STYLE_OCEAN, STYLE_STEAM, STYLE_COUNT };
@@ -48,6 +50,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool surfaceambient_strip_cmap_on = false;
+    int surfaceambient_strip_cmap_kernel = 0;
+    float surfaceambient_strip_cmap_rep = 4.0f;
+    int surfaceambient_strip_cmap_unfold = 0;
+    float surfaceambient_strip_cmap_dir = 0.0f;
+    int surfaceambient_strip_cmap_color_style = 0;
 };
 
 #endif

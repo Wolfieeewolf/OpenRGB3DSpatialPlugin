@@ -12,6 +12,7 @@
 #include <limits>
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class BandScan : public SpatialEffect3D
 {
@@ -36,6 +37,7 @@ public:
 
 private slots:
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     void RefreshBandRange();
@@ -53,7 +55,8 @@ private:
                           bool rainbow_mode,
                           float stratum_speed_mul,
                           float stratum_tight_mul,
-                          float stratum_phase01) const;
+                          float stratum_phase01,
+                          float strip_cmap_p01) const;
     float WrapDistance(float a, float b, int modulo) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
@@ -67,6 +70,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool bandscan_strip_cmap_on = false;
+    int bandscan_strip_cmap_kernel = 0;
+    float bandscan_strip_cmap_rep = 4.0f;
+    int bandscan_strip_cmap_unfold = 0;
+    float bandscan_strip_cmap_dir = 0.0f;
+    int bandscan_strip_cmap_color_style = 0;
 };
 
 #endif // BANDSCAN_H

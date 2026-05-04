@@ -2,6 +2,8 @@
 
 #include "Bubbles.h"
 #include "EffectHelpers.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -128,6 +130,15 @@ void Bubbles::SetupCustomUI(QWidget* parent)
         if(spawn_label) spawn_label->setText(QString::number(spawn_interval, 'f', 2));
         emit ParametersChanged();
     });
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(bubbles_strip_cmap_on,
+                                            bubbles_strip_cmap_kernel,
+                                            bubbles_strip_cmap_rep,
+                                            bubbles_strip_cmap_unfold,
+                                            bubbles_strip_cmap_dir,
+                                            bubbles_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Bubbles::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -135,6 +146,19 @@ void Bubbles::SetupCustomUI(QWidget* parent)
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Bubbles::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void Bubbles::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    bubbles_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    bubbles_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    bubbles_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    bubbles_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    bubbles_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    bubbles_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Bubbles::OnStratumBandChanged()
@@ -246,7 +270,24 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         }
     }
 
-    RGBColor final_color = GetRainbowMode() ? GetRainbowColor(best_hue) : GetColorAtPosition(0.5f);
+    float pal01 = 0.5f;
+    if(bubbles_strip_cmap_on)
+    {
+        const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + best_hue * (1.f / 360.f) + 1.f, 1.f);
+        pal01 = SampleStripKernelPalette01(bubbles_strip_cmap_kernel,
+                                           bubbles_strip_cmap_rep,
+                                           bubbles_strip_cmap_unfold,
+                                           bubbles_strip_cmap_dir,
+                                           ph01,
+                                           time,
+                                           grid,
+                                           size_m,
+                                           origin,
+                                           rp);
+        best_hue = pal01 * 360.0f;
+    }
+    RGBColor final_color =
+        GetRainbowMode() ? GetRainbowColor(best_hue) : GetColorAtPosition(bubbles_strip_cmap_on ? pal01 : 0.5f);
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
@@ -278,6 +319,14 @@ nlohmann::json Bubbles::SaveSettings() const
     j["rise_speed"] = rise_speed;
     j["spawn_interval"] = spawn_interval;
     j["max_radius"] = max_radius;
+    StripColormapSaveJson(j,
+                          "bubbles",
+                          bubbles_strip_cmap_on,
+                          bubbles_strip_cmap_kernel,
+                          bubbles_strip_cmap_rep,
+                          bubbles_strip_cmap_unfold,
+                          bubbles_strip_cmap_dir,
+                          bubbles_strip_cmap_color_style);
     return j;
 }
 
@@ -301,6 +350,24 @@ void Bubbles::LoadSettings(const nlohmann::json& settings)
         spawn_interval = std::max(0.3f, std::min(2.0f, settings["spawn_interval"].get<float>()));
     if(settings.contains("max_radius") && settings["max_radius"].is_number())
         max_radius = std::max(0.5f, std::min(2.0f, settings["max_radius"].get<float>()));
+    StripColormapLoadJson(settings,
+                          "bubbles",
+                          bubbles_strip_cmap_on,
+                          bubbles_strip_cmap_kernel,
+                          bubbles_strip_cmap_rep,
+                          bubbles_strip_cmap_unfold,
+                          bubbles_strip_cmap_dir,
+                          bubbles_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(bubbles_strip_cmap_on,
+                                                bubbles_strip_cmap_kernel,
+                                                bubbles_strip_cmap_rep,
+                                                bubbles_strip_cmap_unfold,
+                                                bubbles_strip_cmap_dir,
+                                                bubbles_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

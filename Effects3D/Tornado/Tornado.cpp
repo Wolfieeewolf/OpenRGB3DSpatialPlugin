@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Tornado.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QGridLayout>
@@ -101,6 +103,16 @@ void Tornado::SetupCustomUI(QWidget* parent)
         height_label->setText(QString::number(value));
     });
 
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(tornado_strip_cmap_on,
+                                            tornado_strip_cmap_kernel,
+                                            tornado_strip_cmap_rep,
+                                            tornado_strip_cmap_unfold,
+                                            tornado_strip_cmap_dir,
+                                            tornado_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Tornado::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -138,6 +150,19 @@ void Tornado::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void Tornado::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    tornado_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    tornado_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    tornado_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    tornado_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    tornado_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    tornado_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -221,11 +246,29 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     sp.origin_z = origin.z;
     sp.y_norm = axial;
 
+    const float phase01 = std::fmod(progress_e * 0.25f + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(tornado_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(tornado_strip_cmap_kernel,
+                                                 tornado_strip_cmap_rep,
+                                                 tornado_strip_cmap_unfold,
+                                                 tornado_strip_cmap_dir,
+                                                 phase01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rotated_pos);
+    }
+
     RGBColor final_color;
     if(GetRainbowMode())
     {
         float hue =
             200.0f + swirl * 57.2958f * 0.2f + h_norm * 80.0f + time * rate * 12.0f * bb.speed_mul;
+        if(tornado_strip_cmap_on)
+            hue = strip_p01 * 360.0f + time * rate * 12.0f * bb.speed_mul;
         hue = ApplySpatialRainbowHue(hue, std::clamp(h_norm, 0.0f, 1.0f), compass_basis, sp, compass_map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -238,6 +281,8 @@ RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, cons
     else
     {
         float pos = fmodf(0.5f + 0.5f * intensity + time * rate * 0.02f * bb.speed_mul, 1.0f);
+        if(tornado_strip_cmap_on)
+            pos = strip_p01;
         if(pos < 0.0f) pos += 1.0f;
         float p = ApplySpatialPalette01(pos, compass_basis, sp, compass_map, time, &grid);
         p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
@@ -272,6 +317,11 @@ nlohmann::json Tornado::SaveSettings() const
                                            "tornado_stratum_band_speed_pct",
                                            "tornado_stratum_band_tight_pct",
                                            "tornado_stratum_band_phase_deg");
+    j["tornado_strip_cmap_on"] = tornado_strip_cmap_on;
+    j["tornado_strip_cmap_kernel"] = tornado_strip_cmap_kernel;
+    j["tornado_strip_cmap_rep"] = tornado_strip_cmap_rep;
+    j["tornado_strip_cmap_unfold"] = tornado_strip_cmap_unfold;
+    j["tornado_strip_cmap_dir"] = tornado_strip_cmap_dir;
     return j;
 }
 
@@ -287,7 +337,28 @@ void Tornado::LoadSettings(const nlohmann::json& settings)
                                             "tornado_stratum_band_phase_deg");
     if(settings.contains("core_radius")) core_radius = settings["core_radius"];
     if(settings.contains("tornado_height")) tornado_height = settings["tornado_height"];
+    if(settings.contains("tornado_strip_cmap_on") && settings["tornado_strip_cmap_on"].is_boolean())
+        tornado_strip_cmap_on = settings["tornado_strip_cmap_on"].get<bool>();
+    else if(settings.contains("tornado_strip_cmap_on") && settings["tornado_strip_cmap_on"].is_number_integer())
+        tornado_strip_cmap_on = settings["tornado_strip_cmap_on"].get<int>() != 0;
+    if(settings.contains("tornado_strip_cmap_kernel") && settings["tornado_strip_cmap_kernel"].is_number_integer())
+        tornado_strip_cmap_kernel = std::clamp(settings["tornado_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+    if(settings.contains("tornado_strip_cmap_rep") && settings["tornado_strip_cmap_rep"].is_number())
+        tornado_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["tornado_strip_cmap_rep"].get<float>()));
+    if(settings.contains("tornado_strip_cmap_unfold") && settings["tornado_strip_cmap_unfold"].is_number_integer())
+        tornado_strip_cmap_unfold = std::clamp(settings["tornado_strip_cmap_unfold"].get<int>(), 0, 6);
+    if(settings.contains("tornado_strip_cmap_dir") && settings["tornado_strip_cmap_dir"].is_number())
+        tornado_strip_cmap_dir = std::fmod(settings["tornado_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
 
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(tornado_strip_cmap_on,
+                                                tornado_strip_cmap_kernel,
+                                                tornado_strip_cmap_rep,
+                                                tornado_strip_cmap_unfold,
+                                                tornado_strip_cmap_dir,
+                                                tornado_strip_cmap_color_style);
+    }
     if(core_radius_slider) core_radius_slider->setValue(core_radius);
     if(height_slider) height_slider->setValue(tornado_height);
     if(stratum_panel)

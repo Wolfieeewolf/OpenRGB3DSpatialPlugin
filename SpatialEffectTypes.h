@@ -26,6 +26,10 @@ enum SpatialEffectType
     SPATIAL_EFFECT_SKY_LIGHTNING    = 13,
     SPATIAL_EFFECT_TEXTURE_PROJECTION = 14,
     SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE = 15,
+    /** Virtual 1D strip unfolded through 3D (shell or extruded fill); host for strip/matrix kernels. */
+    SPATIAL_EFFECT_STRIP_SHELL_PATTERN = 16,
+    /** Rotating spotlight cones in normalized volume (mapped-cube style 3D). */
+    SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS = 17,
 };
 
 enum ReferencePointType

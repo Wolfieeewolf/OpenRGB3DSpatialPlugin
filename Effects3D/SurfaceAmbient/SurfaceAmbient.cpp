@@ -2,6 +2,8 @@
 
 #include "SurfaceAmbient.h"
 #include "EffectHelpers.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
@@ -171,6 +173,16 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     });
     row++;
 
+    strip_cmap_panel = new StripKernelColormapPanel(outer);
+    strip_cmap_panel->mirrorStateFromEffect(surfaceambient_strip_cmap_on,
+                                            surfaceambient_strip_cmap_kernel,
+                                            surfaceambient_strip_cmap_rep,
+                                            surfaceambient_strip_cmap_unfold,
+                                            surfaceambient_strip_cmap_dir,
+                                            surfaceambient_strip_cmap_color_style);
+    vbox->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SurfaceAmbient::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(outer);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -179,6 +191,19 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
     OnStratumBandChanged();
 
     AddWidgetToParent(outer, parent);
+}
+
+void SurfaceAmbient::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    surfaceambient_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    surfaceambient_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    surfaceambient_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    surfaceambient_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    surfaceambient_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    surfaceambient_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void SurfaceAmbient::OnStratumBandChanged()
@@ -277,6 +302,27 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         if(hue < 0.0f) hue += 360.0f;
     }
 
+    float palette_driver = best_plasma;
+    if(surfaceambient_strip_cmap_on && style != STYLE_STEAM)
+    {
+        const float size_m = GetNormalizedSize();
+        const float ph01 = std::fmod(time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
+                                         bb.phase_deg * (1.f / 360.f) + best_plasma * 0.08f + 1.f,
+                                     1.f);
+        const float sp = SampleStripKernelPalette01(surfaceambient_strip_cmap_kernel,
+                                                    surfaceambient_strip_cmap_rep,
+                                                    surfaceambient_strip_cmap_unfold,
+                                                    surfaceambient_strip_cmap_dir,
+                                                    ph01,
+                                                    time,
+                                                    grid,
+                                                    size_m,
+                                                    origin,
+                                                    rp);
+        hue = sp * 360.f;
+        palette_driver = sp;
+    }
+
     RGBColor c;
     if(style == STYLE_STEAM)
     {
@@ -286,7 +332,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     else if(GetRainbowMode())
         c = GetRainbowColor(hue);
     else
-        c = GetColorAtPosition(best_plasma);
+        c = GetColorAtPosition(palette_driver);
     float mult = best_intensity;
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * mult)));
     int g_ = std::min(255, std::max(0, (int)(((c >> 8) & 0xFF) * mult)));
@@ -314,6 +360,14 @@ nlohmann::json SurfaceAmbient::SaveSettings() const
     j["style"] = style;
     j["height_pct"] = height_pct;
     j["thickness"] = thickness;
+    StripColormapSaveJson(j,
+                          "surfaceambient",
+                          surfaceambient_strip_cmap_on,
+                          surfaceambient_strip_cmap_kernel,
+                          surfaceambient_strip_cmap_rep,
+                          surfaceambient_strip_cmap_unfold,
+                          surfaceambient_strip_cmap_dir,
+                          surfaceambient_strip_cmap_color_style);
     return j;
 }
 
@@ -333,6 +387,24 @@ void SurfaceAmbient::LoadSettings(const nlohmann::json& settings)
         height_pct = std::max(0.05f, std::min(1.0f, settings["height_pct"].get<float>()));
     if(settings.contains("thickness") && settings["thickness"].is_number())
         thickness = std::max(0.02f, std::min(0.5f, settings["thickness"].get<float>()));
+    StripColormapLoadJson(settings,
+                          "surfaceambient",
+                          surfaceambient_strip_cmap_on,
+                          surfaceambient_strip_cmap_kernel,
+                          surfaceambient_strip_cmap_rep,
+                          surfaceambient_strip_cmap_unfold,
+                          surfaceambient_strip_cmap_dir,
+                          surfaceambient_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(surfaceambient_strip_cmap_on,
+                                                surfaceambient_strip_cmap_kernel,
+                                                surfaceambient_strip_cmap_rep,
+                                                surfaceambient_strip_cmap_unfold,
+                                                surfaceambient_strip_cmap_dir,
+                                                surfaceambient_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

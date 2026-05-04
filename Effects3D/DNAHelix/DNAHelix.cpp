@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DNAHelix.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
@@ -85,6 +87,16 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
     radius_label->setMinimumWidth(30);
     layout->addWidget(radius_label, 0, 2);
 
+    strip_cmap_panel = new StripKernelColormapPanel(outer_w);
+    strip_cmap_panel->mirrorStateFromEffect(dnahelix_strip_cmap_on,
+                                            dnahelix_strip_cmap_kernel,
+                                            dnahelix_strip_cmap_rep,
+                                            dnahelix_strip_cmap_unfold,
+                                            dnahelix_strip_cmap_dir,
+                                            dnahelix_strip_cmap_color_style);
+    vbox->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DNAHelix::SyncStripColormapFromPanel);
+
     stratum_panel = new StratumBandPanel(outer_w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -119,6 +131,19 @@ void DNAHelix::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
+    emit ParametersChanged();
+}
+
+void DNAHelix::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    dnahelix_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    dnahelix_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    dnahelix_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    dnahelix_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    dnahelix_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    dnahelix_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
@@ -213,10 +238,28 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     total_intensity = total_intensity + energy_pulse + ambient_glow;
     total_intensity = fmax(0.0f, fmin(1.0f, total_intensity * 1.3f));
 
+    const float dna_phase01 = std::fmod(progress_use + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(dnahelix_strip_cmap_on)
+    {
+        strip_p01 = SampleStripKernelPalette01(dnahelix_strip_cmap_kernel,
+                                               dnahelix_strip_cmap_rep,
+                                               dnahelix_strip_cmap_unfold,
+                                               dnahelix_strip_cmap_dir,
+                                               dna_phase01,
+                                               time,
+                                               grid,
+                                               size_multiplier,
+                                               origin,
+                                               rotated_pos);
+    }
+
     RGBColor final_color;
     if(GetRainbowMode())
     {
         float hue = helix_height * 50.0f + angle * 20.0f + time * rate * 12.0f * bb.speed_mul + bb.phase_deg;
+        if(dnahelix_strip_cmap_on)
+            hue = strip_p01 * 360.0f + time * rate * 12.0f * bb.speed_mul;
         if(base_pair_connection > 0.3f)
         {
             hue += 180.0f;
@@ -229,6 +272,8 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
         {
             float position = (GetColors().size() > 1) ? 0.7f : 0.5f;
             float pos = fmodf(position + time * rate * 0.02f, 1.0f);
+            if(dnahelix_strip_cmap_on)
+                pos = strip_p01;
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);
         }
@@ -236,6 +281,8 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
         {
             float position = fmod(helix_height * 0.3f, 1.0f);
             float pos = fmodf(position + time * rate * 0.02f, 1.0f);
+            if(dnahelix_strip_cmap_on)
+                pos = strip_p01;
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);
         }
@@ -268,6 +315,9 @@ nlohmann::json DNAHelix::SaveSettings() const
                                            "dna_helix_stratum_band_tight_pct",
                                            "dna_helix_stratum_band_phase_deg");
     j["helix_radius"] = helix_radius;
+    StripColormapSaveJson(j, "dnahelix", dnahelix_strip_cmap_on, dnahelix_strip_cmap_kernel, dnahelix_strip_cmap_rep,
+                          dnahelix_strip_cmap_unfold, dnahelix_strip_cmap_dir,
+                          dnahelix_strip_cmap_color_style);
     return j;
 }
 
@@ -281,6 +331,19 @@ void DNAHelix::LoadSettings(const nlohmann::json& settings)
                                             "dna_helix_stratum_band_speed_pct",
                                             "dna_helix_stratum_band_tight_pct",
                                             "dna_helix_stratum_band_phase_deg");
+    StripColormapLoadJson(settings, "dnahelix", dnahelix_strip_cmap_on, dnahelix_strip_cmap_kernel, dnahelix_strip_cmap_rep,
+                          dnahelix_strip_cmap_unfold, dnahelix_strip_cmap_dir,
+                          dnahelix_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(dnahelix_strip_cmap_on,
+                                                dnahelix_strip_cmap_kernel,
+                                                dnahelix_strip_cmap_rep,
+                                                dnahelix_strip_cmap_unfold,
+                                                dnahelix_strip_cmap_dir,
+                                                dnahelix_strip_cmap_color_style);
+    }
     if(settings.contains("helix_radius")) helix_radius = settings["helix_radius"];
 
     if(radius_slider) radius_slider->setValue(helix_radius);

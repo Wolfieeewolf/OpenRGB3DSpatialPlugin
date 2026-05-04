@@ -8,6 +8,7 @@
 #include "EffectStratumBlend.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class Matrix : public SpatialEffect3D
 {
@@ -33,6 +34,7 @@ public:
 private slots:
     void OnMatrixParameterChanged();
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     QSlider*        density_slider;
@@ -60,6 +62,14 @@ private:
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool matrix_strip_cmap_on = false;
+    int matrix_strip_cmap_kernel = 0;
+    float matrix_strip_cmap_rep = 4.0f;
+    int matrix_strip_cmap_unfold = 0;
+    float matrix_strip_cmap_dir = 0.0f;
+    int matrix_strip_cmap_color_style = 0;
 
     /* Returns intensity 0..1; if out_head is non-null, sets *out_head to 0..1 for leading edge blend (only very tip is head). */
     float ComputeFaceIntensity(int face,

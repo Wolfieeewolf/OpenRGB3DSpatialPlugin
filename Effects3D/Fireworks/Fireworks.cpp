@@ -2,6 +2,8 @@
 
 #include "Fireworks.h"
 #include "EffectHelpers.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -167,6 +169,15 @@ void Fireworks::SetupCustomUI(QWidget* parent)
         if(decay_label) decay_label->setText(QString::number(decay_speed, 'f', 1));
         emit ParametersChanged();
     });
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(fireworks_strip_cmap_on,
+                                            fireworks_strip_cmap_kernel,
+                                            fireworks_strip_cmap_rep,
+                                            fireworks_strip_cmap_unfold,
+                                            fireworks_strip_cmap_dir,
+                                            fireworks_strip_cmap_color_style);
+    outer->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Fireworks::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
@@ -174,6 +185,19 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Fireworks::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(w, parent);
+}
+
+void Fireworks::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    fireworks_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    fireworks_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    fireworks_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    fireworks_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    fireworks_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    fireworks_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Fireworks::OnStratumBandChanged()
@@ -415,7 +439,25 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
         if(intensity < 0.01f) continue;
         float hue_use = fmodf(p.hue + bb.phase_deg + time * GetScaledFrequency() * 6.0f * (bb.speed_mul - 1.0f), 360.0f);
         if(hue_use < 0.0f) hue_use += 360.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue_use) : GetColorAtPosition(hue_use / 360.0f);
+        float pal01 = hue_use / 360.0f;
+        if(fireworks_strip_cmap_on)
+        {
+            const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + p.hue * (1.f / 360.f) +
+                                             time * GetScaledFrequency() * 0.04f * bb.speed_mul + 1.f,
+                                         1.f);
+            pal01 = SampleStripKernelPalette01(fireworks_strip_cmap_kernel,
+                                                 fireworks_strip_cmap_rep,
+                                                 fireworks_strip_cmap_unfold,
+                                                 fireworks_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rp);
+            hue_use = pal01 * 360.0f;
+        }
+        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue_use) : GetColorAtPosition(pal01);
         sum_r += ((c & 0xFF) / 255.0f) * intensity;
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
@@ -452,6 +494,14 @@ nlohmann::json Fireworks::SaveSettings() const
     j["num_simultaneous"] = num_simultaneous;
     j["gravity_strength"] = gravity_strength;
     j["decay_speed"] = decay_speed;
+    StripColormapSaveJson(j,
+                          "fireworks",
+                          fireworks_strip_cmap_on,
+                          fireworks_strip_cmap_kernel,
+                          fireworks_strip_cmap_rep,
+                          fireworks_strip_cmap_unfold,
+                          fireworks_strip_cmap_dir,
+                          fireworks_strip_cmap_color_style);
     return j;
 }
 
@@ -477,6 +527,24 @@ void Fireworks::LoadSettings(const nlohmann::json& settings)
         gravity_strength = std::max(0.0f, std::min(2.0f, settings["gravity_strength"].get<float>()));
     if(settings.contains("decay_speed") && settings["decay_speed"].is_number())
         decay_speed = std::max(0.5f, std::min(6.0f, settings["decay_speed"].get<float>()));
+    StripColormapLoadJson(settings,
+                          "fireworks",
+                          fireworks_strip_cmap_on,
+                          fireworks_strip_cmap_kernel,
+                          fireworks_strip_cmap_rep,
+                          fireworks_strip_cmap_unfold,
+                          fireworks_strip_cmap_dir,
+                          fireworks_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(fireworks_strip_cmap_on,
+                                                fireworks_strip_cmap_kernel,
+                                                fireworks_strip_cmap_rep,
+                                                fireworks_strip_cmap_unfold,
+                                                fireworks_strip_cmap_dir,
+                                                fireworks_strip_cmap_color_style);
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);
