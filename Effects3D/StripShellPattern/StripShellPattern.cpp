@@ -24,6 +24,7 @@ const char* StripShellPattern::UnfoldModeLabel(int m)
     case 4: return "Radial XZ (ring unwrap)";
     case 5: return "Diagonal (x+y+z)";
     case 6: return "Manhattan distance";
+    case 7: return "Effect phase (no spatial unfold)";
     default: return "Along X";
     }
 }

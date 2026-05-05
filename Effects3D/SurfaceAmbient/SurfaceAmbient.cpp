@@ -309,7 +309,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         const float ph01 = std::fmod(time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
                                          bb.phase_deg * (1.f / 360.f) + best_plasma * 0.08f + 1.f,
                                      1.f);
-        const float sp = SampleStripKernelPalette01(surfaceambient_strip_cmap_kernel,
+        palette_driver = SampleStripKernelPalette01(surfaceambient_strip_cmap_kernel,
                                                     surfaceambient_strip_cmap_rep,
                                                     surfaceambient_strip_cmap_unfold,
                                                     surfaceambient_strip_cmap_dir,
@@ -319,8 +319,6 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
                                                     size_m,
                                                     origin,
                                                     rp);
-        hue = sp * 360.f;
-        palette_driver = sp;
     }
 
     RGBColor c;
@@ -328,6 +326,16 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     {
         unsigned char gv = (unsigned char)(180 + (int)(best_plasma * 75));
         c = (RGBColor)((gv << 16) | (gv << 8) | gv);
+    }
+    else if(surfaceambient_strip_cmap_on)
+    {
+        float sp = ApplyVoxelDriveToPalette01(palette_driver, x, y, z, time, grid);
+        c      = ResolveStripKernelFinalColor(*this,
+                                               surfaceambient_strip_cmap_kernel,
+                                               std::clamp(sp, 0.0f, 1.0f),
+                                               surfaceambient_strip_cmap_color_style,
+                                               time,
+                                               GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
         c = GetRainbowColor(hue);

@@ -552,7 +552,8 @@ void BreathingSphere::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("breathing_strip_cmap_rep") && settings["breathing_strip_cmap_rep"].is_number())
         breathing_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["breathing_strip_cmap_rep"].get<float>()));
     if(settings.contains("breathing_strip_cmap_unfold") && settings["breathing_strip_cmap_unfold"].is_number_integer())
-        breathing_strip_cmap_unfold = std::clamp(settings["breathing_strip_cmap_unfold"].get<int>(), 0, 6);
+        breathing_strip_cmap_unfold = std::clamp(settings["breathing_strip_cmap_unfold"].get<int>(), 0,
+                                               (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("breathing_strip_cmap_dir") && settings["breathing_strip_cmap_dir"].is_number())
         breathing_strip_cmap_dir = std::fmod(settings["breathing_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
     if(settings.contains("breathing_strip_cmap_color_style") && settings["breathing_strip_cmap_color_style"].is_number_integer())

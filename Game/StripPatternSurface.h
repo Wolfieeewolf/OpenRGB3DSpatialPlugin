@@ -18,6 +18,8 @@ enum class UnfoldMode : int
     RadialXZ,
     DiagonalXYZ,
     Manhattan01,
+    /** Strip index follows the host effect’s phase input only (no 3D axis unfold). */
+    EffectPhaseOnly,
     COUNT
 };
 

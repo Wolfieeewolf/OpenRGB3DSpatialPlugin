@@ -346,7 +346,8 @@ void Tornado::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("tornado_strip_cmap_rep") && settings["tornado_strip_cmap_rep"].is_number())
         tornado_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["tornado_strip_cmap_rep"].get<float>()));
     if(settings.contains("tornado_strip_cmap_unfold") && settings["tornado_strip_cmap_unfold"].is_number_integer())
-        tornado_strip_cmap_unfold = std::clamp(settings["tornado_strip_cmap_unfold"].get<int>(), 0, 6);
+        tornado_strip_cmap_unfold = std::clamp(settings["tornado_strip_cmap_unfold"].get<int>(), 0,
+                                           (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("tornado_strip_cmap_dir") && settings["tornado_strip_cmap_dir"].is_number())
         tornado_strip_cmap_dir = std::fmod(settings["tornado_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
 

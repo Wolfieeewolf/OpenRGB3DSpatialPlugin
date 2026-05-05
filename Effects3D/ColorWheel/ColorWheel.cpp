@@ -393,6 +393,15 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     }
     palette01 = ApplyVoxelDriveToPalette01(palette01, x, y, z, time, grid);
 
+    if(colorwheel_strip_cmap_on)
+    {
+        return ResolveStripKernelFinalColor(*this,
+                                            colorwheel_strip_cmap_kernel,
+                                            std::clamp(palette01, 0.0f, 1.0f),
+                                            colorwheel_strip_cmap_color_style,
+                                            time,
+                                            GetScaledFrequency() * 12.0f * spd_mul);
+    }
     return GetRainbowMode() ? GetRainbowColor(palette01 * 360.0f) : GetColorAtPosition(palette01);
 }
 

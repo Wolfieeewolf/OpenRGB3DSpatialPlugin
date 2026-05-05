@@ -22,6 +22,7 @@ const char* StripKernelColormapPanel::UnfoldLabel(int m)
     case 4: return "Radial XZ";
     case 5: return "Diagonal x+y+z";
     case 6: return "Manhattan";
+    case 7: return "Effect phase (no spatial unfold)";
     default: return "Along X";
     }
 }
@@ -46,7 +47,8 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     color_style_combo->addItem("Pattern palette");
     color_style_combo->addItem("Effect color stops");
     color_style_combo->addItem("Rainbow");
-    color_style_combo->setToolTip("Pattern palette = built-in look per kernel. Stops = your colors below. Rainbow = spectrum.");
+    color_style_combo->setToolTip(
+        "Pattern palette = each kernel’s default colors (WLED/FastLED-style). Effect color stops = your palette. Rainbow = spectrum.");
     g->addWidget(color_style_combo, row, 1, 1, 2);
     row++;
     g->addWidget(new QLabel("Kernel:"), row, 0);

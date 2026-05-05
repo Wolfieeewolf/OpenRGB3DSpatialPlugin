@@ -69,7 +69,20 @@ inline float SampleStripKernelPalette01(int kernel_id,
     float lz = (rot.z - origin.z) / sd;
     auto mode = static_cast<StripPatternSurface::UnfoldMode>(
         std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
-    float s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
+    float s01;
+    if(mode == StripPatternSurface::UnfoldMode::EffectPhaseOnly)
+    {
+        s01 = std::fmod(phase01, 1.0f);
+        if(s01 < 0.0f)
+        {
+            s01 += 1.0f;
+        }
+        s01 = std::clamp(s01, 0.0f, 1.0f);
+    }
+    else
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
+    }
     float k = EvalStripShellKernel(kernel_id, s01, phase01, kernel_rep, time_sec);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }
@@ -122,7 +135,7 @@ inline void StripColormapLoadJson(const nlohmann::json& settings,
     if(settings.contains(k_cs) && settings[k_cs].is_number_integer())
         color_style = StripKernelColorStyleClamp(settings[k_cs].get<int>());
     else
-        color_style = legacy_rainbow_when_missing_key ? 2 : 1;
+        color_style = legacy_rainbow_when_missing_key ? 2 : 0;
 }
 
 #endif

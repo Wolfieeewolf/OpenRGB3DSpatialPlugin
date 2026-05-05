@@ -270,6 +270,7 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
               360.0f);
     if(hue < 0.0f) hue += 360.0f;
     float pal01 = 0.5f;
+    RGBColor c;
     if(wireframecube_strip_cmap_on)
     {
         const float size_m = GetNormalizedSize();
@@ -287,9 +288,18 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
                                            size_m,
                                            origin,
                                            rot);
-        hue = pal01 * 360.f;
+        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+        c     = ResolveStripKernelFinalColor(*this,
+                                              wireframecube_strip_cmap_kernel,
+                                              std::clamp(pal01, 0.0f, 1.0f),
+                                              wireframecube_strip_cmap_color_style,
+                                              time,
+                                              GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
-    RGBColor c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pal01);
+    else
+    {
+        c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition(pal01);
+    }
     int r = (int)((c & 0xFF) * total);
     int g = (int)(((c >> 8) & 0xFF) * total);
     int b = (int)(((c >> 16) & 0xFF) * total);

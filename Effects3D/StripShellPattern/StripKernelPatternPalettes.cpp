@@ -163,10 +163,16 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     case StripShellKernel::RunningLight:
         return LerpBGR(PackBGR(0, 0, 0), PackBGR(255, 255, 255), (std::sin(p01 * 6.2831853f) * 0.5f + 0.5f));
     case StripShellKernel::SpectrumWaves:
-    case StripShellKernel::HueBounceDot:
     case StripShellKernel::ColorWave:
     case StripShellKernel::PlasmaSinProduct:
         return HsvToBgr(p01 * 360.0f + time_sec * 25.0f, 0.95f, 1.0f);
+    case StripShellKernel::HueBounceDot:
+    case StripShellKernel::DotBounce:
+    {
+        RGBColor deep = PackBGR(160, 30, 120);
+        RGBColor hot  = PackBGR(255, 140, 230);
+        return LerpBGR(deep, hot, std::pow(p01, 0.85f));
+    }
     case StripShellKernel::BpmPulse:
         return LerpBGR(PackBGR(80, 0, 120), PackBGR(255, 220, 60), p01);
     default:

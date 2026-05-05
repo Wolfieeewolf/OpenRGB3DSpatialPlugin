@@ -692,13 +692,14 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("wave_strip_cmap_rep") && settings["wave_strip_cmap_rep"].is_number())
         wave_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["wave_strip_cmap_rep"].get<float>()));
     if(settings.contains("wave_strip_cmap_unfold") && settings["wave_strip_cmap_unfold"].is_number_integer())
-        wave_strip_cmap_unfold = std::clamp(settings["wave_strip_cmap_unfold"].get<int>(), 0, 6);
+        wave_strip_cmap_unfold = std::clamp(settings["wave_strip_cmap_unfold"].get<int>(), 0,
+                                        (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("wave_strip_cmap_dir") && settings["wave_strip_cmap_dir"].is_number())
         wave_strip_cmap_dir = std::fmod(settings["wave_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
     if(settings.contains("wave_strip_cmap_color_style") && settings["wave_strip_cmap_color_style"].is_number_integer())
         wave_strip_cmap_color_style = std::clamp(settings["wave_strip_cmap_color_style"].get<int>(), 0, 2);
     else
-        wave_strip_cmap_color_style = GetRainbowMode() ? 2 : 1;
+        wave_strip_cmap_color_style = GetRainbowMode() ? 2 : 0;
 
     if(strip_cmap_panel)
     {

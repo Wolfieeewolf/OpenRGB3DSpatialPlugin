@@ -310,10 +310,26 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         }
         if(intensity < 0.01f) continue;
 
-        float hue = fmodf((float)i * 2.0f * (0.6f + 0.4f * detail) + (starfield_strip_cmap_on ? strip_p01 * 360.0f : color_cycle), 360.0f);
-        if(hue < 0.0f) hue += 360.0f;
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue)
-                                    : GetColorAtPosition(starfield_strip_cmap_on ? strip_p01 : ((float)i / (float)n_stars));
+        RGBColor c;
+        if(starfield_strip_cmap_on)
+        {
+            float pv = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+            c      = ResolveStripKernelFinalColor(*this,
+                                                   starfield_strip_cmap_kernel,
+                                                   std::clamp(pv, 0.0f, 1.0f),
+                                                   starfield_strip_cmap_color_style,
+                                                   time,
+                                                   GetScaledFrequency() * 12.0f * (strat_on ? bb.speed_mul : 1.0f));
+        }
+        else
+        {
+            float hue = fmodf((float)i * 2.0f * (0.6f + 0.4f * detail) + color_cycle, 360.0f);
+            if(hue < 0.0f)
+            {
+                hue += 360.0f;
+            }
+            c = GetRainbowMode() ? GetRainbowColor(hue) : GetColorAtPosition((float)i / (float)n_stars);
+        }
         sum_r += ((c & 0xFF) / 255.0f) * intensity;
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;

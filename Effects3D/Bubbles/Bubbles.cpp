@@ -270,24 +270,32 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         }
     }
 
-    float pal01 = 0.5f;
+    RGBColor final_color;
     if(bubbles_strip_cmap_on)
     {
         const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + best_hue * (1.f / 360.f) + 1.f, 1.f);
-        pal01 = SampleStripKernelPalette01(bubbles_strip_cmap_kernel,
-                                           bubbles_strip_cmap_rep,
-                                           bubbles_strip_cmap_unfold,
-                                           bubbles_strip_cmap_dir,
-                                           ph01,
-                                           time,
-                                           grid,
-                                           size_m,
-                                           origin,
-                                           rp);
-        best_hue = pal01 * 360.0f;
+        float pal01 = SampleStripKernelPalette01(bubbles_strip_cmap_kernel,
+                                                 bubbles_strip_cmap_rep,
+                                                 bubbles_strip_cmap_unfold,
+                                                 bubbles_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rp);
+        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+        final_color = ResolveStripKernelFinalColor(*this,
+                                                   bubbles_strip_cmap_kernel,
+                                                   std::clamp(pal01, 0.0f, 1.0f),
+                                                   bubbles_strip_cmap_color_style,
+                                                   time,
+                                                   GetScaledFrequency() * 12.0f * (strat_on ? bb.speed_mul : 1.0f));
     }
-    RGBColor final_color =
-        GetRainbowMode() ? GetRainbowColor(best_hue) : GetColorAtPosition(bubbles_strip_cmap_on ? pal01 : 0.5f);
+    else
+    {
+        final_color = GetRainbowMode() ? GetRainbowColor(best_hue) : GetColorAtPosition(0.5f);
+    }
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;

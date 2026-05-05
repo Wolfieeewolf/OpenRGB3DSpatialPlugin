@@ -440,6 +440,7 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
         float hue_use = fmodf(p.hue + bb.phase_deg + time * GetScaledFrequency() * 6.0f * (bb.speed_mul - 1.0f), 360.0f);
         if(hue_use < 0.0f) hue_use += 360.0f;
         float pal01 = hue_use / 360.0f;
+        RGBColor c;
         if(fireworks_strip_cmap_on)
         {
             const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + p.hue * (1.f / 360.f) +
@@ -455,9 +456,18 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                                                  size_m,
                                                  origin,
                                                  rp);
-            hue_use = pal01 * 360.0f;
+            pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+            c     = ResolveStripKernelFinalColor(*this,
+                                                  fireworks_strip_cmap_kernel,
+                                                  std::clamp(pal01, 0.0f, 1.0f),
+                                                  fireworks_strip_cmap_color_style,
+                                                  time,
+                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
         }
-        RGBColor c = GetRainbowMode() ? GetRainbowColor(hue_use) : GetColorAtPosition(pal01);
+        else
+        {
+            c = GetRainbowMode() ? GetRainbowColor(hue_use) : GetColorAtPosition(pal01);
+        }
         sum_r += ((c & 0xFF) / 255.0f) * intensity;
         sum_g += (((c >> 8) & 0xFF) / 255.0f) * intensity;
         sum_b += (((c >> 16) & 0xFF) / 255.0f) * intensity;
