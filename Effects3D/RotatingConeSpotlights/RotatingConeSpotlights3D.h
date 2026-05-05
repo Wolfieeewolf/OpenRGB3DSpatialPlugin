@@ -22,12 +22,12 @@ public:
     explicit RotatingConeSpotlights3D(QWidget* parent = nullptr);
     ~RotatingConeSpotlights3D() override;
 
-    EFFECT_REGISTERER_3D("RotatingConeSpotlights3D", "Rotating cone spotlights", "Spatial", []() {
+    EFFECT_REGISTERER_3D("RotatingConeSpotlights3D", "Spotlights / rotation 3D", "Spatial", []() {
         return new RotatingConeSpotlights3D;
     });
 
     static std::string const ClassName() { return "RotatingConeSpotlights3D"; }
-    static std::string const UIName() { return "Rotating cone spotlights"; }
+    static std::string const UIName() { return "Spotlights / rotation 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -47,8 +47,8 @@ private:
 
     /** Matches 1/(pi^2) in reference tunings; larger = wider cones (smaller sqrt term divisor). */
     float cone_scale = 0.10132118364233777f;
-    /** Base hue 0..1 (reference ~0.97 magenta). */
-    float hue01 = 0.97f;
+    /** Added to hue from room X (aligned to the centered-x hue convention). */
+    float hue01 = 0.0f;
     /** Multiplier on time for axis wobble frequencies. */
     float motion_rate = 1.0f;
 

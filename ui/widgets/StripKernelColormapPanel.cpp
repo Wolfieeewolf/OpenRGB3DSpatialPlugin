@@ -48,7 +48,7 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     color_style_combo->addItem("Effect color stops");
     color_style_combo->addItem("Rainbow");
     color_style_combo->setToolTip(
-        "Pattern palette = each kernel’s default colors (WLED/FastLED-style). Effect color stops = your palette. Rainbow = spectrum.");
+        "Pattern palette = each kernel's default colors. Effect color stops = your palette. Rainbow = spectrum.");
     g->addWidget(color_style_combo, row, 1, 1, 2);
     row++;
     g->addWidget(new QLabel("Kernel:"), row, 0);

@@ -16,7 +16,7 @@ class WireframeCube : public SpatialEffect3D
 public:
     explicit WireframeCube(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("WireframeCube", "Wireframe Cube", "Spatial", [](){ return new WireframeCube; })
+    EFFECT_REGISTERER_3D("WireframeCube", "Wire Frame", "Spatial", [](){ return new WireframeCube; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -33,14 +33,32 @@ private slots:
 private:
     static float PointToSegmentDistance(float px, float py, float pz,
                                         float ax, float ay, float az,
-                                        float bx, float by, float bz);
+                                        float bx, float by, float bz,
+                                        float* out_t01 = nullptr);
+
+    void RebuildRoomWireframeCache(const GridContext3D& grid);
+    void ClosestOnRoomWireframe(float x, float y, float z,
+                                float& out_dist, float& out_path01) const;
 
     float thickness = 0.08f;
     float line_brightness = 1.0f;
 
-    float cube_cache_time = -1e9f;
-    float cube_corners[8][3];
-    float cached_angle_deg = 0.0f;
+    uint64_t room_wf_cache_seq = 0;
+    float room_wf_min_x = 0.0f;
+    float room_wf_max_x = 0.0f;
+    float room_wf_min_y = 0.0f;
+    float room_wf_max_y = 0.0f;
+    float room_wf_min_z = 0.0f;
+    float room_wf_max_z = 0.0f;
+    float room_wf_ax[12]{};
+    float room_wf_ay[12]{};
+    float room_wf_az[12]{};
+    float room_wf_bx[12]{};
+    float room_wf_by[12]{};
+    float room_wf_bz[12]{};
+    float room_wf_edge_len[12]{};
+    float room_wf_prefix[13]{};
+    float room_wf_total_len = 1.0f;
 
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;

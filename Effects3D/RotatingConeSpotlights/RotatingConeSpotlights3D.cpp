@@ -8,6 +8,7 @@
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
+#include <QColor>
 #include <QLabel>
 #include <QGridLayout>
 #include <QSlider>
@@ -132,10 +133,11 @@ EffectInfo3D RotatingConeSpotlights3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Rotating cone spotlights";
+    info.effect_name = "Spotlights / rotation 3D";
     info.effect_description =
-        "Double-cone spotlight field in normalized room coordinates; axis and angle rotate over time. "
-        "Best on full 3D grids; tune cone scale and global brightness.";
+        "Rotating cone spotlights: time-varying axis-angle rotation in a centered unit volume, "
+        "then a double cone dist = |z'| − sqrt((x'² + y'²) / scale); hue follows room X like the reference "
+        "`hsv(x, 1−dist, (1+dist)⁴)`. Best on full 3D grids.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
     info.is_reversible = true;
@@ -179,11 +181,12 @@ void RotatingConeSpotlights3D::SetupCustomUI(QWidget* parent)
     g->addWidget(cone_label, row, 2);
     row++;
 
-    g->addWidget(new QLabel("Hue:"), row, 0);
+    g->addWidget(new QLabel("Hue shift:"), row, 0);
     hue_slider = new QSlider(Qt::Horizontal);
     hue_slider->setRange(0, 1000);
     hue_slider->setValue((int)std::lround(hue01 * 1000.0f));
     hue_label = new QLabel(QString::number(hue01, 'f', 3));
+    hue_slider->setToolTip("Added to hue from position along room X (reference pattern uses x as hue).");
     g->addWidget(hue_slider, row, 1);
     g->addWidget(hue_label, row, 2);
     row++;
@@ -287,25 +290,42 @@ RGBColor RotatingConeSpotlights3D::CalculateColorGrid(float x, float y, float z,
     float val = std::pow(1.0f + dist, 4.0f);
     val = std::clamp(val, 0.0f, 1.0f);
 
-    float h = hue01;
+    float h = std::fmod(px + 0.5f + hue01 + 1.0f, 1.0f);
     if(cones_spot_strip_cmap_on)
     {
         const float size_m = GetNormalizedSize();
         const float ph01 = std::fmod(CalculateProgress(time) * 0.4f + time * rate * 0.01f + dist * 0.08f + 1.f, 1.f);
-        h = SampleStripKernelPalette01(cones_spot_strip_cmap_kernel,
-                                       cones_spot_strip_cmap_rep,
-                                       cones_spot_strip_cmap_unfold,
-                                       cones_spot_strip_cmap_dir,
-                                       ph01,
-                                       time,
-                                       grid,
-                                       size_m,
-                                       origin,
-                                       rot);
+        float pal01 = SampleStripKernelPalette01(cones_spot_strip_cmap_kernel,
+                                                 cones_spot_strip_cmap_rep,
+                                                 cones_spot_strip_cmap_unfold,
+                                                 cones_spot_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rot);
+        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+        const int kid = StripShellKernelClamp(cones_spot_strip_cmap_kernel);
+        RGBColor c = ResolveStripKernelFinalColor(*this,
+                                                  kid,
+                                                  std::clamp(pal01, 0.0f, 1.0f),
+                                                  cones_spot_strip_cmap_color_style,
+                                                  time,
+                                                  rate * 0.24f);
+        const int cr = (int)(c & 0xFF);
+        const int cg = (int)((c >> 8) & 0xFF);
+        const int cb = (int)((c >> 16) & 0xFF);
+        QColor qc = QColor::fromRgb(cr, cg, cb);
+        qreal ch, cs, cv, ca;
+        qc.getHsvF(&ch, &cs, &cv, &ca);
+        h = (ch >= 0.0) ? std::fmod((float)ch / 360.0f + hue01 + 1.0f, 1.0f) : std::fmod(hue01 + 1.0f, 1.0f);
+        (void)cs;
+        return Hsv01ToBgr(h, sat, std::clamp(val * (float)cv, 0.0f, 1.0f));
     }
-    else if(GetRainbowMode())
+    if(GetRainbowMode())
     {
-        float p = std::fmod(hue01 + dist * 0.35f + CalculateProgress(time) * 0.4f + time * rate * 0.01f, 1.0f);
+        float p = std::fmod(px + 0.5f + hue01 + dist * 0.35f + CalculateProgress(time) * 0.4f + time * rate * 0.01f, 1.0f);
         if(p < 0.0f)
             p += 1.0f;
         h = p;

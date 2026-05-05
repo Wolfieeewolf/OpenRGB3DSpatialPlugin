@@ -439,17 +439,17 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         float shell = inner_open * outer_open * (0.1f + 0.9f * bell);
 
         float ripple = rk * sinf(distance * (detail / (bounds_r + 0.001f)) * 1.5f / std::max(0.25f, bb.tight_mul) - progress * 2.0f * bb.speed_mul);
-        ripple = (ripple + 1.0f) * 0.5f;
+    ripple = (ripple + 1.0f) * 0.5f;
         float rip_mix = ripple * 0.38f * inner_open * outer_open;
 
         float ring_glow = 0.48f * expf(-((distance - R * 0.93f) / (R * 0.13f + 1e-4f)) * ((distance - R * 0.93f) / (R * 0.13f + 1e-4f)));
         if(edge == EDGE_FEATHERED) ring_glow *= 1.25f;
         if(edge == EDGE_SHARP) ring_glow *= 0.65f;
-
+    
         float ambient = ak * (1.0f - smoothstep(0.0f, R * 2.0f, distance)) * inner_open;
-
+    
         sphere_intensity = shell + rip_mix + ring_glow * inner_open + ambient;
-        sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
+    sphere_intensity = fmax(0.0f, fmin(1.0f, sphere_intensity));
         sphere_intensity = fa + fb * sphere_intensity;
     }
 

@@ -2,10 +2,12 @@
 
 #include "WireframeCube.h"
 #include "SpatialKernelColormap.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
 #include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
+#include <algorithm>
 #include <cmath>
 #include <QGridLayout>
 #include <QLabel>
@@ -14,61 +16,121 @@
 
 REGISTER_EFFECT_3D(WireframeCube);
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-static void rotate_axis_angle(float& x, float& y, float& z, float ax, float ay, float az, float angle_rad)
-{
-    float c = cosf(angle_rad);
-    float s = sinf(angle_rad);
-    float dot = ax*x + ay*y + az*z;
-    float nx = x*c + (ay*z - az*y)*s + ax*dot*(1.0f - c);
-    float ny = y*c + (az*x - ax*z)*s + ay*dot*(1.0f - c);
-    float nz = z*c + (ax*y - ay*x)*s + az*dot*(1.0f - c);
-    x = nx; y = ny; z = nz;
-}
-
-static void FillRotatedCubeCorners(float corners_out[8][3], float angle_deg)
-{
-    float a = fmodf(angle_deg, 360.0f * 6.0f);
-    if(a < 0.0f) a += 360.0f * 6.0f;
-    float angle_rad = a * (float)(M_PI / 180.0);
-
-    float ax = 0.0f, ay = 0.0f, az = 1.0f;
-    if(a > 4.0f * 360.0f)
-    {
-        ax = 0.0f; ay = 1.0f; az = 0.0f;
-    }
-    else if(a > 2.0f * 360.0f)
-    {
-        ax = ay = az = 1.0f / sqrtf(3.0f);
-    }
-
-    float corners[8][3] = {
-        {-1,-1,-1}, {+1,-1,-1}, {-1,+1,-1}, {+1,+1,-1},
-        {-1,-1,+1}, {+1,-1,+1}, {-1,+1,+1}, {+1,+1,+1}
-    };
-    for(int i = 0; i < 8; i++)
-    {
-        corners_out[i][0] = corners[i][0];
-        corners_out[i][1] = corners[i][1];
-        corners_out[i][2] = corners[i][2];
-        rotate_axis_angle(corners_out[i][0], corners_out[i][1], corners_out[i][2], ax, ay, az, angle_rad);
-    }
-}
-
 float WireframeCube::PointToSegmentDistance(float px, float py, float pz,
-                                               float ax, float ay, float az,
-                                               float bx, float by, float bz)
+                                            float ax, float ay, float az,
+                                            float bx, float by, float bz,
+                                            float* out_t01)
 {
     float dx = bx - ax, dy = by - ay, dz = bz - az;
-    float len2 = dx*dx + dy*dy + dz*dz;
-    if(len2 < 1e-10f) return sqrtf((px-ax)*(px-ax) + (py-ay)*(py-ay) + (pz-az)*(pz-az));
-    float t = ((px-ax)*dx + (py-ay)*dy + (pz-az)*dz) / len2;
+    float len2 = dx * dx + dy * dy + dz * dz;
+    if(len2 < 1e-10f)
+    {
+        if(out_t01)
+        {
+            *out_t01 = 0.0f;
+        }
+        return sqrtf((px - ax) * (px - ax) + (py - ay) * (py - ay) + (pz - az) * (pz - az));
+    }
+    float t = ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / len2;
     t = fmaxf(0.0f, fminf(1.0f, t));
-    float qx = ax + t*dx, qy = ay + t*dy, qz = az + t*dz;
-    return sqrtf((px-qx)*(px-qx) + (py-qy)*(py-qy) + (pz-qz)*(pz-qz));
+    if(out_t01)
+    {
+        *out_t01 = t;
+    }
+    float qx = ax + t * dx, qy = ay + t * dy, qz = az + t * dz;
+    return sqrtf((px - qx) * (px - qx) + (py - qy) * (py - qy) + (pz - qz) * (pz - qz));
+}
+
+void WireframeCube::RebuildRoomWireframeCache(const GridContext3D& grid)
+{
+    if(room_wf_cache_seq == grid.render_sequence
+       && room_wf_min_x == grid.min_x && room_wf_max_x == grid.max_x
+       && room_wf_min_y == grid.min_y && room_wf_max_y == grid.max_y
+       && room_wf_min_z == grid.min_z && room_wf_max_z == grid.max_z)
+    {
+        return;
+    }
+
+    room_wf_cache_seq = grid.render_sequence;
+    room_wf_min_x = grid.min_x;
+    room_wf_max_x = grid.max_x;
+    room_wf_min_y = grid.min_y;
+    room_wf_max_y = grid.max_y;
+    room_wf_min_z = grid.min_z;
+    room_wf_max_z = grid.max_z;
+
+    const float mx = grid.min_x;
+    const float Mx = grid.max_x;
+    const float my = grid.min_y;
+    const float My = grid.max_y;
+    const float mz = grid.min_z;
+    const float Mz = grid.max_z;
+
+    // Bottom face (y = my), then top face (y = My), then four verticals — matches LEDViewport3D room box.
+    const float c000[3] = {mx, my, mz};
+    const float c100[3] = {Mx, my, mz};
+    const float c110[3] = {Mx, my, Mz};
+    const float c010[3] = {mx, my, Mz};
+    const float c001[3] = {mx, My, mz};
+    const float c101[3] = {Mx, My, mz};
+    const float c111[3] = {Mx, My, Mz};
+    const float c011[3] = {mx, My, Mz};
+
+    const float* edge_corners[12][2] = {
+        {c000, c100}, {c100, c110}, {c110, c010}, {c010, c000},
+        {c001, c101}, {c101, c111}, {c111, c011}, {c011, c001},
+        {c000, c001}, {c100, c101}, {c110, c111}, {c010, c011},
+    };
+
+    room_wf_prefix[0] = 0.0f;
+    float total = 0.0f;
+    for(int e = 0; e < 12; e++)
+    {
+        const float* a = edge_corners[e][0];
+        const float* b = edge_corners[e][1];
+        room_wf_ax[e] = a[0];
+        room_wf_ay[e] = a[1];
+        room_wf_az[e] = a[2];
+        room_wf_bx[e] = b[0];
+        room_wf_by[e] = b[1];
+        room_wf_bz[e] = b[2];
+        float dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+        float L = sqrtf(dx * dx + dy * dy + dz * dz);
+        if(L < 1e-6f)
+        {
+            L = 1e-6f;
+        }
+        room_wf_edge_len[e] = L;
+        total += L;
+        room_wf_prefix[e + 1] = total;
+    }
+    room_wf_total_len = (total > 1e-8f) ? total : 1.0f;
+}
+
+void WireframeCube::ClosestOnRoomWireframe(float x, float y, float z,
+                                           float& out_dist, float& out_path01) const
+{
+    float best_d2 = 1e30f;
+    float best_arc = 0.0f;
+    const float inv_tot = 1.0f / room_wf_total_len;
+
+    for(int e = 0; e < 12; e++)
+    {
+        float t01 = 0.0f;
+        float d = PointToSegmentDistance(x, y, z,
+                                         room_wf_ax[e], room_wf_ay[e], room_wf_az[e],
+                                         room_wf_bx[e], room_wf_by[e], room_wf_bz[e],
+                                         &t01);
+        float d2 = d * d;
+        float arc = room_wf_prefix[e] + t01 * room_wf_edge_len[e];
+        if(d2 < best_d2 || (d2 <= best_d2 + 1e-12f && arc < best_arc))
+        {
+            best_d2 = d2;
+            best_arc = arc;
+        }
+    }
+    out_dist = sqrtf(best_d2);
+    out_path01 = std::clamp(best_arc * inv_tot, 0.0f, 1.0f);
 }
 
 WireframeCube::WireframeCube(QWidget* parent) : SpatialEffect3D(parent) {}
@@ -77,8 +139,10 @@ EffectInfo3D WireframeCube::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Wireframe Cube";
-    info.effect_description = "Rotating wireframe cube (Mega-Cube style); soft glow along edges";
+    info.effect_name = "Wire Frame";
+    info.effect_description = "Soft glow on the room’s axis-aligned outline (floor, ceiling, corners). "
+                             "Strip kernels run as a single 1D path around the perimeter — "
+                             "suited to LEDs along skirting, ceiling edges, and vertical corners.";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;
     info.is_reversible = false;
@@ -140,6 +204,12 @@ void WireframeCube::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
+    auto* hint = new QLabel(QStringLiteral(
+        "Patterns: strip kernels use one continuous path (floor loop, then ceiling loop, then vertical corners). "
+        "Direction and repeats apply to that 1D run."));
+    hint->setWordWrap(true);
+    vbox->addWidget(hint);
+
     strip_cmap_panel = new StripKernelColormapPanel(outer);
     strip_cmap_panel->mirrorStateFromEffect(wireframecube_strip_cmap_on,
                                             wireframecube_strip_cmap_kernel,
@@ -179,7 +249,6 @@ void WireframeCube::OnStratumBandChanged()
         stratum_layout_mode = stratum_panel->layoutMode();
         stratum_tuning_ = stratum_panel->tuning();
     }
-    cube_cache_time = -1e9f;
     emit ParametersChanged();
 }
 
@@ -188,7 +257,6 @@ void WireframeCube::UpdateParams(SpatialEffectParams& params)
     (void)params;
 }
 
-
 RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -196,105 +264,71 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
     if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
         return 0x00000000;
 
-    Vector3D rot = TransformPointByRotation(x, y, z, origin);
-    float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    RebuildRoomWireframeCache(grid);
+    if(room_wf_total_len < 1e-7f)
+        return 0x00000000;
+
+    float dist_edge = 0.0f;
+    float path01 = 0.0f;
+    ClosestOnRoomWireframe(x, y, z, dist_edge, path01);
+
+    float coord2 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings strat_st;
     EffectStratumBlend::InitStratumBreaks(strat_st);
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
-    const bool strat_on = (stratum_layout_mode == 1);
     const float tm = std::max(0.25f, bb.tight_mul);
 
-    float corners_use[8][3];
-    float angle_deg_for_hue;
-
-    if(!strat_on)
-    {
-        if(fabsf(time - cube_cache_time) > 0.001f)
-        {
-            cube_cache_time = time;
-            float progress_val = CalculateProgress(time);
-            float angle_deg = fmodf(progress_val * 360.0f, 360.0f * 6.0f);
-            if(angle_deg < 0.0f) angle_deg += 360.0f * 6.0f;
-            cached_angle_deg = angle_deg;
-            FillRotatedCubeCorners(cube_corners, angle_deg);
-        }
-        for(int i = 0; i < 8; i++)
-        {
-            corners_use[i][0] = cube_corners[i][0];
-            corners_use[i][1] = cube_corners[i][1];
-            corners_use[i][2] = cube_corners[i][2];
-        }
-        angle_deg_for_hue = cached_angle_deg;
-    }
-    else
-    {
-        float progress_val = CalculateProgress(time * bb.speed_mul);
-        angle_deg_for_hue = fmodf(progress_val * 360.0f, 360.0f * 6.0f);
-        if(angle_deg_for_hue < 0.0f) angle_deg_for_hue += 360.0f * 6.0f;
-        FillRotatedCubeCorners(corners_use, angle_deg_for_hue);
-    }
-
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    float lx = (rot.x - origin.x) / e.hw;
-    float ly = (rot.y - origin.y) / e.hh;
-    float lz = (rot.z - origin.z) / e.hd;
-
-    const int edges[12][2] = {
-        {0,1},{2,3},{0,2},{1,3},{4,5},{6,7},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}
-    };
     float sigma = std::max(thickness, 0.02f);
     float sigma_sq = sigma * sigma / (tm * tm);
     const float d2_cutoff = 9.0f * sigma_sq;
+    float d = dist_edge;
+    float d2 = d * d;
     float total = 0.0f;
-    for(int ei = 0; ei < 12; ei++)
+    if(d2 <= d2_cutoff)
     {
-        int i = edges[ei][0], j = edges[ei][1];
-        float d = PointToSegmentDistance(lx, ly, lz,
-            corners_use[i][0], corners_use[i][1], corners_use[i][2],
-            corners_use[j][0], corners_use[j][1], corners_use[j][2]);
-        float d2 = d * d;
-        if(d2 > d2_cutoff) continue;
-        total += expf(-d2 / sigma_sq);
+        total = expf(-d2 / sigma_sq);
     }
     total = fminf(1.0f, total * 0.35f);
     total *= std::max(0.0f, std::min(1.0f, line_brightness));
 
-    float hue = fmodf(angle_deg_for_hue * 0.1f, 360.0f);
-    if(hue < 0.0f) hue += 360.0f;
     float detail = std::max(0.05f, GetScaledDetail());
-    hue = fmodf(hue * (0.6f + 0.4f * detail) + time * GetScaledFrequency() * 12.0f * bb.speed_mul
-                  + lx * 42.0f + ly * 38.0f + lz * 46.0f + bb.phase_deg,
-              360.0f);
-    if(hue < 0.0f) hue += 360.0f;
+    const float speed_phase = GetScaledFrequency() * 12.0f * bb.speed_mul;
+
+    float hue = std::fmod(path01 * 360.0f * (0.6f + 0.4f * detail) + time * speed_phase + bb.phase_deg,
+                          360.0f);
+    if(hue < 0.0f)
+        hue += 360.0f;
+
     float pal01 = 0.5f;
     RGBColor c;
     if(wireframecube_strip_cmap_on)
     {
-        const float size_m = GetNormalizedSize();
-        const float ph01 =
-            std::fmod(CalculateProgress(time) * 0.2f + time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
-                          bb.phase_deg * (1.f / 360.f) + lx * 0.03f + ly * 0.03f + lz * 0.03f + 1.f,
+        const float dir01 = std::fmod(wireframecube_strip_cmap_dir * (1.f / 360.f), 1.f);
+        float s01_kernel = std::fmod(path01 + dir01 + 1.f, 1.f);
+
+        const float phase01 =
+            std::fmod(CalculateProgress(time) * 0.2f + time * speed_phase * (1.f / 360.f) +
+                          bb.phase_deg * (1.f / 360.f) + 1.f,
                       1.f);
-        pal01 = SampleStripKernelPalette01(wireframecube_strip_cmap_kernel,
-                                           wireframecube_strip_cmap_rep,
-                                           wireframecube_strip_cmap_unfold,
-                                           wireframecube_strip_cmap_dir,
-                                           ph01,
-                                           time,
-                                           grid,
-                                           size_m,
-                                           origin,
-                                           rot);
+
+        const int kid = StripShellKernelClamp(wireframecube_strip_cmap_kernel);
+        const float k = EvalStripShellKernel(kid,
+                                             s01_kernel,
+                                             phase01,
+                                             wireframecube_strip_cmap_rep,
+                                             time);
+        pal01 = std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
+
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        c     = ResolveStripKernelFinalColor(*this,
-                                              wireframecube_strip_cmap_kernel,
-                                              std::clamp(pal01, 0.0f, 1.0f),
-                                              wireframecube_strip_cmap_color_style,
-                                              time,
-                                              GetScaledFrequency() * 12.0f * bb.speed_mul);
+        c = ResolveStripKernelFinalColor(*this,
+                                         kid,
+                                         pal01,
+                                         wireframecube_strip_cmap_color_style,
+                                         time,
+                                         speed_phase);
     }
     else
     {
@@ -377,7 +411,7 @@ void WireframeCube::LoadSettings(const nlohmann::json& settings)
                                                 wireframecube_strip_cmap_dir,
                                                 wireframecube_strip_cmap_color_style);
     }
-    cube_cache_time = -1e9f;
+    room_wf_cache_seq = 0;
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

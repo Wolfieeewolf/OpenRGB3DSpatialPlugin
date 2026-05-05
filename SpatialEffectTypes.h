@@ -30,6 +30,22 @@ enum SpatialEffectType
     SPATIAL_EFFECT_STRIP_SHELL_PATTERN = 16,
     /** Rotating spotlight cones in normalized volume (mapped-cube style 3D). */
     SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS = 17,
+    /** 3D sin/cos pulse field: hue from interference, value from h³/2. */
+    SPATIAL_EFFECT_SINPULSE_3D = 18,
+    /** Bouncing orbs: independent balls with wall-reflect vectors in normalized room coordinates. */
+    SPATIAL_EFFECT_BOUNCER_3D = 19,
+    /** Hex lattice field with animated zoom and triangular hue shaping. */
+    SPATIAL_EFFECT_HONEYCOMB_3D = 20,
+    /** Diagnostic axis sweep: red=X, green=Y, blue=Z moving band. */
+    SPATIAL_EFFECT_RGB_XYZ_SWEEP_3D = 21,
+    /** Diagnostic octants: static XYZ high/low encoded as RGB. */
+    SPATIAL_EFFECT_RGB_XYZ_OCTANTS_3D = 22,
+    /** Complementary hue gradient along room depth with center dim. */
+    SPATIAL_EFFECT_COMPLEMENTS_3D = 23,
+    /** Fast pulse field from animated XYZ sinusoid mix. */
+    SPATIAL_EFFECT_FAST_PULSE_3D = 24,
+    /** Integer XOR-derived 3D interference pattern. */
+    SPATIAL_EFFECT_XORCERY_3D = 25,
 };
 
 enum ReferencePointType
