@@ -8,7 +8,6 @@
 #define PLUGIN_UI_UTILS_H
 
 #include <QFrame>
-#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -22,12 +21,16 @@
 #include <QWidget>
 #include <algorithm>
 
-/** Muted helper text using a dimmed WindowText color (PlaceholderText is for line-edit hints only). */
+/** Helper / secondary text: use theme’s Disabled+WindowText (OpenRGB dark theme sets this to muted gray). */
 inline void PluginUiApplyMutedSecondaryLabel(QWidget* w)
 {
     if(!w) return;
-    QColor fg = QGuiApplication::palette().color(QPalette::Active, QPalette::WindowText);
-    fg.setAlphaF(0.70f);
+    const QPalette src  = w->palette();
+    QColor fg           = src.color(QPalette::Disabled, QPalette::WindowText);
+    if(!fg.isValid() || fg == src.color(QPalette::Active, QPalette::WindowText))
+    {
+        fg = src.color(QPalette::Active, QPalette::Mid);
+    }
     QPalette pal = w->palette();
     pal.setColor(QPalette::Active, QPalette::WindowText, fg);
     pal.setColor(QPalette::Inactive, QPalette::WindowText, fg);
