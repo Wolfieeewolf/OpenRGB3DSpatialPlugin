@@ -2040,9 +2040,9 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     {
         effect->voxel_volume_group->setVisible(false);
     }
-    if(effect->surfaces_group)
+    if(effect->surfaces_section)
     {
-        effect->surfaces_group->setVisible(false);
+        effect->surfaces_section->setVisible(false);
     }
     if(effect->position_offset_group)
     {

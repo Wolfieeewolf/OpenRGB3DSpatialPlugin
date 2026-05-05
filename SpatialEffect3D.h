@@ -25,6 +25,8 @@
 #include "SpatialLayerCore.h"
 #include <nlohmann/json.hpp>
 
+class EffectGeometryPanel;
+
 /*
  * Effect sampling volume in the same scene convention as GridSpaceUtils / LEDViewport3D:
  *   X width, Y vertical (floor→ceiling), Z depth (front→back).
@@ -250,6 +252,8 @@ public:
     virtual int GetPathAxis() const { return effect_path_axis; }
     virtual int GetPlane() const { return effect_plane; }
     virtual int GetSurfaceMask() const { return effect_surface_mask; }
+    /** One of SURF_* in SpatialEffectTypes.h; updates mask and emits ParametersChanged. */
+    void SetSurfaceMaskFlag(int flag, bool enabled);
     Vector3D GetReferencePointGrid(const GridContext3D& grid) const;
     virtual bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
     virtual ReferenceMode GetReferenceMode() const;
@@ -448,7 +452,8 @@ protected:
     QLabel*             offset_y_label;
     QLabel*             offset_z_label;
 
-    QGroupBox*          surfaces_group;
+    QWidget*            surfaces_group;
+    QWidget*            surfaces_section;
     QGroupBox*          path_plane_group;
     QComboBox*          path_axis_combo;
     QComboBox*          plane_combo;
@@ -522,6 +527,7 @@ private slots:
 private:
     void CreateColorControls();
     void CreateSamplerMapperControls();
+    void ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
     bool SampleVoxelRgbAtRoom(float x, float y, float z, const GridContext3D& grid, RGBColor& out_rgb, bool& got_hit) const;

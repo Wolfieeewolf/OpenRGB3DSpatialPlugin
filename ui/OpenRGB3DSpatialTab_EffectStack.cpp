@@ -609,20 +609,17 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         return body;
     };
 
-    if(is_audio)
-    {
+    auto add_direct_transport_row = [&]() {
         QWidget* btn_widget = new QWidget(effect_controls_widget);
         QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
         btn_layout->setContentsMargins(0, 0, 0, 0);
-
-        direct_start = new QPushButton("Start Effect");
-        direct_stop = new QPushButton("Stop Effect");
-        direct_stop->setEnabled(false);
-
-        btn_layout->addWidget(direct_start);
-        btn_layout->addWidget(direct_stop);
-        btn_layout->addStretch();
+        PluginUiAddEffectTransportButtons(btn_layout, &direct_start, &direct_stop);
         effect_controls_layout->addWidget(btn_widget);
+    };
+
+    if(is_audio)
+    {
+        add_direct_transport_row();
 
         QWidget* stack_effect_body = make_stack_effect_body();
         ui_effect->CreateCommonEffectControls(stack_effect_body, false);
@@ -639,18 +636,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
     else if(is_screen_mirror)
     {
-        QWidget* btn_widget = new QWidget(effect_controls_widget);
-        QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
-        btn_layout->setContentsMargins(0, 0, 0, 0);
-
-        direct_start = new QPushButton("Start Effect");
-        direct_stop = new QPushButton("Stop Effect");
-        direct_stop->setEnabled(false);
-
-        btn_layout->addWidget(direct_start);
-        btn_layout->addWidget(direct_stop);
-        btn_layout->addStretch();
-        effect_controls_layout->addWidget(btn_widget);
+        add_direct_transport_row();
 
         QWidget* stack_effect_body = make_stack_effect_body();
         ui_effect->SetupCustomUI(stack_effect_body);

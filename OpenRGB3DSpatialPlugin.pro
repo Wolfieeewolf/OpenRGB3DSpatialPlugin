@@ -216,6 +216,15 @@ HEADERS +=                                                                      
     Effects3D/SpatialKernelColormap.h                                                          \
     ui/widgets/StripKernelColormapPanel.h                                                       \
     ui/widgets/StratumBandPanel.h                                                               \
+    ui/widgets/EffectMotionPanel.h                                                              \
+    ui/widgets/EffectOutputPanel.h                                                              \
+    ui/widgets/EffectGeometryPanel.h                                                          \
+    ui/widgets/EffectSurfacesPanel.h                                                          \
+    ui/widgets/EffectLayerBanner.h                                                            \
+    ui/widgets/EffectSamplerPanel.h                                                           \
+    ui/widgets/EffectColorPanel.h                                                             \
+    ui/widgets/EffectCustomHost.h                                                             \
+    ui/widgets/EffectControlsRoot.h                                                           \
     Effects3D/SpectrumBars/SpectrumBars.h                                                        \
     Effects3D/BeatPulse/BeatPulse.h                                                             \
     Effects3D/BeatKernelSnap/BeatKernelSnap.h                                                 \
@@ -308,6 +317,15 @@ SOURCES +=                                                                      
     ui/CaptureZonesWidget.cpp                                                                   \
     ui/widgets/StratumBandPanel.cpp                                                             \
     ui/widgets/StripKernelColormapPanel.cpp                                                     \
+    ui/widgets/EffectMotionPanel.cpp                                                          \
+    ui/widgets/EffectOutputPanel.cpp                                                          \
+    ui/widgets/EffectGeometryPanel.cpp                                                        \
+    ui/widgets/EffectSurfacesPanel.cpp                                                        \
+    ui/widgets/EffectLayerBanner.cpp                                                          \
+    ui/widgets/EffectSamplerPanel.cpp                                                         \
+    ui/widgets/EffectColorPanel.cpp                                                           \
+    ui/widgets/EffectCustomHost.cpp                                                           \
+    ui/widgets/EffectControlsRoot.cpp                                                         \
     Effects3D/Plasma/Plasma.cpp                                                             \
     Effects3D/Spiral/Spiral.cpp                                                             \
     Effects3D/Explosion/Explosion.cpp                                                       \

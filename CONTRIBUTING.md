@@ -61,6 +61,7 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 - Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
 - Keep list, combo, and selection state synchronized.
 - Clear/disable dependent controls when selection is invalid.
+- **No custom UI chrome styling:** do not use `setStyleSheet` on plugin widgets, and do not override `QPalette` on panels, frames, `QGroupBox`, or other structural chrome—widgets must inherit the host OpenRGB / system theme. Layout, `QFrame` shape/shadow, `autoFillBackground`, and standard Qt widgets only. (Helpers like dimmed helper labels or RGB swatch icons are content, not theme overrides for containers.)
 
 ## Building
 

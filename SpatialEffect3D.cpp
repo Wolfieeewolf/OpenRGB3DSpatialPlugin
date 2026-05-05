@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
+#include "EffectMotionPanel.h"
+#include "EffectOutputPanel.h"
+#include "EffectGeometryPanel.h"
+#include "EffectSurfacesPanel.h"
+#include "EffectLayerBanner.h"
+#include "EffectSamplerPanel.h"
+#include "EffectColorPanel.h"
+#include "EffectCustomHost.h"
+#include "EffectControlsRoot.h"
 #include "Colors.h"
 #include "Geometry3DUtils.h"
 #include "GameTelemetryBridge.h"
@@ -14,25 +23,6 @@
 
 namespace
 {
-    void AddSectionBlock(QVBoxLayout* main_layout,
-                        const QString& title,
-                        const QString& tip,
-                        QWidget* body)
-    {
-        QLabel* heading = new QLabel(title);
-        QFont f = heading->font();
-        f.setBold(true);
-        heading->setFont(f);
-        if(!tip.isEmpty())
-        {
-            heading->setToolTip(tip);
-        }
-        main_layout->addWidget(heading);
-        main_layout->addSpacing(2);
-        main_layout->addWidget(body);
-        main_layout->addSpacing(8);
-    }
-
     /** Compass palette: horizontal aim stays on the effect reference (origin X/Z); vertical stratum uses that band's mid height so each floor/mid/ceiling layer has its own compass hub. */
     SpatialLayerCore::SamplePoint MakeCompassPaletteSamplePoint(const GridContext3D& grid,
                                                                   const SpatialLayerCore::MapperSettings& map,
@@ -211,6 +201,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     offset_z_label = nullptr;
 
     surfaces_group = nullptr;
+    surfaces_section = nullptr;
     path_plane_group = nullptr;
     path_axis_combo = nullptr;
     plane_combo = nullptr;
@@ -238,418 +229,130 @@ void SpatialEffect3D::ApplyGridSampleCoordinateAdjustment(float& x, float& y, fl
 
 void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_start_stop)
 {
-    effect_controls_group = new QWidget();
-    QVBoxLayout* main_layout = new QVBoxLayout(effect_controls_group);
+    auto* controls_root = new EffectControlsRoot();
+    effect_controls_group = controls_root;
+    QVBoxLayout* main_layout = controls_root->mainLayout();
 
-    {
-        QLabel* layer_heading = new QLabel(QStringLiteral("Layer controls"));
-        QFont hf = layer_heading->font();
-        hf.setBold(true);
-        layer_heading->setFont(hf);
-        main_layout->addWidget(layer_heading);
-    }
-
+    auto* layer_banner = new EffectLayerBanner(include_start_stop);
+    main_layout->addWidget(PluginUiWrapInSettingsPanel(layer_banner));
     if(include_start_stop)
     {
-        QHBoxLayout* button_layout = new QHBoxLayout();
-        start_effect_button = new QPushButton("Start Effect");
-        stop_effect_button = new QPushButton("Stop Effect");
-        stop_effect_button->setEnabled(false);
-
-        button_layout->addWidget(start_effect_button);
-        button_layout->addWidget(stop_effect_button);
-        button_layout->addStretch();
-        main_layout->addLayout(button_layout);
+        start_effect_button = layer_banner->startEffectButton();
+        stop_effect_button  = layer_banner->stopEffectButton();
     }
 
-    surfaces_group = new QGroupBox("Surfaces");
-    surfaces_group->setToolTip(
-        "Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
-        "All checked = no surface filter. "
-        "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack.");
-    QGridLayout* surf_layout = new QGridLayout(surfaces_group);
-    QCheckBox* cb_floor = new QCheckBox("Floor");
-    cb_floor->setChecked((effect_surface_mask & SURF_FLOOR) != 0);
-    surf_layout->addWidget(cb_floor, 0, 0);
-    connect(cb_floor, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_FLOOR; else effect_surface_mask &= ~SURF_FLOOR; emit ParametersChanged(); });
-    QCheckBox* cb_ceil = new QCheckBox("Ceiling");
-    cb_ceil->setChecked((effect_surface_mask & SURF_CEIL) != 0);
-    surf_layout->addWidget(cb_ceil, 0, 1);
-    connect(cb_ceil, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_CEIL; else effect_surface_mask &= ~SURF_CEIL; emit ParametersChanged(); });
-    QCheckBox* cb_wxm = new QCheckBox("Wall -X");
-    cb_wxm->setChecked((effect_surface_mask & SURF_WALL_XM) != 0);
-    surf_layout->addWidget(cb_wxm, 0, 2);
-    connect(cb_wxm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XM; else effect_surface_mask &= ~SURF_WALL_XM; emit ParametersChanged(); });
-    QCheckBox* cb_wxp = new QCheckBox("Wall +X");
-    cb_wxp->setChecked((effect_surface_mask & SURF_WALL_XP) != 0);
-    surf_layout->addWidget(cb_wxp, 1, 0);
-    connect(cb_wxp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_XP; else effect_surface_mask &= ~SURF_WALL_XP; emit ParametersChanged(); });
-    QCheckBox* cb_wzm = new QCheckBox("Wall -Z");
-    cb_wzm->setChecked((effect_surface_mask & SURF_WALL_ZM) != 0);
-    surf_layout->addWidget(cb_wzm, 1, 1);
-    connect(cb_wzm, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZM; else effect_surface_mask &= ~SURF_WALL_ZM; emit ParametersChanged(); });
-    QCheckBox* cb_wzp = new QCheckBox("Wall +Z");
-    cb_wzp->setChecked((effect_surface_mask & SURF_WALL_ZP) != 0);
-    surf_layout->addWidget(cb_wzp, 1, 2);
-    connect(cb_wzp, &QCheckBox::toggled, this, [this](bool on){ if(on) effect_surface_mask |= SURF_WALL_ZP; else effect_surface_mask &= ~SURF_WALL_ZP; emit ParametersChanged(); });
-    main_layout->addWidget(surfaces_group);
+    surfaces_group = new EffectSurfacesPanel(effect_surface_mask, this);
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Surfaces"),
+                            QStringLiteral("Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
+                                           "All checked = no surface filter. "
+                                           "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack."),
+                            surfaces_group,
+                            &surfaces_section);
 
-    QWidget* motion_pattern_group = new QWidget();
-    motion_pattern_group->setToolTip("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds.");
-    QVBoxLayout* motion_layout = new QVBoxLayout(motion_pattern_group);
+    auto* motion_pattern_group = new EffectMotionPanel(effect_speed,
+                                                                       effect_brightness,
+                                                                       effect_frequency,
+                                                                       effect_detail,
+                                                                       effect_size,
+                                                                       effect_scale,
+                                                                       scale_inverted,
+                                                                       effect_fps);
+    motion_pattern_group->setToolTip(
+        QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."));
 
-    QHBoxLayout* speed_layout = new QHBoxLayout();
-    speed_layout->addWidget(new QLabel("Speed:"));
-    speed_slider = new QSlider(Qt::Horizontal);
-    speed_slider->setRange(0, 200);
-    speed_slider->setValue(effect_speed);
-    speed_slider->setToolTip("Effect animation speed (uses logarithmic curve for smooth control)");
-    speed_layout->addWidget(speed_slider);
-    speed_label = new QLabel(QString::number(effect_speed));
-    speed_label->setMinimumWidth(30);
-    speed_layout->addWidget(speed_label);
-    motion_layout->addLayout(speed_layout);
-
-    QHBoxLayout* brightness_layout = new QHBoxLayout();
-    brightness_layout->addWidget(new QLabel("Brightness:"));
-    brightness_slider = new QSlider(Qt::Horizontal);
-    brightness_slider->setRange(1, 100);
-    brightness_slider->setToolTip("Overall effect brightness (applied after intensity/sharpness)");
-    brightness_slider->setValue(effect_brightness);
-    brightness_layout->addWidget(brightness_slider);
-    brightness_label = new QLabel(QString::number(effect_brightness));
-    brightness_label->setMinimumWidth(30);
-    brightness_layout->addWidget(brightness_label);
-    motion_layout->addLayout(brightness_layout);
-
-    QHBoxLayout* frequency_layout = new QHBoxLayout();
-    frequency_layout->addWidget(new QLabel("Frequency:"));
-    frequency_slider = new QSlider(Qt::Horizontal);
-    frequency_slider->setRange(0, 200);
-    frequency_slider->setValue(effect_frequency);
-    frequency_slider->setToolTip(
-        "Temporal rate (pattern motion and color cycles). Also speeds compass-based palette scrolling in Room sampler when Compass mode is on.");
-    frequency_layout->addWidget(frequency_slider);
-    frequency_label = new QLabel(QString::number(effect_frequency));
-    frequency_label->setMinimumWidth(30);
-    frequency_layout->addWidget(frequency_label);
-    motion_layout->addLayout(frequency_layout);
-
-    QHBoxLayout* detail_layout = new QHBoxLayout();
-    detail_layout->addWidget(new QLabel("Detail:"));
-    detail_slider = new QSlider(Qt::Horizontal);
-    detail_slider->setRange(0, 200);
-    detail_slider->setValue(effect_detail);
-    detail_slider->setToolTip("Spatial detail (higher = more pattern/color detail across space)");
-    detail_layout->addWidget(detail_slider);
-    detail_label = new QLabel(QString::number(effect_detail));
-    detail_label->setMinimumWidth(30);
-    detail_layout->addWidget(detail_label);
-    motion_layout->addLayout(detail_layout);
-
-    QHBoxLayout* size_layout = new QHBoxLayout();
-    size_layout->addWidget(new QLabel("Size:"));
-    size_slider = new QSlider(Qt::Horizontal);
-    size_slider->setRange(0, 200);
-    size_slider->setValue(effect_size);
-    size_slider->setToolTip("Spatial scale (bigger = larger features / wider bands)");
-    size_layout->addWidget(size_slider);
-    size_label = new QLabel(QString::number(effect_size));
-    size_label->setMinimumWidth(30);
-    size_layout->addWidget(size_label);
-    motion_layout->addLayout(size_layout);
-
-    QHBoxLayout* scale_layout = new QHBoxLayout();
-    scale_layout->addWidget(new QLabel("Scale:"));
-    scale_slider = new QSlider(Qt::Horizontal);
-    scale_slider->setRange(0, 300);
-    scale_slider->setValue(effect_scale);
-    scale_slider->setToolTip("Effect coverage: 0-200 = 0-100% of room (200=fill grid), 201-300 = 101-200% (beyond room)");
-    scale_layout->addWidget(scale_slider);
-    scale_label = new QLabel(QString::number(effect_scale));
-    scale_label->setMinimumWidth(30);
-    scale_layout->addWidget(scale_label);
-    scale_invert_check = new QCheckBox("Invert");
-    scale_invert_check->setToolTip("Collapse effect toward the reference point instead of expanding outward.");
-    scale_invert_check->setChecked(scale_inverted);
-    scale_layout->addWidget(scale_invert_check);
-    motion_layout->addLayout(scale_layout);
+    speed_slider = motion_pattern_group->speedSlider();
+    speed_label = motion_pattern_group->speedLabel();
+    brightness_slider = motion_pattern_group->brightnessSlider();
+    brightness_label = motion_pattern_group->brightnessLabel();
+    frequency_slider = motion_pattern_group->frequencySlider();
+    frequency_label = motion_pattern_group->frequencyLabel();
+    detail_slider = motion_pattern_group->detailSlider();
+    detail_label = motion_pattern_group->detailLabel();
+    size_slider = motion_pattern_group->sizeSlider();
+    size_label = motion_pattern_group->sizeLabel();
+    scale_slider = motion_pattern_group->scaleSlider();
+    scale_label = motion_pattern_group->scaleLabel();
+    scale_invert_check = motion_pattern_group->scaleInvertCheck();
+    fps_slider = motion_pattern_group->fpsSlider();
+    fps_label = motion_pattern_group->fpsLabel();
 
     // Bounds mode is controlled from the global Effect Stack panel.
 
-    QHBoxLayout* fps_layout = new QHBoxLayout();
-    fps_layout->addWidget(new QLabel("FPS:"));
-    fps_slider = new QSlider(Qt::Horizontal);
-    fps_slider->setRange(1, 120);
-    fps_slider->setValue(effect_fps);
-    fps_slider->setToolTip(
-        "Effect refresh rate (1–120 Hz). When an effect is running, the plugin timer uses this layer’s value "
-        "(single effect) or the maximum across enabled stack layers so motion stays smooth.");
-    fps_layout->addWidget(fps_slider);
-    fps_label = new QLabel(QString::number(effect_fps));
-    fps_label->setMinimumWidth(30);
-    fps_layout->addWidget(fps_label);
-    motion_layout->addLayout(fps_layout);
-
-    AddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),
                    motion_pattern_group);
 
-    QWidget* output_shaping_group = new QWidget();
-    output_shaping_group->setToolTip("Final contrast and level before colors; pair with Brightness above.");
-    QVBoxLayout* output_layout = new QVBoxLayout(output_shaping_group);
+    auto* output_shaping_group = new EffectOutputPanel(effect_intensity,
+                                                                       effect_sharpness,
+                                                                       effect_smoothing,
+                                                                       effect_sampling_resolution);
+    output_shaping_group->setToolTip(
+        QStringLiteral("Final contrast and level before colors; pair with Brightness above."));
 
-    QHBoxLayout* intensity_layout = new QHBoxLayout();
-    intensity_layout->addWidget(new QLabel("Intensity:"));
-    intensity_slider = new QSlider(Qt::Horizontal);
-    intensity_slider->setRange(0, 200);
-    intensity_slider->setValue(effect_intensity);
-    intensity_slider->setToolTip("Global intensity multiplier (0 = off, 100 = normal, 200 = 2x)");
-    intensity_layout->addWidget(intensity_slider);
-    intensity_label = new QLabel(QString::number(effect_intensity));
-    intensity_label->setMinimumWidth(30);
-    intensity_layout->addWidget(intensity_label);
-    output_layout->addLayout(intensity_layout);
+    intensity_slider = output_shaping_group->intensitySlider();
+    intensity_label = output_shaping_group->intensityLabel();
+    sharpness_slider = output_shaping_group->sharpnessSlider();
+    sharpness_label = output_shaping_group->sharpnessLabel();
+    smoothing_slider = output_shaping_group->smoothingSlider();
+    smoothing_label = output_shaping_group->smoothingLabel();
+    sampling_resolution_slider = output_shaping_group->samplingResolutionSlider();
+    sampling_resolution_label = output_shaping_group->samplingResolutionLabel();
 
-    QHBoxLayout* sharpness_layout = new QHBoxLayout();
-    sharpness_layout->addWidget(new QLabel("Sharpness:"));
-    sharpness_slider = new QSlider(Qt::Horizontal);
-    sharpness_slider->setRange(0, 200);
-    sharpness_slider->setValue(effect_sharpness);
-    sharpness_slider->setToolTip("Edge contrast: lower = softer, higher = crisper (gamma-like)");
-    sharpness_layout->addWidget(sharpness_slider);
-    sharpness_label = new QLabel(QString::number(effect_sharpness));
-    sharpness_label->setMinimumWidth(30);
-    sharpness_layout->addWidget(sharpness_label);
-    output_layout->addLayout(sharpness_layout);
-
-    QHBoxLayout* smoothing_layout = new QHBoxLayout();
-    smoothing_layout->addWidget(new QLabel("Smoothing:"));
-    smoothing_slider = new QSlider(Qt::Horizontal);
-    smoothing_slider->setRange(0, 100);
-    smoothing_slider->setValue((int)effect_smoothing);
-    smoothing_slider->setToolTip("Global temporal smoothing hint (0 = off). Effects that support it blend frame-to-frame to reduce low-FPS stepping.");
-    smoothing_layout->addWidget(smoothing_slider);
-    smoothing_label = new QLabel(QString::number(effect_smoothing));
-    smoothing_label->setMinimumWidth(30);
-    smoothing_layout->addWidget(smoothing_label);
-    output_layout->addLayout(smoothing_layout);
-
-    QHBoxLayout* sampling_layout = new QHBoxLayout();
-    sampling_layout->addWidget(new QLabel("Sampling:"));
-    sampling_resolution_slider = new QSlider(Qt::Horizontal);
-    sampling_resolution_slider->setRange(0, 100);
-    sampling_resolution_slider->setValue((int)effect_sampling_resolution);
-    sampling_resolution_slider->setToolTip(
-        "Global sampling detail (100 = full, 0 = blocky). Image/GIF layers: UV quantization (× per-media Resolution). "
-        "Other effects: LED positions snap to a coarser voxel grid in room bounds (retro / low-res look).");
-    sampling_layout->addWidget(sampling_resolution_slider);
-    sampling_resolution_label = new QLabel(QString::number((int)effect_sampling_resolution));
-    sampling_resolution_label->setMinimumWidth(30);
-    sampling_layout->addWidget(sampling_resolution_label);
-    output_layout->addLayout(sampling_layout);
-
-    AddSectionBlock(main_layout, QStringLiteral("Output shaping"),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Output shaping"),
                    QStringLiteral("Final contrast and level before colors; pair with Brightness in Motion and pattern."),
                    output_shaping_group);
 
-    QWidget* geometry_group = new QWidget();
+    auto* geometry_group = new EffectGeometryPanel(effect_scale_x,
+                                                            effect_scale_y,
+                                                            effect_scale_z,
+                                                            effect_axis_scale_rotation_yaw,
+                                                            effect_axis_scale_rotation_pitch,
+                                                            effect_axis_scale_rotation_roll,
+                                                            effect_offset_x,
+                                                            effect_offset_y,
+                                                            effect_offset_z,
+                                                            effect_rotation_yaw,
+                                                            effect_rotation_pitch,
+                                                            effect_rotation_roll);
     geometry_group->setToolTip(
-        "LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
-        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
-        "Overall coverage uses the Scale slider under Motion and pattern. "
-        "Choose zone and global/target bounds for this layer in the Effect Stack.");
-    QVBoxLayout* geometry_layout = new QVBoxLayout(geometry_group);
+        QStringLiteral("LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
+                       "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
+                       "Overall coverage uses the Scale slider under Motion and pattern. "
+                       "Choose zone and global/target bounds for this layer in the Effect Stack."));
 
-    QGroupBox* axis_scale_group = new QGroupBox("Effect scale (X / Y / Z %)");
-    axis_scale_group->setToolTip("Scale the effect along each axis. 100% = normal. Does not move scene objects or the camera.");
-    QVBoxLayout* axis_scale_layout = new QVBoxLayout();
+    scale_x_slider = geometry_group->scaleXSlider();
+    scale_x_label = geometry_group->scaleXLabel();
+    scale_y_slider = geometry_group->scaleYSlider();
+    scale_y_label = geometry_group->scaleYLabel();
+    scale_z_slider = geometry_group->scaleZSlider();
+    scale_z_label = geometry_group->scaleZLabel();
+    axis_scale_reset_button = geometry_group->axisScaleResetButton();
 
-    QHBoxLayout* scale_x_layout = new QHBoxLayout();
-    scale_x_layout->addWidget(new QLabel("X:"));
-    scale_x_slider = new QSlider(Qt::Horizontal);
-    scale_x_slider->setRange(1, 400);
-    scale_x_slider->setValue((int)effect_scale_x);
-    scale_x_slider->setToolTip("Effect scale along X (left ↔ right). 100% = normal.");
-    scale_x_layout->addWidget(scale_x_slider);
-    scale_x_label = new QLabel(QString::number(effect_scale_x) + "%");
-    scale_x_label->setMinimumWidth(45);
-    scale_x_layout->addWidget(scale_x_label);
-    axis_scale_layout->addLayout(scale_x_layout);
+    axis_scale_rot_yaw_slider = geometry_group->axisScaleRotYawSlider();
+    axis_scale_rot_yaw_label = geometry_group->axisScaleRotYawLabel();
+    axis_scale_rot_pitch_slider = geometry_group->axisScaleRotPitchSlider();
+    axis_scale_rot_pitch_label = geometry_group->axisScaleRotPitchLabel();
+    axis_scale_rot_roll_slider = geometry_group->axisScaleRotRollSlider();
+    axis_scale_rot_roll_label = geometry_group->axisScaleRotRollLabel();
+    axis_scale_rot_reset_button = geometry_group->axisScaleRotResetButton();
 
-    QHBoxLayout* scale_y_layout = new QHBoxLayout();
-    scale_y_layout->addWidget(new QLabel("Y:"));
-    scale_y_slider = new QSlider(Qt::Horizontal);
-    scale_y_slider->setRange(1, 400);
-    scale_y_slider->setValue((int)effect_scale_y);
-    scale_y_slider->setToolTip("Effect scale along Y (floor ↔ ceiling). 100% = normal.");
-    scale_y_layout->addWidget(scale_y_slider);
-    scale_y_label = new QLabel(QString::number(effect_scale_y) + "%");
-    scale_y_label->setMinimumWidth(45);
-    scale_y_layout->addWidget(scale_y_label);
-    axis_scale_layout->addLayout(scale_y_layout);
+    position_offset_group = geometry_group->positionOffsetGroup();
+    offset_x_slider = geometry_group->offsetXSlider();
+    offset_x_label = geometry_group->offsetXLabel();
+    offset_y_slider = geometry_group->offsetYSlider();
+    offset_y_label = geometry_group->offsetYLabel();
+    offset_z_slider = geometry_group->offsetZSlider();
+    offset_z_label = geometry_group->offsetZLabel();
 
-    QHBoxLayout* scale_z_layout = new QHBoxLayout();
-    scale_z_layout->addWidget(new QLabel("Z:"));
-    scale_z_slider = new QSlider(Qt::Horizontal);
-    scale_z_slider->setRange(1, 400);
-    scale_z_slider->setValue((int)effect_scale_z);
-    scale_z_slider->setToolTip("Effect scale along Z (front ↔ back). 100% = normal.");
-    scale_z_layout->addWidget(scale_z_slider);
-    scale_z_label = new QLabel(QString::number(effect_scale_z) + "%");
-    scale_z_label->setMinimumWidth(45);
-    scale_z_layout->addWidget(scale_z_label);
-    axis_scale_layout->addLayout(scale_z_layout);
+    rotation_yaw_slider = geometry_group->rotationYawSlider();
+    rotation_yaw_label = geometry_group->rotationYawLabel();
+    rotation_pitch_slider = geometry_group->rotationPitchSlider();
+    rotation_pitch_label = geometry_group->rotationPitchLabel();
+    rotation_roll_slider = geometry_group->rotationRollSlider();
+    rotation_roll_label = geometry_group->rotationRollLabel();
+    rotation_reset_button = geometry_group->rotationResetButton();
 
-    axis_scale_reset_button = new QPushButton("Reset to defaults");
-    axis_scale_reset_button->setToolTip("Reset effect scale X, Y, Z to 100%");
-    axis_scale_layout->addWidget(axis_scale_reset_button);
-
-    axis_scale_group->setLayout(axis_scale_layout);
-    geometry_layout->addWidget(axis_scale_group);
-
-    QGroupBox* axis_scale_rot_group = new QGroupBox("Effect scale rotation (°)");
-    axis_scale_rot_group->setToolTip("Rotate the direction of the effect scale axes. Per-axis scale is applied in this orientation (before effect rotation below).");
-    QVBoxLayout* axis_scale_rot_layout = new QVBoxLayout();
-    QHBoxLayout* asr_yaw_layout = new QHBoxLayout();
-    asr_yaw_layout->addWidget(new QLabel("Yaw:"));
-    axis_scale_rot_yaw_slider = new QSlider(Qt::Horizontal);
-    axis_scale_rot_yaw_slider->setRange(-180, 180);
-    axis_scale_rot_yaw_slider->setValue((int)effect_axis_scale_rotation_yaw);
-    axis_scale_rot_yaw_slider->setToolTip("Yaw: rotate scale axes horizontally. Scale is applied in this frame.");
-    axis_scale_rot_yaw_label = new QLabel(QString::number((int)effect_axis_scale_rotation_yaw) + "°");
-    axis_scale_rot_yaw_label->setMinimumWidth(40);
-    asr_yaw_layout->addWidget(axis_scale_rot_yaw_slider);
-    asr_yaw_layout->addWidget(axis_scale_rot_yaw_label);
-    axis_scale_rot_layout->addLayout(asr_yaw_layout);
-    QHBoxLayout* asr_pitch_layout = new QHBoxLayout();
-    asr_pitch_layout->addWidget(new QLabel("Pitch:"));
-    axis_scale_rot_pitch_slider = new QSlider(Qt::Horizontal);
-    axis_scale_rot_pitch_slider->setRange(-180, 180);
-    axis_scale_rot_pitch_slider->setValue((int)effect_axis_scale_rotation_pitch);
-    axis_scale_rot_pitch_label = new QLabel(QString::number((int)effect_axis_scale_rotation_pitch) + "°");
-    axis_scale_rot_pitch_label->setMinimumWidth(40);
-    asr_pitch_layout->addWidget(axis_scale_rot_pitch_slider);
-    asr_pitch_layout->addWidget(axis_scale_rot_pitch_label);
-    axis_scale_rot_layout->addLayout(asr_pitch_layout);
-    QHBoxLayout* asr_roll_layout = new QHBoxLayout();
-    asr_roll_layout->addWidget(new QLabel("Roll:"));
-    axis_scale_rot_roll_slider = new QSlider(Qt::Horizontal);
-    axis_scale_rot_roll_slider->setRange(-180, 180);
-    axis_scale_rot_roll_slider->setValue((int)effect_axis_scale_rotation_roll);
-    axis_scale_rot_roll_label = new QLabel(QString::number((int)effect_axis_scale_rotation_roll) + "°");
-    axis_scale_rot_roll_label->setMinimumWidth(40);
-    asr_roll_layout->addWidget(axis_scale_rot_roll_slider);
-    asr_roll_layout->addWidget(axis_scale_rot_roll_label);
-    axis_scale_rot_layout->addLayout(asr_roll_layout);
-
-    axis_scale_rot_reset_button = new QPushButton("Reset to defaults");
-    axis_scale_rot_reset_button->setToolTip("Reset effect scale rotation (yaw, pitch, roll) to 0°");
-    axis_scale_rot_layout->addWidget(axis_scale_rot_reset_button);
-
-    axis_scale_rot_group->setLayout(axis_scale_rot_layout);
-    geometry_layout->addWidget(axis_scale_rot_group);
-
-    position_offset_group = new QGroupBox("Effect center offset (%)");
-    position_offset_group->setToolTip("Shift the effect origin from room center or the chosen reference point. Percent of half-room size per axis. Does not move scene objects or the camera.");
-    QVBoxLayout* offset_layout = new QVBoxLayout();
-    QHBoxLayout* offset_x_layout = new QHBoxLayout();
-    offset_x_layout->addWidget(new QLabel("X:"));
-    offset_x_slider = new QSlider(Qt::Horizontal);
-    offset_x_slider->setRange(-100, 100);
-    offset_x_slider->setValue(effect_offset_x);
-    offset_x_slider->setToolTip("Effect offset left (-) or right (+) as % of half-room width");
-    offset_x_layout->addWidget(offset_x_slider);
-    offset_x_label = new QLabel(QString::number(effect_offset_x) + "%");
-    offset_x_label->setMinimumWidth(45);
-    offset_x_layout->addWidget(offset_x_label);
-    offset_layout->addLayout(offset_x_layout);
-    QHBoxLayout* offset_y_layout = new QHBoxLayout();
-    offset_y_layout->addWidget(new QLabel("Y:"));
-    offset_y_slider = new QSlider(Qt::Horizontal);
-    offset_y_slider->setRange(-100, 100);
-    offset_y_slider->setValue(effect_offset_y);
-    offset_y_slider->setToolTip("Effect offset down (-) or up (+) as % of half-room height");
-    offset_y_layout->addWidget(offset_y_slider);
-    offset_y_label = new QLabel(QString::number(effect_offset_y) + "%");
-    offset_y_label->setMinimumWidth(45);
-    offset_y_layout->addWidget(offset_y_label);
-    offset_layout->addLayout(offset_y_layout);
-    QHBoxLayout* offset_z_layout = new QHBoxLayout();
-    offset_z_layout->addWidget(new QLabel("Z:"));
-    offset_z_slider = new QSlider(Qt::Horizontal);
-    offset_z_slider->setRange(-100, 100);
-    offset_z_slider->setValue(effect_offset_z);
-    offset_z_slider->setToolTip("Effect offset forward (-) or back (+) as % of half-room depth");
-    offset_z_layout->addWidget(offset_z_slider);
-    offset_z_label = new QLabel(QString::number(effect_offset_z) + "%");
-    offset_z_label->setMinimumWidth(45);
-    offset_z_layout->addWidget(offset_z_label);
-    offset_layout->addLayout(offset_z_layout);
-    QPushButton* offset_reset_btn = new QPushButton("Reset to center");
-    offset_reset_btn->setToolTip("Set effect position offset X, Y, Z to 0%");
-    offset_layout->addWidget(offset_reset_btn);
-    connect(offset_reset_btn, &QPushButton::clicked, this, [this](){
-        effect_offset_x = effect_offset_y = effect_offset_z = 0;
-        if(offset_x_slider) offset_x_slider->setValue(0);
-        if(offset_y_slider) offset_y_slider->setValue(0);
-        if(offset_z_slider) offset_z_slider->setValue(0);
-        if(offset_x_label) offset_x_label->setText("0%");
-        if(offset_y_label) offset_y_label->setText("0%");
-        if(offset_z_label) offset_z_label->setText("0%");
-        emit ParametersChanged();
-    });
-    position_offset_group->setLayout(offset_layout);
-    geometry_layout->addWidget(position_offset_group);
-
-    QGroupBox* rotation_group = new QGroupBox("Effect rotation (°)");
-    rotation_group->setToolTip("Rotate the pattern around the effect origin (after per-axis scale and scale-axis rotation). Does not move the camera or scene objects.");
-    QVBoxLayout* rotation_layout = new QVBoxLayout();
-    
-    QHBoxLayout* yaw_layout = new QHBoxLayout();
-    yaw_layout->addWidget(new QLabel("Yaw:"));
-    rotation_yaw_slider = new QSlider(Qt::Horizontal);
-    rotation_yaw_slider->setRange(0, 360);
-    rotation_yaw_slider->setValue((int)effect_rotation_yaw);
-    rotation_yaw_slider->setToolTip("Effect rotation around Y (horizontal). 0–360°.");
-    rotation_yaw_label = new QLabel(QString::number((int)effect_rotation_yaw) + "°");
-    rotation_yaw_label->setMinimumWidth(50);
-    yaw_layout->addWidget(rotation_yaw_slider);
-    yaw_layout->addWidget(rotation_yaw_label);
-    rotation_layout->addLayout(yaw_layout);
-    
-    QHBoxLayout* pitch_layout = new QHBoxLayout();
-    pitch_layout->addWidget(new QLabel("Pitch:"));
-    rotation_pitch_slider = new QSlider(Qt::Horizontal);
-    rotation_pitch_slider->setRange(0, 360);
-    rotation_pitch_slider->setValue((int)effect_rotation_pitch);
-    rotation_pitch_slider->setToolTip("Effect rotation around X (vertical). 0–360°.");
-    rotation_pitch_label = new QLabel(QString::number((int)effect_rotation_pitch) + "°");
-    rotation_pitch_label->setMinimumWidth(50);
-    pitch_layout->addWidget(rotation_pitch_slider);
-    pitch_layout->addWidget(rotation_pitch_label);
-    rotation_layout->addLayout(pitch_layout);
-    
-    QHBoxLayout* roll_layout = new QHBoxLayout();
-    roll_layout->addWidget(new QLabel("Roll:"));
-    rotation_roll_slider = new QSlider(Qt::Horizontal);
-    rotation_roll_slider->setRange(0, 360);
-    rotation_roll_slider->setValue((int)effect_rotation_roll);
-    rotation_roll_slider->setToolTip("Effect rotation around Z (twist). 0–360°.");
-    rotation_roll_label = new QLabel(QString::number((int)effect_rotation_roll) + "°");
-    rotation_roll_label->setMinimumWidth(50);
-    roll_layout->addWidget(rotation_roll_slider);
-    roll_layout->addWidget(rotation_roll_label);
-    rotation_layout->addLayout(roll_layout);
-    
-    rotation_reset_button = new QPushButton("Reset rotation");
-    rotation_reset_button->setToolTip("Reset effect rotation (yaw, pitch, roll) to 0°");
-    rotation_layout->addWidget(rotation_reset_button);
-    
-    rotation_group->setLayout(rotation_layout);
-    geometry_layout->addWidget(rotation_group);
-
-    AddSectionBlock(main_layout, QStringLiteral("Effect geometry"),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect geometry"),
                    QStringLiteral(
                        "LED sampling uses this order: effect origin (room center or reference, plus center offset below) → "
                        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
@@ -658,23 +361,27 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    geometry_group);
 
     CreateColorControls();
-    AddSectionBlock(main_layout, QStringLiteral("Colors — rainbow & stops"),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors — rainbow & stops"),
                    QStringLiteral("Rainbow mode or color stops used by the effect and room sampler palette mapping."),
                    color_controls_group);
 
-    custom_effect_settings_host = new QWidget();
-    QVBoxLayout* custom_host_layout = new QVBoxLayout(custom_effect_settings_host);
-    custom_host_layout->setContentsMargins(0, 0, 0, 0);
-    custom_host_layout->setSpacing(4);
-    AddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
+    custom_effect_settings_host = new EffectCustomHost();
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
                    QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
                    custom_effect_settings_host);
 
     CreateSamplerMapperControls();
-    AddSectionBlock(main_layout, QStringLiteral("Room sampler"),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Room sampler"),
                    QStringLiteral("Map LED position (and optional game voxels) to palette steering."),
                    sampler_mapper_group);
 
+    ConnectCommonEffectControlSignals(geometry_group);
+
+    AddWidgetToParent(effect_controls_group, parent);
+}
+
+void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel)
+{
     connect(speed_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(brightness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(frequency_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -693,6 +400,37 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     connect(rotation_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRotationResetClicked);
     connect(axis_scale_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAxisScaleResetClicked);
     connect(axis_scale_rot_reset_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAxisScaleRotationResetClicked);
+    if(geometry_panel)
+    {
+        connect(geometry_panel->offsetCenterResetButton(), &QPushButton::clicked, this, [this]() {
+            effect_offset_x = effect_offset_y = effect_offset_z = 0;
+            if(offset_x_slider)
+            {
+                offset_x_slider->setValue(0);
+            }
+            if(offset_y_slider)
+            {
+                offset_y_slider->setValue(0);
+            }
+            if(offset_z_slider)
+            {
+                offset_z_slider->setValue(0);
+            }
+            if(offset_x_label)
+            {
+                offset_x_label->setText(QStringLiteral("0%"));
+            }
+            if(offset_y_label)
+            {
+                offset_y_label->setText(QStringLiteral("0%"));
+            }
+            if(offset_z_label)
+            {
+                offset_z_label->setText(QStringLiteral("0%"));
+            }
+            emit ParametersChanged();
+        });
+    }
     connect(intensity_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(smoothing_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -800,8 +538,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         offset_z_label->setText(QString::number(value) + "%");
         effect_offset_z = value;
     });
-
-    AddWidgetToParent(effect_controls_group, parent);
 }
 
 void SpatialEffect3D::ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const
@@ -863,37 +599,21 @@ void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
 
 void SpatialEffect3D::CreateColorControls()
 {
-    color_controls_group = new QWidget();
-    QVBoxLayout* color_layout = new QVBoxLayout(color_controls_group);
+    auto* color_panel = new EffectColorPanel(rainbow_mode);
+    color_controls_group = color_panel;
 
-    rainbow_mode_check = new QCheckBox("Rainbow Mode");
-    rainbow_mode_check->setChecked(rainbow_mode);
-    rainbow_mode_check->setToolTip("Use full-spectrum rainbow instead of the color stops below");
-    color_layout->addWidget(rainbow_mode_check);
-
-    color_buttons_widget = new QWidget();
-    color_buttons_layout = new QHBoxLayout();
-    color_buttons_widget->setLayout(color_buttons_layout);
+    rainbow_mode_check = color_panel->rainbowModeCheck();
+    color_buttons_widget = color_panel->colorButtonsWidget();
+    color_buttons_layout = color_panel->colorButtonsLayout();
+    add_color_button = color_panel->addColorButton();
+    remove_color_button = color_panel->removeColorButton();
+    remove_color_button->setEnabled(colors.size() > 1);
 
     for(unsigned int i = 0; i < colors.size(); i++)
     {
         CreateColorButton(colors[i]);
     }
 
-    add_color_button = new QPushButton("+");
-    add_color_button->setMaximumSize(30, 30);
-    add_color_button->setToolTip("Add a new color stop");
-
-    remove_color_button = new QPushButton("-");
-    remove_color_button->setMaximumSize(30, 30);
-    remove_color_button->setEnabled(colors.size() > 1);
-    remove_color_button->setToolTip("Remove the last color stop");
-
-    color_buttons_layout->addWidget(add_color_button);
-    color_buttons_layout->addWidget(remove_color_button);
-    color_buttons_layout->addStretch();
-
-    color_layout->addWidget(color_buttons_widget);
     color_buttons_widget->setVisible(!rainbow_mode);
 
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnRainbowModeChanged);
@@ -934,152 +654,34 @@ void SpatialEffect3D::RemoveLastColorButton()
 
 void SpatialEffect3D::CreateSamplerMapperControls()
 {
-    sampler_mapper_group = new QWidget();
+    auto* mapper = new EffectSamplerPanel(spatial_mapping_mode,
+                                                         compass_layer_spin_preset,
+                                                         effect_sampler_influence_centi,
+                                                         effect_sampler_compass_north_offset_deg,
+                                                         effect_voxel_volume_mix,
+                                                         effect_voxel_room_scale_centi,
+                                                         effect_voxel_heading_offset,
+                                                         effect_voxel_drive_mode);
+    sampler_mapper_group = mapper;
     sampler_mapper_group->setToolTip(
         QStringLiteral("Uses LED position in the room (and optional game voxel data) to steer the palette. "
                        "Effect geometry above only shapes the pattern; this section answers \"what color for this corner / height / direction\"."));
 
-    QVBoxLayout* root = new QVBoxLayout(sampler_mapper_group);
-
-    QLabel* intro = new QLabel(
-        QStringLiteral("Surfaces stay open above. Below that: Motion, Output, Geometry, Colors, this effect's own settings, then this sampler. "
-                       "Increase Sampler strength if room mapping feels faint. "
-                       "Voxel Mix tints LEDs with block colors; Palette drive scrolls your rainbow/stops from voxels or room axes."));
-    intro->setWordWrap(true);
-    root->addWidget(intro);
-
-    compass_sampler_group = new QGroupBox(QStringLiteral("Compass → palette"));
-    compass_sampler_group->setToolTip(
-        QStringLiteral("Horizontal direction (8 sectors) and vertical band (floor / mid / ceiling) choose where you sit on the rainbow or color strip."));
-    QVBoxLayout* cg = new QVBoxLayout(compass_sampler_group);
-
-    cg->addWidget(new QLabel(QStringLiteral("Room mapping mode:")));
-    spatial_mapping_combo = new QComboBox();
-    spatial_mapping_combo->addItem(QStringLiteral("Off — flat (no direction layers)"), (int)SpatialMappingMode::Off);
-    spatial_mapping_combo->addItem(QStringLiteral("Subtle — gentle crawl with position"), (int)SpatialMappingMode::SubtleTint);
-    spatial_mapping_combo->addItem(QStringLiteral("Compass — sectors + height bands drive palette"), (int)SpatialMappingMode::CompassPalette);
-    spatial_mapping_combo->addItem(QStringLiteral("Voxel volume — full room grid (reference still biases)"), (int)SpatialMappingMode::VoxelVolume);
-    spatial_mapping_combo->setToolTip(
-        QStringLiteral("Subtle: soft palette crawl from position. Compass: sectors + floor/mid/ceiling bands; each band uses a compass hub at that height through your reference X/Z. "
-                       "Voxel volume: palette varies across the whole room; reference point still nudges mapping."));
-    for(int i = 0; i < spatial_mapping_combo->count(); i++)
-    {
-        if(spatial_mapping_combo->itemData(i).toInt() == (int)spatial_mapping_mode)
-        {
-            spatial_mapping_combo->setCurrentIndex(i);
-            break;
-        }
-    }
-    cg->addWidget(spatial_mapping_combo);
-
-    cg->addWidget(new QLabel(QStringLiteral("Height bands — time scroll direction:")));
-    compass_layer_spin_combo = new QComboBox();
-    compass_layer_spin_combo->addItem(QStringLiteral("All bands clockwise"), 0);
-    compass_layer_spin_combo->addItem(QStringLiteral("All bands counter-clockwise"), 1);
-    compass_layer_spin_combo->addItem(QStringLiteral("Floor CW · mid CCW · ceiling CW"), 2);
-    compass_layer_spin_combo->addItem(QStringLiteral("Floor CCW · mid CW · ceiling CCW"), 3);
-    compass_layer_spin_combo->setToolTip(
-        QStringLiteral("Per vertical band: +1 or −1 on animation scroll (Clockwise vs counter). Only in Compass mode."));
-    compass_layer_spin_combo->setCurrentIndex(std::clamp(compass_layer_spin_preset, 0, 3));
-    cg->addWidget(compass_layer_spin_combo);
-
-    QHBoxLayout* infl_row = new QHBoxLayout();
-    infl_row->addWidget(new QLabel(QStringLiteral("Sampler strength:")));
-    sampler_influence_slider = new QSlider(Qt::Horizontal);
-    sampler_influence_slider->setRange(0, 250);
-    sampler_influence_slider->setValue(effect_sampler_influence_centi);
-    sampler_influence_slider->setToolTip(
-        QStringLiteral("0 = ignore room/voxel palette steering. 100 = default. Up to 250 = stronger compass scroll, subtle tint, and palette drive."));
-    infl_row->addWidget(sampler_influence_slider, 1);
-    sampler_influence_label = new QLabel(QString::number(effect_sampler_influence_centi) + QStringLiteral("%"));
-    sampler_influence_label->setMinimumWidth(40);
-    infl_row->addWidget(sampler_influence_label);
-    cg->addLayout(infl_row);
-
-    QHBoxLayout* north_row = new QHBoxLayout();
-    north_row->addWidget(new QLabel(QStringLiteral("Compass north offset:")));
-    sampler_compass_north_slider = new QSlider(Qt::Horizontal);
-    sampler_compass_north_slider->setRange(-180, 180);
-    sampler_compass_north_slider->setValue(effect_sampler_compass_north_offset_deg);
-    sampler_compass_north_slider->setToolTip(
-        QStringLiteral("Rotates which compass sector counts as “forward” for mapping (degrees). Align sectors with your real room front."));
-    north_row->addWidget(sampler_compass_north_slider, 1);
-    sampler_compass_north_label =
-        new QLabel(QString::number(effect_sampler_compass_north_offset_deg) + QStringLiteral("°"));
-    sampler_compass_north_label->setMinimumWidth(44);
-    north_row->addWidget(sampler_compass_north_label);
-    cg->addLayout(north_row);
-
-    root->addWidget(compass_sampler_group);
-
-    voxel_volume_group = new QGroupBox(QStringLiteral("Voxel — tint + palette drive"));
-    voxel_volume_group->setToolTip(
-        QStringLiteral("Needs telemetry with voxel_frame (e.g. Minecraft UDP). Mix = replace with block color. "
-                       "Palette drive = slide rainbow/stops using voxel brightness or room axes without replacing hue entirely."));
-    QVBoxLayout* voxel_layout = new QVBoxLayout(voxel_volume_group);
-
-    QHBoxLayout* voxel_mix_row = new QHBoxLayout();
-    voxel_mix_row->addWidget(new QLabel(QStringLiteral("Color mix:")));
-    voxel_volume_mix_slider = new QSlider(Qt::Horizontal);
-    voxel_volume_mix_slider->setRange(0, 100);
-    voxel_volume_mix_slider->setValue((int)effect_voxel_volume_mix);
-    voxel_volume_mix_slider->setToolTip(
-        QStringLiteral("Blend sampled voxel RGB into the effect (0 = off). Requires live voxel_frame."));
-    voxel_mix_row->addWidget(voxel_volume_mix_slider);
-    voxel_volume_mix_label = new QLabel(QString::number((int)effect_voxel_volume_mix) + QStringLiteral("%"));
-    voxel_volume_mix_label->setMinimumWidth(44);
-    voxel_mix_row->addWidget(voxel_volume_mix_label);
-    voxel_layout->addLayout(voxel_mix_row);
-
-    QHBoxLayout* voxel_scale_row = new QHBoxLayout();
-    voxel_scale_row->addWidget(new QLabel(QStringLiteral("Room ↔ volume scale:")));
-    voxel_volume_scale_slider = new QSlider(Qt::Horizontal);
-    voxel_volume_scale_slider->setRange(2, 80);
-    voxel_volume_scale_slider->setValue(effect_voxel_room_scale_centi);
-    voxel_volume_scale_slider->setToolTip(
-        QStringLiteral("Minecraft / sender units per room step (×0.01). Fix stretched or offset blocks."));
-    voxel_scale_row->addWidget(voxel_volume_scale_slider);
-    voxel_volume_scale_label = new QLabel(QString::number(effect_voxel_room_scale_centi / 100.0f, 'f', 2));
-    voxel_volume_scale_label->setMinimumWidth(40);
-    voxel_scale_row->addWidget(voxel_volume_scale_label);
-    voxel_layout->addLayout(voxel_scale_row);
-
-    QHBoxLayout* voxel_heading_row = new QHBoxLayout();
-    voxel_heading_row->addWidget(new QLabel(QStringLiteral("Volume heading:")));
-    voxel_volume_heading_slider = new QSlider(Qt::Horizontal);
-    voxel_volume_heading_slider->setRange(-180, 180);
-    voxel_volume_heading_slider->setValue(effect_voxel_heading_offset);
-    voxel_volume_heading_slider->setToolTip(QStringLiteral("Yaw offset when projecting the volume into the room."));
-    voxel_heading_row->addWidget(voxel_volume_heading_slider);
-    voxel_volume_heading_label =
-        new QLabel(QString::number(effect_voxel_heading_offset) + QStringLiteral("°"));
-    voxel_volume_heading_label->setMinimumWidth(44);
-    voxel_heading_row->addWidget(voxel_volume_heading_label);
-    voxel_layout->addLayout(voxel_heading_row);
-
-    QHBoxLayout* voxel_drive_row = new QHBoxLayout();
-    voxel_drive_row->addWidget(new QLabel(QStringLiteral("Palette drive:")));
-    voxel_drive_combo = new QComboBox();
-    voxel_drive_combo->addItem(QStringLiteral("None"), (int)VoxelDriveMode::Off);
-    voxel_drive_combo->addItem(QStringLiteral("From voxel brightness"), (int)VoxelDriveMode::LumaField);
-    voxel_drive_combo->addItem(QStringLiteral("Scroll with room X"), (int)VoxelDriveMode::ScrollRoomX);
-    voxel_drive_combo->addItem(QStringLiteral("Scroll with room Y"), (int)VoxelDriveMode::ScrollRoomY);
-    voxel_drive_combo->addItem(QStringLiteral("Scroll with room Z"), (int)VoxelDriveMode::ScrollRoomZ);
-    voxel_drive_combo->addItem(QStringLiteral("Roll (angle × voxel)"), (int)VoxelDriveMode::VolumeRoll);
-    voxel_drive_combo->setToolTip(
-        QStringLiteral("Shifts rainbow / color stops along the LED (wheel rolling through space). Uses voxels when relevant; room axes work without a game."));
-    for(int i = 0; i < voxel_drive_combo->count(); i++)
-    {
-        if(voxel_drive_combo->itemData(i).toInt() == (int)effect_voxel_drive_mode)
-        {
-            voxel_drive_combo->setCurrentIndex(i);
-            break;
-        }
-    }
-    voxel_drive_row->addWidget(voxel_drive_combo, 1);
-    voxel_layout->addLayout(voxel_drive_row);
-
-    root->addWidget(voxel_volume_group);
+    compass_sampler_group = mapper->compassSamplerGroup();
+    spatial_mapping_combo = mapper->spatialMappingCombo();
+    compass_layer_spin_combo = mapper->compassLayerSpinCombo();
+    sampler_influence_slider = mapper->samplerInfluenceSlider();
+    sampler_influence_label = mapper->samplerInfluenceLabel();
+    sampler_compass_north_slider = mapper->samplerCompassNorthSlider();
+    sampler_compass_north_label = mapper->samplerCompassNorthLabel();
+    voxel_volume_group = mapper->voxelVolumeGroup();
+    voxel_volume_mix_slider = mapper->voxelVolumeMixSlider();
+    voxel_volume_mix_label = mapper->voxelVolumeMixLabel();
+    voxel_volume_scale_slider = mapper->voxelVolumeScaleSlider();
+    voxel_volume_scale_label = mapper->voxelVolumeScaleLabel();
+    voxel_volume_heading_slider = mapper->voxelVolumeHeadingSlider();
+    voxel_volume_heading_label = mapper->voxelVolumeHeadingLabel();
+    voxel_drive_combo = mapper->voxelDriveCombo();
 
     connect(spatial_mapping_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
             &SpatialEffect3D::OnSpatialMappingComboChanged);
@@ -2160,6 +1762,19 @@ void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */
 {
 }
 
+void SpatialEffect3D::SetSurfaceMaskFlag(int flag, bool enabled)
+{
+    if(enabled)
+    {
+        effect_surface_mask |= flag;
+    }
+    else
+    {
+        effect_surface_mask &= ~flag;
+    }
+    emit ParametersChanged();
+}
+
 void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_label, const QString& label_text, bool visible)
 {
     if(slider && value_label)
@@ -2208,7 +1823,10 @@ void SpatialEffect3D::ApplyControlVisibility()
         sampler_mapper_group->setVisible(true);
     }
 
-    if(surfaces_group) surfaces_group->setVisible(true);
+    if(surfaces_section)
+    {
+        surfaces_section->setVisible(true);
+    }
     if(position_offset_group) position_offset_group->setVisible(true);
 }
 
