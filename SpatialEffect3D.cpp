@@ -607,17 +607,37 @@ void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
     if(w && container && container->layout())
     {
         container->layout()->addWidget(w);
+        if(container == custom_effect_settings_host && effect_specific_section)
+        {
+            effect_specific_section->setVisible(true);
+        }
+        else if(container == color_pattern_settings_host && colors_patterns_section)
+        {
+            colors_patterns_section->setVisible(true);
+        }
+        else if(container == band_modulation_settings_host && band_modulation_section)
+        {
+            band_modulation_section->setVisible(true);
+        }
     }
 }
 
 void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
 {
     AddWidgetToParent(widget, color_pattern_settings_host);
+    if(colors_patterns_section)
+    {
+        colors_patterns_section->setVisible(true);
+    }
 }
 
 void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
 {
     AddWidgetToParent(widget, band_modulation_settings_host);
+    if(band_modulation_section)
+    {
+        band_modulation_section->setVisible(true);
+    }
 }
 
 void SpatialEffect3D::CreateColorControls()
