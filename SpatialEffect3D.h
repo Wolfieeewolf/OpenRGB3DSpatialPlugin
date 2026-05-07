@@ -207,6 +207,7 @@ public:
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
     /** Call from render paths: applies global Sampling (spatial) when enabled, then CalculateColorGrid. */
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
+    static const SpatialEffect3D* GetEvaluatingEffect();
     /** Override false for effects that only sample textures/screens (UV quantization handles resolution). */
     virtual bool UsesSpatialSamplingQuantization() const { return true; }
 

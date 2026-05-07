@@ -16,7 +16,7 @@ class WireframeCube : public SpatialEffect3D
 public:
     explicit WireframeCube(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("WireframeCube", "Wire Frame", "Spatial", [](){ return new WireframeCube; })
+    EFFECT_REGISTERER_3D("WireframeCube", "Wireframe Cube", "Spatial", [](){ return new WireframeCube; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

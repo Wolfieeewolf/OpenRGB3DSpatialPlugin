@@ -19,10 +19,10 @@ public:
     explicit Sinpulse3D(QWidget* parent = nullptr);
     ~Sinpulse3D() override;
 
-    EFFECT_REGISTERER_3D("Sinpulse3D", "Harmonic Pulse 3D", "Spatial", []() { return new Sinpulse3D; });
+    EFFECT_REGISTERER_3D("Sinpulse3D", "Sinpulse 3D", "Spatial", []() { return new Sinpulse3D; });
 
     static std::string const ClassName() { return "Sinpulse3D"; }
-    static std::string const UIName() { return "Harmonic Pulse 3D"; }
+    static std::string const UIName() { return "Sinpulse 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

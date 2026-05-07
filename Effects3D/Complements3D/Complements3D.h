@@ -18,10 +18,10 @@ public:
     explicit Complements3D(QWidget* parent = nullptr);
     ~Complements3D() override;
 
-    EFFECT_REGISTERER_3D("Complements3D", "Depth Tone 3D", "Spatial", []() { return new Complements3D; });
+    EFFECT_REGISTERER_3D("Complements3D", "Complements 3D", "Spatial", []() { return new Complements3D; });
 
     static std::string const ClassName() { return "Complements3D"; }
-    static std::string const UIName() { return "Depth Tone 3D"; }
+    static std::string const UIName() { return "Complements 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

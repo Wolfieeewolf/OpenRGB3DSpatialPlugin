@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Xorcery3D.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
 
 #include <QGridLayout>
 #include <QLabel>
@@ -87,7 +90,7 @@ EffectInfo3D Xorcery3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Bitwarp 3D";
+    info.effect_name = "Xorcery 3D";
     info.effect_description =
         "Bitwise interference from XOR-quantized XYZ. Odd/even cells can run motion forward or backward; "
         "tune cell scale and wave drive.";
@@ -171,7 +174,30 @@ void Xorcery3D::SetupCustomUI(QWidget* parent)
     });
     row++;
 
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(bitwarp_strip_cmap_on,
+                                            bitwarp_strip_cmap_kernel,
+                                            bitwarp_strip_cmap_rep,
+                                            bitwarp_strip_cmap_unfold,
+                                            bitwarp_strip_cmap_dir,
+                                            bitwarp_strip_cmap_color_style);
+    AddColorPatternWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Xorcery3D::SyncStripColormapFromPanel);
+
     AddWidgetToParent(w, parent);
+}
+
+void Xorcery3D::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    bitwarp_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    bitwarp_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    bitwarp_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    bitwarp_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    bitwarp_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    bitwarp_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Xorcery3D::UpdateParams(SpatialEffectParams& params)
@@ -228,10 +254,37 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
     h = Triangle01(h) / 5.0f + (nx + ny + nz) / 3.0f + t1;
     v = v * v * v;
 
-    if(GetRainbowMode())
-        return Hsv01ToBgr(h, 1.0f, v);
+    RGBColor c = 0x00000000;
+    const float h01 = h - std::floor(h);
+    if(bitwarp_strip_cmap_on)
+    {
+        float p01 = SampleStripKernelPalette01(bitwarp_strip_cmap_kernel,
+                                               bitwarp_strip_cmap_rep,
+                                               bitwarp_strip_cmap_unfold,
+                                               bitwarp_strip_cmap_dir,
+                                               h01,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rot);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = ResolveStripKernelFinalColor(*this,
+                                         StripShellKernelClamp(bitwarp_strip_cmap_kernel),
+                                         p01,
+                                         bitwarp_strip_cmap_color_style,
+                                         time,
+                                         rate * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        c = Hsv01ToBgr(h, 1.0f, 1.0f);
+    }
+    else
+    {
+        c = GetColorAtPosition(h01);
+    }
 
-    RGBColor c = GetColorAtPosition(h - std::floor(h));
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);
     int b = (int)((float)((c >> 16) & 0xFF) * v);
@@ -247,6 +300,14 @@ nlohmann::json Xorcery3D::SaveSettings() const
     j["bitwarp_direction_alternate"] = direction_alternate;
     j["bitwarp_cell_scale"] = cell_scale;
     j["bitwarp_wave_drive"] = wave_drive;
+    StripColormapSaveJson(j,
+                          "bitwarp",
+                          bitwarp_strip_cmap_on,
+                          bitwarp_strip_cmap_kernel,
+                          bitwarp_strip_cmap_rep,
+                          bitwarp_strip_cmap_unfold,
+                          bitwarp_strip_cmap_dir,
+                          bitwarp_strip_cmap_color_style);
     return j;
 }
 
@@ -259,6 +320,15 @@ void Xorcery3D::LoadSettings(const nlohmann::json& settings)
         cell_scale = std::clamp(settings["bitwarp_cell_scale"].get<float>(), 2.5f, 14.0f);
     if(settings.contains("bitwarp_wave_drive") && settings["bitwarp_wave_drive"].is_number())
         wave_drive = std::clamp(settings["bitwarp_wave_drive"].get<float>(), 0.5f, 1.5f);
+    StripColormapLoadJson(settings,
+                          "bitwarp",
+                          bitwarp_strip_cmap_on,
+                          bitwarp_strip_cmap_kernel,
+                          bitwarp_strip_cmap_rep,
+                          bitwarp_strip_cmap_unfold,
+                          bitwarp_strip_cmap_dir,
+                          bitwarp_strip_cmap_color_style,
+                          GetRainbowMode());
 
     if(alt_slider)
     {
@@ -277,5 +347,14 @@ void Xorcery3D::LoadSettings(const nlohmann::json& settings)
         drive_slider->setValue((int)std::lround(wave_drive * 100.0f));
         if(drive_label)
             drive_label->setText(QString::number(wave_drive, 'f', 2));
+    }
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(bitwarp_strip_cmap_on,
+                                                bitwarp_strip_cmap_kernel,
+                                                bitwarp_strip_cmap_rep,
+                                                bitwarp_strip_cmap_unfold,
+                                                bitwarp_strip_cmap_dir,
+                                                bitwarp_strip_cmap_color_style);
     }
 }

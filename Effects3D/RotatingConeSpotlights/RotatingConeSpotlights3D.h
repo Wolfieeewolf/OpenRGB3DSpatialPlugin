@@ -22,12 +22,12 @@ public:
     explicit RotatingConeSpotlights3D(QWidget* parent = nullptr);
     ~RotatingConeSpotlights3D() override;
 
-    EFFECT_REGISTERER_3D("RotatingConeSpotlights3D", "Spotlights / rotation 3D", "Spatial", []() {
+    EFFECT_REGISTERER_3D("RotatingConeSpotlights3D", "Rotating Cone Spotlights 3D", "Spatial", []() {
         return new RotatingConeSpotlights3D;
     });
 
     static std::string const ClassName() { return "RotatingConeSpotlights3D"; }
-    static std::string const UIName() { return "Spotlights / rotation 3D"; }
+    static std::string const UIName() { return "Rotating Cone Spotlights 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

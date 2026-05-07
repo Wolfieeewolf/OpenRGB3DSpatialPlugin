@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "Honeycomb3D.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -76,7 +79,7 @@ EffectInfo3D Honeycomb3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Hex Lattice 3D";
+    info.effect_name = "Honeycomb 3D";
     info.effect_description =
         "Hex lattice 3D field. Blends sin/cos in XYZ with animated zoom and triangular hue shaping.";
     info.category = "Spatial";
@@ -103,7 +106,30 @@ EffectInfo3D Honeycomb3D::GetEffectInfo()
 
 void Honeycomb3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
+    QWidget* w = new QWidget();
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(honeycomb_strip_cmap_on,
+                                            honeycomb_strip_cmap_kernel,
+                                            honeycomb_strip_cmap_rep,
+                                            honeycomb_strip_cmap_unfold,
+                                            honeycomb_strip_cmap_dir,
+                                            honeycomb_strip_cmap_color_style);
+    AddColorPatternWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Honeycomb3D::SyncStripColormapFromPanel);
+    AddWidgetToParent(w, parent);
+}
+
+void Honeycomb3D::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    honeycomb_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    honeycomb_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    honeycomb_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    honeycomb_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    honeycomb_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    honeycomb_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Honeycomb3D::UpdateParams(SpatialEffectParams& params)
@@ -142,10 +168,37 @@ RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, 
     v = v * v * v;
     h = Triangle01(h) * 0.5f + t3;
 
-    if(GetRainbowMode())
-        return Hsv01ToBgr(h, 1.0f, v);
+    RGBColor c = 0x00000000;
+    const float h01 = h - std::floor(h);
+    if(honeycomb_strip_cmap_on)
+    {
+        float p01 = SampleStripKernelPalette01(honeycomb_strip_cmap_kernel,
+                                               honeycomb_strip_cmap_rep,
+                                               honeycomb_strip_cmap_unfold,
+                                               honeycomb_strip_cmap_dir,
+                                               h01,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rot);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = ResolveStripKernelFinalColor(*this,
+                                         StripShellKernelClamp(honeycomb_strip_cmap_kernel),
+                                         p01,
+                                         honeycomb_strip_cmap_color_style,
+                                         time,
+                                         rate * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        c = Hsv01ToBgr(h, 1.0f, 1.0f);
+    }
+    else
+    {
+        c = GetColorAtPosition(h01);
+    }
 
-    RGBColor c = GetColorAtPosition(h - std::floor(h));
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);
     int b = (int)((float)((c >> 16) & 0xFF) * v);
@@ -157,10 +210,37 @@ RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, 
 
 nlohmann::json Honeycomb3D::SaveSettings() const
 {
-    return SpatialEffect3D::SaveSettings();
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    StripColormapSaveJson(j,
+                          "honeycomb",
+                          honeycomb_strip_cmap_on,
+                          honeycomb_strip_cmap_kernel,
+                          honeycomb_strip_cmap_rep,
+                          honeycomb_strip_cmap_unfold,
+                          honeycomb_strip_cmap_dir,
+                          honeycomb_strip_cmap_color_style);
+    return j;
 }
 
 void Honeycomb3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    StripColormapLoadJson(settings,
+                          "honeycomb",
+                          honeycomb_strip_cmap_on,
+                          honeycomb_strip_cmap_kernel,
+                          honeycomb_strip_cmap_rep,
+                          honeycomb_strip_cmap_unfold,
+                          honeycomb_strip_cmap_dir,
+                          honeycomb_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(honeycomb_strip_cmap_on,
+                                                honeycomb_strip_cmap_kernel,
+                                                honeycomb_strip_cmap_rep,
+                                                honeycomb_strip_cmap_unfold,
+                                                honeycomb_strip_cmap_dir,
+                                                honeycomb_strip_cmap_color_style);
+    }
 }

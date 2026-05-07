@@ -139,7 +139,7 @@ EffectInfo3D WireframeCube::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Wire Frame";
+    info.effect_name = "Wireframe Cube";
     info.effect_description = "Soft glow on the room’s axis-aligned outline (floor, ceiling, corners). "
                              "Strip kernels run as a single 1D path around the perimeter — "
                              "suited to LEDs along skirting, ceiling edges, and vertical corners.";

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "FastPulse3D.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -75,7 +78,7 @@ EffectInfo3D FastPulse3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Rapid Pulse 3D";
+    info.effect_name = "Fast Pulse 3D";
     info.effect_description =
         "Fast high-contrast 3D pulse field from moving XYZ wave sums.";
     info.category = "Spatial";
@@ -102,7 +105,30 @@ EffectInfo3D FastPulse3D::GetEffectInfo()
 
 void FastPulse3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
+    QWidget* w = new QWidget();
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(fastpulse_strip_cmap_on,
+                                            fastpulse_strip_cmap_kernel,
+                                            fastpulse_strip_cmap_rep,
+                                            fastpulse_strip_cmap_unfold,
+                                            fastpulse_strip_cmap_dir,
+                                            fastpulse_strip_cmap_color_style);
+    AddColorPatternWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FastPulse3D::SyncStripColormapFromPanel);
+    AddWidgetToParent(w, parent);
+}
+
+void FastPulse3D::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    fastpulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    fastpulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    fastpulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    fastpulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    fastpulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    fastpulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void FastPulse3D::UpdateParams(SpatialEffectParams& params)
@@ -138,10 +164,36 @@ RGBColor FastPulse3D::CalculateColorGrid(float x, float y, float z, float time, 
     v = v * v * v * v * v;
     const float s = (v < 0.8f) ? 1.0f : 0.0f;
 
-    if(GetRainbowMode())
-        return Hsv01ToBgr(t1, s, v);
+    RGBColor c = 0x00000000;
+    if(fastpulse_strip_cmap_on)
+    {
+        float p01 = SampleStripKernelPalette01(fastpulse_strip_cmap_kernel,
+                                               fastpulse_strip_cmap_rep,
+                                               fastpulse_strip_cmap_unfold,
+                                               fastpulse_strip_cmap_dir,
+                                               t1,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rot);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = ResolveStripKernelFinalColor(*this,
+                                         StripShellKernelClamp(fastpulse_strip_cmap_kernel),
+                                         p01,
+                                         fastpulse_strip_cmap_color_style,
+                                         time,
+                                         rate * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        c = Hsv01ToBgr(t1, s, 1.0f);
+    }
+    else
+    {
+        c = GetColorAtPosition(t1);
+    }
 
-    RGBColor c = GetColorAtPosition(t1);
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);
     int b = (int)((float)((c >> 16) & 0xFF) * v);
@@ -153,10 +205,37 @@ RGBColor FastPulse3D::CalculateColorGrid(float x, float y, float z, float time, 
 
 nlohmann::json FastPulse3D::SaveSettings() const
 {
-    return SpatialEffect3D::SaveSettings();
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    StripColormapSaveJson(j,
+                          "fastpulse",
+                          fastpulse_strip_cmap_on,
+                          fastpulse_strip_cmap_kernel,
+                          fastpulse_strip_cmap_rep,
+                          fastpulse_strip_cmap_unfold,
+                          fastpulse_strip_cmap_dir,
+                          fastpulse_strip_cmap_color_style);
+    return j;
 }
 
 void FastPulse3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    StripColormapLoadJson(settings,
+                          "fastpulse",
+                          fastpulse_strip_cmap_on,
+                          fastpulse_strip_cmap_kernel,
+                          fastpulse_strip_cmap_rep,
+                          fastpulse_strip_cmap_unfold,
+                          fastpulse_strip_cmap_dir,
+                          fastpulse_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(fastpulse_strip_cmap_on,
+                                                fastpulse_strip_cmap_kernel,
+                                                fastpulse_strip_cmap_rep,
+                                                fastpulse_strip_cmap_unfold,
+                                                fastpulse_strip_cmap_dir,
+                                                fastpulse_strip_cmap_color_style);
+    }
 }

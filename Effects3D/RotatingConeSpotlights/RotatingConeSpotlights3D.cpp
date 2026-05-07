@@ -133,7 +133,7 @@ EffectInfo3D RotatingConeSpotlights3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Spotlights / rotation 3D";
+    info.effect_name = "Rotating Cone Spotlights 3D";
     info.effect_description =
         "Rotating cone spotlights: time-varying axis-angle rotation in a centered unit volume, "
         "then a double cone dist = |z'| − sqrt((x'² + y'²) / scale); hue follows room X like the reference "

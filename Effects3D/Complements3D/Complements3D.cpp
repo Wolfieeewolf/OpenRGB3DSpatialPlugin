@@ -71,7 +71,7 @@ EffectInfo3D Complements3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Depth Tone 3D";
+    info.effect_name = "Complements 3D";
     info.effect_description =
         "Rotating hues along room depth (Z) with center dimming; choose how many tone steps span front to back, "
         "optional strip kernel palette for the pattern.";

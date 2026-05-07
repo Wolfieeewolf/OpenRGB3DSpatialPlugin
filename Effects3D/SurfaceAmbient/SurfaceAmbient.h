@@ -16,7 +16,7 @@ class SurfaceAmbient : public SpatialEffect3D
 public:
     explicit SurfaceAmbient(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("SurfaceAmbient", "Surface Fire/Water/Slime", "Spatial", [](){ return new SurfaceAmbient; })
+    EFFECT_REGISTERER_3D("SurfaceAmbient", "Surface Ambient", "Spatial", [](){ return new SurfaceAmbient; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

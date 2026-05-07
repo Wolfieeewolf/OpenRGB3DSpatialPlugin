@@ -1197,20 +1197,20 @@ Vector3D SpatialEffect3D::GetEffectOriginGrid(const GridContext3D& grid) const
 
 float SpatialEffect3D::GetNormalizedSpeed() const
 {
-    float normalized = effect_speed / 200.0f;
-    return normalized * normalized;
+    float normalized = std::clamp(effect_speed / 200.0f, 0.0f, 1.0f);
+    return std::pow(normalized, 1.35f);
 }
 
 float SpatialEffect3D::GetNormalizedFrequency() const
 {
-    float normalized = effect_frequency / 200.0f;
-    return normalized * normalized;
+    float normalized = std::clamp(effect_frequency / 200.0f, 0.0f, 1.0f);
+    return std::pow(normalized, 1.35f);
 }
 
 float SpatialEffect3D::GetNormalizedDetail() const
 {
-    float normalized = effect_detail / 200.0f;
-    return normalized * normalized;
+    float normalized = std::clamp(effect_detail / 200.0f, 0.0f, 1.0f);
+    return std::pow(normalized, 1.35f);
 }
 
 float SpatialEffect3D::GetNormalizedSize() const
@@ -1310,8 +1310,13 @@ static RGBColor BlendRgbForVoxel(RGBColor rgb_a, RGBColor rgb_b, float mix01)
 }
 }
 
+static thread_local const SpatialEffect3D* g_tls_eval_effect = nullptr;
+
 RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
+    const SpatialEffect3D* prev_eval_effect = g_tls_eval_effect;
+    g_tls_eval_effect = this;
+
     if(UsesSpatialSamplingQuantization())
     {
         ApplySpatialSamplingQuantization(x, y, z, grid, GetSamplingResolution());
@@ -1346,7 +1351,13 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
             base = BlendRgbForVoxel(base, vx, t);
         }
     }
+    g_tls_eval_effect = prev_eval_effect;
     return base;
+}
+
+const SpatialEffect3D* SpatialEffect3D::GetEvaluatingEffect()
+{
+    return g_tls_eval_effect;
 }
 
 float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
@@ -1624,6 +1635,7 @@ float SpatialEffect3D::GetScaledSpeed() const
 {
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
     float speed_scale = (info.default_speed_scale > 0.0f) ? info.default_speed_scale : 10.0f;
+    speed_scale = 10.0f + (speed_scale - 10.0f) * 0.6f;
     return GetNormalizedSpeed() * speed_scale;
 }
 
@@ -1631,6 +1643,7 @@ float SpatialEffect3D::GetScaledFrequency() const
 {
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
     float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
+    freq_scale = 10.0f + (freq_scale - 10.0f) * 0.6f;
     return GetNormalizedFrequency() * freq_scale;
 }
 
@@ -1652,6 +1665,7 @@ float SpatialEffect3D::GetScaledDetail() const
 {
     EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
     float s = (info.default_detail_scale > 0.0f) ? info.default_detail_scale : 10.0f;
+    s = 10.0f + (s - 10.0f) * 0.6f;
     return GetNormalizedDetail() * s;
 }
 

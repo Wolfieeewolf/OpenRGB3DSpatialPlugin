@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "AudioLevel.h"
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
 #include "StratumBandPanel.h"
 #include "Colors.h"
 #include "SpatialLayerCore.h"
@@ -170,6 +173,29 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
     AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &AudioLevel::OnStratumBandChanged);
     OnStratumBandChanged();
+
+    strip_cmap_panel = new StripKernelColormapPanel(parent);
+    strip_cmap_panel->mirrorStateFromEffect(audiolevel_strip_cmap_on,
+                                            audiolevel_strip_cmap_kernel,
+                                            audiolevel_strip_cmap_rep,
+                                            audiolevel_strip_cmap_unfold,
+                                            audiolevel_strip_cmap_dir,
+                                            audiolevel_strip_cmap_color_style);
+    AddColorPatternWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &AudioLevel::SyncStripColormapFromPanel);
+}
+
+void AudioLevel::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    audiolevel_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    audiolevel_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    audiolevel_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    audiolevel_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    audiolevel_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    audiolevel_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void AudioLevel::OnStratumBandChanged()
@@ -244,7 +270,28 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(GetRainbowMode())
+    if(audiolevel_strip_cmap_on)
+    {
+        float ph01 = std::fmod(gradient_pos + CalculateProgress(time) * 0.25f + time * GetScaledFrequency() * 0.02f + 1.0f, 1.0f);
+        float p01 = SampleStripKernelPalette01(audiolevel_strip_cmap_kernel,
+                                               audiolevel_strip_cmap_rep,
+                                               audiolevel_strip_cmap_unfold,
+                                               audiolevel_strip_cmap_dir,
+                                               ph01,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rotated_pos);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        user_color = ResolveStripKernelFinalColor(*this,
+                                                  StripShellKernelClamp(audiolevel_strip_cmap_kernel),
+                                                  p01,
+                                                  audiolevel_strip_cmap_color_style,
+                                                  time,
+                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
+    }
+    else if(GetRainbowMode())
     {
         float hue =
             gradient_pos * 360.0f + CalculateProgress(time) * 40.0f * bb.speed_mul + time * GetScaledFrequency() * 12.0f * bb.speed_mul
@@ -287,6 +334,14 @@ nlohmann::json AudioLevel::SaveSettings() const
                                            "audiolevel_stratum_band_speed_pct",
                                            "audiolevel_stratum_band_tight_pct",
                                            "audiolevel_stratum_band_phase_deg");
+    StripColormapSaveJson(j,
+                          "audiolevel",
+                          audiolevel_strip_cmap_on,
+                          audiolevel_strip_cmap_kernel,
+                          audiolevel_strip_cmap_rep,
+                          audiolevel_strip_cmap_unfold,
+                          audiolevel_strip_cmap_dir,
+                          audiolevel_strip_cmap_color_style);
     return j;
 }
 
@@ -301,6 +356,15 @@ void AudioLevel::LoadSettings(const nlohmann::json& settings)
                                             "audiolevel_stratum_band_speed_pct",
                                             "audiolevel_stratum_band_tight_pct",
                                             "audiolevel_stratum_band_phase_deg");
+    StripColormapLoadJson(settings,
+                          "audiolevel",
+                          audiolevel_strip_cmap_on,
+                          audiolevel_strip_cmap_kernel,
+                          audiolevel_strip_cmap_rep,
+                          audiolevel_strip_cmap_unfold,
+                          audiolevel_strip_cmap_dir,
+                          audiolevel_strip_cmap_color_style,
+                          GetRainbowMode());
     if(settings.contains("wave_amount")) wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
     if(settings.contains("edge_soft")) edge_soft = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     smoothed = 0.0f;
@@ -309,6 +373,15 @@ void AudioLevel::LoadSettings(const nlohmann::json& settings)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);
         stratum_panel->setTuning(stratum_tuning_);
+    }
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(audiolevel_strip_cmap_on,
+                                                audiolevel_strip_cmap_kernel,
+                                                audiolevel_strip_cmap_rep,
+                                                audiolevel_strip_cmap_unfold,
+                                                audiolevel_strip_cmap_dir,
+                                                audiolevel_strip_cmap_color_style);
     }
 }
 

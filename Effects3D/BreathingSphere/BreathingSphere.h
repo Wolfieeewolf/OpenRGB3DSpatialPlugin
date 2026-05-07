@@ -18,10 +18,10 @@ public:
     explicit BreathingSphere(QWidget* parent = nullptr);
     ~BreathingSphere();
 
-    EFFECT_REGISTERER_3D("BreathingSphere", "Breathing Shape", "Spatial", [](){return new BreathingSphere;});
+    EFFECT_REGISTERER_3D("BreathingSphere", "Breathing Sphere", "Spatial", [](){return new BreathingSphere;});
 
     static std::string const ClassName() { return "BreathingSphere"; }
-    static std::string const UIName() { return "Breathing Shape"; }
+    static std::string const UIName() { return "Breathing Sphere"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

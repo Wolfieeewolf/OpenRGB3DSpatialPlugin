@@ -8,6 +8,7 @@
 
 class QLabel;
 class QSlider;
+class StripKernelColormapPanel;
 
 class Xorcery3D : public SpatialEffect3D
 {
@@ -17,10 +18,10 @@ public:
     explicit Xorcery3D(QWidget* parent = nullptr);
     ~Xorcery3D() override;
 
-    EFFECT_REGISTERER_3D("Xorcery3D", "Bitwarp 3D", "Spatial", []() { return new Xorcery3D; });
+    EFFECT_REGISTERER_3D("Xorcery3D", "Xorcery 3D", "Spatial", []() { return new Xorcery3D; });
 
     static std::string const ClassName() { return "Xorcery3D"; }
-    static std::string const UIName() { return "Bitwarp 3D"; }
+    static std::string const UIName() { return "Xorcery 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -44,6 +45,16 @@ private:
     QLabel* cell_label = nullptr;
     QSlider* drive_slider = nullptr;
     QLabel* drive_label = nullptr;
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
+    bool bitwarp_strip_cmap_on = false;
+    int bitwarp_strip_cmap_kernel = 0;
+    float bitwarp_strip_cmap_rep = 4.0f;
+    int bitwarp_strip_cmap_unfold = 0;
+    float bitwarp_strip_cmap_dir = 0.0f;
+    int bitwarp_strip_cmap_color_style = 0;
+
+private slots:
+    void SyncStripColormapFromPanel();
 };
 
 #endif

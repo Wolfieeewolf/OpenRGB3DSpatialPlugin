@@ -56,7 +56,7 @@ EffectInfo3D StripShellPattern::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Strip shell pattern";
+    info.effect_name = "Strip Shell Pattern";
     info.effect_description =
         "Unfold 3D position to a strip index, run a 1D pattern, shell or fill.";
     info.category = "Spatial";

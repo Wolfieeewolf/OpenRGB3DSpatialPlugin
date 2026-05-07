@@ -22,10 +22,10 @@ public:
     explicit StripShellPattern(QWidget* parent = nullptr);
     ~StripShellPattern() override;
 
-    EFFECT_REGISTERER_3D("StripShellPattern", "Strip shell pattern", "Spatial", []() { return new StripShellPattern; });
+    EFFECT_REGISTERER_3D("StripShellPattern", "Strip Shell Pattern", "Spatial", []() { return new StripShellPattern; });
 
     static std::string const ClassName() { return "StripShellPattern"; }
-    static std::string const UIName() { return "Strip shell pattern"; }
+    static std::string const UIName() { return "Strip Shell Pattern"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

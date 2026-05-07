@@ -19,10 +19,10 @@ public:
     explicit Bouncer3D(QWidget* parent = nullptr);
     ~Bouncer3D() override;
 
-    EFFECT_REGISTERER_3D("Bouncer3D", "Orbit Bounce 3D", "Spatial", []() { return new Bouncer3D; });
+    EFFECT_REGISTERER_3D("Bouncer3D", "Bouncer 3D", "Spatial", []() { return new Bouncer3D; });
 
     static std::string const ClassName() { return "Bouncer3D"; }
-    static std::string const UIName() { return "Orbit Bounce 3D"; }
+    static std::string const UIName() { return "Bouncer 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

@@ -8,6 +8,7 @@
 #include "EffectStratumBlend.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 
 class Sunrise : public SpatialEffect3D
 {
@@ -15,7 +16,7 @@ class Sunrise : public SpatialEffect3D
 public:
     explicit Sunrise(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("Sunrise", "Realtime Environment", "Spatial", [](){ return new Sunrise; })
+    EFFECT_REGISTERER_3D("Sunrise", "Sunrise", "Spatial", [](){ return new Sunrise; })
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -46,8 +47,16 @@ private:
     bool weather_lightning = false;
 
     StratumBandPanel* stratum_panel = nullptr;
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
     int stratum_layout_mode = 0;
     EffectStratumBlend::BandTuningPct stratum_tuning_{};
+    bool sunrise_strip_cmap_on = false;
+    int sunrise_strip_cmap_kernel = 0;
+    float sunrise_strip_cmap_rep = 4.0f;
+    int sunrise_strip_cmap_unfold = 0;
+    float sunrise_strip_cmap_dir = 0.0f;
+    int sunrise_strip_cmap_color_style = 1;
+    void SyncStripColormapFromPanel();
 };
 
 #endif

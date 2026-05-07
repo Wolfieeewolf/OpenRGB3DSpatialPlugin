@@ -78,7 +78,7 @@ EffectInfo3D Bouncer3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Orbit Bounce 3D";
+    info.effect_name = "Bouncer 3D";
     info.effect_description = "Up to 20 hue-coded orbs bounce in a normalized room volume.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_BOUNCER_3D;

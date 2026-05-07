@@ -86,7 +86,7 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Surface Fire/Water/Slime";
+    info.effect_name = "Surface Ambient";
     info.effect_description = "Fire, water, slime, lava, ember, ocean, or steam on floor, ceiling, or walls; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = (SpatialEffectType)0;

@@ -82,8 +82,10 @@ const char* StripShellKernelDisplayName(int kernel_id)
 float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, float time_sec)
 {
     const StripShellKernel k = static_cast<StripShellKernel>(StripShellKernelClamp(kernel_id));
-    const float ph = phase01;
-    const float r = std::max(1.0f, rep);
+    const float ph = fractf(phase01 * 0.35f + time_sec * 0.08f);
+    const float tsec = time_sec * 0.35f;
+    const float r_in = std::max(1.0f, rep);
+    const float r = 1.0f + (r_in - 1.0f) * 0.72f;
     const float u_phase = fractf(s01 * r + ph + 1000.0f);
 
     switch(k)
@@ -147,13 +149,13 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
 
     case StripShellKernel::TheaterChase:
     {
-        int idx = (int)std::floor(s01 * r * 12.0f + ph * 12.0f + time_sec * 1.5f);
+        int idx = (int)std::floor(s01 * r * 12.0f + ph * 12.0f + tsec * 1.5f);
         int bucket = ((idx % 3) + 3) % 3;
         return (bucket == 0) ? 1.0f : -0.75f;
     }
     case StripShellKernel::RunningLight:
     {
-        float u = fractf(s01 * r - ph - time_sec * 0.22f);
+        float u = fractf(s01 * r - ph - tsec * 0.22f);
         float w = smoothstep(0.0f, 0.08f, u) * (1.0f - smoothstep(0.12f, 0.2f, u));
         return w * 2.0f - 1.0f;
     }
@@ -167,25 +169,25 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     {
         float v = std::sin(TWO_PI * (s01 * r + ph)) +
                   0.5f * std::sin(TWO_PI * (s01 * r * 1.13f + ph * 0.7f + 0.3f)) +
-                  0.25f * std::sin(TWO_PI * (s01 * r * 0.77f + time_sec * 0.11f));
+                  0.25f * std::sin(TWO_PI * (s01 * r * 0.77f + tsec * 0.11f));
         return std::clamp(v * 0.45f, -1.0f, 1.0f);
     }
     case StripShellKernel::TwinkleSparse:
     {
         float id = std::floor(s01 * r * 16.0f);
-        float h = hash11(id + std::floor(time_sec * 3.0f) * 0.01f);
+        float h = hash11(id + std::floor(tsec * 3.0f) * 0.01f);
         return (h > 0.92f) ? 1.0f : -0.9f;
     }
     case StripShellKernel::GlitterBurst:
     {
-        float t = s01 * r * 32.0f + time_sec * 6.0f;
+        float t = s01 * r * 32.0f + tsec * 6.0f;
         float h = hash11(std::floor(t) * 0.07f);
         float tw = fractf(t);
         return (h > 0.88f) ? std::max(-1.0f, 1.0f - tw * 4.0f) : -0.85f;
     }
     case StripShellKernel::FireSimple:
     {
-        float u = 1.0f - fractf(s01 * r * 0.7f + ph + time_sec * 0.07f);
+        float u = 1.0f - fractf(s01 * r * 0.7f + ph + tsec * 0.07f);
         float heat = std::pow(std::max(0.0f, u), 2.5f);
         heat *= 0.6f + 0.4f * std::sin(TWO_PI * s01 * r * 2.0f);
         return heat * 2.0f - 1.0f;
@@ -196,16 +198,16 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
         for(int o = 0; o < 4; o++)
         {
             float f = std::pow(2.0f, (float)o);
-            heat += std::sin(TWO_PI * (s01 * r * f * 0.31f + ph + time_sec * (0.05f + 0.02f * (float)o))) / f;
+            heat += std::sin(TWO_PI * (s01 * r * f * 0.31f + ph + tsec * (0.05f + 0.02f * (float)o))) / f;
         }
         float t = std::tanh(heat * 1.15f);
         return std::clamp(t, -1.0f, 1.0f);
     }
     case StripShellKernel::OceanDriftLite:
     {
-        float v = std::sin(TWO_PI * (s01 * r + time_sec * 0.04f)) * 0.5f +
-                  std::sin(TWO_PI * (s01 * r * 0.6f + ph + time_sec * 0.07f)) * 0.35f +
-                  std::sin(TWO_PI * (s01 * r * 2.1f + time_sec * 0.03f)) * 0.15f;
+        float v = std::sin(TWO_PI * (s01 * r + tsec * 0.04f)) * 0.5f +
+                  std::sin(TWO_PI * (s01 * r * 0.6f + ph + tsec * 0.07f)) * 0.35f +
+                  std::sin(TWO_PI * (s01 * r * 2.1f + tsec * 0.03f)) * 0.15f;
         return std::clamp(v, -1.0f, 1.0f);
     }
     case StripShellKernel::NoiseOctaves:
@@ -228,7 +230,7 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     }
     case StripShellKernel::BpmPulse:
     {
-        float beat = std::sin(TWO_PI * time_sec * 1.5f);
+        float beat = std::sin(TWO_PI * tsec * 1.5f);
         if(beat <= 0.0f)
             return -0.85f;
         return beat * std::sin(TWO_PI * (s01 * r + ph));
@@ -238,7 +240,7 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
         float v = -1.0f;
         for(int b = 0; b < 3; b++)
         {
-            float c = fractf(ph + time_sec * 0.11f * (float)(b + 1) + (float)b * 0.33f);
+            float c = fractf(ph + tsec * 0.11f * (float)(b + 1) + (float)b * 0.33f);
             float d = std::fabs(fractf(s01 * r + 1.0f - c) - 0.5f);
             v = std::max(v, 1.0f - d * 8.0f);
         }
@@ -247,7 +249,7 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     case StripShellKernel::MatrixRain1D:
     {
         float col = fractf(s01 * r);
-        float drop = fractf(col * 7.0f + time_sec * 0.45f + ph);
+        float drop = fractf(col * 7.0f + tsec * 0.45f + ph);
         if(drop > 0.88f)
             return 1.0f;
         if(drop > 0.55f)
@@ -256,20 +258,20 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     }
     case StripShellKernel::PlasmaSinProduct:
     {
-        float v = std::sin(TWO_PI * (s01 + ph)) * std::cos(TWO_PI * (s01 * r * 0.5f + time_sec * 0.07f)) *
+        float v = std::sin(TWO_PI * (s01 + ph)) * std::cos(TWO_PI * (s01 * r * 0.5f + tsec * 0.07f)) *
                   std::sin(TWO_PI * (s01 * r + ph * 0.3f));
         return std::clamp(v * 1.25f, -1.0f, 1.0f);
     }
     case StripShellKernel::HueBounceDot:
     {
-        float pos = std::fabs(2.0f * fractf(time_sec * 0.15f + ph) - 1.0f);
+        float pos = std::fabs(2.0f * fractf(tsec * 0.15f + ph) - 1.0f);
         float d = std::fabs(fractf(s01 * r + 1.0f - pos) - 0.5f) * 2.0f;
         return std::max(-1.0f, 1.0f - d * 4.0f);
     }
     case StripShellKernel::Cylon:
     {
         float u = std::fabs(fractf(s01 * r + ph) - 0.5f) * 2.0f;
-        float eye = fractf(time_sec * 0.18f);
+        float eye = fractf(tsec * 0.18f);
         float d1 = std::fabs(u - eye * 2.0f);
         float d2 = std::fabs(u - fractf(eye + 0.5f) * 2.0f);
         float v = std::max(1.0f - d1 * 5.0f, 1.0f - d2 * 5.0f);
@@ -278,23 +280,23 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     case StripShellKernel::RandomColorsDrift:
     {
         float id = std::floor(s01 * r * 8.0f + ph * 3.0f);
-        float h = hash11(id * 3.17f + std::floor(time_sec * 2.0f) * 0.1f);
+        float h = hash11(id * 3.17f + std::floor(tsec * 2.0f) * 0.1f);
         return h * 2.0f - 1.0f;
     }
     case StripShellKernel::WipeSim:
     {
-        float cut = fractf(ph + time_sec * 0.12f);
+        float cut = fractf(ph + tsec * 0.12f);
         return (fractf(s01) < cut) ? 1.0f : -1.0f;
     }
     case StripShellKernel::TwinkleUp:
     {
-        float h = hash11(std::floor(s01 * r * 20.0f) + std::floor(time_sec * 4.0f) * 0.1f);
-        float rise = fractf(time_sec * 2.0f + s01);
+        float h = hash11(std::floor(s01 * r * 20.0f) + std::floor(tsec * 4.0f) * 0.1f);
+        float rise = fractf(tsec * 2.0f + s01);
         return (h > 0.85f) ? (2.0f * rise - 1.0f) : -0.9f;
     }
     case StripShellKernel::HalloweenFlicker:
     {
-        float n = hash11(std::floor(time_sec * 30.0f) + s01 * 13.0f);
+        float n = hash11(std::floor(tsec * 30.0f) + s01 * 13.0f);
         return (n > 0.4f) ? 0.9f : -1.0f + n * 0.5f;
     }
     case StripShellKernel::SparkleDark:
@@ -303,7 +305,7 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
         return (h > 0.94f) ? 1.0f : -0.95f;
     }
     case StripShellKernel::ColorBlend:
-        return std::sin(TWO_PI * (s01 * r * 0.5f + time_sec * 0.08f)) * std::cos(TWO_PI * time_sec * 0.5f);
+        return std::sin(TWO_PI * (s01 * r * 0.5f + tsec * 0.08f)) * std::cos(TWO_PI * tsec * 0.5f);
     case StripShellKernel::TriFade:
     {
         float u = fractf(s01 * r + ph);
@@ -315,23 +317,23 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
     }
     case StripShellKernel::DotBounce:
     {
-        float u = std::fabs(2.0f * fractf(time_sec * 0.4f + 0.25f) - 1.0f);
+        float u = std::fabs(2.0f * fractf(tsec * 0.4f + 0.25f) - 1.0f);
         float d = std::fabs(fractf(s01 * r) - u);
         return std::max(-1.0f, 1.0f - d * 10.0f);
     }
     case StripShellKernel::TricolorChase:
     {
-        int seg = ((int)std::floor(s01 * r * 9.0f + ph * 9.0f + time_sec * 2.0f) % 3 + 3) % 3;
+        int seg = ((int)std::floor(s01 * r * 9.0f + ph * 9.0f + tsec * 2.0f) % 3 + 3) % 3;
         return (seg == 0) ? 1.0f : (seg == 1) ? 0.0f : -1.0f;
     }
     case StripShellKernel::Ripple1D:
     {
         float d = std::fabs(s01 - 0.5f) * 2.0f;
-        return std::sin(TWO_PI * (2.0f * d - fractf(ph + time_sec * 0.25f) * 2.0f));
+        return std::sin(TWO_PI * (2.0f * d - fractf(ph + tsec * 0.25f) * 2.0f));
     }
     case StripShellKernel::Heartbeat:
     {
-        float u = fractf(time_sec * 0.8f);
+        float u = fractf(tsec * 0.8f);
         if(u < 0.12f)
             return std::sin(TWO_PI * u / 0.12f);
         if(u < 0.2f)
@@ -345,36 +347,36 @@ float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, f
         if(h < 0.965f)
             return -0.92f;
         float spd = 0.65f + hash11(cell * 0.41f) * 2.2f;
-        float t = fractf(time_sec * spd + cell * 0.037f);
+        float t = fractf(tsec * spd + cell * 0.037f);
         float flash = (t < 0.14f) ? (1.0f - smoothstep(0.0f, 0.14f, t)) : 0.0f;
         flash = flash * flash;
         return flash * 2.0f - 1.0f;
     }
     case StripShellKernel::SpectrumWaves:
     {
-        float a = TWO_PI * (s01 * r * 1.0f + time_sec * 0.085f + ph);
-        float b = TWO_PI * (s01 * r * 1.62f - time_sec * 0.052f + ph * 0.73f);
-        float c = TWO_PI * (s01 * r * 0.48f + time_sec * 0.11f + std::sin(TWO_PI * ph) * 0.08f);
+        float a = TWO_PI * (s01 * r * 1.0f + tsec * 0.085f + ph);
+        float b = TWO_PI * (s01 * r * 1.62f - tsec * 0.052f + ph * 0.73f);
+        float c = TWO_PI * (s01 * r * 0.48f + tsec * 0.11f + std::sin(TWO_PI * ph) * 0.08f);
         float wave = std::sin(a) + 0.55f * std::sin(b) + 0.28f * std::sin(c);
         return std::clamp(wave * 0.38f, -1.0f, 1.0f);
     }
     case StripShellKernel::CandleSoft:
     {
-        float t = s01 * r * 1.8f + time_sec * 0.12f;
+        float t = s01 * r * 1.8f + tsec * 0.12f;
         float i = std::floor(t);
         float f = t - i;
         float n0 = hash11(i + 1.1f);
         float n1 = hash11(i + 2.1f);
         float s = f * f * (3.0f - 2.0f * f);
         float smooth = n0 + (n1 - n0) * s;
-        float breathe = 0.5f + 0.5f * std::sin(TWO_PI * (time_sec * 0.22f + s01 * r * 0.08f));
-        float micro = (hash11(std::floor(time_sec * 7.0f) + s01 * r * 9.0f) - 0.5f) * 0.12f;
+        float breathe = 0.5f + 0.5f * std::sin(TWO_PI * (tsec * 0.22f + s01 * r * 0.08f));
+        float micro = (hash11(std::floor(tsec * 7.0f) + s01 * r * 9.0f) - 0.5f) * 0.12f;
         float v = 0.58f + 0.32f * smooth * breathe + micro;
         return std::clamp(v * 2.0f - 1.0f, -1.0f, 1.0f);
     }
     case StripShellKernel::Meteor:
     {
-        float pos = fractf(time_sec * (0.14f + 0.06f * hash11(ph * 3.1f + 0.2f)) + ph * 0.35f);
+        float pos = fractf(tsec * (0.14f + 0.06f * hash11(ph * 3.1f + 0.2f)) + ph * 0.35f);
         float u = fractf(s01 * r - pos + 1.0f);
         float head = smoothstep(0.0f, 0.035f, u) * (1.0f - smoothstep(0.035f, 0.055f, u));
         float tail = std::max(0.0f, 1.0f - u * 5.5f);

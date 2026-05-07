@@ -93,7 +93,7 @@ EffectInfo3D Sinpulse3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Harmonic Pulse 3D";
+    info.effect_name = "Sinpulse 3D";
     info.effect_description =
         "Harmonic 3D pulse: interference of sin/cos on normalized x,y,z with a breathing zoom "
         "(1 + wave·k), hue from the blend, brightness (h³)/2. Global speed/frequency scale motion.";
