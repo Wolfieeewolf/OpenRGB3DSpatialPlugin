@@ -266,8 +266,6 @@ HEADERS +=                                                                      
     Effects3D/Sinpulse3D/Sinpulse3D.h                                                            \
     Effects3D/Bouncer3D/Bouncer3D.h                                                              \
     Effects3D/Honeycomb3D/Honeycomb3D.h                                                          \
-    Effects3D/RgbXyzSweep3D/RgbXyzSweep3D.h                                                      \
-    Effects3D/RgbXyzOctants3D/RgbXyzOctants3D.h                                                  \
     Effects3D/Complements3D/Complements3D.h                                                      \
     Effects3D/FastPulse3D/FastPulse3D.h                                                          \
     Effects3D/Xorcery3D/Xorcery3D.h                                                              \
@@ -364,8 +362,6 @@ SOURCES +=                                                                      
     Effects3D/Sinpulse3D/Sinpulse3D.cpp                                                      \
     Effects3D/Bouncer3D/Bouncer3D.cpp                                                        \
     Effects3D/Honeycomb3D/Honeycomb3D.cpp                                                    \
-    Effects3D/RgbXyzSweep3D/RgbXyzSweep3D.cpp                                                \
-    Effects3D/RgbXyzOctants3D/RgbXyzOctants3D.cpp                                            \
     Effects3D/Complements3D/Complements3D.cpp                                                \
     Effects3D/FastPulse3D/FastPulse3D.cpp                                                    \
     Effects3D/Xorcery3D/Xorcery3D.cpp                                                        \

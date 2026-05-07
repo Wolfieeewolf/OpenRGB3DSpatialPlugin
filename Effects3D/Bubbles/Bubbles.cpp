@@ -194,8 +194,10 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
     const bool strat_on = (stratum_layout_mode == 1);
 
-    EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    float h_scale = std::max({e.hw, e.hh, e.hd});
+    // Use unscaled room half-extents so bubble centers and radii stay inside the real grid volume.
+    // (Scaled half-extents from GetNormalizedScale() inflate coordinates and push bubbles off-layout.)
+    EffectGridAxisHalfExtents e_room = MakeEffectGridAxisHalfExtents(grid, 1.0f);
+    float h_scale = std::max({e_room.hw, e_room.hh, e_room.hd});
     float speed_scale = GetScaledSpeed() * 0.015f;
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
@@ -210,9 +212,10 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     {
         thick /= std::max(0.25f, bb.tight_mul);
     }
-    float rise = std::max(0.2f, std::min(2.0f, rise_speed)) * speed_scale * e.hh;
+    float rise = std::max(0.2f, std::min(2.0f, rise_speed)) * speed_scale * e_room.hh;
     float interval = std::max(0.3f, std::min(2.0f, spawn_interval));
-    float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * h_scale * size_m;
+    const float cycle_t = interval * (float)n_bub;
+    float max_r = std::max(0.5f, std::min(2.0f, max_radius)) * h_scale * size_m * 0.35f;
 
     if(!strat_on)
     {
@@ -222,11 +225,12 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
             bubble_centers_cached.resize(n_bub);
             for(int i = 0; i < n_bub; i++)
             {
-                float phase = fmodf(time + (float)i * interval, interval * (float)n_bub);
-                float radius = (phase / interval) * max_r * 0.4f;
-                float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
-                float cy = origin.y - e.hh * 0.5f + fmodf(time * rise * 0.5f + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
-                float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
+                float phase = fmodf(time + (float)i * interval, cycle_t);
+                float radius = (phase / cycle_t) * max_r * 0.4f;
+                float cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e_room.hw * 0.5f;
+                float cy = origin.y - e_room.hh +
+                           fmodf(time * rise * 0.5f + (float)i * 0.3f, e_room.hh * 2.0f);
+                float cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e_room.hd * 0.5f;
                 bubble_centers_cached[i] = {cx, cy, cz, radius};
             }
         }
@@ -240,12 +244,12 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         BubbleCenter3D b;
         if(strat_on)
         {
-            float phase = fmodf(time * bb.speed_mul + (float)i * interval, interval * (float)n_bub);
-            b.radius = (phase / interval) * max_r * 0.4f;
-            b.cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e.hw * 0.6f;
-            b.cy = origin.y - e.hh * 0.5f +
-                   fmodf(time * rise * 0.5f * bb.speed_mul + (float)i * 0.3f, e.hh * 2.0f) - e.hh;
-            b.cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e.hd * 0.6f;
+            float phase = fmodf(time * bb.speed_mul + (float)i * interval, cycle_t);
+            b.radius = (phase / cycle_t) * max_r * 0.4f;
+            b.cx = origin.x + hash_f((unsigned int)(i * 1000), 1u) * e_room.hw * 0.5f;
+            b.cy = origin.y - e_room.hh +
+                   fmodf(time * rise * 0.5f * bb.speed_mul + (float)i * 0.3f, e_room.hh * 2.0f);
+            b.cz = origin.z + hash_f((unsigned int)(i * 1000), 2u) * e_room.hd * 0.5f;
         }
         else
         {

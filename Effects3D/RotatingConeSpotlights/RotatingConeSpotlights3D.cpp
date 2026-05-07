@@ -317,11 +317,11 @@ RGBColor RotatingConeSpotlights3D::CalculateColorGrid(float x, float y, float z,
         const int cg = (int)((c >> 8) & 0xFF);
         const int cb = (int)((c >> 16) & 0xFF);
         QColor qc = QColor::fromRgb(cr, cg, cb);
-        qreal ch, cs, cv, ca;
-        qc.getHsvF(&ch, &cs, &cv, &ca);
-        h = (ch >= 0.0) ? std::fmod((float)ch / 360.0f + hue01 + 1.0f, 1.0f) : std::fmod(hue01 + 1.0f, 1.0f);
-        (void)cs;
-        return Hsv01ToBgr(h, sat, std::clamp(val * (float)cv, 0.0f, 1.0f));
+        const QColor hsv = qc.toHsv();
+        const float ch = static_cast<float>(hsv.hueF());
+        const float cv = static_cast<float>(hsv.valueF());
+        h = (ch >= 0.0f) ? std::fmod(ch + hue01 + 1.0f, 1.0f) : std::fmod(hue01 + 1.0f, 1.0f);
+        return Hsv01ToBgr(h, sat, std::clamp(val * cv, 0.0f, 1.0f));
     }
     if(GetRainbowMode())
     {

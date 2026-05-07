@@ -241,11 +241,11 @@ RGBColor Sinpulse3D::CalculateColorGrid(float x, float y, float z, float time, c
         const int cg = (int)((c >> 8) & 0xFF);
         const int cb = (int)((c >> 16) & 0xFF);
         QColor qc = QColor::fromRgb(cr, cg, cb);
-        qreal ch, cs, cv, ca;
-        qc.getHsvF(&ch, &cs, &cv, &ca);
-        float hue01 = (ch >= 0.0) ? std::fmod((float)ch / 360.0f + 1.0f, 1.0f) : h01;
-        (void)cs;
-        return Hsv01ToBgr(hue01, 1.0f, std::clamp(val * (float)cv, 0.0f, 1.0f));
+        const QColor hsv = qc.toHsv();
+        const float ch = static_cast<float>(hsv.hueF());
+        const float cv = static_cast<float>(hsv.valueF());
+        const float hue01_kernel = (ch >= 0.0f) ? std::fmod(ch + 1.0f, 1.0f) : h01;
+        return Hsv01ToBgr(hue01_kernel, 1.0f, std::clamp(val * cv, 0.0f, 1.0f));
     }
 
     if(GetRainbowMode())

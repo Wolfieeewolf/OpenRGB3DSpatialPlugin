@@ -6,16 +6,77 @@
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
+#include <QComboBox>
 #include <QGridLayout>
+#include <QLabel>
 #include <QVBoxLayout>
+#include <algorithm>
+#include <cmath>
 #include "../EffectHelpers.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+namespace {
+
+static inline void dna_strand_point_circle(float a, float r, float& ox, float& oz)
+{
+    ox = r * cosf(a);
+    oz = r * sinf(a);
+}
+
+/** Axis-aligned square perimeter (cube silhouette), same period as a circle. */
+static inline void dna_strand_point_square(float a, float r, float& ox, float& oz)
+{
+    float x = cosf(a);
+    float z = sinf(a);
+    float m = fmaxf(fabsf(x), fabsf(z));
+    if(m < 1e-6f)
+    {
+        ox = oz = 0.0f;
+        return;
+    }
+    ox = r * x / m;
+    oz = r * z / m;
+}
+
+/** n=4 superellipse (squircle). */
+static inline void dna_strand_point_squircle(float a, float r, float& ox, float& oz)
+{
+    float ca = cosf(a);
+    float sa = sinf(a);
+    float sx = (ca >= 0.0f) ? 1.0f : -1.0f;
+    float sz = (sa >= 0.0f) ? 1.0f : -1.0f;
+    ox = r * sx * sqrtf(fabsf(ca));
+    oz = r * sz * sqrtf(fabsf(sa));
+}
+
+static inline void dna_strand_point(int shape_mode, float a, float r, float& ox, float& oz)
+{
+    switch(shape_mode)
+    {
+        case 1:
+            dna_strand_point_square(a, r, ox, oz);
+            break;
+        case 2:
+            dna_strand_point_squircle(a, r, ox, oz);
+            break;
+        case 0:
+        case 3:
+        case 4:
+        default:
+            dna_strand_point_circle(a, r, ox, oz);
+            break;
+    }
+}
+
+} // namespace
 
 DNAHelix::DNAHelix(QWidget* parent) : SpatialEffect3D(parent)
 {
     radius_slider = nullptr;
     radius_label = nullptr;
-    helix_radius = 180;
-    progress = 0.0f;
 
     std::vector<RGBColor> dna_colors = {
         0x000000FF,
@@ -38,7 +99,9 @@ EffectInfo3D DNAHelix::GetEffectInfo()
     EffectInfo3D info;
     info.info_version = 2;
     info.effect_name = "DNA Helix";
-    info.effect_description = "Double helix with base pairs and rainbow colors";
+    info.effect_description =
+        "Double helix with base pairs; circle, square, or squircle path; optional vertical drift, ring pulse "
+        "from the middle outward/inward, flat disc or stacked horizontal bands; sized to fill the room width/depth";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_DNA_HELIX;
     info.is_reversible = false;
@@ -79,13 +142,92 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
 
     layout->addWidget(new QLabel("Helix Radius:"), 0, 0);
     radius_slider = new QSlider(Qt::Horizontal);
-    radius_slider->setRange(20, 150);
-    radius_slider->setToolTip("How far strands sit from the helix axis (pairs with Scale and room bounds).");
-    radius_slider->setValue(helix_radius);
+    radius_slider->setRange(20, 200);
+    radius_slider->setToolTip("How far strands sit from the axis as a fraction of the room width/depth (pairs with Size).");
+    radius_slider->setValue((int)helix_radius);
     layout->addWidget(radius_slider, 0, 1);
-    radius_label = new QLabel(QString::number(helix_radius));
+    radius_label = new QLabel(QString::number((int)helix_radius));
     radius_label->setMinimumWidth(30);
     layout->addWidget(radius_label, 0, 2);
+
+    int row = 1;
+    layout->addWidget(new QLabel("Cross-section:"), row, 0);
+    shape_combo = new QComboBox();
+    shape_combo->addItem("Circle");
+    shape_combo->addItem("Square (cube outline)");
+    shape_combo->addItem("Squircle");
+    shape_combo->addItem("Flat disc");
+    shape_combo->addItem("Stacked planes");
+    shape_combo->setCurrentIndex(std::clamp(helix_shape_mode, 0, 4));
+    shape_combo->setToolTip("Strand path in the horizontal plane: round, square, squircle, thin horizontal slab, or discrete Y bands.");
+    layout->addWidget(shape_combo, row, 1, 1, 2);
+    connect(shape_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
+        helix_shape_mode = std::clamp(idx, 0, 4);
+        emit ParametersChanged();
+    });
+    row++;
+
+    layout->addWidget(new QLabel("Vertical drift:"), row, 0);
+    vertical_drift_slider = new QSlider(Qt::Horizontal);
+    vertical_drift_slider->setRange(0, 100);
+    vertical_drift_slider->setToolTip("Slides the helix along height over time (uses Speed).");
+    vertical_drift_slider->setValue(vertical_drift_pct);
+    vertical_drift_label = new QLabel(QString::number(vertical_drift_pct) + "%");
+    vertical_drift_label->setMinimumWidth(40);
+    layout->addWidget(vertical_drift_slider, row, 1);
+    layout->addWidget(vertical_drift_label, row, 2);
+    connect(vertical_drift_slider, &QSlider::valueChanged, this, [this](int v){
+        vertical_drift_pct = v;
+        if(vertical_drift_label) vertical_drift_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+
+    layout->addWidget(new QLabel("Ring pulse:"), row, 0);
+    ring_pulse_slider = new QSlider(Qt::Horizontal);
+    ring_pulse_slider->setRange(0, 100);
+    ring_pulse_slider->setToolTip("Breathing of each horizontal ring: radius modulates from the middle of the grid outward or inward.");
+    ring_pulse_slider->setValue(ring_pulse_pct);
+    ring_pulse_label = new QLabel(QString::number(ring_pulse_pct) + "%");
+    ring_pulse_label->setMinimumWidth(40);
+    layout->addWidget(ring_pulse_slider, row, 1);
+    layout->addWidget(ring_pulse_label, row, 2);
+    connect(ring_pulse_slider, &QSlider::valueChanged, this, [this](int v){
+        ring_pulse_pct = v;
+        if(ring_pulse_label) ring_pulse_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+
+    layout->addWidget(new QLabel("Pulse direction:"), row, 0);
+    pulse_dir_combo = new QComboBox();
+    pulse_dir_combo->addItem("Off");
+    pulse_dir_combo->addItem("Wave outward");
+    pulse_dir_combo->addItem("Wave inward");
+    pulse_dir_combo->setCurrentIndex(std::clamp(ring_pulse_dir, 0, 2));
+    pulse_dir_combo->setToolTip("Traveling pulse along height: from center toward floor/ceiling, or the reverse.");
+    layout->addWidget(pulse_dir_combo, row, 1, 1, 2);
+    connect(pulse_dir_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
+        ring_pulse_dir = std::clamp(idx, 0, 2);
+        emit ParametersChanged();
+    });
+    row++;
+
+    layout->addWidget(new QLabel("Stacked bands:"), row, 0);
+    plane_count_slider = new QSlider(Qt::Horizontal);
+    plane_count_slider->setRange(2, 24);
+    plane_count_slider->setToolTip("For Stacked planes: how many discrete horizontal DNA layers.");
+    plane_count_slider->setValue(std::clamp(plane_layers, 2, 24));
+    plane_count_label = new QLabel(QString::number(plane_layers));
+    plane_count_label->setMinimumWidth(30);
+    layout->addWidget(plane_count_slider, row, 1);
+    layout->addWidget(plane_count_label, row, 2);
+    connect(plane_count_slider, &QSlider::valueChanged, this, [this](int v){
+        plane_layers = v;
+        if(plane_count_label) plane_count_label->setText(QString::number(v));
+        emit ParametersChanged();
+    });
+    row++;
 
     strip_cmap_panel = new StripKernelColormapPanel(outer_w);
     strip_cmap_panel->mirrorStateFromEffect(dnahelix_strip_cmap_on,
@@ -118,8 +260,8 @@ void DNAHelix::OnDNAParameterChanged()
 {
     if(radius_slider)
     {
-        helix_radius = radius_slider->value();
-        if(radius_label) radius_label->setText(QString::number(helix_radius));
+        helix_radius = (unsigned int)radius_slider->value();
+        if(radius_label) radius_label->setText(QString::number((int)helix_radius));
     }
     emit ParametersChanged();
 }
@@ -175,29 +317,80 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
 
     float size_multiplier = GetNormalizedSize();
     float freq_scale = detail * bb.tight_mul * 4.0f / fmax(0.1f, size_multiplier);
-    
-    float max_distance = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
-    float radius_scale_normalized = (helix_radius / 200.0f) * size_multiplier;
-    float radius_scale = max_distance * radius_scale_normalized * 0.9f;
+
+    EffectGridAxisHalfExtents e_room = MakeEffectGridAxisHalfExtents(grid, 1.0f);
+    float h_span = std::min(e_room.hw, e_room.hd);
+    float radius_frac = (helix_radius / 200.0f);
+    radius_frac = std::clamp(radius_frac, 0.08f, 1.25f);
+    float radius_scale = h_span * radius_frac * size_multiplier;
+
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_z = rotated_pos.z - origin.z;
 
-    float radial_distance = sqrt(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
-    float angle = atan2(rot_rel_z, rot_rel_x);
-    float coord_along_helix = y_stratum;
-    float helix_height = coord_along_helix * freq_scale + progress_use;
+    float radial_distance = sqrtf(rot_rel_x * rot_rel_x + rot_rel_z * rot_rel_z);
+    float angle = atan2f(rot_rel_z, rot_rel_x);
+
+    float y_norm = y_stratum;
+    if(vertical_drift_pct > 0)
+    {
+        float drift = (vertical_drift_pct / 100.0f) * time * GetScaledSpeed() * 0.05f;
+        y_norm = y_stratum + drift;
+        y_norm = y_norm - floorf(y_norm);
+    }
+
+    const int shape_m = std::clamp(helix_shape_mode, 0, 4);
+    float coord_along_helix;
+    float y_plane_weight = 1.0f;
+
+    switch(shape_m)
+    {
+        case 3: // Flat disc — twist follows azimuth; brightness in a thin horizontal slab
+            coord_along_helix = angle * freq_scale * 1.15f + progress_use + y_norm * freq_scale * 0.06f;
+            y_plane_weight = expf(-powf((y_norm - 0.5f) * 11.0f, 2.0f));
+            break;
+        case 4: // Stacked planes — discrete horizontal bands
+        {
+            int n = std::clamp(plane_layers, 2, 24);
+            float band_idx = floorf(y_norm * (float)n);
+            band_idx = fminf(band_idx, (float)(n - 1));
+            float band_center = (band_idx + 0.5f) / (float)n;
+            float band_half = (0.5f / (float)n) * 0.92f;
+            y_plane_weight = 1.0f - smoothstep(band_half * 0.35f, band_half, fabsf(y_norm - band_center));
+            coord_along_helix = (band_idx / fmax(1.0f, (float)(n - 1))) * freq_scale + progress_use;
+            break;
+        }
+        default:
+            coord_along_helix = y_norm * freq_scale + progress_use;
+            break;
+    }
+
+    float helix_height = coord_along_helix;
     float coord1 = rot_rel_x;
     float coord2_xz = rot_rel_z;
 
+    if(ring_pulse_pct > 0 && ring_pulse_dir != 0)
+    {
+        float ring_from_center = fabsf(y_norm - 0.5f) * 2.0f;
+        float amp = (ring_pulse_pct / 100.0f) * 0.42f;
+        float spd = time * GetScaledFrequency() * 0.35f * bb.speed_mul;
+        float dir = (ring_pulse_dir == 1) ? 1.0f : -1.0f;
+        float ph = spd - ring_from_center * 7.0f * dir;
+        radius_scale *= 1.0f + amp * sinf(ph);
+    }
+
+    const int path_shape = (shape_m == 3 || shape_m == 4) ? 0 : shape_m;
+
     float helix1_angle = angle + helix_height;
-    float helix1_c1 = radius_scale * cos(helix1_angle);
-    float helix1_c2 = radius_scale * sin(helix1_angle);
-    float helix1_distance = sqrt((coord1 - helix1_c1)*(coord1 - helix1_c1) + (coord2_xz - helix1_c2)*(coord2_xz - helix1_c2));
+    float helix1_c1, helix1_c2;
+    dna_strand_point(path_shape, helix1_angle, radius_scale, helix1_c1, helix1_c2);
+    float helix1_distance = sqrtf((coord1 - helix1_c1) * (coord1 - helix1_c1) +
+                                  (coord2_xz - helix1_c2) * (coord2_xz - helix1_c2));
 
     float helix2_angle = angle + helix_height + 3.14159f;
-    float helix2_c1 = radius_scale * cos(helix2_angle);
-    float helix2_c2 = radius_scale * sin(helix2_angle);
-    float helix2_distance = sqrt((coord1 - helix2_c1)*(coord1 - helix2_c1) + (coord2_xz - helix2_c2)*(coord2_xz - helix2_c2));
+    float helix2_c1, helix2_c2;
+    dna_strand_point(path_shape, helix2_angle, radius_scale, helix2_c1, helix2_c2);
+    float helix2_distance = sqrtf((coord1 - helix2_c1) * (coord1 - helix2_c1) +
+                                  (coord2_xz - helix2_c2) * (coord2_xz - helix2_c2));
 
     float strand_core_thickness = (6.0f + radius_scale * 0.25f) / std::max(0.25f, bb.tight_mul);
     float strand_glow_thickness = (16.0f + radius_scale * 0.5f) / std::max(0.25f, bb.tight_mul);
@@ -234,8 +427,9 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     float ambient_glow = 0.08f * (1.0f - fmin(1.0f, radial_distance / (radius_scale * 4.0f)));
     
     float total_intensity = (strand_intensity + base_pair_connection) * groove_effect;
-    float energy_pulse = 0.15f * sin(helix_height * 4.0f - progress_use * 3.0f) * strand_intensity;
+    float energy_pulse = 0.15f * sinf(helix_height * 4.0f - progress_use * 3.0f) * strand_intensity;
     total_intensity = total_intensity + energy_pulse + ambient_glow;
+    total_intensity *= y_plane_weight;
     total_intensity = fmax(0.0f, fmin(1.0f, total_intensity * 1.3f));
 
     const float dna_phase01 = std::fmod(progress_use + 1.0f, 1.0f);
@@ -315,6 +509,11 @@ nlohmann::json DNAHelix::SaveSettings() const
                                            "dna_helix_stratum_band_tight_pct",
                                            "dna_helix_stratum_band_phase_deg");
     j["helix_radius"] = helix_radius;
+    j["dna_helix_shape"] = helix_shape_mode;
+    j["dna_helix_vertical_drift_pct"] = vertical_drift_pct;
+    j["dna_helix_ring_pulse_pct"] = ring_pulse_pct;
+    j["dna_helix_ring_pulse_dir"] = ring_pulse_dir;
+    j["dna_helix_plane_layers"] = plane_layers;
     StripColormapSaveJson(j, "dnahelix", dnahelix_strip_cmap_on, dnahelix_strip_cmap_kernel, dnahelix_strip_cmap_rep,
                           dnahelix_strip_cmap_unfold, dnahelix_strip_cmap_dir,
                           dnahelix_strip_cmap_color_style);
@@ -344,9 +543,40 @@ void DNAHelix::LoadSettings(const nlohmann::json& settings)
                                                 dnahelix_strip_cmap_dir,
                                                 dnahelix_strip_cmap_color_style);
     }
-    if(settings.contains("helix_radius")) helix_radius = settings["helix_radius"];
+    if(settings.contains("helix_radius") && settings["helix_radius"].is_number())
+    {
+        int hr = settings["helix_radius"].get<int>();
+        helix_radius = (unsigned int)std::clamp(hr, 1, 500);
+    }
+    if(settings.contains("dna_helix_shape") && settings["dna_helix_shape"].is_number_integer())
+        helix_shape_mode = std::clamp(settings["dna_helix_shape"].get<int>(), 0, 4);
+    if(settings.contains("dna_helix_vertical_drift_pct") && settings["dna_helix_vertical_drift_pct"].is_number_integer())
+        vertical_drift_pct = std::clamp(settings["dna_helix_vertical_drift_pct"].get<int>(), 0, 100);
+    if(settings.contains("dna_helix_ring_pulse_pct") && settings["dna_helix_ring_pulse_pct"].is_number_integer())
+        ring_pulse_pct = std::clamp(settings["dna_helix_ring_pulse_pct"].get<int>(), 0, 100);
+    if(settings.contains("dna_helix_ring_pulse_dir") && settings["dna_helix_ring_pulse_dir"].is_number_integer())
+        ring_pulse_dir = std::clamp(settings["dna_helix_ring_pulse_dir"].get<int>(), 0, 2);
+    if(settings.contains("dna_helix_plane_layers") && settings["dna_helix_plane_layers"].is_number_integer())
+        plane_layers = std::clamp(settings["dna_helix_plane_layers"].get<int>(), 2, 24);
 
-    if(radius_slider) radius_slider->setValue(helix_radius);
+    if(radius_slider) radius_slider->setValue((int)helix_radius);
+    if(shape_combo) shape_combo->setCurrentIndex(helix_shape_mode);
+    if(vertical_drift_slider)
+    {
+        vertical_drift_slider->setValue(vertical_drift_pct);
+        if(vertical_drift_label) vertical_drift_label->setText(QString::number(vertical_drift_pct) + "%");
+    }
+    if(ring_pulse_slider)
+    {
+        ring_pulse_slider->setValue(ring_pulse_pct);
+        if(ring_pulse_label) ring_pulse_label->setText(QString::number(ring_pulse_pct) + "%");
+    }
+    if(pulse_dir_combo) pulse_dir_combo->setCurrentIndex(ring_pulse_dir);
+    if(plane_count_slider)
+    {
+        plane_count_slider->setValue(plane_layers);
+        if(plane_count_label) plane_count_label->setText(QString::number(plane_layers));
+    }
     if(stratum_panel)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);

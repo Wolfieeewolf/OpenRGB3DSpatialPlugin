@@ -6,6 +6,9 @@
 #include "EffectRegisterer3D.h"
 #include "SpatialEffect3D.h"
 
+class QLabel;
+class QSlider;
+
 class Xorcery3D : public SpatialEffect3D
 {
     Q_OBJECT
@@ -26,6 +29,21 @@ public:
 
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;
+
+private:
+    /** 0 = all cells share the same time direction; 1 = odd XOR parity runs phases backward. */
+    float direction_alternate = 1.0f;
+    /** Quantization scale for XOR grid (roughly cells across the room). */
+    float cell_scale = 5.0f;
+    /** Scales the moving wave terms (higher = busier motion). */
+    float wave_drive = 1.0f;
+
+    QSlider* alt_slider = nullptr;
+    QLabel* alt_label = nullptr;
+    QSlider* cell_slider = nullptr;
+    QLabel* cell_label = nullptr;
+    QSlider* drive_slider = nullptr;
+    QLabel* drive_label = nullptr;
 };
 
 #endif

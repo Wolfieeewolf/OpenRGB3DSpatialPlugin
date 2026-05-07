@@ -2,6 +2,15 @@
 
 #include "Complements3D.h"
 
+#include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
+#include "StripShellPattern/StripShellPatternKernels.h"
+
+#include <QColor>
+#include <QGridLayout>
+#include <QLabel>
+#include <QSlider>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
 
@@ -61,10 +70,11 @@ Complements3D::~Complements3D() = default;
 EffectInfo3D Complements3D::GetEffectInfo()
 {
     EffectInfo3D info{};
-    info.info_version = 1;
-    info.effect_name = "Dual Tone Depth 3D";
+    info.info_version = 2;
+    info.effect_name = "Depth Tone 3D";
     info.effect_description =
-        "Blends two rotating complementary hues along room Z with center dimming for depth.";
+        "Rotating hues along room depth (Z) with center dimming; choose how many tone steps span front to back, "
+        "optional strip kernel palette for the pattern.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_COMPLEMENTS_3D;
     info.is_reversible = true;
@@ -72,15 +82,15 @@ EffectInfo3D Complements3D::GetEffectInfo()
     info.max_speed = 100;
     info.min_speed = 1;
     info.user_colors = 1;
-    info.has_custom_settings = false;
+    info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = false;
     info.default_speed_scale = 45.0f;
-    info.use_size_parameter = false;
+    info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
     info.show_frequency_control = false;
-    info.show_size_control = false;
+    info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
     return info;
@@ -88,7 +98,55 @@ EffectInfo3D Complements3D::GetEffectInfo()
 
 void Complements3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
+    QWidget* w = new QWidget();
+    QVBoxLayout* vbox = new QVBoxLayout(w);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* g = new QGridLayout();
+    g->setContentsMargins(0, 0, 0, 0);
+
+    g->addWidget(new QLabel("Depth tones:"), 0, 0);
+    depth_tones_slider = new QSlider(Qt::Horizontal);
+    depth_tones_slider->setRange(2, 32);
+    depth_tones_slider->setToolTip(
+        "How many tone steps span front to back (Z). 2 ~ complementary pair; higher = more hues across depth.");
+    depth_tones_slider->setValue(std::clamp(depth_tone_count, 2, 32));
+    depth_tones_label = new QLabel(QString::number(depth_tones_slider->value()));
+    depth_tones_label->setMinimumWidth(28);
+    g->addWidget(depth_tones_slider, 0, 1);
+    g->addWidget(depth_tones_label, 0, 2);
+    connect(depth_tones_slider, &QSlider::valueChanged, this, [this](int v) {
+        depth_tone_count = std::clamp(v, 2, 32);
+        if(depth_tones_label)
+            depth_tones_label->setText(QString::number(depth_tone_count));
+        emit ParametersChanged();
+    });
+
+    vbox->addLayout(g);
+
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(depth_tone_strip_cmap_on,
+                                            depth_tone_strip_cmap_kernel,
+                                            depth_tone_strip_cmap_rep,
+                                            depth_tone_strip_cmap_unfold,
+                                            depth_tone_strip_cmap_dir,
+                                            depth_tone_strip_cmap_color_style);
+    vbox->addWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Complements3D::SyncStripColormapFromPanel);
+
+    AddWidgetToParent(w, parent);
+}
+
+void Complements3D::SyncStripColormapFromPanel()
+{
+    if(!strip_cmap_panel)
+        return;
+    depth_tone_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    depth_tone_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    depth_tone_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    depth_tone_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    depth_tone_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    depth_tone_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
 void Complements3D::UpdateParams(SpatialEffectParams& params)
@@ -109,14 +167,13 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
     float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
 
     const float spd = std::max(0.08f, GetScaledSpeed() / 100.0f);
-    const float pos = Phase01(time, 10.0f, spd); // speed=10000ms in source epe
+    const float pos = Phase01(time, 10.0f, spd);
 
-    const float color_percent = 0.5f; // complementary split
+    const int dc = std::clamp(depth_tone_count, 2, 32);
+    const float hue_span = (float)(dc - 1) / (float)dc;
+    float hue01 = std::fmod(pos + nz * hue_span + 1.0f, 1.0f);
+
     const float percent_dim = 0.7f;
-    const float h1 = pos;
-    const float h2 = pos + color_percent;
-    const float hue = std::fmod(h1 + (h2 - h1) * nz + 1.0f, 1.0f);
-
     float v = 1.0f;
     if(nz < 0.5f)
         v *= (1.0f - (nz * 2.0f * percent_dim));
@@ -124,10 +181,47 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
         v *= ((1.0f - percent_dim) + ((nz - 0.5f) * (nz * 2.0f * percent_dim)));
     v = std::clamp(v, 0.0f, 1.0f);
 
-    if(GetRainbowMode())
-        return Hsv01ToBgr(hue, 1.0f, v);
+    const float size_m = std::max(0.2f, GetNormalizedSize());
+    const float rainbow_rate = spd * 12.0f;
 
-    RGBColor c = GetColorAtPosition(hue);
+    if(depth_tone_strip_cmap_on)
+    {
+        const float ph01 =
+            std::fmod(pos * 0.45f + nz * (0.2f + 0.55f * hue_span) + time * rainbow_rate * 0.012f + 1.0f, 1.0f);
+        float pal01 = SampleStripKernelPalette01(depth_tone_strip_cmap_kernel,
+                                                 depth_tone_strip_cmap_rep,
+                                                 depth_tone_strip_cmap_unfold,
+                                                 depth_tone_strip_cmap_dir,
+                                                 ph01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rot);
+        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+        const int kid = StripShellKernelClamp(depth_tone_strip_cmap_kernel);
+        RGBColor c = ResolveStripKernelFinalColor(*this,
+                                                  kid,
+                                                  std::clamp(pal01, 0.0f, 1.0f),
+                                                  depth_tone_strip_cmap_color_style,
+                                                  time,
+                                                  rainbow_rate * 0.02f);
+        const int cr = (int)(c & 0xFF);
+        const int cg = (int)((c >> 8) & 0xFF);
+        const int cb = (int)((c >> 16) & 0xFF);
+        QColor qc = QColor::fromRgb(cr, cg, cb);
+        const QColor hsv = qc.toHsv();
+        const float ch = static_cast<float>(hsv.hueF());
+        const float cs = static_cast<float>(hsv.saturationF());
+        const float cv = static_cast<float>(hsv.valueF());
+        const float h_use = (ch >= 0.0f) ? std::fmod(ch + 1.0f, 1.0f) : hue01;
+        return Hsv01ToBgr(h_use, cs, std::clamp(v * cv, 0.0f, 1.0f));
+    }
+
+    if(GetRainbowMode())
+        return Hsv01ToBgr(hue01, 1.0f, v);
+
+    RGBColor c = GetColorAtPosition(hue01);
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);
     int b = (int)((float)((c >> 16) & 0xFF) * v);
@@ -139,10 +233,47 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
 
 nlohmann::json Complements3D::SaveSettings() const
 {
-    return SpatialEffect3D::SaveSettings();
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["depth_tone_count"] = depth_tone_count;
+    StripColormapSaveJson(j,
+                          "depth_tone",
+                          depth_tone_strip_cmap_on,
+                          depth_tone_strip_cmap_kernel,
+                          depth_tone_strip_cmap_rep,
+                          depth_tone_strip_cmap_unfold,
+                          depth_tone_strip_cmap_dir,
+                          depth_tone_strip_cmap_color_style);
+    return j;
 }
 
 void Complements3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("depth_tone_count") && settings["depth_tone_count"].is_number_integer())
+        depth_tone_count = std::clamp(settings["depth_tone_count"].get<int>(), 2, 32);
+
+    StripColormapLoadJson(settings,
+                          "depth_tone",
+                          depth_tone_strip_cmap_on,
+                          depth_tone_strip_cmap_kernel,
+                          depth_tone_strip_cmap_rep,
+                          depth_tone_strip_cmap_unfold,
+                          depth_tone_strip_cmap_dir,
+                          depth_tone_strip_cmap_color_style,
+                          GetRainbowMode());
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(depth_tone_strip_cmap_on,
+                                                depth_tone_strip_cmap_kernel,
+                                                depth_tone_strip_cmap_rep,
+                                                depth_tone_strip_cmap_unfold,
+                                                depth_tone_strip_cmap_dir,
+                                                depth_tone_strip_cmap_color_style);
+    }
+    if(depth_tones_slider)
+    {
+        depth_tones_slider->setValue(depth_tone_count);
+        if(depth_tones_label)
+            depth_tones_label->setText(QString::number(depth_tone_count));
+    }
 }

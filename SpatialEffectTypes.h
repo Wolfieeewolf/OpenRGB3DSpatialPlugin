@@ -36,11 +36,7 @@ enum SpatialEffectType
     SPATIAL_EFFECT_BOUNCER_3D = 19,
     /** Hex lattice field with animated zoom and triangular hue shaping. */
     SPATIAL_EFFECT_HONEYCOMB_3D = 20,
-    /** Diagnostic axis sweep: red=X, green=Y, blue=Z moving band. */
-    SPATIAL_EFFECT_RGB_XYZ_SWEEP_3D = 21,
-    /** Diagnostic octants: static XYZ high/low encoded as RGB. */
-    SPATIAL_EFFECT_RGB_XYZ_OCTANTS_3D = 22,
-    /** Complementary hue gradient along room depth with center dim. */
+    /** Complementary hue gradient along room depth with center dim. (21–22 unused: removed axis sweep/octants.) */
     SPATIAL_EFFECT_COMPLEMENTS_3D = 23,
     /** Fast pulse field from animated XYZ sinusoid mix. */
     SPATIAL_EFFECT_FAST_PULSE_3D = 24,

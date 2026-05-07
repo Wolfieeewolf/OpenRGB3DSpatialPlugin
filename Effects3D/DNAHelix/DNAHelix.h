@@ -7,6 +7,7 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 
+class QComboBox;
 class StratumBandPanel;
 class StripKernelColormapPanel;
 
@@ -39,9 +40,24 @@ private slots:
 private:
     QSlider*        radius_slider;
     QLabel*         radius_label;
+    QComboBox*      shape_combo = nullptr;
+    QSlider*        vertical_drift_slider = nullptr;
+    QLabel*         vertical_drift_label = nullptr;
+    QSlider*        ring_pulse_slider = nullptr;
+    QLabel*         ring_pulse_label = nullptr;
+    QComboBox*      pulse_dir_combo = nullptr;
+    QSlider*        plane_count_slider = nullptr;
+    QLabel*         plane_count_label = nullptr;
 
-    unsigned int    helix_radius;
-    float           progress;
+    unsigned int    helix_radius = 180;
+    float           progress = 0.0f;
+    /** 0 circle, 1 square, 2 squircle, 3 flat disc, 4 stacked planes */
+    int             helix_shape_mode = 0;
+    int             vertical_drift_pct = 0;
+    int             ring_pulse_pct = 0;
+    /** 0 off, 1 outward from center, 2 inward toward center */
+    int             ring_pulse_dir = 0;
+    int             plane_layers = 8;
 
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;

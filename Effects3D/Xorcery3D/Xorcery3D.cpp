@@ -2,6 +2,11 @@
 
 #include "Xorcery3D.h"
 
+#include <QGridLayout>
+#include <QLabel>
+#include <QSlider>
+#include <QVBoxLayout>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -60,6 +65,13 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
     const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
+
+/** Blend phase with its time-reverse on alternating XOR parity. */
+inline float PhaseWithAlternate(float ph01, int xor_parity_lsb, float alternate01)
+{
+    const float rev = (xor_parity_lsb != 0) ? (1.0f - ph01) : ph01;
+    return ph01 * (1.0f - alternate01) + rev * alternate01;
+}
 } // namespace
 
 Xorcery3D::Xorcery3D(QWidget* parent) : SpatialEffect3D(parent)
@@ -77,7 +89,8 @@ EffectInfo3D Xorcery3D::GetEffectInfo()
     info.info_version = 1;
     info.effect_name = "Bitwarp 3D";
     info.effect_description =
-        "Bitwise interference using integer XOR over reflected XYZ cells.";
+        "Bitwise interference from XOR-quantized XYZ. Odd/even cells can run motion forward or backward; "
+        "tune cell scale and wave drive.";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_XORCERY_3D;
     info.is_reversible = true;
@@ -85,7 +98,7 @@ EffectInfo3D Xorcery3D::GetEffectInfo()
     info.max_speed = 100;
     info.min_speed = 1;
     info.user_colors = 1;
-    info.has_custom_settings = false;
+    info.has_custom_settings = true;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
     info.default_speed_scale = 45.0f;
@@ -102,7 +115,63 @@ EffectInfo3D Xorcery3D::GetEffectInfo()
 
 void Xorcery3D::SetupCustomUI(QWidget* parent)
 {
-    Q_UNUSED(parent);
+    QWidget* w = new QWidget();
+    QVBoxLayout* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QGridLayout* grid = new QGridLayout();
+    grid->setContentsMargins(0, 0, 0, 0);
+    outer->addLayout(grid);
+    int row = 0;
+
+    grid->addWidget(new QLabel("Alternate dirs:"), row, 0);
+    alt_slider = new QSlider(Qt::Horizontal);
+    alt_slider->setRange(0, 100);
+    alt_slider->setValue((int)std::lround(direction_alternate * 100.0f));
+    alt_slider->setToolTip("0 = all cells move the same way; 100 = odd XOR cells run phases backward.");
+    alt_label = new QLabel(QString::number(direction_alternate, 'f', 2));
+    grid->addWidget(alt_slider, row, 1);
+    grid->addWidget(alt_label, row, 2);
+    connect(alt_slider, &QSlider::valueChanged, this, [this](int v) {
+        direction_alternate = std::clamp(v / 100.0f, 0.0f, 1.0f);
+        if(alt_label)
+            alt_label->setText(QString::number(direction_alternate, 'f', 2));
+        emit ParametersChanged();
+    });
+    row++;
+
+    grid->addWidget(new QLabel("Cell scale:"), row, 0);
+    cell_slider = new QSlider(Qt::Horizontal);
+    cell_slider->setRange(25, 140);
+    cell_slider->setValue((int)std::lround(cell_scale * 10.0f));
+    cell_slider->setToolTip("Finer XOR grid (higher = more, smaller cells).");
+    cell_label = new QLabel(QString::number(cell_scale, 'f', 1));
+    grid->addWidget(cell_slider, row, 1);
+    grid->addWidget(cell_label, row, 2);
+    connect(cell_slider, &QSlider::valueChanged, this, [this](int v) {
+        cell_scale = std::clamp(v / 10.0f, 2.5f, 14.0f);
+        if(cell_label)
+            cell_label->setText(QString::number(cell_scale, 'f', 1));
+        emit ParametersChanged();
+    });
+    row++;
+
+    grid->addWidget(new QLabel("Wave drive:"), row, 0);
+    drive_slider = new QSlider(Qt::Horizontal);
+    drive_slider->setRange(50, 150);
+    drive_slider->setValue((int)std::lround(wave_drive * 100.0f));
+    drive_slider->setToolTip("Strength of the moving wave terms.");
+    drive_label = new QLabel(QString::number(wave_drive, 'f', 2));
+    grid->addWidget(drive_slider, row, 1);
+    grid->addWidget(drive_label, row, 2);
+    connect(drive_slider, &QSlider::valueChanged, this, [this](int v) {
+        wave_drive = std::clamp(v / 100.0f, 0.5f, 1.5f);
+        if(drive_label)
+            drive_label->setText(QString::number(wave_drive, 'f', 2));
+        emit ParametersChanged();
+    });
+    row++;
+
+    AddWidgetToParent(w, parent);
 }
 
 void Xorcery3D::UpdateParams(SpatialEffectParams& params)
@@ -129,20 +198,29 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
     const float motion = spd * rate;
 
     const float t1 = Phase01(time, 10.0f, motion);
-    const float t2 = Phase01(time, 10.0f, motion) * kTwoPi;
-    const float t3 = Phase01(time, 2.0f, motion);
-    const float t4 = Phase01(time, 5.0f, motion) * kTwoPi;
+    const float t2_base = Phase01(time, 10.0f, motion);
+    const float t3_base = Phase01(time, 2.0f, motion);
+    const float t4_base = Phase01(time, 5.0f, motion);
 
     const float m = 0.3f + Triangle01(t1) * 0.2f;
     const float size_mul = std::max(0.2f, GetNormalizedSize());
-    const int xi = (int)std::floor(5.0f * ((nx - 0.5f) * size_mul));
-    const int yi = (int)std::floor(5.0f * ((ny - 0.5f) * size_mul));
-    const int zi = (int)std::floor(5.0f * ((nz - 0.5f) * size_mul));
+    const float gmul = cell_scale;
+    const int xi = (int)std::floor(gmul * ((nx - 0.5f) * size_mul));
+    const int yi = (int)std::floor(gmul * ((ny - 0.5f) * size_mul));
+    const int zi = (int)std::floor(gmul * ((nz - 0.5f) * size_mul));
     const int xori = xi ^ yi ^ zi;
     const float xor_scaled = (float)xori / 50.0f;
 
-    float h = std::sin(t2);
-    const float wave_in = std::fmod(xor_scaled * (Triangle01(t3) * 10.0f + 4.0f * std::sin(t4)), m);
+    const int parity = xori & 1;
+    const float t2_ph = PhaseWithAlternate(t2_base, parity, direction_alternate);
+    const float t3 = PhaseWithAlternate(t3_base, parity, direction_alternate);
+    const float t4_phase = PhaseWithAlternate(t4_base, parity, direction_alternate);
+    const float t4 = t4_phase * kTwoPi;
+
+    float h = std::sin(t2_ph * kTwoPi);
+    const float wd = wave_drive;
+    const float wave_in =
+        std::fmod(xor_scaled * (Triangle01(t3) * 10.0f * wd + 4.0f * wd * std::sin(t4)), m);
     h += Wave01(wave_in);
 
     float v = std::fmod(std::fabs(h) + std::fabs(m) + t1, 1.0f);
@@ -165,10 +243,39 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
 
 nlohmann::json Xorcery3D::SaveSettings() const
 {
-    return SpatialEffect3D::SaveSettings();
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["bitwarp_direction_alternate"] = direction_alternate;
+    j["bitwarp_cell_scale"] = cell_scale;
+    j["bitwarp_wave_drive"] = wave_drive;
+    return j;
 }
 
 void Xorcery3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("bitwarp_direction_alternate") && settings["bitwarp_direction_alternate"].is_number())
+        direction_alternate = std::clamp(settings["bitwarp_direction_alternate"].get<float>(), 0.0f, 1.0f);
+    if(settings.contains("bitwarp_cell_scale") && settings["bitwarp_cell_scale"].is_number())
+        cell_scale = std::clamp(settings["bitwarp_cell_scale"].get<float>(), 2.5f, 14.0f);
+    if(settings.contains("bitwarp_wave_drive") && settings["bitwarp_wave_drive"].is_number())
+        wave_drive = std::clamp(settings["bitwarp_wave_drive"].get<float>(), 0.5f, 1.5f);
+
+    if(alt_slider)
+    {
+        alt_slider->setValue((int)std::lround(direction_alternate * 100.0f));
+        if(alt_label)
+            alt_label->setText(QString::number(direction_alternate, 'f', 2));
+    }
+    if(cell_slider)
+    {
+        cell_slider->setValue((int)std::lround(cell_scale * 10.0f));
+        if(cell_label)
+            cell_label->setText(QString::number(cell_scale, 'f', 1));
+    }
+    if(drive_slider)
+    {
+        drive_slider->setValue((int)std::lround(wave_drive * 100.0f));
+        if(drive_label)
+            drive_label->setText(QString::number(wave_drive, 'f', 2));
+    }
 }
