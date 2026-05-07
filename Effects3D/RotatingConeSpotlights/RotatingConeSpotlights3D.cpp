@@ -228,7 +228,7 @@ void RotatingConeSpotlights3D::SetupCustomUI(QWidget* parent)
                                             cones_spot_strip_cmap_unfold,
                                             cones_spot_strip_cmap_dir,
                                             cones_spot_strip_cmap_color_style);
-    main_layout->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &RotatingConeSpotlights3D::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);

@@ -252,7 +252,7 @@ void Spiral::SetupCustomUI(QWidget* parent)
                                             spiral_strip_cmap_unfold,
                                             spiral_strip_cmap_dir,
                                             spiral_strip_cmap_color_style);
-    outer->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Spiral::SyncStripColormapFromPanel);
 
     AddWidgetToParent(spiral_widget, parent);

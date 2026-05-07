@@ -225,7 +225,7 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
                                             colorwheel_strip_cmap_unfold,
                                             colorwheel_strip_cmap_dir,
                                             colorwheel_strip_cmap_color_style);
-    outer->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &ColorWheel::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);

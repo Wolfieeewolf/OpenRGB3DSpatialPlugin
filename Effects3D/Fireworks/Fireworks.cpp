@@ -176,12 +176,12 @@ void Fireworks::SetupCustomUI(QWidget* parent)
                                             fireworks_strip_cmap_unfold,
                                             fireworks_strip_cmap_dir,
                                             fireworks_strip_cmap_color_style);
-    outer->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Fireworks::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    outer->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Fireworks::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(w, parent);

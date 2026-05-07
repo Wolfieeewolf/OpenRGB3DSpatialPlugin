@@ -167,7 +167,7 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    layout->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &AudioLevel::OnStratumBandChanged);
     OnStratumBandChanged();
 }

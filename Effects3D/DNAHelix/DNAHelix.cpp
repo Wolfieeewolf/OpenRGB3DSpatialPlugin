@@ -236,13 +236,13 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
                                             dnahelix_strip_cmap_unfold,
                                             dnahelix_strip_cmap_dir,
                                             dnahelix_strip_cmap_color_style);
-    vbox->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DNAHelix::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(outer_w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    vbox->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &DNAHelix::OnStratumBandChanged);
     OnStratumBandChanged();
 
@@ -310,6 +310,19 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     EffectStratumBlend::WeightsForYNorm(y_stratum, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
         EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = y_stratum;
 
     float rate = GetScaledFrequency();
     float detail = std::max(0.05f, GetScaledDetail());
@@ -433,6 +446,7 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
     total_intensity = fmax(0.0f, fmin(1.0f, total_intensity * 1.3f));
 
     const float dna_phase01 = std::fmod(progress_use + 1.0f, 1.0f);
+    const float helix_plane01 = std::fmod(coord_along_helix + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
     if(dnahelix_strip_cmap_on)
     {
@@ -446,6 +460,8 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
                                                size_multiplier,
                                                origin,
                                                rotated_pos);
+        strip_p01 = ApplySpatialPalette01(strip_p01, basis, sp, map, time, &grid);
+        strip_p01 = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
     }
 
     RGBColor final_color;
@@ -454,9 +470,18 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
         float hue = helix_height * 50.0f + angle * 20.0f + time * rate * 12.0f * bb.speed_mul + bb.phase_deg;
         if(dnahelix_strip_cmap_on)
             hue = strip_p01 * 360.0f + time * rate * 12.0f * bb.speed_mul;
+        else
+            hue = ApplySpatialRainbowHue(hue, helix_plane01, basis, sp, map, time, &grid);
         if(base_pair_connection > 0.3f)
         {
             hue += 180.0f;
+        }
+        if(!dnahelix_strip_cmap_on)
+        {
+            float p01 = std::fmod(hue / 360.0f, 1.0f);
+            if(p01 < 0.0f) p01 += 1.0f;
+            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+            hue = p01 * 360.0f;
         }
         final_color = GetRainbowColor(hue);
     }
@@ -468,6 +493,11 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
             float pos = fmodf(position + time * rate * 0.02f, 1.0f);
             if(dnahelix_strip_cmap_on)
                 pos = strip_p01;
+            else
+            {
+                pos = ApplySpatialPalette01(pos, basis, sp, map, time, &grid);
+                pos = ApplyVoxelDriveToPalette01(pos, x, y, z, time, grid);
+            }
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);
         }
@@ -477,6 +507,11 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
             float pos = fmodf(position + time * rate * 0.02f, 1.0f);
             if(dnahelix_strip_cmap_on)
                 pos = strip_p01;
+            else
+            {
+                pos = ApplySpatialPalette01(pos, basis, sp, map, time, &grid);
+                pos = ApplyVoxelDriveToPalette01(pos, x, y, z, time, grid);
+            }
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);
         }

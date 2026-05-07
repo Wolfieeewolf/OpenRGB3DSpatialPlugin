@@ -13,9 +13,9 @@ EffectColorPanel::EffectColorPanel(bool rainbow_mode, QWidget* parent)
     QVBoxLayout* color_layout = new QVBoxLayout(this);
     color_layout->setContentsMargins(0, 0, 0, 0);
 
-    rainbow_mode_check_ = new QCheckBox(QStringLiteral("Rainbow Mode"));
+    rainbow_mode_check_ = new QCheckBox(QStringLiteral("Rainbow"));
     rainbow_mode_check_->setChecked(rainbow_mode);
-    rainbow_mode_check_->setToolTip(QStringLiteral("Use full-spectrum rainbow instead of the color stops below"));
+    rainbow_mode_check_->setToolTip(QStringLiteral("Use full-spectrum rainbow instead of manual color stops."));
     color_layout->addWidget(rainbow_mode_check_);
 
     color_buttons_widget_ = new QWidget();
@@ -35,4 +35,10 @@ EffectColorPanel::EffectColorPanel(bool rainbow_mode, QWidget* parent)
     color_buttons_layout_->addStretch();
 
     color_layout->addWidget(color_buttons_widget_);
+
+    pattern_host_widget_ = new QWidget();
+    pattern_host_layout_ = new QVBoxLayout(pattern_host_widget_);
+    pattern_host_layout_->setContentsMargins(0, 0, 0, 0);
+    pattern_host_layout_->setSpacing(6);
+    color_layout->addWidget(pattern_host_widget_);
 }

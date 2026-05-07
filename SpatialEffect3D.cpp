@@ -66,7 +66,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_bounds_mode = (int)BOUNDS_MODE_GLOBAL;
     effect_fps = 30;
     rainbow_mode = false;
-    spatial_mapping_mode = SpatialMappingMode::SubtleTint;
+    spatial_mapping_mode = SpatialMappingMode::Off;
     compass_layer_spin_preset = 2;
     rainbow_progress = 0.0f;
 
@@ -127,6 +127,8 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     axis_scale_rot_reset_button = nullptr;
 
     color_controls_group = nullptr;
+    color_pattern_settings_host = nullptr;
+    band_modulation_settings_host = nullptr;
     rainbow_mode_check = nullptr;
     sampler_mapper_group = nullptr;
     compass_sampler_group = nullptr;
@@ -202,6 +204,9 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
 
     surfaces_group = nullptr;
     surfaces_section = nullptr;
+    colors_patterns_section = nullptr;
+    band_modulation_section = nullptr;
+    effect_specific_section = nullptr;
     path_plane_group = nullptr;
     path_axis_combo = nullptr;
     plane_combo = nullptr;
@@ -361,14 +366,22 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    geometry_group);
 
     CreateColorControls();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors — rainbow & stops"),
-                   QStringLiteral("Rainbow mode or color stops used by the effect and room sampler palette mapping."),
-                   color_controls_group);
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors and patterns"),
+                   QStringLiteral("Base colors (Rainbow/Stops) plus optional pattern-kernel color modifiers."),
+                   color_controls_group,
+                   &colors_patterns_section);
+
+    band_modulation_settings_host = new EffectCustomHost();
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Band modulation"),
+                   QStringLiteral("Shared floor/mid/ceiling modulation controls used by effects that support strata."),
+                   band_modulation_settings_host,
+                   &band_modulation_section);
 
     custom_effect_settings_host = new EffectCustomHost();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
                    QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
-                   custom_effect_settings_host);
+                   custom_effect_settings_host,
+                   &effect_specific_section);
 
     CreateSamplerMapperControls();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Room sampler"),
@@ -597,6 +610,16 @@ void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
     }
 }
 
+void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
+{
+    AddWidgetToParent(widget, color_pattern_settings_host);
+}
+
+void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
+{
+    AddWidgetToParent(widget, band_modulation_settings_host);
+}
+
 void SpatialEffect3D::CreateColorControls()
 {
     auto* color_panel = new EffectColorPanel(rainbow_mode);
@@ -605,6 +628,7 @@ void SpatialEffect3D::CreateColorControls()
     rainbow_mode_check = color_panel->rainbowModeCheck();
     color_buttons_widget = color_panel->colorButtonsWidget();
     color_buttons_layout = color_panel->colorButtonsLayout();
+    color_pattern_settings_host = color_panel->patternHostWidget();
     add_color_button = color_panel->addColorButton();
     remove_color_button = color_panel->removeColorButton();
     remove_color_button->setEnabled(colors.size() > 1);
@@ -842,9 +866,19 @@ void SpatialEffect3D::SyncSpatialMappingControlVisibility()
 {
     const bool compass_mode = (spatial_mapping_mode == SpatialMappingMode::CompassPalette);
     const bool room_active = (spatial_mapping_mode != SpatialMappingMode::Off);
+    const bool voxel_mode = (spatial_mapping_mode == SpatialMappingMode::VoxelVolume);
+
+    if(sampler_influence_slider)
+    {
+        sampler_influence_slider->setEnabled(room_active);
+    }
+    if(sampler_influence_label)
+    {
+        sampler_influence_label->setEnabled(room_active);
+    }
     if(compass_layer_spin_combo)
     {
-        compass_layer_spin_combo->setVisible(compass_mode);
+        compass_layer_spin_combo->setEnabled(compass_mode);
     }
     if(sampler_compass_north_slider)
     {
@@ -853,6 +887,14 @@ void SpatialEffect3D::SyncSpatialMappingControlVisibility()
     if(sampler_compass_north_label)
     {
         sampler_compass_north_label->setEnabled(room_active);
+    }
+    if(voxel_volume_group)
+    {
+        voxel_volume_group->setEnabled(voxel_mode);
+    }
+    if(voxel_drive_combo)
+    {
+        voxel_drive_combo->setEnabled(voxel_mode);
     }
 }
 
@@ -1275,8 +1317,11 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         return base_pos01;
     case SpatialMappingMode::SubtleTint:
     {
+        // Keep "Subtle" gentle, but animate slightly so users can see mapping is active.
         const float h = SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
-        return SpatialLayerCore::ShiftGradient01WithCompassHue(base_pos01, h);
+        const float drift_deg = time * std::max(0.08f, GetScaledFrequency()) * 6.0f * infl;
+        const float h_use = h + drift_deg;
+        return SpatialLayerCore::ShiftGradient01WithCompassHue(base_pos01, h_use);
     }
     case SpatialMappingMode::CompassPalette:
     {
@@ -1293,8 +1338,8 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         int spins[3];
         FillCompassSpinFromPreset(compass_layer_spin_preset, spins);
         const float scroll =
-            time * std::max(0.12f, GetScaledFrequency()) * 0.22f * infl;
-        const float plane_mix = 0.42f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
+            time * std::max(0.12f, GetScaledFrequency()) * 0.30f * infl;
+        const float plane_mix = 0.58f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
         return SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, base_pos01);
     }
     case SpatialMappingMode::VoxelVolume:
@@ -1312,7 +1357,7 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         const float ry = (sp.grid_y - sp.origin_y) / std::max(grid->height, 1e-3f);
         const float rz = (sp.grid_z - sp.origin_z) / std::max(grid->depth, 1e-3f);
         const float ref01 = std::fmod(0.29f * rx + 0.31f * ry + 0.27f * rz + 1.0f, 1.0f);
-        float p = base_pos01 + infl * (0.62f * (vol01 - 0.5f) + 0.38f * (ref01 - 0.5f));
+        float p = base_pos01 + infl * (0.78f * (vol01 - 0.5f) + 0.45f * (ref01 - 0.5f));
         p = std::fmod(p, 1.0f);
         if(p < 0.0f)
         {
@@ -1341,7 +1386,11 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
     case SpatialMappingMode::Off:
         return hue_deg;
     case SpatialMappingMode::SubtleTint:
-        return hue_deg + SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
+    {
+        const float h = SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
+        const float drift_deg = time * std::max(0.08f, GetScaledFrequency()) * 6.0f * infl;
+        return hue_deg + h + drift_deg;
+    }
     case SpatialMappingMode::CompassPalette:
     {
         SpatialLayerCore::SamplePoint sp_map = sp;
@@ -1357,8 +1406,8 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
         int spins[3];
         FillCompassSpinFromPreset(compass_layer_spin_preset, spins);
         const float scroll =
-            time * std::max(0.12f, GetScaledFrequency()) * 0.22f * infl;
-        const float plane_mix = 0.38f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
+            time * std::max(0.12f, GetScaledFrequency()) * 0.30f * infl;
+        const float plane_mix = 0.52f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
         const float pos01 =
             SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, plane_pos01);
         return pos01 * 360.0f + hue_deg * 0.22f;
@@ -1378,7 +1427,7 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
         const float ry = (sp.grid_y - sp.origin_y) / std::max(grid->height, 1e-3f);
         const float rz = (sp.grid_z - sp.origin_z) / std::max(grid->depth, 1e-3f);
         const float ref01 = std::fmod(0.29f * rx + 0.31f * ry + 0.27f * rz + 1.0f, 1.0f);
-        const float delta_deg = infl * 360.0f * (0.62f * (vol01 - 0.5f) + 0.38f * (ref01 - 0.5f));
+        const float delta_deg = infl * 360.0f * (0.78f * (vol01 - 0.5f) + 0.45f * (ref01 - 0.5f));
         return hue_deg + delta_deg;
     }
     }
@@ -1817,6 +1866,18 @@ void SpatialEffect3D::ApplyControlVisibility()
     if(color_controls_group)
     {
         color_controls_group->setVisible(true);
+    }
+    if(colors_patterns_section && color_pattern_settings_host && color_pattern_settings_host->layout())
+    {
+        colors_patterns_section->setVisible(color_pattern_settings_host->layout()->count() > 0);
+    }
+    if(band_modulation_section && band_modulation_settings_host && band_modulation_settings_host->layout())
+    {
+        band_modulation_section->setVisible(band_modulation_settings_host->layout()->count() > 0);
+    }
+    if(effect_specific_section && custom_effect_settings_host && custom_effect_settings_host->layout())
+    {
+        effect_specific_section->setVisible(custom_effect_settings_host->layout()->count() > 0);
     }
     if(sampler_mapper_group)
     {

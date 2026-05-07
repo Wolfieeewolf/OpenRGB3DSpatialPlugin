@@ -33,37 +33,38 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     main->setContentsMargins(0, 0, 0, 0);
 
     source_combo = new QComboBox(this);
-    source_combo->addItem("Effect colors (default)");
-    source_combo->addItem("Strip kernel colormap");
-    source_combo->setToolTip("Palette from strip kernels in room space.");
+    source_combo->addItem("Colors only (Rainbow/Stops)");
+    source_combo->addItem("Colors + Pattern kernel");
+    source_combo->setToolTip("Pattern kernel is a room-space color/palette modifier layered on top of base Colors.");
     main->addWidget(source_combo);
 
     secondary_row = new QWidget(this);
     auto* g = new QGridLayout(secondary_row);
     g->setContentsMargins(0, 0, 0, 0);
     int row = 0;
-    g->addWidget(new QLabel("Kernel colors:"), row, 0);
+    g->addWidget(new QLabel("Kernel color source:"), row, 0);
     color_style_combo = new QComboBox();
     color_style_combo->addItem("Pattern palette");
-    color_style_combo->addItem("Effect color stops");
-    color_style_combo->addItem("Rainbow");
+    color_style_combo->addItem("Color stops (from Colors)");
+    color_style_combo->addItem("Rainbow (from Colors)");
+    color_style_combo->setCurrentIndex(1);
     color_style_combo->setToolTip(
         "Pattern palette = each kernel's default colors. Effect color stops = your palette. Rainbow = spectrum.");
     g->addWidget(color_style_combo, row, 1, 1, 2);
     row++;
-    g->addWidget(new QLabel("Kernel:"), row, 0);
+    g->addWidget(new QLabel("Pattern shape:"), row, 0);
     kernel_combo = new QComboBox();
     for(int i = 0; i < StripShellKernelCount(); i++)
         kernel_combo->addItem(StripShellKernelDisplayName(i));
     g->addWidget(kernel_combo, row, 1, 1, 2);
     row++;
-    g->addWidget(new QLabel("Unfold:"), row, 0);
+    g->addWidget(new QLabel("Pattern projection:"), row, 0);
     unfold_combo = new QComboBox();
     for(int i = 0; i < (int)StripPatternSurface::UnfoldMode::COUNT; i++)
         unfold_combo->addItem(UnfoldLabel(i));
     g->addWidget(unfold_combo, row, 1, 1, 2);
     row++;
-    g->addWidget(new QLabel("Repeats:"), row, 0);
+    g->addWidget(new QLabel("Pattern density:"), row, 0);
     repeats_slider = new QSlider(Qt::Horizontal);
     repeats_slider->setRange(1, 40);
     repeats_slider->setValue(4);
@@ -72,7 +73,7 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     g->addWidget(repeats_slider, row, 1);
     g->addWidget(repeats_label, row, 2);
     row++;
-    g->addWidget(new QLabel("Plane angle:"), row, 0);
+    g->addWidget(new QLabel("Projection angle:"), row, 0);
     dir_slider = new QSlider(Qt::Horizontal);
     dir_slider->setRange(0, 359);
     dir_slider->setValue(0);

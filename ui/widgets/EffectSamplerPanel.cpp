@@ -26,13 +26,12 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
     root->setContentsMargins(0, 0, 0, 0);
 
     QLabel* intro = new QLabel(
-        QStringLiteral("Surfaces stay open above. Below that: Motion, Output, Geometry, Colors, this effect's own settings, then this sampler. "
-                       "Increase Sampler strength if room mapping feels faint. "
-                       "Voxel Mix tints LEDs with block colors; Palette drive scrolls your rainbow/stops from voxels or room axes."));
+        QStringLiteral("Optional room-driven color mapping. Start with Room mapping mode = Off. "
+                       "Use Compass for directional layers, or Voxel volume for game voxel tint / palette drive."));
     intro->setWordWrap(true);
     root->addWidget(intro);
 
-    compass_sampler_group_ = new QGroupBox(QStringLiteral("Compass → palette"));
+    compass_sampler_group_ = new QGroupBox(QStringLiteral("Room Mapping"));
     compass_sampler_group_->setToolTip(
         QStringLiteral("Horizontal direction (8 sectors) and vertical band (floor / mid / ceiling) choose where you sit on the rainbow or color strip."));
     QVBoxLayout* cg = new QVBoxLayout(compass_sampler_group_);
@@ -56,24 +55,24 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
     }
     cg->addWidget(spatial_mapping_combo_);
 
-    cg->addWidget(new QLabel(QStringLiteral("Height bands — time scroll direction:")));
+    cg->addWidget(new QLabel(QStringLiteral("Compass band spin:")));
     compass_layer_spin_combo_ = new QComboBox();
     compass_layer_spin_combo_->addItem(QStringLiteral("All bands clockwise"), 0);
     compass_layer_spin_combo_->addItem(QStringLiteral("All bands counter-clockwise"), 1);
     compass_layer_spin_combo_->addItem(QStringLiteral("Floor CW · mid CCW · ceiling CW"), 2);
     compass_layer_spin_combo_->addItem(QStringLiteral("Floor CCW · mid CW · ceiling CCW"), 3);
     compass_layer_spin_combo_->setToolTip(
-        QStringLiteral("Per vertical band: +1 or −1 on animation scroll (Clockwise vs counter). Only in Compass mode."));
+        QStringLiteral("Per vertical band spin direction. Used only in Compass mode."));
     compass_layer_spin_combo_->setCurrentIndex(std::clamp(compass_layer_spin_preset, 0, 3));
     cg->addWidget(compass_layer_spin_combo_);
 
     QHBoxLayout* infl_row = new QHBoxLayout();
-    infl_row->addWidget(new QLabel(QStringLiteral("Sampler strength:")));
+    infl_row->addWidget(new QLabel(QStringLiteral("Mapping strength:")));
     sampler_influence_slider_ = new QSlider(Qt::Horizontal);
     sampler_influence_slider_->setRange(0, 250);
     sampler_influence_slider_->setValue(sampler_influence_centi);
     sampler_influence_slider_->setToolTip(
-        QStringLiteral("0 = ignore room/voxel palette steering. 100 = default. Up to 250 = stronger compass scroll, subtle tint, and palette drive."));
+        QStringLiteral("0 = off. 100 = normal. Higher values increase room/voxel influence."));
     infl_row->addWidget(sampler_influence_slider_, 1);
     sampler_influence_label_ = new QLabel(QString::number(sampler_influence_centi) + QStringLiteral("%"));
     sampler_influence_label_->setMinimumWidth(40);
@@ -96,10 +95,9 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
 
     root->addWidget(compass_sampler_group_);
 
-    voxel_volume_group_ = new QGroupBox(QStringLiteral("Voxel — tint + palette drive"));
+    voxel_volume_group_ = new QGroupBox(QStringLiteral("Voxel Mapping"));
     voxel_volume_group_->setToolTip(
-        QStringLiteral("Needs telemetry with voxel_frame (e.g. Minecraft UDP). Mix = replace with block color. "
-                       "Palette drive = slide rainbow/stops using voxel brightness or room axes without replacing hue entirely."));
+        QStringLiteral("Requires live voxel telemetry (voxel_frame, e.g. Minecraft UDP)."));
     QVBoxLayout* voxel_layout = new QVBoxLayout(voxel_volume_group_);
 
     QHBoxLayout* voxel_mix_row = new QHBoxLayout();

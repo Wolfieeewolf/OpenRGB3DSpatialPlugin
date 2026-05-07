@@ -221,7 +221,7 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
     stratum_panel = new StratumBandPanel(outer);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    vbox->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TextureProjection::OnStratumBandChanged);
     OnStratumBandChanged();
 

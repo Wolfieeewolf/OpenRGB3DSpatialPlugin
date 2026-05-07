@@ -217,13 +217,13 @@ void WireframeCube::SetupCustomUI(QWidget* parent)
                                             wireframecube_strip_cmap_unfold,
                                             wireframecube_strip_cmap_dir,
                                             wireframecube_strip_cmap_color_style);
-    vbox->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &WireframeCube::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(outer);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    vbox->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &WireframeCube::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(outer, parent);

@@ -132,13 +132,13 @@ void FreqFill::SetupCustomUI(QWidget* parent)
                                             freqfill_strip_cmap_unfold,
                                             freqfill_strip_cmap_dir,
                                             freqfill_strip_cmap_color_style);
-    layout->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqFill::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    layout->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqFill::OnStratumBandChanged);
     OnStratumBandChanged();
 }

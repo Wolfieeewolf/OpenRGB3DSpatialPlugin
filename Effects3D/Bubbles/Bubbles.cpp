@@ -137,12 +137,12 @@ void Bubbles::SetupCustomUI(QWidget* parent)
                                             bubbles_strip_cmap_unfold,
                                             bubbles_strip_cmap_dir,
                                             bubbles_strip_cmap_color_style);
-    outer->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Bubbles::SyncStripColormapFromPanel);
     stratum_panel = new StratumBandPanel(w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    outer->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Bubbles::OnStratumBandChanged);
     OnStratumBandChanged();
     AddWidgetToParent(w, parent);
@@ -274,6 +274,19 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
         }
     }
 
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+
     RGBColor final_color;
     if(bubbles_strip_cmap_on)
     {
@@ -288,6 +301,7 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
                                                  size_m,
                                                  origin,
                                                  rp);
+        pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
         final_color = ResolveStripKernelFinalColor(*this,
                                                    bubbles_strip_cmap_kernel,
@@ -298,7 +312,26 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
     }
     else
     {
-        final_color = GetRainbowMode() ? GetRainbowColor(best_hue) : GetColorAtPosition(0.5f);
+        if(GetRainbowMode())
+        {
+            float hue = ApplySpatialRainbowHue(best_hue,
+                                               std::fmod(best_hue * (1.0f / 360.0f) + 1.0f, 1.0f),
+                                               basis,
+                                               sp,
+                                               map,
+                                               time,
+                                               &grid);
+            float p01 = std::fmod(hue / 360.0f, 1.0f);
+            if(p01 < 0.0f) p01 += 1.0f;
+            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+            final_color = GetRainbowColor(p01 * 360.0f);
+        }
+        else
+        {
+            float p = ApplySpatialPalette01(0.5f, basis, sp, map, time, &grid);
+            p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+            final_color = GetColorAtPosition(p);
+        }
     }
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;

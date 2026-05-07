@@ -39,7 +39,12 @@ inline RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
     if(s == 0)
         return SampleKernelPatternPalette(kernel_id, p, time_sec);
     if(s == 1)
+    {
+        // If there is only one stop (often red), fallback to rainbow so kernel output still varies by pattern.
+        if(!effect.GetRainbowMode() && effect.GetColors().size() <= 1)
+            return effect.GetRainbowColor(std::fmod(p * 360.0f + time_sec * rainbow_time_hue_mul, 360.0f));
         return effect.GetColorAtPosition(p);
+    }
     return effect.GetRainbowColor(std::fmod(p * 360.0f + time_sec * rainbow_time_hue_mul, 360.0f));
 }
 
@@ -112,13 +117,11 @@ inline void StripColormapLoadJson(const nlohmann::json& settings,
                                   int& unfold,
                                   float& dir,
                                   int& color_style,
-                                  bool legacy_rainbow_when_missing_key)
+                                  bool /*legacy_rainbow_when_missing_key*/)
 {
     const std::string k_on = prefix + "_strip_cmap_on";
     if(settings.contains(k_on) && settings[k_on].is_boolean())
         on = settings[k_on].get<bool>();
-    else if(settings.contains(k_on) && settings[k_on].is_number_integer())
-        on = settings[k_on].get<int>() != 0;
     const std::string k_k = prefix + "_strip_cmap_kernel";
     if(settings.contains(k_k) && settings[k_k].is_number_integer())
         kern = std::clamp(settings[k_k].get<int>(), 0, StripShellKernelCount() - 1);
@@ -135,7 +138,7 @@ inline void StripColormapLoadJson(const nlohmann::json& settings,
     if(settings.contains(k_cs) && settings[k_cs].is_number_integer())
         color_style = StripKernelColorStyleClamp(settings[k_cs].get<int>());
     else
-        color_style = legacy_rainbow_when_missing_key ? 2 : 0;
+        color_style = 1;
 }
 
 #endif

@@ -130,7 +130,7 @@ void Complements3D::SetupCustomUI(QWidget* parent)
                                             depth_tone_strip_cmap_unfold,
                                             depth_tone_strip_cmap_dir,
                                             depth_tone_strip_cmap_color_style);
-    vbox->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Complements3D::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
@@ -165,6 +165,20 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
 
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
     float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+    float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = ny;
 
     const float spd = std::max(0.08f, GetScaledSpeed() / 100.0f);
     const float pos = Phase01(time, 10.0f, spd);
@@ -198,6 +212,7 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
                                                  size_m,
                                                  origin,
                                                  rot);
+        pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
         const int kid = StripShellKernelClamp(depth_tone_strip_cmap_kernel);
         RGBColor c = ResolveStripKernelFinalColor(*this,
@@ -219,9 +234,18 @@ RGBColor Complements3D::CalculateColorGrid(float x, float y, float z, float time
     }
 
     if(GetRainbowMode())
-        return Hsv01ToBgr(hue01, 1.0f, v);
+    {
+        float hue = hue01 * 360.0f;
+        hue = ApplySpatialRainbowHue(hue, nz, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f) p01 += 1.0f;
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        return Hsv01ToBgr(p01, 1.0f, v);
+    }
 
-    RGBColor c = GetColorAtPosition(hue01);
+    float p = ApplySpatialPalette01(hue01, basis, sp, map, time, &grid);
+    p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+    RGBColor c = GetColorAtPosition(p);
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);
     int b = (int)((float)((c >> 16) & 0xFF) * v);

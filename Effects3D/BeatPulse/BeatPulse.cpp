@@ -152,13 +152,13 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
                                             beatpulse_strip_cmap_unfold,
                                             beatpulse_strip_cmap_dir,
                                             beatpulse_strip_cmap_color_style);
-    layout->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BeatPulse::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    layout->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BeatPulse::OnStratumBandChanged);
     OnStratumBandChanged();
 }

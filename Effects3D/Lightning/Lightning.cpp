@@ -170,13 +170,13 @@ void Lightning::SetupCustomUI(QWidget* parent)
                                             lightning_strip_cmap_unfold,
                                             lightning_strip_cmap_dir,
                                             lightning_strip_cmap_color_style);
-    vbox->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Lightning::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(outer_w);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    vbox->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Lightning::OnStratumBandChanged);
     OnStratumBandChanged();
 

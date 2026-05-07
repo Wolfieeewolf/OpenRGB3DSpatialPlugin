@@ -267,6 +267,9 @@ public:
 
     /** Set after CreateCommonEffectControls: add per-effect controls here from SetupCustomUI. */
     QWidget* GetCustomSettingsHost() const { return custom_effect_settings_host; }
+    QWidget* GetBandModulationHost() const { return band_modulation_settings_host; }
+    void AddColorPatternWidget(QWidget* widget);
+    void AddBandModulationWidget(QWidget* widget);
 
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
@@ -363,6 +366,8 @@ protected:
     QPushButton*        axis_scale_rot_reset_button;
 
     QWidget*            color_controls_group;
+    QWidget*            color_pattern_settings_host;
+    QWidget*            band_modulation_settings_host;
     QCheckBox*          rainbow_mode_check;
 
     QWidget*            sampler_mapper_group;
@@ -454,6 +459,9 @@ protected:
 
     QWidget*            surfaces_group;
     QWidget*            surfaces_section;
+    QWidget*            colors_patterns_section = nullptr;
+    QWidget*            band_modulation_section = nullptr;
+    QWidget*            effect_specific_section = nullptr;
     QGroupBox*          path_plane_group;
     QComboBox*          path_axis_combo;
     QComboBox*          plane_combo;

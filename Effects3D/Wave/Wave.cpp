@@ -261,13 +261,13 @@ void Wave::SetupCustomUI(QWidget* parent)
                                             wave_strip_cmap_unfold,
                                             wave_strip_cmap_dir,
                                             wave_strip_cmap_color_style);
-    main_layout->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Wave::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(wave_widget);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    main_layout->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Wave::OnStratumBandChanged);
     OnStratumBandChanged();
 

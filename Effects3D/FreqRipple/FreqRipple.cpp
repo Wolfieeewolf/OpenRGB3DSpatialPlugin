@@ -150,13 +150,13 @@ void FreqRipple::SetupCustomUI(QWidget* parent)
                                             freqripple_strip_cmap_unfold,
                                             freqripple_strip_cmap_dir,
                                             freqripple_strip_cmap_color_style);
-    layout->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqRipple::SyncStripColormapFromPanel);
 
     stratum_panel = new StratumBandPanel(parent);
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
-    layout->addWidget(stratum_panel);
+    AddBandModulationWidget(stratum_panel);
     connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqRipple::OnStratumBandChanged);
     OnStratumBandChanged();
 }

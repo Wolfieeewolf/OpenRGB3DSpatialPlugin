@@ -152,7 +152,7 @@ void Sinpulse3D::SetupCustomUI(QWidget* parent)
                                             sinpulse_strip_cmap_unfold,
                                             sinpulse_strip_cmap_dir,
                                             sinpulse_strip_cmap_color_style);
-    vbox->addWidget(strip_cmap_panel);
+    AddColorPatternWidget(strip_cmap_panel);
     connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Sinpulse3D::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
