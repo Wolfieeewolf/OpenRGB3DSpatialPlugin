@@ -10,6 +10,7 @@
 #include "EffectColorPanel.h"
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
+#include "StripKernelColormapPanel.h"
 #include "Colors.h"
 #include "Geometry3DUtils.h"
 #include "GameTelemetryBridge.h"
@@ -281,7 +282,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     fps_slider = motion_pattern_group->fpsSlider();
     fps_label = motion_pattern_group->fpsLabel();
 
-    // Bounds mode is controlled from the global Effect Stack panel.
 
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),
@@ -406,7 +406,6 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
     {
         connect(scale_invert_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
     }
-    // Bounds mode is controlled from the global Effect Stack panel.
     connect(rotation_yaw_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_pitch_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
     connect(rotation_roll_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnRotationChanged);
@@ -625,6 +624,17 @@ void SpatialEffect3D::AddWidgetToParent(QWidget* w, QWidget* container)
 void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
 {
     AddWidgetToParent(widget, color_pattern_settings_host);
+    if(!shared_strip_cmap_panel)
+    {
+        if(auto* panel = qobject_cast<StripKernelColormapPanel*>(widget))
+        {
+            shared_strip_cmap_panel = panel;
+            connect(shared_strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, [this]() {
+                SyncColorControlVisibilityForPatternMode();
+            });
+        }
+    }
+    SyncColorControlVisibilityForPatternMode();
     if(colors_patterns_section)
     {
         colors_patterns_section->setVisible(true);
@@ -640,6 +650,23 @@ void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
     }
 }
 
+void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
+{
+    const bool use_pattern_palette =
+        shared_strip_cmap_panel &&
+        shared_strip_cmap_panel->useStripColormap() &&
+        shared_strip_cmap_panel->colorStyle() == 0;
+
+    if(rainbow_mode_check)
+    {
+        rainbow_mode_check->setVisible(!use_pattern_palette);
+    }
+    if(color_buttons_widget)
+    {
+        color_buttons_widget->setVisible(!use_pattern_palette && !rainbow_mode);
+    }
+}
+
 void SpatialEffect3D::CreateColorControls()
 {
     auto* color_panel = new EffectColorPanel(rainbow_mode);
@@ -649,6 +676,7 @@ void SpatialEffect3D::CreateColorControls()
     color_buttons_widget = color_panel->colorButtonsWidget();
     color_buttons_layout = color_panel->colorButtonsLayout();
     color_pattern_settings_host = color_panel->patternHostWidget();
+    shared_strip_cmap_panel = nullptr;
     add_color_button = color_panel->addColorButton();
     remove_color_button = color_panel->removeColorButton();
     remove_color_button->setEnabled(colors.size() > 1);
@@ -663,6 +691,7 @@ void SpatialEffect3D::CreateColorControls()
     connect(rainbow_mode_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnRainbowModeChanged);
     connect(add_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnAddColorClicked);
     connect(remove_color_button, &QPushButton::clicked, this, &SpatialEffect3D::OnRemoveColorClicked);
+    SyncColorControlVisibilityForPatternMode();
 }
 
 void SpatialEffect3D::CreateColorButton(RGBColor color)
@@ -845,7 +874,7 @@ RGBColor SpatialEffect3D::GetColorAtPosition(float position)
 void SpatialEffect3D::OnRainbowModeChanged()
 {
     rainbow_mode = rainbow_mode_check->isChecked();
-    color_buttons_widget->setVisible(!rainbow_mode);
+    SyncColorControlVisibilityForPatternMode();
     emit ParametersChanged();
 }
 
@@ -1337,7 +1366,6 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         return base_pos01;
     case SpatialMappingMode::SubtleTint:
     {
-        // Keep "Subtle" gentle, but animate slightly so users can see mapping is active.
         const float h = SpatialLayerCore::CompassStratumHueOffsetDegrees(basis, sp, m, 3) * infl;
         const float drift_deg = time * std::max(0.08f, GetScaledFrequency()) * 6.0f * infl;
         const float h_use = h + drift_deg;
@@ -1493,14 +1521,33 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
                                                   float time,
                                                   const GridContext3D& grid) const
 {
+    float p01 = palette01;
+    if(spatial_mapping_mode != SpatialMappingMode::Off)
+    {
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
+        Vector3D origin = GetEffectOriginGrid(grid);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+        p01 = ApplySpatialPalette01(p01, basis, sp, map, time, &grid);
+    }
+
     if(effect_voxel_drive_mode == VoxelDriveMode::Off)
     {
-        return palette01;
+        return p01;
     }
     const float infl = std::clamp((float)effect_sampler_influence_centi / 100.0f, 0.0f, 2.5f);
     if(infl <= 1e-5f)
     {
-        return palette01;
+        return p01;
     }
     const float detail_gate = std::clamp(GetScaledDetail(), 0.05f, 1.f);
     float drive = 0.0f;
@@ -1508,7 +1555,7 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
     switch(effect_voxel_drive_mode)
     {
     case VoxelDriveMode::Off:
-        return palette01;
+        return p01;
     case VoxelDriveMode::LumaField:
     {
         RGBColor vx{};
@@ -1516,7 +1563,7 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
         SampleVoxelRgbAtRoom(x, y, z, grid, vx, got);
         if(!got)
         {
-            return palette01;
+            return p01;
         }
         const float r = (float)(vx & 0xFF);
         const float g = (float)((vx >> 8) & 0xFF);
@@ -1551,7 +1598,7 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
         {
             drive += 1.0f;
         }
-        float p = std::fmod(palette01 + 0.55f * detail_gate * infl * drive, 1.0f);
+        float p = std::fmod(p01 + 0.55f * detail_gate * infl * drive, 1.0f);
         if(p < 0.0f)
         {
             p += 1.0f;
@@ -1560,7 +1607,7 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
     }
     }
     const float mix_strength = 0.45f * detail_gate * infl;
-    float p = std::fmod(palette01 + mix_strength * drive, 1.0f);
+    float p = std::fmod(p01 + mix_strength * drive, 1.0f);
     if(p < 0.0f)
     {
         p += 1.0f;
@@ -1596,7 +1643,6 @@ bool SpatialEffect3D::UseWorldGridBounds() const
 {
     if(effect_bounds_mode == (int)BOUNDS_MODE_TARGET_ZONE)
     {
-        // Match bounds space to the effect sample space so origin/center math stays coherent.
         return RequiresWorldSpaceCoordinates();
     }
     return RequiresWorldSpaceGridBounds();
@@ -1950,7 +1996,6 @@ void SpatialEffect3D::OnParameterChanged()
     {
         scale_inverted = scale_invert_check->isChecked();
     }
-    // effect_bounds_mode is managed externally (Effect Stack panel).
 
     if(fps_slider && fps_label)
     {
@@ -2594,7 +2639,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         QSignalBlocker blocker(scale_invert_check);
         scale_invert_check->setChecked(scale_inverted);
     }
-    // Bounds mode is controlled from the global Effect Stack panel.
 
     if(fps_slider)
     {

@@ -20,6 +20,8 @@ enum class UnfoldMode : int
     Manhattan01,
     /** Strip index follows the host effect’s phase input only (no 3D axis unfold). */
     EffectPhaseOnly,
+    /** Static room projection using the angle control (no kernel time/phase animation). */
+    StaticRoomPlane,
     COUNT
 };
 

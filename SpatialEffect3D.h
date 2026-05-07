@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 class EffectGeometryPanel;
+class StripKernelColormapPanel;
 
 /*
  * Effect sampling volume in the same scene convention as GridSpaceUtils / LEDViewport3D:
@@ -135,9 +136,6 @@ inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normali
     std::sort(extents, extents + 3);
     const float med = extents[1];
     const float max_e = extents[2];
-    // Narrow zones (e.g. strips along one axis): the median half-axis can shrink toward zero even when
-    // the long axis still spans usable distance. Floor by a fraction of the dominant half-axis so
-    // radial falloff, rings, and depth cues stay tunable on sparse layouts and target-zone bounds.
     constexpr float kDominantAxisFraction = 0.2f;
     return std::max(med, kDominantAxisFraction * max_e);
 }
@@ -368,6 +366,7 @@ protected:
     QWidget*            color_controls_group;
     QWidget*            color_pattern_settings_host;
     QWidget*            band_modulation_settings_host;
+    StripKernelColormapPanel* shared_strip_cmap_panel = nullptr;
     QCheckBox*          rainbow_mode_check;
 
     QWidget*            sampler_mapper_group;
@@ -472,6 +471,7 @@ protected:
     bool                use_custom_reference;
 
     void AddWidgetToParent(QWidget* w, QWidget* container);
+    void SyncColorControlVisibilityForPatternMode();
 
     Vector3D GetEffectOrigin() const;
     RGBColor GetRainbowColor(float hue);

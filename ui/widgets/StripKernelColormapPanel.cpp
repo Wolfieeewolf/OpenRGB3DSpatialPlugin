@@ -22,7 +22,8 @@ const char* StripKernelColormapPanel::UnfoldLabel(int m)
     case 4: return "Radial XZ";
     case 5: return "Diagonal x+y+z";
     case 6: return "Manhattan";
-    case 7: return "Effect phase (no spatial unfold)";
+    case 7: return "Effect animation only (no room projection)";
+    case 8: return "Static room projection (angle)";
     default: return "Along X";
     }
 }
@@ -46,10 +47,9 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     color_style_combo = new QComboBox();
     color_style_combo->addItem("Pattern palette");
     color_style_combo->addItem("Color stops (from Colors)");
-    color_style_combo->addItem("Rainbow (from Colors)");
     color_style_combo->setCurrentIndex(1);
     color_style_combo->setToolTip(
-        "Pattern palette = each kernel's default colors. Effect color stops = your palette. Rainbow = spectrum.");
+        "Pattern palette = each kernel's default colors. Color stops (from Colors) uses your color stops or rainbow toggle.");
     g->addWidget(color_style_combo, row, 1, 1, 2);
     row++;
     g->addWidget(new QLabel("Pattern shape:"), row, 0);
@@ -67,8 +67,8 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     g->addWidget(new QLabel("Pattern density:"), row, 0);
     repeats_slider = new QSlider(Qt::Horizontal);
     repeats_slider->setRange(1, 40);
-    repeats_slider->setValue(4);
-    repeats_label = new QLabel(QStringLiteral("4"));
+    repeats_slider->setValue(1);
+    repeats_label = new QLabel(QStringLiteral("1"));
     repeats_label->setMinimumWidth(24);
     g->addWidget(repeats_slider, row, 1);
     g->addWidget(repeats_label, row, 2);
@@ -120,11 +120,17 @@ float StripKernelColormapPanel::directionDeg() const
 
 int StripKernelColormapPanel::colorStyle() const
 {
-    return color_style_combo ? std::clamp(color_style_combo->currentIndex(), 0, 2) : 1;
+    return color_style_combo ? std::clamp(color_style_combo->currentIndex(), 0, 1) : 1;
 }
 
 void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float rep, int unfold, float dir_deg, int color_style)
 {
+    if(!on)
+    {
+        rep = 1.0f;
+        unfold = (int)StripPatternSurface::UnfoldMode::EffectPhaseOnly;
+    }
+
     if(source_combo)
     {
         QSignalBlocker b(source_combo);
@@ -133,7 +139,7 @@ void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float 
     if(color_style_combo)
     {
         QSignalBlocker b(color_style_combo);
-        color_style_combo->setCurrentIndex(std::clamp(color_style, 0, 2));
+        color_style_combo->setCurrentIndex(std::clamp(color_style, 0, 1));
     }
     if(kernel_combo)
     {
@@ -166,6 +172,14 @@ void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float 
 void StripKernelColormapPanel::refreshSecondaryEnabled()
 {
     bool on = useStripColormap();
+    const int unfold_idx = unfold_combo ? unfold_combo->currentIndex() : 0;
+    const bool disable_angle =
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::EffectPhaseOnly ||
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::AlongX ||
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::AlongY ||
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::AlongZ ||
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::DiagonalXYZ ||
+        unfold_idx == (int)StripPatternSurface::UnfoldMode::Manhattan01;
     if(color_style_combo)
         color_style_combo->setEnabled(on);
     if(kernel_combo)
@@ -177,9 +191,9 @@ void StripKernelColormapPanel::refreshSecondaryEnabled()
     if(repeats_label)
         repeats_label->setEnabled(on);
     if(dir_slider)
-        dir_slider->setEnabled(on);
+        dir_slider->setEnabled(on && !disable_angle);
     if(dir_label)
-        dir_label->setEnabled(on);
+        dir_label->setEnabled(on && !disable_angle);
 }
 
 void StripKernelColormapPanel::onSourceChanged(int)

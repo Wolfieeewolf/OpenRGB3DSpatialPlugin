@@ -74,6 +74,21 @@ float Hash01(float x)
     float f = std::sin(x * 12.9898f) * 43758.547f;
     return f - std::floor(f);
 }
+
+RGBColor TonePairByKernel(int kernel_id, float p01)
+{
+    static const RGBColor kPairs[][2] = {
+        {PackBGR(24, 120, 220), PackBGR(180, 230, 255)}, // blue sky
+        {PackBGR(80, 30, 160), PackBGR(220, 140, 255)},  // violet neon
+        {PackBGR(0, 130, 110), PackBGR(140, 230, 180)},  // teal mint
+        {PackBGR(180, 70, 20), PackBGR(255, 210, 120)},  // amber
+        {PackBGR(140, 20, 70), PackBGR(255, 150, 200)},  // magenta rose
+        {PackBGR(40, 90, 170), PackBGR(180, 200, 255)},  // steel blue
+    };
+    constexpr int kCount = (int)(sizeof(kPairs) / sizeof(kPairs[0]));
+    int idx = StripShellKernelClamp(kernel_id) % kCount;
+    return LerpBGR(kPairs[idx][0], kPairs[idx][1], p01);
+}
 } // namespace
 
 RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
@@ -128,8 +143,8 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     case StripShellKernel::GlitterBurst:
     case StripShellKernel::Confetti:
     {
-        float hue = std::fmod(p01 * 360.0f + Hash01(p01 * 17.3f + time_sec) * 80.0f, 360.0f);
-        return HsvToBgr(hue, 0.85f, 0.2f + 0.8f * p01);
+        float hue = std::fmod(p01 * 220.0f + Hash01(p01 * 17.3f + time_sec) * 45.0f, 360.0f);
+        return HsvToBgr(hue, 0.65f, 0.25f + 0.7f * p01);
     }
     case StripShellKernel::TricolorChase:
     {
@@ -165,7 +180,7 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     case StripShellKernel::SpectrumWaves:
     case StripShellKernel::ColorWave:
     case StripShellKernel::PlasmaSinProduct:
-        return HsvToBgr(p01 * 360.0f + time_sec * 25.0f, 0.95f, 1.0f);
+        return HsvToBgr(p01 * 240.0f + time_sec * 14.0f, 0.72f, 0.92f);
     case StripShellKernel::HueBounceDot:
     case StripShellKernel::DotBounce:
     {
@@ -176,6 +191,6 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     case StripShellKernel::BpmPulse:
         return LerpBGR(PackBGR(80, 0, 120), PackBGR(255, 220, 60), p01);
     default:
-        return HsvToBgr(p01 * 360.0f + time_sec * 8.0f, 0.92f, 1.0f);
+        return TonePairByKernel(kernel_id, p01);
     }
 }

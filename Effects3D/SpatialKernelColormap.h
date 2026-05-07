@@ -16,12 +16,11 @@ enum class StripKernelColorStyle : int
 {
     PatternPalette = 0,
     EffectColors = 1,
-    Rainbow = 2,
 };
 
 inline int StripKernelColorStyleClamp(int v)
 {
-    return std::clamp(v, 0, 2);
+    return std::clamp(v, 0, 1);
 }
 
 inline RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
@@ -29,7 +28,7 @@ inline RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
                                             float palette01,
                                             int color_style,
                                             float time_sec,
-                                            float rainbow_time_hue_mul)
+                                            float /*rainbow_time_hue_mul*/)
 {
     const int s = StripKernelColorStyleClamp(color_style);
     float p = std::fmod(palette01, 1.0f);
@@ -38,14 +37,7 @@ inline RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
     kernel_id = StripShellKernelClamp(kernel_id);
     if(s == 0)
         return SampleKernelPatternPalette(kernel_id, p, time_sec);
-    if(s == 1)
-    {
-        // If there is only one stop (often red), fallback to rainbow so kernel output still varies by pattern.
-        if(!effect.GetRainbowMode() && effect.GetColors().size() <= 1)
-            return effect.GetRainbowColor(std::fmod(p * 360.0f + time_sec * rainbow_time_hue_mul, 360.0f));
-        return effect.GetColorAtPosition(p);
-    }
-    return effect.GetRainbowColor(std::fmod(p * 360.0f + time_sec * rainbow_time_hue_mul, 360.0f));
+    return effect.GetColorAtPosition(p);
 }
 
 inline float SampleStripKernelPalette01(int kernel_id,
@@ -74,21 +66,29 @@ inline float SampleStripKernelPalette01(int kernel_id,
     float lz = (rot.z - origin.z) / sd;
     auto mode = static_cast<StripPatternSurface::UnfoldMode>(
         std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
+    float phase_eff = phase01;
+    float time_eff = time_sec;
     float s01;
     if(mode == StripPatternSurface::UnfoldMode::EffectPhaseOnly)
     {
-        s01 = std::fmod(phase01, 1.0f);
+        s01 = std::fmod(phase01 + time_sec * 0.12f, 1.0f);
         if(s01 < 0.0f)
         {
             s01 += 1.0f;
         }
         s01 = std::clamp(s01, 0.0f, 1.0f);
     }
+    else if(mode == StripPatternSurface::UnfoldMode::StaticRoomPlane)
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, StripPatternSurface::UnfoldMode::PlaneXZ, dir_deg);
+        phase_eff = 0.0f;
+        time_eff = 0.0f;
+    }
     else
     {
         s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
     }
-    float k = EvalStripShellKernel(kernel_id, s01, phase01, kernel_rep, time_sec);
+    float k = EvalStripShellKernel(kernel_id, s01, phase_eff, kernel_rep, time_eff);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }
 
