@@ -407,7 +407,7 @@ void Plasma::LoadSettings(const nlohmann::json& settings)
     else if(settings.contains("plasma_strip_cmap_on") && settings["plasma_strip_cmap_on"].is_number_integer())
         plasma_strip_cmap_on = settings["plasma_strip_cmap_on"].get<int>() != 0;
     if(settings.contains("plasma_strip_cmap_kernel") && settings["plasma_strip_cmap_kernel"].is_number_integer())
-        plasma_strip_cmap_kernel = std::clamp(settings["plasma_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+        plasma_strip_cmap_kernel = std::clamp(settings["plasma_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("plasma_strip_cmap_rep") && settings["plasma_strip_cmap_rep"].is_number())
         plasma_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["plasma_strip_cmap_rep"].get<float>()));
     if(settings.contains("plasma_strip_cmap_unfold") && settings["plasma_strip_cmap_unfold"].is_number_integer())

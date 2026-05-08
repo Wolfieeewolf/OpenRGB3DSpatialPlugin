@@ -342,7 +342,7 @@ void Tornado::LoadSettings(const nlohmann::json& settings)
     else if(settings.contains("tornado_strip_cmap_on") && settings["tornado_strip_cmap_on"].is_number_integer())
         tornado_strip_cmap_on = settings["tornado_strip_cmap_on"].get<int>() != 0;
     if(settings.contains("tornado_strip_cmap_kernel") && settings["tornado_strip_cmap_kernel"].is_number_integer())
-        tornado_strip_cmap_kernel = std::clamp(settings["tornado_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+        tornado_strip_cmap_kernel = std::clamp(settings["tornado_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("tornado_strip_cmap_rep") && settings["tornado_strip_cmap_rep"].is_number())
         tornado_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["tornado_strip_cmap_rep"].get<float>()));
     if(settings.contains("tornado_strip_cmap_unfold") && settings["tornado_strip_cmap_unfold"].is_number_integer())

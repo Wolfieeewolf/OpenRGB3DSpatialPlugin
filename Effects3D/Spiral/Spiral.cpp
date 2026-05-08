@@ -620,7 +620,7 @@ void Spiral::LoadSettings(const nlohmann::json& settings)
     else if(settings.contains("spiral_strip_cmap_on") && settings["spiral_strip_cmap_on"].is_number_integer())
         spiral_strip_cmap_on = settings["spiral_strip_cmap_on"].get<int>() != 0;
     if(settings.contains("spiral_strip_cmap_kernel") && settings["spiral_strip_cmap_kernel"].is_number_integer())
-        spiral_strip_cmap_kernel = std::clamp(settings["spiral_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+        spiral_strip_cmap_kernel = std::clamp(settings["spiral_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("spiral_strip_cmap_rep") && settings["spiral_strip_cmap_rep"].is_number())
         spiral_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["spiral_strip_cmap_rep"].get<float>()));
     if(settings.contains("spiral_strip_cmap_unfold") && settings["spiral_strip_cmap_unfold"].is_number_integer())

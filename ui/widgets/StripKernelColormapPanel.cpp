@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "Game/StripPatternSurface.h"
 #include <QComboBox>
 #include <QGridLayout>
@@ -54,8 +54,8 @@ StripKernelColormapPanel::StripKernelColormapPanel(QWidget* parent) : QWidget(pa
     row++;
     g->addWidget(new QLabel("Pattern shape:"), row, 0);
     kernel_combo = new QComboBox();
-    for(int i = 0; i < StripShellKernelCount(); i++)
-        kernel_combo->addItem(StripShellKernelDisplayName(i));
+    for(int i = 0; i < SpatialPatternKernelCount(); i++)
+        kernel_combo->addItem(SpatialPatternKernelDisplayName(i));
     g->addWidget(kernel_combo, row, 1, 1, 2);
     row++;
     g->addWidget(new QLabel("Pattern projection:"), row, 0);
@@ -100,7 +100,7 @@ bool StripKernelColormapPanel::useStripColormap() const
 
 int StripKernelColormapPanel::kernelId() const
 {
-    return kernel_combo ? std::clamp(kernel_combo->currentIndex(), 0, StripShellKernelCount() - 1) : 0;
+    return kernel_combo ? std::clamp(kernel_combo->currentIndex(), 0, SpatialPatternKernelCount() - 1) : 0;
 }
 
 float StripKernelColormapPanel::kernelRepeats() const
@@ -144,7 +144,7 @@ void StripKernelColormapPanel::mirrorStateFromEffect(bool on, int kernel, float 
     if(kernel_combo)
     {
         QSignalBlocker b(kernel_combo);
-        kernel_combo->setCurrentIndex(std::clamp(kernel, 0, StripShellKernelCount() - 1));
+        kernel_combo->setCurrentIndex(std::clamp(kernel, 0, SpatialPatternKernelCount() - 1));
     }
     if(unfold_combo)
     {

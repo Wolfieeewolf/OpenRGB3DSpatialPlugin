@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "Honeycomb3D.h"
+#include "HexLattice3D.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(Honeycomb3D);
+REGISTER_EFFECT_3D(HexLattice3D);
 
 namespace
 {
@@ -33,7 +33,7 @@ inline float Triangle01(float x01)
 }
 } // namespace
 
-RGBColor Honeycomb3D::Hsv01ToBgr(float h, float s, float v)
+RGBColor HexLattice3D::Hsv01ToBgr(float h, float s, float v)
 {
     h = std::fmod(h, 1.0f);
     if(h < 0.0f)
@@ -66,24 +66,24 @@ RGBColor Honeycomb3D::Hsv01ToBgr(float h, float s, float v)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
-Honeycomb3D::Honeycomb3D(QWidget* parent) : SpatialEffect3D(parent)
+HexLattice3D::HexLattice3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(35);
     SetFrequency(12);
 }
 
-Honeycomb3D::~Honeycomb3D() = default;
+HexLattice3D::~HexLattice3D() = default;
 
-EffectInfo3D Honeycomb3D::GetEffectInfo()
+EffectInfo3D HexLattice3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Honeycomb 3D";
+    info.effect_name = "Hex Lattice 3D";
     info.effect_description =
         "Hex lattice 3D field. Blends sin/cos in XYZ with animated zoom and triangular hue shaping.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_HONEYCOMB_3D;
+    info.effect_type = SPATIAL_EFFECT_HEX_LATTICE_3D;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -104,40 +104,40 @@ EffectInfo3D Honeycomb3D::GetEffectInfo()
     return info;
 }
 
-void Honeycomb3D::SetupCustomUI(QWidget* parent)
+void HexLattice3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(honeycomb_strip_cmap_on,
-                                            honeycomb_strip_cmap_kernel,
-                                            honeycomb_strip_cmap_rep,
-                                            honeycomb_strip_cmap_unfold,
-                                            honeycomb_strip_cmap_dir,
-                                            honeycomb_strip_cmap_color_style);
+    strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
+                                            hexlattice_strip_cmap_kernel,
+                                            hexlattice_strip_cmap_rep,
+                                            hexlattice_strip_cmap_unfold,
+                                            hexlattice_strip_cmap_dir,
+                                            hexlattice_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Honeycomb3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &HexLattice3D::SyncStripColormapFromPanel);
     AddWidgetToParent(w, parent);
 }
 
-void Honeycomb3D::SyncStripColormapFromPanel()
+void HexLattice3D::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
-    honeycomb_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    honeycomb_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    honeycomb_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    honeycomb_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    honeycomb_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    honeycomb_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    hexlattice_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    hexlattice_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    hexlattice_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    hexlattice_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    hexlattice_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    hexlattice_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
-void Honeycomb3D::UpdateParams(SpatialEffectParams& params)
+void HexLattice3D::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_HONEYCOMB_3D;
+    params.type = SPATIAL_EFFECT_HEX_LATTICE_3D;
 }
 
-RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor HexLattice3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -170,12 +170,12 @@ RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, 
 
     RGBColor c = 0x00000000;
     const float h01 = h - std::floor(h);
-    if(honeycomb_strip_cmap_on)
+    if(hexlattice_strip_cmap_on)
     {
-        float p01 = SampleStripKernelPalette01(honeycomb_strip_cmap_kernel,
-                                               honeycomb_strip_cmap_rep,
-                                               honeycomb_strip_cmap_unfold,
-                                               honeycomb_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(hexlattice_strip_cmap_kernel,
+                                               hexlattice_strip_cmap_rep,
+                                               hexlattice_strip_cmap_unfold,
+                                               hexlattice_strip_cmap_dir,
                                                h01,
                                                time,
                                                grid,
@@ -184,9 +184,9 @@ RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, 
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         StripShellKernelClamp(honeycomb_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(hexlattice_strip_cmap_kernel),
                                          p01,
-                                         honeycomb_strip_cmap_color_style,
+                                         hexlattice_strip_cmap_color_style,
                                          time,
                                          rate * 12.0f);
     }
@@ -208,39 +208,39 @@ RGBColor Honeycomb3D::CalculateColorGrid(float x, float y, float z, float time, 
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json Honeycomb3D::SaveSettings() const
+nlohmann::json HexLattice3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     StripColormapSaveJson(j,
-                          "honeycomb",
-                          honeycomb_strip_cmap_on,
-                          honeycomb_strip_cmap_kernel,
-                          honeycomb_strip_cmap_rep,
-                          honeycomb_strip_cmap_unfold,
-                          honeycomb_strip_cmap_dir,
-                          honeycomb_strip_cmap_color_style);
+                          "hexlattice",
+                          hexlattice_strip_cmap_on,
+                          hexlattice_strip_cmap_kernel,
+                          hexlattice_strip_cmap_rep,
+                          hexlattice_strip_cmap_unfold,
+                          hexlattice_strip_cmap_dir,
+                          hexlattice_strip_cmap_color_style);
     return j;
 }
 
-void Honeycomb3D::LoadSettings(const nlohmann::json& settings)
+void HexLattice3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     StripColormapLoadJson(settings,
-                          "honeycomb",
-                          honeycomb_strip_cmap_on,
-                          honeycomb_strip_cmap_kernel,
-                          honeycomb_strip_cmap_rep,
-                          honeycomb_strip_cmap_unfold,
-                          honeycomb_strip_cmap_dir,
-                          honeycomb_strip_cmap_color_style,
+                          "hexlattice",
+                          hexlattice_strip_cmap_on,
+                          hexlattice_strip_cmap_kernel,
+                          hexlattice_strip_cmap_rep,
+                          hexlattice_strip_cmap_unfold,
+                          hexlattice_strip_cmap_dir,
+                          hexlattice_strip_cmap_color_style,
                           GetRainbowMode());
     if(strip_cmap_panel)
     {
-        strip_cmap_panel->mirrorStateFromEffect(honeycomb_strip_cmap_on,
-                                                honeycomb_strip_cmap_kernel,
-                                                honeycomb_strip_cmap_rep,
-                                                honeycomb_strip_cmap_unfold,
-                                                honeycomb_strip_cmap_dir,
-                                                honeycomb_strip_cmap_color_style);
+        strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
+                                                hexlattice_strip_cmap_kernel,
+                                                hexlattice_strip_cmap_rep,
+                                                hexlattice_strip_cmap_unfold,
+                                                hexlattice_strip_cmap_dir,
+                                                hexlattice_strip_cmap_color_style);
     }
 }

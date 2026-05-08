@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "Sinpulse3D.h"
+#include "HarmonicPulse3D.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include <QColor>
 #include <QGridLayout>
 #include <QLabel>
@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(Sinpulse3D);
+REGISTER_EFFECT_3D(HarmonicPulse3D);
 
 namespace
 {
@@ -26,7 +26,7 @@ inline float Phase01(float time_sec, float cycle_seconds, float speed_mul)
 }
 } // namespace
 
-RGBColor Sinpulse3D::Hsv01ToBgr(float h, float s, float v)
+RGBColor HarmonicPulse3D::Hsv01ToBgr(float h, float s, float v)
 {
     h = std::fmod(h, 1.0f);
     if(h < 0.0f)
@@ -81,24 +81,24 @@ RGBColor Sinpulse3D::Hsv01ToBgr(float h, float s, float v)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
-Sinpulse3D::Sinpulse3D(QWidget* parent) : SpatialEffect3D(parent)
+HarmonicPulse3D::HarmonicPulse3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetFrequency(55);
     SetRainbowMode(false);
 }
 
-Sinpulse3D::~Sinpulse3D() = default;
+HarmonicPulse3D::~HarmonicPulse3D() = default;
 
-EffectInfo3D Sinpulse3D::GetEffectInfo()
+EffectInfo3D HarmonicPulse3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Sinpulse 3D";
+    info.effect_name = "Harmonic Pulse 3D";
     info.effect_description =
         "Harmonic 3D pulse: interference of sin/cos on normalized x,y,z with a breathing zoom "
         "(1 + wave·k), hue from the blend, brightness (h³)/2. Global speed/frequency scale motion.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_SINPULSE_3D;
+    info.effect_type = SPATIAL_EFFECT_HARMONIC_PULSE_3D;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -119,7 +119,7 @@ EffectInfo3D Sinpulse3D::GetEffectInfo()
     return info;
 }
 
-void Sinpulse3D::SetupCustomUI(QWidget* parent)
+void HarmonicPulse3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* vbox = new QVBoxLayout(w);
@@ -146,37 +146,37 @@ void Sinpulse3D::SetupCustomUI(QWidget* parent)
     vbox->addLayout(g);
 
     strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(sinpulse_strip_cmap_on,
-                                            sinpulse_strip_cmap_kernel,
-                                            sinpulse_strip_cmap_rep,
-                                            sinpulse_strip_cmap_unfold,
-                                            sinpulse_strip_cmap_dir,
-                                            sinpulse_strip_cmap_color_style);
+    strip_cmap_panel->mirrorStateFromEffect(harmonic_strip_cmap_on,
+                                            harmonic_strip_cmap_kernel,
+                                            harmonic_strip_cmap_rep,
+                                            harmonic_strip_cmap_unfold,
+                                            harmonic_strip_cmap_dir,
+                                            harmonic_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Sinpulse3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &HarmonicPulse3D::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void Sinpulse3D::SyncStripColormapFromPanel()
+void HarmonicPulse3D::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
-    sinpulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    sinpulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    sinpulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    sinpulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    sinpulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    sinpulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    harmonic_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    harmonic_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    harmonic_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    harmonic_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    harmonic_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    harmonic_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
-void Sinpulse3D::UpdateParams(SpatialEffectParams& params)
+void HarmonicPulse3D::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_SINPULSE_3D;
+    params.type = SPATIAL_EFFECT_HARMONIC_PULSE_3D;
 }
 
-RGBColor Sinpulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor HarmonicPulse3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
@@ -214,15 +214,15 @@ RGBColor Sinpulse3D::CalculateColorGrid(float x, float y, float z, float time, c
 
     const float rainbow_rate = rate * 12.0f;
 
-    if(sinpulse_strip_cmap_on)
+    if(harmonic_strip_cmap_on)
     {
         const float size_m = GetNormalizedSize();
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.35f + time * rainbow_rate * 0.01f + h01 * 0.2f + 1.f, 1.f);
-        float pal01 = SampleStripKernelPalette01(sinpulse_strip_cmap_kernel,
-                                                 sinpulse_strip_cmap_rep,
-                                                 sinpulse_strip_cmap_unfold,
-                                                 sinpulse_strip_cmap_dir,
+        float pal01 = SampleStripKernelPalette01(harmonic_strip_cmap_kernel,
+                                                 harmonic_strip_cmap_rep,
+                                                 harmonic_strip_cmap_unfold,
+                                                 harmonic_strip_cmap_dir,
                                                  ph01,
                                                  time,
                                                  grid,
@@ -230,11 +230,11 @@ RGBColor Sinpulse3D::CalculateColorGrid(float x, float y, float z, float time, c
                                                  origin,
                                                  rot);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        const int kid = StripShellKernelClamp(sinpulse_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(harmonic_strip_cmap_kernel);
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
                                                   std::clamp(pal01, 0.0f, 1.0f),
-                                                  sinpulse_strip_cmap_color_style,
+                                                  harmonic_strip_cmap_color_style,
                                                   time,
                                                   rainbow_rate * 0.02f);
         const int cr = (int)(c & 0xFF);
@@ -266,45 +266,45 @@ RGBColor Sinpulse3D::CalculateColorGrid(float x, float y, float z, float time, c
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json Sinpulse3D::SaveSettings() const
+nlohmann::json HarmonicPulse3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["sinpulse_zoom_wobble"] = zoom_wobble_strength;
+    j["harmonic_zoom_wobble"] = zoom_wobble_strength;
     StripColormapSaveJson(j,
-                          "sinpulse",
-                          sinpulse_strip_cmap_on,
-                          sinpulse_strip_cmap_kernel,
-                          sinpulse_strip_cmap_rep,
-                          sinpulse_strip_cmap_unfold,
-                          sinpulse_strip_cmap_dir,
-                          sinpulse_strip_cmap_color_style);
+                          "harmonic",
+                          harmonic_strip_cmap_on,
+                          harmonic_strip_cmap_kernel,
+                          harmonic_strip_cmap_rep,
+                          harmonic_strip_cmap_unfold,
+                          harmonic_strip_cmap_dir,
+                          harmonic_strip_cmap_color_style);
     return j;
 }
 
-void Sinpulse3D::LoadSettings(const nlohmann::json& settings)
+void HarmonicPulse3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("sinpulse_zoom_wobble") && settings["sinpulse_zoom_wobble"].is_number())
+    if(settings.contains("harmonic_zoom_wobble") && settings["harmonic_zoom_wobble"].is_number())
         zoom_wobble_strength =
-            std::clamp(settings["sinpulse_zoom_wobble"].get<float>(), 0.05f, 8.0f);
+            std::clamp(settings["harmonic_zoom_wobble"].get<float>(), 0.05f, 8.0f);
 
     StripColormapLoadJson(settings,
-                          "sinpulse",
-                          sinpulse_strip_cmap_on,
-                          sinpulse_strip_cmap_kernel,
-                          sinpulse_strip_cmap_rep,
-                          sinpulse_strip_cmap_unfold,
-                          sinpulse_strip_cmap_dir,
-                          sinpulse_strip_cmap_color_style,
+                          "harmonic",
+                          harmonic_strip_cmap_on,
+                          harmonic_strip_cmap_kernel,
+                          harmonic_strip_cmap_rep,
+                          harmonic_strip_cmap_unfold,
+                          harmonic_strip_cmap_dir,
+                          harmonic_strip_cmap_color_style,
                           GetRainbowMode());
     if(strip_cmap_panel)
     {
-        strip_cmap_panel->mirrorStateFromEffect(sinpulse_strip_cmap_on,
-                                                sinpulse_strip_cmap_kernel,
-                                                sinpulse_strip_cmap_rep,
-                                                sinpulse_strip_cmap_unfold,
-                                                sinpulse_strip_cmap_dir,
-                                                sinpulse_strip_cmap_color_style);
+        strip_cmap_panel->mirrorStateFromEffect(harmonic_strip_cmap_on,
+                                                harmonic_strip_cmap_kernel,
+                                                harmonic_strip_cmap_rep,
+                                                harmonic_strip_cmap_unfold,
+                                                harmonic_strip_cmap_dir,
+                                                harmonic_strip_cmap_color_style);
     }
     if(wobble_slider)
     {

@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef STRIPSHELLPATTERN_H
-#define STRIPSHELLPATTERN_H
+#ifndef SHELLPATTERN3D_H
+#define SHELLPATTERN3D_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 #include "Game/StripPatternSurface.h"
-#include "StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 class StratumBandPanel;
 class QComboBox;
 class QSlider;
 class QLabel;
 
-class StripShellPattern : public SpatialEffect3D
+class ShellPattern3D : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit StripShellPattern(QWidget* parent = nullptr);
-    ~StripShellPattern() override;
+    explicit ShellPattern3D(QWidget* parent = nullptr);
+    ~ShellPattern3D() override;
 
-    EFFECT_REGISTERER_3D("StripShellPattern", "Strip Shell Pattern", "Spatial", []() { return new StripShellPattern; });
+    EFFECT_REGISTERER_3D("ShellPattern3D", "Shell Pattern 3D", "Spatial", []() { return new ShellPattern3D; });
 
-    static std::string const ClassName() { return "StripShellPattern"; }
-    static std::string const UIName() { return "Strip Shell Pattern"; }
+    static std::string const ClassName() { return "ShellPattern3D"; }
+    static std::string const UIName() { return "Shell Pattern 3D"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

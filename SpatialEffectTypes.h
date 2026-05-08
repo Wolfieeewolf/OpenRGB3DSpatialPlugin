@@ -26,22 +26,22 @@ enum SpatialEffectType
     SPATIAL_EFFECT_SKY_LIGHTNING    = 13,
     SPATIAL_EFFECT_TEXTURE_PROJECTION = 14,
     SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE = 15,
-    /** Virtual 1D strip unfolded through 3D (shell or extruded fill); host for strip/matrix kernels. */
-    SPATIAL_EFFECT_STRIP_SHELL_PATTERN = 16,
+    /** 1D path unfolded through 3D (shell or extruded fill); host for spatial pattern kernels. */
+    SPATIAL_EFFECT_SHELL_PATTERN_3D = 16,
     /** Rotating spotlight cones in normalized volume (mapped-cube style 3D). */
     SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS = 17,
-    /** 3D sin/cos pulse field: hue from interference, value from h³/2. */
-    SPATIAL_EFFECT_SINPULSE_3D = 18,
+    /** 3D harmonic pulse field: hue from interference, value from h³/2. */
+    SPATIAL_EFFECT_HARMONIC_PULSE_3D = 18,
     /** Bouncing orbs: independent balls with wall-reflect vectors in normalized room coordinates. */
     SPATIAL_EFFECT_BOUNCER_3D = 19,
     /** Hex lattice field with animated zoom and triangular hue shaping. */
-    SPATIAL_EFFECT_HONEYCOMB_3D = 20,
-    /** Complementary hue gradient along room depth with center dim. (21–22 unused: removed axis sweep/octants.) */
-    SPATIAL_EFFECT_COMPLEMENTS_3D = 23,
-    /** Fast pulse field from animated XYZ sinusoid mix. */
-    SPATIAL_EFFECT_FAST_PULSE_3D = 24,
-    /** Integer XOR-derived 3D interference pattern. */
-    SPATIAL_EFFECT_XORCERY_3D = 25,
+    SPATIAL_EFFECT_HEX_LATTICE_3D = 20,
+    /** Depth-graded tone steps along room depth with center dim. (21–22 unused: removed axis sweep/octants.) */
+    SPATIAL_EFFECT_DEPTH_TONE_3D = 23,
+    /** High-contrast pulse field from animated XYZ sinusoid mix. */
+    SPATIAL_EFFECT_SHARP_PULSE_3D = 24,
+    /** Integer XOR-derived 3D interference field. */
+    SPATIAL_EFFECT_XOR_FIELD_3D = 25,
 };
 
 enum ReferencePointType

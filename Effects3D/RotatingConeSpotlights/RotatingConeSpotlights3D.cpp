@@ -306,7 +306,7 @@ RGBColor RotatingConeSpotlights3D::CalculateColorGrid(float x, float y, float z,
                                                  origin,
                                                  rot);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        const int kid = StripShellKernelClamp(cones_spot_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(cones_spot_strip_cmap_kernel);
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
                                                   std::clamp(pal01, 0.0f, 1.0f),

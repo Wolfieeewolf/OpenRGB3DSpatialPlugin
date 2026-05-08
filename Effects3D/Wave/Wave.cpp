@@ -688,7 +688,7 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     else if(settings.contains("wave_strip_cmap_on") && settings["wave_strip_cmap_on"].is_number_integer())
         wave_strip_cmap_on = settings["wave_strip_cmap_on"].get<int>() != 0;
     if(settings.contains("wave_strip_cmap_kernel") && settings["wave_strip_cmap_kernel"].is_number_integer())
-        wave_strip_cmap_kernel = std::clamp(settings["wave_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+        wave_strip_cmap_kernel = std::clamp(settings["wave_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("wave_strip_cmap_rep") && settings["wave_strip_cmap_rep"].is_number())
         wave_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["wave_strip_cmap_rep"].get<float>()));
     if(settings.contains("wave_strip_cmap_unfold") && settings["wave_strip_cmap_unfold"].is_number_integer())

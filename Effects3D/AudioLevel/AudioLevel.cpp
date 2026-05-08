@@ -3,7 +3,7 @@
 #include "AudioLevel.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "StratumBandPanel.h"
 #include "Colors.h"
 #include "SpatialLayerCore.h"
@@ -285,7 +285,7 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
                                                rotated_pos);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         user_color = ResolveStripKernelFinalColor(*this,
-                                                  StripShellKernelClamp(audiolevel_strip_cmap_kernel),
+                                                  SpatialPatternKernelClamp(audiolevel_strip_cmap_kernel),
                                                   p01,
                                                   audiolevel_strip_cmap_color_style,
                                                   time,

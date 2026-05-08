@@ -3,7 +3,7 @@
 #include "Sunrise.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "StratumBandPanel.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
@@ -439,7 +439,7 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
                                                rp);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         RGBColor pat = ResolveStripKernelFinalColor(*this,
-                                                    StripShellKernelClamp(sunrise_strip_cmap_kernel),
+                                                    SpatialPatternKernelClamp(sunrise_strip_cmap_kernel),
                                                     p01,
                                                     sunrise_strip_cmap_color_style,
                                                     time,

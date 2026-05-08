@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "StripKernelPatternPalettes.h"
-#include "StripShellPatternKernels.h"
+#include "SpatialPatternPalettes.h"
+#include "SpatialPatternKernels.h"
 #include <algorithm>
 #include <cmath>
 
@@ -86,7 +86,7 @@ RGBColor TonePairByKernel(int kernel_id, float p01)
         {PackBGR(40, 90, 170), PackBGR(180, 200, 255)},  // steel blue
     };
     constexpr int kCount = (int)(sizeof(kPairs) / sizeof(kPairs[0]));
-    int idx = StripShellKernelClamp(kernel_id) % kCount;
+    int idx = SpatialPatternKernelClamp(kernel_id) % kCount;
     return LerpBGR(kPairs[idx][0], kPairs[idx][1], p01);
 }
 } // namespace
@@ -96,12 +96,12 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
     p01 = std::fmod(p01, 1.0f);
     if(p01 < 0.0f)
         p01 += 1.0f;
-    const StripShellKernel k = static_cast<StripShellKernel>(StripShellKernelClamp(kernel_id));
+    const SpatialPatternKernel k = static_cast<SpatialPatternKernel>(SpatialPatternKernelClamp(kernel_id));
 
     switch(k)
     {
-    case StripShellKernel::FireSimple:
-    case StripShellKernel::FireLayered:
+    case SpatialPatternKernel::FireSimple:
+    case SpatialPatternKernel::FireLayered:
     {
         RGBColor black = PackBGR(0, 0, 0);
         RGBColor red = PackBGR(255, 24, 0);
@@ -116,7 +116,7 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
             return LerpBGR(orange, yellow, (p01 - 0.5f) / 0.28f);
         return LerpBGR(yellow, white, (p01 - 0.78f) / 0.22f);
     }
-    case StripShellKernel::OceanDriftLite:
+    case SpatialPatternKernel::OceanDriftLite:
     {
         RGBColor deep = PackBGR(8, 40, 120);
         RGBColor mid = PackBGR(30, 140, 200);
@@ -125,28 +125,28 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
             return LerpBGR(deep, mid, p01 / 0.55f);
         return LerpBGR(mid, foam, (p01 - 0.55f) / 0.45f);
     }
-    case StripShellKernel::MatrixRain1D:
+    case SpatialPatternKernel::MatrixRain1D:
     {
         float g = 40.0f + 215.0f * p01;
         return PackBGR((unsigned char)(g * 0.15f), (unsigned char)g, (unsigned char)(g * 0.25f));
     }
-    case StripShellKernel::HalloweenFlicker:
+    case SpatialPatternKernel::HalloweenFlicker:
         return LerpBGR(PackBGR(255, 80, 0), PackBGR(140, 0, 200), 0.35f + 0.65f * p01);
-    case StripShellKernel::Cylon:
+    case SpatialPatternKernel::Cylon:
         return LerpBGR(PackBGR(40, 0, 0), PackBGR(255, 20, 10), std::pow(p01, 2.2f));
-    case StripShellKernel::CandleSoft:
+    case SpatialPatternKernel::CandleSoft:
         return LerpBGR(PackBGR(255, 120, 40), PackBGR(255, 230, 160), p01);
-    case StripShellKernel::Meteor:
+    case SpatialPatternKernel::Meteor:
         return LerpBGR(PackBGR(255, 200, 80), PackBGR(40, 20, 80), 1.0f - p01);
-    case StripShellKernel::SparkleDark:
-    case StripShellKernel::TwinkleSparse:
-    case StripShellKernel::GlitterBurst:
-    case StripShellKernel::Confetti:
+    case SpatialPatternKernel::SparkleDark:
+    case SpatialPatternKernel::TwinkleSparse:
+    case SpatialPatternKernel::GlitterBurst:
+    case SpatialPatternKernel::Confetti:
     {
         float hue = std::fmod(p01 * 220.0f + Hash01(p01 * 17.3f + time_sec) * 45.0f, 360.0f);
         return HsvToBgr(hue, 0.65f, 0.25f + 0.7f * p01);
     }
-    case StripShellKernel::TricolorChase:
+    case SpatialPatternKernel::TricolorChase:
     {
         float u = p01 * 3.0f;
         int band = (int)std::floor(u) % 3;
@@ -160,7 +160,7 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
             return LerpBGR(c1, c2, f);
         return LerpBGR(c2, c0, f);
     }
-    case StripShellKernel::TriFade:
+    case SpatialPatternKernel::TriFade:
     {
         float u = p01 * 3.0f;
         int band = (int)std::floor(u) % 3;
@@ -174,21 +174,21 @@ RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
             return LerpBGR(b, c, f);
         return LerpBGR(c, a, f);
     }
-    case StripShellKernel::TheaterChase:
-    case StripShellKernel::RunningLight:
+    case SpatialPatternKernel::TheaterChase:
+    case SpatialPatternKernel::RunningLight:
         return LerpBGR(PackBGR(0, 0, 0), PackBGR(255, 255, 255), (std::sin(p01 * 6.2831853f) * 0.5f + 0.5f));
-    case StripShellKernel::SpectrumWaves:
-    case StripShellKernel::ColorWave:
-    case StripShellKernel::PlasmaSinProduct:
+    case SpatialPatternKernel::SpectrumWaves:
+    case SpatialPatternKernel::ColorWave:
+    case SpatialPatternKernel::PlasmaSinProduct:
         return HsvToBgr(p01 * 240.0f + time_sec * 14.0f, 0.72f, 0.92f);
-    case StripShellKernel::HueBounceDot:
-    case StripShellKernel::DotBounce:
+    case SpatialPatternKernel::HueBounceDot:
+    case SpatialPatternKernel::DotBounce:
     {
         RGBColor deep = PackBGR(160, 30, 120);
         RGBColor hot  = PackBGR(255, 140, 230);
         return LerpBGR(deep, hot, std::pow(p01, 0.85f));
     }
-    case StripShellKernel::BpmPulse:
+    case SpatialPatternKernel::BpmPulse:
         return LerpBGR(PackBGR(80, 0, 120), PackBGR(255, 220, 60), p01);
     default:
         return TonePairByKernel(kernel_id, p01);

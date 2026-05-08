@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef STRIPSHELLPATTERNKERNELS_H
-#define STRIPSHELLPATTERNKERNELS_H
+#ifndef SPATIAL_PATTERN_KERNELS_H
+#define SPATIAL_PATTERN_KERNELS_H
 
-enum class StripShellKernel : int
+enum class SpatialPatternKernel : int
 {
     Sine = 0,
     Saw,
@@ -51,15 +51,15 @@ enum class StripShellKernel : int
     Meteor,
 };
 
-inline int StripShellKernelCount()
+inline int SpatialPatternKernelCount()
 {
-    return (int)StripShellKernel::Meteor + 1;
+    return (int)SpatialPatternKernel::Meteor + 1;
 }
 
-int StripShellKernelClamp(int id);
+int SpatialPatternKernelClamp(int id);
 
-const char* StripShellKernelDisplayName(int kernel_id);
+const char* SpatialPatternKernelDisplayName(int kernel_id);
 
-float EvalStripShellKernel(int kernel_id, float s01, float phase01, float rep, float time_sec);
+float EvalSpatialPatternKernel(int kernel_id, float s01, float phase01, float rep, float time_sec);
 
 #endif

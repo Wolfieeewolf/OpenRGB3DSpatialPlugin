@@ -4,8 +4,8 @@
 #define SPATIALKERNELCOLORMAP_H
 
 #include "Game/StripPatternSurface.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
-#include "StripShellPattern/StripKernelPatternPalettes.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternPalettes.h"
 #include "SpatialEffect3D.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -34,7 +34,7 @@ inline RGBColor ResolveStripKernelFinalColor(SpatialEffect3D& effect,
     float p = std::fmod(palette01, 1.0f);
     if(p < 0.0f)
         p += 1.0f;
-    kernel_id = StripShellKernelClamp(kernel_id);
+    kernel_id = SpatialPatternKernelClamp(kernel_id);
     if(s == 0)
         return SampleKernelPatternPalette(kernel_id, p, time_sec);
     return effect.GetColorAtPosition(p);
@@ -98,7 +98,7 @@ inline float SampleStripKernelPalette01(int kernel_id,
     {
         s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
     }
-    float k = EvalStripShellKernel(kernel_id, s01, phase_eff, kernel_rep_eff, time_eff);
+    float k = EvalSpatialPatternKernel(kernel_id, s01, phase_eff, kernel_rep_eff, time_eff);
     return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 }
 
@@ -134,7 +134,7 @@ inline void StripColormapLoadJson(const nlohmann::json& settings,
         on = settings[k_on].get<bool>();
     const std::string k_k = prefix + "_strip_cmap_kernel";
     if(settings.contains(k_k) && settings[k_k].is_number_integer())
-        kern = std::clamp(settings[k_k].get<int>(), 0, StripShellKernelCount() - 1);
+        kern = std::clamp(settings[k_k].get<int>(), 0, SpatialPatternKernelCount() - 1);
     const std::string k_r = prefix + "_strip_cmap_rep";
     if(settings.contains(k_r) && settings[k_r].is_number())
         rep = std::max(1.0f, std::min(40.0f, settings[k_r].get<float>()));

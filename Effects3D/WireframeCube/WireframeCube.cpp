@@ -2,7 +2,7 @@
 
 #include "WireframeCube.h"
 #include "SpatialKernelColormap.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
@@ -314,8 +314,8 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
                           bb.phase_deg * (1.f / 360.f) + 1.f,
                       1.f);
 
-        const int kid = StripShellKernelClamp(wireframecube_strip_cmap_kernel);
-        const float k = EvalStripShellKernel(kid,
+        const int kid = SpatialPatternKernelClamp(wireframecube_strip_cmap_kernel);
+        const float k = EvalSpatialPatternKernel(kid,
                                              s01_kernel,
                                              phase01,
                                              wireframecube_strip_cmap_rep,

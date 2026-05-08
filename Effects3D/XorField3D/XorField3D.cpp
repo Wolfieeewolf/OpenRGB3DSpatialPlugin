@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "Xorcery3D.h"
+#include "XorField3D.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
-#include "StripShellPattern/StripShellPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QGridLayout>
 #include <QLabel>
@@ -14,7 +14,7 @@
 #include <cmath>
 #include <cstdint>
 
-REGISTER_EFFECT_3D(Xorcery3D);
+REGISTER_EFFECT_3D(XorField3D);
 
 namespace
 {
@@ -77,25 +77,25 @@ inline float PhaseWithAlternate(float ph01, int xor_parity_lsb, float alternate0
 }
 } // namespace
 
-Xorcery3D::Xorcery3D(QWidget* parent) : SpatialEffect3D(parent)
+XorField3D::XorField3D(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(45);
     SetFrequency(35);
 }
 
-Xorcery3D::~Xorcery3D() = default;
+XorField3D::~XorField3D() = default;
 
-EffectInfo3D Xorcery3D::GetEffectInfo()
+EffectInfo3D XorField3D::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Xorcery 3D";
+    info.effect_name = "Xor Field 3D";
     info.effect_description =
         "Bitwise interference from XOR-quantized XYZ. Odd/even cells can run motion forward or backward; "
         "tune cell scale and wave drive.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_XORCERY_3D;
+    info.effect_type = SPATIAL_EFFECT_XOR_FIELD_3D;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -116,7 +116,7 @@ EffectInfo3D Xorcery3D::GetEffectInfo()
     return info;
 }
 
-void Xorcery3D::SetupCustomUI(QWidget* parent)
+void XorField3D::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* outer = new QVBoxLayout(w);
@@ -175,37 +175,37 @@ void Xorcery3D::SetupCustomUI(QWidget* parent)
     row++;
 
     strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(bitwarp_strip_cmap_on,
-                                            bitwarp_strip_cmap_kernel,
-                                            bitwarp_strip_cmap_rep,
-                                            bitwarp_strip_cmap_unfold,
-                                            bitwarp_strip_cmap_dir,
-                                            bitwarp_strip_cmap_color_style);
+    strip_cmap_panel->mirrorStateFromEffect(xorfield_strip_cmap_on,
+                                            xorfield_strip_cmap_kernel,
+                                            xorfield_strip_cmap_rep,
+                                            xorfield_strip_cmap_unfold,
+                                            xorfield_strip_cmap_dir,
+                                            xorfield_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Xorcery3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &XorField3D::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void Xorcery3D::SyncStripColormapFromPanel()
+void XorField3D::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
-    bitwarp_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    bitwarp_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    bitwarp_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    bitwarp_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    bitwarp_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    bitwarp_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    xorfield_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    xorfield_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    xorfield_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    xorfield_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    xorfield_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    xorfield_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
-void Xorcery3D::UpdateParams(SpatialEffectParams& params)
+void XorField3D::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_XORCERY_3D;
+    params.type = SPATIAL_EFFECT_XOR_FIELD_3D;
 }
 
-RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor XorField3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -256,12 +256,12 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
 
     RGBColor c = 0x00000000;
     const float h01 = h - std::floor(h);
-    if(bitwarp_strip_cmap_on)
+    if(xorfield_strip_cmap_on)
     {
-        float p01 = SampleStripKernelPalette01(bitwarp_strip_cmap_kernel,
-                                               bitwarp_strip_cmap_rep,
-                                               bitwarp_strip_cmap_unfold,
-                                               bitwarp_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(xorfield_strip_cmap_kernel,
+                                               xorfield_strip_cmap_rep,
+                                               xorfield_strip_cmap_unfold,
+                                               xorfield_strip_cmap_dir,
                                                h01,
                                                time,
                                                grid,
@@ -270,9 +270,9 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         StripShellKernelClamp(bitwarp_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(xorfield_strip_cmap_kernel),
                                          p01,
-                                         bitwarp_strip_cmap_color_style,
+                                         xorfield_strip_cmap_color_style,
                                          time,
                                          rate * 12.0f);
     }
@@ -294,40 +294,40 @@ RGBColor Xorcery3D::CalculateColorGrid(float x, float y, float z, float time, co
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json Xorcery3D::SaveSettings() const
+nlohmann::json XorField3D::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["bitwarp_direction_alternate"] = direction_alternate;
-    j["bitwarp_cell_scale"] = cell_scale;
-    j["bitwarp_wave_drive"] = wave_drive;
+    j["xorfield_direction_alternate"] = direction_alternate;
+    j["xorfield_cell_scale"] = cell_scale;
+    j["xorfield_wave_drive"] = wave_drive;
     StripColormapSaveJson(j,
-                          "bitwarp",
-                          bitwarp_strip_cmap_on,
-                          bitwarp_strip_cmap_kernel,
-                          bitwarp_strip_cmap_rep,
-                          bitwarp_strip_cmap_unfold,
-                          bitwarp_strip_cmap_dir,
-                          bitwarp_strip_cmap_color_style);
+                          "xorfield",
+                          xorfield_strip_cmap_on,
+                          xorfield_strip_cmap_kernel,
+                          xorfield_strip_cmap_rep,
+                          xorfield_strip_cmap_unfold,
+                          xorfield_strip_cmap_dir,
+                          xorfield_strip_cmap_color_style);
     return j;
 }
 
-void Xorcery3D::LoadSettings(const nlohmann::json& settings)
+void XorField3D::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    if(settings.contains("bitwarp_direction_alternate") && settings["bitwarp_direction_alternate"].is_number())
-        direction_alternate = std::clamp(settings["bitwarp_direction_alternate"].get<float>(), 0.0f, 1.0f);
-    if(settings.contains("bitwarp_cell_scale") && settings["bitwarp_cell_scale"].is_number())
-        cell_scale = std::clamp(settings["bitwarp_cell_scale"].get<float>(), 2.5f, 14.0f);
-    if(settings.contains("bitwarp_wave_drive") && settings["bitwarp_wave_drive"].is_number())
-        wave_drive = std::clamp(settings["bitwarp_wave_drive"].get<float>(), 0.5f, 1.5f);
+    if(settings.contains("xorfield_direction_alternate") && settings["xorfield_direction_alternate"].is_number())
+        direction_alternate = std::clamp(settings["xorfield_direction_alternate"].get<float>(), 0.0f, 1.0f);
+    if(settings.contains("xorfield_cell_scale") && settings["xorfield_cell_scale"].is_number())
+        cell_scale = std::clamp(settings["xorfield_cell_scale"].get<float>(), 2.5f, 14.0f);
+    if(settings.contains("xorfield_wave_drive") && settings["xorfield_wave_drive"].is_number())
+        wave_drive = std::clamp(settings["xorfield_wave_drive"].get<float>(), 0.5f, 1.5f);
     StripColormapLoadJson(settings,
-                          "bitwarp",
-                          bitwarp_strip_cmap_on,
-                          bitwarp_strip_cmap_kernel,
-                          bitwarp_strip_cmap_rep,
-                          bitwarp_strip_cmap_unfold,
-                          bitwarp_strip_cmap_dir,
-                          bitwarp_strip_cmap_color_style,
+                          "xorfield",
+                          xorfield_strip_cmap_on,
+                          xorfield_strip_cmap_kernel,
+                          xorfield_strip_cmap_rep,
+                          xorfield_strip_cmap_unfold,
+                          xorfield_strip_cmap_dir,
+                          xorfield_strip_cmap_color_style,
                           GetRainbowMode());
 
     if(alt_slider)
@@ -350,11 +350,11 @@ void Xorcery3D::LoadSettings(const nlohmann::json& settings)
     }
     if(strip_cmap_panel)
     {
-        strip_cmap_panel->mirrorStateFromEffect(bitwarp_strip_cmap_on,
-                                                bitwarp_strip_cmap_kernel,
-                                                bitwarp_strip_cmap_rep,
-                                                bitwarp_strip_cmap_unfold,
-                                                bitwarp_strip_cmap_dir,
-                                                bitwarp_strip_cmap_color_style);
+        strip_cmap_panel->mirrorStateFromEffect(xorfield_strip_cmap_on,
+                                                xorfield_strip_cmap_kernel,
+                                                xorfield_strip_cmap_rep,
+                                                xorfield_strip_cmap_unfold,
+                                                xorfield_strip_cmap_dir,
+                                                xorfield_strip_cmap_color_style);
     }
 }

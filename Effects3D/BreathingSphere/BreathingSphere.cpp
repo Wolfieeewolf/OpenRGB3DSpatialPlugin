@@ -548,7 +548,7 @@ void BreathingSphere::LoadSettings(const nlohmann::json& settings)
     else if(settings.contains("breathing_strip_cmap_on") && settings["breathing_strip_cmap_on"].is_number_integer())
         breathing_strip_cmap_on = settings["breathing_strip_cmap_on"].get<int>() != 0;
     if(settings.contains("breathing_strip_cmap_kernel") && settings["breathing_strip_cmap_kernel"].is_number_integer())
-        breathing_strip_cmap_kernel = std::clamp(settings["breathing_strip_cmap_kernel"].get<int>(), 0, StripShellKernelCount() - 1);
+        breathing_strip_cmap_kernel = std::clamp(settings["breathing_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("breathing_strip_cmap_rep") && settings["breathing_strip_cmap_rep"].is_number())
         breathing_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["breathing_strip_cmap_rep"].get<float>()));
     if(settings.contains("breathing_strip_cmap_unfold") && settings["breathing_strip_cmap_unfold"].is_number_integer())

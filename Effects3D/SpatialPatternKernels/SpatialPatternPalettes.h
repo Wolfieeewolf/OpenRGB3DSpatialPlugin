@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef STRIPKERNELPATTERNPALETTES_H
-#define STRIPKERNELPATTERNPALETTES_H
+#ifndef SPATIAL_PATTERN_PALETTES_H
+#define SPATIAL_PATTERN_PALETTES_H
 
 #include "RGBController.h"
 
