@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef HARMONICPULSE3D_H
-#define HARMONICPULSE3D_H
+#ifndef HARMONICPULSE_H
+#define HARMONICPULSE_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
@@ -11,18 +11,18 @@ class QSlider;
 class StripKernelColormapPanel;
 
 /** Harmonic 3D pulse: h = (1 + sin(x·zoom+t1) + cos(y·zoom+t2) + sin(z·zoom+t1−t2))/2, v = h³/2. */
-class HarmonicPulse3D : public SpatialEffect3D
+class HarmonicPulse : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit HarmonicPulse3D(QWidget* parent = nullptr);
-    ~HarmonicPulse3D() override;
+    explicit HarmonicPulse(QWidget* parent = nullptr);
+    ~HarmonicPulse() override;
 
-    EFFECT_REGISTERER_3D("HarmonicPulse3D", "Harmonic Pulse 3D", "Spatial", []() { return new HarmonicPulse3D; });
+    EFFECT_REGISTERER_3D("HarmonicPulse", "Harmonic Pulse", "Spatial", []() { return new HarmonicPulse; });
 
-    static std::string const ClassName() { return "HarmonicPulse3D"; }
-    static std::string const UIName() { return "Harmonic Pulse 3D"; }
+    static std::string const ClassName() { return "HarmonicPulse"; }
+    static std::string const UIName() { return "Harmonic Pulse"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -38,11 +38,23 @@ private slots:
 private:
     static RGBColor Hsv01ToBgr(float h, float s, float v);
 
-    /** Extra amplitude on (1 + wave·strength); reference uses 3. */
-    float zoom_wobble_strength = 3.0f;
+    /** Extra amplitude on (1 + wave·strength). */
+    float zoom_wobble_strength = 0.0f;
+    /** Multiplies motion pace beyond shared speed/frequency controls. */
+    float flow_amount = 1.0f;
+    /** Extra brightness contrast shaping for pulses. */
+    float pulse_contrast = 1.0f;
+    /** Scales lattice density based on grid size to keep large rigs lively. */
+    float large_setup_boost = 1.0f;
 
     QSlider* wobble_slider = nullptr;
     QLabel* wobble_label = nullptr;
+    QSlider* flow_slider = nullptr;
+    QLabel* flow_label = nullptr;
+    QSlider* contrast_slider = nullptr;
+    QLabel* contrast_label = nullptr;
+    QSlider* setup_boost_slider = nullptr;
+    QLabel* setup_boost_label = nullptr;
 
     StripKernelColormapPanel* strip_cmap_panel = nullptr;
     bool harmonic_strip_cmap_on = false;

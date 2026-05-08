@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "HexLattice3D.h"
+#include "SharpPulse.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(HexLattice3D);
+REGISTER_EFFECT_3D(SharpPulse);
 
 namespace
 {
@@ -31,9 +31,8 @@ inline float Triangle01(float x01)
     const float f = x01 - std::floor(x01);
     return 1.0f - std::fabs(2.0f * f - 1.0f);
 }
-} // namespace
 
-RGBColor HexLattice3D::Hsv01ToBgr(float h, float s, float v)
+inline RGBColor Hsv01ToBgr(float h, float s, float v)
 {
     h = std::fmod(h, 1.0f);
     if(h < 0.0f)
@@ -59,31 +58,31 @@ RGBColor HexLattice3D::Hsv01ToBgr(float h, float s, float v)
     case 4: r = t; g = p; b = v; break;
     default: r = v; g = p; b = q; break;
     }
-
     const int ri = std::clamp((int)std::lround(r * 255.0f), 0, 255);
     const int gi = std::clamp((int)std::lround(g * 255.0f), 0, 255);
     const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
+} // namespace
 
-HexLattice3D::HexLattice3D(QWidget* parent) : SpatialEffect3D(parent)
+SharpPulse::SharpPulse(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
-    SetSpeed(35);
-    SetFrequency(12);
+    SetSpeed(55);
+    SetFrequency(20);
 }
 
-HexLattice3D::~HexLattice3D() = default;
+SharpPulse::~SharpPulse() = default;
 
-EffectInfo3D HexLattice3D::GetEffectInfo()
+EffectInfo3D SharpPulse::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Hex Lattice 3D";
+    info.effect_name = "Sharp Pulse";
     info.effect_description =
-        "Hex lattice 3D field. Blends sin/cos in XYZ with animated zoom and triangular hue shaping.";
+        "Fast high-contrast 3D pulse field from moving XYZ wave sums.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_HEX_LATTICE_3D;
+    info.effect_type = SPATIAL_EFFECT_SHARP_PULSE;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -92,8 +91,8 @@ EffectInfo3D HexLattice3D::GetEffectInfo()
     info.has_custom_settings = false;
     info.needs_3d_origin = false;
     info.needs_frequency = true;
-    info.default_speed_scale = 35.0f;
-    info.default_frequency_scale = 12.0f;
+    info.default_speed_scale = 55.0f;
+    info.default_frequency_scale = 20.0f;
     info.use_size_parameter = true;
     info.show_speed_control = true;
     info.show_brightness_control = true;
@@ -104,40 +103,40 @@ EffectInfo3D HexLattice3D::GetEffectInfo()
     return info;
 }
 
-void HexLattice3D::SetupCustomUI(QWidget* parent)
+void SharpPulse::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
-                                            hexlattice_strip_cmap_kernel,
-                                            hexlattice_strip_cmap_rep,
-                                            hexlattice_strip_cmap_unfold,
-                                            hexlattice_strip_cmap_dir,
-                                            hexlattice_strip_cmap_color_style);
+    strip_cmap_panel->mirrorStateFromEffect(sharppulse_strip_cmap_on,
+                                            sharppulse_strip_cmap_kernel,
+                                            sharppulse_strip_cmap_rep,
+                                            sharppulse_strip_cmap_unfold,
+                                            sharppulse_strip_cmap_dir,
+                                            sharppulse_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &HexLattice3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SharpPulse::SyncStripColormapFromPanel);
     AddWidgetToParent(w, parent);
 }
 
-void HexLattice3D::SyncStripColormapFromPanel()
+void SharpPulse::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
-    hexlattice_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    hexlattice_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    hexlattice_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    hexlattice_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    hexlattice_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    hexlattice_strip_cmap_color_style = strip_cmap_panel->colorStyle();
+    sharppulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    sharppulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
+    sharppulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
+    sharppulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
+    sharppulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
+    sharppulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
     emit ParametersChanged();
 }
 
-void HexLattice3D::UpdateParams(SpatialEffectParams& params)
+void SharpPulse::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_HEX_LATTICE_3D;
+    params.type = SPATIAL_EFFECT_SHARP_PULSE;
 }
 
-RGBColor HexLattice3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor SharpPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -155,28 +154,24 @@ RGBColor HexLattice3D::CalculateColorGrid(float x, float y, float z, float time,
     const float rate = std::max(0.08f, GetScaledFrequency() / 50.0f);
     const float motion = spd * rate;
 
-    const float t1 = Wave01(Phase01(time, 1.333333f, motion)) * kTwoPi; // time(.75)
-    const float t2 = Wave01(Phase01(time, 1.0526316f, motion)) * kTwoPi; // time(.95)
-    const float zoom = 2.0f + Wave01(Phase01(time, 2.0f, motion)) * 5.0f; // time(.5)
-    const float t3 = Wave01(Phase01(time, 1.5384615f, motion)); // time(.65)
-    const float t4 = Phase01(time, 20.0f, motion); // time(.05)
+    const float t1 = Phase01(time, 10.0f, motion); // time(.1)
+    const float r1 = std::sin(kTwoPi * Phase01(time, 10.0f, motion));
+    const float r2 = std::sin(kTwoPi * Phase01(time, 20.0f, motion));
+    const float r3 = std::sin(kTwoPi * Phase01(time, 14.285714f, motion));
 
     const float size_mul = std::max(0.2f, GetNormalizedSize());
-    float h = (1.0f + std::sin(nx * zoom * size_mul + t1) + std::cos(ny * zoom * size_mul + t2) +
-               std::cos(nz * zoom * size_mul + t2 + 0.3f)) * 0.5f;
-    float v = Wave01(h + t4);
-    v = v * v * v;
-    h = Triangle01(h) * 0.5f + t3;
+    float v = Triangle01(std::fmod(3.0f * Wave01(t1) + (nx * r1 + ny * r2 + nz * r3) * size_mul + 10.0f, 1.0f));
+    v = v * v * v * v * v;
+    const float s = (v < 0.8f) ? 1.0f : 0.0f;
 
     RGBColor c = 0x00000000;
-    const float h01 = h - std::floor(h);
-    if(hexlattice_strip_cmap_on)
+    if(sharppulse_strip_cmap_on)
     {
-        float p01 = SampleStripKernelPalette01(hexlattice_strip_cmap_kernel,
-                                               hexlattice_strip_cmap_rep,
-                                               hexlattice_strip_cmap_unfold,
-                                               hexlattice_strip_cmap_dir,
-                                               h01,
+        float p01 = SampleStripKernelPalette01(sharppulse_strip_cmap_kernel,
+                                               sharppulse_strip_cmap_rep,
+                                               sharppulse_strip_cmap_unfold,
+                                               sharppulse_strip_cmap_dir,
+                                               t1,
                                                time,
                                                grid,
                                                GetNormalizedSize(),
@@ -184,19 +179,19 @@ RGBColor HexLattice3D::CalculateColorGrid(float x, float y, float z, float time,
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         SpatialPatternKernelClamp(hexlattice_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(sharppulse_strip_cmap_kernel),
                                          p01,
-                                         hexlattice_strip_cmap_color_style,
+                                         sharppulse_strip_cmap_color_style,
                                          time,
                                          rate * 12.0f);
     }
     else if(GetRainbowMode())
     {
-        c = Hsv01ToBgr(h, 1.0f, 1.0f);
+        c = Hsv01ToBgr(t1, s, 1.0f);
     }
     else
     {
-        c = GetColorAtPosition(h01);
+        c = GetColorAtPosition(t1);
     }
 
     int r = (int)((float)(c & 0xFF) * v);
@@ -208,39 +203,39 @@ RGBColor HexLattice3D::CalculateColorGrid(float x, float y, float z, float time,
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json HexLattice3D::SaveSettings() const
+nlohmann::json SharpPulse::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     StripColormapSaveJson(j,
-                          "hexlattice",
-                          hexlattice_strip_cmap_on,
-                          hexlattice_strip_cmap_kernel,
-                          hexlattice_strip_cmap_rep,
-                          hexlattice_strip_cmap_unfold,
-                          hexlattice_strip_cmap_dir,
-                          hexlattice_strip_cmap_color_style);
+                          "sharppulse",
+                          sharppulse_strip_cmap_on,
+                          sharppulse_strip_cmap_kernel,
+                          sharppulse_strip_cmap_rep,
+                          sharppulse_strip_cmap_unfold,
+                          sharppulse_strip_cmap_dir,
+                          sharppulse_strip_cmap_color_style);
     return j;
 }
 
-void HexLattice3D::LoadSettings(const nlohmann::json& settings)
+void SharpPulse::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     StripColormapLoadJson(settings,
-                          "hexlattice",
-                          hexlattice_strip_cmap_on,
-                          hexlattice_strip_cmap_kernel,
-                          hexlattice_strip_cmap_rep,
-                          hexlattice_strip_cmap_unfold,
-                          hexlattice_strip_cmap_dir,
-                          hexlattice_strip_cmap_color_style,
+                          "sharppulse",
+                          sharppulse_strip_cmap_on,
+                          sharppulse_strip_cmap_kernel,
+                          sharppulse_strip_cmap_rep,
+                          sharppulse_strip_cmap_unfold,
+                          sharppulse_strip_cmap_dir,
+                          sharppulse_strip_cmap_color_style,
                           GetRainbowMode());
     if(strip_cmap_panel)
     {
-        strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
-                                                hexlattice_strip_cmap_kernel,
-                                                hexlattice_strip_cmap_rep,
-                                                hexlattice_strip_cmap_unfold,
-                                                hexlattice_strip_cmap_dir,
-                                                hexlattice_strip_cmap_color_style);
+        strip_cmap_panel->mirrorStateFromEffect(sharppulse_strip_cmap_on,
+                                                sharppulse_strip_cmap_kernel,
+                                                sharppulse_strip_cmap_rep,
+                                                sharppulse_strip_cmap_unfold,
+                                                sharppulse_strip_cmap_dir,
+                                                sharppulse_strip_cmap_color_style);
     }
 }

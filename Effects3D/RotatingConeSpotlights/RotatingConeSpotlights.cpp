@@ -4,7 +4,7 @@
 // dist = |z| - sqrt((x*x + y*y) / scale) (double cone), HSV from dist.
 // Suitable for volumetric LED layouts; coordinates match per-axis 0..1 room mapping.
 
-#include "RotatingConeSpotlights3D.h"
+#include "RotatingConeSpotlights.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
@@ -15,7 +15,7 @@
 #include <QVBoxLayout>
 #include <cmath>
 
-REGISTER_EFFECT_3D(RotatingConeSpotlights3D);
+REGISTER_EFFECT_3D(RotatingConeSpotlights);
 
 namespace
 {
@@ -26,7 +26,7 @@ float Triangle01(float phase01)
 }
 } // namespace
 
-RGBColor RotatingConeSpotlights3D::Hsv01ToBgr(float h, float s, float v)
+RGBColor RotatingConeSpotlights::Hsv01ToBgr(float h, float s, float v)
 {
     h = std::fmod(h, 1.0f);
     if(h < 0.0f)
@@ -81,7 +81,7 @@ RGBColor RotatingConeSpotlights3D::Hsv01ToBgr(float h, float s, float v)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
-void RotatingConeSpotlights3D::SetupRotationMatrix(float ux, float uy, float uz, float angle_rad, float R[3][3])
+void RotatingConeSpotlights::SetupRotationMatrix(float ux, float uy, float uz, float angle_rad, float R[3][3])
 {
     float len = std::sqrt(ux * ux + uy * uy + uz * uz);
     if(len < 1e-5f)
@@ -114,26 +114,26 @@ void RotatingConeSpotlights3D::SetupRotationMatrix(float ux, float uy, float uz,
     R[2][2] = cosa + uz * uz * ccosa;
 }
 
-void RotatingConeSpotlights3D::Rotate3D(float x, float y, float z, const float R[3][3], float* rx, float* ry, float* rz)
+void RotatingConeSpotlights::Rotate3D(float x, float y, float z, const float R[3][3], float* rx, float* ry, float* rz)
 {
     *rx = R[0][0] * x + R[0][1] * y + R[0][2] * z;
     *ry = R[1][0] * x + R[1][1] * y + R[1][2] * z;
     *rz = R[2][0] * x + R[2][1] * y + R[2][2] * z;
 }
 
-RotatingConeSpotlights3D::RotatingConeSpotlights3D(QWidget* parent) : SpatialEffect3D(parent)
+RotatingConeSpotlights::RotatingConeSpotlights(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetFrequency(50);
     SetRainbowMode(false);
 }
 
-RotatingConeSpotlights3D::~RotatingConeSpotlights3D() = default;
+RotatingConeSpotlights::~RotatingConeSpotlights() = default;
 
-EffectInfo3D RotatingConeSpotlights3D::GetEffectInfo()
+EffectInfo3D RotatingConeSpotlights::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Rotating Cone Spotlights 3D";
+    info.effect_name = "Rotating Cone Spotlights";
     info.effect_description =
         "Rotating cone spotlights: time-varying axis-angle rotation in a centered unit volume, "
         "then a double cone dist = |z'| − sqrt((x'² + y'²) / scale); hue follows room X like the reference "
@@ -163,7 +163,7 @@ EffectInfo3D RotatingConeSpotlights3D::GetEffectInfo()
     return info;
 }
 
-void RotatingConeSpotlights3D::SetupCustomUI(QWidget* parent)
+void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* main_layout = new QVBoxLayout(w);
@@ -229,12 +229,12 @@ void RotatingConeSpotlights3D::SetupCustomUI(QWidget* parent)
                                             cones_spot_strip_cmap_dir,
                                             cones_spot_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &RotatingConeSpotlights3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &RotatingConeSpotlights::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void RotatingConeSpotlights3D::SyncStripColormapFromPanel()
+void RotatingConeSpotlights::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
@@ -247,12 +247,12 @@ void RotatingConeSpotlights3D::SyncStripColormapFromPanel()
     emit ParametersChanged();
 }
 
-void RotatingConeSpotlights3D::UpdateParams(SpatialEffectParams& params)
+void RotatingConeSpotlights::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
 }
 
-RGBColor RotatingConeSpotlights3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
@@ -334,7 +334,7 @@ RGBColor RotatingConeSpotlights3D::CalculateColorGrid(float x, float y, float z,
     return Hsv01ToBgr(h, sat, val);
 }
 
-nlohmann::json RotatingConeSpotlights3D::SaveSettings() const
+nlohmann::json RotatingConeSpotlights::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["cone_spot_scale"] = cone_scale;
@@ -351,7 +351,7 @@ nlohmann::json RotatingConeSpotlights3D::SaveSettings() const
     return j;
 }
 
-void RotatingConeSpotlights3D::LoadSettings(const nlohmann::json& settings)
+void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("cone_spot_scale") && settings["cone_spot_scale"].is_number())

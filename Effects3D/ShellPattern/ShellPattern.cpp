@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "ShellPattern3D.h"
+#include "ShellPattern.h"
 #include "SpatialKernelColormap.h"
+#include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QComboBox>
@@ -11,9 +12,9 @@
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(ShellPattern3D);
+REGISTER_EFFECT_3D(ShellPattern);
 
-const char* ShellPattern3D::UnfoldModeLabel(int m)
+const char* ShellPattern::UnfoldModeLabel(int m)
 {
     switch(m)
     {
@@ -21,15 +22,16 @@ const char* ShellPattern3D::UnfoldModeLabel(int m)
     case 1: return "Along Y";
     case 2: return "Along Z";
     case 3: return "Plane XZ (angled)";
-    case 4: return "Radial XZ (ring unwrap)";
-    case 5: return "Diagonal (x+y+z)";
-    case 6: return "Manhattan distance";
-    case 7: return "Effect phase (no spatial unfold)";
+    case 4: return "Radial XZ";
+    case 5: return "Diagonal x+y+z";
+    case 6: return "Manhattan";
+    case 7: return "Effect animation only (no room projection)";
+    case 8: return "Static room projection (angle)";
     default: return "Along X";
     }
 }
 
-const char* ShellPattern3D::DisplayModeLabel(int d)
+const char* ShellPattern::DisplayModeLabel(int d)
 {
     switch(d)
     {
@@ -39,7 +41,7 @@ const char* ShellPattern3D::DisplayModeLabel(int d)
     }
 }
 
-ShellPattern3D::ShellPattern3D(QWidget* parent) : SpatialEffect3D(parent)
+ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetFrequency(50);
     SetRainbowMode(false);
@@ -50,17 +52,17 @@ ShellPattern3D::ShellPattern3D(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
-ShellPattern3D::~ShellPattern3D() = default;
+ShellPattern::~ShellPattern() = default;
 
-EffectInfo3D ShellPattern3D::GetEffectInfo()
+EffectInfo3D ShellPattern::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 3;
-    info.effect_name = "Shell Pattern 3D";
+    info.effect_name = "Shell Pattern";
     info.effect_description =
         "Map 3D position to a 1D coordinate, run a pattern kernel, then show it as a shell band or a solid extruded fill.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_SHELL_PATTERN_3D;
+    info.effect_type = SPATIAL_EFFECT_SHELL_PATTERN;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -84,7 +86,7 @@ EffectInfo3D ShellPattern3D::GetEffectInfo()
     return info;
 }
 
-void ShellPattern3D::SetupCustomUI(QWidget* parent)
+void ShellPattern::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* main_layout = new QVBoxLayout(w);
@@ -92,15 +94,6 @@ void ShellPattern3D::SetupCustomUI(QWidget* parent)
 
     QGridLayout* g = new QGridLayout();
     int row = 0;
-    g->addWidget(new QLabel("Unfold:"), row, 0);
-    unfold_combo = new QComboBox();
-    for(int i = 0; i < (int)StripPatternSurface::UnfoldMode::COUNT; i++)
-        unfold_combo->addItem(UnfoldModeLabel(i));
-    unfold_combo->setCurrentIndex(std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
-    unfold_combo->setToolTip("How the 1D pattern coordinate is derived from position.");
-    g->addWidget(unfold_combo, row, 1, 1, 2);
-    row++;
-
     g->addWidget(new QLabel("Display:"), row, 0);
     display_combo = new QComboBox();
     for(int d = 0; d < DISP_COUNT; d++)
@@ -108,35 +101,6 @@ void ShellPattern3D::SetupCustomUI(QWidget* parent)
     display_combo->setCurrentIndex(std::clamp(display_mode, 0, DISP_COUNT - 1));
     display_combo->setToolTip("Shell: Gaussian band around a height. Extrude: brightness follows only the unfold coordinate.");
     g->addWidget(display_combo, row, 1, 1, 2);
-    row++;
-
-    g->addWidget(new QLabel("Pattern:"), row, 0);
-    pattern_combo = new QComboBox();
-    for(int p = 0; p < SpatialPatternKernelCount(); p++)
-        pattern_combo->addItem(SpatialPatternKernelDisplayName(p));
-    pattern_combo->setCurrentIndex(std::clamp(pattern_id, 0, SpatialPatternKernelCount() - 1));
-    pattern_combo->setToolTip("1D pattern; tune Speed, Frequency, repeats.");
-    g->addWidget(pattern_combo, row, 1, 1, 2);
-    row++;
-
-    g->addWidget(new QLabel("Pattern colors:"), row, 0);
-    color_style_combo = new QComboBox();
-    color_style_combo->addItem("Pattern palette");
-    color_style_combo->addItem("Effect color stops");
-    color_style_combo->addItem("Rainbow");
-    color_style_combo->setCurrentIndex(std::clamp(strip_shell_color_style, 0, 2));
-    color_style_combo->setToolTip("Pattern palette: built-in look per pattern. Effect stops / Rainbow: map kernel value to your colors or spectrum.");
-    g->addWidget(color_style_combo, row, 1, 1, 2);
-    row++;
-
-    g->addWidget(new QLabel("Plane angle:"), row, 0);
-    dir_slider = new QSlider(Qt::Horizontal);
-    dir_slider->setRange(0, 359);
-    dir_slider->setValue((int)direction_deg);
-    dir_label = new QLabel(QString::number((int)direction_deg) + QChar(0x00B0));
-    dir_label->setMinimumWidth(40);
-    g->addWidget(dir_slider, row, 1);
-    g->addWidget(dir_label, row, 2);
     row++;
 
     g->addWidget(new QLabel("Shell thickness:"), row, 0);
@@ -148,16 +112,6 @@ void ShellPattern3D::SetupCustomUI(QWidget* parent)
     g->addWidget(thick_slider, row, 1);
     g->addWidget(thick_label, row, 2);
     thick_slider->setToolTip("Shell band width.");
-    row++;
-
-    g->addWidget(new QLabel("Pattern repeats:"), row, 0);
-    repeats_slider = new QSlider(Qt::Horizontal);
-    repeats_slider->setRange(1, 40);
-    repeats_slider->setValue((int)strip_repeats);
-    repeats_label = new QLabel(QString::number((int)strip_repeats));
-    repeats_label->setMinimumWidth(28);
-    g->addWidget(repeats_slider, row, 1);
-    g->addWidget(repeats_label, row, 2);
     row++;
 
     g->addWidget(new QLabel("Shell amplitude:"), row, 0);
@@ -181,26 +135,11 @@ void ShellPattern3D::SetupCustomUI(QWidget* parent)
 
     main_layout->addLayout(g);
 
-    connect(unfold_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern3D::OnParameterChanged);
-    connect(display_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern3D::OnParameterChanged);
-    connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern3D::OnParameterChanged);
-    connect(color_style_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern3D::OnParameterChanged);
-    connect(dir_slider, &QSlider::valueChanged, this, [this](int v) {
-        direction_deg = (float)v;
-        if(dir_label)
-            dir_label->setText(QString::number(v) + QChar(0x00B0));
-        emit ParametersChanged();
-    });
+    connect(display_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShellPattern::OnParameterChanged);
     connect(thick_slider, &QSlider::valueChanged, this, [this](int v) {
         surface_thickness = v / 100.0f;
         if(thick_label)
             thick_label->setText(QString::number(v) + "%");
-        emit ParametersChanged();
-    });
-    connect(repeats_slider, &QSlider::valueChanged, this, [this](int v) {
-        strip_repeats = (float)std::max(1, v);
-        if(repeats_label)
-            repeats_label->setText(QString::number(v));
         emit ParametersChanged();
     });
     connect(amp_slider, &QSlider::valueChanged, this, [this](int v) {
@@ -220,26 +159,30 @@ void ShellPattern3D::SetupCustomUI(QWidget* parent)
     stratum_panel->setLayoutMode(stratum_layout_mode);
     stratum_panel->setTuning(stratum_tuning_);
     AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &ShellPattern3D::OnStratumBandChanged);
+    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &ShellPattern::OnStratumBandChanged);
     OnStratumBandChanged();
+
+    strip_cmap_panel = new StripKernelColormapPanel(w);
+    strip_cmap_panel->mirrorStateFromEffect(shellpattern_strip_cmap_on,
+                                            pattern_id,
+                                            strip_repeats,
+                                            unfold_mode,
+                                            direction_deg,
+                                            strip_shell_color_style);
+    AddColorPatternWidget(strip_cmap_panel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &ShellPattern::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void ShellPattern3D::OnParameterChanged()
+void ShellPattern::OnParameterChanged()
 {
-    if(unfold_combo)
-        unfold_mode = std::clamp(unfold_combo->currentIndex(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(display_combo)
         display_mode = std::clamp(display_combo->currentIndex(), 0, DISP_COUNT - 1);
-    if(pattern_combo)
-        pattern_id = std::clamp(pattern_combo->currentIndex(), 0, SpatialPatternKernelCount() - 1);
-    if(color_style_combo)
-        strip_shell_color_style = std::clamp(color_style_combo->currentIndex(), 0, 2);
     emit ParametersChanged();
 }
 
-void ShellPattern3D::OnStratumBandChanged()
+void ShellPattern::OnStratumBandChanged()
 {
     if(stratum_panel)
     {
@@ -249,17 +192,30 @@ void ShellPattern3D::OnStratumBandChanged()
     emit ParametersChanged();
 }
 
-void ShellPattern3D::UpdateParams(SpatialEffectParams& params)
+void ShellPattern::SyncStripColormapFromPanel()
 {
-    params.type = SPATIAL_EFFECT_SHELL_PATTERN_3D;
+    if(!strip_cmap_panel)
+        return;
+    shellpattern_strip_cmap_on = strip_cmap_panel->useStripColormap();
+    pattern_id = strip_cmap_panel->kernelId();
+    strip_repeats = strip_cmap_panel->kernelRepeats();
+    unfold_mode = strip_cmap_panel->unfoldMode();
+    direction_deg = strip_cmap_panel->directionDeg();
+    strip_shell_color_style = strip_cmap_panel->colorStyle();
+    emit ParametersChanged();
 }
 
-float ShellPattern3D::EvaluateKernel(float s01, float phase01, float time_sec, int pattern) const
+void ShellPattern::UpdateParams(SpatialEffectParams& params)
+{
+    params.type = SPATIAL_EFFECT_SHELL_PATTERN;
+}
+
+float ShellPattern::EvaluateKernel(float s01, float phase01, float time_sec, int pattern) const
 {
     return EvalSpatialPatternKernel(pattern, s01, phase01, strip_repeats, time_sec);
 }
 
-RGBColor ShellPattern3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
@@ -348,25 +304,36 @@ RGBColor ShellPattern3D::CalculateColorGrid(float x, float y, float z, float tim
 
     float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
     float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
-    RGBColor c = ResolveStripKernelFinalColor(*this, pat, p01v, strip_shell_color_style, time, rate * 12.0f);
+    RGBColor c = 0x00000000;
+    if(shellpattern_strip_cmap_on)
+    {
+        c = ResolveStripKernelFinalColor(*this, pat, p01v, strip_shell_color_style, time, rate * 12.0f);
+    }
+    else
+    {
+        c = GetColorAtPosition(p01v);
+    }
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));
     int g_ = std::min(255, std::max(0, (int)(((c >> 8) & 0xFF) * intensity)));
     int b_ = std::min(255, std::max(0, (int)(((c >> 16) & 0xFF) * intensity)));
     return (RGBColor)((b_ << 16) | (g_ << 8) | r_);
 }
 
-nlohmann::json ShellPattern3D::SaveSettings() const
+nlohmann::json ShellPattern::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    j["shellpattern_unfold_mode"] = unfold_mode;
     j["shellpattern_display_mode"] = display_mode;
-    j["shellpattern_pattern_id"] = pattern_id;
-    j["shellpattern_color_style"] = strip_shell_color_style;
-    j["shellpattern_direction_deg"] = direction_deg;
     j["shellpattern_surface_thickness"] = surface_thickness;
-    j["shellpattern_repeats"] = strip_repeats;
     j["shellpattern_wave_amplitude"] = wave_amplitude;
     j["shellpattern_edge_fade_pct"] = edge_fade_pct;
+    StripColormapSaveJson(j,
+                          "shellpattern",
+                          shellpattern_strip_cmap_on,
+                          pattern_id,
+                          strip_repeats,
+                          unfold_mode,
+                          direction_deg,
+                          strip_shell_color_style);
     int sm = stratum_layout_mode;
     EffectStratumBlend::BandTuningPct st = stratum_tuning_;
     if(stratum_panel)
@@ -384,7 +351,7 @@ nlohmann::json ShellPattern3D::SaveSettings() const
     return j;
 }
 
-void ShellPattern3D::LoadSettings(const nlohmann::json& settings)
+void ShellPattern::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     EffectStratumBlend::LoadBandTuningJson(settings,
@@ -394,52 +361,42 @@ void ShellPattern3D::LoadSettings(const nlohmann::json& settings)
                                            "shellpattern_stratum_band_speed_pct",
                                            "shellpattern_stratum_band_tight_pct",
                                            "shellpattern_stratum_band_phase_deg");
-    if(settings.contains("shellpattern_unfold_mode") && settings["shellpattern_unfold_mode"].is_number_integer())
-        unfold_mode = std::clamp(settings["shellpattern_unfold_mode"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("shellpattern_display_mode") && settings["shellpattern_display_mode"].is_number_integer())
         display_mode = std::clamp(settings["shellpattern_display_mode"].get<int>(), 0, DISP_COUNT - 1);
+    StripColormapLoadJson(settings,
+                          "shellpattern",
+                          shellpattern_strip_cmap_on,
+                          pattern_id,
+                          strip_repeats,
+                          unfold_mode,
+                          direction_deg,
+                          strip_shell_color_style,
+                          GetRainbowMode());
+    // Back-compat for prior ShellPattern keys before shared colormap panel migration.
+    if(settings.contains("shellpattern_unfold_mode") && settings["shellpattern_unfold_mode"].is_number_integer())
+        unfold_mode = std::clamp(settings["shellpattern_unfold_mode"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("shellpattern_pattern_id") && settings["shellpattern_pattern_id"].is_number_integer())
         pattern_id = std::clamp(settings["shellpattern_pattern_id"].get<int>(), 0, SpatialPatternKernelCount() - 1);
     if(settings.contains("shellpattern_color_style") && settings["shellpattern_color_style"].is_number_integer())
-        strip_shell_color_style = std::clamp(settings["shellpattern_color_style"].get<int>(), 0, 2);
-    else
-        strip_shell_color_style = GetRainbowMode() ? 2 : 0;
+        strip_shell_color_style = std::clamp(settings["shellpattern_color_style"].get<int>(), 0, 1);
     if(settings.contains("shellpattern_direction_deg") && settings["shellpattern_direction_deg"].is_number())
         direction_deg = std::fmod(settings["shellpattern_direction_deg"].get<float>() + 360.0f, 360.0f);
-    if(settings.contains("shellpattern_surface_thickness") && settings["shellpattern_surface_thickness"].is_number())
-        surface_thickness = std::clamp(settings["shellpattern_surface_thickness"].get<float>(), 0.0f, 1.0f);
     if(settings.contains("shellpattern_repeats") && settings["shellpattern_repeats"].is_number())
         strip_repeats = std::max(1.0f, std::min(40.0f, settings["shellpattern_repeats"].get<float>()));
+    if(settings.contains("shellpattern_surface_thickness") && settings["shellpattern_surface_thickness"].is_number())
+        surface_thickness = std::clamp(settings["shellpattern_surface_thickness"].get<float>(), 0.0f, 1.0f);
     if(settings.contains("shellpattern_wave_amplitude") && settings["shellpattern_wave_amplitude"].is_number())
         wave_amplitude = std::max(0.2f, std::min(2.0f, settings["shellpattern_wave_amplitude"].get<float>()));
     if(settings.contains("shellpattern_edge_fade_pct") && settings["shellpattern_edge_fade_pct"].is_number())
         edge_fade_pct = std::clamp(settings["shellpattern_edge_fade_pct"].get<float>(), 0.0f, 100.0f);
 
-    if(unfold_combo)
-        unfold_combo->setCurrentIndex(unfold_mode);
     if(display_combo)
         display_combo->setCurrentIndex(display_mode);
-    if(pattern_combo)
-        pattern_combo->setCurrentIndex(pattern_id);
-    if(color_style_combo)
-        color_style_combo->setCurrentIndex(strip_shell_color_style);
-    if(dir_slider)
-    {
-        dir_slider->setValue((int)direction_deg);
-        if(dir_label)
-            dir_label->setText(QString::number((int)direction_deg) + QChar(0x00B0));
-    }
     if(thick_slider)
     {
         thick_slider->setValue((int)std::lround(surface_thickness * 100.0f));
         if(thick_label)
             thick_label->setText(QString::number((int)std::lround(surface_thickness * 100.0f)) + "%");
-    }
-    if(repeats_slider)
-    {
-        repeats_slider->setValue((int)strip_repeats);
-        if(repeats_label)
-            repeats_label->setText(QString::number((int)strip_repeats));
     }
     if(amp_slider)
     {
@@ -457,5 +414,14 @@ void ShellPattern3D::LoadSettings(const nlohmann::json& settings)
     {
         stratum_panel->setLayoutMode(stratum_layout_mode);
         stratum_panel->setTuning(stratum_tuning_);
+    }
+    if(strip_cmap_panel)
+    {
+        strip_cmap_panel->mirrorStateFromEffect(shellpattern_strip_cmap_on,
+                                                pattern_id,
+                                                strip_repeats,
+                                                unfold_mode,
+                                                direction_deg,
+                                                strip_shell_color_style);
     }
 }

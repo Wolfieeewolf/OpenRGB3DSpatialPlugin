@@ -519,7 +519,10 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     RGBColor final_color;
     if(spiral_strip_cmap_on)
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        // Keep kernel coloring anchored to the spiral pattern so enabling the
+        // kernel textures the spiral instead of looking like a flat room tint.
+        float textured_p01 = std::fmod(strip_p01 + spiral_value * 0.35f + 1.0f, 1.0f);
+        float p01v = ApplyVoxelDriveToPalette01(textured_p01, x, y, z, time, grid);
         final_color = ResolveStripKernelFinalColor(*this, spiral_strip_cmap_kernel, p01v, spiral_strip_cmap_color_style, time,
                                                    rate_e * 12.0f);
     }
@@ -554,9 +557,17 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         final_color = GetColorAtPosition(p);
     }
 
+    // Apply spiral intensity as a shared brightness mask so all color sources
+    // still preserve visible spiral structure.
+    float spiral_mask = std::clamp(spiral_value, 0.0f, 1.0f);
+    spiral_mask = std::pow(spiral_mask, 0.85f);
+
     unsigned char r = final_color & 0xFF;
     unsigned char g = (final_color >> 8) & 0xFF;
     unsigned char b = (final_color >> 16) & 0xFF;
+    r = (unsigned char)std::clamp((int)std::lround((float)r * spiral_mask), 0, 255);
+    g = (unsigned char)std::clamp((int)std::lround((float)g * spiral_mask), 0, 255);
+    b = (unsigned char)std::clamp((int)std::lround((float)b * spiral_mask), 0, 255);
     return (b << 16) | (g << 8) | r;
 }
 

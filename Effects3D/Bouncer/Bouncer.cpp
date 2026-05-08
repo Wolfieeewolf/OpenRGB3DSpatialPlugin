@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "Bouncer3D.h"
+#include "Bouncer.h"
 
 #include <QGridLayout>
 #include <QLabel>
@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(Bouncer3D);
+REGISTER_EFFECT_3D(Bouncer);
 
 namespace
 {
@@ -65,23 +65,23 @@ RGBColor Hsv01ToBgr(float h, float s, float v)
 }
 } // namespace
 
-Bouncer3D::Bouncer3D(QWidget* parent) : SpatialEffect3D(parent)
+Bouncer::Bouncer(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(false);
     SetSpeed(50);
     SetFrequency(50);
 }
 
-Bouncer3D::~Bouncer3D() = default;
+Bouncer::~Bouncer() = default;
 
-EffectInfo3D Bouncer3D::GetEffectInfo()
+EffectInfo3D Bouncer::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Bouncer 3D";
+    info.effect_name = "Bouncer";
     info.effect_description = "Up to 20 hue-coded orbs bounce in a normalized room volume.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_BOUNCER_3D;
+    info.effect_type = SPATIAL_EFFECT_BOUNCER;
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 100;
@@ -101,7 +101,7 @@ EffectInfo3D Bouncer3D::GetEffectInfo()
     return info;
 }
 
-void Bouncer3D::SetupCustomUI(QWidget* parent)
+void Bouncer::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* outer = new QVBoxLayout(w);
@@ -121,16 +121,16 @@ void Bouncer3D::SetupCustomUI(QWidget* parent)
     ball_count_label->setMinimumWidth(28);
     grid->addWidget(ball_count_label, 0, 2);
 
-    connect(ball_count_slider, &QSlider::valueChanged, this, &Bouncer3D::OnBallCountChanged);
+    connect(ball_count_slider, &QSlider::valueChanged, this, &Bouncer::OnBallCountChanged);
     AddWidgetToParent(w, parent);
 }
 
-void Bouncer3D::UpdateParams(SpatialEffectParams& params)
+void Bouncer::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_BOUNCER_3D;
+    params.type = SPATIAL_EFFECT_BOUNCER;
 }
 
-void Bouncer3D::OnBallCountChanged()
+void Bouncer::OnBallCountChanged()
 {
     if(ball_count_slider)
     {
@@ -144,7 +144,7 @@ void Bouncer3D::OnBallCountChanged()
     }
 }
 
-void Bouncer3D::EnsureBallStates(unsigned int count)
+void Bouncer::EnsureBallStates(unsigned int count)
 {
     if(balls_.size() == count && !needs_reset_)
     {
@@ -155,7 +155,7 @@ void Bouncer3D::EnsureBallStates(unsigned int count)
     needs_reset_ = false;
 }
 
-void Bouncer3D::ResetBallStates()
+void Bouncer::ResetBallStates()
 {
     const float speed = std::clamp(GetSpeed() / 100.0f, 0.0f, 1.0f) * 0.15f;
     for(unsigned int i = 0; i < balls_.size(); i++)
@@ -171,7 +171,7 @@ void Bouncer3D::ResetBallStates()
     }
 }
 
-void Bouncer3D::StepSimulation(float dt_seconds)
+void Bouncer::StepSimulation(float dt_seconds)
 {
     if(dt_seconds <= 0.0f)
     {
@@ -202,7 +202,7 @@ void Bouncer3D::StepSimulation(float dt_seconds)
     }
 }
 
-RGBColor Bouncer3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor Bouncer::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -263,14 +263,14 @@ RGBColor Bouncer3D::CalculateColorGrid(float x, float y, float z, float time, co
     return Hsv01ToBgr(out_h, out_s, out_v);
 }
 
-nlohmann::json Bouncer3D::SaveSettings() const
+nlohmann::json Bouncer::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["bouncer3d_ball_count"] = ball_count;
     return j;
 }
 
-void Bouncer3D::LoadSettings(const nlohmann::json& settings)
+void Bouncer::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("bouncer3d_ball_count") && settings["bouncer3d_ball_count"].is_number_integer())

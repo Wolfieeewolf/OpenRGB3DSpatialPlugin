@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef XORFIELD3D_H
-#define XORFIELD3D_H
+#ifndef XORFIELD_H
+#define XORFIELD_H
 
 #include "EffectRegisterer3D.h"
 #include "SpatialEffect3D.h"
@@ -10,18 +10,18 @@ class QLabel;
 class QSlider;
 class StripKernelColormapPanel;
 
-class XorField3D : public SpatialEffect3D
+class XorField : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit XorField3D(QWidget* parent = nullptr);
-    ~XorField3D() override;
+    explicit XorField(QWidget* parent = nullptr);
+    ~XorField() override;
 
-    EFFECT_REGISTERER_3D("XorField3D", "Xor Field 3D", "Spatial", []() { return new XorField3D; });
+    EFFECT_REGISTERER_3D("XorField", "Xor Field", "Spatial", []() { return new XorField; });
 
-    static std::string const ClassName() { return "XorField3D"; }
-    static std::string const UIName() { return "Xor Field 3D"; }
+    static std::string const ClassName() { return "XorField"; }
+    static std::string const UIName() { return "Xor Field"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

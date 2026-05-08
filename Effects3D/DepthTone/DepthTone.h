@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef DEPTHTONE3D_H
-#define DEPTHTONE3D_H
+#ifndef DEPTHTONE_H
+#define DEPTHTONE_H
 
 #include "EffectRegisterer3D.h"
 #include "SpatialEffect3D.h"
@@ -10,18 +10,18 @@ class QLabel;
 class QSlider;
 class StripKernelColormapPanel;
 
-class DepthTone3D : public SpatialEffect3D
+class DepthTone : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit DepthTone3D(QWidget* parent = nullptr);
-    ~DepthTone3D() override;
+    explicit DepthTone(QWidget* parent = nullptr);
+    ~DepthTone() override;
 
-    EFFECT_REGISTERER_3D("DepthTone3D", "Depth Tone 3D", "Spatial", []() { return new DepthTone3D; });
+    EFFECT_REGISTERER_3D("DepthTone", "Depth Tone", "Spatial", []() { return new DepthTone; });
 
-    static std::string const ClassName() { return "DepthTone3D"; }
-    static std::string const UIName() { return "Depth Tone 3D"; }
+    static std::string const ClassName() { return "DepthTone"; }
+    static std::string const UIName() { return "Depth Tone"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

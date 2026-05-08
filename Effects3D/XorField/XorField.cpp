@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "XorField3D.h"
+#include "XorField.h"
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
@@ -14,7 +14,7 @@
 #include <cmath>
 #include <cstdint>
 
-REGISTER_EFFECT_3D(XorField3D);
+REGISTER_EFFECT_3D(XorField);
 
 namespace
 {
@@ -77,25 +77,25 @@ inline float PhaseWithAlternate(float ph01, int xor_parity_lsb, float alternate0
 }
 } // namespace
 
-XorField3D::XorField3D(QWidget* parent) : SpatialEffect3D(parent)
+XorField::XorField(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(45);
     SetFrequency(35);
 }
 
-XorField3D::~XorField3D() = default;
+XorField::~XorField() = default;
 
-EffectInfo3D XorField3D::GetEffectInfo()
+EffectInfo3D XorField::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 1;
-    info.effect_name = "Xor Field 3D";
+    info.effect_name = "Xor Field";
     info.effect_description =
         "Bitwise interference from XOR-quantized XYZ. Odd/even cells can run motion forward or backward; "
         "tune cell scale and wave drive.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_XOR_FIELD_3D;
+    info.effect_type = SPATIAL_EFFECT_XOR_FIELD;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -116,7 +116,7 @@ EffectInfo3D XorField3D::GetEffectInfo()
     return info;
 }
 
-void XorField3D::SetupCustomUI(QWidget* parent)
+void XorField::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* outer = new QVBoxLayout(w);
@@ -182,12 +182,12 @@ void XorField3D::SetupCustomUI(QWidget* parent)
                                             xorfield_strip_cmap_dir,
                                             xorfield_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &XorField3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &XorField::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void XorField3D::SyncStripColormapFromPanel()
+void XorField::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
@@ -200,12 +200,12 @@ void XorField3D::SyncStripColormapFromPanel()
     emit ParametersChanged();
 }
 
-void XorField3D::UpdateParams(SpatialEffectParams& params)
+void XorField::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_XOR_FIELD_3D;
+    params.type = SPATIAL_EFFECT_XOR_FIELD;
 }
 
-RGBColor XorField3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor XorField::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -294,7 +294,7 @@ RGBColor XorField3D::CalculateColorGrid(float x, float y, float z, float time, c
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json XorField3D::SaveSettings() const
+nlohmann::json XorField::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["xorfield_direction_alternate"] = direction_alternate;
@@ -311,7 +311,7 @@ nlohmann::json XorField3D::SaveSettings() const
     return j;
 }
 
-void XorField3D::LoadSettings(const nlohmann::json& settings)
+void XorField::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("xorfield_direction_alternate") && settings["xorfield_direction_alternate"].is_number())

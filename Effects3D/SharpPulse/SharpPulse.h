@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef SHARPPULSE3D_H
-#define SHARPPULSE3D_H
+#ifndef SHARPPULSE_H
+#define SHARPPULSE_H
 
 #include "EffectRegisterer3D.h"
 #include "SpatialEffect3D.h"
 
 class StripKernelColormapPanel;
 
-class SharpPulse3D : public SpatialEffect3D
+class SharpPulse : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit SharpPulse3D(QWidget* parent = nullptr);
-    ~SharpPulse3D() override;
+    explicit SharpPulse(QWidget* parent = nullptr);
+    ~SharpPulse() override;
 
-    EFFECT_REGISTERER_3D("SharpPulse3D", "Sharp Pulse 3D", "Spatial", []() { return new SharpPulse3D; });
+    EFFECT_REGISTERER_3D("SharpPulse", "Sharp Pulse", "Spatial", []() { return new SharpPulse; });
 
-    static std::string const ClassName() { return "SharpPulse3D"; }
-    static std::string const UIName() { return "Sharp Pulse 3D"; }
+    static std::string const ClassName() { return "SharpPulse"; }
+    static std::string const UIName() { return "Sharp Pulse"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

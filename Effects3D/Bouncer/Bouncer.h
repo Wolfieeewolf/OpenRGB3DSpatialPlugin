@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef BOUNCER3D_H
-#define BOUNCER3D_H
+#ifndef BOUNCER_H
+#define BOUNCER_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
@@ -11,18 +11,18 @@
 class QSlider;
 class QLabel;
 
-class Bouncer3D : public SpatialEffect3D
+class Bouncer : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit Bouncer3D(QWidget* parent = nullptr);
-    ~Bouncer3D() override;
+    explicit Bouncer(QWidget* parent = nullptr);
+    ~Bouncer() override;
 
-    EFFECT_REGISTERER_3D("Bouncer3D", "Bouncer 3D", "Spatial", []() { return new Bouncer3D; });
+    EFFECT_REGISTERER_3D("Bouncer", "Bouncer", "Spatial", []() { return new Bouncer; });
 
-    static std::string const ClassName() { return "Bouncer3D"; }
-    static std::string const UIName() { return "Bouncer 3D"; }
+    static std::string const ClassName() { return "Bouncer"; }
+    static std::string const UIName() { return "Bouncer"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

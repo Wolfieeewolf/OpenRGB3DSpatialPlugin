@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include "DepthTone3D.h"
+#include "DepthTone.h"
 
 #include "SpatialKernelColormap.h"
 #include "StripKernelColormapPanel.h"
@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <cmath>
 
-REGISTER_EFFECT_3D(DepthTone3D);
+REGISTER_EFFECT_3D(DepthTone);
 
 namespace
 {
@@ -59,24 +59,24 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
 }
 } // namespace
 
-DepthTone3D::DepthTone3D(QWidget* parent) : SpatialEffect3D(parent)
+DepthTone::DepthTone(QWidget* parent) : SpatialEffect3D(parent)
 {
     SetRainbowMode(true);
     SetSpeed(45);
 }
 
-DepthTone3D::~DepthTone3D() = default;
+DepthTone::~DepthTone() = default;
 
-EffectInfo3D DepthTone3D::GetEffectInfo()
+EffectInfo3D DepthTone::GetEffectInfo()
 {
     EffectInfo3D info{};
     info.info_version = 2;
-    info.effect_name = "Depth Tone 3D";
+    info.effect_name = "Depth Tone";
     info.effect_description =
         "Rotating hues along room depth (Z) with center dimming; choose how many tone steps span front to back, "
         "optional spatial pattern palette for modulation.";
     info.category = "Spatial";
-    info.effect_type = SPATIAL_EFFECT_DEPTH_TONE_3D;
+    info.effect_type = SPATIAL_EFFECT_DEPTH_TONE;
     info.is_reversible = true;
     info.supports_random = false;
     info.max_speed = 100;
@@ -96,7 +96,7 @@ EffectInfo3D DepthTone3D::GetEffectInfo()
     return info;
 }
 
-void DepthTone3D::SetupCustomUI(QWidget* parent)
+void DepthTone::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
     QVBoxLayout* vbox = new QVBoxLayout(w);
@@ -131,12 +131,12 @@ void DepthTone3D::SetupCustomUI(QWidget* parent)
                                             depth_tone_strip_cmap_dir,
                                             depth_tone_strip_cmap_color_style);
     AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DepthTone3D::SyncStripColormapFromPanel);
+    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DepthTone::SyncStripColormapFromPanel);
 
     AddWidgetToParent(w, parent);
 }
 
-void DepthTone3D::SyncStripColormapFromPanel()
+void DepthTone::SyncStripColormapFromPanel()
 {
     if(!strip_cmap_panel)
         return;
@@ -149,12 +149,12 @@ void DepthTone3D::SyncStripColormapFromPanel()
     emit ParametersChanged();
 }
 
-void DepthTone3D::UpdateParams(SpatialEffectParams& params)
+void DepthTone::UpdateParams(SpatialEffectParams& params)
 {
-    params.type = SPATIAL_EFFECT_DEPTH_TONE_3D;
+    params.type = SPATIAL_EFFECT_DEPTH_TONE;
 }
 
-RGBColor DepthTone3D::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
     float rel_x = x - origin.x;
@@ -255,7 +255,7 @@ RGBColor DepthTone3D::CalculateColorGrid(float x, float y, float z, float time, 
     return (RGBColor)((b << 16) | (g << 8) | r);
 }
 
-nlohmann::json DepthTone3D::SaveSettings() const
+nlohmann::json DepthTone::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["depth_tone_count"] = depth_tone_count;
@@ -270,7 +270,7 @@ nlohmann::json DepthTone3D::SaveSettings() const
     return j;
 }
 
-void DepthTone3D::LoadSettings(const nlohmann::json& settings)
+void DepthTone::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("depth_tone_count") && settings["depth_tone_count"].is_number_integer())

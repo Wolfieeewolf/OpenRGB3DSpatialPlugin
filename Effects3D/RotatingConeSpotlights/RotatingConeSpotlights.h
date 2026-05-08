@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef ROTATINGCONESPOTLIGHTS3D_H
-#define ROTATINGCONESPOTLIGHTS3D_H
+#ifndef ROTATINGCONESPOTLIGHTS_H
+#define ROTATINGCONESPOTLIGHTS_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
@@ -14,20 +14,20 @@ class StripKernelColormapPanel;
  * Double-cone spotlight field in a unit cube, with a rotation matrix whose axis and angle
  * vary over time. Intended for dense 3D grids / room volumes with normalized coordinates.
  */
-class RotatingConeSpotlights3D : public SpatialEffect3D
+class RotatingConeSpotlights : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit RotatingConeSpotlights3D(QWidget* parent = nullptr);
-    ~RotatingConeSpotlights3D() override;
+    explicit RotatingConeSpotlights(QWidget* parent = nullptr);
+    ~RotatingConeSpotlights() override;
 
-    EFFECT_REGISTERER_3D("RotatingConeSpotlights3D", "Rotating Cone Spotlights 3D", "Spatial", []() {
-        return new RotatingConeSpotlights3D;
+    EFFECT_REGISTERER_3D("RotatingConeSpotlights", "Rotating Cone Spotlights", "Spatial", []() {
+        return new RotatingConeSpotlights;
     });
 
-    static std::string const ClassName() { return "RotatingConeSpotlights3D"; }
-    static std::string const UIName() { return "Rotating Cone Spotlights 3D"; }
+    static std::string const ClassName() { return "RotatingConeSpotlights"; }
+    static std::string const UIName() { return "Rotating Cone Spotlights"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;

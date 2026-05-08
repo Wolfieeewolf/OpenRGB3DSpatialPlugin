@@ -242,6 +242,9 @@ public:
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
     virtual unsigned int GetDetail() const;
+    /** Used by palette sampling helpers on the evaluating effect; same scaling as internal paths. */
+    float GetScaledFrequency() const;
+    float GetScaledDetail() const;
     virtual unsigned int GetSmoothing() const { return effect_smoothing; }
     virtual unsigned int GetSamplingResolution() const { return effect_sampling_resolution; }
     /** Effective 0..100 sampling quality: global × per-layer (for media-style effects). */
@@ -488,8 +491,6 @@ protected:
     void SetScaleInverted(bool inverted);
 
     float GetScaledSpeed() const;
-    float GetScaledFrequency() const;
-    float GetScaledDetail() const;
     float CalculateProgress(float time) const;
 
     /** Solid palette 0..1 after room mapping (Off / Subtle / Compass / Voxel volume). */

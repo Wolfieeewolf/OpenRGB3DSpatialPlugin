@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef SHELLPATTERN3D_H
-#define SHELLPATTERN3D_H
+#ifndef SHELLPATTERN_H
+#define SHELLPATTERN_H
 
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
@@ -10,22 +10,23 @@
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 class StratumBandPanel;
+class StripKernelColormapPanel;
 class QComboBox;
 class QSlider;
 class QLabel;
 
-class ShellPattern3D : public SpatialEffect3D
+class ShellPattern : public SpatialEffect3D
 {
     Q_OBJECT
 
 public:
-    explicit ShellPattern3D(QWidget* parent = nullptr);
-    ~ShellPattern3D() override;
+    explicit ShellPattern(QWidget* parent = nullptr);
+    ~ShellPattern() override;
 
-    EFFECT_REGISTERER_3D("ShellPattern3D", "Shell Pattern 3D", "Spatial", []() { return new ShellPattern3D; });
+    EFFECT_REGISTERER_3D("ShellPattern", "Shell Pattern", "Spatial", []() { return new ShellPattern; });
 
-    static std::string const ClassName() { return "ShellPattern3D"; }
-    static std::string const UIName() { return "Shell Pattern 3D"; }
+    static std::string const ClassName() { return "ShellPattern"; }
+    static std::string const UIName() { return "Shell Pattern"; }
 
     EffectInfo3D GetEffectInfo() override;
     void SetupCustomUI(QWidget* parent) override;
@@ -38,6 +39,7 @@ public:
 private slots:
     void OnParameterChanged();
     void OnStratumBandChanged();
+    void SyncStripColormapFromPanel();
 
 private:
     enum DisplayMode { DISP_SHELL_Y = 0, DISP_FILL_STRIP, DISP_COUNT };
@@ -51,26 +53,21 @@ private:
     int display_mode = DISP_SHELL_Y;
     int pattern_id = 0;
     int strip_shell_color_style = 0;
+    bool shellpattern_strip_cmap_on = true;
     float direction_deg = 0.0f;
     float surface_thickness = 0.0f;
     float strip_repeats = 1.0f;
     float wave_amplitude = 0.2f;
     float edge_fade_pct = 0.0f;
 
-    QComboBox* unfold_combo = nullptr;
     QComboBox* display_combo = nullptr;
-    QComboBox* pattern_combo = nullptr;
-    QComboBox* color_style_combo = nullptr;
-    QSlider* dir_slider = nullptr;
-    QLabel* dir_label = nullptr;
     QSlider* thick_slider = nullptr;
     QLabel* thick_label = nullptr;
-    QSlider* repeats_slider = nullptr;
-    QLabel* repeats_label = nullptr;
     QSlider* amp_slider = nullptr;
     QLabel* amp_label = nullptr;
     QSlider* edge_slider = nullptr;
     QLabel* edge_label = nullptr;
+    StripKernelColormapPanel* strip_cmap_panel = nullptr;
 
     StratumBandPanel* stratum_panel = nullptr;
     int stratum_layout_mode = 0;

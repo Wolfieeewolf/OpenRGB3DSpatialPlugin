@@ -260,16 +260,16 @@ HEADERS +=                                                                      
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h                                     \
     Effects3D/TextureProjection/TextureProjection.h                                             \
     Effects3D/OmniShapeTexture/OmniShapeTexture.h                                                \
-    Effects3D/ShellPattern3D/ShellPattern3D.h                                              \
+    Effects3D/ShellPattern/ShellPattern.h                                              \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.h                                    \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h                                    \
-    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights3D.h                                  \
-    Effects3D/HarmonicPulse3D/HarmonicPulse3D.h                                                            \
-    Effects3D/Bouncer3D/Bouncer3D.h                                                              \
-    Effects3D/HexLattice3D/HexLattice3D.h                                                          \
-    Effects3D/DepthTone3D/DepthTone3D.h                                                      \
-    Effects3D/SharpPulse3D/SharpPulse3D.h                                                          \
-    Effects3D/XorField3D/XorField3D.h                                                              \
+    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.h                                  \
+    Effects3D/HarmonicPulse/HarmonicPulse.h                                                            \
+    Effects3D/Bouncer/Bouncer.h                                                              \
+    Effects3D/HexLattice/HexLattice.h                                                          \
+    Effects3D/DepthTone/DepthTone.h                                                      \
+    Effects3D/SharpPulse/SharpPulse.h                                                          \
+    Effects3D/XorField/XorField.h                                                              \
 
 SOURCES +=                                                                                      \
     OpenRGB3DSpatialPlugin.cpp                                                                  \
@@ -356,16 +356,16 @@ SOURCES +=                                                                      
     Effects3D/ScreenMirror/ScreenMirror.cpp                                                \
     Effects3D/TextureProjection/TextureProjection.cpp                                      \
     Effects3D/OmniShapeTexture/OmniShapeTexture.cpp                                        \
-    Effects3D/ShellPattern3D/ShellPattern3D.cpp                                      \
+    Effects3D/ShellPattern/ShellPattern.cpp                                      \
     Effects3D/SpatialPatternKernels/SpatialPatternKernels.cpp                               \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp                               \
-    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights3D.cpp                            \
-    Effects3D/HarmonicPulse3D/HarmonicPulse3D.cpp                                                      \
-    Effects3D/Bouncer3D/Bouncer3D.cpp                                                        \
-    Effects3D/HexLattice3D/HexLattice3D.cpp                                                    \
-    Effects3D/DepthTone3D/DepthTone3D.cpp                                                \
-    Effects3D/SharpPulse3D/SharpPulse3D.cpp                                                    \
-    Effects3D/XorField3D/XorField3D.cpp                                                        \
+    Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.cpp                            \
+    Effects3D/HarmonicPulse/HarmonicPulse.cpp                                                      \
+    Effects3D/Bouncer/Bouncer.cpp                                                        \
+    Effects3D/HexLattice/HexLattice.cpp                                                    \
+    Effects3D/DepthTone/DepthTone.cpp                                                \
+    Effects3D/SharpPulse/SharpPulse.cpp                                                    \
+    Effects3D/XorField/XorField.cpp                                                        \
     Audio/AudioInputManager.cpp                                                                 \
 
 
