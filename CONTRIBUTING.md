@@ -58,6 +58,16 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 
 ## UI
 
+### Effect settings tab order (stack / library)
+
+`SpatialEffect3D::CreateCommonEffectControls` defines the **fixed section order** for every effect that uses the common mount (not Screen Mirror `CustomOnly` or Minecraft chrome overrides):
+
+1. **Surfaces** → 2. **Motion and pattern** → 3. **Output shaping** → 4. **Effect geometry** → 5. **Colors and patterns** (rainbow/stops; strip colormap when `supports_strip_colormap`) → 6. **Height motion bands** (`StratumBandPanel` when `supports_height_bands`) → 7. **Effect-specific settings** (`SetupCustomUI` only).
+
+Do **not** duplicate strip colormap or floor/mid/ceiling band controls in `SetupCustomUI`—set `supports_strip_colormap` / `supports_height_bands` on `EffectInfo3D` and use `GetStratumTuning()` / `GetStratumLayoutMode()` in render.
+
+Within **Effect-specific settings**, use a single `QGridLayout`: **combos first** (label column 0, control columns 1–2), then **sliders** (label · slider · value), same row pattern as Spiral / Plasma.
+
 - Keep signal wiring/disconnect paths symmetrical for dynamically created effect UI widgets.
 - Keep list, combo, and selection state synchronized.
 - Clear/disable dependent controls when selection is invalid.

@@ -6,40 +6,13 @@
 #include "SpatialKernelColormap.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <QComboBox>
 #include <QGridLayout>
-#include <QGroupBox>
 #include <QLabel>
-#include <QSignalBlocker>
-#include <QSlider>
 #include <QVBoxLayout>
 
 REGISTER_EFFECT_3D(ColorWheel);
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-namespace
-{
-static void LoadBandInt3FromJson(const nlohmann::json& settings,
-                                 const char* key,
-                                 std::array<int, 3>& out,
-                                 int lo,
-                                 int hi)
-{
-    if(!settings.contains(key) || !settings[key].is_array())
-        return;
-    const nlohmann::json& a = settings[key];
-    for(size_t i = 0; i < 3 && i < a.size(); i++)
-    {
-        if(a[i].is_number_integer())
-            out[i] = std::clamp(a[i].get<int>(), lo, hi);
-    }
-}
-}
 
 ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -74,6 +47,7 @@ EffectInfo3D ColorWheel::GetEffectInfo() const
     info.show_color_controls = true;
     info.show_plane_control = true;
     info.supports_strip_colormap = true;
+    info.supports_height_bands = true;
 
     return info;
 }
@@ -123,136 +97,8 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
         hue_geometry_mode = std::clamp(geom_combo->currentData().toInt(), 0, 1);
         emit ParametersChanged();
     });
-    row++;
 
-    layout->addWidget(new QLabel("Wheel layout:"), row, 0);
-    QComboBox* layout_combo = new QComboBox();
-    layout_combo->addItem("Single wheel", 0);
-    layout_combo->addItem("Per height band (floor · mid · ceiling)", 1);
-    layout_combo->setToolTip(
-        "Single: one wheel for the whole room. Per band: each vertical stratum blends its own speed, tightness, and phase "
-        "(same geometry origin; acts like stacked independent wheels at soft band boundaries).");
-    for(int i = 0; i < layout_combo->count(); i++)
-    {
-        if(layout_combo->itemData(i).toInt() == wheel_layout_mode)
-        {
-            layout_combo->setCurrentIndex(i);
-            break;
-        }
-    }
-    layout->addWidget(layout_combo, row, 1, 1, 2);
-    wheel_layout_combo = layout_combo;
-    connect(layout_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, layout_combo](int) {
-        wheel_layout_mode = std::clamp(layout_combo->currentData().toInt(), 0, 1);
-        if(layered_settings_widget)
-        {
-            layered_settings_widget->setVisible(wheel_layout_mode == 1);
-        }
-        emit ParametersChanged();
-    });
-    row++;
-
-    layered_settings_widget = new QGroupBox(QStringLiteral("Band tuning (floor · mid · ceiling)"));
-    layered_settings_widget->setToolTip(
-        "Speed % scales spin from global Frequency in that band. Tightness % scales how many hue cycles fit in space "
-        "(higher = tighter wheel). Phase offsets hue per band. Values blend smoothly at band edges.");
-    QGridLayout* band_grid = new QGridLayout(layered_settings_widget);
-    band_grid->addWidget(new QLabel(QString()), 0, 0);
-    band_grid->addWidget(new QLabel(QStringLiteral("Speed %")), 0, 1);
-    band_grid->addWidget(new QLabel(QStringLiteral("Tight %")), 0, 3);
-    band_grid->addWidget(new QLabel(QStringLiteral("Phase °")), 0, 5);
-
-    for(int i = 0; i < 3; i++)
-    {
-        const int r = i + 1;
-        band_grid->addWidget(new QLabel(QString("%1:").arg(EffectStratumBlend::BandNameUi(i))), r, 0);
-
-        QSlider* sp_sl = new QSlider(Qt::Horizontal);
-        sp_sl->setRange(0, 200);
-        sp_sl->setValue(band_speed_pct[(size_t)i]);
-        sp_sl->setToolTip(QStringLiteral("Band speed vs global Frequency (0–200%)."));
-        QLabel* sp_lbl = new QLabel(QString::number(band_speed_pct[(size_t)i]));
-        sp_lbl->setMinimumWidth(28);
-        band_speed_value_lbl[i] = sp_lbl;
-        band_speed_slider[i] = sp_sl;
-        band_grid->addWidget(sp_sl, r, 1);
-        band_grid->addWidget(sp_lbl, r, 2);
-        connect(sp_sl, &QSlider::valueChanged, this, [this, i, sp_lbl](int v) {
-            band_speed_pct[(size_t)i] = std::clamp(v, 0, 200);
-            sp_lbl->setText(QString::number(band_speed_pct[(size_t)i]));
-            emit ParametersChanged();
-        });
-
-        QSlider* sz_sl = new QSlider(Qt::Horizontal);
-        sz_sl->setRange(25, 300);
-        sz_sl->setValue(band_size_pct[(size_t)i]);
-        sz_sl->setToolTip(QStringLiteral("Hue tightness in this band (25–300%). Higher = more cycles across the room."));
-        QLabel* sz_lbl = new QLabel(QString::number(band_size_pct[(size_t)i]));
-        sz_lbl->setMinimumWidth(28);
-        band_size_value_lbl[i] = sz_lbl;
-        band_size_slider[i] = sz_sl;
-        band_grid->addWidget(sz_sl, r, 3);
-        band_grid->addWidget(sz_lbl, r, 4);
-        connect(sz_sl, &QSlider::valueChanged, this, [this, i, sz_lbl](int v) {
-            band_size_pct[(size_t)i] = std::clamp(v, 25, 300);
-            sz_lbl->setText(QString::number(band_size_pct[(size_t)i]));
-            emit ParametersChanged();
-        });
-
-        QSlider* ph_sl = new QSlider(Qt::Horizontal);
-        ph_sl->setRange(-180, 180);
-        ph_sl->setValue(band_phase_deg[(size_t)i]);
-        ph_sl->setToolTip(QStringLiteral("Hue offset for this band (−180°…180°)."));
-        QLabel* ph_lbl = new QLabel(QString::number(band_phase_deg[(size_t)i]));
-        ph_lbl->setMinimumWidth(32);
-        band_phase_value_lbl[i] = ph_lbl;
-        band_phase_slider[i] = ph_sl;
-        band_grid->addWidget(ph_sl, r, 5);
-        band_grid->addWidget(ph_lbl, r, 6);
-        connect(ph_sl, &QSlider::valueChanged, this, [this, i, ph_lbl](int v) {
-            band_phase_deg[(size_t)i] = std::clamp(v, -180, 180);
-            ph_lbl->setText(QString::number(band_phase_deg[(size_t)i]));
-            emit ParametersChanged();
-        });
-    }
-
-    layered_settings_widget->setVisible(wheel_layout_mode == 1);
-    outer->addWidget(layered_settings_widget);
-AddWidgetToParent(w, parent);
-}
-
-void ColorWheel::SyncLayeredSliderWidgets()
-{
-    for(int i = 0; i < 3; i++)
-    {
-        if(band_speed_slider[i])
-        {
-            QSignalBlocker b(band_speed_slider[i]);
-            band_speed_slider[i]->setValue(band_speed_pct[(size_t)i]);
-        }
-        if(band_speed_value_lbl[i])
-        {
-            band_speed_value_lbl[i]->setText(QString::number(band_speed_pct[(size_t)i]));
-        }
-        if(band_size_slider[i])
-        {
-            QSignalBlocker b(band_size_slider[i]);
-            band_size_slider[i]->setValue(band_size_pct[(size_t)i]);
-        }
-        if(band_size_value_lbl[i])
-        {
-            band_size_value_lbl[i]->setText(QString::number(band_size_pct[(size_t)i]));
-        }
-        if(band_phase_slider[i])
-        {
-            QSignalBlocker b(band_phase_slider[i]);
-            band_phase_slider[i]->setValue(band_phase_deg[(size_t)i]);
-        }
-        if(band_phase_value_lbl[i])
-        {
-            band_phase_value_lbl[i]->setText(QString::number(band_phase_deg[(size_t)i]));
-        }
-    }
+    AddWidgetToParent(w, parent);
 }
 
 void ColorWheel::UpdateParams(SpatialEffectParams& params) { (void)params; }
@@ -269,22 +115,19 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     Vector3D rot = TransformPointByRotation(x, y, z, origin);
     float lx = rot.x - origin.x, ly = rot.y - origin.y, lz = rot.z - origin.z;
 
+    const float y_norm = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
     SpatialLayerCore::MapperSettings map;
     EffectStratumBlend::InitStratumBreaks(map);
     map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
     map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
     map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
 
-    const float y_norm = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
-    float layer_w[SpatialLayerCore::kMaxLayerCount]{};
-    SpatialLayerCore::ComputeVerticalStratumWeights(y_norm, map, 3, layer_w);
-
-    EffectStratumBlend::BandTuningPct wheel_bt{};
-    wheel_bt.speed = band_speed_pct;
-    wheel_bt.tight = band_size_pct;
-    wheel_bt.phase_deg = band_phase_deg;
+    float stratum_w[3]{};
+    EffectStratumBlend::WeightsForYNorm(y_norm, map, stratum_w);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(wheel_layout_mode, layer_w, wheel_bt);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     float spd_mul = bb.speed_mul;
     float sz_mul = bb.tight_mul;
     float ph_blend = bb.phase_deg;
@@ -319,7 +162,7 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
         const float spin = progress * 6.2831855f * dir + time * GetScaledFrequency() * 0.12f * spd_mul;
         const float cu = std::cos(spin);
         const float su = std::sin(spin);
-        angle = (u * cu + v * su) * (float)M_PI * (0.5f + 0.5f * detail);
+        angle = (u * cu + v * su) * 3.14159265f * (0.5f + 0.5f * detail);
     }
     else
     {
@@ -328,7 +171,10 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
         else angle = atan2f(lz / e.hd, ly / e.hh);
     }
 
-    float hue_plane = fmodf(angle * (180.0f / (float)M_PI) * (0.5f + 0.5f * detail) + progress * 360.0f * dir +
+    angle += stratum_mot01 * 6.2831853f * 0.55f;
+    angle += EffectStratumBlend::PhaseShiftRad(bb);
+
+    float hue_plane = fmodf(angle * (180.0f / 3.14159265f) * (0.5f + 0.5f * detail) + progress * 360.0f * dir +
                             time * GetScaledFrequency() * 12.0f * spd_mul + ph_blend,
                         360.0f);
 
@@ -386,11 +232,7 @@ nlohmann::json ColorWheel::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["direction"] = direction;
     j["hue_geometry_mode"] = hue_geometry_mode;
-    j["wheel_layout_mode"] = wheel_layout_mode;
-    j["band_speed_pct"] = nlohmann::json::array({band_speed_pct[0], band_speed_pct[1], band_speed_pct[2]});
-    j["band_size_pct"] = nlohmann::json::array({band_size_pct[0], band_size_pct[1], band_size_pct[2]});
-    j["band_phase_deg"] = nlohmann::json::array({band_phase_deg[0], band_phase_deg[1], band_phase_deg[2]});
-return j;
+    return j;
 }
 
 void ColorWheel::LoadSettings(const nlohmann::json& settings)
@@ -400,28 +242,4 @@ void ColorWheel::LoadSettings(const nlohmann::json& settings)
         direction = std::max(0, std::min(1, settings["direction"].get<int>()));
     if(settings.contains("hue_geometry_mode") && settings["hue_geometry_mode"].is_number_integer())
         hue_geometry_mode = std::clamp(settings["hue_geometry_mode"].get<int>(), 0, 1);
-    if(settings.contains("wheel_layout_mode") && settings["wheel_layout_mode"].is_number_integer())
-        wheel_layout_mode = std::clamp(settings["wheel_layout_mode"].get<int>(), 0, 1);
-
-    LoadBandInt3FromJson(settings, "band_speed_pct", band_speed_pct, 0, 200);
-    LoadBandInt3FromJson(settings, "band_size_pct", band_size_pct, 25, 300);
-    LoadBandInt3FromJson(settings, "band_phase_deg", band_phase_deg, -180, 180);
-
-    if(wheel_layout_combo)
-    {
-        QSignalBlocker b(wheel_layout_combo);
-        for(int i = 0; i < wheel_layout_combo->count(); i++)
-        {
-            if(wheel_layout_combo->itemData(i).toInt() == wheel_layout_mode)
-            {
-                wheel_layout_combo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-    if(layered_settings_widget)
-    {
-        layered_settings_widget->setVisible(wheel_layout_mode == 1);
-    }
-SyncLayeredSliderWidgets();
 }
