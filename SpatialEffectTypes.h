@@ -26,21 +26,13 @@ enum SpatialEffectType
     SPATIAL_EFFECT_SKY_LIGHTNING    = 13,
     SPATIAL_EFFECT_TEXTURE_PROJECTION = 14,
     SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE = 15,
-    /** 1D path unfolded through 3D (shell or extruded fill); host for spatial pattern kernels. */
     SPATIAL_EFFECT_SHELL_PATTERN = 16,
-    /** Rotating spotlight cones in normalized volume (mapped-cube style 3D). */
     SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS = 17,
-    /** 3D harmonic pulse field: hue from interference, value from h³/2. */
     SPATIAL_EFFECT_HARMONIC_PULSE = 18,
-    /** Bouncing orbs: independent balls with wall-reflect vectors in normalized room coordinates. */
     SPATIAL_EFFECT_BOUNCER = 19,
-    /** Hex lattice field with animated zoom and triangular hue shaping. */
     SPATIAL_EFFECT_HEX_LATTICE = 20,
-    /** Depth-graded tone steps along room depth with center dim. (21–22 unused: removed axis sweep/octants.) */
     SPATIAL_EFFECT_DEPTH_TONE = 23,
-    /** High-contrast pulse field from animated XYZ sinusoid mix. */
     SPATIAL_EFFECT_SHARP_PULSE = 24,
-    /** Integer XOR-derived 3D interference field. */
     SPATIAL_EFFECT_XOR_FIELD = 25,
 };
 
@@ -78,12 +70,7 @@ enum ReferenceMode
     REF_MODE_USER_POSITION  = 1,
     REF_MODE_CUSTOM_POINT   = 2,
     REF_MODE_TARGET_ZONE_CENTER = 3,
-    /** Use (0,0,0) as origin — no room center or virtual ref point; patterns use raw grid coordinates. */
     REF_MODE_WORLD_ORIGIN   = 4,
-    /**
-     * Average position of mapped LEDs when the grid provides it; else box center.
-     * Default for new effects: patterns follow real hardware, not an abstract room midpoint.
-     */
     REF_MODE_LED_CENTROID   = 5
 };
 
@@ -96,20 +83,14 @@ enum EffectAxis
     AXIS_CUSTOM = 4
 };
 
-/** How room compass + vertical strata reshape palette / rainbow (see SpatialEffect3D). */
 enum class SpatialMappingMode : int
 {
     Off = 0,
     SubtleTint = 1,
     CompassPalette = 2,
-    /** Palette follows the full room volume; reference point still biases the mapping. */
     VoxelVolume = 3,
 };
 
-/**
- * Extra motion from telemetry voxel / room axes (applied after spatial mapping).
- * Volume color blend remains on the Mix slider separately.
- */
 enum class VoxelDriveMode : int
 {
     Off = 0,

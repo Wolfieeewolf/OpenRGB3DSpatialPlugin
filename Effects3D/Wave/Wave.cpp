@@ -2,8 +2,6 @@
 
 #include "Wave.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QComboBox>
 #include <QGridLayout>
@@ -52,7 +50,7 @@ Wave::Wave(QWidget* parent) : SpatialEffect3D(parent)
 
 Wave::~Wave() = default;
 
-EffectInfo3D Wave::GetEffectInfo()
+EffectInfo3D Wave::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.info_version = 3;
@@ -81,6 +79,9 @@ EffectInfo3D Wave::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
 
     return info;
 }
@@ -254,23 +255,6 @@ void Wave::SetupCustomUI(QWidget* parent)
     if(line_controls) line_controls->setVisible(mode == MODE_LINE);
     if(surface_controls) surface_controls->setVisible(mode == MODE_SURFACE);
 
-    strip_cmap_panel = new StripKernelColormapPanel(wave_widget);
-    strip_cmap_panel->mirrorStateFromEffect(wave_strip_cmap_on,
-                                            wave_strip_cmap_kernel,
-                                            wave_strip_cmap_rep,
-                                            wave_strip_cmap_unfold,
-                                            wave_strip_cmap_dir,
-                                            wave_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Wave::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(wave_widget);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Wave::OnStratumBandChanged);
-    OnStratumBandChanged();
-
     AddWidgetToParent(wave_widget, parent);
 }
 
@@ -296,36 +280,12 @@ void Wave::OnWaveParameterChanged()
     emit ParametersChanged();
 }
 
-void Wave::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void Wave::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    wave_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    wave_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    wave_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    wave_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    wave_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    wave_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
 float Wave::smoothstep(float edge0, float edge1, float x) const
 {
     float t = (x - edge0) / (std::max(0.0001f, edge1 - edge0));
     t = std::clamp(t, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
-
 
 RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -343,17 +303,20 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float swt[3];
         EffectStratumBlend::WeightsForYNorm(coord_y01, strat_map_s, swt);
         const EffectStratumBlend::BandBlendScalars bb =
-            EffectStratumBlend::BlendBands(stratum_layout_mode, swt, stratum_tuning_);
+            EffectStratumBlend::BlendBands(GetStratumLayoutMode(), swt, GetStratumTuning());
+        const float stratum_mot01 =
+            ComputeStratumMotion01(swt, grid, x, y, z, origin, time);
 
         float progress_val = CalculateProgress(time) * bb.speed_mul;
-        const float surf_phase01 = std::fmod(progress_val + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+        const float surf_phase01 =
+            std::fmod(progress_val + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
         float strip_surf_p01 = 0.0f;
-        if(wave_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
-            strip_surf_p01 = SampleStripKernelPalette01(wave_strip_cmap_kernel,
-                                                        wave_strip_cmap_rep,
-                                                        wave_strip_cmap_unfold,
-                                                        wave_strip_cmap_dir,
+            strip_surf_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                        GetEffectStripColormapRepeats(),
+                                                        GetEffectStripColormapUnfold(),
+                                                        GetEffectStripColormapDirectionDeg(),
                                                         surf_phase01,
                                                         time,
                                                         grid,
@@ -362,8 +325,8 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
                                                         rot);
         }
         float phase = progress_val * (float)(2.0 * M_PI);
-        float phase_rad = bb.phase_deg * (float)(M_PI / 180.0f);
-        float travel = phase + phase_rad;
+        float travel = phase + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb),
+                                                                         stratum_mot01, 0.45f);
         float scale_eff = std::max(0.05f, GetNormalizedScale());
         float sw = grid.width * 0.5f * scale_eff;
         float sh = grid.height * 0.5f * scale_eff;
@@ -384,7 +347,6 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
 
         float surface_y;
         int style = std::max(0, std::min(wave_style, STYLE_COUNT - 1));
-        // travel already includes phase + phase_rad; do not add phase again or motion runs ~2x and drifts wrong.
         switch(style)
         {
         case STYLE_RADIAL:
@@ -417,7 +379,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float fade = std::clamp(surface_edge_fade / 100.0f, 0.0f, 1.0f);
         if(fade > 0.001f)
         {
-            float u = std::max(std::fabs(lx), std::fabs(lz));
+            const float u = RoomXZEdgeProximity01(rot.x, rot.z, grid);
             float edge_mul = 1.0f - fade * smoothstep(0.0f, 1.0f, u);
             intensity *= std::max(0.0f, std::min(1.0f, edge_mul));
         }
@@ -447,10 +409,10 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         sp.y_norm = coord_y01;
 
         RGBColor c;
-        if(wave_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             float p01v = ApplyVoxelDriveToPalette01(strip_surf_p01, x, y, z, time, grid);
-            c = ResolveStripKernelFinalColor(*this, wave_strip_cmap_kernel, p01v, wave_strip_cmap_color_style, time,
+            c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                              rate * 12.0f);
         }
         else if(GetRainbowMode())
@@ -485,7 +447,9 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     float stratum_w[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_map, stratum_w);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
     const float prog = progress * bb.speed_mul;
     float rot_rel_x = rotated_pos.x - origin.x;
     float rot_rel_y = rotated_pos.y - origin.y;
@@ -511,9 +475,10 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         normalized_position = 0.5f * (nx + nz);
     }
     normalized_position = fmaxf(0.0f, fminf(1.0f, normalized_position));
-    const float pshift = bb.phase_deg * (1.0f / 360.0f);
-    normalized_position = std::fmod(normalized_position + pshift + 1.0f, 1.0f);
-    wave_value = sin(normalized_position * freq_scale_e * 10.0f - prog);
+    normalized_position =
+        std::fmod(normalized_position + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
+    wave_value = sin(normalized_position * freq_scale_e * 10.0f - prog +
+                     stratum_mot01 * (float)(2.0 * M_PI) * 0.55f);
     float radial_distance = sqrtf(rot_rel_x*rot_rel_x + rot_rel_y*rot_rel_y + rot_rel_z*rot_rel_z);
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float depth_factor = 1.0f;
@@ -526,14 +491,14 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         wave_value * 0.7f + 0.3f * sin(normalized_position * freq_scale_e * 20.0f - prog * 1.5f);
     wave_enhanced = fmax(-1.0f, fmin(1.0f, wave_enhanced));
     float pos_for_spatial = (wave_enhanced + 1.0f) * 0.5f;
-    const float line_phase01 = std::fmod(prog + pshift + 1.0f, 1.0f);
+    const float line_phase01 = std::fmod(prog + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_line_p01 = 0.0f;
-    if(wave_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        strip_line_p01 = SampleStripKernelPalette01(wave_strip_cmap_kernel,
-                                                    wave_strip_cmap_rep,
-                                                    wave_strip_cmap_unfold,
-                                                    wave_strip_cmap_dir,
+        strip_line_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                    GetEffectStripColormapRepeats(),
+                                                    GetEffectStripColormapUnfold(),
+                                                    GetEffectStripColormapDirectionDeg(),
                                                     line_phase01,
                                                     time,
                                                     grid,
@@ -558,10 +523,10 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     sp.y_norm = coord2;
 
     RGBColor final_color;
-    if(wave_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float p01v = ApplyVoxelDriveToPalette01(strip_line_p01, x, y, z, time, grid);
-        final_color = ResolveStripKernelFinalColor(*this, wave_strip_cmap_kernel, p01v, wave_strip_cmap_color_style, time,
+        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                     rate * 12.0f);
     }
     else if(GetRainbowMode())
@@ -625,39 +590,12 @@ nlohmann::json Wave::SaveSettings() const
     j["wave_amplitude"] = wave_amplitude;
     j["wave_direction_deg"] = wave_direction_deg;
     j["surface_edge_fade"] = surface_edge_fade;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "wave_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "wave_stratum_band_speed_pct",
-                                           "wave_stratum_band_tight_pct",
-                                           "wave_stratum_band_phase_deg");
-    j["wave_strip_cmap_on"] = wave_strip_cmap_on;
-    j["wave_strip_cmap_kernel"] = wave_strip_cmap_kernel;
-    j["wave_strip_cmap_rep"] = wave_strip_cmap_rep;
-    j["wave_strip_cmap_unfold"] = wave_strip_cmap_unfold;
-    j["wave_strip_cmap_dir"] = wave_strip_cmap_dir;
-    j["wave_strip_cmap_color_style"] = wave_strip_cmap_color_style;
     return j;
 }
 
 void Wave::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "wave_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "wave_stratum_band_speed_pct",
-                                            "wave_stratum_band_tight_pct",
-                                            "wave_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("shape_type") && settings["shape_type"].is_number_integer())
@@ -683,33 +621,6 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("surface_edge_fade") && settings["surface_edge_fade"].is_number())
         surface_edge_fade = std::clamp(settings["surface_edge_fade"].get<float>(), 0.0f, 100.0f);
 
-    if(settings.contains("wave_strip_cmap_on") && settings["wave_strip_cmap_on"].is_boolean())
-        wave_strip_cmap_on = settings["wave_strip_cmap_on"].get<bool>();
-    else if(settings.contains("wave_strip_cmap_on") && settings["wave_strip_cmap_on"].is_number_integer())
-        wave_strip_cmap_on = settings["wave_strip_cmap_on"].get<int>() != 0;
-    if(settings.contains("wave_strip_cmap_kernel") && settings["wave_strip_cmap_kernel"].is_number_integer())
-        wave_strip_cmap_kernel = std::clamp(settings["wave_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
-    if(settings.contains("wave_strip_cmap_rep") && settings["wave_strip_cmap_rep"].is_number())
-        wave_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["wave_strip_cmap_rep"].get<float>()));
-    if(settings.contains("wave_strip_cmap_unfold") && settings["wave_strip_cmap_unfold"].is_number_integer())
-        wave_strip_cmap_unfold = std::clamp(settings["wave_strip_cmap_unfold"].get<int>(), 0,
-                                        (int)StripPatternSurface::UnfoldMode::COUNT - 1);
-    if(settings.contains("wave_strip_cmap_dir") && settings["wave_strip_cmap_dir"].is_number())
-        wave_strip_cmap_dir = std::fmod(settings["wave_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
-    if(settings.contains("wave_strip_cmap_color_style") && settings["wave_strip_cmap_color_style"].is_number_integer())
-        wave_strip_cmap_color_style = std::clamp(settings["wave_strip_cmap_color_style"].get<int>(), 0, 2);
-    else
-        wave_strip_cmap_color_style = GetRainbowMode() ? 2 : 0;
-
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(wave_strip_cmap_on,
-                                                wave_strip_cmap_kernel,
-                                                wave_strip_cmap_rep,
-                                                wave_strip_cmap_unfold,
-                                                wave_strip_cmap_dir,
-                                                wave_strip_cmap_color_style);
-    }
     if(style_combo)
         style_combo->setCurrentIndex(mode);
     if(line_controls) line_controls->setVisible(mode == MODE_LINE);
@@ -747,10 +658,5 @@ void Wave::LoadSettings(const nlohmann::json& settings)
     {
         surface_edge_fade_slider->setValue((int)surface_edge_fade);
         if(surface_edge_fade_label) surface_edge_fade_label->setText(QString::number((int)surface_edge_fade) + "%");
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
     }
 }

@@ -8,12 +8,6 @@
 
 class QSlider;
 class QLabel;
-class StripKernelColormapPanel;
-
-/**
- * Double-cone spotlight field in a unit cube, with a rotation matrix whose axis and angle
- * vary over time. Intended for dense 3D grids / room volumes with normalized coordinates.
- */
 class RotatingConeSpotlights : public SpatialEffect3D
 {
     Q_OBJECT
@@ -29,7 +23,7 @@ public:
     static std::string const ClassName() { return "RotatingConeSpotlights"; }
     static std::string const UIName() { return "Rotating Cone Spotlights"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -38,18 +32,13 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void SyncStripColormapFromPanel();
-
 private:
     static void SetupRotationMatrix(float ux, float uy, float uz, float angle_rad, float R[3][3]);
     static void Rotate3D(float x, float y, float z, const float R[3][3], float* rx, float* ry, float* rz);
     static RGBColor Hsv01ToBgr(float h, float s, float v);
 
-    /** Matches 1/(pi^2) in reference tunings; larger = wider cones (smaller sqrt term divisor). */
     float cone_scale = 0.10132118364233777f;
-    /** Added to hue from room X (aligned to the centered-x hue convention). */
     float hue01 = 0.0f;
-    /** Multiplier on time for axis wobble frequencies. */
     float motion_rate = 1.0f;
 
     QSlider* cone_slider = nullptr;
@@ -58,14 +47,6 @@ private:
     QLabel* hue_label = nullptr;
     QSlider* motion_slider = nullptr;
     QLabel* motion_label = nullptr;
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool cones_spot_strip_cmap_on = false;
-    int cones_spot_strip_cmap_kernel = 0;
-    float cones_spot_strip_cmap_rep = 4.0f;
-    int cones_spot_strip_cmap_unfold = 0;
-    float cones_spot_strip_cmap_dir = 0.0f;
-    int cones_spot_strip_cmap_color_style = 0;
 };
 
 #endif

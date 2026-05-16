@@ -2,8 +2,6 @@
 
 #include "FreqRipple.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
 #include <algorithm>
@@ -20,7 +18,7 @@ FreqRipple::FreqRipple(QWidget* parent)
     ripples.reserve(64);
 }
 
-EffectInfo3D FreqRipple::GetEffectInfo()
+EffectInfo3D FreqRipple::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -46,6 +44,9 @@ EffectInfo3D FreqRipple::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -142,46 +143,6 @@ void FreqRipple::SetupCustomUI(QWidget* parent)
         ripple_edge_shape = std::clamp(idx, 0, 2);
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(freqripple_strip_cmap_on,
-                                            freqripple_strip_cmap_kernel,
-                                            freqripple_strip_cmap_rep,
-                                            freqripple_strip_cmap_unfold,
-                                            freqripple_strip_cmap_dir,
-                                            freqripple_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqRipple::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqRipple::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void FreqRipple::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    freqripple_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    freqripple_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    freqripple_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    freqripple_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    freqripple_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    freqripple_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void FreqRipple::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 float FreqRipple::smoothstep(float edge0, float edge1, float x) const
@@ -230,13 +191,16 @@ void FreqRipple::TickRipples(float time)
         }), ripples.end());
 }
 
-RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time, const EffectStratumBlend::BandBlendScalars& bb) const
+RGBColor FreqRipple::ComputeRippleColor(float dist_norm,
+                                        float time,
+                                        const EffectStratumBlend::BandBlendScalars& bb,
+                                        float stratum_mot01) const
 {
     RGBColor result = ToRGBColor(0, 0, 0);
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
-    float phase_shift = bb.phase_deg * (1.0f / 360.0f);
+    float phase_shift = EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
 
     for(unsigned int i = 0; i < ripples.size(); i++)
     {
@@ -281,7 +245,6 @@ RGBColor FreqRipple::ComputeRippleColor(float dist_norm, float time, const Effec
     return result;
 }
 
-
 RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
@@ -298,14 +261,17 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     float dx = rp.x - origin.x;
     float dy = rp.y - origin.y;
     float dz = rp.z - origin.z;
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float dist_norm = std::clamp(std::sqrt(dx*dx + dy*dy + dz*dz) / std::max(max_radius, 1e-5f), 0.0f, 2.0f);
 
-    RGBColor color = ComputeRippleColor(dist_norm, time, bb);
+    RGBColor color = ComputeRippleColor(dist_norm, time, bb, stratum_mot01);
 
     SpatialLayerCore::Basis basis;
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
@@ -321,17 +287,17 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(freqripple_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.37f + dist_norm * 0.21f +
                           time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) + 1.f,
                       1.f);
-        float p01 = SampleStripKernelPalette01(freqripple_strip_cmap_kernel,
-                                                 freqripple_strip_cmap_rep,
-                                                 freqripple_strip_cmap_unfold,
-                                                 freqripple_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -339,8 +305,8 @@ RGBColor FreqRipple::CalculateColorGrid(float x, float y, float z, float time, c
                                                  origin,
                                                  rp);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
-        user_color = ResolveStripKernelFinalColor(*this, freqripple_strip_cmap_kernel, std::min(p01, 1.0f),
-                                                  freqripple_strip_cmap_color_style, time,
+        user_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), std::min(p01, 1.0f),
+                                                  GetEffectStripColormapColorStyle(), time,
                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
@@ -373,73 +339,21 @@ nlohmann::json FreqRipple::SaveSettings() const
     j["decay_rate"]       = decay_rate;
     j["onset_threshold"]  = onset_threshold;
     j["ripple_edge_shape"] = ripple_edge_shape;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "freqripple_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "freqripple_stratum_band_speed_pct",
-                                           "freqripple_stratum_band_tight_pct",
-                                           "freqripple_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "freqripple",
-                          freqripple_strip_cmap_on,
-                          freqripple_strip_cmap_kernel,
-                          freqripple_strip_cmap_rep,
-                          freqripple_strip_cmap_unfold,
-                          freqripple_strip_cmap_dir,
-                          freqripple_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void FreqRipple::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "freqripple_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "freqripple_stratum_band_speed_pct",
-                                            "freqripple_stratum_band_tight_pct",
-                                            "freqripple_stratum_band_phase_deg");
     if(settings.contains("trail_width"))     trail_width     = settings["trail_width"].get<float>();
     if(settings.contains("decay_rate"))      decay_rate      = settings["decay_rate"].get<float>();
     if(settings.contains("onset_threshold")) onset_threshold = settings["onset_threshold"].get<float>();
     if(settings.contains("ripple_edge_shape")) ripple_edge_shape = std::clamp(settings["ripple_edge_shape"].get<int>(), 0, 2);
-    StripColormapLoadJson(settings,
-                          "freqripple",
-                          freqripple_strip_cmap_on,
-                          freqripple_strip_cmap_kernel,
-                          freqripple_strip_cmap_rep,
-                          freqripple_strip_cmap_unfold,
-                          freqripple_strip_cmap_dir,
-                          freqripple_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(freqripple_strip_cmap_on,
-                                                freqripple_strip_cmap_kernel,
-                                                freqripple_strip_cmap_rep,
-                                                freqripple_strip_cmap_unfold,
-                                                freqripple_strip_cmap_dir,
-                                                freqripple_strip_cmap_color_style);
-    }
-    ripples.clear();
+ripples.clear();
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(FreqRipple)

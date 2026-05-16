@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/** Helpers for plugin UI: no QSS; no per-widget palette on panels/frames (inherit app/theme palette).
- *  OpenRGBEffectsPlugin leans on Qt Designer .ui files and named composite widgets; this
- *  plugin builds the same kinds of sections in code and centralizes repeated pieces here
- *  (muted labels, swatches, section blocks, transport buttons) for consistency. */
 
 #ifndef PLUGIN_UI_UTILS_H
 #define PLUGIN_UI_UTILS_H
@@ -21,7 +17,6 @@
 #include <QWidget>
 #include <algorithm>
 
-/** Helper / secondary text: use theme’s Disabled+WindowText (OpenRGB dark theme sets this to muted gray). */
 inline void PluginUiApplyMutedSecondaryLabel(QWidget* w)
 {
     if(!w) return;
@@ -55,7 +50,6 @@ inline void PluginUiApplyBoldLabel(QWidget* w)
     w->setFont(f);
 }
 
-/** Color preview on a push button without QSS (uses icon swatch). */
 inline void PluginUiSetRgbSwatchButton(QPushButton* btn, int r, int g, int b)
 {
     if(!btn) return;
@@ -70,7 +64,6 @@ inline void PluginUiSetRgbSwatchButton(QPushButton* btn, int r, int g, int b)
     btn->setText(QString());
 }
 
-/** Inset panel: shape/shadow only; fill comes from the active Qt style (CONTRIBUTING — no custom chrome palette). */
 inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
 {
     if(!inner)
@@ -88,7 +81,6 @@ inline QFrame* PluginUiWrapInSettingsPanel(QWidget* inner, int inner_margin = 9)
     return panel;
 }
 
-/** Bold title + framed body + gap. out_entire_section = outer widget (title + frame) for show/hide (e.g. Minecraft). */
 inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,
                                     const QString& title,
                                     const QString& tip,
@@ -130,7 +122,6 @@ inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,
     }
 }
 
-/** Start / Stop pair aligned with EffectLayerBanner (shared wording and initial enabled state). */
 inline void PluginUiAddEffectTransportButtons(QHBoxLayout* row,
                                               QPushButton** out_start = nullptr,
                                               QPushButton** out_stop = nullptr)

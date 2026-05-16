@@ -13,6 +13,12 @@
 
 REGISTER_EFFECT_3D(ScreenMirror);
 
+namespace
+{
+constexpr int kWhiteRolloffSliderMax = 125;
+constexpr float kWhiteRolloffStoredMax = static_cast<float>(kWhiteRolloffSliderMax) / 100.0f;
+}
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -66,7 +72,6 @@ const uint8_t* GetCalibrationPatternBuffer(int& out_w, int& out_h)
     return buffer.data();
 }
 
-/** Slider integer = degrees × this (one slider step = 0.5°). */
 constexpr int kScreenMapRollTicksPerDegree = 2;
 constexpr int kScreenMapRollSliderMax = 180 * kScreenMapRollTicksPerDegree;
 inline float RadialMapUiToInternal(int ui_0_100)
@@ -95,7 +100,6 @@ bool CaptureSourceIdIsPrimary(const std::string& source_id)
     return false;
 }
 
-/** Primary capture wins; if none marked, first plane in manager order. */
 bool DefaultMonitorEnabledForPlane(DisplayPlane3D* plane)
 {
     std::vector<DisplayPlane3D*> planes = DisplayPlaneManager::instance()->GetDisplayPlanes();
@@ -167,7 +171,7 @@ ScreenMirror::ScreenMirror(QWidget* parent)
 
 ScreenMirror::~ScreenMirror() = default;
 
-EffectInfo3D ScreenMirror::GetEffectInfo()
+EffectInfo3D ScreenMirror::GetEffectInfo() const
 {
     EffectInfo3D info           = {};
     info.info_version           = 2;
@@ -227,6 +231,12 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
         s.white_rolloff_label = nullptr;
         s.vibrance_slider = nullptr;
         s.vibrance_label = nullptr;
+        s.led_output_gain_r_slider = nullptr;
+        s.led_output_gain_r_label = nullptr;
+        s.led_output_gain_g_slider = nullptr;
+        s.led_output_gain_g_label = nullptr;
+        s.led_output_gain_b_slider = nullptr;
+        s.led_output_gain_b_label = nullptr;
         s.black_bar_letterbox_slider = nullptr;
         s.black_bar_letterbox_label = nullptr;
         s.black_bar_pillarbox_slider = nullptr;
@@ -448,7 +458,6 @@ void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-
 namespace
 {
     inline float Smoothstep(float edge0, float edge1, float x)
@@ -462,7 +471,6 @@ namespace
         return t * t * (3.0f - 2.0f * t);
     }
 
-    /** Near image corners, blend center UV with vertical-edge and horizontal-edge samples (HyperHDR-style 2D idea in UV space). */
     inline RGBColor SampleFrameWithCornerBlend(const uint8_t* frame_data,
                                                int frame_w,
                                                int frame_h,
@@ -745,6 +753,9 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float brightness_threshold;
         float white_rolloff;
         float vibrance;
+        float led_output_gain_r;
+        float led_output_gain_g;
+        float led_output_gain_b;
         float black_bar_letterbox_percent;
         float black_bar_pillarbox_percent;
         float smoothing_time_ms;
@@ -879,7 +890,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         {
             mon_settings.capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
         }
-        /* Zones match the rectilinear preview (before radial warp and map roll). */
         bool in_zone = false;
         for(size_t zone_idx = 0; zone_idx < mon_settings.capture_zones.size(); zone_idx++)
         {
@@ -1111,6 +1121,9 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             contrib.brightness_threshold = mon_settings.brightness_threshold;
             contrib.white_rolloff = mon_settings.white_rolloff;
             contrib.vibrance = mon_settings.vibrance;
+            contrib.led_output_gain_r = mon_settings.led_output_gain_r;
+            contrib.led_output_gain_g = mon_settings.led_output_gain_g;
+            contrib.led_output_gain_b = mon_settings.led_output_gain_b;
             contrib.black_bar_letterbox_percent = mon_settings.black_bar_letterbox_percent;
             contrib.black_bar_pillarbox_percent = mon_settings.black_bar_pillarbox_percent;
             contrib.smoothing_time_ms = mon_settings.smoothing_time_ms;
@@ -1182,6 +1195,14 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
     float total_r = 0.0f, total_g = 0.0f, total_b = 0.0f;
     float total_weight = 0.0f;
+    std::vector<float> per_contrib_r;
+    std::vector<float> per_contrib_g;
+    std::vector<float> per_contrib_b;
+    std::vector<float> per_contrib_w;
+    per_contrib_r.reserve(contributions.size());
+    per_contrib_g.reserve(contributions.size());
+    per_contrib_b.reserve(contributions.size());
+    per_contrib_w.reserve(contributions.size());
 
     for(size_t contrib_index = 0; contrib_index < contributions.size(); contrib_index++)
     {
@@ -1205,7 +1226,6 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             float v_min = lp;
             float v_max = 1.0f - lp;
             float sample_u_clamped = std::clamp(sample_u, u_min, u_max);
-            /* Procedural calibration texture uses the same v axis as SpatialMapToScreen (not DXGI row order). */
             float tex_v = std::clamp(sample_v, v_min, v_max);
             const unsigned int samp = GetSamplingResolution();
             RGBColor sampled_cal = SampleFrameWithCornerBlend(cal_data,
@@ -1286,11 +1306,13 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
             if(contrib.brightness_threshold > 0.0f)
             {
-                float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
                 float thr = std::min(255.0f, contrib.brightness_threshold);
-                if(luminance <= thr)
+                float luminance = 0.299f * r + 0.587f * g + 0.114f * b;
+                float peak = std::max(r, std::max(g, b));
+                float level = std::max(luminance, peak);
+                if(level <= thr)
                 {
-                    float t = (thr <= 0.0f) ? 1.0f : std::max(0.0f, luminance / thr);
+                    float t = (thr <= 0.0f) ? 1.0f : std::max(0.0f, level / thr);
                     t = t * t;
                     contrib.weight *= t;
                     r *= t;
@@ -1305,21 +1327,42 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         float min_rgb = std::min(r, std::min(g, b));
         float sat = (max_rgb > 0.001f) ? ((max_rgb - min_rgb) / max_rgb) : 0.0f;
 
-        if(lum > 235.0f && sat > 0.10f)
+        const float wr_full = std::clamp(contrib.white_rolloff, 0.0f, kWhiteRolloffStoredMax);
+        const float wr_sub = std::min(1.0f, wr_full);
+
+        if(lum > 242.0f && sat < 0.20f)
         {
-            float t = std::clamp((lum - 235.0f) / 20.0f, 0.0f, 1.0f);
+            float t = std::clamp((lum - 242.0f) / 13.0f, 0.0f, 1.0f);
+            t *= (1.0f - wr_sub);
             float gray = lum;
             r = (1.0f - t) * r + t * gray;
             g = (1.0f - t) * g + t * gray;
             b = (1.0f - t) * b + t * gray;
         }
-        float white_factor = (1.0f - sat) * (lum / 255.0f);
-        float white_reduce = std::min(1.0f, contrib.white_rolloff);
-        float dampen = 1.0f - white_reduce * white_factor;
+        if(wr_sub > 0.0f)
+        {
+            float wmin = std::min(r, std::min(g, b));
+            float sub = wr_sub * wmin;
+            r -= sub;
+            g -= sub;
+            b -= sub;
+        }
+        const float ultra01 = std::clamp((wr_full - 1.0f) / (kWhiteRolloffStoredMax - 1.0f), 0.0f, 1.0f);
+        if(ultra01 > 0.0f)
+        {
+            float gray = (r + g + b) / 3.0f;
+            const float boost = 1.0f + ultra01 * 0.95f;
+            r = gray + (r - gray) * boost;
+            g = gray + (g - gray) * boost;
+            b = gray + (b - gray) * boost;
+            r = std::clamp(r, 0.0f, 255.0f);
+            g = std::clamp(g, 0.0f, 255.0f);
+            b = std::clamp(b, 0.0f, 255.0f);
+        }
 
-        r *= contrib.brightness_multiplier * dampen;
-        g *= contrib.brightness_multiplier * dampen;
-        b *= contrib.brightness_multiplier * dampen;
+        r *= contrib.brightness_multiplier;
+        g *= contrib.brightness_multiplier;
+        b *= contrib.brightness_multiplier;
 
         float vib = std::max(0.0f, std::min(2.0f, contrib.vibrance));
         if(std::fabs(vib - 1.0f) > 0.001f)
@@ -1333,12 +1376,21 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
             b = std::max(0.0f, std::min(255.0f, b));
         }
 
+        r = std::clamp(r * contrib.led_output_gain_r, 0.0f, 255.0f);
+        g = std::clamp(g * contrib.led_output_gain_g, 0.0f, 255.0f);
+        b = std::clamp(b * contrib.led_output_gain_b, 0.0f, 255.0f);
+
         float adjusted_weight = contrib.weight * (0.5f + 0.5f * blend_factor);
 
         total_r += r * adjusted_weight;
         total_g += g * adjusted_weight;
         total_b += b * adjusted_weight;
         total_weight += adjusted_weight;
+
+        per_contrib_r.push_back(r);
+        per_contrib_g.push_back(g);
+        per_contrib_b.push_back(b);
+        per_contrib_w.push_back(adjusted_weight);
     }
 
     if(total_weight > 0.0f)
@@ -1348,6 +1400,45 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
         total_b /= total_weight;
     }
 
+    if(per_contrib_w.size() >= 2 && total_weight > 1e-6f)
+    {
+        size_t best = 0;
+        for(size_t i = 1; i < per_contrib_w.size(); i++)
+        {
+            if(per_contrib_w[i] > per_contrib_w[best])
+            {
+                best = i;
+            }
+        }
+        const float dominance = per_contrib_w[best] / total_weight;
+        if(dominance >= 0.50f)
+        {
+            total_r = per_contrib_r[best];
+            total_g = per_contrib_g[best];
+            total_b = per_contrib_b[best];
+        }
+        else
+        {
+            float maxc = std::max(total_r, std::max(total_g, total_b));
+            float minc = std::min(total_r, std::min(total_g, total_b));
+            if(maxc > 1.0f)
+            {
+                float sat_mix = (maxc - minc) / maxc;
+                if(sat_mix < 0.30f)
+                {
+                    float gray = (total_r + total_g + total_b) / 3.0f;
+                    float k = 1.0f + (0.30f - sat_mix) * 1.15f;
+                    k = std::min(k, 1.48f);
+                    total_r = gray + (total_r - gray) * k;
+                    total_g = gray + (total_g - gray) * k;
+                    total_b = gray + (total_b - gray) * k;
+                    total_r = std::clamp(total_r, 0.0f, 255.0f);
+                    total_g = std::clamp(total_g, 0.0f, 255.0f);
+                    total_b = std::clamp(total_b, 0.0f, 255.0f);
+                }
+            }
+        }
+    }
 
     if(total_r > 255.0f) total_r = 255.0f;
     if(total_g > 255.0f) total_g = 255.0f;
@@ -1442,6 +1533,9 @@ nlohmann::json ScreenMirror::SaveSettings() const
         mon["brightness_threshold"] = mon_settings.brightness_threshold;
         mon["white_rolloff"] = mon_settings.white_rolloff;
         mon["vibrance"] = mon_settings.vibrance;
+        mon["led_output_gain_r"] = mon_settings.led_output_gain_r;
+        mon["led_output_gain_g"] = mon_settings.led_output_gain_g;
+        mon["led_output_gain_b"] = mon_settings.led_output_gain_b;
         mon["black_bar_letterbox_percent"] = mon_settings.black_bar_letterbox_percent;
         mon["black_bar_pillarbox_percent"] = mon_settings.black_bar_pillarbox_percent;
         
@@ -1553,6 +1647,39 @@ void ScreenMirror::SyncMonitorSettingsToUI(MonitorSettings& msettings)
     if(msettings.vibrance_label)
     {
         msettings.vibrance_label->setText(QString::number((int)std::lround(msettings.vibrance * 100.0f)) + "%");
+    }
+    if(msettings.led_output_gain_r_slider)
+    {
+        QSignalBlocker blocker(msettings.led_output_gain_r_slider);
+        msettings.led_output_gain_r_slider->setValue(
+            (int)std::lround(std::clamp(msettings.led_output_gain_r, 0.5f, 2.0f) * 100.0f));
+    }
+    if(msettings.led_output_gain_r_label)
+    {
+        msettings.led_output_gain_r_label->setText(
+            QString::number((int)std::lround(std::clamp(msettings.led_output_gain_r, 0.5f, 2.0f) * 100.0f)) + "%");
+    }
+    if(msettings.led_output_gain_g_slider)
+    {
+        QSignalBlocker blocker(msettings.led_output_gain_g_slider);
+        msettings.led_output_gain_g_slider->setValue(
+            (int)std::lround(std::clamp(msettings.led_output_gain_g, 0.5f, 2.0f) * 100.0f));
+    }
+    if(msettings.led_output_gain_g_label)
+    {
+        msettings.led_output_gain_g_label->setText(
+            QString::number((int)std::lround(std::clamp(msettings.led_output_gain_g, 0.5f, 2.0f) * 100.0f)) + "%");
+    }
+    if(msettings.led_output_gain_b_slider)
+    {
+        QSignalBlocker blocker(msettings.led_output_gain_b_slider);
+        msettings.led_output_gain_b_slider->setValue(
+            (int)std::lround(std::clamp(msettings.led_output_gain_b, 0.5f, 2.0f) * 100.0f));
+    }
+    if(msettings.led_output_gain_b_label)
+    {
+        msettings.led_output_gain_b_label->setText(
+            QString::number((int)std::lround(std::clamp(msettings.led_output_gain_b, 0.5f, 2.0f) * 100.0f)) + "%");
     }
     if(msettings.black_bar_letterbox_slider)
     {
@@ -1821,6 +1948,12 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             QLabel* existing_white_rolloff_label = nullptr;
             QSlider* existing_vibrance_slider = nullptr;
             QLabel* existing_vibrance_label = nullptr;
+            QSlider* existing_led_output_gain_r_slider = nullptr;
+            QLabel* existing_led_output_gain_r_label = nullptr;
+            QSlider* existing_led_output_gain_g_slider = nullptr;
+            QLabel* existing_led_output_gain_g_label = nullptr;
+            QSlider* existing_led_output_gain_b_slider = nullptr;
+            QLabel* existing_led_output_gain_b_label = nullptr;
             QSlider* existing_black_bar_letterbox_slider = nullptr;
             QLabel* existing_black_bar_letterbox_label = nullptr;
             QSlider* existing_black_bar_pillarbox_slider = nullptr;
@@ -1882,6 +2015,12 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 existing_white_rolloff_label = existing_it->second.white_rolloff_label;
                 existing_vibrance_slider = existing_it->second.vibrance_slider;
                 existing_vibrance_label = existing_it->second.vibrance_label;
+                existing_led_output_gain_r_slider = existing_it->second.led_output_gain_r_slider;
+                existing_led_output_gain_r_label = existing_it->second.led_output_gain_r_label;
+                existing_led_output_gain_g_slider = existing_it->second.led_output_gain_g_slider;
+                existing_led_output_gain_g_label = existing_it->second.led_output_gain_g_label;
+                existing_led_output_gain_b_slider = existing_it->second.led_output_gain_b_slider;
+                existing_led_output_gain_b_label = existing_it->second.led_output_gain_b_label;
                 existing_black_bar_letterbox_slider = existing_it->second.black_bar_letterbox_slider;
                 existing_black_bar_letterbox_label = existing_it->second.black_bar_letterbox_label;
                 existing_black_bar_pillarbox_slider = existing_it->second.black_bar_pillarbox_slider;
@@ -1959,6 +2098,30 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             else msettings.white_rolloff = 0.0f;
             if(mon.contains("vibrance")) msettings.vibrance = mon["vibrance"].get<float>();
             else msettings.vibrance = 1.0f;
+            if(mon.contains("led_output_gain_r"))
+            {
+                msettings.led_output_gain_r = mon["led_output_gain_r"].get<float>();
+            }
+            else
+            {
+                msettings.led_output_gain_r = 1.0f;
+            }
+            if(mon.contains("led_output_gain_g"))
+            {
+                msettings.led_output_gain_g = mon["led_output_gain_g"].get<float>();
+            }
+            else
+            {
+                msettings.led_output_gain_g = 1.0f;
+            }
+            if(mon.contains("led_output_gain_b"))
+            {
+                msettings.led_output_gain_b = mon["led_output_gain_b"].get<float>();
+            }
+            else
+            {
+                msettings.led_output_gain_b = 1.0f;
+            }
             if(mon.contains("black_bar_letterbox_percent")) msettings.black_bar_letterbox_percent = mon["black_bar_letterbox_percent"].get<float>();
             else msettings.black_bar_letterbox_percent = 0.0f;
             if(mon.contains("black_bar_pillarbox_percent")) msettings.black_bar_pillarbox_percent = mon["black_bar_pillarbox_percent"].get<float>();
@@ -2073,8 +2236,11 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
             msettings.smoothing_time_ms = std::clamp(msettings.smoothing_time_ms, 0.0f, 500.0f);
             msettings.brightness_multiplier = std::clamp(msettings.brightness_multiplier, 0.0f, 2.0f);
             msettings.brightness_threshold = std::clamp(msettings.brightness_threshold, 0.0f, 255.0f);
-            msettings.white_rolloff = std::clamp(msettings.white_rolloff, 0.0f, 1.0f);
+            msettings.white_rolloff = std::clamp(msettings.white_rolloff, 0.0f, kWhiteRolloffStoredMax);
             msettings.vibrance = std::clamp(msettings.vibrance, 0.0f, 2.0f);
+            msettings.led_output_gain_r = std::clamp(msettings.led_output_gain_r, 0.5f, 2.0f);
+            msettings.led_output_gain_g = std::clamp(msettings.led_output_gain_g, 0.5f, 2.0f);
+            msettings.led_output_gain_b = std::clamp(msettings.led_output_gain_b, 0.5f, 2.0f);
             msettings.black_bar_letterbox_percent = std::clamp(msettings.black_bar_letterbox_percent, 0.0f, 50.0f);
             msettings.black_bar_pillarbox_percent = std::clamp(msettings.black_bar_pillarbox_percent, 0.0f, 50.0f);
             msettings.edge_softness = std::clamp(msettings.edge_softness, 0.0f, 100.0f);
@@ -2112,6 +2278,12 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                 msettings.white_rolloff_label = existing_white_rolloff_label;
                 msettings.vibrance_slider = existing_vibrance_slider;
                 msettings.vibrance_label = existing_vibrance_label;
+                msettings.led_output_gain_r_slider = existing_led_output_gain_r_slider;
+                msettings.led_output_gain_r_label = existing_led_output_gain_r_label;
+                msettings.led_output_gain_g_slider = existing_led_output_gain_g_slider;
+                msettings.led_output_gain_g_label = existing_led_output_gain_g_label;
+                msettings.led_output_gain_b_slider = existing_led_output_gain_b_slider;
+                msettings.led_output_gain_b_label = existing_led_output_gain_b_label;
                 msettings.black_bar_letterbox_slider = existing_black_bar_letterbox_slider;
                 msettings.black_bar_letterbox_label = existing_black_bar_letterbox_label;
                 msettings.black_bar_pillarbox_slider = existing_black_bar_pillarbox_slider;
@@ -2191,10 +2363,12 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                     QHBoxLayout* white_rolloff_layout = new QHBoxLayout(white_rolloff_widget);
                     white_rolloff_layout->setContentsMargins(0, 0, 0, 0);
                     msettings.white_rolloff_slider = new QSlider(Qt::Horizontal);
-                    msettings.white_rolloff_slider->setRange(0, 100);
+                    msettings.white_rolloff_slider->setRange(0, kWhiteRolloffSliderMax);
                     msettings.white_rolloff_slider->setValue((int)std::lround(msettings.white_rolloff * 100.0f));
                     msettings.white_rolloff_slider->setEnabled(has_capture);
-                    msettings.white_rolloff_slider->setToolTip("How much to reduce white/gray wash (0-100%). 0 = no rolloff, 100% = strong; keeps RGB/CYM vibrant.");
+                    msettings.white_rolloff_slider->setToolTip(
+                        "Removes gray/white fog (0-125%). ~70-80% is a common sweet spot. 100% = full chroma strip (no shared white). "
+                        "101-125% = Plus Ultra: extra saturation for anime / punch (can clip - ease off if it is too much).");
                     white_rolloff_layout->addWidget(msettings.white_rolloff_slider);
                     msettings.white_rolloff_label = new QLabel(QString::number((int)std::lround(msettings.white_rolloff * 100.0f)) + "%");
                     msettings.white_rolloff_label->setMinimumWidth(45);
@@ -2218,6 +2392,25 @@ void ScreenMirror::LoadSettings(const nlohmann::json& settings)
                     connect(msettings.vibrance_slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
                     connect(msettings.vibrance_slider, &QSlider::valueChanged, msettings.vibrance_label, [&msettings](int v) { msettings.vibrance_label->setText(QString::number(v) + "%"); });
                     form->addRow("Vibrance:", vibrance_widget);
+                }
+            }
+
+            if(msettings.led_output_gain_r_slider == nullptr && msettings.group_box != nullptr)
+            {
+                QGroupBox* bg = msettings.group_box->findChild<QGroupBox*>("ScreenMirror_BrightnessGroup");
+                if(!bg)
+                {
+                    for(QObject* child : msettings.group_box->children())
+                    {
+                        QGroupBox* g = qobject_cast<QGroupBox*>(child);
+                        if(g && g->title() == "Brightness") { bg = g; break; }
+                    }
+                }
+                QFormLayout* form = bg ? qobject_cast<QFormLayout*>(bg->layout()) : nullptr;
+                if(form)
+                {
+                    bool has_capture = !DisplayPlaneManager::instance()->GetDisplayPlanes().empty();
+                    AddLedOutputTrimUIRow(msettings, form, has_capture);
                 }
             }
     }
@@ -2260,8 +2453,19 @@ void ScreenMirror::OnParameterChanged()
         if(settings.smoothing_time_slider) settings.smoothing_time_ms = (float)settings.smoothing_time_slider->value();
         if(settings.brightness_slider) settings.brightness_multiplier = std::clamp(settings.brightness_slider->value() / 100.0f, 0.0f, 2.0f);
         if(settings.brightness_threshold_slider) settings.brightness_threshold = (float)settings.brightness_threshold_slider->value();
-        if(settings.white_rolloff_slider) settings.white_rolloff = std::clamp((float)settings.white_rolloff_slider->value() / 100.0f, 0.0f, 1.0f);
+        if(settings.white_rolloff_slider)
+            settings.white_rolloff =
+                std::clamp((float)settings.white_rolloff_slider->value() / 100.0f, 0.0f, kWhiteRolloffStoredMax);
         if(settings.vibrance_slider) settings.vibrance = std::clamp((float)settings.vibrance_slider->value() / 100.0f, 0.0f, 2.0f);
+        if(settings.led_output_gain_r_slider)
+            settings.led_output_gain_r =
+                std::clamp((float)settings.led_output_gain_r_slider->value() / 100.0f, 0.5f, 2.0f);
+        if(settings.led_output_gain_g_slider)
+            settings.led_output_gain_g =
+                std::clamp((float)settings.led_output_gain_g_slider->value() / 100.0f, 0.5f, 2.0f);
+        if(settings.led_output_gain_b_slider)
+            settings.led_output_gain_b =
+                std::clamp((float)settings.led_output_gain_b_slider->value() / 100.0f, 0.5f, 2.0f);
         if(settings.black_bar_letterbox_slider) settings.black_bar_letterbox_percent = (float)settings.black_bar_letterbox_slider->value();
         if(settings.black_bar_pillarbox_slider) settings.black_bar_pillarbox_percent = (float)settings.black_bar_pillarbox_slider->value();
         
@@ -2628,6 +2832,34 @@ ScreenMirror::LEDKey ScreenMirror::MakeLEDKey(float x, float y, float z) const
     return key;
 }
 
+void ScreenMirror::AddLedOutputTrimUIRow(MonitorSettings& settings, QFormLayout* brightness_form, bool has_capture)
+{
+    QWidget* row = new QWidget();
+    QHBoxLayout* h = new QHBoxLayout(row);
+    h->setContentsMargins(0, 0, 0, 0);
+    auto add_channel = [&](const QString& title, QSlider*& slider, QLabel*& label, float gain) {
+        QLabel* t = new QLabel(title);
+        t->setMinimumWidth(14);
+        h->addWidget(t);
+        slider = new QSlider(Qt::Horizontal);
+        slider->setRange(50, 200);
+        slider->setValue((int)std::lround(std::clamp(gain, 0.5f, 2.0f) * 100.0f));
+        slider->setEnabled(has_capture);
+        slider->setToolTip(
+            "Per-channel multiplier for this display (50-200%). 100% = neutral. Lower green slightly if oranges read yellow on the strip.");
+        h->addWidget(slider, 1);
+        label = new QLabel(QString::number((int)std::lround(std::clamp(gain, 0.5f, 2.0f) * 100.0f)) + "%");
+        label->setMinimumWidth(36);
+        h->addWidget(label);
+        connect(slider, &QSlider::valueChanged, this, &ScreenMirror::OnParameterChanged);
+        connect(slider, &QSlider::valueChanged, label, [label](int v) { label->setText(QString::number(v) + "%"); });
+    };
+    add_channel(QStringLiteral("R"), settings.led_output_gain_r_slider, settings.led_output_gain_r_label, settings.led_output_gain_r);
+    add_channel(QStringLiteral("G"), settings.led_output_gain_g_slider, settings.led_output_gain_g_label, settings.led_output_gain_g);
+    add_channel(QStringLiteral("B"), settings.led_output_gain_b_slider, settings.led_output_gain_b_label, settings.led_output_gain_b);
+    brightness_form->addRow(QStringLiteral("LED output trim:"), row);
+}
+
 void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings)
 {
     if(!plane || !monitors_layout)
@@ -2789,7 +3021,9 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     settings.brightness_threshold_slider->setEnabled(has_capture_source);
     settings.brightness_threshold_slider->setTickPosition(QSlider::TicksBelow);
     settings.brightness_threshold_slider->setTickInterval(25);
-    settings.brightness_threshold_slider->setToolTip("Minimum brightness (0-255). 0 = all content, 128 = mid, 255 = only bright content.");
+    settings.brightness_threshold_slider->setToolTip(
+        "Floor for dim pixels (0-255). Uses peak RGB and luma so saturated reds/greens/blues are not crushed. "
+        "0 = off, higher = only brighter content passes at full strength.");
     threshold_layout->addWidget(settings.brightness_threshold_slider);
     settings.brightness_threshold_label = new QLabel(QString::number((int)settings.brightness_threshold));
     settings.brightness_threshold_label->setMinimumWidth(50);
@@ -2804,12 +3038,13 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
     QHBoxLayout* white_rolloff_layout = new QHBoxLayout(white_rolloff_widget);
     white_rolloff_layout->setContentsMargins(0, 0, 0, 0);
     settings.white_rolloff_slider = new QSlider(Qt::Horizontal);
-    settings.white_rolloff_slider->setRange(0, 100);
+    settings.white_rolloff_slider->setRange(0, kWhiteRolloffSliderMax);
     settings.white_rolloff_slider->setValue((int)std::lround(settings.white_rolloff * 100.0f));
     settings.white_rolloff_slider->setEnabled(has_capture_source);
     settings.white_rolloff_slider->setTickPosition(QSlider::TicksBelow);
     settings.white_rolloff_slider->setTickInterval(10);
-    settings.white_rolloff_slider->setToolTip("How much to reduce white/gray wash (0-100%). 0 = no rolloff, 100% = strong; keeps RGB/CYM vibrant, only big bright moments pop.");
+    settings.white_rolloff_slider->setToolTip(
+        "0-125%: strip gray/white (~70-80% sweet spot). 100% = max fog removal. 101-125% = Plus Ultra extra chroma.");
     white_rolloff_layout->addWidget(settings.white_rolloff_slider);
     settings.white_rolloff_label = new QLabel(QString::number((int)std::lround(settings.white_rolloff * 100.0f)) + "%");
     settings.white_rolloff_label->setMinimumWidth(45);
@@ -2839,6 +3074,8 @@ void ScreenMirror::CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSetting
         settings.vibrance_label->setText(QString::number(value) + "%");
     });
     brightness_form->addRow("Vibrance:", vibrance_widget);
+
+    AddLedOutputTrimUIRow(settings, brightness_form, has_capture_source);
 
     main_layout->addWidget(brightness_group);
 

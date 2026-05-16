@@ -2,9 +2,7 @@
 
 #include "Sunrise.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
-#include "StratumBandPanel.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -127,7 +125,7 @@ Sunrise::Sunrise(QWidget* parent) : SpatialEffect3D(parent)
     ApplyPreset(PRESET_DAYTIME);
 }
 
-EffectInfo3D Sunrise::GetEffectInfo()
+EffectInfo3D Sunrise::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 2;
@@ -153,6 +151,9 @@ EffectInfo3D Sunrise::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -241,52 +242,10 @@ void Sunrise::SetupCustomUI(QWidget* parent)
     layout->addWidget(lightning_cb, row, 0);
     connect(lightning_cb, &QCheckBox::toggled, this, [this](bool on){ weather_lightning = on; emit ParametersChanged(); });
     row++;
-
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Sunrise::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(sunrise_strip_cmap_on,
-                                            sunrise_strip_cmap_kernel,
-                                            sunrise_strip_cmap_rep,
-                                            sunrise_strip_cmap_unfold,
-                                            sunrise_strip_cmap_dir,
-                                            sunrise_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Sunrise::SyncStripColormapFromPanel);
-
-    AddWidgetToParent(w, parent);
-}
-
-void Sunrise::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void Sunrise::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    sunrise_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    sunrise_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    sunrise_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    sunrise_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    sunrise_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    sunrise_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void Sunrise::UpdateParams(SpatialEffectParams& params) { (void)params; }
-
 
 static RGBColor lerp_color(RGBColor a, RGBColor b, float t)
 {
@@ -316,14 +275,17 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
 
     float progress = GetTimeOfDayProgress(time);
     float spd = std::max(0.5f, std::min(3.0f, 0.5f + GetScaledSpeed() * 0.3f)) * bb.speed_mul;
     float size_m = GetNormalizedSize();
     float weather_freq = std::max(0.2f, std::min(8.0f, GetScaledFrequency() * 0.15f));
     float detail = std::max(0.05f, GetScaledDetail());
-    const float time_w = time * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f);
+    const float time_w = time * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
 
     float norm_y = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
 
@@ -352,7 +314,7 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
         sp.origin_y = origin.y;
         sp.origin_z = origin.z;
         sp.y_norm = coord2;
-        float hue = progress * 60.0f + norm_y * 40.0f * (0.6f + 0.4f * detail) + time_w * weather_freq * 12.0f + bb.phase_deg;
+        float hue = progress * 60.0f + norm_y * 40.0f * (0.6f + 0.4f * detail) + time_w * weather_freq * 12.0f + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
         hue = ApplySpatialRainbowHue(hue, norm_y, basis, sp, smap, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -367,6 +329,30 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
         c3 = GetRainbowColor(hub + 90.0f);
     }
 
+    SpatialLayerCore::Basis basis_sky;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis_sky);
+    SpatialLayerCore::MapperSettings map_sky;
+    EffectStratumBlend::InitStratumBreaks(map_sky);
+    map_sky.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+    map_sky.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map_sky.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+    SpatialLayerCore::SamplePoint sp_sky{};
+    sp_sky.grid_x = x;
+    sp_sky.grid_y = y;
+    sp_sky.grid_z = z;
+    sp_sky.origin_x = origin.x;
+    sp_sky.origin_y = origin.y;
+    sp_sky.origin_z = origin.z;
+    sp_sky.y_norm = coord2;
+
+    float sky_y = norm_y;
+    if(!GetRainbowMode())
+    {
+        sky_y = ApplySpatialPalette01(norm_y, basis_sky, sp_sky, map_sky, time, &grid);
+        sky_y = ApplyVoxelDriveToPalette01(sky_y, x, y, z, time, grid);
+        sky_y = std::clamp(sky_y, 0.0f, 1.0f);
+    }
+
     float exp_h = (0.15f * spd) / std::max(0.25f, bb.tight_mul);
     float exp_s = (0.12f * spd) / std::max(0.25f, bb.tight_mul);
     float horizon_y = 0.12f + 0.28f * powf(progress, exp_h);
@@ -378,12 +364,12 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
     sun_y = std::min(0.98f, std::max(horizon_y + 0.05f, sun_y));
 
     RGBColor result;
-    if(norm_y <= horizon_y)
-        result = lerp_color(c3, c2, norm_y / std::max(0.001f, horizon_y));
-    else if(norm_y <= sun_y)
-        result = lerp_color(c2, c1, (norm_y - horizon_y) / std::max(0.001f, sun_y - horizon_y));
+    if(sky_y <= horizon_y)
+        result = lerp_color(c3, c2, sky_y / std::max(0.001f, horizon_y));
+    else if(sky_y <= sun_y)
+        result = lerp_color(c2, c1, (sky_y - horizon_y) / std::max(0.001f, sun_y - horizon_y));
     else
-        result = lerp_color(c1, c0, (norm_y - sun_y) / std::max(0.001f, 1.0f - sun_y));
+        result = lerp_color(c1, c0, (sky_y - sun_y) / std::max(0.001f, 1.0f - sun_y));
 
     if(weather_cloudy)
     {
@@ -424,13 +410,14 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
         }
     }
 
-    if(sunrise_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float ph01 = std::fmod(progress + norm_y * 0.35f + time_w * weather_freq * 0.02f + 1.0f, 1.0f);
-        float p01 = SampleStripKernelPalette01(sunrise_strip_cmap_kernel,
-                                               sunrise_strip_cmap_rep,
-                                               sunrise_strip_cmap_unfold,
-                                               sunrise_strip_cmap_dir,
+        ph01 = ApplySpatialPalette01(ph01, basis_sky, sp_sky, map_sky, time, &grid);
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                ph01,
                                                time,
                                                grid,
@@ -439,9 +426,9 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
                                                rp);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         RGBColor pat = ResolveStripKernelFinalColor(*this,
-                                                    SpatialPatternKernelClamp(sunrise_strip_cmap_kernel),
+                                                    SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                                     p01,
-                                                    sunrise_strip_cmap_color_style,
+                                                    GetEffectStripColormapColorStyle(),
                                                     time,
                                                     weather_freq * 12.0f);
         const int rr = (result & 0xFF) * (pat & 0xFF) / 255;
@@ -456,20 +443,6 @@ RGBColor Sunrise::CalculateColorGrid(float x, float y, float z, float time, cons
 nlohmann::json Sunrise::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "sunrise_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "sunrise_stratum_band_speed_pct",
-                                           "sunrise_stratum_band_tight_pct",
-                                           "sunrise_stratum_band_phase_deg");
     j["time_mode"] = time_mode;
     j["color_preset"] = color_preset;
     j["day_length_minutes"] = day_length_minutes;
@@ -477,27 +450,12 @@ nlohmann::json Sunrise::SaveSettings() const
     j["weather_fog"] = weather_fog;
     j["weather_cloudy"] = weather_cloudy;
     j["weather_lightning"] = weather_lightning;
-    StripColormapSaveJson(j,
-                          "sunrise",
-                          sunrise_strip_cmap_on,
-                          sunrise_strip_cmap_kernel,
-                          sunrise_strip_cmap_rep,
-                          sunrise_strip_cmap_unfold,
-                          sunrise_strip_cmap_dir,
-                          sunrise_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void Sunrise::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "sunrise_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "sunrise_stratum_band_speed_pct",
-                                            "sunrise_stratum_band_tight_pct",
-                                            "sunrise_stratum_band_phase_deg");
     if(settings.contains("time_mode") && settings["time_mode"].is_number_integer())
         time_mode = std::max(0, std::min(settings["time_mode"].get<int>(), MODE_COUNT - 1));
     if(settings.contains("color_preset") && settings["color_preset"].is_number_integer())
@@ -512,27 +470,4 @@ void Sunrise::LoadSettings(const nlohmann::json& settings)
         weather_cloudy = settings["weather_cloudy"].get<bool>();
     if(settings.contains("weather_lightning") && settings["weather_lightning"].is_boolean())
         weather_lightning = settings["weather_lightning"].get<bool>();
-    StripColormapLoadJson(settings,
-                          "sunrise",
-                          sunrise_strip_cmap_on,
-                          sunrise_strip_cmap_kernel,
-                          sunrise_strip_cmap_rep,
-                          sunrise_strip_cmap_unfold,
-                          sunrise_strip_cmap_dir,
-                          sunrise_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(sunrise_strip_cmap_on,
-                                                sunrise_strip_cmap_kernel,
-                                                sunrise_strip_cmap_rep,
-                                                sunrise_strip_cmap_unfold,
-                                                sunrise_strip_cmap_dir,
-                                                sunrise_strip_cmap_color_style);
-    }
 }

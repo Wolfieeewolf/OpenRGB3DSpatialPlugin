@@ -3,7 +3,6 @@
 #include "DepthTone.h"
 
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QColor>
@@ -57,7 +56,7 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
     const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
-} // namespace
+}
 
 DepthTone::DepthTone(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -67,7 +66,7 @@ DepthTone::DepthTone(QWidget* parent) : SpatialEffect3D(parent)
 
 DepthTone::~DepthTone() = default;
 
-EffectInfo3D DepthTone::GetEffectInfo()
+EffectInfo3D DepthTone::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 2;
@@ -93,6 +92,8 @@ EffectInfo3D DepthTone::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -122,31 +123,7 @@ void DepthTone::SetupCustomUI(QWidget* parent)
     });
 
     vbox->addLayout(g);
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(depth_tone_strip_cmap_on,
-                                            depth_tone_strip_cmap_kernel,
-                                            depth_tone_strip_cmap_rep,
-                                            depth_tone_strip_cmap_unfold,
-                                            depth_tone_strip_cmap_dir,
-                                            depth_tone_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DepthTone::SyncStripColormapFromPanel);
-
-    AddWidgetToParent(w, parent);
-}
-
-void DepthTone::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    depth_tone_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    depth_tone_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    depth_tone_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    depth_tone_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    depth_tone_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    depth_tone_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void DepthTone::UpdateParams(SpatialEffectParams& params)
@@ -198,14 +175,14 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
     const float size_m = std::max(0.2f, GetNormalizedSize());
     const float rainbow_rate = spd * 12.0f;
 
-    if(depth_tone_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float ph01 =
             std::fmod(pos * 0.45f + nz * (0.2f + 0.55f * hue_span) + time * rainbow_rate * 0.012f + 1.0f, 1.0f);
-        float pal01 = SampleStripKernelPalette01(depth_tone_strip_cmap_kernel,
-                                                 depth_tone_strip_cmap_rep,
-                                                 depth_tone_strip_cmap_unfold,
-                                                 depth_tone_strip_cmap_dir,
+        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -214,11 +191,11 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
                                                  rot);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        const int kid = SpatialPatternKernelClamp(depth_tone_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
                                                   std::clamp(pal01, 0.0f, 1.0f),
-                                                  depth_tone_strip_cmap_color_style,
+                                                  GetEffectStripColormapColorStyle(),
                                                   time,
                                                   rainbow_rate * 0.02f);
         const int cr = (int)(c & 0xFF);
@@ -259,15 +236,7 @@ nlohmann::json DepthTone::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     j["depth_tone_count"] = depth_tone_count;
-    StripColormapSaveJson(j,
-                          "depth_tone",
-                          depth_tone_strip_cmap_on,
-                          depth_tone_strip_cmap_kernel,
-                          depth_tone_strip_cmap_rep,
-                          depth_tone_strip_cmap_unfold,
-                          depth_tone_strip_cmap_dir,
-                          depth_tone_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void DepthTone::LoadSettings(const nlohmann::json& settings)
@@ -275,26 +244,7 @@ void DepthTone::LoadSettings(const nlohmann::json& settings)
     SpatialEffect3D::LoadSettings(settings);
     if(settings.contains("depth_tone_count") && settings["depth_tone_count"].is_number_integer())
         depth_tone_count = std::clamp(settings["depth_tone_count"].get<int>(), 2, 32);
-
-    StripColormapLoadJson(settings,
-                          "depth_tone",
-                          depth_tone_strip_cmap_on,
-                          depth_tone_strip_cmap_kernel,
-                          depth_tone_strip_cmap_rep,
-                          depth_tone_strip_cmap_unfold,
-                          depth_tone_strip_cmap_dir,
-                          depth_tone_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(depth_tone_strip_cmap_on,
-                                                depth_tone_strip_cmap_kernel,
-                                                depth_tone_strip_cmap_rep,
-                                                depth_tone_strip_cmap_unfold,
-                                                depth_tone_strip_cmap_dir,
-                                                depth_tone_strip_cmap_color_style);
-    }
-    if(depth_tones_slider)
+if(depth_tones_slider)
     {
         depth_tones_slider->setValue(depth_tone_count);
         if(depth_tones_label)

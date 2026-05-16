@@ -2,7 +2,6 @@
 
 #include "HexLattice.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QGridLayout>
@@ -35,7 +34,7 @@ inline float Triangle01(float x01)
     const float f = x01 - std::floor(x01);
     return 1.0f - std::fabs(2.0f * f - 1.0f);
 }
-} // namespace
+}
 
 RGBColor HexLattice::Hsv01ToBgr(float h, float s, float v)
 {
@@ -79,7 +78,7 @@ HexLattice::HexLattice(QWidget* parent) : SpatialEffect3D(parent)
 
 HexLattice::~HexLattice() = default;
 
-EffectInfo3D HexLattice::GetEffectInfo()
+EffectInfo3D HexLattice::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 1;
@@ -105,6 +104,8 @@ EffectInfo3D HexLattice::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -178,30 +179,7 @@ void HexLattice::SetupCustomUI(QWidget* parent)
             turbulence_amount_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
-                                            hexlattice_strip_cmap_kernel,
-                                            hexlattice_strip_cmap_rep,
-                                            hexlattice_strip_cmap_unfold,
-                                            hexlattice_strip_cmap_dir,
-                                            hexlattice_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &HexLattice::SyncStripColormapFromPanel);
-    AddWidgetToParent(w, parent);
-}
-
-void HexLattice::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    hexlattice_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    hexlattice_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    hexlattice_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    hexlattice_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    hexlattice_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    hexlattice_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void HexLattice::UpdateParams(SpatialEffectParams& params)
@@ -227,21 +205,17 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     const float freq_norm = std::max(0.05f, GetNormalizedFrequency());
     const float detail_norm = std::max(0.05f, GetNormalizedDetail());
 
-    // Build motion with stronger response at normal slider values so flow is obvious
-    // without maxing speed/frequency.
     const float flow_mode_mul[3] = {0.68f, 1.0f, 1.55f};
     const float flow_mul = flow_mode_mul[std::clamp(flow_mode, 0, 2)];
     const float flow_rate = (0.15f + speed_norm * (0.90f + 1.20f * freq_norm)) * flow_mul;
     const float flow_t = time * flow_rate;
 
-    // Breathing zoom for visible grow/shrink lattice movement.
     const float base_scale = std::max(0.2f, GetNormalizedSize());
     const float lattice_density = 2.4f + freq_norm * (3.0f + 4.0f * detail_norm);
     const float breathe_base = Wave01(flow_t * (0.22f + 0.30f * speed_norm));
     const float breathe = 1.0f + ((breathe_base - 0.5f) * 0.96f) * breathing_amount;
     const float zoom = lattice_density * base_scale * breathe;
 
-    // Axis phase offsets with drift terms create clear directional flow.
     const float px = kTwoPi * (flow_t * (0.30f + 0.85f * detail_norm));
     const float py = kTwoPi * (flow_t * (0.24f + 0.65f * freq_norm) + 0.17f);
     const float pz = kTwoPi * (flow_t * (0.19f + 0.75f * speed_norm) + 0.41f);
@@ -249,7 +223,6 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     const float drift_y = flow_t * (0.14f + 0.35f * detail_norm);
     const float drift_z = flow_t * (0.22f + 0.30f * speed_norm);
 
-    // More active field blend: detail increases harmonic complexity and contrast.
     const float turbulence = std::clamp(turbulence_amount, 0.0f, 2.0f);
     const float harmonic = 0.55f + 0.90f * detail_norm + 0.75f * turbulence;
     const float swirl = turbulence * (0.07f + 0.11f * detail_norm);
@@ -261,7 +234,6 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
     h += 0.45f * std::cos((nx - ny + nz) * (zoom * (0.8f + 0.6f * detail_norm + 0.5f * turbulence)) + (py + pz) * 0.5f);
     h /= 3.10f;
 
-    // Detail now affects edge sharpness and pulse energy.
     float v = Wave01(h * (1.0f + 0.9f * detail_norm) + flow_t * (0.04f + 0.10f * freq_norm));
     const float contrast = 1.2f + detail_norm * 2.2f + pulse_amount * 0.8f;
     v = std::pow(std::clamp(v, 0.0f, 1.0f), contrast);
@@ -273,12 +245,12 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
 
     RGBColor c = 0x00000000;
     const float h01 = h - std::floor(h);
-    if(hexlattice_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        float p01 = SampleStripKernelPalette01(hexlattice_strip_cmap_kernel,
-                                               hexlattice_strip_cmap_rep,
-                                               hexlattice_strip_cmap_unfold,
-                                               hexlattice_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                h01,
                                                time,
                                                grid,
@@ -287,9 +259,9 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         SpatialPatternKernelClamp(hexlattice_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                          p01,
-                                         hexlattice_strip_cmap_color_style,
+                                         GetEffectStripColormapColorStyle(),
                                          time,
                                          flow_rate * 6.0f);
     }
@@ -314,14 +286,6 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
 nlohmann::json HexLattice::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    StripColormapSaveJson(j,
-                          "hexlattice",
-                          hexlattice_strip_cmap_on,
-                          hexlattice_strip_cmap_kernel,
-                          hexlattice_strip_cmap_rep,
-                          hexlattice_strip_cmap_unfold,
-                          hexlattice_strip_cmap_dir,
-                          hexlattice_strip_cmap_color_style);
     j["hexlattice_breathing_amount"] = breathing_amount;
     j["hexlattice_pulse_amount"] = pulse_amount;
     j["hexlattice_flow_mode"] = flow_mode;
@@ -332,15 +296,6 @@ nlohmann::json HexLattice::SaveSettings() const
 void HexLattice::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    StripColormapLoadJson(settings,
-                          "hexlattice",
-                          hexlattice_strip_cmap_on,
-                          hexlattice_strip_cmap_kernel,
-                          hexlattice_strip_cmap_rep,
-                          hexlattice_strip_cmap_unfold,
-                          hexlattice_strip_cmap_dir,
-                          hexlattice_strip_cmap_color_style,
-                          GetRainbowMode());
     if(settings.contains("hexlattice_breathing_amount") && settings["hexlattice_breathing_amount"].is_number())
         breathing_amount = std::clamp(settings["hexlattice_breathing_amount"].get<float>(), 0.0f, 2.0f);
     if(settings.contains("hexlattice_pulse_amount") && settings["hexlattice_pulse_amount"].is_number())
@@ -372,15 +327,5 @@ void HexLattice::LoadSettings(const nlohmann::json& settings)
         turbulence_amount_slider->setValue(v);
         if(turbulence_amount_label)
             turbulence_amount_label->setText(QString::number(v) + "%");
-    }
-
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(hexlattice_strip_cmap_on,
-                                                hexlattice_strip_cmap_kernel,
-                                                hexlattice_strip_cmap_rep,
-                                                hexlattice_strip_cmap_unfold,
-                                                hexlattice_strip_cmap_dir,
-                                                hexlattice_strip_cmap_color_style);
     }
 }

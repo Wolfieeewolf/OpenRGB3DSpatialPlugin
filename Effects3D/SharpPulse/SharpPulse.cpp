@@ -2,7 +2,6 @@
 
 #include "SharpPulse.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <algorithm>
@@ -63,7 +62,7 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
     const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
-} // namespace
+}
 
 SharpPulse::SharpPulse(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -74,7 +73,7 @@ SharpPulse::SharpPulse(QWidget* parent) : SpatialEffect3D(parent)
 
 SharpPulse::~SharpPulse() = default;
 
-EffectInfo3D SharpPulse::GetEffectInfo()
+EffectInfo3D SharpPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 1;
@@ -100,35 +99,15 @@ EffectInfo3D SharpPulse::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
 void SharpPulse::SetupCustomUI(QWidget* parent)
 {
     QWidget* w = new QWidget();
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(sharppulse_strip_cmap_on,
-                                            sharppulse_strip_cmap_kernel,
-                                            sharppulse_strip_cmap_rep,
-                                            sharppulse_strip_cmap_unfold,
-                                            sharppulse_strip_cmap_dir,
-                                            sharppulse_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SharpPulse::SyncStripColormapFromPanel);
-    AddWidgetToParent(w, parent);
-}
-
-void SharpPulse::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    sharppulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    sharppulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    sharppulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    sharppulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    sharppulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    sharppulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void SharpPulse::UpdateParams(SpatialEffectParams& params)
@@ -154,7 +133,7 @@ RGBColor SharpPulse::CalculateColorGrid(float x, float y, float z, float time, c
     const float rate = std::max(0.08f, GetScaledFrequency() / 50.0f);
     const float motion = spd * rate;
 
-    const float t1 = Phase01(time, 10.0f, motion); // time(.1)
+    const float t1 = Phase01(time, 10.0f, motion);
     const float r1 = std::sin(kTwoPi * Phase01(time, 10.0f, motion));
     const float r2 = std::sin(kTwoPi * Phase01(time, 20.0f, motion));
     const float r3 = std::sin(kTwoPi * Phase01(time, 14.285714f, motion));
@@ -165,12 +144,12 @@ RGBColor SharpPulse::CalculateColorGrid(float x, float y, float z, float time, c
     const float s = (v < 0.8f) ? 1.0f : 0.0f;
 
     RGBColor c = 0x00000000;
-    if(sharppulse_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        float p01 = SampleStripKernelPalette01(sharppulse_strip_cmap_kernel,
-                                               sharppulse_strip_cmap_rep,
-                                               sharppulse_strip_cmap_unfold,
-                                               sharppulse_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                t1,
                                                time,
                                                grid,
@@ -179,9 +158,9 @@ RGBColor SharpPulse::CalculateColorGrid(float x, float y, float z, float time, c
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         SpatialPatternKernelClamp(sharppulse_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                          p01,
-                                         sharppulse_strip_cmap_color_style,
+                                         GetEffectStripColormapColorStyle(),
                                          time,
                                          rate * 12.0f);
     }
@@ -206,36 +185,10 @@ RGBColor SharpPulse::CalculateColorGrid(float x, float y, float z, float time, c
 nlohmann::json SharpPulse::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    StripColormapSaveJson(j,
-                          "sharppulse",
-                          sharppulse_strip_cmap_on,
-                          sharppulse_strip_cmap_kernel,
-                          sharppulse_strip_cmap_rep,
-                          sharppulse_strip_cmap_unfold,
-                          sharppulse_strip_cmap_dir,
-                          sharppulse_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void SharpPulse::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    StripColormapLoadJson(settings,
-                          "sharppulse",
-                          sharppulse_strip_cmap_on,
-                          sharppulse_strip_cmap_kernel,
-                          sharppulse_strip_cmap_rep,
-                          sharppulse_strip_cmap_unfold,
-                          sharppulse_strip_cmap_dir,
-                          sharppulse_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(sharppulse_strip_cmap_on,
-                                                sharppulse_strip_cmap_kernel,
-                                                sharppulse_strip_cmap_rep,
-                                                sharppulse_strip_cmap_unfold,
-                                                sharppulse_strip_cmap_dir,
-                                                sharppulse_strip_cmap_color_style);
-    }
 }

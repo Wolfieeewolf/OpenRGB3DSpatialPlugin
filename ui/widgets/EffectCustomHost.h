@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-/** Empty vertical host for per-effect controls from SetupCustomUI. */
 class EffectCustomHost : public QWidget
 {
 public:

@@ -10,7 +10,6 @@ namespace VoxelMapping
 {
 namespace
 {
-/** Room layout: Y up; horizontal framing uses yaw only (matches compass / voxel tint). */
 static void BuildHorizontalVoxelBasis(float look_x,
                                       float look_y,
                                       float look_z,
@@ -97,7 +96,7 @@ static void BuildHorizontalVoxelBasis(float look_x,
     basis.up_z = uz;
     basis.valid = true;
 }
-} // namespace
+}
 
 RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetry,
                           float heading_offset_deg,
@@ -191,4 +190,4 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     return c;
 }
 
-} // namespace VoxelMapping
+}

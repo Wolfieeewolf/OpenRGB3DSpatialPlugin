@@ -26,8 +26,9 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
     root->setContentsMargins(0, 0, 0, 0);
 
     QLabel* intro = new QLabel(
-        QStringLiteral("Optional room-driven color mapping. Start with Room mapping mode = Off. "
-                       "Use Compass for directional layers, or Voxel volume for game voxel tint / palette drive."));
+        QStringLiteral("Optional room-driven colour mapping (this block is attached only on layers that use it). "
+                       "Start with Room mapping mode = Off. Use Compass for directional layers, or Voxel volume for "
+                       "game voxel tint / palette drive."));
     intro->setWordWrap(true);
     root->addWidget(intro);
 

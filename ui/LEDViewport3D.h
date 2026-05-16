@@ -48,7 +48,6 @@ public:
     void NotifyDisplayPlaneChanged();
     void UploadDisplayPlaneCaptureTexturesDuringEffectTick();
     void SetShowScreenPreview(bool show);
-    /** Optional: invoked each tick of the screen preview timer (before repaint). */
     void SetScreenPreviewTickCallback(std::function<void()> cb) { screen_preview_tick_cb = std::move(cb); }
     bool GetShowScreenPreview() const { return show_screen_preview; }
     bool IsScreenPreviewRefreshActive() const

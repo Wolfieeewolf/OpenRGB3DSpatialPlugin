@@ -1129,8 +1129,8 @@ void LEDViewport3D::DrawAxisLabels()
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
-    const float max_y = extents.height_units; // vertical (matches room height_mm / LED Y)
-    const float max_z = extents.depth_units;  // depth (matches room depth_mm / LED Z)
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
 
     double screen_x, screen_y;
 
@@ -1228,22 +1228,34 @@ void LEDViewport3D::ClearRoomGridOverlayBounds()
 void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* out_nz) const
 {
     const int step = std::max(1, room_grid_step);
+    const float eps = 1e-4f;
+    auto cells_along = [step, eps](float span) -> int {
+        if(span <= eps)
+            return 1;
+        const int raw = (int)(span / (float)step) + 1;
+        return std::max(2, raw);
+    };
+
+    float w = 0.0f, h = 0.0f, d = 0.0f;
     int nx = 1, ny = 1, nz = 1;
     if(room_grid_overlay_use_bounds)
     {
-        float w = room_grid_overlay_max_x - room_grid_overlay_min_x;
-        float h = room_grid_overlay_max_y - room_grid_overlay_min_y;
-        float d = room_grid_overlay_max_z - room_grid_overlay_min_z;
-        nx = std::max(1, (int)(w / (float)step) + 1);
-        ny = std::max(1, (int)(h / (float)step) + 1);
-        nz = std::max(1, (int)(d / (float)step) + 1);
+        w = room_grid_overlay_max_x - room_grid_overlay_min_x;
+        h = room_grid_overlay_max_y - room_grid_overlay_min_y;
+        d = room_grid_overlay_max_z - room_grid_overlay_min_z;
+        nx = cells_along(w);
+        ny = cells_along(h);
+        nz = cells_along(d);
     }
     else
     {
         const GridExtents extents = GetRoomExtents();
-        nx = (int)(extents.width_units / (float)step) + 1;
-        ny = (int)(extents.height_units / (float)step) + 1;
-        nz = (int)(extents.depth_units / (float)step) + 1;
+        w = extents.width_units;
+        h = extents.height_units;
+        d = extents.depth_units;
+        nx = cells_along(w);
+        ny = cells_along(h);
+        nz = cells_along(d);
     }
     const size_t max_overlay_points = 35000u;
     size_t count = (size_t)nx * (size_t)ny * (size_t)nz;
@@ -1253,6 +1265,31 @@ void LEDViewport3D::GetRoomGridOverlayDimensions(int* out_nx, int* out_ny, int* 
         nx = std::max(1, (int)(nx * f));
         ny = std::max(1, (int)(ny * f));
         nz = std::max(1, (int)(nz * f));
+        if(w > eps)
+            nx = std::max(nx, 2);
+        if(h > eps)
+            ny = std::max(ny, 2);
+        if(d > eps)
+            nz = std::max(nz, 2);
+        count = (size_t)nx * (size_t)ny * (size_t)nz;
+        while(count > max_overlay_points && (nx > 2 || ny > 2 || nz > 2))
+        {
+            if(nx >= ny && nx >= nz && nx > 2)
+                nx--;
+            else if(ny >= nx && ny >= nz && ny > 2)
+                ny--;
+            else if(nz >= nx && nz >= ny && nz > 2)
+                nz--;
+            else if(nx > 2)
+                nx--;
+            else if(ny > 2)
+                ny--;
+            else if(nz > 2)
+                nz--;
+            else
+                break;
+            count = (size_t)nx * (size_t)ny * (size_t)nz;
+        }
     }
     if(out_nx) *out_nx = nx;
     if(out_ny) *out_ny = ny;
@@ -2284,7 +2321,6 @@ float LEDViewport3D::GetControllerMinY(ControllerTransform* ctrl)
     return min_y;
 }
 
-
 int LEDViewport3D::PickDisplayPlane(int mouse_x, int mouse_y)
 {
     if(!display_planes) return -1;
@@ -2782,5 +2818,4 @@ void LEDViewport3D::DrawReferencePoints()
         glPopMatrix();
     }
 }
-
 

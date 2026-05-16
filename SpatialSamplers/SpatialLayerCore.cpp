@@ -189,7 +189,7 @@ static void RotateDirectionEuler(float x,
     oz = pz;
 }
 
-} // namespace detail
+}
 
 void ComputeVerticalStratumWeights(float y_norm, const MapperSettings& settings, int layer_count, float* out_w)
 {

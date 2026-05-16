@@ -893,7 +893,6 @@ void OpenRGB3DSpatialTab::on_freq_enabled_toggled(bool checked)
     SaveFrequencyRanges();
 }
 
-
 void OpenRGB3DSpatialTab::SaveFrequencyRanges()
 {
     nlohmann::json ranges_json = nlohmann::json::array();
@@ -946,25 +945,16 @@ void OpenRGB3DSpatialTab::SetupFreqRangeEffectUI(FrequencyRangeEffect3D* range, 
         return;
     }
     
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
+    EffectSettingsUiMount mount = createEffectSettingsUi(freq_effect_settings_widget,
+                                                       freq_effect_settings_layout,
+                                                       class_name.toStdString(),
+                                                       SpatialEffectSettingsLayout::CommonNoTransport);
+    SpatialEffect3D* effect = mount.effect;
     if(!effect)
     {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Frequency range: failed to create effect UI: %s", class_name.toStdString().c_str());
         freq_effect_settings_widget->hide();
         return;
     }
-
-    QWidget* ui_wrapper = new QWidget(freq_effect_settings_widget);
-    QVBoxLayout* wrapper_layout = new QVBoxLayout(ui_wrapper);
-    wrapper_layout->setContentsMargins(0, 0, 0, 0);
-    wrapper_layout->setSpacing(4);
-
-    effect->setParent(ui_wrapper);
-    effect->CreateCommonEffectControls(ui_wrapper, false);
-    QWidget* custom_host = effect->GetCustomSettingsHost();
-    effect->SetupCustomUI(custom_host ? custom_host : ui_wrapper);
-
-    freq_effect_settings_layout->addWidget(ui_wrapper);
 
     if(!range->effect_settings.is_null())
     {

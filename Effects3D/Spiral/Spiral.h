@@ -6,14 +6,10 @@
 #include "SpatialEffect3D.h"
 #include "EffectRegisterer3D.h"
 
-#include <array>
-
 class QSlider;
 class QLabel;
 class QWidget;
 class QComboBox;
-class StripKernelColormapPanel;
-
 class Spiral : public SpatialEffect3D
 {
     Q_OBJECT
@@ -27,7 +23,7 @@ public:
     static std::string const ClassName() { return "Spiral"; }
     static std::string const UIName() { return "Spiral"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -37,45 +33,19 @@ public:
 
 private slots:
     void OnSpiralParameterChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     static constexpr int kSpiralPatternCount = 6;
-
-    void SyncLayeredBandWidgets();
 
     QSlider*        arms_slider;
     QLabel*         arms_label;
     QComboBox*      pattern_combo;
     QSlider*        gap_slider;
     QLabel*         gap_label;
-    QComboBox*      spiral_layout_combo = nullptr;
-    QWidget*        layered_band_widget = nullptr;
-    QSlider*        band_speed_slider[3]{};
-    QSlider*        band_tight_slider[3]{};
-    QSlider*        band_phase_slider[3]{};
-    QLabel*         band_speed_lbl[3]{};
-    QLabel*         band_tight_lbl[3]{};
-    QLabel*         band_phase_lbl[3]{};
 
     unsigned int    num_arms;
     int             pattern_type;
     unsigned int    gap_size;
     float           progress;
-
-    /** 0 = single field; 1 = floor / mid / ceiling blend their own speed, tightness, phase. */
-    int             spiral_layout_mode = 0;
-    std::array<int, 3> band_speed_pct{{100, 100, 100}};
-    std::array<int, 3> band_tight_pct{{100, 100, 100}};
-    std::array<int, 3> band_phase_deg{{0, 0, 0}};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool spiral_strip_cmap_on = false;
-    int spiral_strip_cmap_kernel = 0;
-    float spiral_strip_cmap_rep = 4.0f;
-    int spiral_strip_cmap_unfold = 0;
-    float spiral_strip_cmap_dir = 0.0f;
-    int spiral_strip_cmap_color_style = 0;
 };
 
 #endif

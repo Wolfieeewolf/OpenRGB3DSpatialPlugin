@@ -62,12 +62,11 @@ struct Settings
     bool enable_lightning_flash = true;
     float tint_layer_ground_end = 0.30f;
     float tint_layer_sky_start = 0.68f;
-    int spatial_mapping_mode = 0; // 0 Compass directional probes, 1 Voxel room mapping, 2 Classic layered world tint
-    int spatial_layer_profile_mode = 0; // 0 Auto, 3 Three-layer, 4 Four-layer
+    int spatial_mapping_mode = 0;
+    int spatial_layer_profile_mode = 0;
     float spatial_center_size = 0.14f;
     float spatial_blend_softness = 0.10f;
     float spatial_heading_offset_deg = 0.0f;
-    /** Phase for layered compass (N,NE,…): default −45° aligns room front with N for 8-fold probes. */
     float spatial_compass_offset_deg = -45.0f;
     float spatial_voxel_room_scale = 0.18f;
     float spatial_voxel_mix = 0.78f;

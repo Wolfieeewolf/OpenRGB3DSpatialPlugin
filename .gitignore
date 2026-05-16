@@ -5,6 +5,11 @@ release/
 _intermediate_debug/
 _intermediate_release/
 
+# qmake run in repository root (prefer a dedicated build/ directory)
+/Makefile
+/Makefile.*
+/.qmake.stash
+
 # Qt files
 *.pro.user
 *.pro.user.*

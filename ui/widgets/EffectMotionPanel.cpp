@@ -52,7 +52,7 @@ EffectMotionPanel::EffectMotionPanel(unsigned int speed,
     frequency_slider_->setRange(0, 200);
     frequency_slider_->setValue((int)frequency);
     frequency_slider_->setToolTip(
-        QStringLiteral("Temporal rate (pattern motion and color cycles). Also speeds compass-based palette scrolling in Room sampler when Compass mode is on."));
+        QStringLiteral("Temporal rate (pattern motion and color cycles). When a layer exposes Room & voxel mapping and Compass mode is on, this also speeds compass-based palette scrolling."));
     frequency_layout->addWidget(frequency_slider_);
     frequency_label_ = new QLabel(QString::number(frequency));
     frequency_label_->setMinimumWidth(30);

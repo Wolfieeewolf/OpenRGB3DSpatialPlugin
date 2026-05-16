@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "Gizmo3D.h"
 #include "QtCompat.h"
 
@@ -999,7 +998,6 @@ void Gizmo3D::ApplyFreeroamDragRayPlane(int mouse_x, int mouse_y, const float* m
     float move_dz = target_z - gizmo_z;
     ApplyTranslation(move_dx, move_dy, move_dz);
 }
-
 
 void Gizmo3D::DrawMoveGizmo()
 {

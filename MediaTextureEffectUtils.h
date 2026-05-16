@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-//
-// Shared helpers for texture / GIF based spatial effects (bilinear sample, ambience, blending).
 
 #ifndef MEDIATEXTUREEFFECTUTILS_H
 #define MEDIATEXTUREEFFECTUTILS_H
@@ -104,6 +102,92 @@ inline RGBColor LerpRGB(RGBColor a, RGBColor b, float t)
     const int g = (int)(RGBGetGValue(a) * (1.0f - t) + RGBGetGValue(b) * t + 0.5f);
     const int bl = (int)(RGBGetBValue(a) * (1.0f - t) + RGBGetBValue(b) * t + 0.5f);
     return ToRGBColor(std::min(255, r), std::min(255, g), std::min(255, bl));
+}
+
+inline void RgbBytesToHsv(float r, float g, float b, float& h_deg, float& s, float& v)
+{
+    r *= (1.0f / 255.0f);
+    g *= (1.0f / 255.0f);
+    b *= (1.0f / 255.0f);
+    const float mx = std::max({r, g, b});
+    const float mn = std::min({r, g, b});
+    const float d = mx - mn;
+    v = mx;
+    s = mx < 1e-5f ? 0.0f : d / mx;
+    if(d < 1e-5f)
+    {
+        h_deg = 0.0f;
+        return;
+    }
+    float h = 0.0f;
+    if(mx == r)
+    {
+        h = 60.0f * std::fmod((g - b) / d, 6.0f);
+    }
+    else if(mx == g)
+    {
+        h = 60.0f * (((b - r) / d) + 2.0f);
+    }
+    else
+    {
+        h = 60.0f * (((r - g) / d) + 4.0f);
+    }
+    if(h < 0.0f)
+    {
+        h += 360.0f;
+    }
+    h_deg = h;
+}
+
+inline RGBColor HsvToRgbBytes(float h_deg, float s, float v)
+{
+    h_deg = std::fmod(h_deg, 360.0f);
+    if(h_deg < 0.0f)
+    {
+        h_deg += 360.0f;
+    }
+    s = std::clamp(s, 0.0f, 1.0f);
+    v = std::clamp(v, 0.0f, 1.0f);
+    const float c = v * s;
+    const float x = c * (1.0f - std::fabs(std::fmod(h_deg / 60.0f, 2.0f) - 1.0f));
+    const float m = v - c;
+    float rp = 0.0f;
+    float gp = 0.0f;
+    float bp = 0.0f;
+    if(h_deg < 60.0f)
+    {
+        rp = c;
+        gp = x;
+    }
+    else if(h_deg < 120.0f)
+    {
+        rp = x;
+        gp = c;
+    }
+    else if(h_deg < 180.0f)
+    {
+        gp = c;
+        bp = x;
+    }
+    else if(h_deg < 240.0f)
+    {
+        gp = x;
+        bp = c;
+    }
+    else if(h_deg < 300.0f)
+    {
+        rp = x;
+        bp = c;
+    }
+    else
+    {
+        rp = c;
+        bp = x;
+    }
+    const int r = (int)std::clamp((rp + m) * 255.0f + 0.5f, 0.0f, 255.0f);
+    const int g = (int)std::clamp((gp + m) * 255.0f + 0.5f, 0.0f, 255.0f);
+    const int bl = (int)std::clamp((bp + m) * 255.0f + 0.5f, 0.0f, 255.0f);
+    return ToRGBColor(r, g, bl);
 }
 }
 

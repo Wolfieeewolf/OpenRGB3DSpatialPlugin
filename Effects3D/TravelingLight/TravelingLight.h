@@ -7,9 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class TravelingLight : public SpatialEffect3D
 {
     Q_OBJECT
@@ -22,7 +19,7 @@ public:
     static std::string const ClassName() { return "TravelingLight"; }
     static std::string const UIName() { return "Traveling Light"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -31,9 +28,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum Mode {
         MODE_COMET = 0,
@@ -54,18 +48,6 @@ private:
     float glow = 0.5f;
     int wipe_edge_shape = 0;
     int num_divisions = 4;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool travelinglight_strip_cmap_on = false;
-    int travelinglight_strip_cmap_kernel = 0;
-    float travelinglight_strip_cmap_rep = 4.0f;
-    int travelinglight_strip_cmap_unfold = 0;
-    float travelinglight_strip_cmap_dir = 0.0f;
-    int travelinglight_strip_cmap_color_style = 0;
 };
 
 #endif

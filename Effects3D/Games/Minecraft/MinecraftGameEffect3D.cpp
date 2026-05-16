@@ -8,13 +8,11 @@ REGISTER_EFFECT_3D(MinecraftGameEffect3D);
 
 MinecraftGameEffect3D::MinecraftGameEffect3D(QWidget* parent) : SpatialEffect3D(parent)
 {
-    // The Minecraft channel blend already carries its own gain controls.
-    // Keep generic post-process intensity neutral-to-slightly-soft by default.
     effect_intensity = 85;
     effect_sharpness = 100;
 }
 
-EffectInfo3D MinecraftGameEffect3D::GetEffectInfo()
+EffectInfo3D MinecraftGameEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 2;
@@ -58,6 +56,7 @@ void MinecraftGameEffect3D::SetupCustomUI(QWidget* parent)
                                                    this,
                                                    [this]() { emit ParametersChanged(); });
     AddWidgetToParent(w, parent);
+    AttachRoomMappingPanel(parent);
 }
 
 void MinecraftGameEffect3D::UpdateParams(SpatialEffectParams& params)
@@ -87,8 +86,9 @@ RGBColor MinecraftGameEffect3D::CalculateColorGrid(float gx, float gy, float gz,
 {
     const GameTelemetryBridge::TelemetrySnapshot t = GameTelemetryBridge::GetTelemetrySnapshot();
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
-    return MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
-                                      mc_settings_, MinecraftGame::ChAll, &world_smooth_);
+    RGBColor c = MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
+                                            mc_settings_, MinecraftGame::ChAll, &world_smooth_);
+    return RemapSaturatedRgbWithRoomMapping(c, gx, gy, gz, time, grid);
 }
 
 bool MinecraftGameEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const

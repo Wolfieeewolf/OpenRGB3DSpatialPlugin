@@ -8,9 +8,6 @@
 #include "EffectStratumBlend.h"
 
 class QComboBox;
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class DNAHelix : public SpatialEffect3D
 {
     Q_OBJECT
@@ -24,7 +21,7 @@ public:
     static std::string const ClassName() { return "DNAHelix"; }
     static std::string const UIName() { return "DNA Helix"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -34,9 +31,6 @@ public:
 
 private slots:
     void OnDNAParameterChanged();
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     QSlider*        radius_slider;
     QLabel*         radius_label;
@@ -51,25 +45,11 @@ private:
 
     unsigned int    helix_radius = 180;
     float           progress = 0.0f;
-    /** 0 circle, 1 square, 2 squircle, 3 flat disc, 4 stacked planes */
     int             helix_shape_mode = 0;
     int             vertical_drift_pct = 0;
     int             ring_pulse_pct = 0;
-    /** 0 off, 1 outward from center, 2 inward toward center */
     int             ring_pulse_dir = 0;
     int             plane_layers = 8;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool dnahelix_strip_cmap_on = false;
-    int dnahelix_strip_cmap_kernel = 0;
-    float dnahelix_strip_cmap_rep = 4.0f;
-    int dnahelix_strip_cmap_unfold = 0;
-    float dnahelix_strip_cmap_dir = 0.0f;
-    int dnahelix_strip_cmap_color_style = 0;
 };
 
 #endif

@@ -10,7 +10,6 @@ class QLabel;
 class QPushButton;
 class QSlider;
 
-/** Per-axis scale, scale-axis rotation, center offset, and effect rotation — shared geometry block. */
 class EffectGeometryPanel : public QWidget
 {
 public:

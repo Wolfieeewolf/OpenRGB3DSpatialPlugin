@@ -7,7 +7,6 @@
 
 class QPushButton;
 
-/** “Layer controls” heading and optional Start / Stop row. */
 class EffectLayerBanner : public QWidget
 {
 public:

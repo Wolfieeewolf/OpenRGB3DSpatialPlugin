@@ -2,8 +2,6 @@
 
 #include "TravelingLight.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "../EffectHelpers.h"
 #include <QComboBox>
@@ -69,7 +67,7 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
-EffectInfo3D TravelingLight::GetEffectInfo()
+EffectInfo3D TravelingLight::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -96,6 +94,9 @@ EffectInfo3D TravelingLight::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -177,52 +178,13 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
         if(glow_label) glow_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(travelinglight_strip_cmap_on,
-                                            travelinglight_strip_cmap_kernel,
-                                            travelinglight_strip_cmap_rep,
-                                            travelinglight_strip_cmap_unfold,
-                                            travelinglight_strip_cmap_dir,
-                                            travelinglight_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &TravelingLight::SyncStripColormapFromPanel);
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TravelingLight::OnStratumBandChanged);
-    OnStratumBandChanged();
-    AddWidgetToParent(w, parent);
-}
-
-void TravelingLight::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    travelinglight_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    travelinglight_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    travelinglight_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    travelinglight_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    travelinglight_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    travelinglight_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void TravelingLight::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void TravelingLight::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_COMET;
 }
-
 
 RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -238,9 +200,12 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
 
-    float progress = CalculateProgress(time) * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f);
+
+    float progress = CalculateProgress(time) * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
     if(progress > 1.0f) progress = std::fmod(progress, 1.0f);
     if(progress < 0.0f) progress = std::fmod(progress, 1.0f) + 1.0f;
 
@@ -252,12 +217,12 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     const float size_m_tl = GetNormalizedSize();
     const float tl_phase01 = std::fmod(progress + color_cycle * (1.f / 360.f) + 1.f, 1.f);
     float tl_strip_p01 = 0.f;
-    if(travelinglight_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        tl_strip_p01 = SampleStripKernelPalette01(travelinglight_strip_cmap_kernel,
-                                                  travelinglight_strip_cmap_rep,
-                                                  travelinglight_strip_cmap_unfold,
-                                                  travelinglight_strip_cmap_dir,
+        tl_strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                  GetEffectStripColormapRepeats(),
+                                                  GetEffectStripColormapUnfold(),
+                                                  GetEffectStripColormapDirectionDeg(),
                                                   tl_phase01,
                                                   time,
                                                   grid,
@@ -268,16 +233,16 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     const float tl_rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
     auto tl_strip_rgb = [&](float p01_k) -> RGBColor {
         float pv = ApplyVoxelDriveToPalette01(p01_k, x, y, z, time, grid);
-        return ResolveStripKernelFinalColor(*this, travelinglight_strip_cmap_kernel, pv, travelinglight_strip_cmap_color_style, time,
+        return ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), pv, GetEffectStripColormapColorStyle(), time,
                                              tl_rbow_mul);
     };
     auto tl_rainbow = [&](float hue_deg) -> RGBColor {
-        if(travelinglight_strip_cmap_on)
+        if(UseEffectStripColormap())
             return tl_strip_rgb(tl_strip_p01);
         return GetRainbowColor(hue_deg);
     };
     auto tl_palette = [&](float p01) -> RGBColor {
-        if(travelinglight_strip_cmap_on)
+        if(UseEffectStripColormap())
             return tl_strip_rgb(tl_strip_p01);
         return GetColorAtPosition(p01);
     };
@@ -306,17 +271,17 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
             c = tl_rainbow(hue);
         }
         else if(dist < -hw)
-            c = travelinglight_strip_cmap_on
+            c = UseEffectStripColormap()
                     ? tl_strip_rgb(step ? tl_strip_p01 : std::fmod(tl_strip_p01 + 0.5f, 1.0f))
                     : GetColorAtPosition(step ? 1.0f : 0.0f);
         else if(dist > hw)
-            c = travelinglight_strip_cmap_on
+            c = UseEffectStripColormap()
                     ? tl_strip_rgb(step ? std::fmod(tl_strip_p01 + 0.5f, 1.0f) : tl_strip_p01)
                     : GetColorAtPosition(step ? 0.0f : 1.0f);
         else
         {
             float interp = std::max(0.0f, std::min(1.0f, (hw - dist) / w));
-            c = travelinglight_strip_cmap_on
+            c = UseEffectStripColormap()
                     ? tl_strip_rgb(step ? std::fmod(tl_strip_p01 + interp * 0.35f, 1.0f)
                                         : std::fmod(tl_strip_p01 + (1.0f - interp) * 0.35f, 1.0f))
                     : GetColorAtPosition(step ? interp : (1.0f - interp));
@@ -385,7 +350,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         float t = progress;
         float s = 0.5f * (1.0f + sinf(sec * (float)M_PI * 4.0f + (zone_id ? 1.0f : -1.0f) * t * (float)(2.0 * M_PI) + (float)M_PI * 0.25f));
         RGBColor c0, c1;
-        if(travelinglight_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             c0 = tl_strip_rgb(tl_strip_p01);
             c1 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
@@ -408,10 +373,17 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     {
         float sine_x = sinf(progress * (float)M_PI);
         float sine_y = sinf(progress * (float)M_PI * 1.3f);
-        float half_w = grid.width * 0.5f;
-        float half_h = grid.height * 0.5f;
-        float x_progress = origin.x + sine_x * half_w;
-        float y_progress = origin.y + sine_y * half_h;
+        
+        const float half_w = grid.width * 0.5f;
+        const float half_h = grid.height * 0.5f;
+        const float bias_amp_x = half_w * 0.25f;
+        const float bias_amp_y = half_h * 0.25f;
+        const float bias_x = std::clamp(origin.x - grid.center_x, -bias_amp_x, bias_amp_x);
+        const float bias_y = std::clamp(origin.y - grid.center_y, -bias_amp_y, bias_amp_y);
+        const float spread_w = half_w - std::fabs(bias_x);
+        const float spread_h = half_h - std::fabs(bias_y);
+        float x_progress = grid.center_x + bias_x + sine_x * spread_w;
+        float y_progress = grid.center_y + bias_y + sine_y * spread_h;
         float dist_x = fabsf(x - x_progress);
         float dist_y = fabsf(y - y_progress);
         float thick = std::max(0.02f, std::min(0.2f, 0.08f * size_scale)) * std::max(grid.width, grid.height) * tight_inv;
@@ -421,7 +393,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         dx_pct = std::min(1.0f, dx_pct);
         dy_pct = std::min(1.0f, dy_pct);
         RGBColor c1, c2;
-        if(travelinglight_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             c1 = tl_strip_rgb(tl_strip_p01);
             c2 = tl_strip_rgb(std::fmod(tl_strip_p01 + 0.5f, 1.0f));
@@ -575,7 +547,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
         return (RGBColor)((b_ << 16) | (g_ << 8) | r_);
     }
 
-    /* MODE_COMET: single comet with tail */
+    
     float head = axis_min + progress * span;
     float dist = head - axis_val;
     float intensity = 0.0f;
@@ -602,45 +574,16 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
 nlohmann::json TravelingLight::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "travelinglight_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "travelinglight_stratum_band_speed_pct",
-                                           "travelinglight_stratum_band_tight_pct",
-                                           "travelinglight_stratum_band_phase_deg");
     j["mode"] = this->mode;
     j["glow"] = glow;
     j["wipe_edge_shape"] = wipe_edge_shape;
     j["num_divisions"] = num_divisions;
-    StripColormapSaveJson(j,
-                          "travelinglight",
-                          travelinglight_strip_cmap_on,
-                          travelinglight_strip_cmap_kernel,
-                          travelinglight_strip_cmap_rep,
-                          travelinglight_strip_cmap_unfold,
-                          travelinglight_strip_cmap_dir,
-                          travelinglight_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void TravelingLight::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "travelinglight_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "travelinglight_stratum_band_speed_pct",
-                                            "travelinglight_stratum_band_tight_pct",
-                                            "travelinglight_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         this->mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("glow") && settings["glow"].is_number())
@@ -651,29 +594,6 @@ void TravelingLight::LoadSettings(const nlohmann::json& settings)
         wipe_edge_shape = std::clamp(settings["edge_shape"].get<int>(), 0, 2);
     if(settings.contains("num_divisions") && settings["num_divisions"].is_number_integer())
         num_divisions = std::max(2, std::min(16, settings["num_divisions"].get<int>()));
-    StripColormapLoadJson(settings,
-                          "travelinglight",
-                          travelinglight_strip_cmap_on,
-                          travelinglight_strip_cmap_kernel,
-                          travelinglight_strip_cmap_rep,
-                          travelinglight_strip_cmap_unfold,
-                          travelinglight_strip_cmap_dir,
-                          travelinglight_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(travelinglight_strip_cmap_on,
-                                                travelinglight_strip_cmap_kernel,
-                                                travelinglight_strip_cmap_rep,
-                                                travelinglight_strip_cmap_unfold,
-                                                travelinglight_strip_cmap_dir,
-                                                travelinglight_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(TravelingLight);

@@ -2,9 +2,7 @@
 
 #include "AudioLevel.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
-#include "StratumBandPanel.h"
 #include "Colors.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
@@ -35,7 +33,7 @@ AudioLevel::AudioLevel(QWidget* parent)
 {
 }
 
-EffectInfo3D AudioLevel::GetEffectInfo()
+EffectInfo3D AudioLevel::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -68,6 +66,9 @@ EffectInfo3D AudioLevel::GetEffectInfo()
     info.show_axis_control = false;
     info.show_color_controls = true;
     info.show_path_axis_control = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -166,52 +167,11 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
         edge_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &AudioLevel::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(audiolevel_strip_cmap_on,
-                                            audiolevel_strip_cmap_kernel,
-                                            audiolevel_strip_cmap_rep,
-                                            audiolevel_strip_cmap_unfold,
-                                            audiolevel_strip_cmap_dir,
-                                            audiolevel_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &AudioLevel::SyncStripColormapFromPanel);
-}
-
-void AudioLevel::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    audiolevel_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    audiolevel_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    audiolevel_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    audiolevel_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    audiolevel_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    audiolevel_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void AudioLevel::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void AudioLevel::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
-
 
 RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -227,7 +187,10 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
 
     float amplitude = AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz);
     float fill_level = EvaluateIntensity(amplitude, time);
@@ -270,13 +233,13 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(audiolevel_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float ph01 = std::fmod(gradient_pos + CalculateProgress(time) * 0.25f + time * GetScaledFrequency() * 0.02f + 1.0f, 1.0f);
-        float p01 = SampleStripKernelPalette01(audiolevel_strip_cmap_kernel,
-                                               audiolevel_strip_cmap_rep,
-                                               audiolevel_strip_cmap_unfold,
-                                               audiolevel_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                ph01,
                                                time,
                                                grid,
@@ -285,9 +248,9 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
                                                rotated_pos);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         user_color = ResolveStripKernelFinalColor(*this,
-                                                  SpatialPatternKernelClamp(audiolevel_strip_cmap_kernel),
+                                                  SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                                   p01,
-                                                  audiolevel_strip_cmap_color_style,
+                                                  GetEffectStripColormapColorStyle(),
                                                   time,
                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
@@ -295,7 +258,7 @@ RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, c
     {
         float hue =
             gradient_pos * 360.0f + CalculateProgress(time) * 40.0f * bb.speed_mul + time * GetScaledFrequency() * 12.0f * bb.speed_mul
-            + bb.phase_deg * (1.0f / 360.0f) * 50.0f;
+             + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 50.0f;
         hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -320,69 +283,17 @@ nlohmann::json AudioLevel::SaveSettings() const
     AudioReactiveSaveToJson(j, audio_settings);
     j["wave_amount"] = wave_amount;
     j["edge_soft"] = edge_soft;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "audiolevel_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "audiolevel_stratum_band_speed_pct",
-                                           "audiolevel_stratum_band_tight_pct",
-                                           "audiolevel_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "audiolevel",
-                          audiolevel_strip_cmap_on,
-                          audiolevel_strip_cmap_kernel,
-                          audiolevel_strip_cmap_rep,
-                          audiolevel_strip_cmap_unfold,
-                          audiolevel_strip_cmap_dir,
-                          audiolevel_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void AudioLevel::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "audiolevel_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "audiolevel_stratum_band_speed_pct",
-                                            "audiolevel_stratum_band_tight_pct",
-                                            "audiolevel_stratum_band_phase_deg");
-    StripColormapLoadJson(settings,
-                          "audiolevel",
-                          audiolevel_strip_cmap_on,
-                          audiolevel_strip_cmap_kernel,
-                          audiolevel_strip_cmap_rep,
-                          audiolevel_strip_cmap_unfold,
-                          audiolevel_strip_cmap_dir,
-                          audiolevel_strip_cmap_color_style,
-                          GetRainbowMode());
     if(settings.contains("wave_amount")) wave_amount = std::clamp(settings["wave_amount"].get<float>(), 0.0f, 0.5f);
     if(settings.contains("edge_soft")) edge_soft = std::clamp(settings["edge_soft"].get<float>(), 0.02f, 0.5f);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(audiolevel_strip_cmap_on,
-                                                audiolevel_strip_cmap_kernel,
-                                                audiolevel_strip_cmap_rep,
-                                                audiolevel_strip_cmap_unfold,
-                                                audiolevel_strip_cmap_dir,
-                                                audiolevel_strip_cmap_color_style);
-    }
 }
 
 REGISTER_EFFECT_3D(AudioLevel)

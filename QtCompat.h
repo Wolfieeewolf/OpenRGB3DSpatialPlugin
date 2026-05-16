@@ -7,7 +7,6 @@
 
 namespace OpenRGB3DUi
 {
-/** Interval for live capture preview repaints (~30 Hz). */
 inline constexpr int kScreenPreviewTimerIntervalMs = 33;
 }
 
@@ -21,4 +20,4 @@ inline constexpr int kScreenPreviewTimerIntervalMs = 33;
     #define MOUSE_EVENT_POS(event) ((event)->pos())
 #endif
 
-#endif // QTCOMPAT_H
+#endif

@@ -11,9 +11,6 @@
 #include <vector>
 #include <limits>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class FreqRipple : public SpatialEffect3D
 {
     Q_OBJECT
@@ -22,7 +19,7 @@ public:
 
     EFFECT_REGISTERER_3D("FreqRipple", "Frequency Ripple", "Audio", [](){ return new FreqRipple; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -32,12 +29,12 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     void TickRipples(float time);
-    RGBColor ComputeRippleColor(float dist_norm, float time, const EffectStratumBlend::BandBlendScalars& bb) const;
+    RGBColor ComputeRippleColor(float dist_norm,
+                              float time,
+                              const EffectStratumBlend::BandBlendScalars& bb,
+                              float stratum_mot01) const;
     float smoothstep(float edge0, float edge1, float x) const;
 
     struct Ripple
@@ -56,19 +53,7 @@ private:
     float trail_width  = 0.35f;
     float decay_rate   = 2.0f;
     float onset_threshold = 0.25f;
-    int ripple_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool freqripple_strip_cmap_on = false;
-    int freqripple_strip_cmap_kernel = 0;
-    float freqripple_strip_cmap_rep = 4.0f;
-    int freqripple_strip_cmap_unfold = 0;
-    float freqripple_strip_cmap_dir = 0.0f;
-    int freqripple_strip_cmap_color_style = 0;
+    int ripple_edge_shape = 0;
 };
 
 #endif

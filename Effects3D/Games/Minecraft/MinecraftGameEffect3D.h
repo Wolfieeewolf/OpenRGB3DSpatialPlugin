@@ -16,7 +16,7 @@ public:
 
     EFFECT_REGISTERER_3D("MinecraftGame", "Minecraft (Fabric, all)", "Game", []() { return new MinecraftGameEffect3D; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;

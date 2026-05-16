@@ -23,16 +23,14 @@
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
 #include "SpatialLayerCore.h"
+#include "EffectStratumBlend.h"
 #include <nlohmann/json.hpp>
 
 class EffectGeometryPanel;
+class StratumBandPanel;
+class StripKernelColormapPanel;
 class StripKernelColormapPanel;
 
-/*
- * Effect sampling volume in the same scene convention as GridSpaceUtils / LEDViewport3D:
- *   X width, Y vertical (floor→ceiling), Z depth (front→back).
- * width/height/depth are spans (max−min) on those axes.
- */
 struct GridContext3D
 {
     float min_x, max_x;
@@ -42,13 +40,11 @@ struct GridContext3D
     float center_x, center_y, center_z;
     float grid_scale_mm;
 
-    /** Average position of mapped LEDs in this grid’s coordinate space (room vs world); optional. */
     float led_centroid_x = 0.0f;
     float led_centroid_y = 0.0f;
     float led_centroid_z = 0.0f;
     bool has_led_centroid = false;
 
-    /** Incremented each main stack render; 0 = unknown (use effect-local fallbacks). */
     uint64_t render_sequence = 0;
 
     GridContext3D(float minX,
@@ -119,6 +115,15 @@ inline float EffectGridHorizontalRadialNorm01(float r_xz_corner_sqrt2)
     return std::min(1.0f, r_xz_corner_sqrt2 * inv_sqrt2);
 }
 
+inline float RoomXZEdgeProximity01(float x, float z, const GridContext3D& grid)
+{
+    const float mx = std::max(grid.max_x - grid.min_x, 1e-4f);
+    const float mz = std::max(grid.max_z - grid.min_z, 1e-4f);
+    const float tx = std::fabs((x - grid.min_x) / mx - 0.5f) * 2.0f;
+    const float tz = std::fabs((z - grid.min_z) / mz - 0.5f) * 2.0f;
+    return std::clamp(std::max(tx, tz), 0.0f, 1.0f);
+}
+
 inline float NormalizeGridAxis01(float value, float min_v, float max_v)
 {
     float range = max_v - min_v;
@@ -165,22 +170,31 @@ struct EffectInfo3D
     float               default_detail_scale = 10.0f;
     bool                use_size_parameter;
 
-    bool                show_speed_control;
-    bool                show_brightness_control;
-    bool                show_frequency_control;
+    bool                show_speed_control = true;
+    bool                show_brightness_control = true;
+    bool                show_frequency_control = true;
     bool                show_detail_control = true;
-    bool                show_size_control;
-    bool                show_scale_control;
+    bool                show_size_control = true;
+    bool                show_scale_control = true;
     bool                show_fps_control = true;
-    bool                show_axis_control;
-    bool                show_color_controls;
+    bool                show_axis_control = true;
+    bool                show_color_controls = true;
     bool                show_surface_control = true;
     bool                show_path_axis_control = false;
     bool                show_plane_control = false;
     bool                show_position_offset_control = true;
+    bool                supports_height_bands = false;
+    bool                supports_strip_colormap = false;
 };
 
 class SpatialEffect3D;
+
+enum class SpatialEffectSettingsLayout : uint8_t
+{
+    FullWithTransport = 0,
+    CommonNoTransport = 1,
+    CustomOnly = 2,
+};
 
 namespace MinecraftGame {
 void ApplyFabricGameEffectChrome(SpatialEffect3D* effect);
@@ -201,23 +215,21 @@ public:
     virtual ~SpatialEffect3D();
     unsigned int GetTargetFPSSetting() const { return GetTargetFPS(); }
 
-    virtual EffectInfo3D GetEffectInfo() = 0;
+    virtual EffectInfo3D GetEffectInfo() const = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
     virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
-    /** Call from render paths: applies global Sampling (spatial) when enabled, then CalculateColorGrid. */
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
     static const SpatialEffect3D* GetEvaluatingEffect();
-    /** Override false for effects that only sample textures/screens (UV quantization handles resolution). */
     virtual bool UsesSpatialSamplingQuantization() const { return true; }
 
     bool EffectGridSampleOutsideVolume(float x, float y, float z, const GridContext3D& grid) const;
     void ApplyGridSampleCoordinateAdjustment(float& x, float& y, float& z, const GridContext3D& grid) const;
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
+    void MountSettingsUi(QWidget* parent, SpatialEffectSettingsLayout layout);
     virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
     virtual void ApplyControlVisibility();
-
 
     virtual void SetEffectEnabled(bool enabled) { effect_enabled = enabled; }
     virtual bool IsEffectEnabled() { return effect_enabled; }
@@ -242,19 +254,16 @@ public:
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
     virtual unsigned int GetDetail() const;
-    /** Used by palette sampling helpers on the evaluating effect; same scaling as internal paths. */
     float GetScaledFrequency() const;
     float GetScaledDetail() const;
     virtual unsigned int GetSmoothing() const { return effect_smoothing; }
     virtual unsigned int GetSamplingResolution() const { return effect_sampling_resolution; }
-    /** Effective 0..100 sampling quality: global × per-layer (for media-style effects). */
     unsigned int CombineMediaSampling(unsigned int local_detail_percent) const;
 
     virtual void SetReferenceMode(ReferenceMode mode);
     virtual int GetPathAxis() const { return effect_path_axis; }
     virtual int GetPlane() const { return effect_plane; }
     virtual int GetSurfaceMask() const { return effect_surface_mask; }
-    /** One of SURF_* in SpatialEffectTypes.h; updates mask and emits ParametersChanged. */
     void SetSurfaceMaskFlag(int flag, bool enabled);
     Vector3D GetReferencePointGrid(const GridContext3D& grid) const;
     virtual bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const;
@@ -267,11 +276,28 @@ public:
     QPushButton* GetStartButton() { return start_effect_button; }
     QPushButton* GetStopButton() { return stop_effect_button; }
 
-    /** Set after CreateCommonEffectControls: add per-effect controls here from SetupCustomUI. */
     QWidget* GetCustomSettingsHost() const { return custom_effect_settings_host; }
     QWidget* GetBandModulationHost() const { return band_modulation_settings_host; }
     void AddColorPatternWidget(QWidget* widget);
     void AddBandModulationWidget(QWidget* widget);
+
+    int GetStratumLayoutMode() const { return effect_stratum_layout_mode; }
+    const EffectStratumBlend::BandTuningPct& GetStratumTuning() const { return effect_stratum_tuning_; }
+
+    float ComputeStratumMotion01(const float layer_weights[3],
+                                 const GridContext3D& grid,
+                                 float x,
+                                 float y,
+                                 float z,
+                                 const Vector3D& origin,
+                                 float time_sec) const;
+
+    bool UseEffectStripColormap() const { return effect_strip_cmap_on; }
+    int GetEffectStripColormapKernel() const { return effect_strip_cmap_kernel; }
+    float GetEffectStripColormapRepeats() const { return effect_strip_cmap_rep; }
+    int GetEffectStripColormapUnfold() const { return effect_strip_cmap_unfold; }
+    float GetEffectStripColormapDirectionDeg() const { return effect_strip_cmap_dir; }
+    int GetEffectStripColormapColorStyle() const { return effect_strip_cmap_color_style; }
 
     float GetRotationYaw() const { return effect_rotation_yaw; }
     float GetRotationPitch() const { return effect_rotation_pitch; }
@@ -295,6 +321,8 @@ public:
 
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
+
+    void AttachRoomMappingPanel(QWidget* settings_host);
 
 signals:
     void ParametersChanged();
@@ -420,18 +448,16 @@ protected:
     int                 effect_voxel_room_scale_centi;
     int                 effect_voxel_heading_offset;
     VoxelDriveMode      effect_voxel_drive_mode;
-    /** 25–250, default 100: scales room-map and voxel palette drive strength. */
     int                 effect_sampler_influence_centi;
-    /** −180…180°: rotates compass sector indexing (room “north” vs effect forward). */
     int                 effect_sampler_compass_north_offset_deg;
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;
     unsigned int        effect_smoothing;
     unsigned int        effect_sampling_resolution;
-    int                 effect_edge_profile;   /* 0=Sharp, 1=Square, 2=Round, 3=Smooth, 4=Sharpen */
-    unsigned int        effect_edge_thickness; /* 0..100: transition width / line thickness */
-    unsigned int        effect_glow_level;     /* 0..100: soft glow beyond edge */
+    int                 effect_edge_profile;
+    unsigned int        effect_edge_thickness;
+    unsigned int        effect_glow_level;
     unsigned int        effect_scale_x;
     unsigned int        effect_scale_y;
     unsigned int        effect_scale_z;
@@ -465,6 +491,7 @@ protected:
     QWidget*            colors_patterns_section = nullptr;
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;
+    QWidget*            room_mapping_section = nullptr;
     QGroupBox*          path_plane_group;
     QComboBox*          path_axis_combo;
     QComboBox*          plane_combo;
@@ -476,6 +503,26 @@ protected:
 
     void AddWidgetToParent(QWidget* w, QWidget* container);
     void SyncColorControlVisibilityForPatternMode();
+    void EnsureHeightBandsPanel();
+    void LoadEffectStratumSettings(const nlohmann::json& settings);
+    void SaveEffectStratumSettings(nlohmann::json& j) const;
+    void SyncEffectStratumPanelFromModel();
+    void EnsureStripColormapPanel();
+    void LoadEffectStripColormapSettings(const nlohmann::json& settings);
+    void SaveEffectStripColormapSettings(nlohmann::json& j) const;
+    void SyncEffectStripColormapPanelFromModel();
+
+    int effect_stratum_layout_mode = 0;
+    EffectStratumBlend::BandTuningPct effect_stratum_tuning_{};
+    StratumBandPanel* effect_stratum_panel = nullptr;
+
+    bool effect_strip_cmap_on = false;
+    int effect_strip_cmap_kernel = 0;
+    float effect_strip_cmap_rep = 4.0f;
+    int effect_strip_cmap_unfold = 0;
+    float effect_strip_cmap_dir = 0.0f;
+    int effect_strip_cmap_color_style = 0;
+    StripKernelColormapPanel* effect_strip_cmap_panel = nullptr;
 
     Vector3D GetEffectOrigin() const;
     RGBColor GetRainbowColor(float hue);
@@ -493,14 +540,12 @@ protected:
     float GetScaledSpeed() const;
     float CalculateProgress(float time) const;
 
-    /** Solid palette 0..1 after room mapping (Off / Subtle / Compass / Voxel volume). */
     float ApplySpatialPalette01(float base_pos01,
                                 const SpatialLayerCore::Basis& basis,
                                 const SpatialLayerCore::SamplePoint& sp,
                                 const SpatialLayerCore::MapperSettings& map,
                                 float time,
                                 const GridContext3D* grid = nullptr) const;
-    /** Rainbow hue (deg) after room mapping; plane_pos01 is the effect's local wedge position 0..1. */
     float ApplySpatialRainbowHue(float hue_deg,
                                  float plane_pos01,
                                  const SpatialLayerCore::Basis& basis,
@@ -508,8 +553,14 @@ protected:
                                  const SpatialLayerCore::MapperSettings& map,
                                  float time,
                                  const GridContext3D* grid = nullptr) const;
-    /** Apply voxel/room scroll drive to an already-mapped palette coordinate. */
     float ApplyVoxelDriveToPalette01(float palette01, float x, float y, float z, float time, const GridContext3D& grid) const;
+
+    RGBColor RemapSaturatedRgbWithRoomMapping(RGBColor col,
+                                              float x,
+                                              float y,
+                                              float z,
+                                              float time,
+                                              const GridContext3D& grid) const;
 
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
 
@@ -524,6 +575,8 @@ private slots:
     void OnSpatialMappingComboChanged();
     void OnCompassLayerSpinComboChanged();
     void OnVoxelDriveComboChanged();
+    void OnEffectStratumBandChanged();
+    void OnEffectStripColormapChanged();
     void OnAddColorClicked();
     void OnRemoveColorClicked();
     void OnColorButtonClicked();

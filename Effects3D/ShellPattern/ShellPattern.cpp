@@ -2,8 +2,6 @@
 
 #include "ShellPattern.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QComboBox>
 #include <QGridLayout>
@@ -43,7 +41,7 @@ const char* ShellPattern::DisplayModeLabel(int d)
 
 ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 {
-    SetFrequency(50);
+    SetFrequency(38);
     SetRainbowMode(false);
     std::vector<RGBColor> default_colors;
     default_colors.push_back(0x000000FF);
@@ -54,7 +52,7 @@ ShellPattern::ShellPattern(QWidget* parent) : SpatialEffect3D(parent)
 
 ShellPattern::~ShellPattern() = default;
 
-EffectInfo3D ShellPattern::GetEffectInfo()
+EffectInfo3D ShellPattern::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -83,6 +81,9 @@ EffectInfo3D ShellPattern::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -128,6 +129,8 @@ void ShellPattern::SetupCustomUI(QWidget* parent)
     edge_slider = new QSlider(Qt::Horizontal);
     edge_slider->setRange(0, 100);
     edge_slider->setValue((int)edge_fade_pct);
+    edge_slider->setToolTip(
+        "Softens toward the room X/Z walls (full grid bounds). 0% = off. Uses real room edges, not effect scale.");
     edge_label = new QLabel(QString::number((int)edge_fade_pct) + "%");
     edge_label->setMinimumWidth(36);
     g->addWidget(edge_slider, row, 1);
@@ -155,23 +158,6 @@ void ShellPattern::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
 
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &ShellPattern::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(shellpattern_strip_cmap_on,
-                                            pattern_id,
-                                            strip_repeats,
-                                            unfold_mode,
-                                            direction_deg,
-                                            strip_shell_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &ShellPattern::SyncStripColormapFromPanel);
-
     AddWidgetToParent(w, parent);
 }
 
@@ -182,37 +168,14 @@ void ShellPattern::OnParameterChanged()
     emit ParametersChanged();
 }
 
-void ShellPattern::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void ShellPattern::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    shellpattern_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    pattern_id = strip_cmap_panel->kernelId();
-    strip_repeats = strip_cmap_panel->kernelRepeats();
-    unfold_mode = strip_cmap_panel->unfoldMode();
-    direction_deg = strip_cmap_panel->directionDeg();
-    strip_shell_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
 void ShellPattern::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_SHELL_PATTERN;
 }
 
-float ShellPattern::EvaluateKernel(float s01, float phase01, float time_sec, int pattern) const
+float ShellPattern::EvaluateKernel(float s01, float phase01, float time_sec, int pattern, float repeats) const
 {
-    return EvalSpatialPatternKernel(pattern, s01, phase01, strip_repeats, time_sec);
+    return EvalSpatialPatternKernel(pattern, s01, phase01, repeats, time_sec);
 }
 
 RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -229,10 +192,12 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     float swt[3];
     EffectStratumBlend::WeightsForYNorm(coord_y01, strat_map_s, swt);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, swt, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), swt, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(swt, grid, x, y, z, origin, time);
 
     float progress_val = CalculateProgress(time) * bb.speed_mul;
-    float phase01 = std::fmod(progress_val + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    const float phase_drive = progress_val + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
 
     float scale_eff = std::max(0.05f, GetNormalizedScale());
     float sw = grid.width * 0.5f * scale_eff;
@@ -249,10 +214,15 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     float ly = (rot.y - origin.y) / sh;
     float lz = (rot.z - origin.z) / sd;
 
-    auto unfold = static_cast<StripPatternSurface::UnfoldMode>(std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
-    float s01 = StripPatternSurface::StripCoord01(lx, ly, lz, unfold, direction_deg);
-    int pat = std::clamp(pattern_id, 0, SpatialPatternKernelCount() - 1);
-    float k = EvaluateKernel(s01, phase01, time, pat);
+    const int unfold_i = UseEffectStripColormap() ? GetEffectStripColormapUnfold() : unfold_mode;
+    const float dir_deg = UseEffectStripColormap() ? GetEffectStripColormapDirectionDeg() : direction_deg;
+    const float reps = UseEffectStripColormap() ? GetEffectStripColormapRepeats() : strip_repeats;
+    auto unfold = static_cast<StripPatternSurface::UnfoldMode>(
+        std::clamp(unfold_i, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
+    float s01 = StripPatternSurface::StripCoord01(lx, ly, lz, unfold, dir_deg);
+    int pat = std::clamp(UseEffectStripColormap() ? GetEffectStripColormapKernel() : pattern_id, 0,
+                         SpatialPatternKernelCount() - 1);
+    float k = EvaluateKernel(s01, phase_drive, time, pat, reps);
     float amp = std::max(0.2f, std::min(2.0f, wave_amplitude * bb.tight_mul));
 
     float intensity = 1.0f;
@@ -269,9 +239,8 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     float fade = std::clamp(edge_fade_pct / 100.0f, 0.0f, 1.0f);
     if(fade > 0.001f)
     {
-        float u = std::max(std::fabs(lx), std::fabs(lz));
-        float t = (u - 0.0f) / std::max(0.0001f, 1.0f);
-        t = std::clamp(t, 0.0f, 1.0f);
+        const float u = RoomXZEdgeProximity01(rot.x, rot.z, grid);
+        const float t = std::clamp(u, 0.0f, 1.0f);
         float edge_mul = 1.0f - fade * (t * t * (3.0f - 2.0f * t));
         intensity *= std::max(0.0f, std::min(1.0f, edge_mul));
     }
@@ -281,9 +250,10 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     float pos_norm = (k + 1.0f) * 0.5f;
     pos_norm = std::clamp(pos_norm, 0.0f, 1.0f);
     float rate = GetScaledFrequency();
-    float pos_color = std::fmod(pos_norm + time * rate * 0.02f, 1.0f);
+    float pos_color = std::fmod(pos_norm + time * rate * 0.009f, 1.0f);
     if(pos_color < 0.0f)
         pos_color += 1.0f;
+    pos_color = EffectStratumBlend::ApplyMotionToPhase01(pos_color, stratum_mot01, 0.5f);
 
     float detail = std::max(0.05f, GetScaledDetail());
     SpatialLayerCore::Basis basis;
@@ -302,15 +272,31 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     sp.origin_z = origin.z;
     sp.y_norm = coord_y01;
 
-    float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
-    float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
     RGBColor c = 0x00000000;
-    if(shellpattern_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        c = ResolveStripKernelFinalColor(*this, pat, p01v, strip_shell_color_style, time, rate * 12.0f);
+        float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
+        float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
+        const int color_style =
+            UseEffectStripColormap() ? GetEffectStripColormapColorStyle() : strip_shell_color_style;
+        c = ResolveStripKernelFinalColor(*this, pat, p01v, color_style, time, rate * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        float hue = pos_color * 360.0f;
+        hue = ApplySpatialRainbowHue(hue, coord_y01, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        float p01v = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = GetRainbowColor(p01v * 360.0f);
     }
     else
     {
+        float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
+        float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
         c = GetColorAtPosition(p01v);
     }
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));
@@ -326,53 +312,14 @@ nlohmann::json ShellPattern::SaveSettings() const
     j["shellpattern_surface_thickness"] = surface_thickness;
     j["shellpattern_wave_amplitude"] = wave_amplitude;
     j["shellpattern_edge_fade_pct"] = edge_fade_pct;
-    StripColormapSaveJson(j,
-                          "shellpattern",
-                          shellpattern_strip_cmap_on,
-                          pattern_id,
-                          strip_repeats,
-                          unfold_mode,
-                          direction_deg,
-                          strip_shell_color_style);
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "shellpattern_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "shellpattern_stratum_band_speed_pct",
-                                           "shellpattern_stratum_band_tight_pct",
-                                           "shellpattern_stratum_band_phase_deg");
     return j;
 }
 
 void ShellPattern::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                           "shellpattern_stratum_layout_mode",
-                                           stratum_layout_mode,
-                                           stratum_tuning_,
-                                           "shellpattern_stratum_band_speed_pct",
-                                           "shellpattern_stratum_band_tight_pct",
-                                           "shellpattern_stratum_band_phase_deg");
     if(settings.contains("shellpattern_display_mode") && settings["shellpattern_display_mode"].is_number_integer())
         display_mode = std::clamp(settings["shellpattern_display_mode"].get<int>(), 0, DISP_COUNT - 1);
-    StripColormapLoadJson(settings,
-                          "shellpattern",
-                          shellpattern_strip_cmap_on,
-                          pattern_id,
-                          strip_repeats,
-                          unfold_mode,
-                          direction_deg,
-                          strip_shell_color_style,
-                          GetRainbowMode());
-    // Back-compat for prior ShellPattern keys before shared colormap panel migration.
     if(settings.contains("shellpattern_unfold_mode") && settings["shellpattern_unfold_mode"].is_number_integer())
         unfold_mode = std::clamp(settings["shellpattern_unfold_mode"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
     if(settings.contains("shellpattern_pattern_id") && settings["shellpattern_pattern_id"].is_number_integer())
@@ -409,19 +356,5 @@ void ShellPattern::LoadSettings(const nlohmann::json& settings)
         edge_slider->setValue((int)edge_fade_pct);
         if(edge_label)
             edge_label->setText(QString::number((int)edge_fade_pct) + "%");
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(shellpattern_strip_cmap_on,
-                                                pattern_id,
-                                                strip_repeats,
-                                                unfold_mode,
-                                                direction_deg,
-                                                strip_shell_color_style);
     }
 }

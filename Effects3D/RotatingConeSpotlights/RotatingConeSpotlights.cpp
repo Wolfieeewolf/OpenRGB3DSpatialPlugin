@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-//
-// Algorithm: time-varying axis-angle rotation in normalized centered cube, then
-// dist = |z| - sqrt((x*x + y*y) / scale) (double cone), HSV from dist.
-// Suitable for volumetric LED layouts; coordinates match per-axis 0..1 room mapping.
 
 #include "RotatingConeSpotlights.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include <QColor>
 #include <QLabel>
 #include <QGridLayout>
@@ -24,7 +19,7 @@ float Triangle01(float phase01)
     float p = phase01 - std::floor(phase01);
     return 1.0f - std::fabs(2.0f * p - 1.0f);
 }
-} // namespace
+}
 
 RGBColor RotatingConeSpotlights::Hsv01ToBgr(float h, float s, float v)
 {
@@ -129,7 +124,7 @@ RotatingConeSpotlights::RotatingConeSpotlights(QWidget* parent) : SpatialEffect3
 
 RotatingConeSpotlights::~RotatingConeSpotlights() = default;
 
-EffectInfo3D RotatingConeSpotlights::GetEffectInfo()
+EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -160,6 +155,8 @@ EffectInfo3D RotatingConeSpotlights::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -220,31 +217,7 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
             motion_label->setText(QString::number(motion_rate, 'f', 2));
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(cones_spot_strip_cmap_on,
-                                            cones_spot_strip_cmap_kernel,
-                                            cones_spot_strip_cmap_rep,
-                                            cones_spot_strip_cmap_unfold,
-                                            cones_spot_strip_cmap_dir,
-                                            cones_spot_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &RotatingConeSpotlights::SyncStripColormapFromPanel);
-
-    AddWidgetToParent(w, parent);
-}
-
-void RotatingConeSpotlights::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    cones_spot_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    cones_spot_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    cones_spot_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    cones_spot_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    cones_spot_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    cones_spot_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void RotatingConeSpotlights::UpdateParams(SpatialEffectParams& params)
@@ -291,14 +264,14 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
     val = std::clamp(val, 0.0f, 1.0f);
 
     float h = std::fmod(px + 0.5f + hue01 + 1.0f, 1.0f);
-    if(cones_spot_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
         const float ph01 = std::fmod(CalculateProgress(time) * 0.4f + time * rate * 0.01f + dist * 0.08f + 1.f, 1.f);
-        float pal01 = SampleStripKernelPalette01(cones_spot_strip_cmap_kernel,
-                                                 cones_spot_strip_cmap_rep,
-                                                 cones_spot_strip_cmap_unfold,
-                                                 cones_spot_strip_cmap_dir,
+        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -306,11 +279,11 @@ RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, f
                                                  origin,
                                                  rot);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        const int kid = SpatialPatternKernelClamp(cones_spot_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
                                                   std::clamp(pal01, 0.0f, 1.0f),
-                                                  cones_spot_strip_cmap_color_style,
+                                                  GetEffectStripColormapColorStyle(),
                                                   time,
                                                   rate * 0.24f);
         const int cr = (int)(c & 0xFF);
@@ -340,15 +313,7 @@ nlohmann::json RotatingConeSpotlights::SaveSettings() const
     j["cone_spot_scale"] = cone_scale;
     j["cone_spot_hue01"] = hue01;
     j["cone_spot_motion"] = motion_rate;
-    StripColormapSaveJson(j,
-                          "cones_spot",
-                          cones_spot_strip_cmap_on,
-                          cones_spot_strip_cmap_kernel,
-                          cones_spot_strip_cmap_rep,
-                          cones_spot_strip_cmap_unfold,
-                          cones_spot_strip_cmap_dir,
-                          cones_spot_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
@@ -360,27 +325,7 @@ void RotatingConeSpotlights::LoadSettings(const nlohmann::json& settings)
         hue01 = std::clamp(settings["cone_spot_hue01"].get<float>(), 0.0f, 1.0f);
     if(settings.contains("cone_spot_motion") && settings["cone_spot_motion"].is_number())
         motion_rate = std::clamp(settings["cone_spot_motion"].get<float>(), 0.2f, 4.0f);
-
-    StripColormapLoadJson(settings,
-                          "cones_spot",
-                          cones_spot_strip_cmap_on,
-                          cones_spot_strip_cmap_kernel,
-                          cones_spot_strip_cmap_rep,
-                          cones_spot_strip_cmap_unfold,
-                          cones_spot_strip_cmap_dir,
-                          cones_spot_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(cones_spot_strip_cmap_on,
-                                                cones_spot_strip_cmap_kernel,
-                                                cones_spot_strip_cmap_rep,
-                                                cones_spot_strip_cmap_unfold,
-                                                cones_spot_strip_cmap_dir,
-                                                cones_spot_strip_cmap_color_style);
-    }
-
-    if(cone_slider)
+if(cone_slider)
     {
         cone_slider->setValue((int)std::lround(cone_scale * 1000.0f));
         if(cone_label)

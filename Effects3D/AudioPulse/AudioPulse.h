@@ -11,9 +11,6 @@
 #include <limits>
 #include <vector>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class AudioPulse : public SpatialEffect3D
 {
     Q_OBJECT
@@ -23,7 +20,7 @@ public:
 
     EFFECT_REGISTERER_3D("AudioPulse", "Audio Pulse", "Audio", [](){ return new AudioPulse; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams&) override;
 
@@ -34,9 +31,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     struct PulseData
     {
@@ -52,6 +46,7 @@ private:
                           float radius_basis,
                           float time,
                           const EffectStratumBlend::BandBlendScalars& bb,
+                          float stratum_mot01,
                           float height_fade,
                           float x,
                           float y,
@@ -72,18 +67,6 @@ private:
     float onset_threshold = 0.38f;
     float last_tick_time = std::numeric_limits<float>::lowest();
     int particle_amount = 40;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool audiopulse_strip_cmap_on = false;
-    int audiopulse_strip_cmap_kernel = 0;
-    float audiopulse_strip_cmap_rep = 4.0f;
-    int audiopulse_strip_cmap_unfold = 0;
-    float audiopulse_strip_cmap_dir = 0.0f;
-    int audiopulse_strip_cmap_color_style = 0;
 };
 
 #endif

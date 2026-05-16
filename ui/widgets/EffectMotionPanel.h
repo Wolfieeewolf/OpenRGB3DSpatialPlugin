@@ -9,7 +9,6 @@ class QCheckBox;
 class QLabel;
 class QSlider;
 
-/** Speed, brightness, frequency, detail, size, scale (+ invert), FPS — shared motion/pattern row set. */
 class EffectMotionPanel : public QWidget
 {
 public:

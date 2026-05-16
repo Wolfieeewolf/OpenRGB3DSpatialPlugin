@@ -20,7 +20,6 @@ struct VoxelGrid
     float min_y = 0.0f;
     float min_z = 0.0f;
     float voxel_size = 1.0f;
-    // Packed RGBA bytes per voxel, index = ((x * size_y + y) * size_z + z) * 4.
     std::vector<unsigned char> rgba;
 };
 

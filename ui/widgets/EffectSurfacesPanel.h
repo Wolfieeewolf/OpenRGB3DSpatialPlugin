@@ -7,7 +7,6 @@
 
 class SpatialEffect3D;
 
-/** Floor / ceiling / wall surface toggles for room-shell LED filtering (title via PluginUiAddSectionBlock). */
 class EffectSurfacesPanel : public QWidget
 {
 public:

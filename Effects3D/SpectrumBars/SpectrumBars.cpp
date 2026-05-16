@@ -2,8 +2,6 @@
 
 #include "SpectrumBars.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
@@ -38,7 +36,7 @@ SpectrumBars::SpectrumBars(QWidget* parent)
 
 SpectrumBars::~SpectrumBars() = default;
 
-EffectInfo3D SpectrumBars::GetEffectInfo()
+EffectInfo3D SpectrumBars::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -66,6 +64,9 @@ EffectInfo3D SpectrumBars::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -147,53 +148,12 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
         roll_label->setText(QString::number(roll_speed, 'f', 2));
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(spectrumbars_strip_cmap_on,
-                                            spectrumbars_strip_cmap_kernel,
-                                            spectrumbars_strip_cmap_rep,
-                                            spectrumbars_strip_cmap_unfold,
-                                            spectrumbars_strip_cmap_dir,
-                                            spectrumbars_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SpectrumBars::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &SpectrumBars::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void SpectrumBars::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    spectrumbars_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    spectrumbars_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    spectrumbars_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    spectrumbars_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    spectrumbars_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    spectrumbars_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
 }
 
 void SpectrumBars::UpdateParams(SpatialEffectParams& /*params*/)
 {
     RefreshBandRange();
 }
-
-void SpectrumBars::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
 
 RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -212,7 +172,10 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     float axis_pos = ResolveCoordinateNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float height_norm = ResolveHeightNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float radial_norm = ResolveRadialNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
@@ -237,14 +200,14 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(spectrumbars_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.29f + axis_pos * 0.22f + color_cycle * (1.f / 360.f) + 1.f, 1.f);
-        float p01 = SampleStripKernelPalette01(spectrumbars_strip_cmap_kernel,
-                                               spectrumbars_strip_cmap_rep,
-                                               spectrumbars_strip_cmap_unfold,
-                                               spectrumbars_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                ph01,
                                                time,
                                                grid,
@@ -252,8 +215,8 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
                                                origin,
                                                rotated_pos);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
-        user_color = ResolveStripKernelFinalColor(*this, spectrumbars_strip_cmap_kernel, std::clamp(p01, 0.0f, 1.0f),
-                                                  spectrumbars_strip_cmap_color_style, time,
+        user_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), std::clamp(p01, 0.0f, 1.0f),
+                                                  GetEffectStripColormapColorStyle(), time,
                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
@@ -282,7 +245,7 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
                         user_color,
                         bb.speed_mul,
                         bb.tight_mul,
-                        bb.phase_deg * (1.0f / 360.0f));
+                        EffectStratumBlend::CombinedPhase01(bb, stratum_mot01));
 }
 
 nlohmann::json SpectrumBars::SaveSettings() const
@@ -290,69 +253,17 @@ nlohmann::json SpectrumBars::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["roll_speed"] = roll_speed;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "spectrumbars_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "spectrumbars_stratum_band_speed_pct",
-                                           "spectrumbars_stratum_band_tight_pct",
-                                           "spectrumbars_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "spectrumbars",
-                          spectrumbars_strip_cmap_on,
-                          spectrumbars_strip_cmap_kernel,
-                          spectrumbars_strip_cmap_rep,
-                          spectrumbars_strip_cmap_unfold,
-                          spectrumbars_strip_cmap_dir,
-                          spectrumbars_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void SpectrumBars::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "spectrumbars_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "spectrumbars_stratum_band_speed_pct",
-                                            "spectrumbars_stratum_band_tight_pct",
-                                            "spectrumbars_stratum_band_phase_deg");
     if(settings.contains("roll_speed")) roll_speed = settings["roll_speed"].get<float>();
 
     RefreshBandRange();
     last_sample_time = std::numeric_limits<float>::lowest();
-    StripColormapLoadJson(settings,
-                          "spectrumbars",
-                          spectrumbars_strip_cmap_on,
-                          spectrumbars_strip_cmap_kernel,
-                          spectrumbars_strip_cmap_rep,
-                          spectrumbars_strip_cmap_unfold,
-                          spectrumbars_strip_cmap_dir,
-                          spectrumbars_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(spectrumbars_strip_cmap_on,
-                                                spectrumbars_strip_cmap_kernel,
-                                                spectrumbars_strip_cmap_rep,
-                                                spectrumbars_strip_cmap_unfold,
-                                                spectrumbars_strip_cmap_dir,
-                                                spectrumbars_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 void SpectrumBars::RefreshBandRange()

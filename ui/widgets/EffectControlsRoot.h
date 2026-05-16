@@ -7,7 +7,6 @@
 
 class QVBoxLayout;
 
-/** Root widget for the stacked common effect control sections. */
 class EffectControlsRoot : public QWidget
 {
 public:

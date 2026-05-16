@@ -2,7 +2,6 @@
 
 #include "XorField.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
 #include <QGridLayout>
@@ -69,13 +68,12 @@ inline RGBColor Hsv01ToBgr(float h, float s, float v)
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
 
-/** Blend phase with its time-reverse on alternating XOR parity. */
 inline float PhaseWithAlternate(float ph01, int xor_parity_lsb, float alternate01)
 {
     const float rev = (xor_parity_lsb != 0) ? (1.0f - ph01) : ph01;
     return ph01 * (1.0f - alternate01) + rev * alternate01;
 }
-} // namespace
+}
 
 XorField::XorField(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -86,7 +84,7 @@ XorField::XorField(QWidget* parent) : SpatialEffect3D(parent)
 
 XorField::~XorField() = default;
 
-EffectInfo3D XorField::GetEffectInfo()
+EffectInfo3D XorField::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 1;
@@ -113,6 +111,8 @@ EffectInfo3D XorField::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -173,31 +173,7 @@ void XorField::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
     row++;
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(xorfield_strip_cmap_on,
-                                            xorfield_strip_cmap_kernel,
-                                            xorfield_strip_cmap_rep,
-                                            xorfield_strip_cmap_unfold,
-                                            xorfield_strip_cmap_dir,
-                                            xorfield_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &XorField::SyncStripColormapFromPanel);
-
-    AddWidgetToParent(w, parent);
-}
-
-void XorField::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    xorfield_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    xorfield_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    xorfield_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    xorfield_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    xorfield_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    xorfield_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void XorField::UpdateParams(SpatialEffectParams& params)
@@ -256,12 +232,12 @@ RGBColor XorField::CalculateColorGrid(float x, float y, float z, float time, con
 
     RGBColor c = 0x00000000;
     const float h01 = h - std::floor(h);
-    if(xorfield_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        float p01 = SampleStripKernelPalette01(xorfield_strip_cmap_kernel,
-                                               xorfield_strip_cmap_rep,
-                                               xorfield_strip_cmap_unfold,
-                                               xorfield_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                h01,
                                                time,
                                                grid,
@@ -270,9 +246,9 @@ RGBColor XorField::CalculateColorGrid(float x, float y, float z, float time, con
                                                rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
-                                         SpatialPatternKernelClamp(xorfield_strip_cmap_kernel),
+                                         SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                          p01,
-                                         xorfield_strip_cmap_color_style,
+                                         GetEffectStripColormapColorStyle(),
                                          time,
                                          rate * 12.0f);
     }
@@ -300,15 +276,7 @@ nlohmann::json XorField::SaveSettings() const
     j["xorfield_direction_alternate"] = direction_alternate;
     j["xorfield_cell_scale"] = cell_scale;
     j["xorfield_wave_drive"] = wave_drive;
-    StripColormapSaveJson(j,
-                          "xorfield",
-                          xorfield_strip_cmap_on,
-                          xorfield_strip_cmap_kernel,
-                          xorfield_strip_cmap_rep,
-                          xorfield_strip_cmap_unfold,
-                          xorfield_strip_cmap_dir,
-                          xorfield_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void XorField::LoadSettings(const nlohmann::json& settings)
@@ -320,17 +288,7 @@ void XorField::LoadSettings(const nlohmann::json& settings)
         cell_scale = std::clamp(settings["xorfield_cell_scale"].get<float>(), 2.5f, 14.0f);
     if(settings.contains("xorfield_wave_drive") && settings["xorfield_wave_drive"].is_number())
         wave_drive = std::clamp(settings["xorfield_wave_drive"].get<float>(), 0.5f, 1.5f);
-    StripColormapLoadJson(settings,
-                          "xorfield",
-                          xorfield_strip_cmap_on,
-                          xorfield_strip_cmap_kernel,
-                          xorfield_strip_cmap_rep,
-                          xorfield_strip_cmap_unfold,
-                          xorfield_strip_cmap_dir,
-                          xorfield_strip_cmap_color_style,
-                          GetRainbowMode());
-
-    if(alt_slider)
+if(alt_slider)
     {
         alt_slider->setValue((int)std::lround(direction_alternate * 100.0f));
         if(alt_label)
@@ -347,14 +305,5 @@ void XorField::LoadSettings(const nlohmann::json& settings)
         drive_slider->setValue((int)std::lround(wave_drive * 100.0f));
         if(drive_label)
             drive_label->setText(QString::number(wave_drive, 'f', 2));
-    }
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(xorfield_strip_cmap_on,
-                                                xorfield_strip_cmap_kernel,
-                                                xorfield_strip_cmap_rep,
-                                                xorfield_strip_cmap_unfold,
-                                                xorfield_strip_cmap_dir,
-                                                xorfield_strip_cmap_color_style);
     }
 }

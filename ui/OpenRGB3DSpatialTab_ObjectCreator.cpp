@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include "OpenRGB3DSpatialTab_Presets.h"
 #include "GridSpaceUtils.h"
@@ -87,8 +86,6 @@ static bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<Con
     return false;
 }
 
-
-
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
 {
     if(!object_creator_status_label)
@@ -113,7 +110,6 @@ void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is
     object_creator_status_label->setFont(status_font);
     object_creator_status_label->setText(message);
 }
-
 
 void OpenRGB3DSpatialTab::LoadDevices()
 {
@@ -708,7 +704,6 @@ void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, flo
     }
 }
 
-
 void OpenRGB3DSpatialTab::on_start_effect_clicked()
 {
     if(controller_transforms.empty())
@@ -1001,7 +996,6 @@ bool OpenRGB3DSpatialTab::AddCustomControllerToScene(int virtual_controller_inde
     ctrl_transform->transform.rotation = {0.0f, 0.0f, 0.0f};
     ctrl_transform->transform.scale = {1.0f, 1.0f, 1.0f};
     ctrl_transform->hidden_by_virtual = false;
-    // Virtual controllers should inherit spacing from their shared definition.
     ctrl_transform->led_spacing_mm_x = virtual_ctrl->GetSpacingX();
     ctrl_transform->led_spacing_mm_y = virtual_ctrl->GetSpacingY();
     ctrl_transform->led_spacing_mm_z = virtual_ctrl->GetSpacingZ();
@@ -1681,8 +1675,6 @@ void OpenRGB3DSpatialTab::on_apply_spacing_clicked()
 
     if(ctrl->virtual_controller)
     {
-        // Two-way sync: scene spacing edits update the custom-controller definition,
-        // then all placed instances of that custom controller.
         VirtualController3D* virtual_ctrl = ctrl->virtual_controller;
         virtual_ctrl->SetSpacing(ctrl->led_spacing_mm_x, ctrl->led_spacing_mm_y, ctrl->led_spacing_mm_z);
 
@@ -2667,7 +2659,6 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
                     .arg(unmatched));
             }
 
-
             QMessageBox::information(this, "Import Successful",
                                     QString("Custom controller '%1' imported successfully!\n\n"
                                            "Grid: %2x%3x%4\n"
@@ -3042,7 +3033,6 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
         controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
         controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
         controller_json["led_spacing_mm"]["z"] = ct->led_spacing_mm_z;
-
 
         controller_json["granularity"] = ct->granularity;
         controller_json["item_idx"] = ct->item_idx;
@@ -3761,12 +3751,10 @@ void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
     filesystem::path config_dir = resource_manager->GetConfigurationDirectory();
     filesystem::path layouts_dir = config_dir / "plugins" / "settings" / "OpenRGB3DSpatialPlugin" / "layouts";
 
-
     QDir dir(QString::fromStdString(layouts_dir.string()));
     QStringList filters;
     filters << "*.json";
     QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
-
 
     for(int i = 0; i < files.size(); i++)
     {
@@ -3851,7 +3839,6 @@ void OpenRGB3DSpatialTab::TryAutoLoadLayout()
     {
         saved_profile = settings["SelectedProfile"].get<std::string>();
     }
-
 
     bool restore_auto_load_signals = auto_load_checkbox->blockSignals(true);
     auto_load_checkbox->setChecked(auto_load_enabled);
@@ -4054,7 +4041,6 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granulari
 
     if(granularity == 0)
     {
-        // Whole-device entry is considered "in scene" only when all LEDs are consumed.
         for(unsigned int i = 0; i < used_leds.size(); i++)
         {
             if(!used_leds[i])
@@ -4273,7 +4259,6 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
         }
     }
 }
-
 
 bool OpenRGB3DSpatialTab::ParseMonitorPresetEntry(const nlohmann::json& entry, const QString& file_id, MonitorPreset& out_preset)
 {
@@ -4899,7 +4884,6 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         display_planes_empty_label->setVisible(display_planes_list->count() == 0);
     }
 
-
     if(display_planes.empty())
     {
         current_display_plane_index = -1;
@@ -4919,7 +4903,6 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
         on_display_plane_selected(-1);
     }
 }
-
 
 void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
 {

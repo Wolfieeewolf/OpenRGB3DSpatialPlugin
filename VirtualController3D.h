@@ -45,10 +45,6 @@ public:
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
     static std::unique_ptr<VirtualController3D> FromJsonForController(const json& j, RGBController* controller, const std::string& display_name);
 
-    /**
-     * Convert a JSON array of per-LED [x,y] or [x,y,z] coordinates into grid mappings.
-     * On failure, returns empty vector and optionally writes a message to out_error.
-     */
     static std::vector<GridLEDMapping> ImportMappingsFromCoordinateMapJson(
         const json& map_json,
         LedLayoutCoordinateMap::NormalizationMode mode,

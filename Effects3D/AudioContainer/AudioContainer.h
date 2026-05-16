@@ -15,7 +15,7 @@ public:
 
     EFFECT_REGISTERER_3D("AudioContainer", "Audio Effect", "Audio", [](){ return new AudioContainer; })
 
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info{};
         info.info_version            = 2;

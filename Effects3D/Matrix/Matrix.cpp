@@ -2,8 +2,6 @@
 
 #include "Matrix.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QGridLayout>
 #include <QVBoxLayout>
@@ -35,10 +33,10 @@ Matrix::Matrix(QWidget* parent) : SpatialEffect3D(parent)
     head_brightness = 35;
     SetRainbowMode(false);
     if(GetColors().empty())
-        SetColors({ 0x0000FF00 });  /* default green for classic matrix look */
+        SetColors({ 0x0000FF00 });  
 }
 
-EffectInfo3D Matrix::GetEffectInfo()
+EffectInfo3D Matrix::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.info_version = 3;
@@ -69,6 +67,9 @@ EffectInfo3D Matrix::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -149,25 +150,7 @@ void Matrix::SetupCustomUI(QWidget* parent)
     head_brightness_label = new QLabel(QString::number(head_brightness) + "%");
     head_brightness_label->setMinimumWidth(36);
     layout->addWidget(head_brightness_label, 6, 2);
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(matrix_strip_cmap_on,
-                                            matrix_strip_cmap_kernel,
-                                            matrix_strip_cmap_rep,
-                                            matrix_strip_cmap_unfold,
-                                            matrix_strip_cmap_dir,
-                                            matrix_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Matrix::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Matrix::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    AddWidgetToParent(w, parent);
+AddWidgetToParent(w, parent);
 
     connect(density_slider, &QSlider::valueChanged, this, &Matrix::OnMatrixParameterChanged);
     connect(trail_slider, &QSlider::valueChanged, this, &Matrix::OnMatrixParameterChanged);
@@ -222,30 +205,6 @@ void Matrix::OnMatrixParameterChanged()
     }
     emit ParametersChanged();
 }
-
-void Matrix::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void Matrix::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    matrix_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    matrix_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    matrix_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    matrix_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    matrix_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    matrix_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
 
 float Matrix::ComputeFaceIntensity(int face,
                                      float x,
@@ -314,7 +273,7 @@ float Matrix::ComputeFaceIntensity(int face,
             face_distance = fabsf(z - grid.max_z);
             break;
         case 4:
-            /* Floor (y = min_y): stream along z, distance from floor */
+            
             u = x;
             v = z;
             axis_value = z;
@@ -324,7 +283,7 @@ float Matrix::ComputeFaceIntensity(int face,
             break;
         case 5:
         default:
-            /* Ceiling (y = max_y): stream along z, distance from ceiling */
+            
             u = x;
             v = z;
             axis_value = z;
@@ -334,7 +293,7 @@ float Matrix::ComputeFaceIntensity(int face,
             break;
     }
 
-    /* Let matrix rain extend into the room so it feels on everything (walls, floor, ceiling, and volume) */
+    
     float room_extent = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     if(room_extent > 0.001f && face_distance > room_extent * 0.75f)
         return 0.0f;
@@ -426,7 +385,7 @@ float Matrix::ComputeFaceIntensity(int face,
     position_along_axis = fmax(-1000.0f, fmin(1000.0f, position_along_axis));
     stream_time = fmax(-10000.0f, fmin(10000.0f, stream_time));
 
-    /* Fall downward: front of stream moves toward smaller position_along_axis on walls (high Y -> low Y) */
+    
     float stream_pos = stream_time - position_along_axis;
 
     stream_pos = fmax(-10000.0f, fmin(10000.0f, stream_pos));
@@ -465,7 +424,7 @@ float Matrix::ComputeFaceIntensity(int face,
         if(char_internal < char_body_ratio)
         {
             intensity = 1.0f;
-            /* Only the very first LED (leading edge) is the "head" – smooth blend so it’s not all white */
+            
             if(out_head && char_internal < 0.1f)
                 *out_head = 1.0f - char_internal / 0.1f;
         }
@@ -568,11 +527,14 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
 
     float speed = GetScaledSpeed() * bb.speed_mul;
     float size_m = GetNormalizedSize();
-    float t_sample = time + (bb.phase_deg / 360.0f) * (2.0f / std::max(0.1f, speed));
+    float t_sample = time + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * (2.0f / std::max(0.1f, speed));
     float color_cycle = t_sample * GetScaledFrequency() * 0.02f;
     float detail = std::max(0.05f, GetScaledDetail());
 
@@ -593,14 +555,14 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
         }
     }
 
-    const float mtx_phase01 = std::fmod(color_cycle + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    const float mtx_phase01 = std::fmod(color_cycle + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
-    if(matrix_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(matrix_strip_cmap_kernel,
-                                               matrix_strip_cmap_rep,
-                                               matrix_strip_cmap_unfold,
-                                               matrix_strip_cmap_dir,
+        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                mtx_phase01,
                                                time,
                                                grid,
@@ -609,11 +571,34 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
                                                rp);
     }
 
-    /* Trail uses effect colors (green default) or rainbow when enabled */
+    
     float color_pos = fmodf(color_cycle + (float)(((int)(x * 31 + y * 17 + z * 7) % 1000)) / 1000.0f, 1.0f);
-    if(matrix_strip_cmap_on)
+    if(UseEffectStripColormap())
         color_pos = strip_p01;
     if(color_pos < 0.0f) color_pos += 1.0f;
+    color_pos = EffectStratumBlend::ApplyMotionToPhase01(color_pos, stratum_mot01, 0.35f);
+
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+    color_pos = ApplySpatialPalette01(color_pos, basis, sp, map, time, &grid);
+    color_pos = ApplyVoxelDriveToPalette01(color_pos, x, y, z, time, grid);
+    color_pos = std::fmod(color_pos, 1.0f);
+    if(color_pos < 0.0f)
+        color_pos += 1.0f;
+
     RGBColor trail_color = GetColorAtPosition(color_pos);
     unsigned char tr = (unsigned char)(trail_color & 0xFF);
     unsigned char tg = (unsigned char)((trail_color >> 8) & 0xFF);
@@ -623,7 +608,7 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
     tg = (unsigned char)(tg * bright);
     tb = (unsigned char)(tb * bright);
 
-    /* Only the very first LED is whitish; blend with trail based on head brightness slider */
+    
     float head_strength = head * (head_brightness / 100.0f);
     head_strength = std::min(1.0f, std::max(0.0f, head_strength));
     unsigned char r = (unsigned char)(tr * (1.0f - head_strength) + 255 * head_strength);
@@ -635,20 +620,6 @@ RGBColor Matrix::CalculateColorGrid(float x, float y, float z, float time, const
 nlohmann::json Matrix::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "matrix_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "matrix_stratum_band_speed_pct",
-                                           "matrix_stratum_band_tight_pct",
-                                           "matrix_stratum_band_phase_deg");
     j["density"] = density;
     j["trail"] = trail;
     j["char_height"] = char_height;
@@ -656,22 +627,12 @@ nlohmann::json Matrix::SaveSettings() const
     j["char_variation"] = char_variation;
     j["char_spacing"] = char_spacing;
     j["head_brightness"] = head_brightness;
-    StripColormapSaveJson(j, "matrix", matrix_strip_cmap_on, matrix_strip_cmap_kernel, matrix_strip_cmap_rep,
-                          matrix_strip_cmap_unfold, matrix_strip_cmap_dir,
-                          matrix_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void Matrix::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "matrix_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "matrix_stratum_band_speed_pct",
-                                            "matrix_stratum_band_tight_pct",
-                                            "matrix_stratum_band_phase_deg");
     if(settings.contains("density")) density = settings["density"];
     if(settings.contains("trail")) trail = settings["trail"];
     if(settings.contains("char_height")) char_height = settings["char_height"];
@@ -679,32 +640,13 @@ void Matrix::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("char_variation")) char_variation = settings["char_variation"];
     if(settings.contains("char_spacing")) char_spacing = settings["char_spacing"];
     if(settings.contains("head_brightness")) head_brightness = std::clamp(settings["head_brightness"].get<unsigned int>(), 0u, 100u);
-
-    StripColormapLoadJson(settings, "matrix", matrix_strip_cmap_on, matrix_strip_cmap_kernel, matrix_strip_cmap_rep,
-                          matrix_strip_cmap_unfold, matrix_strip_cmap_dir,
-                          matrix_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(matrix_strip_cmap_on,
-                                                matrix_strip_cmap_kernel,
-                                                matrix_strip_cmap_rep,
-                                                matrix_strip_cmap_unfold,
-                                                matrix_strip_cmap_dir,
-                                                matrix_strip_cmap_color_style);
-    }
-    if(density_slider) { density_slider->setValue(density); if(density_label) density_label->setText(QString::number(density) + "%"); }
+if(density_slider) { density_slider->setValue(density); if(density_label) density_label->setText(QString::number(density) + "%"); }
     if(trail_slider) { trail_slider->setValue(trail); if(trail_label) trail_label->setText(QString::number(trail) + "%"); }
     if(char_height_slider) { char_height_slider->setValue(char_height); if(char_height_label) char_height_label->setText(QString::number(char_height) + "%"); }
     if(char_gap_slider) { char_gap_slider->setValue(char_gap); if(char_gap_label) char_gap_label->setText(QString::number(char_gap) + "%"); }
     if(char_variation_slider) { char_variation_slider->setValue(char_variation); if(char_variation_label) char_variation_label->setText(QString::number(char_variation) + "%"); }
     if(char_spacing_slider) { char_spacing_slider->setValue(char_spacing); if(char_spacing_label) char_spacing_label->setText(QString::number(char_spacing) + "%"); }
     if(head_brightness_slider) { head_brightness_slider->setValue((int)head_brightness); if(head_brightness_label) head_brightness_label->setText(QString::number(head_brightness) + "%"); }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(Matrix)

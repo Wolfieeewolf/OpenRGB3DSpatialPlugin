@@ -11,7 +11,6 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-/** Synthetic capture-sized texture: v=0 at top (matches frame sampling). */
 inline void ScreenMirrorFillCalibrationPatternBuffer(std::vector<uint8_t>& rgba)
 {
     constexpr int w = 512;

@@ -78,18 +78,18 @@ float Hash01(float x)
 RGBColor TonePairByKernel(int kernel_id, float p01)
 {
     static const RGBColor kPairs[][2] = {
-        {PackBGR(24, 120, 220), PackBGR(180, 230, 255)}, // blue sky
-        {PackBGR(80, 30, 160), PackBGR(220, 140, 255)},  // violet neon
-        {PackBGR(0, 130, 110), PackBGR(140, 230, 180)},  // teal mint
-        {PackBGR(180, 70, 20), PackBGR(255, 210, 120)},  // amber
-        {PackBGR(140, 20, 70), PackBGR(255, 150, 200)},  // magenta rose
-        {PackBGR(40, 90, 170), PackBGR(180, 200, 255)},  // steel blue
+        {PackBGR(24, 120, 220), PackBGR(180, 230, 255)},
+        {PackBGR(80, 30, 160), PackBGR(220, 140, 255)},
+        {PackBGR(0, 130, 110), PackBGR(140, 230, 180)},
+        {PackBGR(180, 70, 20), PackBGR(255, 210, 120)},
+        {PackBGR(140, 20, 70), PackBGR(255, 150, 200)},
+        {PackBGR(40, 90, 170), PackBGR(180, 200, 255)},
     };
     constexpr int kCount = (int)(sizeof(kPairs) / sizeof(kPairs[0]));
     int idx = SpatialPatternKernelClamp(kernel_id) % kCount;
     return LerpBGR(kPairs[idx][0], kPairs[idx][1], p01);
 }
-} // namespace
+}
 
 RGBColor SampleKernelPatternPalette(int kernel_id, float p01, float time_sec)
 {

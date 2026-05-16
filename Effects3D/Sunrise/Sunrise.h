@@ -7,9 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class Sunrise : public SpatialEffect3D
 {
     Q_OBJECT
@@ -18,7 +15,7 @@ public:
 
     EFFECT_REGISTERER_3D("Sunrise", "Sunrise", "Spatial", [](){ return new Sunrise; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -27,8 +24,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-
 private:
     enum Mode { MODE_MANUAL = 0, MODE_REALTIME, MODE_SIMULATED, MODE_COUNT };
     enum Preset { PRESET_REALISTIC_SUNRISE = 0, PRESET_REALISTIC_SUNSET, PRESET_DAYTIME, PRESET_NIGHT, PRESET_CUSTOM, PRESET_COUNT };
@@ -45,18 +40,6 @@ private:
     bool weather_fog = false;
     bool weather_cloudy = false;
     bool weather_lightning = false;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-    bool sunrise_strip_cmap_on = false;
-    int sunrise_strip_cmap_kernel = 0;
-    float sunrise_strip_cmap_rep = 4.0f;
-    int sunrise_strip_cmap_unfold = 0;
-    float sunrise_strip_cmap_dir = 0.0f;
-    int sunrise_strip_cmap_color_style = 1;
-    void SyncStripColormapFromPanel();
 };
 
 #endif

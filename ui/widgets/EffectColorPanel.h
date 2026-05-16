@@ -10,7 +10,6 @@ class QHBoxLayout;
 class QPushButton;
 class QVBoxLayout;
 
-/** Rainbow mode toggle and color-stop strip (+ / − at end of row). */
 class EffectColorPanel : public QWidget
 {
 public:

@@ -2,8 +2,6 @@
 
 #include "AudioPulse.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "../EffectHelpers.h"
 #include <QLabel>
@@ -65,7 +63,7 @@ void AudioPulse::TickPulses(float time)
         onset_hold = std::max(0.0f, onset_hold - dt);
     }
 
-    /* Require real band energy so spectral-flux / FFT noise does not spawn rings in silence. */
+    
     constexpr float kMinBandForPulse = 0.042f;
     constexpr float kMinPulseStrength = 0.018f;
     if(audio->isRunning() && onset_hold <= 0.0f && onset_smoothed >= onset_threshold)
@@ -117,6 +115,7 @@ float AudioPulse::SampleBeatShell(float distance,
                                   float radius_basis,
                                   float time,
                                   const EffectStratumBlend::BandBlendScalars& bb,
+                                  float stratum_mot01,
                                   float height_fade,
                                   float x,
                                   float y,
@@ -126,7 +125,7 @@ float AudioPulse::SampleBeatShell(float distance,
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
-    /* Narrower shells when falloff (audio UI) is higher — matches “tight ring” feel */
+    
     float wave_thickness =
         radius_basis * (0.02f + 0.09f / std::max(0.2f, audio_settings.falloff)) * size_m;
     wave_thickness /= std::max(0.25f, tm);
@@ -158,7 +157,7 @@ float AudioPulse::SampleBeatShell(float distance,
         secondary *= expf(-fabsf(distance - secondary_radius) * 0.11f) * 0.62f;
 
         float shock = 0.22f * sinf(distance * freq_rip * 10.0f - burst_phase * 6.283f +
-                                   bb.phase_deg * (float)(M_PI / 180.0f));
+                                   EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01));
         shock *= expf(-distance * 0.065f);
 
         float core = (distance < explosion_radius * 0.24f)
@@ -181,7 +180,7 @@ AudioPulse::AudioPulse(QWidget* parent)
 {
 }
 
-EffectInfo3D AudioPulse::GetEffectInfo()
+EffectInfo3D AudioPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 4;
@@ -212,6 +211,9 @@ EffectInfo3D AudioPulse::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -310,46 +312,6 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
         part_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(audiopulse_strip_cmap_on,
-                                            audiopulse_strip_cmap_kernel,
-                                            audiopulse_strip_cmap_rep,
-                                            audiopulse_strip_cmap_unfold,
-                                            audiopulse_strip_cmap_dir,
-                                            audiopulse_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &AudioPulse::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &AudioPulse::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void AudioPulse::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    audiopulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    audiopulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    audiopulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    audiopulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    audiopulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    audiopulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void AudioPulse::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void AudioPulse::UpdateParams(SpatialEffectParams& /*params*/)
@@ -373,7 +335,10 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, o, time);
+
 
     float dx = rotated_pos.x - o.x;
     float dy = rotated_pos.y - o.y;
@@ -387,10 +352,9 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
 
     float height_fade = HeightFade01(coord2);
     float energy =
-        SampleBeatShell(distance, radius_basis, time, bb, height_fade, x, y, z);
+        SampleBeatShell(distance, radius_basis, time, bb, stratum_mot01, height_fade, x, y, z);
     energy = std::clamp(energy, 0.0f, 1.0f);
 
-    /* No fixed brightness floor — silence / decayed shells stay off (was 20% floor via 0.2f + 0.8f*energy). */
     constexpr float kShellSilenceEps = 0.006f;
     if(energy <= kShellSilenceEps)
     {
@@ -406,7 +370,9 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
 
     float detail = std::max(0.05f, GetScaledDetail());
     float hue_pos = std::clamp(1.0f - gradient_pos, 0.0f, 1.0f);
-    hue_pos = fmodf(hue_pos * (0.65f + 0.35f * detail * bb.tight_mul) + bb.phase_deg * (1.0f / 360.0f), 1.0f);
+    hue_pos = EffectStratumBlend::ApplyMotionToPhase01(
+        std::fmod(hue_pos * (0.65f + 0.35f * detail * bb.tight_mul) + EffectStratumBlend::PhaseShift01(bb) + 1.0f, 1.0f),
+        stratum_mot01);
     if(hue_pos < 0.0f)
     {
         hue_pos += 1.0f;
@@ -426,17 +392,17 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
     sp.y_norm = coord2;
 
     RGBColor user_color;
-    if(audiopulse_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.33f + hue_pos * 0.2f +
                           time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) + 1.f,
                       1.f);
-        float p01 = SampleStripKernelPalette01(audiopulse_strip_cmap_kernel,
-                                               audiopulse_strip_cmap_rep,
-                                               audiopulse_strip_cmap_unfold,
-                                               audiopulse_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                ph01,
                                                time,
                                                grid,
@@ -444,7 +410,7 @@ RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, c
                                                o,
                                                rotated_pos);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
-        user_color = ResolveStripKernelFinalColor(*this, audiopulse_strip_cmap_kernel, p01, audiopulse_strip_cmap_color_style,
+        user_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01, GetEffectStripColormapColorStyle(),
                                                    time, GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
@@ -475,42 +441,13 @@ nlohmann::json AudioPulse::SaveSettings() const
     AudioReactiveSaveToJson(j, audio_settings);
     j["onset_threshold"] = onset_threshold;
     j["particle_amount"] = particle_amount;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "audiopulse_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "audiopulse_stratum_band_speed_pct",
-                                           "audiopulse_stratum_band_tight_pct",
-                                           "audiopulse_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "audiopulse",
-                          audiopulse_strip_cmap_on,
-                          audiopulse_strip_cmap_kernel,
-                          audiopulse_strip_cmap_rep,
-                          audiopulse_strip_cmap_unfold,
-                          audiopulse_strip_cmap_dir,
-                          audiopulse_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void AudioPulse::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "audiopulse_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "audiopulse_stratum_band_speed_pct",
-                                            "audiopulse_stratum_band_tight_pct",
-                                            "audiopulse_stratum_band_phase_deg");
     if(settings.contains("onset_threshold"))
     {
         onset_threshold = std::clamp(settings["onset_threshold"].get<float>(), 0.05f, 0.95f);
@@ -523,29 +460,6 @@ void AudioPulse::LoadSettings(const nlohmann::json& settings)
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
     last_tick_time = std::numeric_limits<float>::lowest();
-    StripColormapLoadJson(settings,
-                          "audiopulse",
-                          audiopulse_strip_cmap_on,
-                          audiopulse_strip_cmap_kernel,
-                          audiopulse_strip_cmap_rep,
-                          audiopulse_strip_cmap_unfold,
-                          audiopulse_strip_cmap_dir,
-                          audiopulse_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(audiopulse_strip_cmap_on,
-                                                audiopulse_strip_cmap_kernel,
-                                                audiopulse_strip_cmap_rep,
-                                                audiopulse_strip_cmap_unfold,
-                                                audiopulse_strip_cmap_dir,
-                                                audiopulse_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(AudioPulse)

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "CubeLayer.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
 #include <algorithm>
@@ -45,7 +44,7 @@ CubeLayer::CubeLayer(QWidget* parent) : SpatialEffect3D(parent)
 {
 }
 
-EffectInfo3D CubeLayer::GetEffectInfo()
+EffectInfo3D CubeLayer::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -72,6 +71,8 @@ EffectInfo3D CubeLayer::GetEffectInfo()
     info.show_axis_control = false;
     info.show_color_controls = true;
     info.show_path_axis_control = true;
+    info.supports_height_bands = true;
+
     return info;
 }
 
@@ -149,29 +150,11 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &CubeLayer::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void CubeLayer::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void CubeLayer::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
-
 
 RGBColor CubeLayer::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -191,7 +174,10 @@ RGBColor CubeLayer::CalculateColorGrid(float x, float y, float z, float time, co
     float stratum_w[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, stratum_w);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
+
 
     float axis_pos = AxisPosition(GetPathAxis(), rotated_pos.x, rotated_pos.y, rotated_pos.z,
                                    grid.min_x, grid.max_x,
@@ -217,7 +203,9 @@ RGBColor CubeLayer::CalculateColorGrid(float x, float y, float z, float time, co
     intensity = std::clamp(intensity, 0.0f, 1.0f);
 
     float detail = std::max(0.05f, GetScaledDetail()) * bb.tight_mul;
-    float gradient_pos = fmodf(layer_pos * (0.6f + 0.4f * detail) + time * GetScaledFrequency() * 0.02f * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f), 1.0f);
+    float gradient_pos = fmodf(layer_pos * (0.6f + 0.4f * detail) + time * GetScaledFrequency() * 0.02f * bb.speed_mul +
+                                    EffectStratumBlend::CombinedPhase01(bb, stratum_mot01),
+                                1.0f);
     if(gradient_pos < 0.0f) gradient_pos += 1.0f;
     RGBColor color = ComposeAudioGradientColor(audio_settings, gradient_pos, intensity);
     color = ScaleRGBColor(color, 0.2f + 0.8f * intensity);
@@ -238,7 +226,7 @@ RGBColor CubeLayer::CalculateColorGrid(float x, float y, float z, float time, co
     RGBColor user_color;
     if(GetRainbowMode())
     {
-        float hue = gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul + bb.phase_deg;
+        float hue = gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
         hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f) p01 += 1.0f;
@@ -267,44 +255,18 @@ nlohmann::json CubeLayer::SaveSettings() const
     AudioReactiveSaveToJson(j, audio_settings);
     j["layer_thickness"] = layer_thickness;
     j["layer_edge_shape"] = layer_edge_shape;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "cubelayer_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "cubelayer_stratum_band_speed_pct",
-                                           "cubelayer_stratum_band_tight_pct",
-                                           "cubelayer_stratum_band_phase_deg");
-    return j;
+return j;
 }
 
 void CubeLayer::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "cubelayer_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "cubelayer_stratum_band_speed_pct",
-                                            "cubelayer_stratum_band_tight_pct",
-                                            "cubelayer_stratum_band_phase_deg");
-    AudioReactiveLoadFromJson(audio_settings, settings);
+AudioReactiveLoadFromJson(audio_settings, settings);
     if(settings.contains("layer_thickness")) layer_thickness = std::clamp(settings["layer_thickness"].get<float>(), 0.05f, 1.0f);
     if(settings.contains("layer_edge_shape")) layer_edge_shape = std::clamp(settings["layer_edge_shape"].get<int>(), 0, 2);
     if(layer_edge_combo) layer_edge_combo->setCurrentIndex(layer_edge_shape);
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(CubeLayer)

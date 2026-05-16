@@ -3,8 +3,6 @@
 #include "Fireworks.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
@@ -30,6 +28,20 @@ const char* Fireworks::TypeName(int t)
     }
 }
 
+const char* Fireworks::BurstStyleName(int s)
+{
+    switch(s)
+    {
+    case BURST_AUTO: return "Auto mix";
+    case BURST_PEONY: return "Peony";
+    case BURST_CHRYSANTHEMUM: return "Chrysanthemum";
+    case BURST_WILLOW: return "Willow";
+    case BURST_PALM: return "Palm";
+    case BURST_CROSSETTE: return "Crossette";
+    default: return "Auto mix";
+    }
+}
+
 static float hash_f(unsigned int seed, unsigned int salt)
 {
     unsigned int v = seed * 73856093u ^ salt * 19349663u;
@@ -38,9 +50,38 @@ static float hash_f(unsigned int seed, unsigned int salt)
     return ((v & 0xFFFFu) / 65535.0f) * 2.0f - 1.0f;
 }
 
+static float dist_point_segment_sq(float px, float py, float pz,
+                                   float ax, float ay, float az,
+                                   float bx, float by, float bz)
+{
+    const float abx = bx - ax;
+    const float aby = by - ay;
+    const float abz = bz - az;
+    const float apx = px - ax;
+    const float apy = py - ay;
+    const float apz = pz - az;
+    const float ab2 = abx * abx + aby * aby + abz * abz;
+    if(ab2 <= 1e-8f)
+    {
+        const float dx = px - ax;
+        const float dy = py - ay;
+        const float dz = pz - az;
+        return dx * dx + dy * dy + dz * dz;
+    }
+    float t = (apx * abx + apy * aby + apz * abz) / ab2;
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float qx = ax + abx * t;
+    const float qy = ay + aby * t;
+    const float qz = az + abz * t;
+    const float dx = px - qx;
+    const float dy = py - qy;
+    const float dz = pz - qz;
+    return dx * dx + dy * dy + dz * dz;
+}
+
 Fireworks::Fireworks(QWidget* parent) : SpatialEffect3D(parent) {}
 
-EffectInfo3D Fireworks::GetEffectInfo()
+EffectInfo3D Fireworks::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -67,6 +108,9 @@ EffectInfo3D Fireworks::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -95,9 +139,26 @@ void Fireworks::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
     row++;
+    layout->addWidget(new QLabel("Burst style:"), row, 0);
+    QComboBox* burst_combo = new QComboBox();
+    for(int s = 0; s < BURST_COUNT; s++) burst_combo->addItem(BurstStyleName(s));
+    burst_combo->setCurrentIndex(std::max(0, std::min(burst_style, BURST_COUNT - 1)));
+    burst_combo->setToolTip("Shape profile for aerial shell particles.");
+    burst_combo->setItemData(0, "Blend styles automatically per launch.", Qt::ToolTipRole);
+    burst_combo->setItemData(1, "Classic spherical shell.", Qt::ToolTipRole);
+    burst_combo->setItemData(2, "Round shell with dense outer ring.", Qt::ToolTipRole);
+    burst_combo->setItemData(3, "Slow, drooping trails.", Qt::ToolTipRole);
+    burst_combo->setItemData(4, "Upward-heavy palm fronds.", Qt::ToolTipRole);
+    burst_combo->setItemData(5, "Small branch splits from each star.", Qt::ToolTipRole);
+    layout->addWidget(burst_combo, row, 1, 1, 2);
+    connect(burst_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx){
+        burst_style = std::max(0, std::min(idx, BURST_COUNT - 1));
+        emit ParametersChanged();
+    });
+    row++;
     layout->addWidget(new QLabel("Simultaneous:"), row, 0);
     QSlider* sim_slider = new QSlider(Qt::Horizontal);
-    sim_slider->setRange(1, 5);
+    sim_slider->setRange(1, 10);
     sim_slider->setToolTip("How many bursts can be active at once (more = busier, heavier).");
     sim_slider->setValue(num_simultaneous);
     QLabel* sim_label = new QLabel(QString::number(num_simultaneous));
@@ -107,6 +168,36 @@ void Fireworks::SetupCustomUI(QWidget* parent)
     connect(sim_slider, &QSlider::valueChanged, this, [this, sim_label](int v){
         num_simultaneous = v;
         if(sim_label) sim_label->setText(QString::number(v));
+        emit ParametersChanged();
+    });
+    row++;
+    layout->addWidget(new QLabel("Show density:"), row, 0);
+    QSlider* density_slider = new QSlider(Qt::Horizontal);
+    density_slider->setRange(50, 200);
+    density_slider->setToolTip("How packed the overall show is (active launches and particle volume).");
+    density_slider->setValue((int)(show_density * 100.0f));
+    QLabel* density_label = new QLabel(QString::number((int)(show_density * 100.0f)) + "%");
+    density_label->setMinimumWidth(36);
+    layout->addWidget(density_slider, row, 1);
+    layout->addWidget(density_label, row, 2);
+    connect(density_slider, &QSlider::valueChanged, this, [this, density_label](int v){
+        show_density = v / 100.0f;
+        if(density_label) density_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+    layout->addWidget(new QLabel("Show variety:"), row, 0);
+    QSlider* variety_slider = new QSlider(Qt::Horizontal);
+    variety_slider->setRange(0, 100);
+    variety_slider->setToolTip("How much shell size/height/position variation is added across launches.");
+    variety_slider->setValue((int)(show_variety * 100.0f));
+    QLabel* variety_label = new QLabel(QString::number((int)(show_variety * 100.0f)) + "%");
+    variety_label->setMinimumWidth(36);
+    layout->addWidget(variety_slider, row, 1);
+    layout->addWidget(variety_label, row, 2);
+    connect(variety_slider, &QSlider::valueChanged, this, [this, variety_label](int v){
+        show_variety = v / 100.0f;
+        if(variety_label) variety_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
     row++;
@@ -169,49 +260,70 @@ void Fireworks::SetupCustomUI(QWidget* parent)
         if(decay_label) decay_label->setText(QString::number(decay_speed, 'f', 1));
         emit ParametersChanged();
     });
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(fireworks_strip_cmap_on,
-                                            fireworks_strip_cmap_kernel,
-                                            fireworks_strip_cmap_rep,
-                                            fireworks_strip_cmap_unfold,
-                                            fireworks_strip_cmap_dir,
-                                            fireworks_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Fireworks::SyncStripColormapFromPanel);
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Fireworks::OnStratumBandChanged);
-    OnStratumBandChanged();
-    AddWidgetToParent(w, parent);
-}
-
-void Fireworks::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    fireworks_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    fireworks_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    fireworks_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    fireworks_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    fireworks_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    fireworks_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void Fireworks::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
+    row++;
+    layout->addWidget(new QLabel("Launch trail:"), row, 0);
+    QSlider* trail_slider = new QSlider(Qt::Horizontal);
+    trail_slider->setRange(0, 200);
+    trail_slider->setToolTip("Comet tail strength during launch.");
+    trail_slider->setValue((int)std::lround(launch_trail_amount * 100.0f));
+    QLabel* trail_label = new QLabel(QString::number((int)std::lround(launch_trail_amount * 100.0f)) + "%");
+    trail_label->setMinimumWidth(36);
+    layout->addWidget(trail_slider, row, 1);
+    layout->addWidget(trail_label, row, 2);
+    connect(trail_slider, &QSlider::valueChanged, this, [this, trail_label](int v){
+        launch_trail_amount = v / 100.0f;
+        if(trail_label) trail_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+    layout->addWidget(new QLabel("Burst flash:"), row, 0);
+    QSlider* flash_slider = new QSlider(Qt::Horizontal);
+    flash_slider->setRange(0, 200);
+    flash_slider->setToolTip("Brightness and duration of the burst ignition flash.");
+    flash_slider->setValue((int)std::lround(burst_flash_amount * 100.0f));
+    QLabel* flash_label = new QLabel(QString::number((int)std::lround(burst_flash_amount * 100.0f)) + "%");
+    flash_label->setMinimumWidth(36);
+    layout->addWidget(flash_slider, row, 1);
+    layout->addWidget(flash_label, row, 2);
+    connect(flash_slider, &QSlider::valueChanged, this, [this, flash_label](int v){
+        burst_flash_amount = v / 100.0f;
+        if(flash_label) flash_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+    layout->addWidget(new QLabel("Ember amount:"), row, 0);
+    QSlider* ember_slider = new QSlider(Qt::Horizontal);
+    ember_slider->setRange(0, 200);
+    ember_slider->setToolTip("How strong the post-burst ember layer is.");
+    ember_slider->setValue((int)std::lround(ember_amount * 100.0f));
+    QLabel* ember_label = new QLabel(QString::number((int)std::lround(ember_amount * 100.0f)) + "%");
+    ember_label->setMinimumWidth(36);
+    layout->addWidget(ember_slider, row, 1);
+    layout->addWidget(ember_label, row, 2);
+    connect(ember_slider, &QSlider::valueChanged, this, [this, ember_label](int v){
+        ember_amount = v / 100.0f;
+        if(ember_label) ember_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+    row++;
+    layout->addWidget(new QLabel("Ember hang time:"), row, 0);
+    QSlider* hang_slider = new QSlider(Qt::Horizontal);
+    hang_slider->setRange(40, 220);
+    hang_slider->setToolTip("How long embers linger before fading.");
+    hang_slider->setValue((int)std::lround(ember_hang_time * 100.0f));
+    QLabel* hang_label = new QLabel(QString::number((int)std::lround(ember_hang_time * 100.0f)) + "%");
+    hang_label->setMinimumWidth(36);
+    layout->addWidget(hang_slider, row, 1);
+    layout->addWidget(hang_label, row, 2);
+    connect(hang_slider, &QSlider::valueChanged, this, [this, hang_label](int v){
+        ember_hang_time = v / 100.0f;
+        if(hang_label) hang_label->setText(QString::number(v) + "%");
+        emit ParametersChanged();
+    });
+AddWidgetToParent(w, parent);
 }
 
 void Fireworks::UpdateParams(SpatialEffectParams& params) { (void)params; }
-
 
 RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -227,13 +339,26 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
 
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
     float hw = e.hw, hh = e.hh, hd = e.hd;
     float h_scale = std::max({hw, hh, hd});
     constexpr float kFireworkGridFill = 3.0f;
     float speed_scale = GetScaledSpeed() * 0.015f * kFireworkGridFill;
+
+    
+    const float launch_inset_x = std::min(grid.width * 0.05f, hw);
+    const float launch_inset_z = std::min(grid.depth * 0.05f, hd);
+    const float launch_x = std::clamp(origin.x,
+                                      grid.min_x + launch_inset_x,
+                                      grid.max_x - launch_inset_x);
+    const float launch_z = std::clamp(origin.z,
+                                      grid.min_z + launch_inset_z,
+                                      grid.max_z - launch_inset_z);
     float size_m = GetNormalizedSize();
     float detail = std::max(0.05f, GetScaledDetail());
     float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
@@ -245,8 +370,15 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     const float d2_cutoff = 9.0f * sigma_sq_use;
     float grav_mult = std::max(0.0f, std::min(2.0f, gravity_strength));
     float decay_mult = std::max(0.5f, std::min(6.0f, decay_speed));
-    int n_sim = std::max(1, std::min(5, num_simultaneous));
+    int n_sim = std::max(1, std::min(10, num_simultaneous));
     int type = std::max(0, std::min(firework_type, TYPE_COUNT - 1));
+    const float show_density_m = std::clamp(show_density, 0.5f, 2.0f);
+    const float show_variety_m = std::clamp(show_variety, 0.0f, 1.0f);
+    const float trail_m = std::clamp(launch_trail_amount, 0.0f, 2.0f);
+    const float flash_m = std::clamp(burst_flash_amount, 0.0f, 2.0f);
+    const float ember_m = std::clamp(ember_amount, 0.0f, 2.0f);
+    const float ember_hang_m = std::clamp(ember_hang_time, 0.4f, 2.2f);
+    const int n_sim_eff = std::max(1, std::min(12, (int)std::lround((float)n_sim * (0.65f + 0.85f * show_density_m))));
 
     if(particle_cache.empty() || fabsf(time - particle_cache_time) > 0.001f)
     {
@@ -258,37 +390,47 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
         const float gravity_base = -0.95f * speed_scale * hh * grav_mult;
         const float decay_coeff = 6.0f * decay_mult;
 
-        for(int launch = 0; launch < n_sim; launch++)
+        for(int launch = 0; launch < n_sim_eff; launch++)
         {
-            float phase = fmodf(time + (float)launch * (cycle / (float)n_sim), cycle);
+            float phase = fmodf(time + (float)launch * (cycle / (float)n_sim_eff), cycle);
             int use_type = type;
+            const unsigned int lseed = (unsigned int)(launch * 1543 + (int)std::floor(time / std::max(0.25f, cycle)) * 7919);
             if(use_type == TYPE_RANDOM)
             {
                 float h = hash_f((unsigned int)launch, (unsigned int)(time / cycle * 1000.0f) + 1u);
                 use_type = (int)((h + 1.0f) * 0.5f * (float)(TYPE_COUNT - 1)) % (TYPE_COUNT - 1);
                 if(use_type < 0) use_type = 0;
             }
+            float shell_pick = (hash_f(lseed, 41u) + 1.0f) * 0.5f;
+            float shell_scale = (shell_pick < 0.33f) ? 0.72f : (shell_pick < 0.78f ? 1.00f : 1.35f);
+            shell_scale *= (0.85f + 0.45f * show_variety_m);
+            float launch_spread_x = hw * (0.20f + 0.65f * show_variety_m);
+            float launch_spread_z = hd * (0.20f + 0.65f * show_variety_m);
+            float launch_x_i = std::clamp(launch_x + hash_f(lseed, 101u) * launch_spread_x, grid.min_x, grid.max_x);
+            float launch_z_i = std::clamp(launch_z + hash_f(lseed, 102u) * launch_spread_z, grid.min_z, grid.max_z);
+            float launch_floor = grid.min_y + grid.height * (0.08f + 0.20f * ((hash_f(lseed, 103u) + 1.0f) * 0.5f));
+            float burst_y = grid.min_y + grid.height * (0.45f + 0.45f * ((hash_f(lseed, 104u) + 1.0f) * 0.5f));
 
             if(use_type == TYPE_FOUNTAIN)
             {
                 float spray_duration = 2.0f;
                 float gravity = gravity_base * 0.6f;
-                int n_pt = std::max(15, std::min(80, num_debris));
+                int n_pt = std::max(18, std::min(120, (int)std::lround((float)num_debris * (0.6f + 0.8f * show_density_m))));
                 for(int i = 0; i < n_pt; i++)
                 {
                     float emit_t = (float)i / (float)n_pt * spray_duration;
                     if(phase < emit_t) continue;
                     float t = phase - emit_t;
-                    float vx = hash_f((unsigned int)(launch * 1000 + i), 10u) * speed_scale * hw * 0.4f;
-                    float vy = (0.5f + 0.4f * (hash_f((unsigned int)(launch * 1000 + i), 20u) + 1.0f) * 0.5f) * speed_scale * hh;
-                    float vz = hash_f((unsigned int)(launch * 1000 + i), 30u) * speed_scale * hd * 0.4f;
-                    float px = origin.x + vx * t;
-                    float py = origin.y - hh * 0.5f + vy * t + 0.5f * gravity * t * t;
-                    float pz = origin.z + vz * t;
+                    float vx = hash_f((unsigned int)(launch * 1000 + i), 10u) * speed_scale * hw * (0.3f + 0.25f * shell_scale);
+                    float vy = (0.45f + 0.55f * (hash_f((unsigned int)(launch * 1000 + i), 20u) + 1.0f) * 0.5f) * speed_scale * hh * shell_scale;
+                    float vz = hash_f((unsigned int)(launch * 1000 + i), 30u) * speed_scale * hd * (0.3f + 0.25f * shell_scale);
+                    float px = launch_x_i + vx * t;
+                    float py = launch_floor + vy * t + 0.5f * gravity * t * t;
+                    float pz = launch_z_i + vz * t;
                     float decay = 1.0f / (1.0f + t * decay_coeff * 0.4f);
                     float hue = fmodf((float)i * 3.0f + color_cycle, 360.0f);
                     if(hue < 0.0f) hue += 360.0f;
-                    particle_cache.push_back({px, py, pz, decay, hue});
+                    particle_cache.push_back({px, py, pz, vx, vy, vz, decay, hue, hash_f((unsigned int)(launch * 1000 + i), 91u)});
                 }
                 continue;
             }
@@ -304,9 +446,9 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                     if(phase < pop_time) continue;
                     float burst_t = phase - pop_time;
                     float decay = 1.0f / (1.0f + burst_t * decay_coeff * 0.6f);
-                    float by = origin.y - hh * 0.6f + (pop_time / rise) * hh;
-                    float bx = origin.x; float bz = origin.z;
-                    int n_pt = std::max(8, num_debris / 4);
+                    float by = launch_floor + (pop_time / rise) * grid.height * (0.35f + 0.35f * shell_scale);
+                    float bx = launch_x_i; float bz = launch_z_i;
+                    int n_pt = std::max(10, (int)std::lround((float)num_debris * (0.18f + 0.18f * show_density_m)));
                     for(int i = 0; i < n_pt; i++)
                     {
                         unsigned int seed = (unsigned int)(launch * 500 + p * 100 + i);
@@ -318,7 +460,7 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                         float pz = bz + vz * burst_t;
                         float hue = fmodf((float)(p * n_pt + i) + color_cycle, 360.0f);
                         if(hue < 0.0f) hue += 360.0f;
-                        particle_cache.push_back({px, py, pz, decay, hue});
+                        particle_cache.push_back({px, py, pz, vx, vy, vz, decay, hue, hash_f(seed, 92u)});
                     }
                 }
                 continue;
@@ -330,31 +472,31 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                 if(phase < rise_duration)
                 {
                     float t = phase / rise_duration;
-                    float mx = origin.x + 0.3f * hw * cosf(time * 8.0f + (float)launch);
-                    float my = origin.y - hh * 0.8f + t * (hh * 1.1f);
-                    float mz = origin.z + 0.3f * hd * sinf(time * 8.0f + (float)launch);
+                    float mx = launch_x_i + (0.18f + 0.20f * shell_scale) * hw * cosf(time * 8.0f + (float)launch);
+                    float my = launch_floor + t * grid.height * (0.45f + 0.25f * shell_scale);
+                    float mz = launch_z_i + (0.18f + 0.20f * shell_scale) * hd * sinf(time * 8.0f + (float)launch);
                     float hue = fmodf(time * 60.0f, 360.0f);
                     if(hue < 0.0f) hue += 360.0f;
-                    particle_cache.push_back({mx, my, mz, 1.0f, hue});
+                    particle_cache.push_back({mx, my, mz, 0.0f, speed_scale * hh * 0.9f, 0.0f, 1.0f, hue, hash_f(lseed, 93u)});
                     int trail = 12;
                     for(int i = 0; i < trail; i++)
                     {
                         float ti = (float)i / (float)trail * t;
-                        float tx = origin.x + 0.35f * hw * cosf(time * 8.0f + (float)launch + ti * 6.0f);
-                        float ty = origin.y - hh * 0.8f + ti * (hh * 1.1f);
-                        float tz = origin.z + 0.35f * hd * sinf(time * 8.0f + (float)launch + ti * 6.0f);
+                        float tx = launch_x_i + (0.22f + 0.22f * shell_scale) * hw * cosf(time * 8.0f + (float)launch + ti * 6.0f);
+                        float ty = launch_floor + ti * grid.height * (0.45f + 0.25f * shell_scale);
+                        float tz = launch_z_i + (0.22f + 0.22f * shell_scale) * hd * sinf(time * 8.0f + (float)launch + ti * 6.0f);
                         float decay = 1.0f - ti * 0.7f;
                         float h = fmodf((float)i * 30.0f, 360.0f);
                         if(h < 0.0f) h += 360.0f;
-                        particle_cache.push_back({tx, ty, tz, decay, h});
+                        particle_cache.push_back({tx, ty, tz, 0.0f, speed_scale * hh * 0.5f, 0.0f, decay, h, hash_f((unsigned int)(launch * 300 + i), 94u)});
                     }
                 }
                 else
                 {
                     float burst_t = phase - rise_duration;
                     float decay = 1.0f / (1.0f + burst_t * decay_coeff * 0.5f);
-                    float ex = origin.x, ey = origin.y + hh * 0.3f, ez = origin.z;
-                    int n_pt = std::max(10, num_debris / 2);
+                    float ex = launch_x_i, ey = burst_y, ez = launch_z_i;
+                    int n_pt = std::max(12, (int)std::lround((float)num_debris * (0.35f + 0.35f * show_density_m)));
                     for(int i = 0; i < n_pt; i++)
                     {
                         float vx = hash_f((unsigned int)(launch * 200 + i), 10u) * speed_scale * hw * 0.5f;
@@ -365,7 +507,7 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                         float pz = ez + vz * burst_t;
                         float hue = fmodf((float)i * 5.0f + time * 20.0f, 360.0f);
                         if(hue < 0.0f) hue += 360.0f;
-                        particle_cache.push_back({px, py, pz, decay, hue});
+                        particle_cache.push_back({px, py, pz, vx, vy, vz, decay, hue, hash_f((unsigned int)(launch * 200 + i), 95u)});
                     }
                 }
                 continue;
@@ -375,33 +517,132 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
             if(phase < missile_dur)
             {
                 float t = phase / missile_dur;
-                float mx = origin.x;
-                float my = origin.y - hh * 0.8f + t * (hh * 1.2f);
-                float mz = origin.z;
+                float mx = launch_x_i;
+                float my = launch_floor + t * (burst_y - launch_floor);
+                float mz = launch_z_i;
                 float hue = fmodf(time * 50.0f + (float)launch * 70.0f, 360.0f);
                 if(hue < 0.0f) hue += 360.0f;
-                particle_cache.push_back({mx, my, mz, 1.0f, hue});
+                particle_cache.push_back({mx, my, mz, 0.0f, speed_scale * hh * 1.1f, 0.0f, 1.0f, hue, hash_f(lseed, 96u)});
+                const int trail_pts = std::max(2, (int)std::lround(14.0f * trail_m));
+                for(int ti = 1; ti <= trail_pts; ++ti)
+                {
+                    const float tt = std::max(0.0f, t - (float)ti / (float)trail_pts * 0.32f);
+                    const float tx = launch_x_i;
+                    const float ty = launch_floor + tt * (burst_y - launch_floor);
+                    const float tz = launch_z_i;
+                    const float tail_decay = std::max(0.04f, (1.0f - (float)ti / (float)trail_pts) * (0.35f + 0.65f * trail_m));
+                    const float tail_hue = std::fmod(hue * 0.3f + 18.0f + (float)ti * 2.5f, 360.0f);
+                    particle_cache.push_back({tx,
+                                              ty,
+                                              tz,
+                                              0.0f,
+                                              speed_scale * hh * 0.65f,
+                                              0.0f,
+                                              tail_decay,
+                                              tail_hue,
+                                              hash_f((unsigned int)(lseed + (unsigned int)ti * 17u), 960u)});
+                }
             }
             else
             {
                 float explode_t = phase - missile_dur;
                 float decay = 1.0f / (1.0f + explode_t * decay_coeff);
-                float ex = origin.x, ey = origin.y + hh * 0.4f, ez = origin.z;
-                int n_debris_use = std::max(10, std::min(100, (use_type == TYPE_BIG_EXPLOSION) ? (num_debris * 3 / 2) : num_debris));
-                float vel_scale = (use_type == TYPE_BIG_EXPLOSION) ? 1.4f : 1.0f;
+                float ex = launch_x_i, ey = burst_y, ez = launch_z_i;
+                const float flash_window = 0.03f + 0.08f * flash_m;
+                if(explode_t < flash_window && flash_m > 0.001f)
+                {
+                    const float flash_decay = 1.0f - explode_t / std::max(1e-3f, flash_window);
+                    particle_cache.push_back(
+                        {ex, ey, ez, 0.0f, 0.0f, 0.0f, std::max(0.2f, flash_decay) * flash_m, 48.0f, 0.99f});
+                }
+                int n_debris_use = (use_type == TYPE_BIG_EXPLOSION)
+                    ? (int)std::lround((float)num_debris * (1.4f + 0.9f * show_density_m))
+                    : (int)std::lround((float)num_debris * (0.7f + 0.8f * show_density_m));
+                n_debris_use = std::max(16, std::min(160, n_debris_use));
+                float vel_scale = ((use_type == TYPE_BIG_EXPLOSION) ? 1.35f : 0.95f) * shell_scale;
+                int style_use = std::max(0, std::min(burst_style, BURST_COUNT - 1));
+                if(style_use == BURST_AUTO)
+                {
+                    style_use = 1 + ((int)std::fabs(hash_f(lseed, 401u) * 1000.0f) % (BURST_COUNT - 1));
+                }
 
                 for(int i = 0; i < n_debris_use; i++)
                 {
                     unsigned int seed = (unsigned int)(launch * 1000 + i);
-                    float vx = hash_f(seed, 10u) * speed_scale * hw * 0.8f * vel_scale;
-                    float vy = (0.3f + 0.5f * ((hash_f(seed, 20u) + 1.0f) * 0.5f)) * speed_scale * hh * vel_scale;
-                    float vz = hash_f(seed, 30u) * speed_scale * hd * 0.8f * vel_scale;
+                    float u = (hash_f(seed, 10u) + 1.0f) * 0.5f;
+                    float v = (hash_f(seed, 11u) + 1.0f) * 0.5f;
+                    float az = u * 2.0f * (float)M_PI;
+                    float cz = 2.0f * v - 1.0f;
+                    float sz = std::sqrt(std::max(0.0f, 1.0f - cz * cz));
+                    float dir_x = cosf(az) * sz;
+                    float dir_y = cz;
+                    float dir_z = sinf(az) * sz;
+                    float base_v = speed_scale * std::max(hw, hd) * (0.45f + 0.35f * vel_scale);
+                    float vy_scale = speed_scale * hh * (0.65f + 0.45f * vel_scale);
+                    float decay_local = decay;
+                    float sparkle_local = hash_f(seed, 97u);
+                    if(style_use == BURST_PEONY)
+                    {
+                        dir_y *= 0.9f;
+                    }
+                    else if(style_use == BURST_CHRYSANTHEMUM)
+                    {
+                        const float ring = 0.85f + 0.30f * ((hash_f(seed, 402u) + 1.0f) * 0.5f);
+                        base_v *= ring;
+                        dir_y *= 0.75f;
+                    }
+                    else if(style_use == BURST_WILLOW)
+                    {
+                        base_v *= 0.65f;
+                        vy_scale *= 0.55f;
+                        dir_y = std::max(0.0f, dir_y) * 0.35f;
+                        decay_local *= 1.45f;
+                    }
+                    else if(style_use == BURST_PALM)
+                    {
+                        const float frond = (hash_f(seed, 403u) + 1.0f) * 0.5f;
+                        dir_y = 0.35f + 0.65f * std::max(0.0f, dir_y) + frond * 0.2f;
+                        base_v *= 0.80f;
+                        vy_scale *= 1.25f;
+                    }
+                    else if(style_use == BURST_CROSSETTE)
+                    {
+                        base_v *= 0.78f;
+                        sparkle_local = 0.95f;
+                    }
+                    float vx = dir_x * base_v;
+                    float vy = dir_y * vy_scale;
+                    float vz = dir_z * base_v;
                     float px = ex + vx * explode_t;
                     float py = ey + vy * explode_t + 0.5f * gravity_base * explode_t * explode_t;
                     float pz = ez + vz * explode_t;
                     float hue = fmodf((float)i * 4.0f + time * 20.0f + (float)launch * 50.0f, 360.0f);
                     if(hue < 0.0f) hue += 360.0f;
-                    particle_cache.push_back({px, py, pz, decay, hue});
+                    particle_cache.push_back({px, py, pz, vx, vy, vz, decay_local, hue, sparkle_local});
+                    const float ember_vx = vx * (0.18f + 0.16f * ember_m);
+                    const float ember_vy = vy * (0.10f + 0.15f * ember_m);
+                    const float ember_vz = vz * (0.18f + 0.16f * ember_m);
+                    const float ember_px = ex + ember_vx * explode_t;
+                    const float ember_py = ey + ember_vy * explode_t + 0.5f * gravity_base * (0.65f / ember_hang_m) * explode_t * explode_t;
+                    const float ember_pz = ez + ember_vz * explode_t;
+                    const float ember_decay = std::min(1.0f, decay_local * (0.7f + 0.95f * ember_m) * ember_hang_m);
+                    const float ember_hue = std::fmod(hue * 0.45f + 22.0f, 360.0f);
+                    if(ember_m > 0.001f)
+                    {
+                        particle_cache.push_back(
+                            {ember_px, ember_py, ember_pz, ember_vx, ember_vy, ember_vz, ember_decay, ember_hue, 0.92f});
+                    }
+                    if(style_use == BURST_CROSSETTE)
+                    {
+                        for(int c = 0; c < 3; ++c)
+                        {
+                            const float branch = (2.0f * (float)M_PI * (float)c) / 3.0f;
+                            const float bx = vx * 0.35f + cosf(branch) * base_v * 0.25f;
+                            const float by = vy * 0.35f + (0.10f + 0.15f * c) * vy_scale;
+                            const float bz = vz * 0.35f + sinf(branch) * base_v * 0.25f;
+                            particle_cache.push_back({px, py, pz, bx, by, bz, decay_local * 0.85f, hue + 8.0f * c, 0.98f});
+                        }
+                    }
                 }
             }
         }
@@ -434,22 +675,35 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
     {
         float dx = x - p.px, dy = y - p.py, dz = z - p.pz;
         float d2 = dx*dx + dy*dy + dz*dz;
-        if(d2 > d2_cutoff) continue;
-        float intensity = expf(-d2 / sigma_sq_use) * p.decay;
+        if(d2 > d2_cutoff * 1.35f) continue;
+        const float vmag = std::sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+        const float vnorm = (vmag > 1e-6f) ? 1.0f / vmag : 0.0f;
+        const float trail_len = sigma * (0.8f + 3.0f * p.decay) * (1.0f + std::min(1.5f, vmag / std::max(1e-3f, speed_scale * h_scale)));
+        const float ax = p.px;
+        const float ay = p.py;
+        const float az = p.pz;
+        const float bx = p.px - p.vx * vnorm * trail_len;
+        const float by = p.py - p.vy * vnorm * trail_len;
+        const float bz = p.pz - p.vz * vnorm * trail_len;
+        const float d2_trail = dist_point_segment_sq(x, y, z, ax, ay, az, bx, by, bz);
+        const float head = expf(-d2 / sigma_sq_use);
+        const float trail = expf(-d2_trail / (sigma_sq_use * 0.35f));
+        const float twinkle = 0.72f + 0.28f * (0.5f + 0.5f * sinf(time * 35.0f + p.sparkle * 12.0f));
+        float intensity = (0.35f * head + 0.90f * trail) * p.decay * twinkle;
         if(intensity < 0.01f) continue;
-        float hue_use = fmodf(p.hue + bb.phase_deg + time * GetScaledFrequency() * 6.0f * (bb.speed_mul - 1.0f), 360.0f);
+        float hue_use = fmodf(p.hue  + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f + time * GetScaledFrequency() * 6.0f * (bb.speed_mul - 1.0f), 360.0f);
         if(hue_use < 0.0f) hue_use += 360.0f;
         float pal01 = hue_use / 360.0f;
         RGBColor c;
-        if(fireworks_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + p.hue * (1.f / 360.f) +
                                              time * GetScaledFrequency() * 0.04f * bb.speed_mul + 1.f,
                                          1.f);
-            pal01 = SampleStripKernelPalette01(fireworks_strip_cmap_kernel,
-                                                 fireworks_strip_cmap_rep,
-                                                 fireworks_strip_cmap_unfold,
-                                                 fireworks_strip_cmap_dir,
+            pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -458,9 +712,9 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
                                                  rp);
             pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
             c     = ResolveStripKernelFinalColor(*this,
-                                                  fireworks_strip_cmap_kernel,
+                                                  GetEffectStripColormapKernel(),
                                                   std::clamp(pal01, 0.0f, 1.0f),
-                                                  fireworks_strip_cmap_color_style,
+                                                  GetEffectStripColormapColorStyle(),
                                                   time,
                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
         }
@@ -484,80 +738,49 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
 nlohmann::json Fireworks::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "fireworks_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "fireworks_stratum_band_speed_pct",
-                                           "fireworks_stratum_band_tight_pct",
-                                           "fireworks_stratum_band_phase_deg");
     j["particle_size"] = particle_size;
     j["num_debris"] = num_debris;
     j["firework_type"] = firework_type;
+    j["burst_style"] = burst_style;
     j["num_simultaneous"] = num_simultaneous;
+    j["show_density"] = show_density;
+    j["show_variety"] = show_variety;
+    j["launch_trail_amount"] = launch_trail_amount;
+    j["burst_flash_amount"] = burst_flash_amount;
+    j["ember_amount"] = ember_amount;
+    j["ember_hang_time"] = ember_hang_time;
     j["gravity_strength"] = gravity_strength;
     j["decay_speed"] = decay_speed;
-    StripColormapSaveJson(j,
-                          "fireworks",
-                          fireworks_strip_cmap_on,
-                          fireworks_strip_cmap_kernel,
-                          fireworks_strip_cmap_rep,
-                          fireworks_strip_cmap_unfold,
-                          fireworks_strip_cmap_dir,
-                          fireworks_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void Fireworks::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "fireworks_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "fireworks_stratum_band_speed_pct",
-                                            "fireworks_stratum_band_tight_pct",
-                                            "fireworks_stratum_band_phase_deg");
     if(settings.contains("particle_size") && settings["particle_size"].is_number())
         particle_size = std::max(0.02f, std::min(1.0f, settings["particle_size"].get<float>()));
     if(settings.contains("num_debris") && settings["num_debris"].is_number())
         num_debris = std::max(10, std::min(100, settings["num_debris"].get<int>()));
     if(settings.contains("firework_type") && settings["firework_type"].is_number())
         firework_type = std::max(0, std::min(settings["firework_type"].get<int>(), TYPE_COUNT - 1));
+    if(settings.contains("burst_style") && settings["burst_style"].is_number())
+        burst_style = std::max(0, std::min(settings["burst_style"].get<int>(), BURST_COUNT - 1));
     if(settings.contains("num_simultaneous") && settings["num_simultaneous"].is_number())
-        num_simultaneous = std::max(1, std::min(5, settings["num_simultaneous"].get<int>()));
+        num_simultaneous = std::max(1, std::min(10, settings["num_simultaneous"].get<int>()));
+    if(settings.contains("show_density") && settings["show_density"].is_number())
+        show_density = std::max(0.5f, std::min(2.0f, settings["show_density"].get<float>()));
+    if(settings.contains("show_variety") && settings["show_variety"].is_number())
+        show_variety = std::max(0.0f, std::min(1.0f, settings["show_variety"].get<float>()));
+    if(settings.contains("launch_trail_amount") && settings["launch_trail_amount"].is_number())
+        launch_trail_amount = std::max(0.0f, std::min(2.0f, settings["launch_trail_amount"].get<float>()));
+    if(settings.contains("burst_flash_amount") && settings["burst_flash_amount"].is_number())
+        burst_flash_amount = std::max(0.0f, std::min(2.0f, settings["burst_flash_amount"].get<float>()));
+    if(settings.contains("ember_amount") && settings["ember_amount"].is_number())
+        ember_amount = std::max(0.0f, std::min(2.0f, settings["ember_amount"].get<float>()));
+    if(settings.contains("ember_hang_time") && settings["ember_hang_time"].is_number())
+        ember_hang_time = std::max(0.4f, std::min(2.2f, settings["ember_hang_time"].get<float>()));
     if(settings.contains("gravity_strength") && settings["gravity_strength"].is_number())
         gravity_strength = std::max(0.0f, std::min(2.0f, settings["gravity_strength"].get<float>()));
     if(settings.contains("decay_speed") && settings["decay_speed"].is_number())
         decay_speed = std::max(0.5f, std::min(6.0f, settings["decay_speed"].get<float>()));
-    StripColormapLoadJson(settings,
-                          "fireworks",
-                          fireworks_strip_cmap_on,
-                          fireworks_strip_cmap_kernel,
-                          fireworks_strip_cmap_rep,
-                          fireworks_strip_cmap_unfold,
-                          fireworks_strip_cmap_dir,
-                          fireworks_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(fireworks_strip_cmap_on,
-                                                fireworks_strip_cmap_kernel,
-                                                fireworks_strip_cmap_rep,
-                                                fireworks_strip_cmap_unfold,
-                                                fireworks_strip_cmap_dir,
-                                                fireworks_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }

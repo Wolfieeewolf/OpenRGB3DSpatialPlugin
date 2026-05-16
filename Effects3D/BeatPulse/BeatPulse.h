@@ -11,9 +11,6 @@
 #include <limits>
 #include <vector>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class BeatPulse : public SpatialEffect3D
 {
     Q_OBJECT
@@ -26,7 +23,7 @@ public:
     static std::string const ClassName() { return "BeatPulse"; }
     static std::string const UIName() { return "Beat Pulse"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -36,9 +33,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     struct PulseData
     {
@@ -49,7 +43,8 @@ private:
     float SamplePulseField(float radial_norm,
                            float height_norm,
                            float time,
-                           const EffectStratumBlend::BandBlendScalars& bb) const;
+                           const EffectStratumBlend::BandBlendScalars& bb,
+                           float stratum_mot01) const;
 
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 200);
     float EvaluateIntensity(float amplitude, float time);
@@ -62,18 +57,6 @@ private:
     float onset_hold = 0.0f;
     float onset_threshold = 0.35f;
     float last_tick_time = std::numeric_limits<float>::lowest();
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool beatpulse_strip_cmap_on = false;
-    int beatpulse_strip_cmap_kernel = 0;
-    float beatpulse_strip_cmap_rep = 4.0f;
-    int beatpulse_strip_cmap_unfold = 0;
-    float beatpulse_strip_cmap_dir = 0.0f;
-    int beatpulse_strip_cmap_color_style = 0;
 };
 
-#endif // BEATPULSE_H
+#endif

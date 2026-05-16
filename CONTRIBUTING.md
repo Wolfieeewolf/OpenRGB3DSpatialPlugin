@@ -66,9 +66,21 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Building
 
 - Qt 5.15+ (or 6), OpenRGB submodule initialized.
-- Windows: `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` (or your kit’s equivalent).
-- Linux: `qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr` then `make -j$(nproc)`.
+- Prefer an **out-of-tree** build so generated files stay out of the source tree, for example:
+  - `mkdir build && cd build && qmake ../OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` (Windows MSVC kit) or `make -j$(nproc)` (Linux).
+- In-tree alternative: from the repository root, `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` / `make`; remove generated `Makefile`, `Makefile.*`, and `.qmake.stash` afterward if you do not want them in the tree (they are gitignored and must not be committed).
+- Linux install prefix when packaging: `qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr` (then `make`).
 - For full OpenRGB build prerequisites, see `OpenRGB/Documentation/Compiling.md`.
+
+## Pre-submit checklist (plugin-owned code)
+
+Aligned with this file and `OpenRGB/CONTRIBUTING.md` (and `OpenRGB/Documentation/RGBControllerAPI.md` where LED/zone paths are touched):
+
+- No `QDebug`, `printf`, or `std::cout` for logging; use `LogManager`.
+- No `setStyleSheet` on plugin structural chrome; do not replace the host theme with custom `QPalette` on panels or `QGroupBox` (semantic helper text / swatches may use palette-derived colours sparingly—see **UI** above).
+- SPDX header on new or substantially new files; no other comments unless truly required (not bug notes, tuning rationale, or axis cheat-sheets).
+- Match brace and naming style already used in the file.
+- Effect stack code calls `SpatialEffect3D::EvaluateColorGrid`, not `CalculateColorGrid`, unless you are inside the effect implementation itself.
 
 ## Effect rendering entry points
 

@@ -2,8 +2,6 @@
 
 #include "BandScan.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
@@ -36,7 +34,7 @@ BandScan::BandScan(QWidget* parent)
     RefreshBandRange();
 }
 
-EffectInfo3D BandScan::GetEffectInfo()
+EffectInfo3D BandScan::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -61,6 +59,9 @@ EffectInfo3D BandScan::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -125,53 +126,12 @@ void BandScan::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(bandscan_strip_cmap_on,
-                                            bandscan_strip_cmap_kernel,
-                                            bandscan_strip_cmap_rep,
-                                            bandscan_strip_cmap_unfold,
-                                            bandscan_strip_cmap_dir,
-                                            bandscan_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BandScan::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BandScan::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void BandScan::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    bandscan_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    bandscan_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    bandscan_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    bandscan_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    bandscan_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    bandscan_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
 }
 
 void BandScan::UpdateParams(SpatialEffectParams& /*params*/)
 {
     RefreshBandRange();
 }
-
-void BandScan::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
 
 RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -190,7 +150,10 @@ RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, con
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     float axis_pos = ResolveCoordinateNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float height_norm = ResolveHeightNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
     float radial_norm = ResolveRadialNormalized(&grid, rotated_pos.x, rotated_pos.y, rotated_pos.z);
@@ -217,14 +180,14 @@ RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, con
     bool rainbow_mode = GetRainbowMode();
     float strip_phase_p01 = -1.0f;
     RGBColor axis_color;
-    if(bandscan_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.3f + axis_pos * 0.2f + color_cycle * (1.f / 360.f) + 1.f, 1.f);
-        strip_phase_p01 = SampleStripKernelPalette01(bandscan_strip_cmap_kernel,
-                                                     bandscan_strip_cmap_rep,
-                                                     bandscan_strip_cmap_unfold,
-                                                     bandscan_strip_cmap_dir,
+        strip_phase_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                     GetEffectStripColormapRepeats(),
+                                                     GetEffectStripColormapUnfold(),
+                                                     GetEffectStripColormapDirectionDeg(),
                                                      ph01,
                                                      time,
                                                      grid,
@@ -232,8 +195,8 @@ RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, con
                                                      origin,
                                                      rotated_pos);
         float p01 = ApplyVoxelDriveToPalette01(strip_phase_p01, x, y, z, time, grid);
-        axis_color = ResolveStripKernelFinalColor(*this, bandscan_strip_cmap_kernel, std::clamp(p01, 0.0f, 1.0f),
-                                                   bandscan_strip_cmap_color_style, time,
+        axis_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), std::clamp(p01, 0.0f, 1.0f),
+                                                   GetEffectStripColormapColorStyle(), time,
                                                    GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(rainbow_mode)
@@ -263,7 +226,7 @@ RGBColor BandScan::CalculateColorGrid(float x, float y, float z, float time, con
                         rainbow_mode,
                         bb.speed_mul,
                         bb.tight_mul,
-                        bb.phase_deg * (1.0f / 360.0f),
+                        EffectStratumBlend::CombinedPhase01(bb, stratum_mot01),
                         strip_phase_p01);
 }
 
@@ -271,68 +234,15 @@ nlohmann::json BandScan::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "bandscan_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "bandscan_stratum_band_speed_pct",
-                                           "bandscan_stratum_band_tight_pct",
-                                           "bandscan_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "bandscan",
-                          bandscan_strip_cmap_on,
-                          bandscan_strip_cmap_kernel,
-                          bandscan_strip_cmap_rep,
-                          bandscan_strip_cmap_unfold,
-                          bandscan_strip_cmap_dir,
-                          bandscan_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void BandScan::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "bandscan_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "bandscan_stratum_band_speed_pct",
-                                            "bandscan_stratum_band_tight_pct",
-                                            "bandscan_stratum_band_phase_deg");
-
-    RefreshBandRange();
+RefreshBandRange();
     last_sample_time = std::numeric_limits<float>::lowest();
-    StripColormapLoadJson(settings,
-                          "bandscan",
-                          bandscan_strip_cmap_on,
-                          bandscan_strip_cmap_kernel,
-                          bandscan_strip_cmap_rep,
-                          bandscan_strip_cmap_unfold,
-                          bandscan_strip_cmap_dir,
-                          bandscan_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(bandscan_strip_cmap_on,
-                                                bandscan_strip_cmap_kernel,
-                                                bandscan_strip_cmap_rep,
-                                                bandscan_strip_cmap_unfold,
-                                                bandscan_strip_cmap_dir,
-                                                bandscan_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 void BandScan::RefreshBandRange()
@@ -555,8 +465,8 @@ RGBColor BandScan::ComposeColor(float axis_pos,
         if(strip_cmap_p01 >= 0.0f)
         {
             float p_mod = std::fmod(strip_cmap_p01 + scan_phase * (100.0f / 360.0f) + 1.0f, 1.0f);
-            modulation = ResolveStripKernelFinalColor(*mutable_self, bandscan_strip_cmap_kernel, p_mod,
-                                                        bandscan_strip_cmap_color_style, time,
+            modulation = ResolveStripKernelFinalColor(*mutable_self, GetEffectStripColormapKernel(), p_mod,
+                                                        GetEffectStripColormapColorStyle(), time,
                                                         mutable_self->GetScaledFrequency() * 12.0f * stratum_speed_mul);
         }
         else

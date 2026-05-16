@@ -9,8 +9,6 @@
 #include "Game/StripPatternSurface.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
 class QComboBox;
 class QSlider;
 class QLabel;
@@ -28,7 +26,7 @@ public:
     static std::string const ClassName() { return "ShellPattern"; }
     static std::string const UIName() { return "Shell Pattern"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -38,22 +36,18 @@ public:
 
 private slots:
     void OnParameterChanged();
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum DisplayMode { DISP_SHELL_Y = 0, DISP_FILL_STRIP, DISP_COUNT };
 
     static const char* UnfoldModeLabel(int m);
     static const char* DisplayModeLabel(int d);
 
-    float EvaluateKernel(float s01, float phase01, float time_sec, int pattern) const;
+    float EvaluateKernel(float s01, float phase01, float time_sec, int pattern, float repeats) const;
 
     int unfold_mode = 0;
     int display_mode = DISP_SHELL_Y;
     int pattern_id = 0;
     int strip_shell_color_style = 0;
-    bool shellpattern_strip_cmap_on = true;
     float direction_deg = 0.0f;
     float surface_thickness = 0.0f;
     float strip_repeats = 1.0f;
@@ -67,11 +61,6 @@ private:
     QLabel* amp_label = nullptr;
     QSlider* edge_slider = nullptr;
     QLabel* edge_label = nullptr;
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

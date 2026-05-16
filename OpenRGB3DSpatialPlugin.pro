@@ -304,6 +304,7 @@ SOURCES +=                                                                      
     ui/OpenRGB3DSpatialTab_RefPoints.cpp                                                        \
     ui/OpenRGB3DSpatialTab_Zones.cpp                                                            \
     ui/OpenRGB3DSpatialTab_EffectStack.cpp                                                      \
+    ui/OpenRGB3DSpatialTab_EffectSettingsUi.cpp                                                 \
     ui/OpenRGB3DSpatialTab_EffectStackRender.cpp                                                \
     ui/OpenRGB3DSpatialTab_EffectStackPersist.cpp                                               \
     ui/OpenRGB3DSpatialTab_EffectProfiles.cpp                                                   \

@@ -3,7 +3,6 @@
 #include "HarmonicPulse.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
 #include <QColor>
 #include <QGridLayout>
@@ -17,14 +16,13 @@ REGISTER_EFFECT_3D(HarmonicPulse);
 
 namespace
 {
-/** Phase 0..1 from time, one cycle every `cycle_seconds / speed_mul` (speed_mul ≈ spd·rate). */
 inline float Phase01(float time_sec, float cycle_seconds, float speed_mul)
 {
     if(cycle_seconds < 1e-4f)
         return 0.f;
     return std::fmod((time_sec * speed_mul) / cycle_seconds + 1000.f, 1.f);
 }
-} // namespace
+}
 
 RGBColor HarmonicPulse::Hsv01ToBgr(float h, float s, float v)
 {
@@ -89,7 +87,7 @@ HarmonicPulse::HarmonicPulse(QWidget* parent) : SpatialEffect3D(parent)
 
 HarmonicPulse::~HarmonicPulse() = default;
 
-EffectInfo3D HarmonicPulse::GetEffectInfo()
+EffectInfo3D HarmonicPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 1;
@@ -116,6 +114,8 @@ EffectInfo3D HarmonicPulse::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -192,31 +192,7 @@ void HarmonicPulse::SetupCustomUI(QWidget* parent)
     row++;
 
     vbox->addLayout(g);
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(harmonic_strip_cmap_on,
-                                            harmonic_strip_cmap_kernel,
-                                            harmonic_strip_cmap_rep,
-                                            harmonic_strip_cmap_unfold,
-                                            harmonic_strip_cmap_dir,
-                                            harmonic_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &HarmonicPulse::SyncStripColormapFromPanel);
-
-    AddWidgetToParent(w, parent);
-}
-
-void HarmonicPulse::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    harmonic_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    harmonic_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    harmonic_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    harmonic_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    harmonic_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    harmonic_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void HarmonicPulse::UpdateParams(SpatialEffectParams& params)
@@ -240,8 +216,6 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
     const float rate = std::max(0.08f, GetScaledFrequency() / 50.0f);
     const float motion = spd * rate * std::clamp(flow_amount, 0.3f, 3.0f);
 
-    // Ratios like time(.05) / (.09) / (.2): use ~20s / 11s / 5s per cycle at motion=1
-    // (tuning for room-scale LED layouts; raise speed/frequency for snappier motion).
     const float t1 = Phase01(time, 20.0f, motion) * TWO_PI;
     const float t2 = Phase01(time, 11.111111f, motion) * TWO_PI;
     const float zw = Phase01(time, 5.0f, motion) * TWO_PI;
@@ -266,15 +240,15 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
 
     const float rainbow_rate = rate * 12.0f;
 
-    if(harmonic_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.35f + time * rainbow_rate * 0.01f + h01 * 0.2f + 1.f, 1.f);
-        float pal01 = SampleStripKernelPalette01(harmonic_strip_cmap_kernel,
-                                                 harmonic_strip_cmap_rep,
-                                                 harmonic_strip_cmap_unfold,
-                                                 harmonic_strip_cmap_dir,
+        float pal01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -282,11 +256,11 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
                                                  origin,
                                                  rot);
         pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-        const int kid = SpatialPatternKernelClamp(harmonic_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
                                                   std::clamp(pal01, 0.0f, 1.0f),
-                                                  harmonic_strip_cmap_color_style,
+                                                  GetEffectStripColormapColorStyle(),
                                                   time,
                                                   rainbow_rate * 0.02f);
         const int cr = (int)(c & 0xFF);
@@ -325,15 +299,7 @@ nlohmann::json HarmonicPulse::SaveSettings() const
     j["harmonic_flow_amount"] = flow_amount;
     j["harmonic_pulse_contrast"] = pulse_contrast;
     j["harmonic_large_setup_boost"] = large_setup_boost;
-    StripColormapSaveJson(j,
-                          "harmonic",
-                          harmonic_strip_cmap_on,
-                          harmonic_strip_cmap_kernel,
-                          harmonic_strip_cmap_rep,
-                          harmonic_strip_cmap_unfold,
-                          harmonic_strip_cmap_dir,
-                          harmonic_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void HarmonicPulse::LoadSettings(const nlohmann::json& settings)
@@ -348,26 +314,7 @@ void HarmonicPulse::LoadSettings(const nlohmann::json& settings)
         pulse_contrast = std::clamp(settings["harmonic_pulse_contrast"].get<float>(), 0.4f, 2.8f);
     if(settings.contains("harmonic_large_setup_boost") && settings["harmonic_large_setup_boost"].is_number())
         large_setup_boost = std::clamp(settings["harmonic_large_setup_boost"].get<float>(), 0.0f, 2.0f);
-
-    StripColormapLoadJson(settings,
-                          "harmonic",
-                          harmonic_strip_cmap_on,
-                          harmonic_strip_cmap_kernel,
-                          harmonic_strip_cmap_rep,
-                          harmonic_strip_cmap_unfold,
-                          harmonic_strip_cmap_dir,
-                          harmonic_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(harmonic_strip_cmap_on,
-                                                harmonic_strip_cmap_kernel,
-                                                harmonic_strip_cmap_rep,
-                                                harmonic_strip_cmap_unfold,
-                                                harmonic_strip_cmap_dir,
-                                                harmonic_strip_cmap_color_style);
-    }
-    if(wobble_slider)
+if(wobble_slider)
     {
         wobble_slider->setValue((int)std::lround(zoom_wobble_strength * 100.0f));
         if(wobble_label)

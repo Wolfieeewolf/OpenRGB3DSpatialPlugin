@@ -7,9 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class PulseRing : public SpatialEffect3D
 {
     Q_OBJECT
@@ -18,7 +15,7 @@ public:
 
     EFFECT_REGISTERER_3D("PulseRing", "Pulse Ring", "Spatial", [](){ return new PulseRing; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -27,9 +24,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum Style { STYLE_PULSE_RING = 0, STYLE_RADIAL_RAINBOW, STYLE_COUNT };
     static const char* StyleName(int s);
@@ -38,18 +32,6 @@ private:
     float hole_size = 0.15f;
     float pulse_amplitude = 1.0f;
     float direction_deg = 0.0f;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool pulsering_strip_cmap_on = false;
-    int pulsering_strip_cmap_kernel = 0;
-    float pulsering_strip_cmap_rep = 4.0f;
-    int pulsering_strip_cmap_unfold = 0;
-    float pulsering_strip_cmap_dir = 0.0f;
-    int pulsering_strip_cmap_color_style = 0;
 };
 
 #endif

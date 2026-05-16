@@ -362,4 +362,4 @@ inline RGBColor ComposeAudioGradientColor(const AudioReactiveSettings3D& cfg, fl
     return BlendRGBColors(background, audio_mix, accent);
 }
 
-#endif // AUDIOREACTIVECOMMON_H
+#endif

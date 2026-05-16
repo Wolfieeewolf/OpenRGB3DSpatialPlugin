@@ -11,6 +11,8 @@
 #include <QSlider>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
 {
     QVBoxLayout* outer = new QVBoxLayout(this);
@@ -21,10 +23,10 @@ StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
     row->addWidget(new QLabel(QStringLiteral("Height bands:")));
     layout_combo_ = new QComboBox();
     layout_combo_->addItem(QStringLiteral("Single field"), 0);
-    layout_combo_->addItem(QStringLiteral("Per band (floor · mid · ceiling)"), 1);
+    layout_combo_->addItem(QStringLiteral("Per height band (floor · mid · ceiling)"), 1);
     layout_combo_->setToolTip(
-        QStringLiteral("Optional: each vertical stratum blends its own speed, tightness, and phase "
-                       "(soft transitions at band edges; same origin and geometry)."));
+        QStringLiteral("Per band: blend speed / tightness / phase for one pattern pass, plus optional spatial motion "
+                       "(scroll room axes, phase spin, roll) so calm effects still drift across the room."));
     row->addWidget(layout_combo_, 1);
     outer->addLayout(row);
 
@@ -37,13 +39,17 @@ StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
         {
             group_->setVisible(layout_mode_ == 1);
         }
+        if(motion_group_)
+        {
+            motion_group_->setVisible(layout_mode_ == 1);
+        }
         emit bandParametersChanged();
     });
 
     group_ = new QGroupBox(QStringLiteral("Band tuning"));
     group_->setToolTip(
-        QStringLiteral("Speed %% scales time motion in that band. Tightness %% scales spatial detail. "
-                       "Phase ° adds hue / pattern twist per band."));
+        QStringLiteral("Speed %% scales time motion in that band. Tightness %% scales spatial detail in the pattern. "
+                       "Phase ° adds pattern phase offset per band."));
     QGridLayout* band_grid = new QGridLayout(group_);
     band_grid->addWidget(new QLabel(QString()), 0, 0);
     band_grid->addWidget(new QLabel(QStringLiteral("Speed %")), 0, 1);
@@ -106,6 +112,65 @@ StratumBandPanel::StratumBandPanel(QWidget* parent) : QWidget(parent)
 
     group_->setVisible(layout_mode_ == 1);
     outer->addWidget(group_);
+
+    motion_group_ = new QGroupBox(QStringLiteral("Spatial motion by band"));
+    motion_group_->setToolTip(
+        QStringLiteral("When height bands are on: each floor / mid / ceiling row can add scroll along room X/Y/Z, "
+                       "clockwise or counter-clockwise phase drift, or horizontal roll around the effect origin. "
+                       "Rate scales strength."));
+    QGridLayout* mot_grid = new QGridLayout(motion_group_);
+    mot_grid->addWidget(new QLabel(QString()), 0, 0);
+    mot_grid->addWidget(new QLabel(QStringLiteral("Motion")), 0, 1);
+    mot_grid->addWidget(new QLabel(QStringLiteral("Rate %")), 0, 3);
+    for(int i = 0; i < 3; i++)
+    {
+        const int r = i + 1;
+        mot_grid->addWidget(new QLabel(QStringLiteral("%1:").arg(EffectStratumBlend::BandNameUi(i))), r, 0);
+        motion_kind_combo_[i] = new QComboBox();
+        motion_kind_combo_[i]->addItem(QStringLiteral("Off"), 0);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Scroll room X"), 1);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Scroll room Y"), 2);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Scroll room Z"), 3);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Phase drift CW"), 4);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Phase drift CCW"), 5);
+        motion_kind_combo_[i]->addItem(QStringLiteral("Roll (around origin)"), 6);
+        const int mk = std::clamp(tuning_.motion_kind[(size_t)i], 0, 6);
+        for(int j = 0; j < motion_kind_combo_[i]->count(); ++j)
+        {
+            if(motion_kind_combo_[i]->itemData(j).toInt() == mk)
+            {
+                motion_kind_combo_[i]->setCurrentIndex(j);
+                break;
+            }
+        }
+        mot_grid->addWidget(motion_kind_combo_[i], r, 1, 1, 2);
+        connect(motion_kind_combo_[i], qOverload<int>(&QComboBox::currentIndexChanged), this, [this, i]() {
+            if(motion_kind_combo_[i])
+            {
+                tuning_.motion_kind[(size_t)i] =
+                    std::clamp(motion_kind_combo_[i]->currentData().toInt(), 0, 6);
+            }
+            emit bandParametersChanged();
+        });
+
+        motion_rate_sl_[i] = new QSlider(Qt::Horizontal);
+        motion_rate_sl_[i]->setRange(0, 200);
+        motion_rate_sl_[i]->setValue(tuning_.motion_rate[(size_t)i]);
+        motion_rate_lbl_[i] = new QLabel(QString::number(tuning_.motion_rate[(size_t)i]));
+        motion_rate_lbl_[i]->setMinimumWidth(28);
+        mot_grid->addWidget(motion_rate_sl_[i], r, 3);
+        mot_grid->addWidget(motion_rate_lbl_[i], r, 4);
+        connect(motion_rate_sl_[i], &QSlider::valueChanged, this, [this, i](int v) {
+            tuning_.motion_rate[(size_t)i] = std::clamp(v, 0, 200);
+            if(motion_rate_lbl_[i])
+            {
+                motion_rate_lbl_[i]->setText(QString::number(tuning_.motion_rate[(size_t)i]));
+            }
+            emit bandParametersChanged();
+        });
+    }
+    motion_group_->setVisible(layout_mode_ == 1);
+    outer->addWidget(motion_group_);
 }
 
 void StratumBandPanel::setLayoutMode(int m)
@@ -126,6 +191,10 @@ void StratumBandPanel::setLayoutMode(int m)
     if(group_)
     {
         group_->setVisible(layout_mode_ == 1);
+    }
+    if(motion_group_)
+    {
+        motion_group_->setVisible(layout_mode_ == 1);
     }
 }
 
@@ -152,6 +221,10 @@ void StratumBandPanel::syncWidgetsFromModel()
     if(group_)
     {
         group_->setVisible(layout_mode_ == 1);
+    }
+    if(motion_group_)
+    {
+        motion_group_->setVisible(layout_mode_ == 1);
     }
     for(int i = 0; i < 3; i++)
     {
@@ -181,6 +254,28 @@ void StratumBandPanel::syncWidgetsFromModel()
         if(phase_lbl_[i])
         {
             phase_lbl_[i]->setText(QString::number(tuning_.phase_deg[(size_t)i]));
+        }
+        if(motion_kind_combo_[i])
+        {
+            const int mk = std::clamp(tuning_.motion_kind[(size_t)i], 0, 6);
+            QSignalBlocker bm(motion_kind_combo_[i]);
+            for(int j = 0; j < motion_kind_combo_[i]->count(); ++j)
+            {
+                if(motion_kind_combo_[i]->itemData(j).toInt() == mk)
+                {
+                    motion_kind_combo_[i]->setCurrentIndex(j);
+                    break;
+                }
+            }
+        }
+        if(motion_rate_sl_[i])
+        {
+            QSignalBlocker br(motion_rate_sl_[i]);
+            motion_rate_sl_[i]->setValue(tuning_.motion_rate[(size_t)i]);
+        }
+        if(motion_rate_lbl_[i])
+        {
+            motion_rate_lbl_[i]->setText(QString::number(tuning_.motion_rate[(size_t)i]));
         }
     }
 }

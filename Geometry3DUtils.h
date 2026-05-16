@@ -80,8 +80,6 @@ namespace Geometry3D
         return fade;
     }
 
-
-    /** Quadrant weights for per-corner UV bias (1 at that corner, 0 along center lines and other quadrants). */
     inline float RadialCornerQuadWeightTL(float u, float v)
     {
         if(u > 0.5f || v > 0.5f) return 0.f;
@@ -103,10 +101,6 @@ namespace Geometry3D
         return (2.f * u - 1.f) * (2.f * v - 1.f);
     }
 
-    /**
-     * Post-process UVs from directional (radial) screen mapping: corner expansion and per-corner pull.
-     * Percent values are typically ±50 from UI; zero = identity.
-     */
     inline void ApplyRadialCornerMapping01(float& u, float& v,
                                           float expansion_pct,
                                           float bias_tl_pct, float bias_tr_pct, float bias_bl_pct, float bias_br_pct)
@@ -141,7 +135,6 @@ namespace Geometry3D
         v = std::clamp(v, 0.0f, 1.0f);
     }
 
-    /** Rotate UV around center (0.5, 0.5), degrees CCW in u-right / v-down space; clamps to [0,1]. */
     inline void ApplyUVRotationDegrees01(float& u, float& v, float roll_deg)
     {
         if(roll_deg > -0.005f && roll_deg < 0.005f)
@@ -157,7 +150,6 @@ namespace Geometry3D
         v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
     }
 
-    /** Bearing from reference toward LED → panel UV (immersive / wrap-friendly). For flat desk-style mapping use 2D ambilight paths instead. */
     inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
     {
         PlaneProjection result;
@@ -198,10 +190,6 @@ namespace Geometry3D
         float dir_z = ref_to_led.z * inv_len;
         float dir_right = dir_x * plane_right.x + dir_y * plane_right.y + dir_z * plane_right.z;
         float dir_up    = dir_x * plane_up.x    + dir_y * plane_up.y    + dir_z * plane_up.z;
-        /**
-         * Rotate direction in the panel (right, up) plane so UVs match capture orientation.
-         * Same effect as a post-map UV roll; kept here so “map roll” UI starts at 0° for a calibrated baseline.
-         */
         static constexpr float kDirectionalMapBasisRotationDeg = -25.5f;
         const float calib_rad = kDirectionalMapBasisRotationDeg * 3.14159265359f / 180.0f;
         const float cc = std::cos(calib_rad);
@@ -244,7 +232,6 @@ namespace Geometry3D
         return result;
     }
 
-    /** Snap UVs to a coarser grid (100 = unchanged; 0 = coarsest). Matches texture media resolution semantics. */
     inline void QuantizeMediaUV01(float& u, float& v, int w, int h, unsigned int resolution_pct)
     {
         if(resolution_pct >= 100u)
@@ -258,7 +245,6 @@ namespace Geometry3D
         v = std::floor(v * steps_v) / steps_v;
     }
 
-    /** Snap a 0..1 coordinate (e.g. normalized room axis) to a coarser grid; same curve as QuantizeMediaUV01. */
     inline void QuantizeNormalizedAxis01(float& t, unsigned int resolution_pct, int virtual_cells = 128)
     {
         if(resolution_pct >= 100u)

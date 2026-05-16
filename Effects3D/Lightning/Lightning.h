@@ -8,9 +8,6 @@
 #include "EffectStratumBlend.h"
 #include <vector>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 struct PlasmaArc3D
 {
     Vector3D start;
@@ -33,7 +30,7 @@ public:
     static std::string const ClassName() { return "Lightning"; }
     static std::string const UIName() { return "Lightning"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -43,9 +40,6 @@ public:
 
 private slots:
     void OnLightningParameterChanged();
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum Mode
     {
@@ -82,18 +76,6 @@ private:
     int             mode = MODE_PLASMA_BALL;
     float           flash_rate = 0.15f;
     float           flash_duration = 0.08f;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool lightning_strip_cmap_on = false;
-    int lightning_strip_cmap_kernel = 0;
-    float lightning_strip_cmap_rep = 4.0f;
-    int lightning_strip_cmap_unfold = 0;
-    float lightning_strip_cmap_dir = 0.0f;
-    int lightning_strip_cmap_color_style = 0;
 };
 
 #endif

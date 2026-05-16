@@ -12,7 +12,6 @@
 
 namespace
 {
-/** Suppress intermediate native repaints while replacing the whole effect control subtree. */
 struct DeferEffectPanelMapping
 {
     QPointer<QScrollArea> scroll;
@@ -52,7 +51,7 @@ struct DeferEffectPanelMapping
         if(scroll) scroll->update();
     }
 };
-} // namespace
+}
 
 void OpenRGB3DSpatialTab::SetupEffectStackPanel(QVBoxLayout* parent_layout)
 {
@@ -586,105 +585,49 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         return;
     }
 
-    SpatialEffect3D* ui_effect = EffectListManager3D::get()->CreateEffect(instance->effect_class_name);
-    if(!ui_effect)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create UI effect for class: %s", instance->effect_class_name.c_str());
-        return;
-    }
+    const SpatialEffectSettingsLayout settings_layout = settingsLayoutForClass(instance->effect_class_name);
+    const bool use_direct_transport = (settings_layout != SpatialEffectSettingsLayout::FullWithTransport);
 
-    current_effect_ui = ui_effect;
-
-    bool is_audio = (EffectListManager3D::get()->GetEffectInfo(instance->effect_class_name).category == "Audio");
-    bool is_screen_mirror = (instance->effect_class_name == "ScreenMirror");
     QPushButton* direct_start = nullptr;
     QPushButton* direct_stop  = nullptr;
-
-    auto make_stack_effect_body = [this, ui_effect]() -> QWidget* {
-        QWidget* body = new QWidget(effect_controls_widget);
-        QVBoxLayout* body_layout = new QVBoxLayout(body);
-        body_layout->setContentsMargins(0, 0, 0, 0);
-        body_layout->setSpacing(4);
-        ui_effect->setParent(body);
-        return body;
-    };
-
-    auto add_direct_transport_row = [&]() {
+    if(use_direct_transport)
+    {
         QWidget* btn_widget = new QWidget(effect_controls_widget);
         QHBoxLayout* btn_layout = new QHBoxLayout(btn_widget);
         btn_layout->setContentsMargins(0, 0, 0, 0);
         PluginUiAddEffectTransportButtons(btn_layout, &direct_start, &direct_stop);
         effect_controls_layout->addWidget(btn_widget);
-    };
-
-    if(is_audio)
-    {
-        add_direct_transport_row();
-
-        QWidget* stack_effect_body = make_stack_effect_body();
-        ui_effect->CreateCommonEffectControls(stack_effect_body, false);
-        QWidget* custom_host = ui_effect->GetCustomSettingsHost();
-        ui_effect->SetupCustomUI(custom_host ? custom_host : stack_effect_body);
-        effect_controls_layout->addWidget(stack_effect_body);
-
-        if(effect_zone_label)   effect_zone_label->setVisible(true);
-        if(effect_zone_combo)   effect_zone_combo->setVisible(true);
-        if(origin_label)         origin_label->setVisible(true);
-        if(effect_origin_combo)  effect_origin_combo->setVisible(true);
-        if(effect_bounds_label)  effect_bounds_label->setVisible(true);
-        if(effect_bounds_combo)  effect_bounds_combo->setVisible(true);
     }
-    else if(is_screen_mirror)
+
+    if(instance->effect_class_name == "MinecraftGame")
     {
-        add_direct_transport_row();
-
-        QWidget* stack_effect_body = make_stack_effect_body();
-        ui_effect->SetupCustomUI(stack_effect_body);
-
-        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(ui_effect);
-        if(screen_mirror)
-        {
-            screen_mirror->SetReferencePoints(&reference_points);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
-        }
-
-        effect_controls_layout->addWidget(stack_effect_body);
-
-        if(effect_zone_label)   effect_zone_label->setVisible(false);
-        if(effect_zone_combo)   effect_zone_combo->setVisible(false);
-        if(origin_label)        origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
-        if(effect_bounds_label) effect_bounds_label->setVisible(false);
-        if(effect_bounds_combo) effect_bounds_combo->setVisible(false);
+        QLabel* bundled_hint = new QLabel(tr(
+            "This stack row is the bundled Minecraft layer (all channels in one effect). "
+            "To build your stack one channel at a time, use the Effect Library: Filter → Game, select "
+            "Minecraft (Fabric), pick a single layer in the dropdown, then Add Minecraft layer."));
+        bundled_hint->setWordWrap(true);
+        PluginUiApplyMutedSecondaryLabel(bundled_hint);
+        effect_controls_layout->addWidget(bundled_hint);
     }
-    else
+
+    EffectSettingsUiMount mount = createEffectSettingsUi(effect_controls_widget,
+                                                       effect_controls_layout,
+                                                       instance->effect_class_name,
+                                                       settings_layout);
+    SpatialEffect3D* ui_effect = mount.effect;
+    if(!ui_effect)
     {
-        if(instance->effect_class_name == "MinecraftGame")
-        {
-            QLabel* bundled_hint = new QLabel(tr(
-                "This stack row is the bundled Minecraft layer (all channels in one effect). "
-                "To build your stack one channel at a time, use the Effect Library: Filter → Game, select "
-                "Minecraft (Fabric), pick a single layer in the dropdown, then Add Minecraft layer."));
-            bundled_hint->setWordWrap(true);
-            PluginUiApplyMutedSecondaryLabel(bundled_hint);
-            effect_controls_layout->addWidget(bundled_hint);
-        }
-
-        QWidget* stack_effect_body = make_stack_effect_body();
-        ui_effect->CreateCommonEffectControls(stack_effect_body);
-        QWidget* custom_host = ui_effect->GetCustomSettingsHost();
-        ui_effect->SetupCustomUI(custom_host ? custom_host : stack_effect_body);
-        effect_controls_layout->addWidget(stack_effect_body);
-
-        if(effect_zone_label) effect_zone_label->setVisible(true);
-        if(effect_zone_combo) effect_zone_combo->setVisible(true);
-        if(origin_label)        origin_label->setVisible(true);
-        if(effect_origin_combo) effect_origin_combo->setVisible(true);
-        if(effect_bounds_label) effect_bounds_label->setVisible(true);
-        if(effect_bounds_combo) effect_bounds_combo->setVisible(true);
+        return;
     }
+
+    current_effect_ui = ui_effect;
+
+    if(settings_layout == SpatialEffectSettingsLayout::CustomOnly)
+    {
+        configureScreenMirrorEffectUi(ui_effect);
+    }
+
+    setStackLayerGlobalChromeVisible(settings_layout == SpatialEffectSettingsLayout::FullWithTransport);
 
     nlohmann::json settings;
     if(instance->saved_settings && !instance->saved_settings->empty())
@@ -708,8 +651,8 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         if(idx >= 0) effect_bounds_combo->setCurrentIndex(idx);
     }
 
-    QPushButton* ui_start = (is_audio || is_screen_mirror) ? direct_start : ui_effect->GetStartButton();
-    QPushButton* ui_stop  = (is_audio || is_screen_mirror) ? direct_stop  : ui_effect->GetStopButton();
+    QPushButton* ui_start = use_direct_transport ? direct_start : ui_effect->GetStartButton();
+    QPushButton* ui_stop  = use_direct_transport ? direct_stop  : ui_effect->GetStopButton();
 
     if(ui_start)
     {

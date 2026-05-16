@@ -13,7 +13,6 @@ class QGroupBox;
 class QSlider;
 class QLabel;
 
-/** Reusable "Single field / Per height band" + 3× Speed, Tight, Phase for effects. */
 class StratumBandPanel : public QWidget
 {
     Q_OBJECT
@@ -38,12 +37,16 @@ private:
 
     QComboBox* layout_combo_ = nullptr;
     QGroupBox* group_ = nullptr;
+    QGroupBox* motion_group_ = nullptr;
     QSlider* speed_sl_[3]{};
     QSlider* tight_sl_[3]{};
     QSlider* phase_sl_[3]{};
     QLabel* speed_lbl_[3]{};
     QLabel* tight_lbl_[3]{};
     QLabel* phase_lbl_[3]{};
+    QComboBox* motion_kind_combo_[3]{};
+    QSlider* motion_rate_sl_[3]{};
+    QLabel* motion_rate_lbl_[3]{};
 };
 
 #endif

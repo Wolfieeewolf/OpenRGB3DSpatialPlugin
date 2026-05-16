@@ -10,8 +10,6 @@
 #include "EffectStratumBlend.h"
 #include <limits>
 
-class StratumBandPanel;
-
 class CubeLayer : public SpatialEffect3D
 {
     Q_OBJECT
@@ -20,7 +18,7 @@ public:
 
     EFFECT_REGISTERER_3D("CubeLayer", "Cube Layer", "Audio", [](){ return new CubeLayer; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -30,8 +28,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-
 private:
     float EvaluateIntensity(float amplitude, float time);
     static float AxisPosition(int axis, float x, float y, float z,
@@ -42,12 +38,8 @@ private:
     float smoothed = 0.0f;
     float last_intensity_time = std::numeric_limits<float>::lowest();
     float layer_thickness = 0.12f;
-    int layer_edge_shape = 0;  /* 0=Round, 1=Sharp, 2=Square */
+    int layer_edge_shape = 0;  
     QComboBox* layer_edge_combo = nullptr;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

@@ -12,9 +12,6 @@
 #include <limits>
 #include <random>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class DiscoFlash : public SpatialEffect3D
 {
     Q_OBJECT
@@ -23,7 +20,7 @@ public:
 
     EFFECT_REGISTERER_3D("DiscoFlash", "Disco Flash", "Audio", [](){ return new DiscoFlash; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -33,16 +30,25 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     void TickFlashes(float time);
-    RGBColor SampleFlashField(float nx,
+    float ApplyDiscoFlashRoomHue(float hue_deg,
+                                 float x,
+                                 float y,
+                                 float z,
+                                 float time,
+                                 const GridContext3D& grid,
+                                 const Vector3D& origin,
+                                 const Vector3D& rp) const;
+    RGBColor SampleFlashField(float x,
+                              float y,
+                              float z,
+                              float nx,
                               float ny,
                               float nz,
                               float time,
                               const EffectStratumBlend::BandBlendScalars& bb,
+                              float stratum_mot01,
                               const GridContext3D& grid,
                               const Vector3D& origin,
                               const Vector3D& rp);
@@ -71,18 +77,6 @@ private:
     int flash_mode = MODE_BEAT;
 
     std::mt19937 rng{42};
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool discoflash_strip_cmap_on = false;
-    int discoflash_strip_cmap_kernel = 0;
-    float discoflash_strip_cmap_rep = 4.0f;
-    int discoflash_strip_cmap_unfold = 0;
-    float discoflash_strip_cmap_dir = 0.0f;
-    int discoflash_strip_cmap_color_style = 0;
 };
 
 #endif

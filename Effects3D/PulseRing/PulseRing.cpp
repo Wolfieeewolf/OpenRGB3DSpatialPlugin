@@ -2,8 +2,6 @@
 
 #include "PulseRing.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "EffectHelpers.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
@@ -27,7 +25,7 @@ const char* PulseRing::StyleName(int s)
 
 PulseRing::PulseRing(QWidget* parent) : SpatialEffect3D(parent) {}
 
-EffectInfo3D PulseRing::GetEffectInfo()
+EffectInfo3D PulseRing::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -54,6 +52,9 @@ EffectInfo3D PulseRing::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -137,49 +138,10 @@ void PulseRing::SetupCustomUI(QWidget* parent)
         if(dir_label) dir_label->setText(QString::number(v) + "°");
         emit ParametersChanged();
     });
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(pulsering_strip_cmap_on,
-                                            pulsering_strip_cmap_kernel,
-                                            pulsering_strip_cmap_rep,
-                                            pulsering_strip_cmap_unfold,
-                                            pulsering_strip_cmap_dir,
-                                            pulsering_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &PulseRing::SyncStripColormapFromPanel);
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &PulseRing::OnStratumBandChanged);
-    OnStratumBandChanged();
-    AddWidgetToParent(w, parent);
-}
-
-void PulseRing::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void PulseRing::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    pulsering_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    pulsering_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    pulsering_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    pulsering_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    pulsering_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    pulsering_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
+AddWidgetToParent(w, parent);
 }
 
 void PulseRing::UpdateParams(SpatialEffectParams& params) { (void)params; }
-
 
 RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -196,10 +158,13 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     float stratum_w[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, stratum_w);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, stratum_w, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), stratum_w, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(stratum_w, grid, x, y, z, origin, time);
+
     float progress = progress_raw * bb.speed_mul;
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    constexpr float kRingHorizontalFill = 1.0f / 3.0f;
+    constexpr float kRingHorizontalFill = 1.0f;
     float hw = std::max(1e-6f, e.hw * kRingHorizontalFill);
     float hd = std::max(1e-6f, e.hd * kRingHorizontalFill);
     float r_corner = EffectGridHorizontalRadialNormXZ(rot.x - origin.x, rot.z - origin.z, hw, hd);
@@ -225,7 +190,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         float freq = std::max(0.3f, std::min(6.0f, GetScaledFrequency() * 0.15f * bb.tight_mul));
         float amp = std::max(0.2f, std::min(2.0f, pulse_amplitude));
         float sigma = std::max(ring_thickness, 0.02f);
-        float phase_offset = direction_deg / 360.0f + bb.phase_deg * (1.0f / 360.0f);
+        float phase_offset = direction_deg / 360.0f + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
         float expand_progress = fmodf(progress + phase_offset, 1.0f);
         float ring_center = hole_r + expand_progress * usable;
         float d = fabsf(r - ring_center);
@@ -257,14 +222,14 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     sp.origin_z = origin.z;
     sp.y_norm = coord2;
 
-    const float pr_phase01 = std::fmod(progress + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    const float pr_phase01 = std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
-    if(pulsering_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(pulsering_strip_cmap_kernel,
-                                               pulsering_strip_cmap_rep,
-                                               pulsering_strip_cmap_unfold,
-                                               pulsering_strip_cmap_dir,
+        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                pr_phase01,
                                                time,
                                                grid,
@@ -274,10 +239,10 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     }
 
     RGBColor c;
-    if(pulsering_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
-        c = ResolveStripKernelFinalColor(*this, pulsering_strip_cmap_kernel, p01v, pulsering_strip_cmap_color_style, time,
+        c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                           GetScaledFrequency() * 12.0f);
     }
     else if(GetRainbowMode())
@@ -320,49 +285,12 @@ nlohmann::json PulseRing::SaveSettings() const
     j["hole_size"] = hole_size;
     j["pulse_amplitude"] = pulse_amplitude;
     j["direction_deg"] = direction_deg;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "pulsering_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "pulsering_stratum_band_speed_pct",
-                                           "pulsering_stratum_band_tight_pct",
-                                           "pulsering_stratum_band_phase_deg");
-    StripColormapSaveJson(j, "pulsering", pulsering_strip_cmap_on, pulsering_strip_cmap_kernel, pulsering_strip_cmap_rep,
-                          pulsering_strip_cmap_unfold, pulsering_strip_cmap_dir,
-                          pulsering_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void PulseRing::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "pulsering_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "pulsering_stratum_band_speed_pct",
-                                            "pulsering_stratum_band_tight_pct",
-                                            "pulsering_stratum_band_phase_deg");
-    StripColormapLoadJson(settings, "pulsering", pulsering_strip_cmap_on, pulsering_strip_cmap_kernel, pulsering_strip_cmap_rep,
-                          pulsering_strip_cmap_unfold, pulsering_strip_cmap_dir,
-                          pulsering_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(pulsering_strip_cmap_on,
-                                                pulsering_strip_cmap_kernel,
-                                                pulsering_strip_cmap_rep,
-                                                pulsering_strip_cmap_unfold,
-                                                pulsering_strip_cmap_dir,
-                                                pulsering_strip_cmap_color_style);
-    }
     if(settings.contains("ring_style") && settings["ring_style"].is_number_integer())
         ring_style = std::max(0, std::min(settings["ring_style"].get<int>(), STYLE_COUNT - 1));
     if(settings.contains("ring_thickness") && settings["ring_thickness"].is_number())
@@ -373,9 +301,4 @@ void PulseRing::LoadSettings(const nlohmann::json& settings)
     { float v = settings["pulse_amplitude"].get<float>(); pulse_amplitude = std::max(0.2f, std::min(2.0f, v)); }
     if(settings.contains("direction_deg") && settings["direction_deg"].is_number())
     { float v = settings["direction_deg"].get<float>(); direction_deg = fmodf(v + 360.0f, 360.0f); }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }

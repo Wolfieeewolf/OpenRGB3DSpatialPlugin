@@ -6,8 +6,6 @@
 #include "EffectRegisterer3D.h"
 #include "SpatialEffect3D.h"
 
-class StripKernelColormapPanel;
-
 class SharpPulse : public SpatialEffect3D
 {
     Q_OBJECT
@@ -21,7 +19,7 @@ public:
     static std::string const ClassName() { return "SharpPulse"; }
     static std::string const UIName() { return "Sharp Pulse"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -30,16 +28,7 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void SyncStripColormapFromPanel();
-
 private:
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool sharppulse_strip_cmap_on = false;
-    int sharppulse_strip_cmap_kernel = 0;
-    float sharppulse_strip_cmap_rep = 4.0f;
-    int sharppulse_strip_cmap_unfold = 0;
-    float sharppulse_strip_cmap_dir = 0.0f;
-    int sharppulse_strip_cmap_color_style = 0;
 };
 
 #endif

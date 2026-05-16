@@ -8,7 +8,6 @@
 namespace AudioEffectLibrary
 {
 
-/** Unified audio layer: frequency ranges and per-range sub-effects live here. */
 inline const char* HubClassName()
 {
     return "AudioContainer";

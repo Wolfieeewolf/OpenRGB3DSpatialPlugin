@@ -3,8 +3,6 @@
 #include "WireframeCube.h"
 #include "SpatialKernelColormap.h"
 #include "SpatialPatternKernels/SpatialPatternKernels.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
 #include <algorithm>
@@ -66,7 +64,6 @@ void WireframeCube::RebuildRoomWireframeCache(const GridContext3D& grid)
     const float mz = grid.min_z;
     const float Mz = grid.max_z;
 
-    // Bottom face (y = my), then top face (y = My), then four verticals — matches LEDViewport3D room box.
     const float c000[3] = {mx, my, mz};
     const float c100[3] = {Mx, my, mz};
     const float c110[3] = {Mx, my, Mz};
@@ -135,7 +132,7 @@ void WireframeCube::ClosestOnRoomWireframe(float x, float y, float z,
 
 WireframeCube::WireframeCube(QWidget* parent) : SpatialEffect3D(parent) {}
 
-EffectInfo3D WireframeCube::GetEffectInfo()
+EffectInfo3D WireframeCube::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 2;
@@ -163,6 +160,9 @@ EffectInfo3D WireframeCube::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -209,47 +209,7 @@ void WireframeCube::SetupCustomUI(QWidget* parent)
         "Direction and repeats apply to that 1D run."));
     hint->setWordWrap(true);
     vbox->addWidget(hint);
-
-    strip_cmap_panel = new StripKernelColormapPanel(outer);
-    strip_cmap_panel->mirrorStateFromEffect(wireframecube_strip_cmap_on,
-                                            wireframecube_strip_cmap_kernel,
-                                            wireframecube_strip_cmap_rep,
-                                            wireframecube_strip_cmap_unfold,
-                                            wireframecube_strip_cmap_dir,
-                                            wireframecube_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &WireframeCube::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(outer);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &WireframeCube::OnStratumBandChanged);
-    OnStratumBandChanged();
-    AddWidgetToParent(outer, parent);
-}
-
-void WireframeCube::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    wireframecube_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    wireframecube_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    wireframecube_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    wireframecube_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    wireframecube_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    wireframecube_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void WireframeCube::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
+AddWidgetToParent(outer, parent);
 }
 
 void WireframeCube::UpdateParams(SpatialEffectParams& params)
@@ -278,10 +238,16 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     const float tm = std::max(0.25f, bb.tight_mul);
 
-    float sigma = std::max(thickness, 0.02f);
+    EffectGridAxisHalfExtents wf_e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    const float wf_h_scale = std::max({wf_e.hw, wf_e.hh, wf_e.hd});
+    const float thickness_world = std::max(thickness, 0.02f) * wf_h_scale * 0.25f;
+    float sigma = std::max(thickness_world, 1e-3f);
     float sigma_sq = sigma * sigma / (tm * tm);
     const float d2_cutoff = 9.0f * sigma_sq;
     float d = dist_edge;
@@ -297,28 +263,28 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
     float detail = std::max(0.05f, GetScaledDetail());
     const float speed_phase = GetScaledFrequency() * 12.0f * bb.speed_mul;
 
-    float hue = std::fmod(path01 * 360.0f * (0.6f + 0.4f * detail) + time * speed_phase + bb.phase_deg,
+    float hue = std::fmod(path01 * 360.0f * (0.6f + 0.4f * detail) + time * speed_phase  + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f,
                           360.0f);
     if(hue < 0.0f)
         hue += 360.0f;
 
     float pal01 = 0.5f;
     RGBColor c;
-    if(wireframecube_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        const float dir01 = std::fmod(wireframecube_strip_cmap_dir * (1.f / 360.f), 1.f);
+        const float dir01 = std::fmod(GetEffectStripColormapDirectionDeg() * (1.f / 360.f), 1.f);
         float s01_kernel = std::fmod(path01 + dir01 + 1.f, 1.f);
 
         const float phase01 =
             std::fmod(CalculateProgress(time) * 0.2f + time * speed_phase * (1.f / 360.f) +
-                          bb.phase_deg * (1.f / 360.f) + 1.f,
+                          EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.f,
                       1.f);
 
-        const int kid = SpatialPatternKernelClamp(wireframecube_strip_cmap_kernel);
+        const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         const float k = EvalSpatialPatternKernel(kid,
                                              s01_kernel,
                                              phase01,
-                                             wireframecube_strip_cmap_rep,
+                                             GetEffectStripColormapRepeats(),
                                              time);
         pal01 = std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
 
@@ -326,7 +292,7 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
         c = ResolveStripKernelFinalColor(*this,
                                          kid,
                                          pal01,
-                                         wireframecube_strip_cmap_color_style,
+                                         GetEffectStripColormapColorStyle(),
                                          time,
                                          speed_phase);
     }
@@ -346,43 +312,14 @@ RGBColor WireframeCube::CalculateColorGrid(float x, float y, float z, float time
 nlohmann::json WireframeCube::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "wireframe_cube_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "wireframe_cube_stratum_band_speed_pct",
-                                           "wireframe_cube_stratum_band_tight_pct",
-                                           "wireframe_cube_stratum_band_phase_deg");
     j["thickness"] = thickness;
     j["line_brightness"] = line_brightness;
-    StripColormapSaveJson(j,
-                          "wireframecube",
-                          wireframecube_strip_cmap_on,
-                          wireframecube_strip_cmap_kernel,
-                          wireframecube_strip_cmap_rep,
-                          wireframecube_strip_cmap_unfold,
-                          wireframecube_strip_cmap_dir,
-                          wireframecube_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void WireframeCube::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "wireframe_cube_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "wireframe_cube_stratum_band_speed_pct",
-                                            "wireframe_cube_stratum_band_tight_pct",
-                                            "wireframe_cube_stratum_band_phase_deg");
     if(settings.contains("thickness") && settings["thickness"].is_number())
     {
         float v = settings["thickness"].get<float>();
@@ -393,28 +330,5 @@ void WireframeCube::LoadSettings(const nlohmann::json& settings)
         float v = settings["line_brightness"].get<float>();
         line_brightness = std::max(0.0f, std::min(1.0f, v));
     }
-    StripColormapLoadJson(settings,
-                          "wireframecube",
-                          wireframecube_strip_cmap_on,
-                          wireframecube_strip_cmap_kernel,
-                          wireframecube_strip_cmap_rep,
-                          wireframecube_strip_cmap_unfold,
-                          wireframecube_strip_cmap_dir,
-                          wireframecube_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(wireframecube_strip_cmap_on,
-                                                wireframecube_strip_cmap_kernel,
-                                                wireframecube_strip_cmap_rep,
-                                                wireframecube_strip_cmap_unfold,
-                                                wireframecube_strip_cmap_dir,
-                                                wireframecube_strip_cmap_color_style);
-    }
-    room_wf_cache_seq = 0;
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
+room_wf_cache_seq = 0;
 }

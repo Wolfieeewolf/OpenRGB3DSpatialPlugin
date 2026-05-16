@@ -3,8 +3,6 @@
 #include "SurfaceAmbient.h"
 #include "EffectHelpers.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
 #include <QGridLayout>
@@ -82,7 +80,7 @@ float SurfaceAmbient::EvalPlasmaStyle(int style, float u, float v, float dist_no
 
 SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent) {}
 
-EffectInfo3D SurfaceAmbient::GetEffectInfo()
+EffectInfo3D SurfaceAmbient::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -107,6 +105,9 @@ EffectInfo3D SurfaceAmbient::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -172,52 +173,10 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
         emit ParametersChanged();
     });
     row++;
-
-    strip_cmap_panel = new StripKernelColormapPanel(outer);
-    strip_cmap_panel->mirrorStateFromEffect(surfaceambient_strip_cmap_on,
-                                            surfaceambient_strip_cmap_kernel,
-                                            surfaceambient_strip_cmap_rep,
-                                            surfaceambient_strip_cmap_unfold,
-                                            surfaceambient_strip_cmap_dir,
-                                            surfaceambient_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &SurfaceAmbient::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(outer);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &SurfaceAmbient::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    AddWidgetToParent(outer, parent);
-}
-
-void SurfaceAmbient::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    surfaceambient_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    surfaceambient_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    surfaceambient_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    surfaceambient_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    surfaceambient_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    surfaceambient_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void SurfaceAmbient::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
+AddWidgetToParent(outer, parent);
 }
 
 void SurfaceAmbient::UpdateParams(SpatialEffectParams& params) { (void)params; }
-
 
 static void eval_surface(int surf, const GridContext3D& grid, float x, float y, float z,
     float& dist, float& u, float& v, float& extent)
@@ -249,7 +208,10 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     const float tm = std::max(0.25f, bb.tight_mul);
 
     float h_pct = std::max(0.05f, std::min(1.0f, height_pct));
@@ -283,7 +245,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     float hue;
     if(GetRainbowMode() && style != STYLE_STEAM)
     {
-        hue = fmodf(best_plasma * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul + bb.phase_deg, 360.0f);
+        hue = fmodf(best_plasma * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul  + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f, 360.0f);
         if(hue < 0.0f) hue += 360.0f;
     }
     else if(style != STYLE_STEAM)
@@ -298,21 +260,21 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         case STYLE_OCEAN: hue = 200.0f + best_plasma * 30.0f; break;
         default: hue = best_plasma * 360.0f;
         }
-        hue = fmodf(hue + time * GetScaledFrequency() * 12.0f * bb.speed_mul + bb.phase_deg, 360.0f);
+        hue = fmodf(hue + time * GetScaledFrequency() * 12.0f * bb.speed_mul  + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f, 360.0f);
         if(hue < 0.0f) hue += 360.0f;
     }
 
     float palette_driver = best_plasma;
-    if(surfaceambient_strip_cmap_on && style != STYLE_STEAM)
+    if(UseEffectStripColormap() && style != STYLE_STEAM)
     {
         const float size_m = GetNormalizedSize();
         const float ph01 = std::fmod(time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) +
-                                         bb.phase_deg * (1.f / 360.f) + best_plasma * 0.08f + 1.f,
+                                         EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + best_plasma * 0.08f + 1.f,
                                      1.f);
-        palette_driver = SampleStripKernelPalette01(surfaceambient_strip_cmap_kernel,
-                                                    surfaceambient_strip_cmap_rep,
-                                                    surfaceambient_strip_cmap_unfold,
-                                                    surfaceambient_strip_cmap_dir,
+        palette_driver = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                    GetEffectStripColormapRepeats(),
+                                                    GetEffectStripColormapUnfold(),
+                                                    GetEffectStripColormapDirectionDeg(),
                                                     ph01,
                                                     time,
                                                     grid,
@@ -327,13 +289,13 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
         unsigned char gv = (unsigned char)(180 + (int)(best_plasma * 75));
         c = (RGBColor)((gv << 16) | (gv << 8) | gv);
     }
-    else if(surfaceambient_strip_cmap_on)
+    else if(UseEffectStripColormap())
     {
         float sp = ApplyVoxelDriveToPalette01(palette_driver, x, y, z, time, grid);
         c      = ResolveStripKernelFinalColor(*this,
-                                               surfaceambient_strip_cmap_kernel,
+                                               GetEffectStripColormapKernel(),
                                                std::clamp(sp, 0.0f, 1.0f),
-                                               surfaceambient_strip_cmap_color_style,
+                                               GetEffectStripColormapColorStyle(),
                                                time,
                                                GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
@@ -351,73 +313,21 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
 nlohmann::json SurfaceAmbient::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "surfaceambient_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "surfaceambient_stratum_band_speed_pct",
-                                           "surfaceambient_stratum_band_tight_pct",
-                                           "surfaceambient_stratum_band_phase_deg");
     j["style"] = style;
     j["height_pct"] = height_pct;
     j["thickness"] = thickness;
-    StripColormapSaveJson(j,
-                          "surfaceambient",
-                          surfaceambient_strip_cmap_on,
-                          surfaceambient_strip_cmap_kernel,
-                          surfaceambient_strip_cmap_rep,
-                          surfaceambient_strip_cmap_unfold,
-                          surfaceambient_strip_cmap_dir,
-                          surfaceambient_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void SurfaceAmbient::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "surfaceambient_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "surfaceambient_stratum_band_speed_pct",
-                                            "surfaceambient_stratum_band_tight_pct",
-                                            "surfaceambient_stratum_band_phase_deg");
     if(settings.contains("style") && settings["style"].is_number_integer())
         style = std::max(0, std::min(settings["style"].get<int>(), (int)STYLE_COUNT - 1));
     if(settings.contains("height_pct") && settings["height_pct"].is_number())
         height_pct = std::max(0.05f, std::min(1.0f, settings["height_pct"].get<float>()));
     if(settings.contains("thickness") && settings["thickness"].is_number())
         thickness = std::max(0.02f, std::min(0.5f, settings["thickness"].get<float>()));
-    StripColormapLoadJson(settings,
-                          "surfaceambient",
-                          surfaceambient_strip_cmap_on,
-                          surfaceambient_strip_cmap_kernel,
-                          surfaceambient_strip_cmap_rep,
-                          surfaceambient_strip_cmap_unfold,
-                          surfaceambient_strip_cmap_dir,
-                          surfaceambient_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(surfaceambient_strip_cmap_on,
-                                                surfaceambient_strip_cmap_kernel,
-                                                surfaceambient_strip_cmap_rep,
-                                                surfaceambient_strip_cmap_unfold,
-                                                surfaceambient_strip_cmap_dir,
-                                                surfaceambient_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(SurfaceAmbient);

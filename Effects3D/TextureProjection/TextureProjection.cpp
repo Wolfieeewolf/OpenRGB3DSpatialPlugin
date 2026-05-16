@@ -4,7 +4,6 @@
 
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
 #include <QCheckBox>
@@ -68,7 +67,7 @@ TextureProjection::~TextureProjection()
     ClearMovie();
 }
 
-EffectInfo3D TextureProjection::GetEffectInfo()
+EffectInfo3D TextureProjection::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -106,6 +105,8 @@ EffectInfo3D TextureProjection::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = false;
+    info.supports_height_bands = true;
+
     return info;
 }
 
@@ -218,12 +219,7 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
     layout->addWidget(media_tuning, row, 0, 1, 3);
     row++;
 
-    stratum_panel = new StratumBandPanel(outer);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &TextureProjection::OnStratumBandChanged);
-    OnStratumBandChanged();
+    AttachRoomMappingPanel(parent);
 
     AddWidgetToParent(outer, parent);
 
@@ -235,16 +231,6 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
 void TextureProjection::UpdateParams(SpatialEffectParams& params)
 {
     params.type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
-}
-
-void TextureProjection::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void TextureProjection::OnProjectionModeChanged(int index)
@@ -519,7 +505,10 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     float sw_bb[3];
     EffectStratumBlend::WeightsForYNorm(coord2_bb, strat_st_bb, sw_bb);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw_bb, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw_bb, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw_bb, grid, x, y, z, origin_bb, time);
+
     const float tm = std::max(0.25f, bb.tight_mul);
 
     std::shared_ptr<QImage> snap;
@@ -573,7 +562,7 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     const float detail_s = detail * tm;
     const float freq = std::min(6.0f, std::max(0.02f, GetScaledFrequency() * 0.065f));
     const float scroll = anim_time * (0.022f + 0.07f * speed_lin + 0.09f * freq) * scroll_mul;
-    /* Scale = repeat density; Size = zoom (higher Size → fewer repeats, “bigger” GIF on the map). */
+    
     const float size_m = std::max(0.08f, GetNormalizedSize());
     const float repeat_from_scale = 0.35f + 1.75f * GetNormalizedScale();
     const float size_zoom_div = std::clamp(0.40f + 0.36f * size_m, 0.32f, 2.2f);
@@ -625,7 +614,7 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
     v += scroll * 0.37f;
 
     const float phase =
-        anim_time * freq * 0.14f * phase_mul + bb.phase_deg * (float)(M_PI / 180.0f);
+        anim_time * freq * 0.14f * phase_mul + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01);
     const float amp = 0.022f * std::min(3.2f, detail * 0.22f) * warp_mul / tm;
     u += std::sin(phase + u * 11.5f * detail_s * 0.08f + v * 7.0f * detail_s * 0.07f) * amp;
     v += std::cos(phase * 0.91f + u * 8.5f * detail_s * 0.07f - v * 10.0f * detail_s * 0.08f) * amp;
@@ -660,6 +649,7 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
         const RGBColor prev_col = MediaTextureEffect::SampleImageBilinear(*prev_snap, su, sv);
         col = MediaTextureEffect::LerpRGB(prev_col, col, a);
     }
+    col = RemapSaturatedRgbWithRoomMapping(col, x, y, z, time, grid);
     const float ag = MediaTextureEffect::AmbienceGain(dist_o, max_r, d_face, ambience_dist_falloff, ambience_falloff_curve,
                                   ambience_edge_soft);
     if(ag >= 0.999f)
@@ -673,20 +663,6 @@ RGBColor TextureProjection::CalculateColorGrid(float x, float y, float z, float 
 nlohmann::json TextureProjection::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "textureprojection_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "textureprojection_stratum_band_speed_pct",
-                                           "textureprojection_stratum_band_tight_pct",
-                                           "textureprojection_stratum_band_phase_deg");
     j["media_path"] = media_path.toStdString();
     j["projection_mode"] = projection_mode;
     j["ambience_dist_falloff"] = ambience_dist_falloff;
@@ -704,13 +680,6 @@ nlohmann::json TextureProjection::SaveSettings() const
 void TextureProjection::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "textureprojection_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "textureprojection_stratum_band_speed_pct",
-                                            "textureprojection_stratum_band_tight_pct",
-                                            "textureprojection_stratum_band_phase_deg");
     if(settings.contains("projection_mode") && settings["projection_mode"].is_number_integer())
     {
         projection_mode = std::max(0, std::min(3, settings["projection_mode"].get<int>()));
@@ -780,11 +749,6 @@ void TextureProjection::LoadSettings(const nlohmann::json& settings)
         {
             tile_repeat_check->setChecked(tile_repeat_enabled);
         }
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
     }
 }
 

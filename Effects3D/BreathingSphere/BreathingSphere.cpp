@@ -2,8 +2,6 @@
 
 #include "BreathingSphere.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 
 REGISTER_EFFECT_3D(BreathingSphere);
@@ -65,7 +63,7 @@ float shapeDistance(float rx, float ry, float rz, int shape, float R, const Grid
     }
 }
 
-} // namespace
+}
 
 const char* BreathingSphere::ShapeName(int s)
 {
@@ -107,11 +105,9 @@ BreathingSphere::BreathingSphere(QWidget* parent) : SpatialEffect3D(parent)
     SetColors(default_colors);
 }
 
-
 BreathingSphere::~BreathingSphere() = default;
 
-
-EffectInfo3D BreathingSphere::GetEffectInfo()
+EffectInfo3D BreathingSphere::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.info_version = 2;
@@ -142,9 +138,11 @@ EffectInfo3D BreathingSphere::GetEffectInfo()
     info.show_scale_control = true;
     info.show_color_controls = true;
 
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
-
 
 void BreathingSphere::SetupCustomUI(QWidget* parent)
 {
@@ -220,51 +218,8 @@ void BreathingSphere::SetupCustomUI(QWidget* parent)
         if(hole_label) hole_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(outer_w);
-    strip_cmap_panel->mirrorStateFromEffect(breathing_strip_cmap_on,
-                                            breathing_strip_cmap_kernel,
-                                            breathing_strip_cmap_rep,
-                                            breathing_strip_cmap_unfold,
-                                            breathing_strip_cmap_dir,
-                                            breathing_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BreathingSphere::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(outer_w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BreathingSphere::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    AddWidgetToParent(outer_w, parent);
+AddWidgetToParent(outer_w, parent);
 }
-
-
-void BreathingSphere::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
-}
-
-void BreathingSphere::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    breathing_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    breathing_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    breathing_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    breathing_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    breathing_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    breathing_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
 
 void BreathingSphere::UpdateParams(SpatialEffectParams& params)
 {
@@ -288,7 +243,10 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
 
     float rel_x = rot.x - origin.x;
     float rel_y = rot.y - origin.y;
@@ -297,14 +255,14 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     float rate = GetScaledFrequency();
     float detail = std::max(0.05f, GetScaledDetail());
     progress = CalculateProgress(time * bb.speed_mul);
-    const float cmap_phase01 = std::fmod(progress + bb.phase_deg * (1.0f / 360.0f) + 1.0f, 1.0f);
+    const float cmap_phase01 = std::fmod(progress + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
     float strip_p01 = 0.0f;
-    if(breathing_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
-        strip_p01 = SampleStripKernelPalette01(breathing_strip_cmap_kernel,
-                                               breathing_strip_cmap_rep,
-                                               breathing_strip_cmap_unfold,
-                                               breathing_strip_cmap_dir,
+        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                cmap_phase01,
                                                time,
                                                grid,
@@ -330,15 +288,15 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         float rush = sinf(exhale * 1.7f * bb.speed_mul + (rel_x + rel_z) * 0.015f * detail / tm) * 0.4f * pulse_strength;
 
         RGBColor c;
-        if(breathing_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
-            c = ResolveStripKernelFinalColor(*this, breathing_strip_cmap_kernel, p01v, breathing_strip_cmap_color_style, time,
+            c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                               rate * 12.0f * bb.speed_mul);
         }
         else if(GetRainbowMode())
         {
-            float hue = time * rate * 12.0f * bb.speed_mul + inhale * 110.0f + wave * 175.0f + ripple * 70.0f + rush * 60.0f + progress * 35.0f + bb.phase_deg;
+            float hue = time * rate * 12.0f * bb.speed_mul + inhale * 110.0f + wave * 175.0f + ripple * 70.0f + rush * 60.0f + progress * 35.0f + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
             c = GetRainbowColor(hue);
         }
         else
@@ -464,15 +422,15 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     }
 
     RGBColor final_color;
-    if(breathing_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
-        final_color = ResolveStripKernelFinalColor(*this, breathing_strip_cmap_kernel, p01v, breathing_strip_cmap_color_style, time,
+        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                    rate * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
     {
-        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f + time * rate * 12.0f * bb.speed_mul + bb.phase_deg;
+        float hue = norm_in_shell * 290.0f * (0.6f + 0.4f * detail) + breath_phase * 72.0f + time * rate * 12.0f * bb.speed_mul + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
         final_color = GetRainbowColor(hue);
     }
     else
@@ -493,86 +451,22 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
 nlohmann::json BreathingSphere::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "breathing_sphere_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "breathing_sphere_stratum_band_speed_pct",
-                                           "breathing_sphere_stratum_band_tight_pct",
-                                           "breathing_sphere_stratum_band_phase_deg");
     j["breathing_shape"] = breathing_shape;
     j["edge_profile"] = edge_profile;
     j["breath_pulse_pct"] = breath_pulse_pct;
     j["center_hole_pct"] = center_hole_pct;
-    j["breathing_strip_cmap_on"] = breathing_strip_cmap_on;
-    j["breathing_strip_cmap_kernel"] = breathing_strip_cmap_kernel;
-    j["breathing_strip_cmap_rep"] = breathing_strip_cmap_rep;
-    j["breathing_strip_cmap_unfold"] = breathing_strip_cmap_unfold;
-    j["breathing_strip_cmap_dir"] = breathing_strip_cmap_dir;
-    j["breathing_strip_cmap_color_style"] = breathing_strip_cmap_color_style;
     return j;
 }
 
 void BreathingSphere::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "breathing_sphere_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "breathing_sphere_stratum_band_speed_pct",
-                                            "breathing_sphere_stratum_band_tight_pct",
-                                            "breathing_sphere_stratum_band_phase_deg");
     if(settings.contains("breathing_shape") && settings["breathing_shape"].is_number_integer())
         breathing_shape = std::max(0, std::min(settings["breathing_shape"].get<int>(), SHAPE_COUNT - 1));
-    else if(settings.contains("breathing_mode") && settings["breathing_mode"].is_number_integer())
-    {
-        int old = settings["breathing_mode"].get<int>();
-        breathing_shape = (old == 1) ? SHAPE_WHOLE_ROOM : SHAPE_SPHERE;
-    }
     if(settings.contains("edge_profile") && settings["edge_profile"].is_number_integer())
         edge_profile = std::max(0, std::min(settings["edge_profile"].get<int>(), EDGE_COUNT - 1));
     if(settings.contains("breath_pulse_pct") && settings["breath_pulse_pct"].is_number_integer())
         breath_pulse_pct = std::max(0, std::min(settings["breath_pulse_pct"].get<int>(), 100));
     if(settings.contains("center_hole_pct") && settings["center_hole_pct"].is_number_integer())
         center_hole_pct = std::max(0, std::min(settings["center_hole_pct"].get<int>(), 100));
-    if(settings.contains("breathing_strip_cmap_on") && settings["breathing_strip_cmap_on"].is_boolean())
-        breathing_strip_cmap_on = settings["breathing_strip_cmap_on"].get<bool>();
-    else if(settings.contains("breathing_strip_cmap_on") && settings["breathing_strip_cmap_on"].is_number_integer())
-        breathing_strip_cmap_on = settings["breathing_strip_cmap_on"].get<int>() != 0;
-    if(settings.contains("breathing_strip_cmap_kernel") && settings["breathing_strip_cmap_kernel"].is_number_integer())
-        breathing_strip_cmap_kernel = std::clamp(settings["breathing_strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
-    if(settings.contains("breathing_strip_cmap_rep") && settings["breathing_strip_cmap_rep"].is_number())
-        breathing_strip_cmap_rep = std::max(1.0f, std::min(40.0f, settings["breathing_strip_cmap_rep"].get<float>()));
-    if(settings.contains("breathing_strip_cmap_unfold") && settings["breathing_strip_cmap_unfold"].is_number_integer())
-        breathing_strip_cmap_unfold = std::clamp(settings["breathing_strip_cmap_unfold"].get<int>(), 0,
-                                               (int)StripPatternSurface::UnfoldMode::COUNT - 1);
-    if(settings.contains("breathing_strip_cmap_dir") && settings["breathing_strip_cmap_dir"].is_number())
-        breathing_strip_cmap_dir = std::fmod(settings["breathing_strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
-    if(settings.contains("breathing_strip_cmap_color_style") && settings["breathing_strip_cmap_color_style"].is_number_integer())
-        breathing_strip_cmap_color_style = std::clamp(settings["breathing_strip_cmap_color_style"].get<int>(), 0, 2);
-    else
-        breathing_strip_cmap_color_style = GetRainbowMode() ? 2 : 1;
-
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(breathing_strip_cmap_on,
-                                                breathing_strip_cmap_kernel,
-                                                breathing_strip_cmap_rep,
-                                                breathing_strip_cmap_unfold,
-                                                breathing_strip_cmap_dir,
-                                                breathing_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }

@@ -12,8 +12,6 @@ class QSlider;
 class QWidget;
 class QComboBox;
 class QLabel;
-class StripKernelColormapPanel;
-
 class ColorWheel : public SpatialEffect3D
 {
     Q_OBJECT
@@ -22,7 +20,7 @@ public:
 
     EFFECT_REGISTERER_3D("ColorWheel", "Color Wheel", "Spatial", [](){ return new ColorWheel; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -31,16 +29,11 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void SyncStripColormapFromPanel();
-
 private:
     int direction = 0;
-    /** 0 = hue from atan2 in plane (radial origin). 1 = swept / shear gradient (no focal point; still spins). */
     int hue_geometry_mode = 0;
-    /** 0 = single wheel (default); 1 = floor / mid / ceiling each get their own speed, size, phase (blended at band edges). */
     int wheel_layout_mode = 0;
     std::array<int, 3> band_speed_pct{{100, 100, 100}};
-    /** Tightness: higher = more hue cycles across space in that band (default 100%). */
     std::array<int, 3> band_size_pct{{100, 100, 100}};
     std::array<int, 3> band_phase_deg{{0, 0, 0}};
 
@@ -52,15 +45,6 @@ private:
     QLabel* band_speed_value_lbl[3]{};
     QLabel* band_size_value_lbl[3]{};
     QLabel* band_phase_value_lbl[3]{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool colorwheel_strip_cmap_on = false;
-    int colorwheel_strip_cmap_kernel = 0;
-    float colorwheel_strip_cmap_rep = 4.0f;
-    int colorwheel_strip_cmap_unfold = 0;
-    float colorwheel_strip_cmap_dir = 0.0f;
-    int colorwheel_strip_cmap_color_style = 0;
-
     void SyncLayeredSliderWidgets();
 };
 

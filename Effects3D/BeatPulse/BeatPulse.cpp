@@ -2,8 +2,6 @@
 
 #include "BeatPulse.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <algorithm>
 #include <cmath>
@@ -37,7 +35,7 @@ BeatPulse::BeatPulse(QWidget* parent)
 {
 }
 
-EffectInfo3D BeatPulse::GetEffectInfo()
+EffectInfo3D BeatPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -63,6 +61,9 @@ EffectInfo3D BeatPulse::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -144,46 +145,6 @@ void BeatPulse::SetupCustomUI(QWidget* parent)
         sens_label->setText(QString::number(v) + "%");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(beatpulse_strip_cmap_on,
-                                            beatpulse_strip_cmap_kernel,
-                                            beatpulse_strip_cmap_rep,
-                                            beatpulse_strip_cmap_unfold,
-                                            beatpulse_strip_cmap_dir,
-                                            beatpulse_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BeatPulse::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BeatPulse::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void BeatPulse::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    beatpulse_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    beatpulse_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    beatpulse_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    beatpulse_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    beatpulse_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    beatpulse_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void BeatPulse::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void BeatPulse::TickPulses(float time)
@@ -219,7 +180,8 @@ void BeatPulse::TickPulses(float time)
 float BeatPulse::SamplePulseField(float radial_norm,
                                   float height_norm,
                                   float time,
-                                  const EffectStratumBlend::BandBlendScalars& bb) const
+                                  const EffectStratumBlend::BandBlendScalars& bb,
+                                  float stratum_mot01) const
 {
     float pulse_speed = (2.0f + GetScaledSpeed()) * bb.speed_mul;
     float size_m = GetNormalizedSize();
@@ -227,7 +189,7 @@ float BeatPulse::SamplePulseField(float radial_norm,
     float tm = std::clamp(bb.tight_mul, 0.25f, 4.0f);
     float width_k =
         ((36.0f * (0.6f + 0.4f * detail)) / std::max(0.35f, size_m)) * tm;
-    float phase_radial = bb.phase_deg * (1.0f / 360.0f);
+    float phase_radial = EffectStratumBlend::CombinedPhase01(bb, stratum_mot01);
 
     float height_fade = 1.0f - std::clamp(height_norm, 0.0f, 1.0f);
     if(UseSpatialRoomTint())
@@ -263,7 +225,6 @@ void BeatPulse::UpdateParams(SpatialEffectParams& /*params*/)
 {
 }
 
-
 RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     Vector3D origin = GetEffectOriginGrid(grid);
@@ -279,14 +240,17 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     float dx = rotated_pos.x - origin.x;
     float dy = rotated_pos.y - origin.y;
     float dz = rotated_pos.z - origin.z;
     float max_radius = EffectGridMedianHalfExtent(grid, GetNormalizedScale()) * 1.7320508f;
     float radial_norm = ComputeRadialNormalized(dx, dy, dz, max_radius);
     float height_norm = coord2;
-    float energy = SamplePulseField(radial_norm, height_norm, time, bb);
+    float energy = SamplePulseField(radial_norm, height_norm, time, bb, stratum_mot01);
     float ambient = EvaluateIntensity(
         AudioInputManager::instance()->getBandEnergyHz((float)audio_settings.low_hz, (float)audio_settings.high_hz), time);
     energy = std::clamp(energy + 0.15f * ambient, 0.0f, 1.0f);
@@ -311,17 +275,17 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
     color = ScaleRGBColor(color, (0.25f + 0.75f * energy));
 
     RGBColor user_color;
-    if(beatpulse_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float size_m = GetNormalizedSize();
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.31f + gradient_pos * 0.18f +
                           time * GetScaledFrequency() * 12.0f * bb.speed_mul * (1.f / 360.f) + 1.f,
                       1.f);
-        float p01 = SampleStripKernelPalette01(beatpulse_strip_cmap_kernel,
-                                               beatpulse_strip_cmap_rep,
-                                               beatpulse_strip_cmap_unfold,
-                                               beatpulse_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
                                                ph01,
                                                time,
                                                grid,
@@ -329,13 +293,13 @@ RGBColor BeatPulse::CalculateColorGrid(float x, float y, float z, float time, co
                                                origin,
                                                rotated_pos);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
-        user_color = ResolveStripKernelFinalColor(*this, beatpulse_strip_cmap_kernel, p01, beatpulse_strip_cmap_color_style, time,
+        user_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01, GetEffectStripColormapColorStyle(), time,
                                                   GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
     {
         float hue = gradient_pos * 360.0f + time * GetScaledFrequency() * 12.0f * bb.speed_mul
-                    + bb.phase_deg * (1.0f / 360.0f) * 40.0f;
+                     + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 40.0f;
         hue = ApplySpatialRainbowHue(hue, gradient_pos, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f)
@@ -359,42 +323,13 @@ nlohmann::json BeatPulse::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["onset_threshold"] = onset_threshold;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "beatpulse_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "beatpulse_stratum_band_speed_pct",
-                                           "beatpulse_stratum_band_tight_pct",
-                                           "beatpulse_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "beatpulse",
-                          beatpulse_strip_cmap_on,
-                          beatpulse_strip_cmap_kernel,
-                          beatpulse_strip_cmap_rep,
-                          beatpulse_strip_cmap_unfold,
-                          beatpulse_strip_cmap_dir,
-                          beatpulse_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void BeatPulse::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "beatpulse_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "beatpulse_stratum_band_speed_pct",
-                                            "beatpulse_stratum_band_tight_pct",
-                                            "beatpulse_stratum_band_phase_deg");
     if(settings.contains("onset_threshold")) onset_threshold = std::clamp(settings["onset_threshold"].get<float>(), 0.05f, 0.95f);
     envelope = 0.0f;
     smoothed = 0.0f;
@@ -403,29 +338,6 @@ void BeatPulse::LoadSettings(const nlohmann::json& settings)
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
     last_tick_time = std::numeric_limits<float>::lowest();
-    StripColormapLoadJson(settings,
-                          "beatpulse",
-                          beatpulse_strip_cmap_on,
-                          beatpulse_strip_cmap_kernel,
-                          beatpulse_strip_cmap_rep,
-                          beatpulse_strip_cmap_unfold,
-                          beatpulse_strip_cmap_dir,
-                          beatpulse_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(beatpulse_strip_cmap_on,
-                                                beatpulse_strip_cmap_kernel,
-                                                beatpulse_strip_cmap_rep,
-                                                beatpulse_strip_cmap_unfold,
-                                                beatpulse_strip_cmap_dir,
-                                                beatpulse_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(BeatPulse)

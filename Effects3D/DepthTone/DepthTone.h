@@ -8,8 +8,6 @@
 
 class QLabel;
 class QSlider;
-class StripKernelColormapPanel;
-
 class DepthTone : public SpatialEffect3D
 {
     Q_OBJECT
@@ -23,7 +21,7 @@ public:
     static std::string const ClassName() { return "DepthTone"; }
     static std::string const UIName() { return "Depth Tone"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -32,20 +30,10 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void SyncStripColormapFromPanel();
-
 private:
     int depth_tone_count = 2;
     QSlider* depth_tones_slider = nullptr;
     QLabel* depth_tones_label = nullptr;
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool depth_tone_strip_cmap_on = false;
-    int depth_tone_strip_cmap_kernel = 0;
-    float depth_tone_strip_cmap_rep = 4.0f;
-    int depth_tone_strip_cmap_unfold = 0;
-    float depth_tone_strip_cmap_dir = 0.0f;
-    int depth_tone_strip_cmap_color_style = 0;
 };
 
 #endif

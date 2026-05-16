@@ -12,7 +12,6 @@ class QGroupBox;
 class QLabel;
 class QSlider;
 
-/** Room sampler: compass palette, strength, voxel volume controls. */
 class EffectSamplerPanel : public QWidget
 {
 public:

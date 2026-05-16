@@ -656,7 +656,6 @@ void CustomControllerDialog::UpdateGridDisplay()
                     }
                 }
 
-
                 item->setToolTip(tooltip_text);
 
                 if(cell_mappings.size() == 1)
@@ -674,7 +673,6 @@ void CustomControllerDialog::UpdateGridDisplay()
             else
             {
                 item->setText("");
-
 
                 item->setToolTip("Empty - click to assign");
             }
@@ -1489,7 +1487,6 @@ void CustomControllerDialog::refresh_colors()
     UpdateGridColors();
 }
 
-
 void CustomControllerDialog::on_lock_transform_toggled(bool locked)
 {
     transform_locked = locked;
@@ -1795,7 +1792,4 @@ void CustomControllerDialog::on_apply_preview_remap_clicked()
     led_mappings = preview_led_mappings;
     UpdateGridDisplay();
 }
-
-
-
 

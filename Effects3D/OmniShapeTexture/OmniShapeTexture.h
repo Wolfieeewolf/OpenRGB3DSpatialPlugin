@@ -20,8 +20,6 @@ class QMovie;
 class QPushButton;
 class QSlider;
 class QTimer;
-class StratumBandPanel;
-
 class OmniShapeTexture : public SpatialEffect3D
 {
     Q_OBJECT
@@ -35,7 +33,7 @@ public:
     static std::string const ClassName() { return "OmniShapeTexture"; }
     static std::string const UIName() { return "Omni shape texture"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -56,8 +54,6 @@ private slots:
     void OnMediaTuningChanged();
     void OnMediaFrameChanged(int frameNumber);
     void OnGifFrameTimerTimeout();
-    void OnStratumBandChanged();
-
 private:
     void ClearMovie();
     void LoadMediaFile(const QString& path);
@@ -115,10 +111,6 @@ private:
     int base_shape;
     unsigned int morph_percent;
     unsigned int spin_percent;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

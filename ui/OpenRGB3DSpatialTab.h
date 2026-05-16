@@ -189,6 +189,18 @@ private:
     int GetUnassignedZoneCount(RGBController* controller);
     int GetUnassignedLEDCount(RGBController* controller);
     void SetupCustomEffectUI(const QString& class_name);
+    struct EffectSettingsUiMount
+    {
+        QWidget* container = nullptr;
+        SpatialEffect3D* effect = nullptr;
+    };
+    SpatialEffectSettingsLayout settingsLayoutForClass(const std::string& class_name) const;
+    EffectSettingsUiMount createEffectSettingsUi(QWidget* parent,
+                                                 QBoxLayout* target_layout,
+                                                 const std::string& class_name,
+                                                 SpatialEffectSettingsLayout layout);
+    void configureScreenMirrorEffectUi(SpatialEffect3D* effect);
+    void setStackLayerGlobalChromeVisible(bool visible);
     void SetupStackPresetUI();
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
@@ -380,7 +392,6 @@ private:
     QComboBox*                  effect_bounds_combo = nullptr;
     QWidget*                    effect_controls_widget;
     QVBoxLayout*                effect_controls_layout;
-    /** Right-hand effect settings scroll; used to defer repaints while rebuilding controls. */
     QScrollArea*                effects_detail_scroll = nullptr;
 
     QListWidget*                reference_points_list;
@@ -604,9 +615,4 @@ private:
 };
 
 #endif
-
-
-
-
-
 

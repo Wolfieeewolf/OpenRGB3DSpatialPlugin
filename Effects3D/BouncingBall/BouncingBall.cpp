@@ -2,8 +2,6 @@
 
 #include "BouncingBall.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
 #include <QGridLayout>
@@ -54,8 +52,7 @@ void IntegrateBall(float& pos_x, float& pos_y, float& pos_z,
     if(pos_y <= ymin)
     {
         pos_y = ymin;
-        /* Match OpenRGBEffectsPlugin idea: reset upward speed from sqrt(2 g h) so energy
-         * does not drain away from friction / float error; balls keep bouncing. */
+        
         vel_y = floor_bounce_vy_up;
     }
     else if(pos_y >= ymax)
@@ -111,7 +108,7 @@ void SeedBall(unsigned int k,
     b.vy = (0.40f + HashFloat01(k * 577U) * 0.60f) * radius_basis * (0.50f + 1.05f * motion);
 }
 
-} // namespace
+}
 
 BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -123,7 +120,7 @@ BouncingBall::BouncingBall(QWidget* parent) : SpatialEffect3D(parent)
 
 BouncingBall::~BouncingBall() = default;
 
-EffectInfo3D BouncingBall::GetEffectInfo()
+EffectInfo3D BouncingBall::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.info_version = 3;
@@ -154,6 +151,9 @@ EffectInfo3D BouncingBall::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -175,51 +175,9 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
     count_label = new QLabel(QString::number(ball_count));
     count_label->setMinimumWidth(30);
     layout->addWidget(count_label, 0, 2);
-
-    strip_cmap_panel = new StripKernelColormapPanel(w);
-    strip_cmap_panel->mirrorStateFromEffect(bouncingball_strip_cmap_on,
-                                            bouncingball_strip_cmap_kernel,
-                                            bouncingball_strip_cmap_rep,
-                                            bouncingball_strip_cmap_unfold,
-                                            bouncingball_strip_cmap_dir,
-                                            bouncingball_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &BouncingBall::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &BouncingBall::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    AddWidgetToParent(w, parent);
+AddWidgetToParent(w, parent);
 
     connect(count_slider, &QSlider::valueChanged, this, &BouncingBall::OnBallParameterChanged);
-}
-
-void BouncingBall::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    bouncingball_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    bouncingball_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    bouncingball_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    bouncingball_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    bouncingball_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    bouncingball_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void BouncingBall::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    ball_last_integrated_wall_time = -1e9f;
-    emit ParametersChanged();
 }
 
 void BouncingBall::UpdateParams(SpatialEffectParams& params)
@@ -237,7 +195,6 @@ void BouncingBall::OnBallParameterChanged()
     emit ParametersChanged();
 }
 
-
 RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
@@ -252,8 +209,11 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
-    /* Linear 0..1 from main effect Speed slider (not squared GetNormalizedSpeed) so the control is obvious. */
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
+    
     const float speed_lin = fmaxf(0.02f, fminf(1.0f, GetSpeed() / 200.0f));
     const float motion = speed_lin * speed_lin * 0.28f + speed_lin * 0.72f;
     constexpr float k_wall_e = 0.987f;
@@ -400,20 +360,20 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
             const float vh = hypotf(ball.vx, hypotf(ball.vy, ball.vz));
             const float vel_w = fminf(1.0f, vh / fmaxf(1e-4f, radius_basis * 0.35f));
             const float hue_vel = atan2f(ball.vz, ball.vx) * 57.2958f * 0.12f * vel_w;
-            hue_for_max = fmodf(color_cycle + hue_ball + hue_spatial + hue_vel + bb.phase_deg, 360.0f);
+            hue_for_max = fmodf(color_cycle + hue_ball + hue_spatial + hue_vel  + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f, 360.0f);
             if(hue_for_max < 0.0f) hue_for_max += 360.0f;
         }
     }
 
     float strip_p01_bb = 0.f;
-    if(bouncingball_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float ph01 =
-            std::fmod(color_cycle * (1.f / 360.f) + bb.phase_deg * (1.f / 360.f) + 1.f, 1.f);
-        strip_p01_bb = SampleStripKernelPalette01(bouncingball_strip_cmap_kernel,
-                                                  bouncingball_strip_cmap_rep,
-                                                  bouncingball_strip_cmap_unfold,
-                                                  bouncingball_strip_cmap_dir,
+            std::fmod(color_cycle * (1.f / 360.f) + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.f, 1.f);
+        strip_p01_bb = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                  GetEffectStripColormapRepeats(),
+                                                  GetEffectStripColormapUnfold(),
+                                                  GetEffectStripColormapDirectionDeg(),
                                                   ph01,
                                                   time,
                                                   grid,
@@ -441,12 +401,12 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     sp.y_norm = coord2;
 
     RGBColor final_color;
-    if(bouncingball_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         float p01v = ApplyVoxelDriveToPalette01(strip_p01_bb, x, y, z, time, grid);
         const float rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
-        final_color = ResolveStripKernelFinalColor(*this, bouncingball_strip_cmap_kernel, p01v,
-                                                   bouncingball_strip_cmap_color_style, time, rbow_mul);
+        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v,
+                                                   GetEffectStripColormapColorStyle(), time, rbow_mul);
     }
     else if(GetRainbowMode())
     {
@@ -477,70 +437,16 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
 nlohmann::json BouncingBall::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "bouncingball_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "bouncingball_stratum_band_speed_pct",
-                                           "bouncingball_stratum_band_tight_pct",
-                                           "bouncingball_stratum_band_phase_deg");
     j["ball_count"] = ball_count;
-    StripColormapSaveJson(j,
-                          "bouncingball",
-                          bouncingball_strip_cmap_on,
-                          bouncingball_strip_cmap_kernel,
-                          bouncingball_strip_cmap_rep,
-                          bouncingball_strip_cmap_unfold,
-                          bouncingball_strip_cmap_dir,
-                          bouncingball_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void BouncingBall::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "bouncingball_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "bouncingball_stratum_band_speed_pct",
-                                            "bouncingball_stratum_band_tight_pct",
-                                            "bouncingball_stratum_band_phase_deg");
     if(settings.contains("ball_count")) ball_count = settings["ball_count"];
-
-    StripColormapLoadJson(settings,
-                          "bouncingball",
-                          bouncingball_strip_cmap_on,
-                          bouncingball_strip_cmap_kernel,
-                          bouncingball_strip_cmap_rep,
-                          bouncingball_strip_cmap_unfold,
-                          bouncingball_strip_cmap_dir,
-                          bouncingball_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(bouncingball_strip_cmap_on,
-                                                bouncingball_strip_cmap_kernel,
-                                                bouncingball_strip_cmap_rep,
-                                                bouncingball_strip_cmap_unfold,
-                                                bouncingball_strip_cmap_dir,
-                                                bouncingball_strip_cmap_color_style);
-    }
-
-    if(count_slider) count_slider->setValue(ball_count);
+if(count_slider) count_slider->setValue(ball_count);
     ball_last_integrated_wall_time = -1e9f;
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(BouncingBall);

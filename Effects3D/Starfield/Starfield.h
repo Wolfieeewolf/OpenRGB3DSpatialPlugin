@@ -8,9 +8,6 @@
 #include "EffectStratumBlend.h"
 #include <vector>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class Starfield : public SpatialEffect3D
 {
     Q_OBJECT
@@ -19,7 +16,7 @@ public:
 
     EFFECT_REGISTERER_3D("Starfield", "Starfield", "Spatial", [](){ return new Starfield; })
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -28,9 +25,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum Mode { MODE_STARFIELD = 0, MODE_TWINKLE, MODE_COUNT };
     static const char* ModeName(int m);
@@ -44,18 +38,6 @@ private:
     std::vector<Vector3D> star_positions_cached;
     float star_aabb_min_x = 0, star_aabb_min_y = 0, star_aabb_min_z = 0;
     float star_aabb_max_x = 0, star_aabb_max_y = 0, star_aabb_max_z = 0;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool starfield_strip_cmap_on = false;
-    int starfield_strip_cmap_kernel = 0;
-    float starfield_strip_cmap_rep = 4.0f;
-    int starfield_strip_cmap_unfold = 0;
-    float starfield_strip_cmap_dir = 0.0f;
-    int starfield_strip_cmap_color_style = 0;
 };
 
 #endif

@@ -2,8 +2,6 @@
 
 #include "DiscoFlash.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "EffectStratumBlend.h"
 #include "SpatialLayerCore.h"
 #include "EffectHelpers.h"
@@ -21,7 +19,7 @@ DiscoFlash::DiscoFlash(QWidget* parent)
 {
 }
 
-EffectInfo3D DiscoFlash::GetEffectInfo()
+EffectInfo3D DiscoFlash::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -47,6 +45,9 @@ EffectInfo3D DiscoFlash::GetEffectInfo()
     info.show_scale_control = true;
     info.show_axis_control = false;
     info.show_color_controls = false;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -162,46 +163,6 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(discoflash_strip_cmap_on,
-                                            discoflash_strip_cmap_kernel,
-                                            discoflash_strip_cmap_rep,
-                                            discoflash_strip_cmap_unfold,
-                                            discoflash_strip_cmap_dir,
-                                            discoflash_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &DiscoFlash::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &DiscoFlash::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void DiscoFlash::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    discoflash_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    discoflash_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    discoflash_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    discoflash_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    discoflash_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    discoflash_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void DiscoFlash::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void DiscoFlash::UpdateParams(SpatialEffectParams& /*params*/)
@@ -259,11 +220,48 @@ void DiscoFlash::TickFlashes(float time)
         }), flashes.end());
 }
 
-RGBColor DiscoFlash::SampleFlashField(float nx,
+float DiscoFlash::ApplyDiscoFlashRoomHue(float hue_deg,
+                                         float x,
+                                         float y,
+                                         float z,
+                                         float time,
+                                         const GridContext3D& grid,
+                                         const Vector3D& origin,
+                                         const Vector3D& rp) const
+{
+    const float coord2 = NormalizeGridAxis01(rp.y, grid.min_y, grid.max_y);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = coord2;
+    hue_deg = ApplySpatialRainbowHue(hue_deg, coord2, basis, sp, map, time, &grid);
+    float p01 = std::fmod(hue_deg / 360.0f, 1.0f);
+    if(p01 < 0.0f)
+    {
+        p01 += 1.0f;
+    }
+    p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+    return p01 * 360.0f;
+}
+
+RGBColor DiscoFlash::SampleFlashField(float x,
+                                      float y,
+                                      float z,
+                                      float nx,
                                       float ny,
                                       float nz,
                                       float time,
                                       const EffectStratumBlend::BandBlendScalars& bb,
+                                      float stratum_mot01,
                                       const GridContext3D& grid,
                                       const Vector3D& origin,
                                       const Vector3D& rp)
@@ -292,26 +290,30 @@ RGBColor DiscoFlash::SampleFlashField(float nx,
         if(contribution < 0.004f) continue;
 
         RGBColor flash_color;
-        if(discoflash_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             const float ph01 = std::fmod(color_cycle * (1.f / 360.f) + (float)i * 0.017f + f.hue * (1.f / 360.f) +
-                                     bb.phase_deg * (1.f / 360.f) + 1.f,
+                                     EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.f,
                                  1.f);
-            float p = SampleStripKernelPalette01(discoflash_strip_cmap_kernel,
-                                                 discoflash_strip_cmap_rep,
-                                                 discoflash_strip_cmap_unfold,
-                                                 discoflash_strip_cmap_dir,
+            float p = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
                                                  size_m,
                                                  origin,
                                                  rp);
-            flash_color = GetRainbowColor(std::fmod(p * 360.0f + f.hue * 0.18f, 360.0f));
+            float hue = std::fmod(p * 360.0f + f.hue * 0.18f, 360.0f);
+            hue = ApplyDiscoFlashRoomHue(hue, x, y, z, time, grid, origin, rp);
+            flash_color = GetRainbowColor(hue);
         }
         else
         {
-            flash_color = GetRainbowColor(f.hue + color_cycle + bb.phase_deg);
+            float hue = f.hue + color_cycle + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f;
+            hue = ApplyDiscoFlashRoomHue(hue, x, y, z, time, grid, origin, rp);
+            flash_color = GetRainbowColor(hue);
         }
         flash_color = ScaleRGBColor(flash_color, contribution);
 
@@ -323,7 +325,6 @@ RGBColor DiscoFlash::SampleFlashField(float nx,
 
     return result;
 }
-
 
 RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
@@ -339,7 +340,10 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, o, time);
+
 
     int mode = std::max(0, std::min(flash_mode, MODE_COUNT - 1));
     if(mode == MODE_SPARKLE)
@@ -358,17 +362,17 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
         intensity = std::max(0.0f, std::min(1.0f, intensity));
         if(intensity < 0.01f) return ToRGBColor(0, 0, 0);
         float hue = fmodf(sparkle * 360.0f * (0.6f + 0.4f * detail * bb.tight_mul) + time * rate * 12.0f * bb.speed_mul
-                          + bb.phase_deg,
+                           + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f,
                       360.0f);
         if(hue < 0.0f) hue += 360.0f;
-        if(discoflash_strip_cmap_on)
+        if(UseEffectStripColormap())
         {
             const float size_m = GetNormalizedSize();
             const float ph01 = std::fmod(time * rate * 12.0f * bb.speed_mul * (1.f / 360.f) + sparkle * 0.11f + 1.f, 1.f);
-            hue = SampleStripKernelPalette01(discoflash_strip_cmap_kernel,
-                                             discoflash_strip_cmap_rep,
-                                             discoflash_strip_cmap_unfold,
-                                             discoflash_strip_cmap_dir,
+            hue = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                             GetEffectStripColormapRepeats(),
+                                             GetEffectStripColormapUnfold(),
+                                             GetEffectStripColormapDirectionDeg(),
                                              ph01,
                                              time,
                                              grid,
@@ -377,6 +381,7 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
                                              rot) *
                   360.0f;
         }
+        hue = ApplyDiscoFlashRoomHue(hue, x, y, z, time, grid, o, rot);
         RGBColor c = GetRainbowColor(hue);
         unsigned char r = (unsigned char)((c & 0xFF) * intensity);
         unsigned char g = (unsigned char)(((c >> 8) & 0xFF) * intensity);
@@ -390,7 +395,7 @@ RGBColor DiscoFlash::CalculateColorGrid(float x, float y, float z, float time, c
     float ny = (grid.height > 1e-5f) ? (y - o.y) / (grid.height * 0.5f) : 0.0f;
     float nz = (grid.depth  > 1e-5f) ? (z - o.z) / (grid.depth  * 0.5f) : 0.0f;
 
-    return SampleFlashField(nx, ny, nz, time, bb, grid, o, rot);
+    return SampleFlashField(x, y, z, nx, ny, nz, time, bb, stratum_mot01, grid, o, rot);
 }
 
 nlohmann::json DiscoFlash::SaveSettings() const
@@ -402,42 +407,13 @@ nlohmann::json DiscoFlash::SaveSettings() const
     j["flash_size"]       = flash_size;
     j["onset_threshold"]  = onset_threshold;
     j["flash_mode"]       = flash_mode;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "discoflash_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "discoflash_stratum_band_speed_pct",
-                                           "discoflash_stratum_band_tight_pct",
-                                           "discoflash_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "discoflash",
-                          discoflash_strip_cmap_on,
-                          discoflash_strip_cmap_kernel,
-                          discoflash_strip_cmap_rep,
-                          discoflash_strip_cmap_unfold,
-                          discoflash_strip_cmap_dir,
-                          discoflash_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void DiscoFlash::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "discoflash_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "discoflash_stratum_band_speed_pct",
-                                            "discoflash_stratum_band_tight_pct",
-                                            "discoflash_stratum_band_phase_deg");
     if(settings.contains("flash_decay"))      flash_decay      = settings["flash_decay"].get<float>();
     if(settings.contains("flash_density"))    flash_density    = settings["flash_density"].get<float>();
     if(settings.contains("flash_size"))       flash_size       = settings["flash_size"].get<float>();
@@ -448,29 +424,6 @@ void DiscoFlash::LoadSettings(const nlohmann::json& settings)
     last_tick_time = std::numeric_limits<float>::lowest();
     onset_smoothed = 0.0f;
     onset_hold = 0.0f;
-    StripColormapLoadJson(settings,
-                          "discoflash",
-                          discoflash_strip_cmap_on,
-                          discoflash_strip_cmap_kernel,
-                          discoflash_strip_cmap_rep,
-                          discoflash_strip_cmap_unfold,
-                          discoflash_strip_cmap_dir,
-                          discoflash_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(discoflash_strip_cmap_on,
-                                                discoflash_strip_cmap_kernel,
-                                                discoflash_strip_cmap_rep,
-                                                discoflash_strip_cmap_unfold,
-                                                discoflash_strip_cmap_dir,
-                                                discoflash_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(DiscoFlash)

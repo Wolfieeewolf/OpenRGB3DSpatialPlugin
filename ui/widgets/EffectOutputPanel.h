@@ -8,7 +8,6 @@
 class QLabel;
 class QSlider;
 
-/** Intensity, sharpness, smoothing, sampling — shared output-shaping row set. */
 class EffectOutputPanel : public QWidget
 {
 public:

@@ -20,8 +20,6 @@ class QMovie;
 class QPushButton;
 class QSlider;
 class QTimer;
-class StratumBandPanel;
-
 class TextureProjection : public SpatialEffect3D
 {
     Q_OBJECT
@@ -35,7 +33,7 @@ public:
     static std::string const ClassName() { return "TextureProjection"; }
     static std::string const UIName() { return "Texture projection"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -54,8 +52,6 @@ private slots:
     void OnAmbienceChanged();
     void OnMotionTuningChanged();
     void OnMediaTuningChanged();
-    void OnStratumBandChanged();
-
 private:
     void ClearMovie();
     void LoadMediaFile(const QString& path);
@@ -107,10 +103,6 @@ private:
     int gif_step_interval_ms = 0;
 
     int projection_mode;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
 };
 
 #endif

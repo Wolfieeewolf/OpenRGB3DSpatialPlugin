@@ -46,7 +46,6 @@ struct AdaptiveLayerState
 
 thread_local AdaptiveLayerState tls_layer_state;
 
-// Published from the render path when spatial debug sweep is active; read by the settings UI timer.
 std::atomic<int> g_spatial_sweep_live{0};
 std::atomic<int> g_spatial_sweep_step{0};
 std::atomic<int> g_spatial_sweep_step_count{0};
@@ -94,8 +93,6 @@ static void FinalizeAdaptiveLayerState()
     float target_gamma = 1.0f;
     if(spread > 0.10f)
     {
-        // Typical room layouts have dense "desk/mid" LEDs sitting lower than half-height
-        // once floor + ceiling strips are included. Lift that middle mass adaptively.
         const float target_mid = 0.46f;
         const float m = std::clamp(q50, 0.05f, 0.95f);
         target_gamma = std::log(target_mid) / std::log(m);
@@ -290,7 +287,6 @@ static SpatialLayerCore::ProbeInput BuildProbeInput(const GameTelemetryBridge::T
     return input;
 }
 
-/** Minecraft / layout: Y is up (sky). Compass and horizontal cues follow yaw only, not look pitch. */
 static void MinecraftRoomHorizontalBasis(float look_x,
                                          float look_y,
                                          float look_z,
@@ -374,11 +370,6 @@ static void MinecraftRoomHorizontalBasis(float look_x,
     }
 }
 
-/**
- * Scene / LED layout (Spatial tab, front view): X left–right, Y up–down (floor→ceiling), Z depth
- * (toward/away). Matches SpatialLayerCore’s Y-up sample space — pass positions through unchanged.
- * Minecraft camera vectors from telemetry stay in their native Y-up world frame.
- */
 static inline void RoomLedToSpatialCore(float rx,
                                         float ry,
                                         float rz,
@@ -400,8 +391,6 @@ static inline void RoomLedToSpatialCore(float rx,
     soz = roz;
 }
 
-// Y is vertical; bounds may increase either toward floor or ceiling. Infer floor vs ceiling from
-// origin proximity (front-left-floor) so 0.0 = floor and 1.0 = ceiling.
 static inline float NormalizeRoomVertical01(float y, const GridContext3D& grid, float origin_y)
 {
     const float d_min = std::fabs(origin_y - grid.min_y);
@@ -631,7 +620,6 @@ static const VoxelRoomCore::VoxelGrid& GetPreviewVoxelGrid()
         grid.min_z = -3.5f;
         grid.rgba.resize((size_t)grid.size_x * (size_t)grid.size_y * (size_t)grid.size_z * 4u, 0u);
 
-        // Left-side "bed" block (purple), right-side warm source, plus a soft ceiling lamp.
         StampPreviewVoxelBox(grid, -1.35f, 0.30f, -0.15f, 0.55f, 0.20f, 0.90f, (RGBColor)0x00B45CE0, 0.88f);
         StampPreviewVoxelBox(grid, 1.25f, 1.05f, 0.35f, 0.30f, 0.30f, 0.30f, (RGBColor)0x0040B0FF, 0.85f);
         StampPreviewVoxelBox(grid, 0.00f, 1.90f, 0.00f, 0.95f, 0.18f, 0.95f, (RGBColor)0x00FFE8CC, 0.38f);
@@ -748,14 +736,14 @@ static RGBColor LayerDebugColorByTopIndex(int top_layer_idx, int layer_count)
 {
     if(layer_count <= 3)
     {
-        if(top_layer_idx <= 0) return (RGBColor)0x00E0A060; // top
-        if(top_layer_idx == 1) return (RGBColor)0x0060E060; // mid
-        return (RGBColor)0x0060A0E0; // bottom
+        if(top_layer_idx <= 0) return (RGBColor)0x00E0A060;
+        if(top_layer_idx == 1) return (RGBColor)0x0060E060;
+        return (RGBColor)0x0060A0E0;
     }
-    if(top_layer_idx <= 0) return (RGBColor)0x00E0A060; // ceiling
-    if(top_layer_idx == 1) return (RGBColor)0x0090D060; // upper wall
-    if(top_layer_idx == 2) return (RGBColor)0x0060D0A0; // desk/monitor
-    return (RGBColor)0x0060A0E0; // floor
+    if(top_layer_idx <= 0) return (RGBColor)0x00E0A060;
+    if(top_layer_idx == 1) return (RGBColor)0x0090D060;
+    if(top_layer_idx == 2) return (RGBColor)0x0060D0A0;
+    return (RGBColor)0x0060A0E0;
 }
 
 static RGBColor RenderSpatialLayerSweepDebug(float time,
@@ -1253,7 +1241,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
 
         QLabel* voxScaleLab = new QLabel(QStringLiteral("Voxel room scale"));
         QSlider* voxScaleSl = new QSlider(Qt::Horizontal);
-        voxScaleSl->setRange(2, 80); // 0.02 .. 0.80 world units per room unit
+        voxScaleSl->setRange(2, 80);
         voxScaleSl->setValue((int)std::lround(std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f) * 100.0f));
         const QString voxScaleTip = QStringLiteral(
             "How large the room maps into voxel world space (LED offset → world ray into the volume). "
@@ -1362,7 +1350,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
 
         QLabel* dbgHzLab = new QLabel(QStringLiteral("Debug sweep speed (cells/sec)"));
         QSlider* dbgHzSl = new QSlider(Qt::Horizontal);
-        dbgHzSl->setRange(2, 120); // 0.2 .. 12.0
+        dbgHzSl->setRange(2, 120);
         dbgHzSl->setValue((int)std::lround(std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f) * 10.0f));
         layout->addWidget(dbgHzLab, row, 0);
         layout->addWidget(dbgHzSl, row, 1);
@@ -1866,8 +1854,6 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                 const float denom = std::max(1e-3f, 1.0f - sStart);
                 projected = LerpColor(mid, sky, (y_norm - sStart) / denom);
             }
-            // Keep ceiling LEDs reading as "sky" even when directional/world-light mixes push
-            // the palette toward ground/mid hues.
             if(t.has_vanilla_biome_colors)
             {
                 RGBColor bioSky = SuppressWhites(MakeRgb(t.biome_sky_r, t.biome_sky_g, t.biome_sky_b));
@@ -2036,10 +2022,6 @@ void ApplyFabricGameEffectChrome(SpatialEffect3D* effect)
     effect->SetControlGroupVisibility(effect->intensity_slider, effect->intensity_label, QStringLiteral("Intensity:"), true);
     effect->SetControlGroupVisibility(effect->sharpness_slider, effect->sharpness_label, QStringLiteral("Sharpness:"), true);
 
-    if(effect->voxel_volume_group)
-    {
-        effect->voxel_volume_group->setVisible(false);
-    }
     if(effect->surfaces_section)
     {
         effect->surfaces_section->setVisible(false);

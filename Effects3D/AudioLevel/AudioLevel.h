@@ -10,9 +10,6 @@
 #include "EffectStratumBlend.h"
 #include <limits>
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class AudioLevel : public SpatialEffect3D
 {
     Q_OBJECT
@@ -25,7 +22,7 @@ public:
     static std::string const ClassName() { return "AudioLevel"; }
     static std::string const UIName() { return "Audio Level"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -35,8 +32,6 @@ public:
     void LoadSettings(const nlohmann::json& settings) override;
 
 private slots:
-    void OnStratumBandChanged();
-
 private:
     AudioReactiveSettings3D audio_settings = MakeDefaultAudioReactiveSettings3D(20, 20000);
     float EvaluateIntensity(float amplitude, float time);
@@ -44,18 +39,6 @@ private:
     float last_intensity_time = std::numeric_limits<float>::lowest();
     float wave_amount = 0.06f;
     float edge_soft = 0.08f;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-    bool audiolevel_strip_cmap_on = false;
-    int audiolevel_strip_cmap_kernel = 0;
-    float audiolevel_strip_cmap_rep = 4.0f;
-    int audiolevel_strip_cmap_unfold = 0;
-    float audiolevel_strip_cmap_dir = 0.0f;
-    int audiolevel_strip_cmap_color_style = 0;
-    void SyncStripColormapFromPanel();
 };
 
-#endif // AUDIOLEVEL_H
+#endif

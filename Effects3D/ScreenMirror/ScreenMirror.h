@@ -15,6 +15,7 @@
 
 class DisplayPlane3D;
 class VirtualReferencePoint3D;
+class QFormLayout;
 struct CaptureSourceInfo;
 struct CapturedFrame;
 
@@ -32,7 +33,7 @@ public:
     static std::string const UIName() { return "Screen Mirror"; }
     static void ForceLink() {}
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -79,6 +80,9 @@ private:
         float brightness_threshold;
         float white_rolloff;
         float vibrance;
+        float led_output_gain_r;
+        float led_output_gain_g;
+        float led_output_gain_b;
         float black_bar_letterbox_percent;
         float black_bar_pillarbox_percent;
 
@@ -97,9 +101,7 @@ private:
         bool show_calibration_pattern;
         bool show_screen_preview;
 
-        /** Extra roll on top of built-in calibration (degrees); 0 = use default −25.5° correction only. */
         float screen_map_roll_deg;
-        /** 0–100 UI: 0 = baseline internal −50 (previous default “feel”); 50 = internal 0; 100 = +50. */
         int radial_corner_expansion_ui;
         int radial_corner_bias_tl_ui;
         int radial_corner_bias_tr_ui;
@@ -124,6 +126,12 @@ private:
         QLabel* white_rolloff_label;
         QSlider* vibrance_slider;
         QLabel* vibrance_label;
+        QSlider* led_output_gain_r_slider;
+        QLabel* led_output_gain_r_label;
+        QSlider* led_output_gain_g_slider;
+        QLabel* led_output_gain_g_label;
+        QSlider* led_output_gain_b_slider;
+        QLabel* led_output_gain_b_label;
         QSlider* black_bar_letterbox_slider;
         QLabel* black_bar_letterbox_label;
         QSlider* black_bar_pillarbox_slider;
@@ -179,6 +187,9 @@ private:
             , brightness_threshold(0.0f)
             , white_rolloff(0.0f)
             , vibrance(1.0f)
+            , led_output_gain_r(1.0f)
+            , led_output_gain_g(1.0f)
+            , led_output_gain_b(1.0f)
             , black_bar_letterbox_percent(0.0f)
             , black_bar_pillarbox_percent(0.0f)
             , edge_softness(0.0f)
@@ -215,6 +226,12 @@ private:
             , white_rolloff_label(nullptr)
             , vibrance_slider(nullptr)
             , vibrance_label(nullptr)
+            , led_output_gain_r_slider(nullptr)
+            , led_output_gain_r_label(nullptr)
+            , led_output_gain_g_slider(nullptr)
+            , led_output_gain_g_label(nullptr)
+            , led_output_gain_b_slider(nullptr)
+            , led_output_gain_b_label(nullptr)
             , black_bar_letterbox_slider(nullptr)
             , black_bar_letterbox_label(nullptr)
             , black_bar_pillarbox_slider(nullptr)
@@ -266,6 +283,7 @@ private:
 
     void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
     void SyncMonitorSettingsToUI(MonitorSettings& msettings);
+    void AddLedOutputTrimUIRow(MonitorSettings& settings, QFormLayout* brightness_form, bool has_capture);
 
     int                 capture_quality;
     QComboBox*          capture_quality_combo;
@@ -351,4 +369,4 @@ private:
                                        bool apply_led_smoothing = true);
 };
 
-#endif // SCREENMIRROR_H
+#endif

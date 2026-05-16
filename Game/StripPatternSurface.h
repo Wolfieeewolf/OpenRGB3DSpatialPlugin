@@ -18,9 +18,7 @@ enum class UnfoldMode : int
     RadialXZ,
     DiagonalXYZ,
     Manhattan01,
-    /** Strip index follows the host effect’s phase input only (no 3D axis unfold). */
     EffectPhaseOnly,
-    /** Static room projection using the angle control (no kernel time/phase animation). */
     StaticRoomPlane,
     COUNT
 };
@@ -36,13 +34,14 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
     switch(mode)
     {
     case UnfoldMode::AlongX:
-        s = 0.5f + 0.5f * std::clamp(lx, -1.0f, 1.0f);
+        
+        s = 0.5f + 0.5f * std::tanh(lx);
         break;
     case UnfoldMode::AlongY:
-        s = 0.5f + 0.5f * std::clamp(ly, -1.0f, 1.0f);
+        s = 0.5f + 0.5f * std::tanh(ly);
         break;
     case UnfoldMode::AlongZ:
-        s = 0.5f + 0.5f * std::clamp(lz, -1.0f, 1.0f);
+        s = 0.5f + 0.5f * std::tanh(lz);
         break;
     case UnfoldMode::PlaneXZ:
     {
@@ -60,7 +59,7 @@ inline float StripCoord01(float lx, float ly, float lz, UnfoldMode mode, float d
         break;
     }
     case UnfoldMode::DiagonalXYZ:
-        s = 0.5f + 0.5f * std::clamp((lx + ly + lz) / 3.0f, -1.0f, 1.0f);
+        s = 0.5f + 0.5f * std::tanh((lx + ly + lz) / 3.0f);
         break;
     case UnfoldMode::Manhattan01:
     {

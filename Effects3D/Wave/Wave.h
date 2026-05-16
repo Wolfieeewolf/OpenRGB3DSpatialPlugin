@@ -7,8 +7,6 @@
 #include "EffectRegisterer3D.h"
 #include "EffectStratumBlend.h"
 
-class StratumBandPanel;
-class StripKernelColormapPanel;
 class QComboBox;
 class QSlider;
 class QLabel;
@@ -26,7 +24,7 @@ public:
     static std::string const ClassName() { return "Wave"; }
     static std::string const UIName() { return "Wave"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -37,9 +35,6 @@ public:
 private slots:
     void OnWaveParameterChanged();
     void OnModeChanged();
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     enum Mode { MODE_LINE = 0, MODE_SURFACE, MODE_COUNT };
     enum WaveStyle { STYLE_SINUS = 0, STYLE_RADIAL, STYLE_LINEAR, STYLE_OCEAN_DRIFT, STYLE_GRADIENT, STYLE_COUNT };
@@ -80,18 +75,6 @@ private:
     float surface_edge_fade = 18.0f;
 
     float progress = 0.0f;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool wave_strip_cmap_on = false;
-    int wave_strip_cmap_kernel = 0;
-    float wave_strip_cmap_rep = 4.0f;
-    int wave_strip_cmap_unfold = 0;
-    float wave_strip_cmap_dir = 0.0f;
-    int wave_strip_cmap_color_style = 0;
 };
 
 #endif

@@ -2,8 +2,6 @@
 
 #include "FreqFill.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <cmath>
 #include <algorithm>
@@ -33,7 +31,7 @@ FreqFill::FreqFill(QWidget* parent)
 {
 }
 
-EffectInfo3D FreqFill::GetEffectInfo()
+EffectInfo3D FreqFill::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 3;
@@ -60,6 +58,9 @@ EffectInfo3D FreqFill::GetEffectInfo()
     info.show_axis_control = false;
     info.show_color_controls = true;
     info.show_path_axis_control = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -124,46 +125,6 @@ void FreqFill::SetupCustomUI(QWidget* parent)
         boost_label->setText(QString::number(audio_settings.peak_boost, 'f', 2) + "x");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(parent);
-    strip_cmap_panel->mirrorStateFromEffect(freqfill_strip_cmap_on,
-                                            freqfill_strip_cmap_kernel,
-                                            freqfill_strip_cmap_rep,
-                                            freqfill_strip_cmap_unfold,
-                                            freqfill_strip_cmap_dir,
-                                            freqfill_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &FreqFill::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(parent);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &FreqFill::OnStratumBandChanged);
-    OnStratumBandChanged();
-}
-
-void FreqFill::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    freqfill_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    freqfill_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    freqfill_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    freqfill_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    freqfill_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    freqfill_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    emit ParametersChanged();
-}
-
-void FreqFill::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
-    }
-    emit ParametersChanged();
 }
 
 void FreqFill::UpdateParams(SpatialEffectParams& /*params*/)
@@ -187,7 +148,6 @@ static float AxisPosition(int axis, float x, float y, float z,
     return std::clamp((val - lo) / range, 0.0f, 1.0f);
 }
 
-
 RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
@@ -206,7 +166,10 @@ RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, con
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, o, time);
+
 
     float pos = AxisPosition(GetPathAxis(), rot.x, rot.y, rot.z,
                              grid.min_x, grid.max_x,
@@ -220,7 +183,8 @@ RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, con
     float blend = std::clamp((fill_level - pos) / edge + 0.5f, 0.0f, 1.0f);
 
     float pos_color =
-        fmodf(pos * (0.6f + 0.4f * detail * tm) + time * GetScaledFrequency() * 0.02f * bb.speed_mul + bb.phase_deg * (1.0f / 360.0f),
+        fmodf(pos * (0.6f + 0.4f * detail * tm) + time * GetScaledFrequency() * 0.02f * bb.speed_mul +
+                  EffectStratumBlend::CombinedPhase01(bb, stratum_mot01),
               1.0f);
     if(pos_color < 0.0f) pos_color += 1.0f;
 
@@ -238,14 +202,14 @@ RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, con
     sp.y_norm = coord2;
 
     RGBColor lit_color;
-    if(freqfill_strip_cmap_on)
+    if(UseEffectStripColormap())
     {
         const float ph01 =
             std::fmod(CalculateProgress(time) * 0.28f + pos * 0.15f + pos_color * 0.12f + 1.f, 1.f);
-        float p01 = SampleStripKernelPalette01(freqfill_strip_cmap_kernel,
-                                                 freqfill_strip_cmap_rep,
-                                                 freqfill_strip_cmap_unfold,
-                                                 freqfill_strip_cmap_dir,
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  ph01,
                                                  time,
                                                  grid,
@@ -253,7 +217,7 @@ RGBColor FreqFill::CalculateColorGrid(float x, float y, float z, float time, con
                                                  o,
                                                  rot);
         p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
-        lit_color = ResolveStripKernelFinalColor(*this, freqfill_strip_cmap_kernel, p01, freqfill_strip_cmap_color_style, time,
+        lit_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01, GetEffectStripColormapColorStyle(), time,
                                                  GetScaledFrequency() * 12.0f * bb.speed_mul);
     }
     else if(GetRainbowMode())
@@ -285,68 +249,16 @@ nlohmann::json FreqFill::SaveSettings() const
     nlohmann::json j = SpatialEffect3D::SaveSettings();
     AudioReactiveSaveToJson(j, audio_settings);
     j["edge_width"] = edge_width;
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "freqfill_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "freqfill_stratum_band_speed_pct",
-                                           "freqfill_stratum_band_tight_pct",
-                                           "freqfill_stratum_band_phase_deg");
-    StripColormapSaveJson(j,
-                          "freqfill",
-                          freqfill_strip_cmap_on,
-                          freqfill_strip_cmap_kernel,
-                          freqfill_strip_cmap_rep,
-                          freqfill_strip_cmap_unfold,
-                          freqfill_strip_cmap_dir,
-                          freqfill_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void FreqFill::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
     AudioReactiveLoadFromJson(audio_settings, settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "freqfill_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "freqfill_stratum_band_speed_pct",
-                                            "freqfill_stratum_band_tight_pct",
-                                            "freqfill_stratum_band_phase_deg");
     if(settings.contains("edge_width")) edge_width = settings["edge_width"].get<float>();
     smoothed = 0.0f;
     last_intensity_time = std::numeric_limits<float>::lowest();
-    StripColormapLoadJson(settings,
-                          "freqfill",
-                          freqfill_strip_cmap_on,
-                          freqfill_strip_cmap_kernel,
-                          freqfill_strip_cmap_rep,
-                          freqfill_strip_cmap_unfold,
-                          freqfill_strip_cmap_dir,
-                          freqfill_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(freqfill_strip_cmap_on,
-                                                freqfill_strip_cmap_kernel,
-                                                freqfill_strip_cmap_rep,
-                                                freqfill_strip_cmap_unfold,
-                                                freqfill_strip_cmap_dir,
-                                                freqfill_strip_cmap_color_style);
-    }
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(FreqFill)

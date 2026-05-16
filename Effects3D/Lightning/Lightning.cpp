@@ -3,8 +3,6 @@
 #include "Lightning.h"
 #include "../EffectHelpers.h"
 #include "SpatialKernelColormap.h"
-#include "StripKernelColormapPanel.h"
-#include "StratumBandPanel.h"
 #include "SpatialLayerCore.h"
 #include <QGridLayout>
 #include <QVBoxLayout>
@@ -50,7 +48,7 @@ Lightning::Lightning(QWidget* parent) : SpatialEffect3D(parent)
 
 Lightning::~Lightning() = default;
 
-EffectInfo3D Lightning::GetEffectInfo()
+EffectInfo3D Lightning::GetEffectInfo() const
 {
     EffectInfo3D info;
     info.info_version = 2;
@@ -80,6 +78,9 @@ EffectInfo3D Lightning::GetEffectInfo()
     info.show_size_control = true;
     info.show_scale_control = true;
     info.show_color_controls = true;
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
     return info;
 }
 
@@ -162,42 +163,10 @@ void Lightning::SetupCustomUI(QWidget* parent)
         if(dur_label) dur_label->setText(QString::number(flash_duration * 1000.0f, 'f', 0) + " ms");
         emit ParametersChanged();
     });
-
-    strip_cmap_panel = new StripKernelColormapPanel(outer_w);
-    strip_cmap_panel->mirrorStateFromEffect(lightning_strip_cmap_on,
-                                            lightning_strip_cmap_kernel,
-                                            lightning_strip_cmap_rep,
-                                            lightning_strip_cmap_unfold,
-                                            lightning_strip_cmap_dir,
-                                            lightning_strip_cmap_color_style);
-    AddColorPatternWidget(strip_cmap_panel);
-    connect(strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, &Lightning::SyncStripColormapFromPanel);
-
-    stratum_panel = new StratumBandPanel(outer_w);
-    stratum_panel->setLayoutMode(stratum_layout_mode);
-    stratum_panel->setTuning(stratum_tuning_);
-    AddBandModulationWidget(stratum_panel);
-    connect(stratum_panel, &StratumBandPanel::bandParametersChanged, this, &Lightning::OnStratumBandChanged);
-    OnStratumBandChanged();
-
-    AddWidgetToParent(outer_w, parent);
+AddWidgetToParent(outer_w, parent);
 
     connect(strike_rate_slider, &QSlider::valueChanged, this, &Lightning::OnLightningParameterChanged);
     connect(branch_slider, &QSlider::valueChanged, this, &Lightning::OnLightningParameterChanged);
-}
-
-void Lightning::SyncStripColormapFromPanel()
-{
-    if(!strip_cmap_panel)
-        return;
-    lightning_strip_cmap_on = strip_cmap_panel->useStripColormap();
-    lightning_strip_cmap_kernel = strip_cmap_panel->kernelId();
-    lightning_strip_cmap_rep = strip_cmap_panel->kernelRepeats();
-    lightning_strip_cmap_unfold = strip_cmap_panel->unfoldMode();
-    lightning_strip_cmap_dir = strip_cmap_panel->directionDeg();
-    lightning_strip_cmap_color_style = strip_cmap_panel->colorStyle();
-    cache_time = -1e9f;
-    emit ParametersChanged();
 }
 
 void Lightning::UpdateParams(SpatialEffectParams& params)
@@ -216,17 +185,6 @@ void Lightning::OnLightningParameterChanged()
     {
         branches = branch_slider->value();
         if(branch_label) branch_label->setText(QString::number(branches));
-    }
-    cache_time = -1e9f;
-    emit ParametersChanged();
-}
-
-void Lightning::OnStratumBandChanged()
-{
-    if(stratum_panel)
-    {
-        stratum_layout_mode = stratum_panel->layoutMode();
-        stratum_tuning_ = stratum_panel->tuning();
     }
     cache_time = -1e9f;
     emit ParametersChanged();
@@ -345,7 +303,6 @@ void Lightning::UpdateArchCache(float time, const GridContext3D& grid)
     }
 }
 
-
 RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
     if(EffectGridSampleOutsideVolume(x, y, z, grid))
@@ -360,20 +317,23 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     float sw[3];
     EffectStratumBlend::WeightsForYNorm(coord2, strat_st, sw);
     const EffectStratumBlend::BandBlendScalars bb =
-        EffectStratumBlend::BlendBands(stratum_layout_mode, sw, stratum_tuning_);
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+
     const float tm = std::max(0.25f, bb.tight_mul);
     float color_cycle = time * GetScaledFrequency() * 12.0f * bb.speed_mul;
     float detail = std::max(0.05f, GetScaledDetail());
     const float size_m = GetNormalizedSize();
     float l_strip_p01 = 0.f;
     const float l_ph =
-        std::fmod(color_cycle * (1.f / 360.f) + bb.phase_deg * (1.f / 360.f) + 1.f, 1.f);
-    if(lightning_strip_cmap_on)
+        std::fmod(color_cycle * (1.f / 360.f) + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.f, 1.f);
+    if(UseEffectStripColormap())
     {
-        l_strip_p01 = SampleStripKernelPalette01(lightning_strip_cmap_kernel,
-                                                 lightning_strip_cmap_rep,
-                                                 lightning_strip_cmap_unfold,
-                                                 lightning_strip_cmap_dir,
+        l_strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
                                                  l_ph,
                                                  time,
                                                  grid,
@@ -384,7 +344,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
     const float l_rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
     auto strip_kernel_rgb = [&](float p01_k) -> RGBColor {
         float pv = ApplyVoxelDriveToPalette01(p01_k, x, y, z, time, grid);
-        return ResolveStripKernelFinalColor(*this, lightning_strip_cmap_kernel, pv, lightning_strip_cmap_color_style, time,
+        return ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), pv, GetEffectStripColormapColorStyle(), time,
                                             l_rbow_mul);
     };
     if(mode != MODE_PLASMA_BALL)
@@ -414,10 +374,10 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         float sky_factor = 0.5f + 0.5f * norm_y;
 
         RGBColor base;
-        if(lightning_strip_cmap_on)
+        if(UseEffectStripColormap())
             base = strip_kernel_rgb(l_strip_p01);
         else if(GetRainbowMode())
-            base = GetRainbowColor(color_cycle + norm_y * 100.0f * (0.6f + 0.4f * detail) + bb.phase_deg);
+            base = GetRainbowColor(color_cycle + norm_y * 100.0f * (0.6f + 0.4f * detail) + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f);
         else
         {
             const std::vector<RGBColor>& cols = GetColors();
@@ -513,10 +473,10 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
 
     float arc_intensity = 0.0f;
     RGBColor arc_color;
-    if(lightning_strip_cmap_on)
+    if(UseEffectStripColormap())
         arc_color = strip_kernel_rgb(l_strip_p01);
     else if(GetRainbowMode())
-        arc_color = GetRainbowColor(220.0f + color_cycle + bb.phase_deg);
+        arc_color = GetRainbowColor(220.0f + color_cycle + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f);
     else
         arc_color = GetColorAtPosition(0.5f);
 
@@ -531,7 +491,7 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         const PlasmaArc3D& arc = cached_arches[i];
         float age = time - arc.birth_time;
         float decay = std::max(0.0f, 1.0f - age / arc.duration);
-        float flicker = 0.7f + 0.3f * sinf(age * 80.0f * bb.speed_mul + bb.phase_deg * (float)(M_PI / 180.0f) + (float)arc.seed);
+        float flicker = 0.7f + 0.3f * sinf(age * 80.0f * bb.speed_mul + EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01) + (float)arc.seed);
         float a_int = decay * flicker;
         if(a_int < 0.02f) continue;
 
@@ -545,10 +505,10 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
         if(contrib > arc_intensity)
         {
             arc_intensity = contrib;
-            if(lightning_strip_cmap_on)
+            if(UseEffectStripColormap())
                 arc_color = strip_kernel_rgb(l_strip_p01);
             else if(GetRainbowMode())
-                arc_color = GetRainbowColor(220.0f + age * 100.0f * bb.speed_mul + (float)arc.seed * 0.1f + color_cycle + bb.phase_deg);
+                arc_color = GetRainbowColor(220.0f + age * 100.0f * bb.speed_mul + (float)arc.seed * 0.1f + color_cycle + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) * 360.0f);
         }
     }
 
@@ -567,46 +527,17 @@ RGBColor Lightning::CalculateColorGrid(float x, float y, float z, float time, co
 nlohmann::json Lightning::SaveSettings() const
 {
     nlohmann::json j = SpatialEffect3D::SaveSettings();
-    int sm = stratum_layout_mode;
-    EffectStratumBlend::BandTuningPct st = stratum_tuning_;
-    if(stratum_panel)
-    {
-        sm = stratum_panel->layoutMode();
-        st = stratum_panel->tuning();
-    }
-    EffectStratumBlend::SaveBandTuningJson(j,
-                                           "lightning_stratum_layout_mode",
-                                           sm,
-                                           st,
-                                           "lightning_stratum_band_speed_pct",
-                                           "lightning_stratum_band_tight_pct",
-                                           "lightning_stratum_band_phase_deg");
     j["mode"] = mode;
     j["strike_rate"] = strike_rate;
     j["branches"] = branches;
     j["flash_rate"] = flash_rate;
     j["flash_duration"] = flash_duration;
-    StripColormapSaveJson(j,
-                          "lightning",
-                          lightning_strip_cmap_on,
-                          lightning_strip_cmap_kernel,
-                          lightning_strip_cmap_rep,
-                          lightning_strip_cmap_unfold,
-                          lightning_strip_cmap_dir,
-                          lightning_strip_cmap_color_style);
-    return j;
+return j;
 }
 
 void Lightning::LoadSettings(const nlohmann::json& settings)
 {
     SpatialEffect3D::LoadSettings(settings);
-    EffectStratumBlend::LoadBandTuningJson(settings,
-                                            "lightning_stratum_layout_mode",
-                                            stratum_layout_mode,
-                                            stratum_tuning_,
-                                            "lightning_stratum_band_speed_pct",
-                                            "lightning_stratum_band_tight_pct",
-                                            "lightning_stratum_band_phase_deg");
     if(settings.contains("mode") && settings["mode"].is_number_integer())
         mode = std::clamp(settings["mode"].get<int>(), 0, MODE_COUNT - 1);
     if(settings.contains("strike_rate") && settings["strike_rate"].is_number_integer())
@@ -617,34 +548,9 @@ void Lightning::LoadSettings(const nlohmann::json& settings)
         flash_rate = std::max(0.05f, std::min(0.5f, settings["flash_rate"].get<float>()));
     if(settings.contains("flash_duration") && settings["flash_duration"].is_number())
         flash_duration = std::max(0.02f, std::min(0.25f, settings["flash_duration"].get<float>()));
-
-    StripColormapLoadJson(settings,
-                          "lightning",
-                          lightning_strip_cmap_on,
-                          lightning_strip_cmap_kernel,
-                          lightning_strip_cmap_rep,
-                          lightning_strip_cmap_unfold,
-                          lightning_strip_cmap_dir,
-                          lightning_strip_cmap_color_style,
-                          GetRainbowMode());
-    if(strip_cmap_panel)
-    {
-        strip_cmap_panel->mirrorStateFromEffect(lightning_strip_cmap_on,
-                                                lightning_strip_cmap_kernel,
-                                                lightning_strip_cmap_rep,
-                                                lightning_strip_cmap_unfold,
-                                                lightning_strip_cmap_dir,
-                                                lightning_strip_cmap_color_style);
-    }
-
-    if(strike_rate_slider) { strike_rate_slider->setValue((int)strike_rate); }
+if(strike_rate_slider) { strike_rate_slider->setValue((int)strike_rate); }
     if(branch_slider) { branch_slider->setValue((int)branches); }
     cache_time = -1e9f;
-    if(stratum_panel)
-    {
-        stratum_panel->setLayoutMode(stratum_layout_mode);
-        stratum_panel->setTuning(stratum_tuning_);
-    }
 }
 
 REGISTER_EFFECT_3D(Lightning);

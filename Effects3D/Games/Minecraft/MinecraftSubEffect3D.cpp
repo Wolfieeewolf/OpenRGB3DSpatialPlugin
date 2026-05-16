@@ -10,8 +10,6 @@ MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* e
       channels_(channels),
       effect_title_(effect_title)
 {
-    // The Minecraft channel blend already carries its own gain controls.
-    // Keep generic post-process intensity neutral-to-slightly-soft by default.
     effect_intensity = 85;
     effect_sharpness = 100;
 }
@@ -60,6 +58,7 @@ void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
                                                    this,
                                                    [this]() { emit ParametersChanged(); });
     AddWidgetToParent(w, parent);
+    AttachRoomMappingPanel(parent);
 }
 
 void MinecraftSubEffect3D::UpdateParams(SpatialEffectParams& params)
@@ -107,7 +106,9 @@ RGBColor MinecraftSubEffect3D::CalculateColorGrid(float gx, float gy, float gz, 
     {
         wp = &world_smooth_;
     }
-    return MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid, mc_settings_, channels_, wp);
+    RGBColor c = MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
+                                            mc_settings_, channels_, wp);
+    return RemapSaturatedRgbWithRoomMapping(c, gx, gy, gz, time, grid);
 }
 
 bool MinecraftSubEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const
@@ -126,7 +127,7 @@ public:
         : MinecraftSubEffect3D(ChHealth, "Minecraft - Health", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Health from Fabric UDP (127.0.0.1:9876): gradient or per-heart strip. Stack per controller.";
@@ -142,7 +143,7 @@ public:
         : MinecraftSubEffect3D(ChHunger, "Minecraft - Hunger", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Hunger gradient from Fabric UDP. Stack per controller.";
@@ -158,7 +159,7 @@ public:
         : MinecraftSubEffect3D(ChAir, "Minecraft - Air", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Air/breathing gradient from Fabric UDP. Stack per controller.";
@@ -174,7 +175,7 @@ public:
         : MinecraftSubEffect3D(ChDurability, "Minecraft - Durability", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Main-hand item durability from Fabric UDP. Stack per controller.";
@@ -190,7 +191,7 @@ public:
         : MinecraftSubEffect3D(ChDamage, "Minecraft - Damage", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Directional damage flash from Fabric UDP. Stack per controller.";
@@ -206,7 +207,7 @@ public:
         : MinecraftSubEffect3D(ChWorldTint, "Minecraft - World tint", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Sky/mid/ground ambient tint from Fabric UDP. Stack per controller.";
@@ -222,7 +223,7 @@ public:
         : MinecraftSubEffect3D(ChLightning, "Minecraft - Lightning", parent)
     {
     }
-    EffectInfo3D GetEffectInfo() override
+    EffectInfo3D GetEffectInfo() const override
     {
         EffectInfo3D info = BaseMinecraftEffectInfo();
         info.effect_description = "Lightning flash (sky-heavy) from Fabric UDP. Stack per controller.";

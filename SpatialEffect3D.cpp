@@ -11,8 +11,12 @@
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
 #include "StripKernelColormapPanel.h"
+#include "StratumBandPanel.h"
 #include "Colors.h"
+#include "EffectStratumBlend.h"
+#include "SpatialKernelColormap.h"
 #include "Geometry3DUtils.h"
+#include "MediaTextureEffectUtils.h"
 #include "GameTelemetryBridge.h"
 #include "VoxelMapping.h"
 #include "PluginUiUtils.h"
@@ -24,7 +28,6 @@
 
 namespace
 {
-    /** Compass palette: horizontal aim stays on the effect reference (origin X/Z); vertical stratum uses that band's mid height so each floor/mid/ceiling layer has its own compass hub. */
     SpatialLayerCore::SamplePoint MakeCompassPaletteSamplePoint(const GridContext3D& grid,
                                                                   const SpatialLayerCore::MapperSettings& map,
                                                                   const SpatialLayerCore::SamplePoint& sp)
@@ -208,6 +211,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     colors_patterns_section = nullptr;
     band_modulation_section = nullptr;
     effect_specific_section = nullptr;
+    room_mapping_section = nullptr;
     path_plane_group = nullptr;
     path_axis_combo = nullptr;
     plane_combo = nullptr;
@@ -281,7 +285,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     scale_invert_check = motion_pattern_group->scaleInvertCheck();
     fps_slider = motion_pattern_group->fpsSlider();
     fps_label = motion_pattern_group->fpsLabel();
-
 
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Motion and pattern"),
                    QStringLiteral("How fast and how large the pattern moves; use the Effect Stack for zone and global/local bounds."),
@@ -372,8 +375,9 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    &colors_patterns_section);
 
     band_modulation_settings_host = new EffectCustomHost();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Band modulation"),
-                   QStringLiteral("Shared floor/mid/ceiling modulation controls used by effects that support strata."),
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Height motion bands"),
+                   QStringLiteral("Floor / mid / ceiling: blend pattern speed, tightness, and phase, plus optional per-band "
+                                  "room scroll, phase drift, or roll so calm effects still move across the room."),
                    band_modulation_settings_host,
                    &band_modulation_section);
 
@@ -383,14 +387,37 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                    custom_effect_settings_host,
                    &effect_specific_section);
 
-    CreateSamplerMapperControls();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Room sampler"),
-                   QStringLiteral("Map LED position (and optional game voxels) to palette steering."),
-                   sampler_mapper_group);
-
     ConnectCommonEffectControlSignals(geometry_group);
 
+    EnsureHeightBandsPanel();
+    EnsureStripColormapPanel();
+
     AddWidgetToParent(effect_controls_group, parent);
+}
+
+void SpatialEffect3D::MountSettingsUi(QWidget* parent, SpatialEffectSettingsLayout layout)
+{
+    if(!parent)
+    {
+        return;
+    }
+
+    setParent(parent);
+
+    switch(layout)
+    {
+    case SpatialEffectSettingsLayout::FullWithTransport:
+        CreateCommonEffectControls(parent, true);
+        break;
+    case SpatialEffectSettingsLayout::CommonNoTransport:
+        CreateCommonEffectControls(parent, false);
+        break;
+    case SpatialEffectSettingsLayout::CustomOnly:
+        break;
+    }
+
+    QWidget* custom_host = GetCustomSettingsHost();
+    SetupCustomUI(custom_host ? custom_host : parent);
 }
 
 void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel)
@@ -484,8 +511,6 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
         effect_axis_scale_rotation_roll = (float)value;
     });
 
-    /* Speed label is updated from OnParameterChanged via virtual SetSpeed() so effects
-     * (e.g. GIF playback) can react when the slider moves. */
     connect(brightness_slider, &QSlider::valueChanged, brightness_label, [this](int value) {
         brightness_label->setText(QString::number(value));
         effect_brightness = value;
@@ -630,7 +655,7 @@ void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
         {
             shared_strip_cmap_panel = panel;
             connect(shared_strip_cmap_panel, &StripKernelColormapPanel::colormapChanged, this, [this]() {
-                SyncColorControlVisibilityForPatternMode();
+                OnEffectStripColormapChanged();
             });
         }
     }
@@ -641,6 +666,85 @@ void SpatialEffect3D::AddColorPatternWidget(QWidget* widget)
     }
 }
 
+void SpatialEffect3D::EnsureStripColormapPanel()
+{
+    if(!GetEffectInfo().supports_strip_colormap || effect_strip_cmap_panel || !color_pattern_settings_host)
+    {
+        return;
+    }
+    effect_strip_cmap_panel = new StripKernelColormapPanel(color_pattern_settings_host);
+    SyncEffectStripColormapPanelFromModel();
+    AddColorPatternWidget(effect_strip_cmap_panel);
+}
+
+void SpatialEffect3D::OnEffectStripColormapChanged()
+{
+    if(effect_strip_cmap_panel)
+    {
+        effect_strip_cmap_on = effect_strip_cmap_panel->useStripColormap();
+        effect_strip_cmap_kernel = effect_strip_cmap_panel->kernelId();
+        effect_strip_cmap_rep = effect_strip_cmap_panel->kernelRepeats();
+        effect_strip_cmap_unfold = effect_strip_cmap_panel->unfoldMode();
+        effect_strip_cmap_dir = effect_strip_cmap_panel->directionDeg();
+        effect_strip_cmap_color_style = effect_strip_cmap_panel->colorStyle();
+    }
+    SyncColorControlVisibilityForPatternMode();
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::SyncEffectStripColormapPanelFromModel()
+{
+    if(effect_strip_cmap_panel)
+    {
+        effect_strip_cmap_panel->mirrorStateFromEffect(effect_strip_cmap_on,
+                                                       effect_strip_cmap_kernel,
+                                                       effect_strip_cmap_rep,
+                                                       effect_strip_cmap_unfold,
+                                                       effect_strip_cmap_dir,
+                                                       effect_strip_cmap_color_style);
+    }
+}
+
+void SpatialEffect3D::LoadEffectStripColormapSettings(const nlohmann::json& settings)
+{
+    effect_strip_cmap_on = false;
+    effect_strip_cmap_kernel = 0;
+    effect_strip_cmap_rep = 4.0f;
+    effect_strip_cmap_unfold = 0;
+    effect_strip_cmap_dir = 0.0f;
+    effect_strip_cmap_color_style = 0;
+
+    StripColormapLoadCanonical(settings,
+                               effect_strip_cmap_on,
+                               effect_strip_cmap_kernel,
+                               effect_strip_cmap_rep,
+                               effect_strip_cmap_unfold,
+                               effect_strip_cmap_dir,
+                               effect_strip_cmap_color_style);
+
+    SyncEffectStripColormapPanelFromModel();
+}
+
+void SpatialEffect3D::SaveEffectStripColormapSettings(nlohmann::json& j) const
+{
+    bool on = effect_strip_cmap_on;
+    int kern = effect_strip_cmap_kernel;
+    float rep = effect_strip_cmap_rep;
+    int unfold = effect_strip_cmap_unfold;
+    float dir = effect_strip_cmap_dir;
+    int color_style = effect_strip_cmap_color_style;
+    if(effect_strip_cmap_panel)
+    {
+        on = effect_strip_cmap_panel->useStripColormap();
+        kern = effect_strip_cmap_panel->kernelId();
+        rep = effect_strip_cmap_panel->kernelRepeats();
+        unfold = effect_strip_cmap_panel->unfoldMode();
+        dir = effect_strip_cmap_panel->directionDeg();
+        color_style = effect_strip_cmap_panel->colorStyle();
+    }
+    StripColormapSaveCanonical(j, on, kern, rep, unfold, dir, color_style);
+}
+
 void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
 {
     AddWidgetToParent(widget, band_modulation_settings_host);
@@ -648,6 +752,84 @@ void SpatialEffect3D::AddBandModulationWidget(QWidget* widget)
     {
         band_modulation_section->setVisible(true);
     }
+}
+
+void SpatialEffect3D::EnsureHeightBandsPanel()
+{
+    if(!GetEffectInfo().supports_height_bands || effect_stratum_panel || !band_modulation_settings_host)
+    {
+        return;
+    }
+    effect_stratum_panel = new StratumBandPanel(band_modulation_settings_host);
+    effect_stratum_panel->setLayoutMode(effect_stratum_layout_mode);
+    effect_stratum_panel->setTuning(effect_stratum_tuning_);
+    AddBandModulationWidget(effect_stratum_panel);
+    connect(effect_stratum_panel, &StratumBandPanel::bandParametersChanged, this,
+            &SpatialEffect3D::OnEffectStratumBandChanged);
+}
+
+void SpatialEffect3D::OnEffectStratumBandChanged()
+{
+    if(effect_stratum_panel)
+    {
+        effect_stratum_layout_mode = effect_stratum_panel->layoutMode();
+        effect_stratum_tuning_ = effect_stratum_panel->tuning();
+    }
+    emit ParametersChanged();
+}
+
+void SpatialEffect3D::SyncEffectStratumPanelFromModel()
+{
+    if(effect_stratum_panel)
+    {
+        effect_stratum_panel->setLayoutMode(effect_stratum_layout_mode);
+        effect_stratum_panel->setTuning(effect_stratum_tuning_);
+    }
+}
+
+float SpatialEffect3D::ComputeStratumMotion01(const float layer_weights[3],
+                                              const GridContext3D& grid,
+                                              float x,
+                                              float y,
+                                              float z,
+                                              const Vector3D& origin,
+                                              float time_sec) const
+{
+    const float nx01 = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
+    const float ny01 = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+    const float nz01 = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
+    return EffectStratumBlend::StratumMotionPhase01(GetStratumLayoutMode(),
+                                                    layer_weights,
+                                                    GetStratumTuning(),
+                                                    nx01,
+                                                    ny01,
+                                                    nz01,
+                                                    origin.x,
+                                                    origin.z,
+                                                    x,
+                                                    z,
+                                                    time_sec);
+}
+
+void SpatialEffect3D::LoadEffectStratumSettings(const nlohmann::json& settings)
+{
+    effect_stratum_layout_mode = 0;
+    effect_stratum_tuning_ = {};
+
+    EffectStratumBlend::LoadBandTuningJson(settings, effect_stratum_layout_mode, effect_stratum_tuning_);
+    SyncEffectStratumPanelFromModel();
+}
+
+void SpatialEffect3D::SaveEffectStratumSettings(nlohmann::json& j) const
+{
+    int mode = effect_stratum_layout_mode;
+    EffectStratumBlend::BandTuningPct tuning = effect_stratum_tuning_;
+    if(effect_stratum_panel)
+    {
+        mode = effect_stratum_panel->layoutMode();
+        tuning = effect_stratum_panel->tuning();
+    }
+    EffectStratumBlend::SaveBandTuningJson(j, mode, tuning);
 }
 
 void SpatialEffect3D::SyncColorControlVisibilityForPatternMode()
@@ -727,6 +909,10 @@ void SpatialEffect3D::RemoveLastColorButton()
 
 void SpatialEffect3D::CreateSamplerMapperControls()
 {
+    if(sampler_mapper_group)
+    {
+        return;
+    }
     auto* mapper = new EffectSamplerPanel(spatial_mapping_mode,
                                                          compass_layer_spin_preset,
                                                          effect_sampler_influence_centi,
@@ -737,8 +923,9 @@ void SpatialEffect3D::CreateSamplerMapperControls()
                                                          effect_voxel_drive_mode);
     sampler_mapper_group = mapper;
     sampler_mapper_group->setToolTip(
-        QStringLiteral("Uses LED position in the room (and optional game voxel data) to steer the palette. "
-                       "Effect geometry above only shapes the pattern; this section answers \"what color for this corner / height / direction\"."));
+        QStringLiteral("Uses LED position in the room (and optional game voxel data) to steer hue / palette. "
+                       "This panel is not in the default effect stack: layers that need it call AttachRoomMappingPanel "
+                       "(e.g. game telemetry, texture projection)."));
 
     compass_sampler_group = mapper->compassSamplerGroup();
     spatial_mapping_combo = mapper->spatialMappingCombo();
@@ -804,6 +991,27 @@ void SpatialEffect3D::CreateSamplerMapperControls()
     connect(voxel_drive_combo, qOverload<int>(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnVoxelDriveComboChanged);
 
     SyncSpatialMappingControlVisibility();
+}
+
+void SpatialEffect3D::AttachRoomMappingPanel(QWidget* settings_host)
+{
+    if(!settings_host || room_mapping_section)
+    {
+        return;
+    }
+    QVBoxLayout* lay = qobject_cast<QVBoxLayout*>(settings_host->layout());
+    if(!lay)
+    {
+        lay = new QVBoxLayout(settings_host);
+        settings_host->setLayout(lay);
+    }
+    CreateSamplerMapperControls();
+    PluginUiAddSectionBlock(lay,
+                            QStringLiteral("Room & voxel mapping"),
+                            QStringLiteral("Compass-style palette mapping and voxel colour blend for layers that opt in. "
+                                           "Generic spatial motion uses Height motion bands in the main stack."),
+                            sampler_mapper_group,
+                            &room_mapping_section);
 }
 
 RGBColor SpatialEffect3D::GetRainbowColor(float hue)
@@ -1626,6 +1834,53 @@ float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
     return p;
 }
 
+RGBColor SpatialEffect3D::RemapSaturatedRgbWithRoomMapping(RGBColor col,
+                                                          float x,
+                                                          float y,
+                                                          float z,
+                                                          float time,
+                                                          const GridContext3D& grid) const
+{
+    if(spatial_mapping_mode == SpatialMappingMode::Off && effect_voxel_drive_mode == VoxelDriveMode::Off)
+    {
+        return col;
+    }
+    constexpr float kSatGate = 0.04f;
+    const float rf = (float)RGBGetRValue(col);
+    const float gf = (float)RGBGetGValue(col);
+    const float bf = (float)RGBGetBValue(col);
+    float h_deg = 0.0f;
+    float s = 0.0f;
+    float v = 0.0f;
+    MediaTextureEffect::RgbBytesToHsv(rf, gf, bf, h_deg, s, v);
+    if(s < kSatGate || v < 1e-3f)
+    {
+        return col;
+    }
+    const Vector3D origin = GetEffectOriginGrid(grid);
+    SpatialLayerCore::Basis basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+    SpatialLayerCore::MapperSettings map;
+    EffectStratumBlend::InitStratumBreaks(map);
+    const float detail = std::max(0.05f, GetScaledDetail());
+    map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
+    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
+    map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
+    float pal01 = h_deg * (1.0f / 360.0f);
+    pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
+    pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
+    h_deg = pal01 * 360.0f;
+    return MediaTextureEffect::HsvToRgbBytes(h_deg, s, v);
+}
+
 unsigned int SpatialEffect3D::GetTargetFPS() const
 {
     return effect_fps;
@@ -1633,7 +1888,7 @@ unsigned int SpatialEffect3D::GetTargetFPS() const
 
 float SpatialEffect3D::GetScaledSpeed() const
 {
-    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    EffectInfo3D info = GetEffectInfo();
     float speed_scale = (info.default_speed_scale > 0.0f) ? info.default_speed_scale : 10.0f;
     speed_scale = 10.0f + (speed_scale - 10.0f) * 0.6f;
     return GetNormalizedSpeed() * speed_scale;
@@ -1641,7 +1896,7 @@ float SpatialEffect3D::GetScaledSpeed() const
 
 float SpatialEffect3D::GetScaledFrequency() const
 {
-    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    EffectInfo3D info = GetEffectInfo();
     float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
     freq_scale = 10.0f + (freq_scale - 10.0f) * 0.6f;
     return GetNormalizedFrequency() * freq_scale;
@@ -1663,7 +1918,7 @@ bool SpatialEffect3D::UseWorldGridBounds() const
 
 float SpatialEffect3D::GetScaledDetail() const
 {
-    EffectInfo3D info = const_cast<SpatialEffect3D*>(this)->GetEffectInfo();
+    EffectInfo3D info = GetEffectInfo();
     float s = (info.default_detail_scale > 0.0f) ? info.default_detail_scale : 10.0f;
     s = 10.0f + (s - 10.0f) * 0.6f;
     return GetNormalizedDetail() * s;
@@ -1692,22 +1947,22 @@ RGBColor SpatialEffect3D::PostProcessColorGrid(RGBColor color) const
     if(effect_sharpness != 100)
     {
         const float gamma = std::pow(2.0f, (effect_sharpness - 100) / 100.0f);
-        if(rr > 0)
+        float rf = (float)rr;
+        float gf = (float)gg;
+        float bf = (float)bb;
+        float lum = 0.299f * rf + 0.587f * gf + 0.114f * bf;
+        if(lum > 0.25f)
         {
-            float n = std::pow((float)rr / 255.0f, gamma);
-            rr = (int)(n * 255.0f + 0.5f);
+            float lum_new = std::pow(lum / 255.0f, gamma) * 255.0f;
+            float scale = lum_new / lum;
+            rf = std::clamp(rf * scale, 0.0f, 255.0f);
+            gf = std::clamp(gf * scale, 0.0f, 255.0f);
+            bf = std::clamp(bf * scale, 0.0f, 255.0f);
+            rr = (int)(rf + 0.5f);
+            gg = (int)(gf + 0.5f);
+            bb = (int)(bf + 0.5f);
             if(rr > 255) rr = 255;
-        }
-        if(gg > 0)
-        {
-            float n = std::pow((float)gg / 255.0f, gamma);
-            gg = (int)(n * 255.0f + 0.5f);
             if(gg > 255) gg = 255;
-        }
-        if(bb > 0)
-        {
-            float n = std::pow((float)bb / 255.0f, gamma);
-            bb = (int)(n * 255.0f + 0.5f);
             if(bb > 255) bb = 255;
         }
     }
@@ -1935,17 +2190,19 @@ void SpatialEffect3D::SetControlGroupVisibility(QSlider* slider, QLabel* value_l
 
 void SpatialEffect3D::ApplyControlVisibility()
 {
-    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", true);
-    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", true);
-    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", true);
-    SetControlGroupVisibility(detail_slider, detail_label, "Detail:", true);
-    SetControlGroupVisibility(size_slider, size_label, "Size:", true);
-    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", true);
-    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", GetEffectInfo().show_fps_control);
+    const EffectInfo3D info = GetEffectInfo();
+
+    SetControlGroupVisibility(speed_slider, speed_label, "Speed:", info.show_speed_control);
+    SetControlGroupVisibility(brightness_slider, brightness_label, "Brightness:", info.show_brightness_control);
+    SetControlGroupVisibility(frequency_slider, frequency_label, "Frequency:", info.show_frequency_control);
+    SetControlGroupVisibility(detail_slider, detail_label, "Detail:", info.show_detail_control);
+    SetControlGroupVisibility(size_slider, size_label, "Size:", info.show_size_control);
+    SetControlGroupVisibility(scale_slider, scale_label, "Scale:", info.show_scale_control);
+    SetControlGroupVisibility(fps_slider, fps_label, "FPS:", info.show_fps_control);
 
     if(color_controls_group)
     {
-        color_controls_group->setVisible(true);
+        color_controls_group->setVisible(info.show_color_controls);
     }
     if(colors_patterns_section && color_pattern_settings_host && color_pattern_settings_host->layout())
     {
@@ -1959,16 +2216,15 @@ void SpatialEffect3D::ApplyControlVisibility()
     {
         effect_specific_section->setVisible(custom_effect_settings_host->layout()->count() > 0);
     }
-    if(sampler_mapper_group)
-    {
-        sampler_mapper_group->setVisible(true);
-    }
 
     if(surfaces_section)
     {
-        surfaces_section->setVisible(true);
+        surfaces_section->setVisible(info.show_surface_control);
     }
-    if(position_offset_group) position_offset_group->setVisible(true);
+    if(position_offset_group)
+    {
+        position_offset_group->setVisible(info.show_position_offset_control);
+    }
 }
 
 void SpatialEffect3D::OnParameterChanged()
@@ -2249,6 +2505,16 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["custom_ref_z"] = custom_reference_point.z;
     j["use_custom_ref"] = use_custom_reference;
 
+    if(GetEffectInfo().supports_height_bands)
+    {
+        SaveEffectStratumSettings(j);
+    }
+
+    if(GetEffectInfo().supports_strip_colormap)
+    {
+        SaveEffectStripColormapSettings(j);
+    }
+
     return j;
 }
 
@@ -2383,7 +2649,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         scale_inverted = settings["scale_inverted"].get<bool>();
     if(settings.contains("fps"))
         effect_fps = std::clamp(settings["fps"].get<unsigned int>(), 1u, 120u);
-
 
     if(settings.contains("colors"))
     {
@@ -2691,6 +2956,16 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         scale_z_label->setText(QString::number(effect_scale_z) + "%");
     }
+
+    if(GetEffectInfo().supports_height_bands)
+    {
+        LoadEffectStratumSettings(settings);
+    }
+
+    if(GetEffectInfo().supports_strip_colormap)
+    {
+        LoadEffectStripColormapSettings(settings);
+    }
 }
 
 void SpatialEffect3D::SetScaleInverted(bool inverted)
@@ -2708,5 +2983,4 @@ void SpatialEffect3D::SetScaleInverted(bool inverted)
     }
     emit ParametersChanged();
 }
-
 

@@ -8,9 +8,6 @@
 #include "EffectStratumBlend.h"
 
 class QSpinBox;
-class StratumBandPanel;
-class StripKernelColormapPanel;
-
 class Explosion : public SpatialEffect3D
 {
     Q_OBJECT
@@ -24,7 +21,7 @@ public:
     static std::string const ClassName() { return "Explosion"; }
     static std::string const UIName() { return "Explosion"; }
 
-    EffectInfo3D GetEffectInfo() override;
+    EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
@@ -34,9 +31,6 @@ public:
 
 private slots:
     void OnExplosionParameterChanged();
-    void OnStratumBandChanged();
-    void SyncStripColormapFromPanel();
-
 private:
     static float explosionHash(unsigned int seed, unsigned int salt);
     float particleDebrisAt(float x, float y, float z, float burst_phase, float distance, float radius, int type_id) const;
@@ -52,22 +46,10 @@ private:
     unsigned int    explosion_intensity;
     float           progress;
     int             explosion_type;
-    int             burst_count;      /* 0 = infinite, 1-10 = that many then stop or repeat */
+    int             burst_count;      
     bool            loop;
-    int             particle_amount;  /* 0-100, debris/spark strength for standard/bomb */
+    int             particle_amount;  
     static constexpr float CYCLE_DURATION = 2.5f;
-
-    StratumBandPanel* stratum_panel = nullptr;
-    int stratum_layout_mode = 0;
-    EffectStratumBlend::BandTuningPct stratum_tuning_{};
-
-    StripKernelColormapPanel* strip_cmap_panel = nullptr;
-    bool explosion_strip_cmap_on = false;
-    int explosion_strip_cmap_kernel = 0;
-    float explosion_strip_cmap_rep = 4.0f;
-    int explosion_strip_cmap_unfold = 0;
-    float explosion_strip_cmap_dir = 0.0f;
-    int explosion_strip_cmap_color_style = 0;
 };
 
 #endif

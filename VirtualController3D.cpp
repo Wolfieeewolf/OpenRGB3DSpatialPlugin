@@ -129,7 +129,6 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
     return positions;
 }
 
-
 json VirtualController3D::ToJson() const
 {
     json j;

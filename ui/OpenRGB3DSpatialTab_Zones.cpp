@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-
 #include "OpenRGB3DSpatialTab.h"
 #include <QInputDialog>
 #include <QMessageBox>

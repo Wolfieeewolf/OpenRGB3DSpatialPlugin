@@ -62,7 +62,7 @@ void ResolveEffectLibraryItem(QListWidgetItem* item, QString& out_class, QString
     out_class = item->data(Qt::UserRole).toString();
     out_ui = item->text();
 }
-} // namespace
+}
 
 OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
     QWidget(parent),
@@ -1547,8 +1547,6 @@ void OpenRGB3DSpatialTab::SetupUI()
             const QSignalBlocker stack_sel_block(effect_stack_list);
             effect_stack_list->setCurrentRow(0);
         }
-        // RebuildEffectStackFromJson(nullptr) disconnects Start/Stop; QListWidget may not emit
-        // currentRowChanged(0) if the row was already 0, so wire the layer UI explicitly.
         on_effect_stack_selection_changed(0);
     }
     UpdateStartStopAllButtons();
@@ -1991,51 +1989,51 @@ void OpenRGB3DSpatialTab::SetupCustomEffectUI(const QString& class_name)
         return;
     }
 
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
+    const std::string class_name_std = class_name.toStdString();
+    EffectSettingsUiMount mount = createEffectSettingsUi(effect_controls_widget,
+                                                       effect_controls_layout,
+                                                       class_name_std,
+                                                       settingsLayoutForClass(class_name_std));
+    SpatialEffect3D* effect = mount.effect;
     if(!effect)
     {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to create effect: %s", class_name.toStdString().c_str());
         return;
     }
-    
 
-    effect->setParent(effect_controls_widget);
-    effect->CreateCommonEffectControls(effect_controls_widget);
-    QWidget* custom_host = effect->GetCustomSettingsHost();
-    effect->SetupCustomUI(custom_host ? custom_host : effect_controls_widget);
     current_effect_ui = effect;
 
     if(class_name == QLatin1String("ScreenMirror"))
     {
-        ScreenMirror* screen_mirror = dynamic_cast<ScreenMirror*>(effect);
-        if(screen_mirror)
+        configureScreenMirrorEffectUi(effect);
+        if(origin_label)
         {
-            screen_mirror->SetReferencePoints(&reference_points);
-            connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
-            QTimer::singleShot(200, screen_mirror, &ScreenMirror::RefreshMonitorStatus);
-            QTimer::singleShot(300, screen_mirror, &ScreenMirror::RefreshReferencePointDropdowns);
+            origin_label->setVisible(false);
         }
-        
-        if(origin_label) origin_label->setVisible(false);
-        if(effect_origin_combo) effect_origin_combo->setVisible(false);
+        if(effect_origin_combo)
+        {
+            effect_origin_combo->setVisible(false);
+        }
     }
     else
     {
-        if(origin_label) origin_label->setVisible(true);
-        if(effect_origin_combo) effect_origin_combo->setVisible(true);
+        if(origin_label)
+        {
+            origin_label->setVisible(true);
+        }
+        if(effect_origin_combo)
+        {
+            effect_origin_combo->setVisible(true);
+        }
     }
 
     start_effect_button = effect->GetStartButton();
     stop_effect_button = effect->GetStopButton();
-    
+
     connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
     connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
-    connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]()
-    {
+    connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]() {
         RefreshEffectDisplay();
     });
-
-    effect_controls_layout->addWidget(effect);
 
     effect_controls_widget->setVisible(true);
     effect_controls_widget->updateGeometry();
@@ -2449,8 +2447,6 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
         return;
     }
 
-    // Force-clear any stale preview widgets so layer switching always shows
-    // the newly selected effect immediately.
     while(QLayoutItem* item = hl->takeAt(0))
     {
         if(QWidget* w = item->widget())
@@ -2493,11 +2489,7 @@ void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
     }
 
     effect->setParent(minecraft_hub_preview_holder);
-    effect->CreateCommonEffectControls(minecraft_hub_preview_holder);
-    QWidget* custom_host = effect->GetCustomSettingsHost();
-    effect->SetupCustomUI(custom_host ? custom_host : minecraft_hub_preview_holder);
-
-    hl->addWidget(effect);
+    effect->MountSettingsUi(minecraft_hub_preview_holder, SpatialEffectSettingsLayout::FullWithTransport);
 
     minecraft_hub_preview_effect = effect;
     current_effect_ui = effect;
@@ -2807,21 +2799,16 @@ void OpenRGB3DSpatialTab::rebuildAudioHubPreviewEffect()
         return;
     }
 
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
+    EffectSettingsUiMount mount = createEffectSettingsUi(audio_hub_preview_holder,
+                                                       hl,
+                                                       class_name.toStdString(),
+                                                       SpatialEffectSettingsLayout::CommonNoTransport);
+    SpatialEffect3D* effect = mount.effect;
     if(!effect)
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Audio hub: failed to create effect: %s", class_name.toStdString().c_str());
         return;
     }
-
-    QWidget* ui_wrapper = new QWidget(audio_hub_preview_holder);
-    QVBoxLayout* wrapper_layout = new QVBoxLayout(ui_wrapper);
-    wrapper_layout->setContentsMargins(0, 0, 0, 0);
-    effect->setParent(ui_wrapper);
-    effect->CreateCommonEffectControls(ui_wrapper, false);
-    QWidget* custom_host = effect->GetCustomSettingsHost();
-    effect->SetupCustomUI(custom_host ? custom_host : ui_wrapper);
-    hl->addWidget(ui_wrapper);
 
     audio_hub_preview_effect = effect;
     connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]() {
@@ -3119,8 +3106,6 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
         effect_stack_list->setCurrentRow(index);
     }
 }
-
-
 
 void OpenRGB3DSpatialTab::UpdateEffectOriginCombo()
 {

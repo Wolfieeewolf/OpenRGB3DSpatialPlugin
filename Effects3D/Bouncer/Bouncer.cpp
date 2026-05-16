@@ -2,6 +2,8 @@
 
 #include "Bouncer.h"
 
+#include "SpatialLayerCore.h"
+
 #include <QGridLayout>
 #include <QLabel>
 #include <QSlider>
@@ -63,7 +65,7 @@ RGBColor Hsv01ToBgr(float h, float s, float v)
     const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
     return (RGBColor)((bi << 16) | (gi << 8) | ri);
 }
-} // namespace
+}
 
 Bouncer::Bouncer(QWidget* parent) : SpatialEffect3D(parent)
 {
@@ -74,7 +76,7 @@ Bouncer::Bouncer(QWidget* parent) : SpatialEffect3D(parent)
 
 Bouncer::~Bouncer() = default;
 
-EffectInfo3D Bouncer::GetEffectInfo()
+EffectInfo3D Bouncer::GetEffectInfo() const
 {
     EffectInfo3D info{};
     info.info_version = 1;
@@ -177,7 +179,6 @@ void Bouncer::StepSimulation(float dt_seconds)
     {
         return;
     }
-    // Original source updates per frame. We approximate frame steps at 60 Hz.
     const float step_dt = 1.0f / 60.0f;
     int steps = (int)std::ceil(dt_seconds / step_dt);
     steps = std::clamp(steps, 1, 200);
@@ -191,7 +192,6 @@ void Bouncer::StepSimulation(float dt_seconds)
             b.y += b.vy;
             b.z += b.vz;
 
-            // Keep the original bounce order: bounce and continue to next orb.
             if(b.x < 0.0f) { b.x = 0.0f; b.vx = -b.vx; continue; }
             if(b.y < 0.0f) { b.y = 0.0f; b.vy = -b.vy; continue; }
             if(b.z < 0.0f) { b.z = 0.0f; b.vz = -b.vz; continue; }
@@ -225,7 +225,6 @@ RGBColor Bouncer::CalculateColorGrid(float x, float y, float z, float time, cons
     StepSimulation(dt);
     last_time_ = time;
 
-    // Normalize to 0..1 room coordinates.
     const float nx = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
     const float ny = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
     const float nz = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
@@ -258,8 +257,36 @@ RGBColor Bouncer::CalculateColorGrid(float x, float y, float z, float time, cons
         break;
     }
 
-    // Respect common brightness control.
     out_v *= std::clamp(GetBrightness() / 100.0f, 0.0f, 1.0f);
+
+    if(out_v > 1e-4f && out_s > 1e-4f)
+    {
+        Vector3D rot = TransformPointByRotation(x, y, z, origin);
+        const float coord2 = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+        const float detail = std::max(0.05f, GetScaledDetail());
+        SpatialLayerCore::Basis basis;
+        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
+        SpatialLayerCore::MapperSettings map;
+        SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
+        SpatialLayerCore::SamplePoint sp{};
+        sp.grid_x = x;
+        sp.grid_y = y;
+        sp.grid_z = z;
+        sp.origin_x = origin.x;
+        sp.origin_y = origin.y;
+        sp.origin_z = origin.z;
+        sp.y_norm = coord2;
+        float hue_deg = out_h * 360.0f;
+        hue_deg = ApplySpatialRainbowHue(hue_deg, coord2, basis, sp, map, time, &grid);
+        float p01 = std::fmod(hue_deg / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        out_h = p01;
+    }
+
     return Hsv01ToBgr(out_h, out_s, out_v);
 }
 

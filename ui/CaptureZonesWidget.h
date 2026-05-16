@@ -92,4 +92,4 @@ private:
     std::function<void()> value_changed_callback;
 };
 
-#endif // CAPTUREZONESWIDGET_H
+#endif
