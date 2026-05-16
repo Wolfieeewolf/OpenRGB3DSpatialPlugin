@@ -65,7 +65,11 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 
 ## Building
 
-- Qt 5.15+ (or 6), OpenRGB submodule initialized.
+- **Qt 5.15** — required for **current OpenRGB releases** (upstream still ships Qt 5 builds). CI always builds this matrix leg.
+- **Qt 6.0+** — any 6.x in the series; source uses `QT_VERSION` guards, not a fixed minor. Build and test against Qt 6 now so the plugin is ready when OpenRGB ships a Qt 6–compatible host. CI pins Windows Qt **6.11.1** (current stable); Linux CI uses distro `qt6-base-dev` (often an older 6.x) for backward coverage.
+- The plugin must be built with the **same Qt major** (and ideally the same toolchain) as the OpenRGB binary that loads it.
+- Windows: Qt 5 → **MSVC 2019** (`msvc2019_64`); Qt 6 → **MSVC 2022** (`msvc2022_64`).
+- OpenRGB submodule initialized.
 - Prefer an **out-of-tree** build so generated files stay out of the source tree, for example:
   - `mkdir build && cd build && qmake ../OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` (Windows MSVC kit) or `make -j$(nproc)` (Linux).
 - In-tree alternative: from the repository root, `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` / `make`; remove generated `Makefile`, `Makefile.*`, and `.qmake.stash` afterward if you do not want them in the tree (they are gitignored and must not be committed).

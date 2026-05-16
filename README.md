@@ -33,7 +33,7 @@ Until you have tried a feature on **your** PC, treat it as **unproven** for you�
 ## Requirements
 
 - OpenRGB **with plugin support** enabled
-- Qt **5.15+** or **6.x**
+- Qt **5.15** for today’s OpenRGB releases, or **6.0+** when using a Qt 6 OpenRGB build (match the host’s Qt major and toolchain)
 - Toolchain: **MSVC** (typical Windows build) or **GCC/Clang** (Linux)
 - **OpenRGB submodule** (headers/SDK for the plugin):  
   `git submodule update --init`

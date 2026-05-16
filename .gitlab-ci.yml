@@ -1,6 +1,6 @@
 # GitLab CI — Qt 5 and Qt 6 builds (aligned with OpenRGB upstream CI matrix).
 # See OpenRGB/.gitlab-ci.yml: "Windows 64" (Qt 5.15 + MSVC 2019) vs "Windows 64 Qt6"
-# (Qt 6.8.x + MSVC 2022), and parallel Linux AppImage / Qt6 jobs.
+# (Qt 6.11.x + MSVC 2022), and parallel Linux AppImage / Qt6 jobs.
 #
 # Adjust QT_WINDOWS_BIN paths on runners if your Qt install versions differ.
 
@@ -44,7 +44,7 @@ build-windows-qt5:
 build-windows-qt6:
   extends: .windows_plugin_build
   variables:
-    QT_WINDOWS_BIN: "C:\\Qt\\6.8.3\\msvc2022_64\\bin"
+    QT_WINDOWS_BIN: "C:\\Qt\\6.11.1\\msvc2022_64\\bin"
 
 #-----------------------------------------------------------------------------
 # Linux — Ubuntu 22.04 (Qt 5 default packages vs Qt 6)

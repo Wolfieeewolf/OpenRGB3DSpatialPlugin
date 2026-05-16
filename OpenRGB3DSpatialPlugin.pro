@@ -11,7 +11,7 @@ QT +=                                                                           
     widgets                                                                                     \
     opengl
 
-# Qt 6+ requires openglwidgets module
+# Qt 6+ requires openglwidgets module (minimum tested: Qt 6.0; CI pins 6.11.1 on Windows).
 greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
 
 DEFINES += OPENRGB3DSPATIALPLUGIN_LIBRARY

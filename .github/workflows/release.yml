@@ -22,7 +22,7 @@ jobs:
             qt_major: '5'
             artifact_name: OpenRGB3DSpatialPlugin-Windows
           - os: windows-latest
-            qt_version: '6.8.3'
+            qt_version: '6.11.1'
             qt_arch: win64_msvc2022_64
             qt_major: '6'
             artifact_name: OpenRGB3DSpatialPlugin-Windows-qt6
