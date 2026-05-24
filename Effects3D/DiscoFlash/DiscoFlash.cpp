@@ -59,7 +59,7 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     const auto on_changed = [this]() { emit ParametersChanged(); };
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("DiscoFlashEffectSettings");
     QVBoxLayout* effect_layout = EffectUiRows::PanelLayout(effect_section);
@@ -103,7 +103,14 @@ void DiscoFlash::SetupCustomUI(QWidget* parent)
         [this](int v) { flash_decay = v / 100.0f; },
         [](int v) { return QString::number(v / 100.0f, 'f', 1); },
         on_changed);
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
 
     QWidget* beat_audio_panel = new QWidget();
     QVBoxLayout* beat_audio_layout = new QVBoxLayout(beat_audio_panel);

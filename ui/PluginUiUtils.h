@@ -3,6 +3,8 @@
 #ifndef PLUGIN_UI_UTILS_H
 #define PLUGIN_UI_UTILS_H
 
+#include "EffectCollapsibleSection.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -137,40 +139,22 @@ inline void PluginUiAddSectionBlock(QVBoxLayout* main_layout,
                                     const QString& title,
                                     const QString& tip,
                                     QWidget* body,
-                                    QWidget** out_entire_section = nullptr)
+                                    QWidget** out_entire_section = nullptr,
+                                    bool start_expanded = true)
 {
     if(!main_layout || !body)
     {
         return;
     }
-    QLabel* heading = new QLabel(title);
-    QFont f = heading->font();
-    f.setBold(true);
-    heading->setFont(f);
-    if(!tip.isEmpty())
-    {
-        heading->setToolTip(tip);
-    }
+
+    auto* section = new EffectCollapsibleSection(title, tip);
+    section->setExpanded(start_expanded);
     QFrame* framed = PluginUiWrapInSettingsPanel(body);
+    section->bodyLayout()->addWidget(framed);
+    main_layout->addWidget(section);
     if(out_entire_section)
     {
-        QWidget* root = new QWidget();
-        QVBoxLayout* root_layout = new QVBoxLayout(root);
-        root_layout->setContentsMargins(0, 0, 0, 0);
-        root_layout->setSpacing(0);
-        root_layout->addWidget(heading);
-        root_layout->addSpacing(2);
-        root_layout->addWidget(framed);
-        root_layout->addSpacing(10);
-        main_layout->addWidget(root);
-        *out_entire_section = root;
-    }
-    else
-    {
-        main_layout->addWidget(heading);
-        main_layout->addSpacing(2);
-        main_layout->addWidget(framed);
-        main_layout->addSpacing(10);
+        *out_entire_section = section;
     }
 }
 

@@ -93,10 +93,14 @@ void AudioAdvancedSettingsDialog::buildRows()
         return;
     }
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Band analyzer"));
+    QVBoxLayout* band_layout = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Band analyzer"));
+    if(!band_layout)
+    {
+        band_layout = layout;
+    }
 
     smoothing_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        band_layout,
         QStringLiteral("Band level smoothing"),
         0,
         99,
@@ -105,7 +109,7 @@ void AudioAdvancedSettingsDialog::buildRows()
     smoothing_row_->setValueLabelMinimumWidth(36);
 
     band_peak_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        band_layout,
         QStringLiteral("Band peak hold"),
         0,
         100,
@@ -114,7 +118,7 @@ void AudioAdvancedSettingsDialog::buildRows()
     band_peak_decay_row_->setValueLabelMinimumWidth(36);
 
     bass_peak_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        band_layout,
         QStringLiteral("Bass peak hold"),
         0,
         100,
@@ -123,7 +127,7 @@ void AudioAdvancedSettingsDialog::buildRows()
     bass_peak_decay_row_->setValueLabelMinimumWidth(36);
 
     activity_peak_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        band_layout,
         QStringLiteral("Transient peak hold"),
         0,
         100,
@@ -131,10 +135,14 @@ void AudioAdvancedSettingsDialog::buildRows()
         QStringLiteral("Used when Mix clarity separates instruments; higher = longer activity tails."));
     activity_peak_decay_row_->setValueLabelMinimumWidth(36);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Spectrum preview"));
+    QVBoxLayout* spectrum_layout = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Spectrum preview"));
+    if(!spectrum_layout)
+    {
+        spectrum_layout = layout;
+    }
 
     visualizer_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        spectrum_layout,
         QStringLiteral("Spectrum peak decay"),
         0,
         100,
@@ -143,7 +151,7 @@ void AudioAdvancedSettingsDialog::buildRows()
     visualizer_decay_row_->setValueLabelMinimumWidth(36);
 
     visualizer_floor_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        spectrum_layout,
         QStringLiteral("Spectrum noise floor"),
         0,
         100,
@@ -151,16 +159,20 @@ void AudioAdvancedSettingsDialog::buildRows()
         QStringLiteral("Minimum displayed peak level (log scale; higher = more visible quiet bins)."));
     visualizer_floor_row_->setValueLabelMinimumWidth(36);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Auto level normalization"));
+    QVBoxLayout* auto_level_layout = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Auto level normalization"));
+    if(!auto_level_layout)
+    {
+        auto_level_layout = layout;
+    }
 
     auto_level_check_ = EffectUiRows::AppendCheckRow(
-        layout,
+        auto_level_layout,
         QStringLiteral("Auto-normalize capture level"),
         true,
         QStringLiteral("Tracks running peak/floor so quiet sources still move the level meter."));
 
     auto_peak_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        auto_level_layout,
         QStringLiteral("Level peak decay"),
         0,
         100,
@@ -169,7 +181,7 @@ void AudioAdvancedSettingsDialog::buildRows()
     auto_peak_decay_row_->setValueLabelMinimumWidth(36);
 
     auto_floor_decay_row_ = EffectUiRows::AppendSliderRow(
-        layout,
+        auto_level_layout,
         QStringLiteral("Level floor decay"),
         0,
         100,
@@ -177,15 +189,19 @@ void AudioAdvancedSettingsDialog::buildRows()
         QStringLiteral("How slowly the noise floor rises toward the current RMS."));
     auto_floor_decay_row_->setValueLabelMinimumWidth(36);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Bass / mid / treble split"));
+    QVBoxLayout* split_layout = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Bass / mid / treble split"));
+    if(!split_layout)
+    {
+        split_layout = layout;
+    }
 
-    bass_xover_row_ = EffectUiRows::AppendSpinRow(layout,
+    bass_xover_row_ = EffectUiRows::AppendSpinRow(split_layout,
                                                   QStringLiteral("Bass upper (Hz)"),
                                                   40,
                                                   800,
                                                   kBassXoverDefault,
                                                   QStringLiteral("Frequencies below this count as bass."));
-    mid_xover_row_ = EffectUiRows::AppendSpinRow(layout,
+    mid_xover_row_ = EffectUiRows::AppendSpinRow(split_layout,
                                                  QStringLiteral("Mid upper (Hz)"),
                                                  400,
                                                  12000,

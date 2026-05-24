@@ -217,6 +217,7 @@ HEADERS += \
     ui/widgets/EffectCheckRow.h \
     ui/widgets/EffectInfoLabel.h \
     ui/widgets/EffectSectionHeading.h \
+    ui/widgets/EffectCollapsibleSection.h \
     ui/widgets/EffectUiRows.h \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
@@ -469,6 +470,7 @@ FORMS += \
     ui/forms/EffectCheckRow.ui \
     ui/forms/EffectInfoLabel.ui \
     ui/forms/EffectSectionHeading.ui \
+    ui/forms/EffectCollapsibleSection.ui \
     ui/forms/ScreenMirrorCapturePanel.ui \
     ui/forms/ScreenMirrorMonitorSettings.ui \
     ui/forms/ScreenMirrorEffectShell.ui \

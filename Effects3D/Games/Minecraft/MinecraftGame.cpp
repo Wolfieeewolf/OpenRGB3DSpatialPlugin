@@ -1061,29 +1061,33 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
 
     const bool all = (channels == ChAll);
 
+    QVBoxLayout* vitals_layout = content_layout;
     if(all || ch(channels, ChHealth) || ch(channels, ChHunger) || ch(channels, ChAir) || ch(channels, ChDurability))
     {
-        EffectUiRows::AppendSectionHeading(content_layout, QStringLiteral("Vitals"));
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Vitals")))
+        {
+            vitals_layout = body;
+        }
     }
     if(all || ch(channels, ChHealth))
     {
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable health gradient"), s.enable_health_gradient,
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable health gradient"), s.enable_health_gradient,
                     [&s](bool v) { s.enable_health_gradient = v; });
 
-        AddCheckRow(content_layout, panel, "Per-heart strip (each heart uses LEDs along layout axis)", s.health_per_heart_strip,
+        AddCheckRow(vitals_layout, panel, "Per-heart strip (each heart uses LEDs along layout axis)", s.health_per_heart_strip,
                     [&s](bool v) { s.health_per_heart_strip = v; });
 
-        AddCheckRow(content_layout, panel, "Index strip mode (works on any controller; uses LED order)", s.health_per_heart_indexed,
+        AddCheckRow(vitals_layout, panel, "Index strip mode (works on any controller; uses LED order)", s.health_per_heart_indexed,
                     [&s](bool v) { s.health_per_heart_indexed = v; });
 
-        AddSpinRow(content_layout,
+        AddSpinRow(vitals_layout,
                    panel,
                    QStringLiteral("LEDs per heart"),
                    1,
                    32,
                    std::clamp(s.health_leds_per_heart, 1, 32),
                    [&s](int v) { s.health_leds_per_heart = std::clamp(v, 1, 32); });
-        QComboBox* axis_combo = AddComboRow(content_layout, QStringLiteral("Heart strip axis"));
+        QComboBox* axis_combo = AddComboRow(vitals_layout, QStringLiteral("Heart strip axis"));
         axis_combo->addItem(QStringLiteral("Auto (longest span)"));
         axis_combo->addItem(QStringLiteral("Along X"));
         axis_combo->addItem(QStringLiteral("Along Y"));
@@ -1098,72 +1102,80 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         axis_combo->setItemData(2, QStringLiteral("Strip runs with increasing Y along the strip."), Qt::ToolTipRole);
         axis_combo->setItemData(3, QStringLiteral("Strip runs with increasing Z along the strip."), Qt::ToolTipRole);
         QObject::connect(axis_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s](int idx) { s.health_strip_axis = std::clamp(idx, 0, 3); });
-        AddCheckRow(content_layout, panel, QStringLiteral("Invert strip direction"), s.health_strip_invert,
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Invert strip direction"), s.health_strip_invert,
                     [&s](bool v) { s.health_strip_invert = v; });
 
     }
     if(all || ch(channels, ChHunger))
     {
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable hunger gradient"), s.enable_hunger_gradient,
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable hunger gradient"), s.enable_hunger_gradient,
                     [&s](bool v) { s.enable_hunger_gradient = v; });
-        AddCheckRow(content_layout, panel, "Per-strip hunger (uses strip/index settings above)", s.hunger_per_strip,
+        AddCheckRow(vitals_layout, panel, "Per-strip hunger (uses strip/index settings above)", s.hunger_per_strip,
                     [&s](bool v) { s.hunger_per_strip = v; });
-        AddPctSlider(content_layout, panel, QStringLiteral("Hunger gradient strength"), &s.hunger_mix);
+        AddPctSlider(vitals_layout, panel, QStringLiteral("Hunger gradient strength"), &s.hunger_mix);
     }
     if(all || ch(channels, ChAir))
     {
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable air gradient"), s.enable_air_gradient,
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable air gradient"), s.enable_air_gradient,
                     [&s](bool v) { s.enable_air_gradient = v; });
-        AddCheckRow(content_layout, panel, "Per-strip air (uses strip/index settings above)", s.air_per_strip,
+        AddCheckRow(vitals_layout, panel, "Per-strip air (uses strip/index settings above)", s.air_per_strip,
                     [&s](bool v) { s.air_per_strip = v; });
-        AddPctSlider(content_layout, panel, QStringLiteral("Air gradient strength"), &s.air_mix);
+        AddPctSlider(vitals_layout, panel, QStringLiteral("Air gradient strength"), &s.air_mix);
     }
     if(all || ch(channels, ChDurability))
     {
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable item durability gradient"), s.enable_durability_gradient,
+        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable item durability gradient"), s.enable_durability_gradient,
                     [&s](bool v) { s.enable_durability_gradient = v; });
-        AddCheckRow(content_layout, panel, "Per-strip durability (uses strip/index settings above)", s.durability_per_strip,
+        AddCheckRow(vitals_layout, panel, "Per-strip durability (uses strip/index settings above)", s.durability_per_strip,
                     [&s](bool v) { s.durability_per_strip = v; });
-        AddPctSlider(content_layout, panel, QStringLiteral("Item durability gradient strength"), &s.durability_mix);
+        AddPctSlider(vitals_layout, panel, QStringLiteral("Item durability gradient strength"), &s.durability_mix);
     }
 
     if(all || ch(channels, ChDamage))
     {
-        EffectUiRows::AppendSectionHeading(content_layout, QStringLiteral("Damage"));
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable damage flash"), s.enable_damage_flash,
+        QVBoxLayout* damage_layout = content_layout;
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Damage")))
+        {
+            damage_layout = body;
+        }
+        AddCheckRow(damage_layout, panel, QStringLiteral("Enable damage flash"), s.enable_damage_flash,
                     [&s](bool v) { s.enable_damage_flash = v; });
-        AddPctSlider(content_layout, panel, QStringLiteral("Directional hit (vs uniform)"), &s.damage_directional_mix);
-        AddSliderRow(content_layout, panel, QStringLiteral("Damage direction sharpness"), 50, 400, (int)std::lround(s.damage_dir_sharpness * 100.0f),
+        AddPctSlider(damage_layout, panel, QStringLiteral("Directional hit (vs uniform)"), &s.damage_directional_mix);
+        AddSliderRow(damage_layout, panel, QStringLiteral("Damage direction sharpness"), 50, 400, (int)std::lround(s.damage_dir_sharpness * 100.0f),
                      [&s](int x) { s.damage_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Damage flash decay (ms)"), 100, 900, (int)std::lround(std::clamp(s.damage_flash_decay_s, 0.10f, 0.90f) * 1000.0f),
+        AddSliderRow(damage_layout, panel, QStringLiteral("Damage flash decay (ms)"), 100, 900, (int)std::lround(std::clamp(s.damage_flash_decay_s, 0.10f, 0.90f) * 1000.0f),
                      [&s](int x) { s.damage_flash_decay_s = std::clamp(x / 1000.0f, 0.10f, 0.90f); },
                      [](int x) { return QString::number(x); });
-        AddPctSlider(content_layout, panel, QStringLiteral("Damage flash strength"), &s.damage_flash_strength);
+        AddPctSlider(damage_layout, panel, QStringLiteral("Damage flash strength"), &s.damage_flash_strength);
     }
 
     if(all || ch(channels, ChWorldTint))
     {
-        EffectUiRows::AppendSectionHeading(content_layout, QStringLiteral("World tint"));
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable ambient world tint"), s.enable_ambient_world_tint,
+        QVBoxLayout* world_layout = content_layout;
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("World tint")))
+        {
+            world_layout = body;
+        }
+        AddCheckRow(world_layout, panel, QStringLiteral("Enable ambient world tint"), s.enable_ambient_world_tint,
                     [&s](bool v) { s.enable_ambient_world_tint = v; });
 
-        AddSliderRow(content_layout, panel, QStringLiteral("World tint strength"), 0, 100, (int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("World tint strength"), 0, 100, (int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("World tint vividness"), 60, 200, (int)std::lround(std::clamp(s.world_tint_vividness, 0.60f, 2.00f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("World tint vividness"), 60, 200, (int)std::lround(std::clamp(s.world_tint_vividness, 0.60f, 2.00f) * 100.0f),
                      [&s](int x) { s.world_tint_vividness = std::clamp(x / 100.0f, 0.60f, 2.00f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("World tint smoothing"), 0, 95, (int)std::lround(std::clamp(s.world_tint_smoothing, 0.0f, 0.95f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("World tint smoothing"), 0, 95, (int)std::lround(std::clamp(s.world_tint_smoothing, 0.0f, 0.95f) * 100.0f),
                      [&s](int x) { s.world_tint_smoothing = std::clamp(x / 100.0f, 0.0f, 0.95f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("World tint directional response"), 0, 100, (int)std::lround(std::clamp(s.world_tint_directional, 0.0f, 1.0f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("World tint directional response"), 0, 100, (int)std::lround(std::clamp(s.world_tint_directional, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.world_tint_directional = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("World tint directional sharpness"), 80, 320, (int)std::lround(std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("World tint directional sharpness"), 80, 320, (int)std::lround(std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f) * 100.0f),
                      [&s](int x) { s.world_tint_dir_sharpness = std::clamp(x / 100.0f, 0.8f, 3.2f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        QComboBox* profileCombo = AddComboRow(content_layout, QStringLiteral("Spatial layer profile"));
+        QComboBox* profileCombo = AddComboRow(world_layout, QStringLiteral("Spatial layer profile"));
         profileCombo->addItem(QStringLiteral("Auto"), 0);
         profileCombo->addItem(QStringLiteral("3-layer (floor/mid/ceiling)"), 3);
         profileCombo->addItem(QStringLiteral("4-layer (floor/desk/upper/ceiling)"), 4);
@@ -1173,7 +1185,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
             const QVariant v = profileCombo->itemData(idx);
             s.spatial_layer_profile_mode = v.isValid() ? v.toInt() : 0;
         });
-        QComboBox* mapModeCombo = AddComboRow(content_layout, QStringLiteral("Spatial mapping mode"));
+        QComboBox* mapModeCombo = AddComboRow(world_layout, QStringLiteral("Spatial mapping mode"));
         mapModeCombo->addItem(QStringLiteral("Classic world tint (MineLights style)"), 2);
         mapModeCombo->addItem(QStringLiteral("Compass directional probes"), 0);
         mapModeCombo->addItem(QStringLiteral("Voxel room mapping (core preview)"), 1);
@@ -1189,16 +1201,16 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
             const QVariant v = mapModeCombo->itemData(idx);
             s.spatial_mapping_mode = v.isValid() ? v.toInt() : 0;
         });
-        AddSliderRow(content_layout, panel, QStringLiteral("Center sector size"), 2, 65, (int)std::lround(std::clamp(s.spatial_center_size, 0.02f, 0.65f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Center sector size"), 2, 65, (int)std::lround(std::clamp(s.spatial_center_size, 0.02f, 0.65f) * 100.0f),
                      [&s](int x) { s.spatial_center_size = std::clamp(x / 100.0f, 0.02f, 0.65f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Layer blend softness"), 2, 35, (int)std::lround(std::clamp(s.spatial_blend_softness, 0.02f, 0.35f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Layer blend softness"), 2, 35, (int)std::lround(std::clamp(s.spatial_blend_softness, 0.02f, 0.35f) * 100.0f),
                      [&s](int x) { s.spatial_blend_softness = std::clamp(x / 100.0f, 0.02f, 0.35f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Room heading offset (deg)"), -180, 180, (int)std::lround(std::clamp(s.spatial_heading_offset_deg, -180.0f, 180.0f)),
+        AddSliderRow(world_layout, panel, QStringLiteral("Room heading offset (deg)"), -180, 180, (int)std::lround(std::clamp(s.spatial_heading_offset_deg, -180.0f, 180.0f)),
                      [&s](int x) { s.spatial_heading_offset_deg = std::clamp((float)x, -180.0f, 180.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("\u00B0"); });
-        AddSliderRow(content_layout,
+        AddSliderRow(world_layout,
                      panel,
                      QStringLiteral("Compass sector offset (deg)"),
                      -180,
@@ -1209,7 +1221,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                      QStringLiteral(
                          "Rotates which direction maps to layered probe N, NE, … (independent of room heading). "
                          "Default −45° lines North up with the room front wall for the usual 8-sector order."));
-        AddSliderRow(content_layout,
+        AddSliderRow(world_layout,
                      panel,
                      QStringLiteral("Voxel room scale"),
                      2,
@@ -1220,7 +1232,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                      QStringLiteral(
                          "How large the room maps into voxel world space (LED offset → world ray into the volume). "
                          "Tune with live frames if the mod sends voxel_origin_* as the grid corner in the same units as player position."));
-        AddSliderRow(content_layout,
+        AddSliderRow(world_layout,
                      panel,
                      QStringLiteral("Voxel room mix"),
                      0,
@@ -1231,10 +1243,10 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                      QStringLiteral(
                          "Blend live voxel RGBA into ambient tint. Requires UDP events with voxel_size_x/y/z, voxel_origin_x/y/z, "
                          "voxel_cell_size, and voxel_rgba byte array in x-major order ((x*sy+y)*sz+z)*4 — see GameTelemetryBridge."));
-        AddCheckRow(content_layout, panel, "Debug layered sweep (step through compass cells)", s.spatial_debug_sweep_enabled,
+        AddCheckRow(world_layout, panel, "Debug layered sweep (step through compass cells)", s.spatial_debug_sweep_enabled,
                     [&s](bool v) { s.spatial_debug_sweep_enabled = v; });
 
-        EffectInfoLabel* dbgSweepStatus = EffectUiRows::AppendInfoLabel(content_layout, QStringLiteral("Sweep status: —"));
+        EffectInfoLabel* dbgSweepStatus = EffectUiRows::AppendInfoLabel(world_layout, QStringLiteral("Sweep status: —"));
 
         QTimer* dbgSweepTimer = new QTimer(panel);
         dbgSweepTimer->setInterval(120);
@@ -1304,7 +1316,7 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         });
         dbgSweepTimer->start();
 
-        AddSliderRow(content_layout,
+        AddSliderRow(world_layout,
                      panel,
                      QStringLiteral("Debug sweep speed (cells/sec)"),
                      2,
@@ -1312,53 +1324,61 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                      (int)std::lround(std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f) * 10.0f),
                      [&s](int x) { s.spatial_debug_sweep_hz = std::clamp(x / 10.0f, 0.2f, 12.0f); },
                      [](int x) { return QString::number(x / 10.0f, 'f', 1); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Auto floor boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_floor_offset, -0.30f, 0.30f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Auto floor boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_floor_offset, -0.30f, 0.30f) * 100.0f),
                      [&s](int x) { s.spatial_floor_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Auto desk boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_desk_offset, -0.30f, 0.30f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Auto desk boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_desk_offset, -0.30f, 0.30f) * 100.0f),
                      [&s](int x) { s.spatial_desk_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Auto upper boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_upper_offset, -0.30f, 0.30f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Auto upper boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_upper_offset, -0.30f, 0.30f) * 100.0f),
                      [&s](int x) { s.spatial_upper_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Ground-to-mid blend ends (grid Y %)"), 10, 55, (int)std::lround(std::clamp(s.tint_layer_ground_end, 0.10f, 0.55f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Ground-to-mid blend ends (grid Y %)"), 10, 55, (int)std::lround(std::clamp(s.tint_layer_ground_end, 0.10f, 0.55f) * 100.0f),
                      [&s](int x) { s.tint_layer_ground_end = std::clamp(x / 100.0f, 0.08f, 0.55f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Mid-to-sky blend starts (grid Y %)"), 40, 85, (int)std::lround(std::clamp(s.tint_layer_sky_start, 0.40f, 0.85f) * 100.0f),
+        AddSliderRow(world_layout, panel, QStringLiteral("Mid-to-sky blend starts (grid Y %)"), 40, 85, (int)std::lround(std::clamp(s.tint_layer_sky_start, 0.40f, 0.85f) * 100.0f),
                      [&s](int x) { s.tint_layer_sky_start = std::clamp(x / 100.0f, 0.40f, 0.92f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddPctSlider(content_layout, panel, QStringLiteral("Biome sky overlay (BiomeEffects sky)"), &s.biome_sky_overlay);
-        AddPctSlider(content_layout, panel, QStringLiteral("Rain darkens sky layer"), &s.env_rain_darken_sky);
-        AddPctSlider(content_layout, panel, QStringLiteral("Thunder darkens sky layer"), &s.env_thunder_darken_sky);
+        AddPctSlider(world_layout, panel, QStringLiteral("Biome sky overlay (BiomeEffects sky)"), &s.biome_sky_overlay);
+        AddPctSlider(world_layout, panel, QStringLiteral("Rain darkens sky layer"), &s.env_rain_darken_sky);
+        AddPctSlider(world_layout, panel, QStringLiteral("Thunder darkens sky layer"), &s.env_thunder_darken_sky);
     }
 
     if(all || ch(channels, ChLightning))
     {
+        QVBoxLayout* lightning_layout = content_layout;
         if(!all && !ch(channels, ChWorldTint))
         {
-            EffectUiRows::AppendSectionHeading(content_layout, QStringLiteral("Lightning"));
+            if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Lightning")))
+            {
+                lightning_layout = body;
+            }
         }
-        AddCheckRow(content_layout, panel, QStringLiteral("Enable lightning flash"), s.enable_lightning_flash,
+        AddCheckRow(lightning_layout, panel, QStringLiteral("Enable lightning flash"), s.enable_lightning_flash,
                     [&s](bool v) { s.enable_lightning_flash = v; });
 
-        AddSliderRow(content_layout, panel, QStringLiteral("Lightning flash strength"), 0, 150, (int)std::lround(std::clamp(s.lightning_flash_strength, 0.0f, 1.5f) * 100.0f),
+        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning flash strength"), 0, 150, (int)std::lround(std::clamp(s.lightning_flash_strength, 0.0f, 1.5f) * 100.0f),
                      [&s](int x) { s.lightning_flash_strength = std::clamp(x / 100.0f, 0.0f, 1.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(content_layout, panel, QStringLiteral("Lightning decay (ms)"), 80, 900, (int)std::lround(std::clamp(s.lightning_flash_decay_s, 0.08f, 0.90f) * 1000.0f),
+        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning decay (ms)"), 80, 900, (int)std::lround(std::clamp(s.lightning_flash_decay_s, 0.08f, 0.90f) * 1000.0f),
                      [&s](int x) { s.lightning_flash_decay_s = std::clamp(x / 1000.0f, 0.08f, 0.90f); },
                      [](int x) { return QString::number(x); });
-        AddPctSlider(content_layout, panel, QStringLiteral("Lightning directional response"), &s.lightning_directional_mix);
-        AddSliderRow(content_layout, panel, QStringLiteral("Lightning directional sharpness"), 50, 500, (int)std::lround(std::clamp(s.lightning_dir_sharpness, 0.5f, 5.0f) * 100.0f),
+        AddPctSlider(lightning_layout, panel, QStringLiteral("Lightning directional response"), &s.lightning_directional_mix);
+        AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning directional sharpness"), 50, 500, (int)std::lround(std::clamp(s.lightning_dir_sharpness, 0.5f, 5.0f) * 100.0f),
                      [&s](int x) { s.lightning_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
     }
 
+    QVBoxLayout* output_layout = content_layout;
     if(all)
     {
-        EffectUiRows::AppendSectionHeading(content_layout, QStringLiteral("Output"));
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Output")))
+        {
+            output_layout = body;
+        }
     }
     {
-        AddSliderRow(content_layout, panel, QStringLiteral("Base brightness"), 80, 150, (int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f),
+        AddSliderRow(output_layout, panel, QStringLiteral("Base brightness"), 80, 150, (int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f),
                      [&s](int x) { s.base_brightness = std::clamp(x / 100.0f, 0.8f, 1.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
     }

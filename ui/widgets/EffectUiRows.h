@@ -7,6 +7,7 @@
 #include "EffectInfoLabel.h"
 #include "EffectLabeledComboRow.h"
 #include "EffectLabeledSpinRow.h"
+#include "EffectCollapsibleSection.h"
 #include "EffectSectionHeading.h"
 #include "EffectSliderRow.h"
 
@@ -32,6 +33,30 @@ inline QWidget* NewEffectPanel(const char* panel_object_name = nullptr)
 inline QVBoxLayout* PanelLayout(QWidget* panel)
 {
     return panel ? qobject_cast<QVBoxLayout*>(panel->layout()) : nullptr;
+}
+
+inline EffectCollapsibleSection* AppendCollapsibleSection(QVBoxLayout* layout,
+                                                          const QString& title,
+                                                          const QString& tooltip = QString(),
+                                                          bool start_expanded = true)
+{
+    if(!layout || title.isEmpty())
+    {
+        return nullptr;
+    }
+    auto* section = new EffectCollapsibleSection(title, tooltip);
+    section->setExpanded(start_expanded);
+    layout->addWidget(section);
+    return section;
+}
+
+inline QVBoxLayout* AppendCollapsibleSectionBody(QVBoxLayout* layout,
+                                                   const QString& title,
+                                                   const QString& tooltip = QString(),
+                                                   bool start_expanded = true)
+{
+    EffectCollapsibleSection* section = AppendCollapsibleSection(layout, title, tooltip, start_expanded);
+    return section ? section->bodyLayout() : nullptr;
 }
 
 inline void AppendSectionHeading(QVBoxLayout* layout, const QString& title)

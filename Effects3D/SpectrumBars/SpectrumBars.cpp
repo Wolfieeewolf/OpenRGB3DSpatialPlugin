@@ -78,7 +78,7 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
 
     AudioReactiveUi::AppendStandardFrequencyBandSection(layout, audio_settings, this, on_changed);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("SpectrumBarsEffectSettings");
     EffectSliderRow* roll_speed_row = EffectUiRows::AppendSliderRow(
@@ -94,7 +94,14 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
         [this](int v) { roll_speed = v / 100.0f; },
         [](int v) { return QString::number(v / 100.0f, 'f', 2); },
         on_changed);
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
 
     AudioReactiveUi::AudioResponseUiOptions response_opts;
     response_opts.include_falloff = true;

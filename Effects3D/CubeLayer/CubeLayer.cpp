@@ -88,7 +88,7 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardFrequencyBandSection(layout, audio_settings, this, on_changed);
     AudioReactiveUi::AppendStandardDriveSection(layout, audio_settings, this, on_changed);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("CubeLayerEffectSettings");
     QVBoxLayout* effect_layout = EffectUiRows::PanelLayout(effect_section);
@@ -110,7 +110,14 @@ void CubeLayer::SetupCustomUI(QWidget* parent)
     EffectLabeledComboRow* layer_edge_row = EffectUiRows::AppendComboRow(effect_layout, QStringLiteral("Layer edge:"));
     layer_edge_row->setObjectName(QStringLiteral("layerEdgeRow"));
     layer_edge_combo = layer_edge_row->combo();
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
     layer_edge_combo->addItem(QStringLiteral("Round"));
     layer_edge_combo->addItem(QStringLiteral("Sharp"));
     layer_edge_combo->addItem(QStringLiteral("Square"));

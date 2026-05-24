@@ -73,7 +73,7 @@ void FreqFill::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardFrequencyBandSection(layout, audio_settings, this, on_changed);
     AudioReactiveUi::AppendStandardDriveSection(layout, audio_settings, this, on_changed);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("FreqFillEffectSettings");
     EffectSliderRow* edge_width_row = EffectUiRows::AppendSliderRow(
@@ -90,7 +90,14 @@ void FreqFill::SetupCustomUI(QWidget* parent)
         [this](int v) { edge_width = (float)v; },
         [](int v) { return QString::number(v) + QStringLiteral("%"); },
         on_changed);
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
 
     AudioReactiveUi::AudioResponseUiOptions response_opts;
     response_opts.peak_boost_tooltip =

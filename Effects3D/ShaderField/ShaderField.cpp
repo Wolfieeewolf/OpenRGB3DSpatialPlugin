@@ -94,9 +94,10 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     QVBoxLayout* layout = new QVBoxLayout(w);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Shader"));
+    QVBoxLayout* shader_section = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Shader"));
+    QVBoxLayout* shader_layout = shader_section ? shader_section : layout;
 
-    EffectLabeledComboRow* preset_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Preset:"));
+    EffectLabeledComboRow* preset_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Preset:"));
     preset_row->setObjectName(QStringLiteral("presetRow"));
     preset_combo = preset_row->combo();
     preset_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -106,7 +107,7 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     }
     connect(preset_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ShaderField::OnPresetChanged);
 
-    EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Projection:"));
+    EffectLabeledComboRow* projection_row = EffectUiRows::AppendComboRow(shader_layout, QStringLiteral("Projection:"));
     projection_row->setObjectName(QStringLiteral("projectionRow"));
     projection_combo = projection_row->combo();
     projection_combo->addItem(QStringLiteral("Floor (X-Z)"));
@@ -120,21 +121,21 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     use_audio_check = new QCheckBox(QStringLiteral("Feed spectrum to u_audio"), w);
     use_audio_check->setObjectName(QStringLiteral("useAudioCheck"));
     use_audio_check->setChecked(use_audio);
-    layout->addWidget(use_audio_check);
+    shader_layout->addWidget(use_audio_check);
     connect(use_audio_check, &QCheckBox::stateChanged, this, &ShaderField::OnUseAudioChanged);
 
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));
     open_folder_button->setToolTip(QStringLiteral(
         "Opens OpenRGB3DSpatialPlugin/spatial-shaders/ — add custom .fs fragment shaders for Shader Field"));
-    layout->addWidget(open_folder_button);
+    shader_layout->addWidget(open_folder_button);
     connect(open_folder_button, &QPushButton::clicked, this, &ShaderField::OnOpenShadersFolder);
 
     compile_log_label = new QLabel(w);
     compile_log_label->setObjectName(QStringLiteral("compileLogLabel"));
     compile_log_label->setWordWrap(true);
     compile_log_label->setVisible(false);
-    layout->addWidget(compile_log_label);
+    shader_layout->addWidget(compile_log_label);
 
     AddWidgetToParent(w, parent);
 }

@@ -81,7 +81,7 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardFrequencyBandSection(layout, audio_settings, this, on_changed);
     AudioReactiveUi::AppendStandardDriveSection(layout, audio_settings, this, on_changed);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("AudioLevelEffectSettings");
     QVBoxLayout* effect_layout = EffectUiRows::PanelLayout(effect_section);
@@ -108,7 +108,14 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
     edge_softness_row->setObjectName(QStringLiteral("edgeSoftnessRow"));
     edge_softness_row->bindValueChanged(
         this, [this](int v) { edge_soft = (float)v; }, pct_format, on_changed);
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
 
     AudioReactiveUi::AudioResponseUiOptions response_opts;
     response_opts.include_falloff = true;

@@ -297,7 +297,7 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
     AudioReactiveUi::AppendBeatSensitivityRow(layout, onset_threshold, this, on_changed);
 
-    EffectUiRows::AppendSectionHeading(layout, QStringLiteral("Effect"));
+    QVBoxLayout* effect_body = EffectUiRows::AppendCollapsibleSectionBody(layout, QStringLiteral("Effect"));
 
     QWidget* effect_section = EffectUiRows::NewEffectPanel("AudioPulseEffectSettings");
     EffectSliderRow* surface_sparks_row = EffectUiRows::AppendSliderRow(
@@ -313,7 +313,14 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
         [this](int v) { particle_amount = v; },
         [](int v) { return QString::number(v) + QStringLiteral("%"); },
         on_changed);
-    layout->addWidget(effect_section);
+    if(effect_body)
+    {
+        effect_body->addWidget(effect_section);
+    }
+    else
+    {
+        layout->addWidget(effect_section);
+    }
 
     AddWidgetToParent(w, parent);
 }

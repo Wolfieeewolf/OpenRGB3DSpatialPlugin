@@ -258,7 +258,8 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                                            "All checked = no surface filter. "
                                            "To run the effect on part of the room (strips, desk, one wall), set zone and bounds on this layer in the Effect Stack."),
                             surfaces_group,
-                            &surfaces_section);
+                            &surfaces_section,
+                            false);
 
     auto* motion_pattern_group = new EffectMotionPanel(effect_speed,
                                                                        effect_brightness,
@@ -367,26 +368,31 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
                        "per-axis scale (X/Y/Z %) → scale-axis rotation → effect rotation (yaw/pitch/roll). "
                        "Overall coverage uses the Scale slider under Motion and pattern. "
                        "Choose zone and global/target bounds for this layer in the Effect Stack."),
-                   geometry_group);
+                   geometry_group,
+                   nullptr,
+                   false);
 
     CreateColorControls();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Colors and patterns"),
                    QStringLiteral("Base colors (Rainbow/Stops) plus optional pattern-kernel color modifiers."),
                    color_controls_group,
-                   &colors_patterns_section);
+                   &colors_patterns_section,
+                   false);
 
     band_modulation_settings_host = new EffectCustomHost();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Height motion bands"),
                    QStringLiteral("Floor / mid / ceiling: blend pattern speed, tightness, and phase, plus optional per-band "
                                   "room scroll, phase drift, or roll so calm effects still move across the room."),
                    band_modulation_settings_host,
-                   &band_modulation_section);
+                   &band_modulation_section,
+                   false);
 
     custom_effect_settings_host = new EffectCustomHost();
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Effect-specific settings"),
                    QStringLiteral("Parameters unique to this effect type (e.g. plasma tweak, explosion type)."),
                    custom_effect_settings_host,
-                   &effect_specific_section);
+                   &effect_specific_section,
+                   false);
 
     ConnectCommonEffectControlSignals(geometry_group);
 
@@ -1030,7 +1036,8 @@ void SpatialEffect3D::AttachRoomMappingPanel(QWidget* settings_host)
                             QStringLiteral("Compass-style palette mapping and voxel colour blend for layers that opt in. "
                                            "Generic spatial motion uses Height motion bands in the main stack."),
                             sampler_mapper_group,
-                            &room_mapping_section);
+                            &room_mapping_section,
+                            false);
 }
 
 RGBColor SpatialEffect3D::GetRainbowColor(float hue) const

@@ -26,9 +26,9 @@ inline EffectLabeledComboRow* AppendLabeledComboHBoxRow(QVBoxLayout* layout, con
     return EffectUiRows::AppendComboRow(layout, caption);
 }
 
-inline void AppendAudioSectionHeading(QVBoxLayout* layout, const QString& title)
+inline QVBoxLayout* AppendAudioSectionBody(QVBoxLayout* layout, const QString& title)
 {
-    EffectUiRows::AppendSectionHeading(layout, title);
+    return EffectUiRows::AppendCollapsibleSectionBody(layout, title);
 }
 
 inline void AppendSliderHBoxRow(QVBoxLayout* layout,
@@ -588,7 +588,7 @@ inline AudioFrequencyBandContext AppendStandardFrequencyBandSection(
     const std::function<void()>& on_changed)
 {
     AudioFrequencyBandContext ctx;
-    AppendAudioSectionHeading(layout, QStringLiteral("Frequency band"));
+    AppendAudioSectionBody(layout, QStringLiteral("Frequency band"));
     AppendFrequencyBandRows(layout,
                             cfg,
                             owner,
@@ -604,7 +604,7 @@ inline void AppendStandardDriveSection(QVBoxLayout* layout,
                                        QObject* owner,
                                        const std::function<void()>& on_changed)
 {
-    AppendAudioSectionHeading(layout, QStringLiteral("Drive"));
+    AppendAudioSectionBody(layout, QStringLiteral("Drive"));
     QComboBox* drive_combo = nullptr;
     AppendAudioDriveModeRow(layout, cfg, owner, on_changed, &drive_combo);
 
@@ -648,7 +648,7 @@ inline void AppendStandardResponseSection(QVBoxLayout* layout,
                                           const std::function<void()>& on_changed,
                                           const AudioResponseUiOptions& opts = {})
 {
-    AppendAudioSectionHeading(layout, QStringLiteral("Response"));
+    AppendAudioSectionBody(layout, QStringLiteral("Response"));
     const QString smooth_label =
         opts.use_onset_smoothing_label ? QStringLiteral("Onset smoothing:")
                                        : QStringLiteral("Level smoothing:");
@@ -697,7 +697,7 @@ inline void AppendStandardBeatWaveSection(QVBoxLayout* layout,
                                           const std::function<void()>& on_changed,
                                           const AudioBeatUiOptions& opts = {})
 {
-    AppendAudioSectionHeading(layout, QStringLiteral("Beat waves"));
+    AppendAudioSectionBody(layout, QStringLiteral("Beat waves"));
     AppendAudioBeatWaveModeRow(layout, cfg, owner, on_changed);
     AppendBeatWaveMotionRows(layout, cfg, owner, on_changed);
     if(opts.include_pulse_color)

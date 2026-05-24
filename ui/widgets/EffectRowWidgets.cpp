@@ -311,3 +311,72 @@ void EffectSectionHeading::setTitle(const QString& title)
 {
     ui->headingLabel->setText(title);
 }
+
+#include "EffectCollapsibleSection.h"
+#include "ui_EffectCollapsibleSection.h"
+
+#include <QFont>
+#include <QToolButton>
+#include <QVBoxLayout>
+
+EffectCollapsibleSection::EffectCollapsibleSection(const QString& title,
+                                                   const QString& tooltip,
+                                                   QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::EffectCollapsibleSection)
+    , title_(title)
+{
+    ui->setupUi(this);
+
+    QFont font = ui->toggleButton->font();
+    font.setBold(true);
+    ui->toggleButton->setFont(font);
+    if(!tooltip.isEmpty())
+    {
+        ui->toggleButton->setToolTip(tooltip);
+    }
+
+    refreshToggleText();
+    connect(ui->toggleButton, &QToolButton::toggled, this, [this](bool expanded) {
+        ui->bodyWidget->setVisible(expanded);
+        refreshToggleText();
+    });
+}
+
+EffectCollapsibleSection::~EffectCollapsibleSection()
+{
+    delete ui;
+}
+
+QVBoxLayout* EffectCollapsibleSection::bodyLayout() const
+{
+    return ui->bodyLayout;
+}
+
+void EffectCollapsibleSection::setTitle(const QString& title)
+{
+    title_ = title;
+    refreshToggleText();
+}
+
+void EffectCollapsibleSection::setExpanded(bool expanded)
+{
+    if(ui->toggleButton->isChecked() == expanded)
+    {
+        ui->bodyWidget->setVisible(expanded);
+        refreshToggleText();
+        return;
+    }
+    ui->toggleButton->setChecked(expanded);
+}
+
+bool EffectCollapsibleSection::isExpanded() const
+{
+    return ui->toggleButton->isChecked();
+}
+
+void EffectCollapsibleSection::refreshToggleText()
+{
+    const QChar marker = ui->toggleButton->isChecked() ? QChar(0x25BC) : QChar(0x25B6);
+    ui->toggleButton->setText(QStringLiteral("%1  %2").arg(marker).arg(title_));
+}
