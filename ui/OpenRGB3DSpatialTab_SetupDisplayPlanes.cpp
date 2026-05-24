@@ -276,7 +276,7 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->SetWidthMM(dialog.widthMm());
     plane->SetHeightMM(dialog.heightMm());
     plane->SetCaptureSourceId(dialog.captureSourceId());
-    plane->SetVisible(dialog.isVisibleInViewport());
+    plane->SetVisible(false);
 
     float room_height_units = roomHeightSpin() ? MMToGridUnits((float)roomHeightSpin()->value(), grid_scale_mm) : 100.0f;
     float room_depth_units = roomDepthSpin() ? MMToGridUnits((float)roomDepthSpin()->value(), grid_scale_mm) : 100.0f;
@@ -313,11 +313,6 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     display_planes.push_back(std::move(plane));
 
     DisplayPlane3D* created_plane = display_planes.back().get();
-    if(created_plane && created_plane->IsVisible())
-    {
-        SetDisplayPlaneVisibleInScene(created_plane, true);
-    }
-    
     SetLayoutDirty();
 
     int new_plane_id = created_plane ? created_plane->GetId() : -1;
@@ -351,7 +346,7 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     RefreshDisplayPlaneDetails();
     if(viewport)
     {
-        viewport->SelectDisplayPlane(current_display_plane_index);
+        viewport->SelectDisplayPlane(-1);
     }
 }
 
@@ -394,19 +389,10 @@ bool OpenRGB3DSpatialTab::EditDisplayPlaneAtIndex(int plane_index)
         name = plane->GetName();
     }
 
-    const bool was_visible = plane->IsVisible();
-    const bool want_visible = dialog.isVisibleInViewport();
-
     plane->SetName(name);
     plane->SetWidthMM(dialog.widthMm());
     plane->SetHeightMM(dialog.heightMm());
     plane->SetCaptureSourceId(dialog.captureSourceId());
-    plane->SetVisible(want_visible);
-
-    if(was_visible != want_visible)
-    {
-        SetDisplayPlaneVisibleInScene(plane, want_visible);
-    }
 
     SetLayoutDirty();
     current_display_plane_index = plane_index;

@@ -1346,9 +1346,9 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
         camera_target_x += right_x * delta_x_gl * pan_sensitivity;
         camera_target_z += right_z * delta_x_gl * pan_sensitivity;
-        camera_target_x -= up_x * delta_y_gl * pan_sensitivity;
-        camera_target_y -= up_y * delta_y_gl * pan_sensitivity;
-        camera_target_z -= up_z * delta_y_gl * pan_sensitivity;
+        camera_target_x += up_x * delta_y_gl * pan_sensitivity;
+        camera_target_y += up_y * delta_y_gl * pan_sensitivity;
+        camera_target_z += up_z * delta_y_gl * pan_sensitivity;
 
         update();
     }

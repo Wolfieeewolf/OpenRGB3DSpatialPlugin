@@ -30,7 +30,6 @@ public:
     float        widthMm() const;
     float        heightMm() const;
     std::string  captureSourceId() const;
-    bool         isVisibleInViewport() const;
 
 private slots:
     void onRefreshCaptureClicked();

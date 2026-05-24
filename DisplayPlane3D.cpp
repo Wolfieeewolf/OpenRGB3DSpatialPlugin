@@ -9,7 +9,7 @@ DisplayPlane3D::DisplayPlane3D(const std::string& name_value) :
     name(name_value),
     width_mm(1000.0f),
     height_mm(600.0f),
-    visible(true),
+    visible(false),
     reference_point_index(-1)
 {
     transform.position = {0.0f, 0.0f, 0.0f};

@@ -42,7 +42,6 @@ void DisplayPlaneDialog::setCreateDefaults(const QString& suggested_name, float 
     ui->nameEdit->setText(suggested_name);
     ui->widthSpin->setValue(width_mm);
     ui->heightSpin->setValue(height_mm);
-    ui->visibleCheck->setCheckState(Qt::Unchecked);
     populateCaptureCombo("");
 }
 
@@ -51,7 +50,6 @@ void DisplayPlaneDialog::loadFrom(const DisplayPlane3D& plane)
     ui->nameEdit->setText(QString::fromStdString(plane.GetName()));
     ui->widthSpin->setValue(plane.GetWidthMM());
     ui->heightSpin->setValue(plane.GetHeightMM());
-    ui->visibleCheck->setCheckState(plane.IsVisible() ? Qt::Checked : Qt::Unchecked);
     populateCaptureCombo(plane.GetCaptureSourceId());
 }
 
@@ -78,11 +76,6 @@ std::string DisplayPlaneDialog::captureSourceId() const
         return {};
     }
     return ui->captureCombo->itemData(index).toString().toStdString();
-}
-
-bool DisplayPlaneDialog::isVisibleInViewport() const
-{
-    return ui->visibleCheck->checkState() == Qt::Checked;
 }
 
 void DisplayPlaneDialog::populateCaptureCombo(const std::string& prefer_source_id)
