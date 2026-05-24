@@ -321,10 +321,6 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     UpdateDisplayPlanesList();
     NotifyDisplayPlaneChanged();
 
-    QMessageBox::information(this, "Display Plane Created",
-                            QString("Display plane '%1' created successfully!\n\nYou can now add it to the 3D view from the Available Controllers list.")
-                            .arg(QString::fromStdString(full_name)));
-
     UpdateAvailableControllersList();
     UpdateReferencePointsList();
 

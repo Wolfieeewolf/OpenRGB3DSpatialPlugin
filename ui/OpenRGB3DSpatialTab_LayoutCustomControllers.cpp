@@ -123,18 +123,6 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
     UpdateCustomControllersList();
     UpdateAvailableControllersList();
     SelectAvailableControllerEntry(-1, new_index);
-
-    QMessageBox::StandardButton add_now = QMessageBox::question(this, "Custom Controller Created",
-        QString("Custom controller '%1' created successfully!\n\nAdd it to the 3D view now?")
-            .arg(controller_name),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-    bool added = (add_now == QMessageBox::Yes && AddCustomControllerToScene(new_index));
-    if(added)
-        SetObjectCreatorStatus(QString("Custom controller '%1' added to 3D view. Position it in the scene.")
-            .arg(controller_name));
-    else
-        SetObjectCreatorStatus(QString("Custom controller '%1' saved. Add it from Available Controllers when ready.")
-            .arg(controller_name));
 }
 
 
@@ -480,10 +468,6 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             viewport->SetControllerTransforms(&controller_transforms);
             viewport->update();
         }
-
-        QMessageBox::information(this, "Custom Controller Updated",
-                                QString("Custom controller '%1' updated successfully!")
-                                .arg(QString::fromStdString(virtual_controllers[list_row]->GetName())));
     }
 }
 

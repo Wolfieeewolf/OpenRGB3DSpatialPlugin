@@ -387,9 +387,6 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
         referencePointsList()->setCurrentRow(list_row);
     }
 
-    SetObjectCreatorStatus(QString("Reference point '%1' created. Add it from the Available Controllers list when ready.")
-                               .arg(QString::fromStdString(name)),
-                           false);
 }
 
 void OpenRGB3DSpatialTab::on_edit_reference_point_clicked()
