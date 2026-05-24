@@ -98,10 +98,6 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
                             .arg(plane->GetHeightMM(), 0, 'f', 0);
         QListWidgetItem* item = new QListWidgetItem(label, displayPlanesList());
         item->setData(Qt::UserRole, plane->GetId());
-        if(!plane->IsVisible())
-        {
-            item->setForeground(QColor(0x888888));
-        }
     }
     
     if(desired_index >= 0 && desired_index < (int)display_planes.size())
@@ -340,21 +336,26 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
         SyncDisplayPlaneControls(plane);
     }
     RefreshDisplayPlaneDetails();
-    if(viewport)
-    {
-        viewport->SelectDisplayPlane(-1);
-    }
 }
 
 void OpenRGB3DSpatialTab::on_edit_display_plane_clicked()
 {
-    if(current_display_plane_index < 0 || current_display_plane_index >= (int)display_planes.size())
+    int plane_index = current_display_plane_index;
+    if(displayPlanesList())
+    {
+        const int list_row = displayPlanesList()->currentRow();
+        if(list_row >= 0)
+        {
+            plane_index = list_row;
+        }
+    }
+    if(plane_index < 0 || plane_index >= (int)display_planes.size())
     {
         QMessageBox::warning(this, tr("No Selection"), tr("Please select a display plane from the list to edit."));
         return;
     }
 
-    EditDisplayPlaneAtIndex(current_display_plane_index);
+    EditDisplayPlaneAtIndex(plane_index);
 }
 
 bool OpenRGB3DSpatialTab::EditDisplayPlaneAtIndex(int plane_index)
@@ -410,11 +411,21 @@ bool OpenRGB3DSpatialTab::EditDisplayPlaneAtIndex(int plane_index)
 
 void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
 {
-    if(current_display_plane_index < 0 ||
-       current_display_plane_index >= (int)display_planes.size())
+    int plane_index = current_display_plane_index;
+    if(displayPlanesList())
+    {
+        const int list_row = displayPlanesList()->currentRow();
+        if(list_row >= 0)
+        {
+            plane_index = list_row;
+        }
+    }
+    if(plane_index < 0 || plane_index >= (int)display_planes.size())
     {
         return;
     }
+    current_display_plane_index = plane_index;
+
     int removed_plane_id = display_planes[current_display_plane_index]->GetId();
     
     DisplayPlane3D* plane_to_remove = display_planes[current_display_plane_index].get();
@@ -584,22 +595,6 @@ void OpenRGB3DSpatialTab::SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, b
 
     SetLayoutDirty();
     UpdateCurrentDisplayPlaneListItemLabel();
-    if(displayPlanesList() && current_display_plane_index >= 0 &&
-       current_display_plane_index < displayPlanesList()->count())
-    {
-        QListWidgetItem* item = displayPlanesList()->item(current_display_plane_index);
-        if(item)
-        {
-            if(plane->IsVisible())
-            {
-                item->setData(Qt::ForegroundRole, QVariant());
-            }
-            else
-            {
-                item->setForeground(QColor(0x888888));
-            }
-        }
-    }
     NotifyDisplayPlaneChanged();
     emit GridLayoutChanged();
     UpdateAvailableControllersList();
@@ -610,12 +605,7 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
 {
     if(index < 0)
     {
-        current_display_plane_index = -1;
-        if(displayPlanesList())
-        {
-            QSignalBlocker block(displayPlanesList());
-            displayPlanesList()->clearSelection();
-        }
+        // Viewport deselect only — keep Object Creator list selection for edit/delete.
         return;
     }
 
@@ -668,12 +658,6 @@ void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, f
 {
     if(index < 0)
     {
-        current_display_plane_index = -1;
-        if(displayPlanesList())
-        {
-            QSignalBlocker block(displayPlanesList());
-            displayPlanesList()->clearSelection();
-        }
         return;
     }
 

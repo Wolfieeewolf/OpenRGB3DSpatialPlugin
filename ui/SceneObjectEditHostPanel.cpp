@@ -24,7 +24,7 @@ SceneObjectEditHostPanel::SceneObjectEditHostPanel(QWidget* parent)
     ui->editReferencePointButton->setToolTip(
         tr("Open Object Creator to edit this reference point (name, type, color)."));
     ui->editDisplayPlaneButton->setToolTip(
-        tr("Open Object Creator to edit this display plane (size, capture, visibility)."));
+        tr("Edit display plane name, size, and screen capture source."));
 }
 
 SceneObjectEditHostPanel::~SceneObjectEditHostPanel()
@@ -84,6 +84,8 @@ void SceneObjectEditHostPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
 void SceneObjectEditHostPanel::syncFromSceneRow(int scene_list_row)
 {
+    scene_list_row_ = scene_list_row;
+
     if(!tab_ || !ui)
     {
         return;

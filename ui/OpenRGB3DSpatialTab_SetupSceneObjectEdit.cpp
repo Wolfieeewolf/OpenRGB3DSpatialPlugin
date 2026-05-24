@@ -6,6 +6,7 @@
 #include "VirtualController3D.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 
+#include <QSignalBlocker>
 #include <QStackedWidget>
 
 namespace {
@@ -20,6 +21,20 @@ int settingsRightStackIndex(const Ui::OpenRGB3DSpatialTab* ui)
 }
 
 } // namespace
+
+int OpenRGB3DSpatialTab::sceneObjectEditSceneRow() const
+{
+    if(ui && ui->sceneObjectEditHostPanel)
+    {
+        const int host_row = ui->sceneObjectEditHostPanel->sceneListRow();
+        if(host_row >= 0)
+        {
+            return host_row;
+        }
+    }
+
+    return sceneControllerCurrentRow();
+}
 
 void OpenRGB3DSpatialTab::InitSceneObjectEditTab()
 {
@@ -167,7 +182,7 @@ void OpenRGB3DSpatialTab::SyncSceneObjectSpacingPanel()
         return;
     }
 
-    const int row = sceneControllerCurrentRow();
+    const int row = sceneObjectEditSceneRow();
     if(row >= 0)
     {
         ui->sceneObjectEditHostPanel->syncFromSceneRow(row);
@@ -224,7 +239,7 @@ void OpenRGB3DSpatialTab::FocusObjectCreatorTab()
 
 void OpenRGB3DSpatialTab::EditCustomControllerForCurrentSceneSelection()
 {
-    const int scene_row = sceneControllerCurrentRow();
+    const int scene_row = sceneObjectEditSceneRow();
     if(scene_row < 0 || sceneControllerRowHasUserRole(scene_row))
     {
         return;
@@ -260,7 +275,7 @@ void OpenRGB3DSpatialTab::EditCustomControllerForCurrentSceneSelection()
 
 void OpenRGB3DSpatialTab::EditReferencePointForCurrentSceneSelection()
 {
-    const int scene_row = sceneControllerCurrentRow();
+    const int scene_row = sceneObjectEditSceneRow();
     if(scene_row < 0 || !sceneControllerRowHasUserRole(scene_row))
     {
         return;
@@ -277,25 +292,39 @@ void OpenRGB3DSpatialTab::EditReferencePointForCurrentSceneSelection()
 
 void OpenRGB3DSpatialTab::EditDisplayPlaneForCurrentSceneSelection()
 {
-    const int scene_row = sceneControllerCurrentRow();
-    if(scene_row < 0 || !sceneControllerRowHasUserRole(scene_row))
+    int plane_index = -1;
+
+    const int scene_row = sceneObjectEditSceneRow();
+    if(scene_row >= 0 && sceneControllerRowHasUserRole(scene_row))
     {
-        return;
+        const SpatialControllerEntryKey key = sceneControllerRowKey(scene_row);
+        if(key.first == -3)
+        {
+            plane_index = FindDisplayPlaneIndexById(key.second);
+        }
     }
 
-    const SpatialControllerEntryKey key = sceneControllerRowKey(scene_row);
-    if(key.first != -3)
+    if(plane_index < 0 && viewport)
     {
-        return;
+        plane_index = viewport->GetSelectedDisplayPlaneIndex();
     }
 
-    const int plane_index = FindDisplayPlaneIndexById(key.second);
     if(plane_index < 0)
     {
         return;
     }
 
-    EditDisplayPlaneAtIndex(plane_index);
+    if(!EditDisplayPlaneAtIndex(plane_index))
+    {
+        return;
+    }
+
+    if(displayPlanesList())
+    {
+        QSignalBlocker block(displayPlanesList());
+        displayPlanesList()->setCurrentRow(plane_index);
+    }
+    current_display_plane_index = plane_index;
 }
 
 void OpenRGB3DSpatialTab::on_scene_card_edit(int scene_list_row)

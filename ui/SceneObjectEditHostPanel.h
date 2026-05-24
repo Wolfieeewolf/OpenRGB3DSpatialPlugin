@@ -23,6 +23,7 @@ public:
 
     void bindTab(OpenRGB3DSpatialTab* tab);
     void syncFromSceneRow(int scene_list_row);
+    int  sceneListRow() const { return scene_list_row_; }
 
     SceneObjectSpacingPanel* spacingPanel() const;
     SceneTransformPanel*     transformPanel() const;
@@ -30,6 +31,7 @@ public:
 private:
     Ui::SceneObjectEditHostPanel* ui = nullptr;
     OpenRGB3DSpatialTab*          tab_ = nullptr;
+    int                           scene_list_row_ = -1;
 };
 
 #endif

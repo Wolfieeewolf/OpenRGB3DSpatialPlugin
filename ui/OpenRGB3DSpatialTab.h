@@ -565,6 +565,8 @@ private:
     int                       settings_tab_before_edit_  = -1;
     int                       right_stack_before_edit_   = -1;
 
+    int sceneObjectEditSceneRow() const;
+
     std::vector<std::unique_ptr<DisplayPlane3D>> display_planes;
     int             current_display_plane_index = -1;
 
