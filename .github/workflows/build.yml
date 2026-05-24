@@ -2,9 +2,9 @@ name: Build Plugin
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   build:
@@ -134,7 +134,7 @@ jobs:
   mirror-to-gitlab:
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -151,5 +151,5 @@ jobs:
           fi
           git remote add gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
           git remote set-url gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
-          git push gitlab HEAD:master --force || echo "GitLab push failed"
+          git push gitlab HEAD:main --force || echo "GitLab push failed"
           git push gitlab --tags || echo "GitLab tag push failed"

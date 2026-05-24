@@ -10,5 +10,5 @@ contact_links:
     url: https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues
     about: Device detection, drivers, core OpenRGB (not this plugin)
   - name: Contributing (this repo)
-    url: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/blob/master/CONTRIBUTING.md
+    url: https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/blob/main/CONTRIBUTING.md
     about: Plugin code, build, and PR expectations
