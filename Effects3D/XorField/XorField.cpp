@@ -1,0 +1,289 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "XorField.h"
+#include "SpatialKernelColormap.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
+
+#include "EffectUiRows.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+
+REGISTER_EFFECT_3D(XorField);
+
+namespace
+{
+constexpr float kTwoPi = 6.28318530717958647692f;
+
+inline float Phase01(float time_sec, float cycle_seconds, float speed_mul)
+{
+    if(cycle_seconds < 1e-4f)
+        return 0.f;
+    return std::fmod((time_sec * speed_mul) / cycle_seconds + 1000.f, 1.f);
+}
+
+inline float Wave01(float x01)
+{
+    return 0.5f + 0.5f * std::sin(kTwoPi * x01);
+}
+
+inline float Triangle01(float x01)
+{
+    const float f = x01 - std::floor(x01);
+    return 1.0f - std::fabs(2.0f * f - 1.0f);
+}
+
+inline RGBColor Hsv01ToBgr(float h, float s, float v)
+{
+    h = std::fmod(h, 1.0f);
+    if(h < 0.0f)
+        h += 1.0f;
+    s = std::clamp(s, 0.0f, 1.0f);
+    v = std::clamp(v, 0.0f, 1.0f);
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    const float hf = h * 6.0f;
+    const int i = (int)std::floor(hf) % 6;
+    const float f = hf - std::floor(hf);
+    const float p = v * (1.0f - s);
+    const float q = v * (1.0f - f * s);
+    const float t = v * (1.0f - (1.0f - f) * s);
+    switch(i)
+    {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q; break;
+    }
+    const int ri = std::clamp((int)std::lround(r * 255.0f), 0, 255);
+    const int gi = std::clamp((int)std::lround(g * 255.0f), 0, 255);
+    const int bi = std::clamp((int)std::lround(b * 255.0f), 0, 255);
+    return (RGBColor)((bi << 16) | (gi << 8) | ri);
+}
+
+inline float PhaseWithAlternate(float ph01, int xor_parity_lsb, float alternate01)
+{
+    const float rev = (xor_parity_lsb != 0) ? (1.0f - ph01) : ph01;
+    return ph01 * (1.0f - alternate01) + rev * alternate01;
+}
+}
+
+XorField::XorField(QWidget* parent) : SpatialEffect3D(parent)
+{
+    SetRainbowMode(true);
+    SetSpeed(45);
+    SetFrequency(35);
+}
+
+XorField::~XorField() = default;
+
+EffectInfo3D XorField::GetEffectInfo() const
+{
+    EffectInfo3D info{};
+    info.info_version = 1;
+    info.effect_name = "Xor Field";
+    info.effect_description =
+        "Bitwise interference from XOR-quantized XYZ. Odd/even cells can run motion forward or backward; "
+        "tune cell scale and wave drive.";
+    info.category = "Spatial";
+    info.effect_type = SPATIAL_EFFECT_XOR_FIELD;
+    info.is_reversible = true;
+    info.supports_random = false;
+    info.max_speed = 100;
+    info.min_speed = 1;
+    info.user_colors = 1;
+    info.has_custom_settings = true;
+    info.needs_3d_origin = false;
+    info.needs_frequency = true;
+    info.default_speed_scale = 45.0f;
+    info.default_frequency_scale = 35.0f;
+    info.use_size_parameter = true;
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = true;
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_color_controls = true;
+    info.supports_strip_colormap = true;
+
+    return info;
+}
+
+void XorField::SetupCustomUI(QWidget* parent)
+{
+    QWidget* w = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(w);
+    layout->setContentsMargins(0, 0, 0, 0);
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+
+    EffectSliderRow* alternate_dirs_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Alternate dirs:"),
+        0,
+        100,
+        (int)std::lround(direction_alternate * 100.0f),
+        QStringLiteral("0 = all cells move the same way; 100 = odd XOR cells run phases backward."));
+    alternate_dirs_row->setObjectName(QStringLiteral("alternateDirsRow"));
+    alt_slider = alternate_dirs_row->slider();
+    alternate_dirs_row->bindValueChanged(
+        this,
+        [this](int v) { direction_alternate = std::clamp(v / 100.0f, 0.0f, 1.0f); },
+        [this](int) { return QString::number(direction_alternate, 'f', 2); },
+        on_changed);
+
+    EffectSliderRow* cell_scale_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Cell scale:"),
+        25,
+        140,
+        (int)std::lround(cell_scale * 10.0f),
+        QStringLiteral("Finer XOR grid (higher = more, smaller cells)."));
+    cell_scale_row->setObjectName(QStringLiteral("cellScaleRow"));
+    cell_slider = cell_scale_row->slider();
+    cell_scale_row->bindValueChanged(
+        this,
+        [this](int v) { cell_scale = std::clamp(v / 10.0f, 2.5f, 14.0f); },
+        [this](int) { return QString::number(cell_scale, 'f', 1); },
+        on_changed);
+
+    EffectSliderRow* wave_drive_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Wave drive:"),
+        50,
+        150,
+        (int)std::lround(wave_drive * 100.0f),
+        QStringLiteral("Strength of the moving wave terms."));
+    wave_drive_row->setObjectName(QStringLiteral("waveDriveRow"));
+    drive_slider = wave_drive_row->slider();
+    wave_drive_row->bindValueChanged(
+        this,
+        [this](int v) { wave_drive = std::clamp(v / 100.0f, 0.5f, 1.5f); },
+        [this](int) { return QString::number(wave_drive, 'f', 2); },
+        on_changed);
+
+    AddWidgetToParent(w, parent);
+}
+
+void XorField::UpdateParams(SpatialEffectParams& params)
+{
+    params.type = SPATIAL_EFFECT_XOR_FIELD;
+}
+
+RGBColor XorField::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+        return 0x00000000;
+
+    Vector3D rot = TransformPointByRotation(x, y, z, origin);
+    const float nx = NormalizeGridAxis01(rot.x, grid.min_x, grid.max_x);
+    const float ny = NormalizeGridAxis01(rot.y, grid.min_y, grid.max_y);
+    const float nz = NormalizeGridAxis01(rot.z, grid.min_z, grid.max_z);
+
+    const float spd = std::max(0.08f, GetScaledSpeed() / 100.0f);
+    const float rate = std::max(0.08f, GetScaledFrequency() / 50.0f);
+    const float motion = spd * rate;
+
+    const float t1 = Phase01(time, 10.0f, motion);
+    const float t2_base = Phase01(time, 10.0f, motion);
+    const float t3_base = Phase01(time, 2.0f, motion);
+    const float t4_base = Phase01(time, 5.0f, motion);
+
+    const float m = 0.3f + Triangle01(t1) * 0.2f;
+    const float size_mul = std::max(0.2f, GetNormalizedSize());
+    const float gmul = cell_scale;
+    const int xi = (int)std::floor(gmul * ((nx - 0.5f) * size_mul));
+    const int yi = (int)std::floor(gmul * ((ny - 0.5f) * size_mul));
+    const int zi = (int)std::floor(gmul * ((nz - 0.5f) * size_mul));
+    const int xori = xi ^ yi ^ zi;
+    const float xor_scaled = (float)xori / 50.0f;
+
+    const int parity = xori & 1;
+    const float t2_ph = PhaseWithAlternate(t2_base, parity, direction_alternate);
+    const float t3 = PhaseWithAlternate(t3_base, parity, direction_alternate);
+    const float t4_phase = PhaseWithAlternate(t4_base, parity, direction_alternate);
+    const float t4 = t4_phase * kTwoPi;
+
+    float h = std::sin(t2_ph * kTwoPi);
+    const float wd = wave_drive;
+    const float wave_in =
+        std::fmod(xor_scaled * (Triangle01(t3) * 10.0f * wd + 4.0f * wd * std::sin(t4)), m);
+    h += Wave01(wave_in);
+
+    float v = std::fmod(std::fabs(h) + std::fabs(m) + t1, 1.0f);
+    v = Triangle01(v * v);
+    h = Triangle01(h) / 5.0f + (nx + ny + nz) / 3.0f + t1;
+    v = v * v * v;
+
+    RGBColor c = 0x00000000;
+    const float h01 = h - std::floor(h);
+    if(UseEffectStripColormap())
+    {
+        float p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
+                                               h01,
+                                               time,
+                                               grid,
+                                               GetNormalizedSize(),
+                                               origin,
+                                               rot);
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        c = ResolveStripKernelFinalColor(*this,
+                                         SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
+                                         p01,
+                                         GetEffectStripColormapColorStyle(),
+                                         time,
+                                         rate * 12.0f);
+    }
+    else if(GetRainbowMode())
+    {
+        c = Hsv01ToBgr(h, 1.0f, 1.0f);
+    }
+    else
+    {
+        c = GetColorAtPosition(h01);
+    }
+
+    int r = (int)((float)(c & 0xFF) * v);
+    int g = (int)((float)((c >> 8) & 0xFF) * v);
+    int b = (int)((float)((c >> 16) & 0xFF) * v);
+    r = std::clamp(r, 0, 255);
+    g = std::clamp(g, 0, 255);
+    b = std::clamp(b, 0, 255);
+    return (RGBColor)((b << 16) | (g << 8) | r);
+}
+
+nlohmann::json XorField::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["xorfield_direction_alternate"] = direction_alternate;
+    j["xorfield_cell_scale"] = cell_scale;
+    j["xorfield_wave_drive"] = wave_drive;
+return j;
+}
+
+void XorField::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("xorfield_direction_alternate") && settings["xorfield_direction_alternate"].is_number())
+        direction_alternate = std::clamp(settings["xorfield_direction_alternate"].get<float>(), 0.0f, 1.0f);
+    if(settings.contains("xorfield_cell_scale") && settings["xorfield_cell_scale"].is_number())
+        cell_scale = std::clamp(settings["xorfield_cell_scale"].get<float>(), 2.5f, 14.0f);
+    if(settings.contains("xorfield_wave_drive") && settings["xorfield_wave_drive"].is_number())
+        wave_drive = std::clamp(settings["xorfield_wave_drive"].get<float>(), 0.5f, 1.5f);
+    if(alt_slider)
+        alt_slider->setValue((int)std::lround(direction_alternate * 100.0f));
+    if(cell_slider)
+        cell_slider->setValue((int)std::lround(cell_scale * 10.0f));
+    if(drive_slider)
+        drive_slider->setValue((int)std::lround(wave_drive * 100.0f));
+}

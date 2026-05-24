@@ -1,0 +1,375 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef SCREENMIRROR_H
+#define SCREENMIRROR_H
+
+#include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
+#include <map>
+#include <unordered_map>
+#include <deque>
+#include <memory>
+#include <string>
+#include "ScreenCaptureManager.h"
+#include "ui/CaptureZonesWidget.h"
+
+class DisplayPlane3D;
+class VirtualReferencePoint3D;
+class QFormLayout;
+struct CaptureSourceInfo;
+struct CapturedFrame;
+
+class ScreenMirrorMonitorPanel;
+
+class ScreenMirror : public SpatialEffect3D
+{
+    Q_OBJECT
+
+    friend class ScreenMirrorMonitorPanel;
+
+public:
+    explicit ScreenMirror(QWidget* parent = nullptr);
+    ~ScreenMirror();
+
+    EFFECT_REGISTERER_3D("ScreenMirror", "Screen Mirror", "Ambilight", [](){return new ScreenMirror;});
+
+    static std::string const ClassName() { return "ScreenMirror"; }
+    static std::string const UIName() { return "Screen Mirror"; }
+    static void ForceLink() {}
+
+    EffectInfo3D GetEffectInfo() const override;
+    void SetupCustomUI(QWidget* parent) override;
+    void UpdateParams(SpatialEffectParams& params) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+    bool UsesSpatialSamplingQuantization() const override { return false; }
+    bool RequiresWorldSpaceCoordinates() const override { return true; }
+    bool RequiresWorldSpaceGridBounds() const override { return true; }
+
+    void SetGridScaleMM(float mm);
+
+    nlohmann::json SaveSettings() const override;
+    void LoadSettings(const nlohmann::json& settings) override;
+
+    void SetReferencePoints(std::vector<std::unique_ptr<VirtualReferencePoint3D>>* ref_points);
+    void RefreshReferencePointDropdowns();
+    void RefreshMonitorStatus();
+
+    using CaptureZone = ::CaptureZone;
+
+signals:
+    void ScreenPreviewChanged(bool enabled);
+    void CalibrationPatternChanged(bool enabled);
+    
+public:
+    bool ShouldShowCalibrationPattern(const std::string& plane_name) const;
+    bool ShouldShowScreenPreview(const std::string& plane_name) const;
+
+    void RefreshFrameCacheForRenderSequence(const GridContext3D& grid);
+
+private slots:
+    void OnParameterChanged();
+    void OnScreenPreviewChanged();
+    void OnCalibrationPatternChanged();
+
+public:
+    struct MonitorSettings
+    {
+        bool enabled;
+
+        float scale;
+        bool scale_inverted;
+
+        float smoothing_time_ms;
+        float brightness_multiplier;
+        float brightness_threshold;
+        float white_rolloff;
+        float vibrance;
+        float led_output_gain_r;
+        float led_output_gain_g;
+        float led_output_gain_b;
+        float black_bar_letterbox_percent;
+        float black_bar_pillarbox_percent;
+
+        float edge_softness;
+        float blend;
+        float propagation_speed_mm_per_ms;
+        float wave_decay_ms;
+        float wave_time_to_edge_sec;
+        float falloff_curve_exponent;
+        float front_back_balance;
+        float left_right_balance;
+        float top_bottom_balance;
+
+        int reference_point_id;
+
+        bool show_calibration_pattern;
+        bool show_screen_preview;
+
+        float screen_map_roll_deg;
+        int radial_corner_expansion_ui;
+        int radial_corner_bias_tl_ui;
+        int radial_corner_bias_tr_ui;
+        int radial_corner_bias_bl_ui;
+        int radial_corner_bias_br_ui;
+        float corner_blend_strength_pct;
+        float corner_blend_zone_pct;
+
+        std::vector<CaptureZone> capture_zones;
+
+        QGroupBox* group_box;
+        QSlider* scale_slider;
+        QLabel* scale_label;
+        QCheckBox* scale_invert_check;
+        QSlider* smoothing_time_slider;
+        QLabel* smoothing_time_label;
+        QSlider* brightness_slider;
+        QLabel* brightness_label;
+        QSlider* brightness_threshold_slider;
+        QLabel* brightness_threshold_label;
+        QSlider* white_rolloff_slider;
+        QLabel* white_rolloff_label;
+        QSlider* vibrance_slider;
+        QLabel* vibrance_label;
+        QSlider* led_output_gain_r_slider;
+        QLabel* led_output_gain_r_label;
+        QSlider* led_output_gain_g_slider;
+        QLabel* led_output_gain_g_label;
+        QSlider* led_output_gain_b_slider;
+        QLabel* led_output_gain_b_label;
+        QSlider* black_bar_letterbox_slider;
+        QLabel* black_bar_letterbox_label;
+        QSlider* black_bar_pillarbox_slider;
+        QLabel* black_bar_pillarbox_label;
+        QSlider* softness_slider;
+        QLabel* softness_label;
+        QSlider* blend_slider;
+        QLabel* blend_label;
+        QSlider* propagation_speed_slider;
+        QLabel* propagation_speed_label;
+        QSlider* wave_decay_slider;
+        QLabel* wave_decay_label;
+        QSlider* wave_time_to_edge_slider;
+        QLabel* wave_time_to_edge_label;
+        QSlider* falloff_curve_slider;
+        QLabel* falloff_curve_label;
+        QSlider* front_back_balance_slider;
+        QLabel* front_back_balance_label;
+        QSlider* left_right_balance_slider;
+        QLabel* left_right_balance_label;
+        QSlider* top_bottom_balance_slider;
+        QLabel* top_bottom_balance_label;
+        QComboBox* ref_point_combo;
+        QCheckBox* calibration_pattern_check;
+        QCheckBox* screen_preview_check;
+        QWidget* capture_area_preview;
+        QPushButton* add_zone_button;
+        CaptureZonesWidget* capture_zones_widget;
+
+        QSlider* screen_map_roll_slider;
+        QLabel* screen_map_roll_label;
+        QSlider* radial_corner_expansion_slider;
+        QLabel* radial_corner_expansion_label;
+        QSlider* radial_corner_bias_tl_slider;
+        QLabel* radial_corner_bias_tl_label;
+        QSlider* radial_corner_bias_tr_slider;
+        QLabel* radial_corner_bias_tr_label;
+        QSlider* radial_corner_bias_bl_slider;
+        QLabel* radial_corner_bias_bl_label;
+        QSlider* radial_corner_bias_br_slider;
+        QLabel* radial_corner_bias_br_label;
+        QSlider* corner_blend_strength_slider;
+        QLabel* corner_blend_strength_label;
+        QSlider* corner_blend_zone_slider;
+        QLabel* corner_blend_zone_label;
+
+        MonitorSettings()
+            : enabled(false)
+            , scale(1.0f)
+            , scale_inverted(true)
+            , smoothing_time_ms(0.0f)
+            , brightness_multiplier(1.0f)
+            , brightness_threshold(0.0f)
+            , white_rolloff(0.0f)
+            , vibrance(1.0f)
+            , led_output_gain_r(1.0f)
+            , led_output_gain_g(1.0f)
+            , led_output_gain_b(1.0f)
+            , black_bar_letterbox_percent(0.0f)
+            , black_bar_pillarbox_percent(0.0f)
+            , edge_softness(0.0f)
+            , blend(0.0f)
+            , propagation_speed_mm_per_ms(0.0f)
+            , wave_decay_ms(0.0f)
+            , wave_time_to_edge_sec(0.0f)
+            , falloff_curve_exponent(1.0f)
+            , front_back_balance(0.0f)
+            , left_right_balance(0.0f)
+            , top_bottom_balance(0.0f)
+            , reference_point_id(-1)
+            , show_calibration_pattern(false)
+            , show_screen_preview(false)
+            , screen_map_roll_deg(0.0f)
+            , radial_corner_expansion_ui(0)
+            , radial_corner_bias_tl_ui(0)
+            , radial_corner_bias_tr_ui(0)
+            , radial_corner_bias_bl_ui(0)
+            , radial_corner_bias_br_ui(0)
+            , corner_blend_strength_pct(0.0f)
+            , corner_blend_zone_pct(0.0f)
+            , group_box(nullptr)
+            , scale_slider(nullptr)
+            , scale_label(nullptr)
+            , scale_invert_check(nullptr)
+            , smoothing_time_slider(nullptr)
+            , smoothing_time_label(nullptr)
+            , brightness_slider(nullptr)
+            , brightness_label(nullptr)
+            , brightness_threshold_slider(nullptr)
+            , brightness_threshold_label(nullptr)
+            , white_rolloff_slider(nullptr)
+            , white_rolloff_label(nullptr)
+            , vibrance_slider(nullptr)
+            , vibrance_label(nullptr)
+            , led_output_gain_r_slider(nullptr)
+            , led_output_gain_r_label(nullptr)
+            , led_output_gain_g_slider(nullptr)
+            , led_output_gain_g_label(nullptr)
+            , led_output_gain_b_slider(nullptr)
+            , led_output_gain_b_label(nullptr)
+            , black_bar_letterbox_slider(nullptr)
+            , black_bar_letterbox_label(nullptr)
+            , black_bar_pillarbox_slider(nullptr)
+            , black_bar_pillarbox_label(nullptr)
+            , softness_slider(nullptr)
+            , softness_label(nullptr)
+            , blend_slider(nullptr)
+            , blend_label(nullptr)
+            , propagation_speed_slider(nullptr)
+            , propagation_speed_label(nullptr)
+            , wave_decay_slider(nullptr)
+            , wave_decay_label(nullptr)
+            , wave_time_to_edge_slider(nullptr)
+            , wave_time_to_edge_label(nullptr)
+            , falloff_curve_slider(nullptr)
+            , falloff_curve_label(nullptr)
+            , front_back_balance_slider(nullptr)
+            , front_back_balance_label(nullptr)
+            , left_right_balance_slider(nullptr)
+            , left_right_balance_label(nullptr)
+            , top_bottom_balance_slider(nullptr)
+            , top_bottom_balance_label(nullptr)
+            , ref_point_combo(nullptr)
+            , calibration_pattern_check(nullptr)
+            , screen_preview_check(nullptr)
+            , capture_area_preview(nullptr)
+            , add_zone_button(nullptr)
+            , capture_zones_widget(nullptr)
+            , screen_map_roll_slider(nullptr)
+            , screen_map_roll_label(nullptr)
+            , radial_corner_expansion_slider(nullptr)
+            , radial_corner_expansion_label(nullptr)
+            , radial_corner_bias_tl_slider(nullptr)
+            , radial_corner_bias_tl_label(nullptr)
+            , radial_corner_bias_tr_slider(nullptr)
+            , radial_corner_bias_tr_label(nullptr)
+            , radial_corner_bias_bl_slider(nullptr)
+            , radial_corner_bias_bl_label(nullptr)
+            , radial_corner_bias_br_slider(nullptr)
+            , radial_corner_bias_br_label(nullptr)
+            , corner_blend_strength_slider(nullptr)
+            , corner_blend_strength_label(nullptr)
+            , corner_blend_zone_slider(nullptr)
+            , corner_blend_zone_label(nullptr)
+        {
+            capture_zones.push_back(CaptureZone(0.0f, 1.0f, 0.0f, 1.0f));
+        }
+    };
+
+private:
+    void CreateMonitorSettingsUI(DisplayPlane3D* plane, MonitorSettings& settings);
+    void SyncMonitorSettingsToUI(MonitorSettings& msettings);
+
+    int                 capture_quality;
+    QComboBox*          capture_quality_combo;
+    int                 capture_backend_mode;
+    QComboBox*          capture_backend_combo;
+
+    QSlider*            global_scale_slider;
+    QLabel*             global_scale_label;
+    QSlider*            smoothing_time_slider;
+    QLabel*             smoothing_time_label;
+    QSlider*            brightness_slider;
+    QLabel*             brightness_label;
+    QSlider*            propagation_speed_slider;
+    QLabel*             propagation_speed_label;
+    QSlider*            wave_decay_slider;
+    QLabel*             wave_decay_label;
+    QSlider*            brightness_threshold_slider;
+    QLabel*             brightness_threshold_label;
+    QCheckBox*          global_scale_invert_check;
+    QLabel*             monitor_status_label;
+    QLabel*             monitor_help_label;
+    QGroupBox*          monitors_container;
+    QVBoxLayout*        monitors_layout;
+    std::map<std::string, MonitorSettings> monitor_settings;
+
+    float               grid_scale_mm_;
+
+    bool                        show_calibration_pattern;
+    bool                        in_parameter_change_;
+
+    std::vector<std::unique_ptr<VirtualReferencePoint3D>>* reference_points;
+
+    struct FrameHistory
+    {
+        std::deque<std::shared_ptr<CapturedFrame>> frames;
+        float cached_avg_frame_time_ms;
+        uint64_t last_frame_rate_update;
+
+        FrameHistory()
+            : cached_avg_frame_time_ms(16.67f)
+            , last_frame_rate_update(0)
+        {
+        }
+    };
+    std::unordered_map<std::string, FrameHistory> capture_history;
+
+    uint64_t                                                             frame_cache_refresh_ms_;
+    uint64_t                                                             frame_cache_last_render_seq_;
+    std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>      frame_cache_;
+    std::vector<DisplayPlane3D*>                                         frame_cache_planes_;
+
+    struct LEDKey
+    {
+        int x;
+        int y;
+        int z;
+
+        bool operator<(const LEDKey& other) const
+        {
+            if(x != other.x) return x < other.x;
+            if(y != other.y) return y < other.y;
+            return z < other.z;
+        }
+    };
+
+    struct LEDState
+    {
+        float r, g, b;
+        uint64_t smooth_last_tick_ms;
+    };
+    std::map<LEDKey, LEDState> led_states;
+
+    bool ResolveReferencePointById(int id, Vector3D& out) const;
+    int LookupReferencePointIdByIndex(int index) const;
+    void AddFrameToHistory(const std::string& capture_id, const std::shared_ptr<CapturedFrame>& frame);
+    float GetHistoryRetentionMs() const;
+    LEDKey MakeLEDKey(float x, float y, float z) const;
+
+    RGBColor CalculateColorGridInternal(float x, float y, float z, float time, const GridContext3D& grid,
+                                       const std::unordered_map<std::string, std::shared_ptr<CapturedFrame>>* frame_cache,
+                                       const std::vector<DisplayPlane3D*>* pre_fetched_planes = nullptr,
+                                       bool apply_led_smoothing = true);
+};
+
+#endif

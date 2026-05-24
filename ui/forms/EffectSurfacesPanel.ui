@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EffectSurfacesPanel</class>
+ <widget class="QWidget" name="EffectSurfacesPanel">
+  <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item row="0" column="0">
+    <widget class="QCheckBox" name="surfaceFloorCheck">
+     <property name="text">
+      <string>Floor</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QCheckBox" name="surfaceCeilingCheck">
+     <property name="text">
+      <string>Ceiling</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="2">
+    <widget class="QCheckBox" name="surfaceWallXmCheck">
+     <property name="text">
+      <string>Wall -X</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QCheckBox" name="surfaceWallXpCheck">
+     <property name="text">
+      <string>Wall +X</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QCheckBox" name="surfaceWallZmCheck">
+     <property name="text">
+      <string>Wall -Z</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QCheckBox" name="surfaceWallZpCheck">
+     <property name="text">
+      <string>Wall +Z</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

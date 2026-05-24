@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CustomControllerDialog</class>
+ <widget class="QDialog" name="CustomControllerDialog">
+  <property name="windowTitle">
+   <string>Custom 3D Controller</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <property name="leftMargin">
+    <number>12</number>
+   </property>
+   <property name="topMargin">
+    <number>12</number>
+   </property>
+   <property name="rightMargin">
+    <number>12</number>
+   </property>
+   <property name="bottomMargin">
+    <number>12</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>Custom 3D Controller</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="summaryLabel">
+     <property name="text">
+      <string>Assigned: 0 cells · Layer 0</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="helpLabel" native="true">
+     <property name="text">
+      <string>Select a canvas cell, choose Device / Zone / LED on a device card, pick the target in the second box, then press +. Fit layout shrink-wraps placed LEDs on this layer to (0,0). Layer tabs set depth (Z) for 3D spacing.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="topBar">
+     <property name="spacing">
+      <number>8</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="nameCaption">
+       <property name="text">
+        <string>Name:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="nameEdit">
+       <property name="placeholderText">
+        <string>My desk layout</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="widthCaption">
+       <property name="text">
+        <string>W:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="widthSpin">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="value">
+        <number>10</number>
+       </property>
+       <property name="toolTip">
+        <string>Grid width (columns)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="heightCaption">
+       <property name="text">
+        <string>H:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="heightSpin">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="value">
+        <number>10</number>
+       </property>
+       <property name="toolTip">
+        <string>Grid height (rows)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="depthCaption">
+       <property name="text">
+        <string>Layers:</string>
+       </property>
+       <property name="toolTip">
+        <string>Number of Z layers in the 3D layout</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="depthSpin">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="value">
+        <number>1</number>
+       </property>
+       <property name="toolTip">
+        <string>Number of depth layers</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="spacingCaption">
+       <property name="text">
+        <string>mm</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="spacingXSpin">
+       <property name="decimals">
+        <number>1</number>
+       </property>
+       <property name="minimum">
+        <double>0.100000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>10.000000000000000</double>
+       </property>
+       <property name="suffix">
+        <string> X</string>
+       </property>
+       <property name="toolTip">
+        <string>LED spacing along X for the 3D scene</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="spacingYSpin">
+       <property name="decimals">
+        <number>1</number>
+       </property>
+       <property name="minimum">
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>10.000000000000000</double>
+       </property>
+       <property name="suffix">
+        <string> Y</string>
+       </property>
+       <property name="toolTip">
+        <string>LED spacing along Y for the 3D scene</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="spacingZSpin">
+       <property name="decimals">
+        <number>1</number>
+       </property>
+       <property name="minimum">
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>10.000000000000000</double>
+       </property>
+       <property name="suffix">
+        <string> Z</string>
+       </property>
+       <property name="toolTip">
+        <string>LED spacing along Z for the 3D scene</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="resetViewButton">
+       <property name="text">
+        <string>Reset view</string>
+       </property>
+       <property name="toolTip">
+        <string>Fit the current layer grid in the view (reset pan/zoom)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="fitLayoutButton">
+       <property name="text">
+        <string>Fit layout</string>
+       </property>
+       <property name="toolTip">
+        <string>Resize W/H to the bounding box of placed LEDs on this layer and move them to the top-left (0,0)</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QSplitter" name="mainSplitter">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="leftPanel">
+      <property name="maximumSize">
+       <size>
+        <width>320</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="leftLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="devicesHeading">
+         <property name="text">
+          <string>Devices</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="deviceListHost" native="true">
+         <property name="minimumSize">
+          <size>
+           <width>220</width>
+           <height>0</height>
+          </size>
+         </property>
+         <layout class="QVBoxLayout" name="deviceListLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="identifyButton">
+         <property name="text">
+          <string>Identify · Off</string>
+         </property>
+         <property name="toolTip">
+          <string>Toggle hardware identify (green) for LEDs in the selected cell(s). Labels show zone LED index; hover for global index.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="clearRow">
+         <item>
+          <widget class="QPushButton" name="clearButton">
+           <property name="text">
+            <string>Clear cell</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeFromGridButton">
+           <property name="text">
+            <string>Clear grid</string>
+           </property>
+           <property name="toolTip">
+            <string>Remove every LED assignment from the entire grid.</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="centerPanel">
+      <layout class="QVBoxLayout" name="centerLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="canvasHeaderRow">
+         <property name="spacing">
+          <number>8</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="canvasHeading">
+           <property name="text">
+            <string>Layout canvas</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="canvasHeaderSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addLayerButton">
+           <property name="text">
+            <string>+ Layer</string>
+           </property>
+           <property name="toolTip">
+            <string>Add a depth layer (same W×H grid, different Z)</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeLayerButton">
+           <property name="text">
+            <string>− Layer</string>
+           </property>
+           <property name="toolTip">
+            <string>Remove the top layer (LEDs on that layer are deleted)</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTabWidget" name="layerTabs"/>
+       </item>
+       <item>
+        <widget class="QLabel" name="cellInfoLabel">
+         <property name="text">
+          <string>Click a cell on the canvas</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QScrollArea" name="transformScroll">
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>220</height>
+          </size>
+         </property>
+         <widget class="QGroupBox" name="transformGroup">
+          <property name="title">
+           <string>Rotate and flip</string>
+          </property>
+          <layout class="QVBoxLayout" name="transformLayout">
+           <item>
+            <layout class="QHBoxLayout" name="rotateRow">
+             <item>
+              <widget class="QPushButton" name="rotate90Button">
+               <property name="text">
+                <string>90°</string>
+               </property>
+               <property name="toolTip">
+                <string>Rotate the whole grid 90° clockwise (also swaps width and height)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="rotate180Button">
+               <property name="text">
+                <string>180°</string>
+               </property>
+               <property name="toolTip">
+                <string>Rotate assignments 180°</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="rotate270Button">
+               <property name="text">
+                <string>270°</string>
+               </property>
+               <property name="toolTip">
+                <string>Rotate the whole grid 270° clockwise (also swaps width and height)</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="flipRow">
+             <item>
+              <widget class="QPushButton" name="flipHorizontalButton">
+               <property name="text">
+                <string>Flip H</string>
+               </property>
+               <property name="toolTip">
+                <string>Mirror assignments horizontally</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="flipVerticalButton">
+               <property name="text">
+                <string>Flip V</string>
+               </property>
+               <property name="toolTip">
+                <string>Mirror assignments vertically</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="transformHelp">
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+             <property name="text">
+              <string>Rotates and flips the grid layout (all layers). 90° and 270° also swap width and height.</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QPushButton" name="previewButton">
+       <property name="text">
+        <string>3D preview…</string>
+       </property>
+       <property name="toolTip">
+        <string>Open a window to orbit the layout in 3D (drag to rotate, wheel to zoom).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="buttonSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="saveButton">
+       <property name="text">
+        <string>Save custom controller</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelButton">
+       <property name="text">
+        <string>Cancel</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

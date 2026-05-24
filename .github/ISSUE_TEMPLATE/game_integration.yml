@@ -1,0 +1,97 @@
+name: Game integration
+description: Game-linked lighting for one title (needs a data path or honest "not sure yet").
+title: "[Game]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Repository: [OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin)**.
+
+        **One game per issue.** Do not file a list of many games — those will be closed.
+
+        Game lighting needs a way for the plugin to **learn what is happening in-game** (mod, app, UDP, API, file, existing project). You do not need to code it yourself. **"Not sure yet" is OK** if you describe what you want the lights to do for **this** game and what you already checked.
+
+        Rough guide by ecosystem (examples only): **Minecraft (Java)** — mods/plugins; some **Unity** games — community tools or mods; **Unreal / others** — often harder; say what you found or that you have not found a path yet.
+
+        Crashes or wrong UI: **Bug report**. Already built a mod/bridge: **[pull request](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/compare)**.
+
+  - type: input
+    id: game
+    attributes:
+      label: Game (one title only)
+      description: Name and version or edition
+      placeholder: "e.g. Valheim 1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: What are you asking for?
+      options:
+        - "Support a new game"
+        - "Add or change lighting for events in a game"
+        - "Fix game lighting that stopped working"
+        - "General idea - need guidance"
+    validations:
+      required: true
+
+  - type: textarea
+    id: lighting_goal
+    attributes:
+      label: What should the lights do?
+      description: When X happens in-game, what should LEDs do? Be specific for this game.
+      placeholder: "e.g. Low health - red pulse on desk strip. Night in-game - dim blue."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data_path_status
+    attributes:
+      label: Do you know how game data could reach the plugin?
+      options:
+        - "Yes - I explained below (mod, tool, API, etc.)"
+        - "Not sure yet - I have ideas for lighting only"
+        - "I looked but found nothing - describe what I tried"
+    validations:
+      required: true
+
+  - type: textarea
+    id: data_source
+    attributes:
+      label: Data path (how could the plugin know game state?)
+      description: Mod name, UDP port, companion app, GitHub project, or write not sure and what you searched
+      placeholder: "e.g. Fabric mod sends JSON on port 5000. Or: not sure - checked Nexus, no RGB mod found."
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup (optional)
+      placeholder: "e.g. Windows 11, OpenRGB 0.9, keyboard + strips in 3D scene"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Links (optional)
+      placeholder: "Mod page, docs, similar OpenRGB project"
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Can you help?
+      options:
+        - "I can test builds and report back"
+        - "I can contribute code or a data bridge (or open a PR)"
+        - "Ideas only - I cannot test or code"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is one game with lighting goals and an honest data-path answer (not a multi-game wish list)
+          required: true

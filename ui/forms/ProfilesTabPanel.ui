@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ProfilesTabPanel</class>
+ <widget class="QWidget" name="ProfilesTabPanel">
+  <property name="windowTitle">
+   <string>Profiles</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>4</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="layoutGroup">
+     <property name="title">
+      <string>Layout Profile</string>
+     </property>
+     <layout class="QVBoxLayout" name="layoutGroupLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="EffectInfoLabel" name="layoutHelpLabel" native="true">
+        <property name="text">
+         <string>Save/Load controller positions, zones, and reference points:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutComboRow">
+        <item>
+         <widget class="QLabel" name="layoutProfileCaption">
+          <property name="text">
+           <string>Profile:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="layoutProfilesCombo">
+          <property name="minimumSize">
+           <size>
+            <width>200</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="layoutComboSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutButtonsRow">
+        <item>
+         <spacer name="layoutButtonsSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="saveLayoutButton">
+          <property name="text">
+           <string>Save</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="saveAsLayoutButton">
+          <property name="text">
+           <string>Save As...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="loadLayoutButton">
+          <property name="text">
+           <string>Load</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="deleteLayoutButton">
+          <property name="text">
+           <string>Delete</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="autoLoadLayoutCheckbox">
+        <property name="text">
+         <string>Auto-load this profile on startup</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="effectGroup">
+     <property name="title">
+      <string>Effect Profile</string>
+     </property>
+     <layout class="QVBoxLayout" name="effectGroupLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="EffectInfoLabel" name="effectHelpLabel" native="true">
+        <property name="text">
+         <string>Save/Load single effect configurations. Select a profile below.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="effectComboRow">
+        <item>
+         <widget class="QLabel" name="effectProfileCaption">
+          <property name="text">
+           <string>Profile:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="effectProfilesCombo">
+          <property name="minimumSize">
+           <size>
+            <width>200</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="effectComboSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="effectButtonsRow">
+        <item>
+         <spacer name="effectButtonsSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="saveEffectProfileButton">
+          <property name="text">
+           <string>Save As...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="loadEffectProfileButton">
+          <property name="text">
+           <string>Load</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="deleteEffectProfileButton">
+          <property name="text">
+           <string>Delete</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="autoLoadEffectProfileCheckbox">
+        <property name="text">
+         <string>Auto-load this profile on startup</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="openConfigFolderButton">
+        <property name="text">
+         <string>Open plugin config folder</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

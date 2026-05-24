@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AudioAdvancedSettingsDialog</class>
+ <widget class="QDialog" name="AudioAdvancedSettingsDialog">
+  <property name="windowTitle">
+   <string>Advanced audio analyzer</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <item>
+    <widget class="EffectInfoLabel" name="introLabel" native="true">
+     <property name="text">
+      <string>Fine-tune how the analyzer normalizes FFT bands and the spectrum preview. Input gain, bands, FFT size, and EQ stay on the Audio Input panel.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="settingsScroll">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <widget class="QWidget" name="scrollContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>420</width>
+        <height>480</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="contentLayout"/>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok|QDialogButtonBox::RestoreDefaults</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

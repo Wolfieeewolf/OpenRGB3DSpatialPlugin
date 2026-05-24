@@ -1,0 +1,77 @@
+name: Feature / suggestion
+description: New capability or UX improvement (not game-specific integration).
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Repository: OpenRGB3DSpatialPlugin** (not the presets repo).
+
+        Controller layout JSON: [OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues/new?template=new-controller-preset.yml).
+
+        For **game-linked lighting**, use **Game integration** on this repo.
+
+        **One idea per issue.** Describe the problem and what you want clearly. If you can build it, open a [pull request](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/compare).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What is hard or missing today? Be specific.
+      placeholder: "e.g. I cannot see which controller is selected in a large scene"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "3D layout / viewport / grid"
+        - "Spatial effects / effect stack"
+        - "Screen mirror / display planes"
+        - "Custom controllers / Object Creator"
+        - "Audio-reactive"
+        - "Profiles / presets"
+        - "Documentation / onboarding"
+        - "Other area"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+
+  - type: dropdown
+    id: willingness
+    attributes:
+      label: Contribution
+      options:
+        - "I can help test a PR"
+        - "I can try to implement or contribute"
+        - "Report only - I cannot contribute"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Mockups, links, or extra context (optional)
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is one focused request with enough detail for someone else to understand it
+          required: true

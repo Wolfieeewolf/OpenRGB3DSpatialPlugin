@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MinecraftLibraryPanel</class>
+ <widget class="QGroupBox" name="MinecraftLibraryPanel">
+  <property name="title">
+   <string>Minecraft (Fabric) — add to stack</string>
+  </property>
+  <property name="visible">
+   <bool>false</bool>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <item>
+    <widget class="EffectInfoLabel" name="introLabel" native="true">
+     <property name="text">
+      <string>Add one Minecraft layer at a time: choose the layer type, adjust settings in the scrollable area, then click Add Minecraft layer.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="layerRow">
+     <item>
+      <widget class="QLabel" name="layerLabel">
+       <property name="text">
+        <string>Minecraft layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="layerCombo">
+       <property name="minimumSize">
+        <size>
+         <width>220</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Which Minecraft effect to add (UDP 127.0.0.1:9876). "All layers (bundled)" shows every channel in one place — use separate entries to build a stack.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="hubSettingsScroll">
+     <property name="sizeAdjustPolicy">
+      <enum>QAbstractScrollArea::AdjustToContents</enum>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>260</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>520</height>
+      </size>
+     </property>
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAsNeeded</enum>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <widget class="QWidget" name="hubPreviewHolder">
+      <layout class="QVBoxLayout" name="hubPreviewLayout">
+       <property name="leftMargin">
+        <number>4</number>
+       </property>
+       <property name="topMargin">
+        <number>4</number>
+       </property>
+       <property name="rightMargin">
+        <number>4</number>
+       </property>
+       <property name="bottomMargin">
+        <number>4</number>
+       </property>
+       <property name="sizeConstraint">
+        <enum>QLayout::SetMinAndMaxSize</enum>
+       </property>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="addLayerButton">
+     <property name="toolTip">
+      <string>Add this configured layer to the effect stack.</string>
+     </property>
+     <property name="text">
+      <string>Add Minecraft layer</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

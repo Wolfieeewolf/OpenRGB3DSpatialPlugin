@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GridSettingsPanel</class>
+ <widget class="QWidget" name="GridSettingsPanel">
+  <property name="windowTitle">
+   <string>Grid Settings</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>4</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="gridScaleGroup">
+     <property name="title">
+      <string>Grid &amp; scale</string>
+     </property>
+     <layout class="QGridLayout" name="gridScaleLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item row="0" column="0" colspan="2">
+       <widget class="QLabel" name="layoutSizeLabel">
+        <property name="text">
+         <string>Layout size (X × Y × Z units):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLabel" name="gridXCaption">
+        <property name="text">
+         <string>X:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QSpinBox" name="gridXSpin"/>
+      </item>
+      <item row="0" column="4">
+       <widget class="QLabel" name="gridYCaption">
+        <property name="text">
+         <string>Y:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QSpinBox" name="gridYSpin"/>
+      </item>
+      <item row="0" column="6">
+       <widget class="QLabel" name="gridZCaption">
+        <property name="text">
+         <string>Z:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="7">
+       <widget class="QSpinBox" name="gridZSpin"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="gridScaleCaption">
+        <property name="text">
+         <string>Grid scale:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QDoubleSpinBox" name="gridScaleSpin"/>
+      </item>
+      <item row="1" column="3" colspan="2">
+       <widget class="QCheckBox" name="gridSnapCheckbox">
+        <property name="text">
+         <string>Snap positions to grid</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QLabel" name="selectionCaption">
+        <property name="text">
+         <string>Selection:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="6" colspan="2">
+       <widget class="QLabel" name="selectionInfoLabel">
+        <property name="text">
+         <string>No selection</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="8">
+       <widget class="EffectInfoLabel" name="gridScaleHelpLabel" native="true">
+        <property name="text">
+         <string>Default size for new LED layouts; scale is mm per grid unit.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="roomGroup">
+     <property name="title">
+      <string>Room size</string>
+     </property>
+     <layout class="QGridLayout" name="roomLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item row="0" column="0" colspan="6">
+       <widget class="QCheckBox" name="useManualRoomSizeCheckbox">
+        <property name="text">
+         <string>Use manual room size</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="roomWidthCaption">
+        <property name="text">
+         <string>Width (X, mm):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QDoubleSpinBox" name="roomWidthSpin"/>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="roomHeightCaption">
+        <property name="text">
+         <string>Height (Y, mm):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QDoubleSpinBox" name="roomHeightSpin"/>
+      </item>
+      <item row="1" column="4">
+       <widget class="QLabel" name="roomDepthCaption">
+        <property name="text">
+         <string>Depth (Z, mm):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QDoubleSpinBox" name="roomDepthSpin"/>
+      </item>
+      <item row="2" column="0" colspan="6">
+       <widget class="EffectInfoLabel" name="roomHelpLabel" native="true">
+        <property name="text">
+         <string>Origin is front-left-floor. Room dimensions and grid scale are in mm. Positions in grid units × scale = mm.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="overlayGroup">
+     <property name="title">
+      <string>3D view overlay</string>
+     </property>
+     <layout class="QGridLayout" name="overlayLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item row="0" column="0" colspan="3">
+       <widget class="QCheckBox" name="roomGridOverlayCheckbox">
+        <property name="text">
+         <string>Show overlay in 3D view</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="3">
+       <widget class="QCheckBox" name="roomGuideLabelsCheckbox">
+        <property name="text">
+         <string>Show room guide labels (walls, floor, origin)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QCheckBox" name="gpuLabelsCheckbox">
+        <property name="text">
+         <string>Alternate label renderer (advanced)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QPushButton" name="frameSelectionButton">
+        <property name="text">
+         <string>Frame selection (F)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="3">
+       <widget class="QCheckBox" name="gpuSceneCheckbox">
+        <property name="text">
+         <string>Shader-based 3D room (Qt 6, experimental)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QPushButton" name="resetCameraButton">
+        <property name="text">
+         <string>Reset camera</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="QLabel" name="resetCameraHint">
+        <property name="text">
+         <string>Default orbit (Home)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="overlayBrightCaption">
+        <property name="text">
+         <string>Overlay brightness:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QSlider" name="overlayBrightSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="QLabel" name="overlayBrightLabel">
+        <property name="minimumSize">
+         <size>
+          <width>44</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>35%</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="0">
+       <widget class="QLabel" name="overlayPointCaption">
+        <property name="text">
+         <string>Point size:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="QSlider" name="overlayPointSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="2">
+       <widget class="QLabel" name="overlayPointLabel">
+        <property name="minimumSize">
+         <size>
+          <width>44</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>3</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="overlayStepCaption">
+        <property name="text">
+         <string>Grid step:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="QSlider" name="overlayStepSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="2">
+       <widget class="QLabel" name="overlayStepLabel">
+        <property name="minimumSize">
+         <size>
+          <width>44</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>4</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0" colspan="3">
+       <widget class="EffectInfoLabel" name="overlayHintLabel" native="true">
+        <property name="text">
+         <string>Overlay settings are saved in plugin settings. Turn off room guide labels to hide wall/floor/origin text; gizmo rotate text while dragging is always shown.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

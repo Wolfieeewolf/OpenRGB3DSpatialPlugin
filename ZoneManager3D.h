@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef ZONEMANAGER3D_H
+#define ZONEMANAGER3D_H
+
+#include "Zone3D.h"
+#include <vector>
+#include <string>
+#include <nlohmann/json.hpp>
+
+class ZoneManager3D
+{
+public:
+    ZoneManager3D();
+    ~ZoneManager3D();
+
+    Zone3D* CreateZone(const std::string& name);
+    void DeleteZone(int zone_idx);
+    void DeleteZone(const std::string& name);
+    void ClearAllZones();
+
+    int GetZoneCount() const { return (int)zones.size(); }
+    Zone3D* GetZone(int idx);
+    Zone3D* GetZoneByName(const std::string& name);
+    const std::vector<Zone3D*>& GetAllZones() const { return zones; }
+
+    std::vector<int> GetControllersInZone(const std::string& zone_name);
+    std::vector<int> GetControllersInZone(int zone_idx);
+    bool ZoneExists(const std::string& name) const;
+
+    nlohmann::json ToJSON() const;
+    void FromJSON(const nlohmann::json& json);
+
+private:
+    std::vector<Zone3D*> zones;
+};
+
+#endif

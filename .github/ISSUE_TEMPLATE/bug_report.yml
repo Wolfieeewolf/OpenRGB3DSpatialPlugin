@@ -1,0 +1,122 @@
+name: Bug report
+description: Something is broken, crashes, or behaves incorrectly in the 3D Spatial plugin.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Repository: [OpenRGB3DSpatialPlugin](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin)** (the 3D Spatial plugin).
+
+        Controller preset JSON: [presets repo](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues). Core OpenRGB: [upstream](https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues).
+
+        **We need steps to reproduce and versions** — not only "it broke." **One bug per issue.** If you already fixed it, open a [pull request](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPlugin/compare) instead.
+
+        Do not use **Blank issue** (maintainers only).
+
+  - type: input
+    id: plugin_version
+    attributes:
+      label: Plugin version
+      description: From release tag or build (e.g. 26.05.19.1)
+      placeholder: "26.05.19.1"
+    validations:
+      required: true
+
+  - type: input
+    id: openrgb_version
+    attributes:
+      label: OpenRGB version
+      placeholder: "0.9.x or git commit"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - "Windows 10"
+        - "Windows 11"
+        - "Linux"
+        - "macOS"
+        - "Other"
+    validations:
+      required: true
+
+  - type: input
+    id: os_detail
+    attributes:
+      label: OS details (optional)
+      placeholder: "Distro and version, or Windows build"
+
+  - type: dropdown
+    id: qt
+    attributes:
+      label: Qt major (OpenRGB build)
+      options:
+        - "Qt 5.15"
+        - "Qt 6.x"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where the problem shows up
+      options:
+        - "3D layout / viewport / grid"
+        - "Spatial effects / effect stack"
+        - "Screen mirror / display planes / capture"
+        - "Game integration (Minecraft, telemetry)"
+        - "Custom controllers / presets / Object Creator"
+        - "Audio-reactive effects"
+        - "Profiles / save-load"
+        - "Build / install / plugin not loading"
+        - "Other area"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open OpenRGB ... 2. 3D Spatial tab ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Relevant hardware (optional)
+      placeholder: "Devices, monitors, capture source, game version"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or errors (optional)
+      description: OpenRGB log lines or crash text
+      render: shell
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I filled in version info and real steps to reproduce (not just that something failed)
+          required: true

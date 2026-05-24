@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef SPATIALKERNELCOLORMAP_H
+#define SPATIALKERNELCOLORMAP_H
+
+#include "Game/StripPatternSurface.h"
+#include "SpatialPatternKernels/SpatialPatternKernels.h"
+#include "SpatialPatternKernels/SpatialPatternPalettes.h"
+#include "SpatialEffect3D.h"
+#include <nlohmann/json.hpp>
+#include <algorithm>
+#include <cmath>
+
+enum class StripKernelColorStyle : int
+{
+    PatternPalette = 0,
+    EffectColors = 1,
+};
+
+inline int StripKernelColorStyleClamp(int v)
+{
+    return std::clamp(v, 0, 1);
+}
+
+inline RGBColor ResolveStripKernelFinalColor(const SpatialEffect3D& effect,
+                                            int kernel_id,
+                                            float palette01,
+                                            int color_style,
+                                            float time_sec,
+                                            float )
+{
+    const int s = StripKernelColorStyleClamp(color_style);
+    float p = std::fmod(palette01, 1.0f);
+    if(p < 0.0f)
+        p += 1.0f;
+    kernel_id = SpatialPatternKernelClamp(kernel_id);
+    if(s == 0)
+        return SampleKernelPatternPalette(kernel_id, p, time_sec);
+    return effect.GetColorAtPosition(p);
+}
+
+inline float SampleStripKernelPalette01(int kernel_id,
+                                        float kernel_rep,
+                                        int unfold_mode,
+                                        float dir_deg,
+                                        float phase01,
+                                        float time_sec,
+                                        const GridContext3D& grid,
+                                        float normalized_scale,
+                                        const Vector3D& origin,
+                                        const Vector3D& rot)
+{
+    const SpatialEffect3D* effect = SpatialEffect3D::GetEvaluatingEffect();
+    float freq_norm = 1.0f;
+    float detail_norm = 1.0f;
+    if(effect)
+    {
+        freq_norm = std::clamp(effect->GetScaledFrequency() / 10.0f, 0.25f, 2.5f);
+        detail_norm = std::clamp(effect->GetScaledDetail() / 10.0f, 0.25f, 2.5f);
+    }
+
+    const float kernel_rep_eff = std::max(1.0f, kernel_rep * (0.65f + 0.70f * detail_norm));
+    float scale_eff = std::max(0.05f, normalized_scale);
+    float sw = grid.width * 0.5f * scale_eff;
+    float sh = grid.height * 0.5f * scale_eff;
+    float sd = grid.depth * 0.5f * scale_eff;
+    if(sw < 1e-5f)
+        sw = 1.0f;
+    if(sh < 1e-5f)
+        sh = 1.0f;
+    if(sd < 1e-5f)
+        sd = 1.0f;
+    float lx = (rot.x - origin.x) / sw;
+    float ly = (rot.y - origin.y) / sh;
+    float lz = (rot.z - origin.z) / sd;
+    auto mode = static_cast<StripPatternSurface::UnfoldMode>(
+        std::clamp(unfold_mode, 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1));
+    float phase_eff = phase01 * (0.70f + 0.55f * freq_norm);
+    float time_eff = time_sec * (0.55f + 0.90f * freq_norm);
+    float s01;
+    if(mode == StripPatternSurface::UnfoldMode::EffectPhaseOnly)
+    {
+        s01 = std::fmod(phase_eff + time_eff * 0.12f, 1.0f);
+        if(s01 < 0.0f)
+        {
+            s01 += 1.0f;
+        }
+        s01 = std::clamp(s01, 0.0f, 1.0f);
+    }
+    else if(mode == StripPatternSurface::UnfoldMode::StaticRoomPlane)
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, StripPatternSurface::UnfoldMode::PlaneXZ, dir_deg);
+        phase_eff = 0.0f;
+        time_eff = 0.0f;
+    }
+    else
+    {
+        s01 = StripPatternSurface::StripCoord01(lx, ly, lz, mode, dir_deg);
+    }
+    float k = EvalSpatialPatternKernel(kernel_id, s01, phase_eff, kernel_rep_eff, time_eff);
+    return std::clamp((k + 1.0f) * 0.5f, 0.0f, 1.0f);
+}
+
+inline void StripColormapSaveCanonical(nlohmann::json& j,
+                                      bool on,
+                                      int kern,
+                                      float rep,
+                                      int unfold,
+                                      float dir,
+                                      int color_style)
+{
+    j["strip_cmap_on"] = on;
+    j["strip_cmap_kernel"] = kern;
+    j["strip_cmap_rep"] = rep;
+    j["strip_cmap_unfold"] = unfold;
+    j["strip_cmap_dir"] = dir;
+    j["strip_cmap_color_style"] = std::clamp(color_style, 0, 2);
+}
+
+inline void StripColormapLoadCanonical(const nlohmann::json& settings,
+                                       bool& on,
+                                       int& kern,
+                                       float& rep,
+                                       int& unfold,
+                                       float& dir,
+                                       int& color_style)
+{
+    if(settings.contains("strip_cmap_on") && settings["strip_cmap_on"].is_boolean())
+        on = settings["strip_cmap_on"].get<bool>();
+    if(settings.contains("strip_cmap_kernel") && settings["strip_cmap_kernel"].is_number_integer())
+        kern = std::clamp(settings["strip_cmap_kernel"].get<int>(), 0, SpatialPatternKernelCount() - 1);
+    if(settings.contains("strip_cmap_rep") && settings["strip_cmap_rep"].is_number())
+        rep = std::max(1.0f, std::min(40.0f, settings["strip_cmap_rep"].get<float>()));
+    if(settings.contains("strip_cmap_unfold") && settings["strip_cmap_unfold"].is_number_integer())
+        unfold = std::clamp(settings["strip_cmap_unfold"].get<int>(), 0, (int)StripPatternSurface::UnfoldMode::COUNT - 1);
+    if(settings.contains("strip_cmap_dir") && settings["strip_cmap_dir"].is_number())
+        dir = std::fmod(settings["strip_cmap_dir"].get<float>() + 360.0f, 360.0f);
+    if(settings.contains("strip_cmap_color_style") && settings["strip_cmap_color_style"].is_number_integer())
+        color_style = std::clamp(settings["strip_cmap_color_style"].get<int>(), 0, 2);
+}
+
+#endif

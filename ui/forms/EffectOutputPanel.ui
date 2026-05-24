@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EffectOutputPanel</class>
+ <widget class="QWidget" name="EffectOutputPanel">
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="intensityRow">
+     <item>
+      <widget class="QLabel" name="intensityCaption">
+       <property name="text">
+        <string>Intensity:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="intensitySlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Global intensity multiplier (0 = off, 100 = normal, 200 = 2x)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="intensityLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="sharpnessRow">
+     <item>
+      <widget class="QLabel" name="sharpnessCaption">
+       <property name="text">
+        <string>Sharpness:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="sharpnessSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Edge contrast: lower = softer, higher = crisper (gamma-like)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="sharpnessLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="smoothingRow">
+     <item>
+      <widget class="QLabel" name="smoothingCaption">
+       <property name="text">
+        <string>Smoothing:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="smoothingSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>100</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Global temporal smoothing hint (0 = off). Effects that support it blend frame-to-frame to reduce low-FPS stepping.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="smoothingLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="samplingRow">
+     <item>
+      <widget class="QLabel" name="samplingCaption">
+       <property name="text">
+        <string>Sampling:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="samplingResolutionSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>100</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Global sampling detail (100 = full, 0 = blocky). Image/GIF layers: UV quantization (× per-media Resolution). Other effects: LED positions snap to a coarser voxel grid in room bounds (retro / low-res look).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="samplingResolutionLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

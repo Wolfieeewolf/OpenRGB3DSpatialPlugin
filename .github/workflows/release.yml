@@ -1,0 +1,178 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*.*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            qt_version: '5.15.2'
+            qt_arch: win64_msvc2019_64
+            qt_major: '5'
+            artifact_name: OpenRGB3DSpatialPlugin-Windows
+          - os: windows-latest
+            qt_version: '6.10.3'
+            qt_arch: win64_msvc2022_64
+            qt_major: '6'
+            artifact_name: OpenRGB3DSpatialPlugin-Windows-qt6
+          - os: ubuntu-latest
+            qt_major: '5'
+            artifact_name: OpenRGB3DSpatialPlugin-Linux
+          - os: ubuntu-latest
+            qt_major: '6'
+            artifact_name: OpenRGB3DSpatialPlugin-Linux-qt6
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Setup Python (Windows, for aqt)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # Windows Store python stubs confuse install-qt-action; use hostedtoolcache only.
+      - name: Disable Windows Store Python alias
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe" -ErrorAction SilentlyContinue
+          Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\python3.exe" -ErrorAction SilentlyContinue
+
+      - name: Install Qt (Windows)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.qt_version }}
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+          setup-python: 'false'
+          aqtversion: '==3.3.*'
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libusb-1.0-0-dev \
+            libhidapi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev
+          if [ "${{ matrix.qt_major }}" = "6" ]; then
+            sudo apt-get install -y qt6-base-dev qt6-base-dev-tools
+          else
+            sudo apt-get install -y qtbase5-dev qt5-qmake qtbase5-dev-tools
+          fi
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL (
+            echo Failed to locate MSVC via vswhere
+            exit /b 1
+          )
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release
+          if errorlevel 1 exit /b 1
+          nmake
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          if [ "${{ matrix.qt_major }}" = "6" ]; then
+            QMQ="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
+            if [ -z "$QMQ" ] && [ -x /usr/lib/qt6/bin/qmake ]; then QMQ=/usr/lib/qt6/bin/qmake; fi
+            if [ -z "$QMQ" ]; then echo "Qt6 qmake not found"; exit 1; fi
+            "$QMQ" OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+          else
+            qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr CONFIG+=release
+          fi
+          make -j$(nproc)
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          mkdir -p staging
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if [ "${{ matrix.qt_major }}" = "6" ]; then
+              cp release/OpenRGB3DSpatialPlugin.dll "staging/OpenRGB3DSpatialPlugin-qt6.dll"
+            else
+              cp release/OpenRGB3DSpatialPlugin.dll "staging/OpenRGB3DSpatialPlugin.dll"
+            fi
+          else
+            if [ "${{ matrix.qt_major }}" = "6" ]; then
+              cp libOpenRGB3DSpatialPlugin.so "staging/OpenRGB3DSpatialPlugin-qt6.so"
+            else
+              cp libOpenRGB3DSpatialPlugin.so "staging/OpenRGB3DSpatialPlugin.so"
+            fi
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: staging/*
+
+  create-release:
+    needs: build-and-release
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            release-assets/**/*.dll
+            release-assets/**/*.so
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push tag to GitLab
+        continue-on-error: true
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "GITLAB_TOKEN not set, skipping"
+            exit 0
+          fi
+          git remote add gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git 2>/dev/null || \
+          git remote set-url gitlab https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin.git
+          git push gitlab ${GITHUB_REF} || echo "GitLab tag push failed"

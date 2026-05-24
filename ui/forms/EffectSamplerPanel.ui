@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EffectSamplerPanel</class>
+ <widget class="QWidget" name="EffectSamplerPanel">
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="EffectInfoLabel" name="introLabel" native="true">
+     <property name="text">
+      <string>Optional room-driven colour mapping (this block is attached only on layers that use it). Start with Room mapping mode = Off. Use Compass for directional layers, or Voxel volume for game voxel tint / palette drive.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="compassSamplerGroup">
+     <property name="title">
+      <string>Room Mapping</string>
+     </property>
+     <property name="toolTip">
+      <string>Horizontal direction (8 sectors) and vertical band (floor / mid / ceiling) choose where you sit on the rainbow or color strip.</string>
+     </property>
+     <layout class="QVBoxLayout" name="compassLayout">
+      <item>
+       <widget class="QLabel" name="mappingModeCaption">
+        <property name="text">
+         <string>Room mapping mode:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="spatialMappingCombo"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="compassSpinCaption">
+        <property name="text">
+         <string>Compass band spin:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="compassLayerSpinCombo"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="influenceRow">
+        <item>
+         <widget class="QLabel" name="influenceCaption">
+          <property name="text">
+           <string>Mapping strength:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="samplerInfluenceSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="maximum">
+           <number>250</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="samplerInfluenceLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="northRow">
+        <item>
+         <widget class="QLabel" name="northCaption">
+          <property name="text">
+           <string>Compass north offset:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="samplerCompassNorthSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="samplerCompassNorthLabel">
+          <property name="minimumSize">
+           <size>
+            <width>44</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="voxelVolumeGroup">
+     <property name="title">
+      <string>Voxel Mapping</string>
+     </property>
+     <property name="toolTip">
+      <string>Requires live voxel telemetry (voxel_frame, e.g. Minecraft UDP).</string>
+     </property>
+     <layout class="QVBoxLayout" name="voxelLayout">
+      <item>
+       <layout class="QHBoxLayout" name="voxelMixRow">
+        <item>
+         <widget class="QLabel" name="voxelMixCaption">
+          <property name="text">
+           <string>Color mix:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="voxelVolumeMixSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="voxelVolumeMixLabel">
+          <property name="minimumSize">
+           <size>
+            <width>44</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="voxelScaleRow">
+        <item>
+         <widget class="QLabel" name="voxelScaleCaption">
+          <property name="text">
+           <string>Room ↔ volume scale:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="voxelVolumeScaleSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>2</number>
+          </property>
+          <property name="maximum">
+           <number>80</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="voxelVolumeScaleLabel">
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="voxelHeadingRow">
+        <item>
+         <widget class="QLabel" name="voxelHeadingCaption">
+          <property name="text">
+           <string>Volume heading:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="voxelVolumeHeadingSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="voxelVolumeHeadingLabel">
+          <property name="minimumSize">
+           <size>
+            <width>44</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="voxelDriveRow">
+        <item>
+         <widget class="QLabel" name="voxelDriveCaption">
+          <property name="text">
+           <string>Palette drive:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="voxelDriveCombo"/>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
