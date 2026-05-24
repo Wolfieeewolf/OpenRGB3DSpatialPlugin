@@ -10,6 +10,7 @@ stages:
 
 variables:
   GIT_DEPTH: 0
+  GIT_SUBMODULE_STRATEGY: recursive
 
 #-----------------------------------------------------------------------------
 # Windows — MSVC 2022 + Qt from PATH (same layout as OpenRGB build-windows.bat)
@@ -66,7 +67,7 @@ build-linux-qt5:
   extends: .linux_plugin_common
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq qtbase5-dev qt5-qmake qtbase5-dev-tools libgl1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
+    - apt-get install -y -qq qtbase5-dev qt5-qmake qtbase5-dev-tools libgl1-mesa-dev libglu1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
   script:
     - qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr
     - make -j$(nproc)
@@ -75,13 +76,16 @@ build-linux-qt6:
   extends: .linux_plugin_common
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq qt6-base-dev qt6-qmake libgl1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
+    - apt-get install -y -qq qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev libglu1-mesa-dev libusb-1.0-0-dev libhidapi-dev build-essential
   script:
     - |
-      if command -v qmake6 >/dev/null 2>&1; then
-        export QM=qmake6
-      else
-        export QM=/usr/lib/qt6/bin/qmake
+      QM="$(command -v qmake6 2>/dev/null || command -v qmake-qt6 2>/dev/null || true)"
+      if [ -z "$QM" ] && [ -x /usr/lib/qt6/bin/qmake ]; then
+        QM=/usr/lib/qt6/bin/qmake
+      fi
+      if [ -z "$QM" ]; then
+        echo "Qt6 qmake not found"
+        exit 1
       fi
       "$QM" -v
       "$QM" OpenRGB3DSpatialPlugin.pro PREFIX=/usr
