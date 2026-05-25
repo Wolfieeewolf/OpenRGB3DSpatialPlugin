@@ -9,6 +9,7 @@
 #include "OpenRGBPluginInterface.h"
 
 class GameTelemetryBridge;
+class GameLightingBridge;
 class OpenRGB3DSpatialTab;
 class QMenu;
 class ResourceManagerInterface;
@@ -41,6 +42,7 @@ private:
 
     OpenRGB3DSpatialTab*        ui = nullptr;
     std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
+    std::unique_ptr<GameLightingBridge>  game_lighting_bridge;
 };
 
 #endif

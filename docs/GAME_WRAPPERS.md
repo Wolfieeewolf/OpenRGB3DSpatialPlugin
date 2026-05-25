@@ -37,7 +37,7 @@ Both can feed the **same grid effect family**; telemetry is better for true 3D (
 
 - One module (e.g. `Game/GameLightingBridge`) — **not** amBX-specific naming in the API.
 - Frame shape (minimal): `source`, `timestamp_ms`, `sequence`, list of `{ zone_id, r, g, b }` or a single **uniform** color.
-- Default port **9877** (telemetry stays **9876** to avoid clashes).
+- Default port **9877** (telemetry stays **9876** to avoid clashes). Wire format: `Game/GameLightingFormat.h` (`GW01` uniform RGB v0).
 - UI: connection status, last source name, optional zone count.
 
 ## Effect behaviour (what we do with incoming data)

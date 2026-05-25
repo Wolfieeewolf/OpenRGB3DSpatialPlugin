@@ -3,6 +3,7 @@
 #include "OpenRGB3DSpatialPlugin.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "Game/GameTelemetryBridge.h"
+#include "Game/GameLightingBridge.h"
 #include "ResourceManagerInterface.h"
 
 ResourceManagerInterface* OpenRGB3DSpatialPlugin::RMPointer = nullptr;
@@ -41,6 +42,12 @@ void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
         game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
     }
     game_telemetry_bridge->Register(RMPointer);
+
+    if(!game_lighting_bridge)
+    {
+        game_lighting_bridge = std::make_unique<GameLightingBridge>();
+    }
+    game_lighting_bridge->Register(RMPointer);
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
@@ -71,6 +78,12 @@ void OpenRGB3DSpatialPlugin::Unload()
     {
         game_telemetry_bridge->Unregister(RMPointer);
         game_telemetry_bridge.reset();
+    }
+
+    if(game_lighting_bridge)
+    {
+        game_lighting_bridge->Unregister(RMPointer);
+        game_lighting_bridge.reset();
     }
 
     if(RMPointer && ui != nullptr)

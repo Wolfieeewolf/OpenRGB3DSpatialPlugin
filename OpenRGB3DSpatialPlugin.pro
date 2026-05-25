@@ -138,6 +138,8 @@ HEADERS += \
     QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     Game/GameTelemetryBridge.h \
+    Game/GameLightingBridge.h \
+    Game/GameLightingFormat.h \
     Game/LedLayoutCoordinateMap.h \
     SpatialSamplers/SpatialBasisUtils.h \
     SpatialSamplers/SpatialLayerCore.h \
@@ -287,6 +289,7 @@ SOURCES += \
     ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     Game/GameTelemetryBridge.cpp \
+    Game/GameLightingBridge.cpp \
     SpatialSamplers/SpatialLayerCore.cpp \
     SpatialSamplers/VoxelRoomCore.cpp \
     SpatialSamplers/VoxelMapping.cpp \
