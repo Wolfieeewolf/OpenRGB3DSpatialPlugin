@@ -116,6 +116,16 @@
         </item>
        </layout>
       </item>
+      <item>
+       <widget class="QCheckBox" name="compassDiscreteZonesCheck">
+        <property name="text">
+         <string>Discrete compass zones (no sector or height-band blending)</string>
+        </property>
+        <property name="toolTip">
+         <string>Each LED uses a single compass sector and a single floor/mid/ceiling band — like classic amBX lamps. Neighbour sectors and layers do not mix colours.</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

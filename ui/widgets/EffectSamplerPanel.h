@@ -7,6 +7,7 @@
 
 #include <QWidget>
 
+class QCheckBox;
 class QComboBox;
 class QGroupBox;
 class QLabel;
@@ -23,6 +24,7 @@ public:
                        int compass_layer_spin_preset,
                        int sampler_influence_centi,
                        int compass_north_offset_deg,
+                       bool compass_discrete_zones,
                        unsigned int voxel_volume_mix,
                        int voxel_room_scale_centi,
                        int voxel_heading_offset,
@@ -37,6 +39,7 @@ public:
     QLabel* samplerInfluenceLabel() const;
     QSlider* samplerCompassNorthSlider() const;
     QLabel* samplerCompassNorthLabel() const;
+    QCheckBox* compassDiscreteZonesCheck() const;
     QGroupBox* voxelVolumeGroup() const;
     QSlider* voxelVolumeMixSlider() const;
     QLabel* voxelVolumeMixLabel() const;
@@ -51,6 +54,7 @@ private:
     void applyInitialValues(int compass_layer_spin_preset,
                             int sampler_influence_centi,
                             int compass_north_offset_deg,
+                            bool compass_discrete_zones,
                             unsigned int voxel_volume_mix,
                             int voxel_room_scale_centi,
                             int voxel_heading_offset);

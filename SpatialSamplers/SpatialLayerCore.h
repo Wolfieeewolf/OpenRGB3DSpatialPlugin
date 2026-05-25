@@ -67,6 +67,8 @@ struct MapperSettings
     float desk_end = 0.55f;
     float upper_end = 0.78f;
     float compass_azimuth_offset_rad = 0.0f;
+    /** When true: one sector and one height band per sample (amBX-style), no neighbor or layer blend. */
+    bool discrete_compass_zones = false;
 };
 
 struct CompassStratumSample
@@ -78,6 +80,7 @@ struct CompassStratumSample
     float layer_w[kMaxLayerCount]{};
     int layer_count = 4;
     bool valid = false;
+    bool discrete = false;
 };
 
 void ComputeVerticalStratumWeights(float y_norm, const MapperSettings& settings, int layer_count, float* out_w);

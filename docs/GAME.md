@@ -1,5 +1,7 @@
 # Game integration
 
+**Vendor SDK capture** (Chroma, iCUE, LightFX, …): see [`GAME_WRAPPERS.md`](GAME_WRAPPERS.md).
+
 ## How it works in the plugin
 
 - Games are normal **Effect library** entries (category **Game**), not a separate top-level tab.

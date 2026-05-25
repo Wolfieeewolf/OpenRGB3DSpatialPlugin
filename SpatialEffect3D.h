@@ -428,6 +428,7 @@ protected:
     QLabel*             sampler_influence_label;
     QSlider*            sampler_compass_north_slider;
     QLabel*             sampler_compass_north_label;
+    QCheckBox*          compass_discrete_zones_check;
 
     QGroupBox*          voxel_volume_group;
     QSlider*            voxel_volume_mix_slider;
@@ -469,6 +470,7 @@ protected:
     VoxelDriveMode      effect_voxel_drive_mode;
     int                 effect_sampler_influence_centi;
     int                 effect_sampler_compass_north_offset_deg;
+    bool                effect_compass_discrete_zones;
 
     unsigned int        effect_intensity;
     unsigned int        effect_sharpness;

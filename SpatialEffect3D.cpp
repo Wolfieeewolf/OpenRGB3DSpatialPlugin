@@ -81,6 +81,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     effect_voxel_drive_mode = VoxelDriveMode::Off;
     effect_sampler_influence_centi = 100;
     effect_sampler_compass_north_offset_deg = 0;
+    effect_compass_discrete_zones = false;
 
     effect_rotation_yaw = 0.0f;
     effect_rotation_pitch = 0.0f;
@@ -143,6 +144,7 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     sampler_influence_label = nullptr;
     sampler_compass_north_slider = nullptr;
     sampler_compass_north_label = nullptr;
+    compass_discrete_zones_check = nullptr;
 
     voxel_volume_group = nullptr;
     voxel_volume_mix_slider = nullptr;
@@ -939,13 +941,14 @@ void SpatialEffect3D::CreateSamplerMapperControls()
         return;
     }
     auto* mapper = new EffectSamplerPanel(spatial_mapping_mode,
-                                                         compass_layer_spin_preset,
-                                                         effect_sampler_influence_centi,
-                                                         effect_sampler_compass_north_offset_deg,
-                                                         effect_voxel_volume_mix,
-                                                         effect_voxel_room_scale_centi,
-                                                         effect_voxel_heading_offset,
-                                                         effect_voxel_drive_mode);
+                                         compass_layer_spin_preset,
+                                         effect_sampler_influence_centi,
+                                         effect_sampler_compass_north_offset_deg,
+                                         effect_compass_discrete_zones,
+                                         effect_voxel_volume_mix,
+                                         effect_voxel_room_scale_centi,
+                                         effect_voxel_heading_offset,
+                                         effect_voxel_drive_mode);
     sampler_mapper_group = mapper;
     sampler_mapper_group->setToolTip(
         QStringLiteral("Uses LED position in the room (and optional game voxel data) to steer hue / palette. "
@@ -959,6 +962,7 @@ void SpatialEffect3D::CreateSamplerMapperControls()
     sampler_influence_label = mapper->samplerInfluenceLabel();
     sampler_compass_north_slider = mapper->samplerCompassNorthSlider();
     sampler_compass_north_label = mapper->samplerCompassNorthLabel();
+    compass_discrete_zones_check = mapper->compassDiscreteZonesCheck();
     voxel_volume_group = mapper->voxelVolumeGroup();
     voxel_volume_mix_slider = mapper->voxelVolumeMixSlider();
     voxel_volume_mix_label = mapper->voxelVolumeMixLabel();
@@ -987,6 +991,10 @@ void SpatialEffect3D::CreateSamplerMapperControls()
             sampler_compass_north_label->setText(QString::number(effect_sampler_compass_north_offset_deg) +
                                                  QStringLiteral("°"));
         }
+        emit ParametersChanged();
+    });
+    connect(compass_discrete_zones_check, &QCheckBox::toggled, this, [this](bool on) {
+        effect_compass_discrete_zones = on;
         emit ParametersChanged();
     });
     connect(voxel_volume_mix_slider, &QSlider::valueChanged, this, [this](int v) {
@@ -1308,6 +1316,10 @@ void SpatialEffect3D::SyncSpatialMappingControlVisibility()
     if(sampler_compass_north_label)
     {
         sampler_compass_north_label->setEnabled(room_active);
+    }
+    if(compass_discrete_zones_check)
+    {
+        compass_discrete_zones_check->setEnabled(compass_mode);
     }
     if(voxel_volume_group)
     {
@@ -1742,6 +1754,7 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
     const float infl = std::clamp((float)effect_sampler_influence_centi / 100.0f, 0.0f, 2.5f);
     SpatialLayerCore::MapperSettings m = map;
     m.compass_azimuth_offset_rad = (float)effect_sampler_compass_north_offset_deg * 0.01745329251f;
+    m.discrete_compass_zones = effect_compass_discrete_zones;
 
     switch(spatial_mapping_mode)
     {
@@ -1811,6 +1824,7 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
     const float infl = std::clamp((float)effect_sampler_influence_centi / 100.0f, 0.0f, 2.5f);
     SpatialLayerCore::MapperSettings m = map;
     m.compass_azimuth_offset_rad = (float)effect_sampler_compass_north_offset_deg * 0.01745329251f;
+    m.discrete_compass_zones = effect_compass_discrete_zones;
 
     switch(spatial_mapping_mode)
     {
@@ -2622,6 +2636,7 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["effect_voxel_drive_mode"] = (int)effect_voxel_drive_mode;
     j["effect_sampler_influence_centi"] = effect_sampler_influence_centi;
     j["effect_sampler_compass_north_offset_deg"] = effect_sampler_compass_north_offset_deg;
+    j["effect_compass_discrete_zones"] = effect_compass_discrete_zones;
     j["intensity"] = effect_intensity;
     j["sharpness"] = effect_sharpness;
     j["smoothing"] = effect_smoothing;
@@ -2739,6 +2754,15 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         effect_sampler_compass_north_offset_deg =
             std::clamp(settings["effect_sampler_compass_north_offset_deg"].get<int>(), -180, 180);
+    }
+    if(settings.contains("effect_compass_discrete_zones"))
+    {
+        effect_compass_discrete_zones = settings["effect_compass_discrete_zones"].get<bool>();
+    }
+    if(compass_discrete_zones_check)
+    {
+        QSignalBlocker b(compass_discrete_zones_check);
+        compass_discrete_zones_check->setChecked(effect_compass_discrete_zones);
     }
 
     if(settings.contains("effect_bounds_mode"))
@@ -3006,6 +3030,11 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         sampler_compass_north_label->setText(QString::number(effect_sampler_compass_north_offset_deg) +
                                              QStringLiteral("°"));
+    }
+    if(compass_discrete_zones_check)
+    {
+        QSignalBlocker b(compass_discrete_zones_check);
+        compass_discrete_zones_check->setChecked(effect_compass_discrete_zones);
     }
 
     if(intensity_slider)

@@ -4,6 +4,7 @@
 #include "PluginUiUtils.h"
 #include "ui_EffectSamplerPanel.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QSlider>
@@ -14,6 +15,7 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
                                        int compass_layer_spin_preset,
                                        int sampler_influence_centi,
                                        int compass_north_offset_deg,
+                                       bool compass_discrete_zones,
                                        unsigned int voxel_volume_mix,
                                        int voxel_room_scale_centi,
                                        int voxel_heading_offset,
@@ -28,6 +30,7 @@ EffectSamplerPanel::EffectSamplerPanel(SpatialMappingMode spatial_mapping_mode,
     applyInitialValues(compass_layer_spin_preset,
                        sampler_influence_centi,
                        compass_north_offset_deg,
+                       compass_discrete_zones,
                        voxel_volume_mix,
                        voxel_room_scale_centi,
                        voxel_heading_offset);
@@ -45,6 +48,7 @@ QSlider* EffectSamplerPanel::samplerInfluenceSlider() const { return ui->sampler
 QLabel* EffectSamplerPanel::samplerInfluenceLabel() const { return ui->samplerInfluenceLabel; }
 QSlider* EffectSamplerPanel::samplerCompassNorthSlider() const { return ui->samplerCompassNorthSlider; }
 QLabel* EffectSamplerPanel::samplerCompassNorthLabel() const { return ui->samplerCompassNorthLabel; }
+QCheckBox* EffectSamplerPanel::compassDiscreteZonesCheck() const { return ui->compassDiscreteZonesCheck; }
 QGroupBox* EffectSamplerPanel::voxelVolumeGroup() const { return ui->voxelVolumeGroup; }
 QSlider* EffectSamplerPanel::voxelVolumeMixSlider() const { return ui->voxelVolumeMixSlider; }
 QLabel* EffectSamplerPanel::voxelVolumeMixLabel() const { return ui->voxelVolumeMixLabel; }
@@ -114,6 +118,7 @@ void EffectSamplerPanel::populateCombos(SpatialMappingMode spatial_mapping_mode,
 void EffectSamplerPanel::applyInitialValues(int compass_layer_spin_preset,
                                             int sampler_influence_centi,
                                             int compass_north_offset_deg,
+                                            bool compass_discrete_zones,
                                             unsigned int voxel_volume_mix,
                                             int voxel_room_scale_centi,
                                             int voxel_heading_offset)
@@ -123,6 +128,7 @@ void EffectSamplerPanel::applyInitialValues(int compass_layer_spin_preset,
     ui->samplerInfluenceLabel->setText(QString::number(sampler_influence_centi) + QStringLiteral("%"));
     ui->samplerCompassNorthSlider->setValue(compass_north_offset_deg);
     ui->samplerCompassNorthLabel->setText(QString::number(compass_north_offset_deg) + QStringLiteral("°"));
+    ui->compassDiscreteZonesCheck->setChecked(compass_discrete_zones);
     ui->voxelVolumeMixSlider->setValue((int)voxel_volume_mix);
     ui->voxelVolumeMixLabel->setText(QString::number((int)voxel_volume_mix) + QStringLiteral("%"));
     ui->voxelVolumeScaleSlider->setValue(voxel_room_scale_centi);

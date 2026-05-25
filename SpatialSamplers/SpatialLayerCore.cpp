@@ -233,6 +233,48 @@ bool MapPositionToCompassStrata(const Basis& basis,
     {
         pos += 8.0f;
     }
+
+    const float horiz = std::sqrt(std::max(0.0f, lx * lx + lz * lz));
+    const float center_size = std::clamp(settings.center_size, 0.02f, 0.65f);
+    const float center_soft = std::max(0.01f, std::clamp(settings.blend_softness, 0.02f, 0.35f) * 0.75f);
+    const float center_w = detail::Clamp01((center_size + center_soft - horiz) / (2.0f * center_soft));
+
+    if(settings.discrete_compass_zones)
+    {
+        int sector = ((int)std::lround(pos)) & 7;
+        if(sector < 0)
+        {
+            sector = 0;
+        }
+        if(sector > 7)
+        {
+            sector &= 7;
+        }
+        out.sector_i0 = sector;
+        out.sector_i1 = sector;
+        out.sector_t = 0.0f;
+        out.directional_blend = (center_w > 0.5f) ? 0.0f : 1.0f;
+        detail::ComputeLayerWeights(sample.y_norm, settings, layer_count, out.layer_w);
+        int dominant = 0;
+        float best_w = out.layer_w[0];
+        for(int i = 1; i < layer_count; i++)
+        {
+            if(out.layer_w[i] > best_w)
+            {
+                best_w = out.layer_w[i];
+                dominant = i;
+            }
+        }
+        for(int i = 0; i < layer_count; i++)
+        {
+            out.layer_w[i] = (i == dominant) ? 1.0f : 0.0f;
+        }
+        out.layer_count = layer_count;
+        out.discrete = true;
+        out.valid = true;
+        return true;
+    }
+
     out.sector_i0 = ((int)std::floor(pos)) & 7;
     out.sector_i1 = (out.sector_i0 + 1) & 7;
     float t = pos - std::floor(pos);
@@ -252,11 +294,6 @@ bool MapPositionToCompassStrata(const Basis& basis,
     }
     (void)w0;
     out.sector_t = w1;
-
-    const float horiz = std::sqrt(std::max(0.0f, lx * lx + lz * lz));
-    const float center_size = std::clamp(settings.center_size, 0.02f, 0.65f);
-    const float center_soft = std::max(0.01f, std::clamp(settings.blend_softness, 0.02f, 0.35f) * 0.75f);
-    const float center_w = detail::Clamp01((center_size + center_soft - horiz) / (2.0f * center_soft));
     out.directional_blend = 1.0f - center_w;
 
     detail::ComputeLayerWeights(sample.y_norm, settings, layer_count, out.layer_w);
@@ -275,9 +312,23 @@ float CompassStratumPalettePosition01(const CompassStratumSample& css,
     {
         return std::clamp(plane_angle01, 0.0f, 1.0f);
     }
-    const float sector01 = ((float)css.sector_i0 + css.sector_t) * (1.0f / 8.0f);
-    const float sector_mixed =
-        css.directional_blend * sector01 + (1.0f - css.directional_blend) * 0.5f;
+    float sector_mixed = 0.5f;
+    if(css.discrete)
+    {
+        if(css.directional_blend < 0.5f)
+        {
+            sector_mixed = 0.5f;
+        }
+        else
+        {
+            sector_mixed = (float)css.sector_i0 * (1.0f / 8.0f);
+        }
+    }
+    else
+    {
+        const float sector01 = ((float)css.sector_i0 + css.sector_t) * (1.0f / 8.0f);
+        sector_mixed = css.directional_blend * sector01 + (1.0f - css.directional_blend) * 0.5f;
+    }
     float spin_w = 0.0f;
     const int lc = std::clamp(css.layer_count, 1, 4);
     const int n = std::min(lc, 3);
@@ -309,7 +360,22 @@ float CompassStratumHueOffsetDegrees(const Basis& basis,
     {
         return 0.0f;
     }
-    float h = css.directional_blend * ((float)css.sector_i0 * 16.0f + css.sector_t * 16.0f);
+    float h = 0.0f;
+    if(css.discrete)
+    {
+        if(css.directional_blend < 0.5f)
+        {
+            h = 8.0f * 16.0f;
+        }
+        else
+        {
+            h = (float)css.sector_i0 * 16.0f;
+        }
+    }
+    else
+    {
+        h = css.directional_blend * ((float)css.sector_i0 * 16.0f + css.sector_t * 16.0f);
+    }
     for(int i = 0; i < lc; i++)
     {
         h += css.layer_w[i] * (float)(i * 12);
@@ -350,18 +416,37 @@ RGBColor ComputeProjectedProbeColor(const ProbeInput& probes,
     const float compass_scale = css.directional_blend;
 
     RGBColor layer_cols[kMaxLayerCount]{};
-    for(int l = 0; l < layer_count; l++)
+    if(settings.discrete_compass_zones && css.discrete)
     {
-        const int base = l * kSectorCount;
-        const RGBColor c0 = probes.layered.colors[(size_t)(base + i0)];
-        const RGBColor c1 = probes.layered.colors[(size_t)(base + i1)];
-        const RGBColor cc = probes.layered.colors[(size_t)(base + 8)];
-        RGBColor az_col = detail::LerpColor(c0, c1, w1);
-        if(compass_scale < 0.999f)
+        for(int l = 0; l < layer_count; l++)
         {
-            az_col = detail::LerpColor(cc, az_col, compass_scale);
+            const int base = l * kSectorCount;
+            const RGBColor cc = probes.layered.colors[(size_t)(base + 8)];
+            if(compass_scale < 0.5f)
+            {
+                layer_cols[l] = cc;
+            }
+            else
+            {
+                layer_cols[l] = probes.layered.colors[(size_t)(base + i0)];
+            }
         }
-        layer_cols[l] = az_col;
+    }
+    else
+    {
+        for(int l = 0; l < layer_count; l++)
+        {
+            const int base = l * kSectorCount;
+            const RGBColor c0 = probes.layered.colors[(size_t)(base + i0)];
+            const RGBColor c1 = probes.layered.colors[(size_t)(base + i1)];
+            const RGBColor cc = probes.layered.colors[(size_t)(base + 8)];
+            RGBColor az_col = detail::LerpColor(c0, c1, w1);
+            if(compass_scale < 0.999f)
+            {
+                az_col = detail::LerpColor(cc, az_col, compass_scale);
+            }
+            layer_cols[l] = az_col;
+        }
     }
 
     RGBColor out = detail::WeightedColorFrom(layer_cols, css.layer_w, layer_count);
