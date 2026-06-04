@@ -11,12 +11,14 @@
 #include <QStyledItemDelegate>
 #include <map>
 #include <set>
+#include <functional>
 #include <unordered_set>
 #include <QVector>
 #include <vector>
 #include "CustomControllerSourceRef.h"
 #include "ResourceManagerInterface.h"
 #include "LEDPosition3D.h"
+#include "CustomControllerTypes.h"
 #include "custom-controller-grid/CustomControllerGridCell.h"
 
 class QCheckBox;
@@ -40,17 +42,6 @@ class CustomControllerPreviewDialog;
 namespace Ui {
 class CustomControllerDialog;
 }
-
-struct GridLEDMapping
-{
-    int x;
-    int y;
-    int z;
-    RGBController* controller;
-    unsigned int zone_idx;
-    unsigned int led_idx;
-    int granularity;
-};
 
 class ColorComboDelegate : public QStyledItemDelegate
 {
@@ -79,16 +70,21 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 public:
-    void LoadExistingController(const std::string& name, int width, int height, int depth,
+    void LoadExistingController(const std::string& name,
+                                int width,
+                                int height,
+                                int depth,
                                 const std::vector<GridLEDMapping>& mappings,
                                 float spacing_x_mm = 10.0f,
                                 float spacing_y_mm = 10.0f,
-                                float spacing_z_mm = 10.0f);
+                                float spacing_z_mm = 10.0f,
+                                const std::vector<CustomControllerLightBlocker>& light_blockers = {});
 
     void SetLayoutGridScaleMm(float mm) { layout_grid_scale_mm = mm; }
     float GetLayoutGridScaleMm() const { return layout_grid_scale_mm; }
 
     std::vector<GridLEDMapping> GetLEDMappings() const { return led_mappings; }
+    std::vector<CustomControllerLightBlocker> GetLightBlockers() const;
     QString GetControllerName() const;
     int GetGridWidth() const;
     int GetGridHeight() const;
@@ -120,6 +116,8 @@ private slots:
     void on_identify_selection_clicked();
     void on_clear_cell_clicked();
     void on_remove_all_leds_clicked();
+    void on_add_light_blocker_clicked();
+    void on_remove_light_blocker_clicked();
     void on_save_clicked();
     void on_show_preview_3d_clicked();
     void on_layout_params_changed();
@@ -149,6 +147,9 @@ private:
     bool LayoutCellsCacheMatchesGrid() const;
     std::set<std::pair<int, int>> SelectedGridCells() const;
     bool IsMatrixHoleCell(int x, int y) const;
+    bool IsLightBlockerCell(int x, int y, int layer) const;
+    void TransformLightBlockerCells(const std::function<void(int& x, int& y, int& z)>& transform_fn);
+    void TrimLightBlockerCells(int max_width, int max_height, int max_depth);
     bool PlaceProfileLayout(RGBController* controller, int granularity, int item_idx, int start_x, int start_y);
     void UpdateGridDisplay();
     void refreshDeviceList(int controller_index = -1);
@@ -205,6 +206,7 @@ private:
     QPushButton*    save_button;
 
     std::unordered_set<uint64_t> matrix_hole_cells;
+    std::unordered_set<uint64_t> light_blocker_cells_;
 
     QGroupBox*      transform_group = nullptr;
     QPushButton*    rotate_90_button;

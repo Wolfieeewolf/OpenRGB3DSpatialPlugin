@@ -340,7 +340,9 @@ Vector3D ControllerLayout3D::CalculateWorldPosition(Vector3D local_pos, Transfor
     return world_pos;
 }
 
-static void CalculateControllerLocalBounds(const ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds)
+void ControllerLayout3D::CalculateControllerLocalBounds(const ControllerTransform* ctrl,
+                                                        Vector3D& min_bounds,
+                                                        Vector3D& max_bounds)
 {
     if(!ctrl || ctrl->led_positions.empty())
     {

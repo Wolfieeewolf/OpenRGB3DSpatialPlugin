@@ -52,6 +52,63 @@ namespace Geometry3D
         return result;
     }
 
+    /** Matches controller LED layout (matrix rotation + scale). */
+    inline Vector3D TransformLocalToWorldScaled(const Vector3D& local_pos, const Transform3D& transform)
+    {
+        const Vector3D scaled = {
+            local_pos.x * transform.scale.x,
+            local_pos.y * transform.scale.y,
+            local_pos.z * transform.scale.z,
+        };
+
+        float rotation_matrix[9];
+        ComputeRotationMatrix(transform.rotation, rotation_matrix);
+        const Vector3D rotated = RotateVector(scaled, rotation_matrix);
+
+        return {
+            rotated.x + transform.position.x,
+            rotated.y + transform.position.y,
+            rotated.z + transform.position.z,
+        };
+    }
+
+    /** Matches display-plane viewport orientation (Euler XYZ + scale). */
+    inline Vector3D TransformDisplayPlaneLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
+    {
+        Vector3D scaled = {
+            local_pos.x * transform.scale.x,
+            local_pos.y * transform.scale.y,
+            local_pos.z * transform.scale.z,
+        };
+
+        Vector3D rotated = scaled;
+
+        const float rx = transform.rotation.x * 3.14159265359f / 180.0f;
+        const float ry = transform.rotation.y * 3.14159265359f / 180.0f;
+        const float rz = transform.rotation.z * 3.14159265359f / 180.0f;
+
+        float temp_y = rotated.y * std::cos(rx) - rotated.z * std::sin(rx);
+        float temp_z = rotated.y * std::sin(rx) + rotated.z * std::cos(rx);
+        rotated.y = temp_y;
+        rotated.z = temp_z;
+
+        float temp_x = rotated.x * std::cos(ry) + rotated.z * std::sin(ry);
+        temp_z = -rotated.x * std::sin(ry) + rotated.z * std::cos(ry);
+        rotated.x = temp_x;
+        rotated.z = temp_z;
+
+        temp_x = rotated.x * std::cos(rz) - rotated.y * std::sin(rz);
+        temp_y = rotated.x * std::sin(rz) + rotated.y * std::cos(rz);
+        rotated.x = temp_x;
+        rotated.y = temp_y;
+
+        return {
+            rotated.x + transform.position.x,
+            rotated.y + transform.position.y,
+            rotated.z + transform.position.z,
+        };
+    }
+
     inline float ComputeFalloff(float distance, float max_range, float feather_percent = 30.0f)
     {
         if (max_range <= 0.0f)

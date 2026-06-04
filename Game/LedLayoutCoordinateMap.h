@@ -3,7 +3,7 @@
 #ifndef LED_LAYOUT_COORDINATE_MAP_H
 #define LED_LAYOUT_COORDINATE_MAP_H
 
-#include "ui/CustomControllerDialog.h"
+#include "ui/CustomControllerTypes.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>

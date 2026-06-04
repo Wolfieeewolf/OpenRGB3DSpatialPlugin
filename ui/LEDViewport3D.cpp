@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cfloat>
 #include <algorithm>
+#include <map>
 
 #include "QtCompat.h"
 
@@ -949,6 +950,7 @@ void LEDViewport3D::paintGlLegacyScene()
         DrawRoomGridOverlay();
     }
     DrawControllers();
+    DrawLightBlockerLayers();
     DrawUserFigure();
     DrawReferencePoints();
 
@@ -2775,6 +2777,222 @@ void LEDViewport3D::DrawLEDs(ControllerTransform* ctrl)
     glColor3f(1.0f, 1.0f, 1.0f);
 }
 
+namespace
+{
+struct LightBlockerLayerExtent
+{
+    int min_x = 0;
+    int min_y = 0;
+    int max_x = 0;
+    int max_y = 0;
+    bool initialized = false;
+};
+
+void DrawLocalFlatQuadXY(float x0, float y0, float x1, float y1, float z,
+                         float r, float g, float b, float a)
+{
+    glColor4f(r, g, b, a);
+    glBegin(GL_QUADS);
+    glVertex3f(x0, y0, z);
+    glVertex3f(x1, y0, z);
+    glVertex3f(x1, y1, z);
+    glVertex3f(x0, y1, z);
+    glEnd();
+}
+
+void DrawLocalFlatQuadBorderXY(float x0, float y0, float x1, float y1, float z,
+                               float r, float g, float b, float a, float line_width)
+{
+    glColor4f(r, g, b, a);
+    glLineWidth(line_width);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(x0, y0, z);
+    glVertex3f(x1, y0, z);
+    glVertex3f(x1, y1, z);
+    glVertex3f(x0, y1, z);
+    glEnd();
+}
+
+void ExpandBoundsForBlockerCell(Vector3D& min_bounds,
+                                Vector3D& max_bounds,
+                                float x0,
+                                float y0,
+                                float z0,
+                                float x1,
+                                float y1,
+                                float z1)
+{
+    if(x0 < min_bounds.x) min_bounds.x = x0;
+    if(y0 < min_bounds.y) min_bounds.y = y0;
+    if(z0 < min_bounds.z) min_bounds.z = z0;
+    if(x1 > max_bounds.x) max_bounds.x = x1;
+    if(y1 > max_bounds.y) max_bounds.y = y1;
+    if(z1 > max_bounds.z) max_bounds.z = z1;
+}
+
+void VirtualControllerGridScales(const VirtualController3D* vc,
+                                 float grid_scale_mm,
+                                 float& scale_x,
+                                 float& scale_y,
+                                 float& scale_z)
+{
+    scale_x = 1.0f;
+    scale_y = 1.0f;
+    scale_z = 1.0f;
+    if(!vc)
+    {
+        return;
+    }
+    if(vc->GetSpacingX() > 0.001f)
+    {
+        scale_x = MMToGridUnits(vc->GetSpacingX(), grid_scale_mm);
+    }
+    if(vc->GetSpacingY() > 0.001f)
+    {
+        scale_y = MMToGridUnits(vc->GetSpacingY(), grid_scale_mm);
+    }
+    if(vc->GetSpacingZ() > 0.001f)
+    {
+        scale_z = MMToGridUnits(vc->GetSpacingZ(), grid_scale_mm);
+    }
+}
+} // namespace
+
+void LEDViewport3D::DrawLightBlockerLayers()
+{
+    if(!controller_transforms)
+    {
+        return;
+    }
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    constexpr float kLayerFillR = 0.35f;
+    constexpr float kLayerFillG = 0.22f;
+    constexpr float kLayerFillB = 0.45f;
+    constexpr float kLayerFillA = 0.14f;
+    constexpr float kCellFillR = 0.22f;
+    constexpr float kCellFillG = 0.14f;
+    constexpr float kCellFillB = 0.29f;
+    constexpr float kCellFillA = 0.38f;
+    constexpr float kBorderR = 0.47f;
+    constexpr float kBorderG = 0.27f;
+    constexpr float kBorderB = 0.63f;
+    constexpr float kBorderA = 0.85f;
+
+    for(size_t i = 0; i < controller_transforms->size(); i++)
+    {
+        ControllerTransform* ctrl = (*controller_transforms)[i].get();
+        if(!ctrl || ctrl->hidden_by_virtual || !ctrl->virtual_controller)
+        {
+            continue;
+        }
+
+        VirtualController3D* layout = ctrl->virtual_controller;
+        const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
+        if(blockers.empty())
+        {
+            continue;
+        }
+
+        float scale_x = 1.0f;
+        float scale_y = 1.0f;
+        float scale_z = 1.0f;
+        VirtualControllerGridScales(layout, grid_scale_mm, scale_x, scale_y, scale_z);
+
+        std::map<int, LightBlockerLayerExtent> layers;
+        for(const CustomControllerLightBlocker& blocker : blockers)
+        {
+            LightBlockerLayerExtent& layer = layers[blocker.z];
+            if(!layer.initialized)
+            {
+                layer.min_x = blocker.x;
+                layer.min_y = blocker.y;
+                layer.max_x = blocker.x;
+                layer.max_y = blocker.y;
+                layer.initialized = true;
+            }
+            else
+            {
+                if(blocker.x < layer.min_x) layer.min_x = blocker.x;
+                if(blocker.y < layer.min_y) layer.min_y = blocker.y;
+                if(blocker.x > layer.max_x) layer.max_x = blocker.x;
+                if(blocker.y > layer.max_y) layer.max_y = blocker.y;
+            }
+        }
+
+        Vector3D min_bounds{};
+        Vector3D max_bounds{};
+        CalculateControllerBounds(ctrl, min_bounds, max_bounds);
+        const Vector3D center_offset = {
+            -(min_bounds.x + max_bounds.x) * 0.5f,
+            -(min_bounds.y + max_bounds.y) * 0.5f,
+            -(min_bounds.z + max_bounds.z) * 0.5f,
+        };
+
+        const bool is_primary = ((int)i == selected_controller_idx);
+        const bool is_selected = IsControllerSelected((int)i);
+        const float layer_alpha = is_primary ? 0.22f : (is_selected ? 0.18f : kLayerFillA);
+        const float cell_alpha = is_primary ? 0.50f : (is_selected ? 0.44f : kCellFillA);
+        const float border_width = is_primary ? 2.5f : (is_selected ? 2.0f : 1.5f);
+
+        glPushMatrix();
+        glTranslatef(ctrl->transform.position.x, ctrl->transform.position.y, ctrl->transform.position.z);
+        glRotatef(ctrl->transform.rotation.x, 1.0f, 0.0f, 0.0f);
+        glRotatef(ctrl->transform.rotation.y, 0.0f, 1.0f, 0.0f);
+        glRotatef(ctrl->transform.rotation.z, 0.0f, 0.0f, 1.0f);
+        glScalef(ctrl->transform.scale.x, ctrl->transform.scale.y, ctrl->transform.scale.z);
+        glTranslatef(center_offset.x, center_offset.y, center_offset.z);
+
+        for(const auto& layer_entry : layers)
+        {
+            const int layer_z = layer_entry.first;
+            const LightBlockerLayerExtent& extent = layer_entry.second;
+            if(!extent.initialized)
+            {
+                continue;
+            }
+
+            const float z_plane = static_cast<float>(layer_z + 1) * scale_z;
+            const float layer_x0 = static_cast<float>(extent.min_x) * scale_x;
+            const float layer_y0 = static_cast<float>(extent.min_y) * scale_y;
+            const float layer_x1 = static_cast<float>(extent.max_x + 1) * scale_x;
+            const float layer_y1 = static_cast<float>(extent.max_y + 1) * scale_y;
+
+            DrawLocalFlatQuadXY(layer_x0, layer_y0, layer_x1, layer_y1, z_plane,
+                                kLayerFillR, kLayerFillG, kLayerFillB, layer_alpha);
+            DrawLocalFlatQuadBorderXY(layer_x0, layer_y0, layer_x1, layer_y1, z_plane,
+                                      kBorderR, kBorderG, kBorderB, kBorderA * 0.65f, border_width);
+        }
+
+        for(const CustomControllerLightBlocker& blocker : blockers)
+        {
+            const float x0 = static_cast<float>(blocker.x) * scale_x;
+            const float y0 = static_cast<float>(blocker.y) * scale_y;
+            const float x1 = static_cast<float>(blocker.x + 1) * scale_x;
+            const float y1 = static_cast<float>(blocker.y + 1) * scale_y;
+            const float z_plane = static_cast<float>(blocker.z + 1) * scale_z;
+
+            DrawLocalFlatQuadXY(x0, y0, x1, y1, z_plane,
+                                kCellFillR, kCellFillG, kCellFillB, cell_alpha);
+            DrawLocalFlatQuadBorderXY(x0, y0, x1, y1, z_plane,
+                                      kBorderR, kBorderG, kBorderB, kBorderA, border_width);
+        }
+
+        glPopMatrix();
+    }
+
+    glDepthMask(GL_TRUE);
+    glLineWidth(1.0f);
+    glDisable(GL_BLEND);
+    glColor3f(1.0f, 1.0f, 1.0f);
+}
+
 int LEDViewport3D::PickController(int win_x, int win_y)
 {
     if(!controller_transforms) return -1;
@@ -3029,28 +3247,62 @@ int LEDViewport3D::PickReferencePoint(int win_x, int win_y)
 
 void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds)
 {
-    if(!ctrl || ctrl->led_positions.empty())
+    bool have_bounds = false;
+    if(ctrl && !ctrl->led_positions.empty())
+    {
+        Vector3D first_pos = ctrl->led_positions[0].local_position;
+        min_bounds = first_pos;
+        max_bounds = first_pos;
+        have_bounds = true;
+
+        for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
+        {
+            const Vector3D& pos = ctrl->led_positions[i].local_position;
+
+            if(pos.x < min_bounds.x) min_bounds.x = pos.x;
+            if(pos.y < min_bounds.y) min_bounds.y = pos.y;
+            if(pos.z < min_bounds.z) min_bounds.z = pos.z;
+
+            if(pos.x > max_bounds.x) max_bounds.x = pos.x;
+            if(pos.y > max_bounds.y) max_bounds.y = pos.y;
+            if(pos.z > max_bounds.z) max_bounds.z = pos.z;
+        }
+    }
+
+    if(ctrl && ctrl->virtual_controller)
+    {
+        float scale_x = 1.0f;
+        float scale_y = 1.0f;
+        float scale_z = 1.0f;
+        VirtualControllerGridScales(ctrl->virtual_controller, grid_scale_mm, scale_x, scale_y, scale_z);
+
+        for(const CustomControllerLightBlocker& blocker : ctrl->virtual_controller->GetLightBlockers())
+        {
+            const float x0 = static_cast<float>(blocker.x) * scale_x;
+            const float y0 = static_cast<float>(blocker.y) * scale_y;
+            const float z0 = static_cast<float>(blocker.z) * scale_z;
+            const float x1 = static_cast<float>(blocker.x + 1) * scale_x;
+            const float y1 = static_cast<float>(blocker.y + 1) * scale_y;
+            const float z1 = static_cast<float>(blocker.z + 1) * scale_z;
+
+            if(!have_bounds)
+            {
+                min_bounds = {x0, y0, z0};
+                max_bounds = {x1, y1, z1};
+                have_bounds = true;
+            }
+            else
+            {
+                ExpandBoundsForBlockerCell(min_bounds, max_bounds, x0, y0, z0, x1, y1, z1);
+            }
+        }
+    }
+
+    if(!have_bounds)
     {
         min_bounds = {-0.5f, -0.5f, -0.5f};
         max_bounds = {0.5f, 0.5f, 0.5f};
         return;
-    }
-
-    Vector3D first_pos = ctrl->led_positions[0].local_position;
-    min_bounds = first_pos;
-    max_bounds = first_pos;
-
-    for(unsigned int i = 0; i < ctrl->led_positions.size(); i++)
-    {
-        const Vector3D& pos = ctrl->led_positions[i].local_position;
-
-        if(pos.x < min_bounds.x) min_bounds.x = pos.x;
-        if(pos.y < min_bounds.y) min_bounds.y = pos.y;
-        if(pos.z < min_bounds.z) min_bounds.z = pos.z;
-
-        if(pos.x > max_bounds.x) max_bounds.x = pos.x;
-        if(pos.y > max_bounds.y) max_bounds.y = pos.y;
-        if(pos.z > max_bounds.z) max_bounds.z = pos.z;
     }
 
     float size_x = max_bounds.x - min_bounds.x;

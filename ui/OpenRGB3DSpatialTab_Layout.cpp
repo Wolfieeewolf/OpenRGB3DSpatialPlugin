@@ -861,19 +861,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                                   qMakePair(-2, static_cast<int>(i)));
     }
 
-    std::vector<DisplayPlane3D*> plane_ptrs;
-    for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
-    {
-        std::unique_ptr<DisplayPlane3D>& plane = display_planes[plane_index];
-        if(plane)
-        {
-            plane_ptrs.push_back(plane.get());
-        }
-    }
-    DisplayPlaneManager::instance()->SetDisplayPlanes(plane_ptrs);
     NotifyDisplayPlaneChanged();
-
-    emit GridLayoutChanged();
 
     if(zone_manager)
     {

@@ -235,6 +235,7 @@ private:
     void getRoomGridOverlayExtents(float& min_x, float& max_x, float& min_y, float& max_y, float& min_z, float& max_z) const;
     void invalidateRoomGridOverlayColors();
     void DrawDisplayPlanes();
+    void DrawLightBlockerLayers();
     void UpdateDisplayPlaneTextures();
     void SyncScreenPreviewTimer();
     bool AnyDisplayPlaneWantsScreenPreview() const;

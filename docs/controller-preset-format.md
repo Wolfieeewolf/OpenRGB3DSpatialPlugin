@@ -25,6 +25,9 @@ Used in **OpenRGB3DSpatialPresets**. Works on any PC that has the same OpenRGB d
 | `width`, `height`, `depth` | yes | Grid size in cells |
 | `spacing_mm_x/y/z` | yes | LED spacing in millimetres |
 | `mappings` | yes | LED assignments (see below) |
+| `light_blockers` | optional | Grid cells that block spatial lighting (see below) |
+
+**Light blockers** (optional array): each entry has `x`, `y`, `z` (layer). Mark empty or LED cells where light must not pass through (e.g. keyboard base). Used by **Spatial · Lighting** effects.
 
 **Every mapping** in a portable preset:
 

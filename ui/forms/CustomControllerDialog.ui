@@ -38,7 +38,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Select a canvas cell, choose Device / Zone / LED on a device card, pick the target in the second box, then press +. Fit layout shrink-wraps placed LEDs on this layer to (0,0). Layer tabs set depth (Z) for 3D spacing.</string>
+      <string>Select cells on the layer grid, assign LEDs from the device list, or use Add light blocker on selected cells to stop spatial light passing through (e.g. keyboard base). Layer tabs set depth (Z).</string>
      </property>
     </widget>
    </item>
@@ -313,6 +313,26 @@
            </property>
            <property name="toolTip">
             <string>Remove every LED assignment from the entire grid.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addLightBlockerButton">
+           <property name="text">
+            <string>Add light blocker</string>
+           </property>
+           <property name="toolTip">
+            <string>Mark selected cells on this layer as opaque to spatial lighting (blocks light rays).</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="removeLightBlockerButton">
+           <property name="text">
+            <string>Remove blocker</string>
+           </property>
+           <property name="toolTip">
+            <string>Remove light blocker from selected cells on this layer.</string>
            </property>
           </widget>
          </item>

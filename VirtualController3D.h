@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 #include "RGBController.h"
-#include "ui/CustomControllerDialog.h"
+#include "LEDPosition3D.h"
+#include "ui/CustomControllerTypes.h"
 #include "Game/LedLayoutCoordinateMap.h"
 #include <nlohmann/json.hpp>
 
@@ -16,9 +17,14 @@ class VirtualController3D
 {
 public:
     VirtualController3D(const std::string& name,
-                        int width, int height, int depth,
+                        int width,
+                        int height,
+                        int depth,
                         const std::vector<GridLEDMapping>& mappings,
-                        float spacing_x = 10.0f, float spacing_y = 10.0f, float spacing_z = 10.0f);
+                        float spacing_x = 10.0f,
+                        float spacing_y = 10.0f,
+                        float spacing_z = 10.0f,
+                        const std::vector<CustomControllerLightBlocker>& light_blockers = {});
     ~VirtualController3D();
 
     std::string GetName() const { return name; }
@@ -38,6 +44,7 @@ public:
     }
 
     const std::vector<GridLEDMapping>& GetMappings() const { return led_mappings; }
+    const std::vector<CustomControllerLightBlocker>& GetLightBlockers() const { return light_blockers; }
 
     std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f,
                                                     float spacing_x_mm = -1.0f,
@@ -71,6 +78,7 @@ private:
     float spacing_mm_y;
     float spacing_mm_z;
     std::vector<GridLEDMapping> led_mappings;
+    std::vector<CustomControllerLightBlocker> light_blockers;
 };
 
 #endif

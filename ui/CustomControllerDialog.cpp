@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "CustomControllerDialog.h"
+
+#include "CustomControllerGridKeys.h"
 #include "ControllerDisplayUtils.h"
 #include "ui_CustomControllerDialog.h"
 #include "CustomControllerDeviceList.h"
@@ -511,6 +513,8 @@ void CustomControllerDialog::SetupUI()
     remove_from_grid_button = ui->removeFromGridButton;
     connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
     connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
+    connect(ui->addLightBlockerButton, &QPushButton::clicked, this, &CustomControllerDialog::on_add_light_blocker_clicked);
+    connect(ui->removeLightBlockerButton, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_light_blocker_clicked);
 
     QFrame* left_wrapped = PluginUiWrapInSettingsPanel(ui->leftPanel, 8);
     ui->mainSplitter->insertWidget(0, left_wrapped);
@@ -930,6 +934,16 @@ void CustomControllerDialog::on_dimension_changed()
             QString("%1 mapping(s) were outside the new grid and were removed.").arg(static_cast<qlonglong>(removed)));
     }
 
+    const size_t blockers_before = light_blocker_cells_.size();
+    TrimLightBlockerCells(new_width, new_height, new_depth);
+    if(light_blocker_cells_.size() < blockers_before)
+    {
+        QMessageBox::information(this,
+                                 tr("Grid resized"),
+                                 tr("%1 light blocker cell(s) outside the new grid were removed.")
+                                     .arg(static_cast<qlonglong>(blockers_before - light_blocker_cells_.size())));
+    }
+
     if(current_layer >= new_depth)
     {
         current_layer = new_depth - 1;
@@ -1128,7 +1142,13 @@ void CustomControllerDialog::ApplyCellFillAndText(CustomControllerGridCellVisual
         visual.fill = base_color;
     }
 
-    if(!cell_mappings.empty() || is_selected)
+    if(visual.is_light_blocker && cell_mappings.empty())
+    {
+        visual.fill = is_selected ? PluginUiBlendColors(QColor(70, 45, 95), PluginUiGridSelectionColor(layout_grid), 0.65f)
+                                  : QColor(55, 35, 75);
+    }
+
+    if(!cell_mappings.empty() || is_selected || visual.is_light_blocker)
     {
         visual.text = PluginUiReadableTextOn(visual.fill, layout_grid);
     }
@@ -1144,8 +1164,9 @@ void CustomControllerDialog::PopulateCellVisual(int col,
                                                 CustomControllerGridCellVisual& visual,
                                                 bool is_selected) const
 {
-    visual.is_empty = cell_mappings.empty();
-    visual.is_hole  = visual.is_empty && IsMatrixHoleCell(col, row);
+    visual.is_empty         = cell_mappings.empty();
+    visual.is_hole          = visual.is_empty && IsMatrixHoleCell(col, row);
+    visual.is_light_blocker = IsLightBlockerCell(col, row, current_layer);
 
     if(!cell_mappings.empty())
     {
@@ -1173,6 +1194,14 @@ void CustomControllerDialog::PopulateCellVisual(int col,
     {
         visual.tooltip = tr("Matrix gap (no LED on this device)");
         visual.label.clear();
+    }
+    else if(visual.is_light_blocker)
+    {
+        visual.tooltip = tr("Light blocker — spatial lighting cannot pass through this cell");
+        if(cell_mappings.empty())
+        {
+            visual.label = QStringLiteral("B");
+        }
     }
     else
     {
@@ -1240,6 +1269,64 @@ void CustomControllerDialog::UpdateGridDisplay()
     syncPreviewLayoutIfVisible();
 }
 
+bool CustomControllerDialog::IsLightBlockerCell(int x, int y, int layer) const
+{
+    return light_blocker_cells_.find(GridCellKey3D(x, y, layer)) != light_blocker_cells_.end();
+}
+
+void CustomControllerDialog::TransformLightBlockerCells(const std::function<void(int& x, int& y, int& z)>& transform_fn)
+{
+    if(!transform_fn || light_blocker_cells_.empty())
+    {
+        return;
+    }
+
+    std::unordered_set<uint64_t> transformed;
+    transformed.reserve(light_blocker_cells_.size());
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(key, &x, &y, &z);
+        transform_fn(x, y, z);
+        transformed.insert(GridCellKey3D(x, y, z));
+    }
+    light_blocker_cells_ = std::move(transformed);
+}
+
+void CustomControllerDialog::TrimLightBlockerCells(int max_width, int max_height, int max_depth)
+{
+    for(auto it = light_blocker_cells_.begin(); it != light_blocker_cells_.end();)
+    {
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(*it, &x, &y, &z);
+        if(x < 0 || x >= max_width || y < 0 || y >= max_height || z < 0 || z >= max_depth)
+        {
+            it = light_blocker_cells_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+std::vector<CustomControllerLightBlocker> CustomControllerDialog::GetLightBlockers() const
+{
+    std::vector<CustomControllerLightBlocker> blockers;
+    blockers.reserve(light_blocker_cells_.size());
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        CustomControllerLightBlocker blocker{};
+        DecodeGridCellKey3D(key, &blocker.x, &blocker.y, &blocker.z);
+        blockers.push_back(blocker);
+    }
+    return blockers;
+}
+
 void CustomControllerDialog::UpdateSummaryLabel()
 {
     const std::vector<GridLEDMapping>& mappings_ref = led_mappings;
@@ -1248,7 +1335,22 @@ void CustomControllerDialog::UpdateSummaryLabel()
     {
         cells.insert(std::make_tuple(m.x, m.y, m.z));
     }
-    summary_label->setText(tr("Assigned: %1 cells · Layer %2").arg(cells.size()).arg(current_layer));
+
+    int blockers_on_layer = 0;
+    for(const uint64_t key : light_blocker_cells_)
+    {
+        int z = 0;
+        DecodeGridCellKey3D(key, nullptr, nullptr, &z);
+        if(z == current_layer)
+        {
+            ++blockers_on_layer;
+        }
+    }
+
+    summary_label->setText(tr("Assigned: %1 cells · Blockers: %2 · Layer %3")
+                               .arg(cells.size())
+                               .arg(blockers_on_layer)
+                               .arg(current_layer));
 
     if(transform_group)
     {
@@ -1590,6 +1692,31 @@ void CustomControllerDialog::on_fit_device_layout_clicked()
             }
             matrix_hole_cells = std::move(shifted_holes);
         }
+
+        if(!light_blocker_cells_.empty())
+        {
+            std::unordered_set<uint64_t> shifted_blockers;
+            shifted_blockers.reserve(light_blocker_cells_.size());
+            for(const uint64_t key : light_blocker_cells_)
+            {
+                int x = 0;
+                int y = 0;
+                int z = 0;
+                DecodeGridCellKey3D(key, &x, &y, &z);
+                if(z != current_layer)
+                {
+                    shifted_blockers.insert(key);
+                    continue;
+                }
+                const int nx = x - min_x;
+                const int ny = y - min_y;
+                if(nx >= 0 && nx < new_w && ny >= 0 && ny < new_h)
+                {
+                    shifted_blockers.insert(GridCellKey3D(nx, ny, z));
+                }
+            }
+            light_blocker_cells_ = std::move(shifted_blockers);
+        }
     }
     else if(!matrix_hole_cells.empty())
     {
@@ -1859,30 +1986,75 @@ void CustomControllerDialog::on_clear_cell_clicked()
 
 void CustomControllerDialog::on_remove_all_leds_clicked()
 {
-    if(led_mappings.empty())
+    if(led_mappings.empty() && light_blocker_cells_.empty())
     {
-        QMessageBox::information(this, "Grid Empty", "The grid is already empty - no LEDs to remove");
+        QMessageBox::information(this, tr("Grid empty"), tr("The grid has no LED assignments or light blockers."));
         return;
     }
 
-    int reply = QMessageBox::question(this, tr("Clear Grid"),
-                                      tr("Remove every LED assignment from the grid? (%1 assignment(s) will be cleared.)").arg(led_mappings.size()),
-                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    int reply = QMessageBox::question(this,
+                                      tr("Clear grid"),
+                                      tr("Remove every LED assignment and light blocker from the grid? "
+                                         "(%1 assignment(s), %2 blocker cell(s)).")
+                                          .arg(led_mappings.size())
+                                          .arg(light_blocker_cells_.size()),
+                                      QMessageBox::Yes | QMessageBox::No,
+                                      QMessageBox::No);
 
     if(reply == QMessageBox::Yes)
     {
-        size_t removed_count = led_mappings.size();
+        const size_t removed_count = led_mappings.size();
         RestoreAllIdentifiedLeds();
         led_mappings.clear();
         matrix_hole_cells.clear();
+        light_blocker_cells_.clear();
 
-        QMessageBox::information(this, tr("Removed"), tr("Removed all %1 LED assignment(s) from the grid").arg(static_cast<int>(removed_count)));
+        QMessageBox::information(this,
+                                 tr("Removed"),
+                                 tr("Cleared %1 LED assignment(s) and all light blockers.")
+                                     .arg(static_cast<int>(removed_count)));
 
         UpdateGridDisplay();
         UpdateCellInfo();
         refreshDeviceList();
         UpdateIdentifyButtonUi();
     }
+}
+
+void CustomControllerDialog::on_add_light_blocker_clicked()
+{
+    const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
+    if(selected_cells.empty())
+    {
+        QMessageBox::warning(this, tr("No selection"), tr("Select one or more cells on the layer grid first."));
+        return;
+    }
+
+    for(const std::pair<int, int>& cell : selected_cells)
+    {
+        light_blocker_cells_.insert(GridCellKey3D(cell.first, cell.second, current_layer));
+    }
+
+    UpdateGridDisplay();
+    UpdateCellInfo();
+}
+
+void CustomControllerDialog::on_remove_light_blocker_clicked()
+{
+    const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
+    if(selected_cells.empty())
+    {
+        QMessageBox::warning(this, tr("No selection"), tr("Select cells to remove light blockers from."));
+        return;
+    }
+
+    for(const std::pair<int, int>& cell : selected_cells)
+    {
+        light_blocker_cells_.erase(GridCellKey3D(cell.first, cell.second, current_layer));
+    }
+
+    UpdateGridDisplay();
+    UpdateCellInfo();
 }
 
 void CustomControllerDialog::on_save_clicked()
@@ -1916,9 +2088,27 @@ void CustomControllerDialog::on_save_clicked()
             QString("Some invalid mappings (outside current grid bounds) were removed."));
     }
 
-    if(led_mappings.empty())
+    for(auto it = light_blocker_cells_.begin(); it != light_blocker_cells_.end();)
     {
-        QMessageBox::warning(this, "No LEDs Assigned", "Please assign at least one LED to the grid");
+        int x = 0;
+        int y = 0;
+        int z = 0;
+        DecodeGridCellKey3D(*it, &x, &y, &z);
+        if(x < 0 || x >= w || y < 0 || y >= h || z < 0 || z >= d)
+        {
+            it = light_blocker_cells_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if(led_mappings.empty() && light_blocker_cells_.empty())
+    {
+        QMessageBox::warning(this,
+                             tr("Empty layout"),
+                             tr("Assign at least one LED or add at least one light blocker cell."));
         return;
     }
 
@@ -2016,7 +2206,8 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
                                                     const std::vector<GridLEDMapping>& mappings,
                                                     float spacing_x_mm,
                                                     float spacing_y_mm,
-                                                    float spacing_z_mm)
+                                                    float spacing_z_mm,
+                                                    const std::vector<CustomControllerLightBlocker>& light_blockers)
 {
     setWindowTitle(tr("Edit Custom 3D Controller"));
     name_edit->setText(QString::fromStdString(name));
@@ -2028,6 +2219,11 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     height_spin->setValue(height);
     depth_spin->setValue(depth);
     led_mappings = mappings;
+    light_blocker_cells_.clear();
+    for(const CustomControllerLightBlocker& blocker : light_blockers)
+    {
+        light_blocker_cells_.insert(GridCellKey3D(blocker.x, blocker.y, blocker.z));
+    }
 
     auto set_spacing_spin = [](QDoubleSpinBox* spin, double value_mm)
     {
@@ -2535,6 +2731,14 @@ void CustomControllerDialog::on_rotate_grid_90()
         led_mappings[i].y = width - 1 - old_x;
     }
 
+    TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)z;
+        const int old_x = x;
+        const int old_y = y;
+        x = old_y;
+        y = width - 1 - old_x;
+    });
+
     width_spin->blockSignals(true);
     height_spin->blockSignals(true);
     width_spin->setValue(height);
@@ -2564,6 +2768,12 @@ void CustomControllerDialog::on_rotate_grid_180()
         led_mappings[i].y = height - 1 - led_mappings[i].y;
     }
 
+    TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)z;
+        x = width - 1 - x;
+        y = height - 1 - y;
+    });
+
     matrix_hole_cells.clear();
     UpdateGridDisplay();
     WarnIfMappingCollisions();
@@ -2587,6 +2797,14 @@ void CustomControllerDialog::on_rotate_grid_270()
         led_mappings[i].x = height - 1 - old_y;
         led_mappings[i].y = old_x;
     }
+
+    TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)z;
+        const int old_x = x;
+        const int old_y = y;
+        x = height - 1 - old_y;
+        y = old_x;
+    });
 
     width_spin->blockSignals(true);
     height_spin->blockSignals(true);
@@ -2614,6 +2832,12 @@ void CustomControllerDialog::on_flip_grid_horizontal()
         led_mappings[i].x = width - 1 - led_mappings[i].x;
     }
 
+    TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)y;
+        (void)z;
+        x = width - 1 - x;
+    });
+
     UpdateGridDisplay();
     WarnIfMappingCollisions();
 }
@@ -2631,6 +2855,12 @@ void CustomControllerDialog::on_flip_grid_vertical()
     {
         led_mappings[i].y = height - 1 - led_mappings[i].y;
     }
+
+    TransformLightBlockerCells([&](int& x, int& y, int& z) {
+        (void)x;
+        (void)z;
+        y = height - 1 - y;
+    });
 
     UpdateGridDisplay();
     WarnIfMappingCollisions();

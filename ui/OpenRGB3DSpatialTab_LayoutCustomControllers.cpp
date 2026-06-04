@@ -112,7 +112,8 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
         dialog.GetLEDMappings(),
         dialog.GetSpacingX(),
         dialog.GetSpacingY(),
-        dialog.GetSpacingZ()
+        dialog.GetSpacingZ(),
+        dialog.GetLightBlockers()
     );
 
     int new_index = (int)virtual_controllers.size();
@@ -338,7 +339,8 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
                                   virtual_ctrl->GetMappings(),
                                   virtual_ctrl->GetSpacingX(),
                                   virtual_ctrl->GetSpacingY(),
-                                  virtual_ctrl->GetSpacingZ());
+                                  virtual_ctrl->GetSpacingZ(),
+                                  virtual_ctrl->GetLightBlockers());
 
     dialog.SetLayoutGridScaleMm(grid_scale_mm);
 
@@ -435,7 +437,8 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
             dialog.GetLEDMappings(),
             dialog.GetSpacingX(),
             dialog.GetSpacingY(),
-            dialog.GetSpacingZ()
+            dialog.GetSpacingZ(),
+            dialog.GetLightBlockers()
         );
 
         VirtualController3D* new_ptr = virtual_controllers[list_row].get();

@@ -12,8 +12,9 @@ struct CustomControllerGridCellVisual
     QColor      text;
     QString     label;
     QString     tooltip;
-    bool        is_hole  = false;
-    bool        is_empty = true;
+    bool        is_hole          = false;
+    bool        is_light_blocker = false;
+    bool        is_empty         = true;
 };
 
 #endif

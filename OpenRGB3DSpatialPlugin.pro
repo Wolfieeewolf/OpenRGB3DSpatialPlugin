@@ -148,6 +148,11 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftEffectLibrary.h \
+    SpatialLighting/SpatialLightingEngine.h \
+    SpatialLighting/SpatialLightingSceneProvider.h \
+    Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
+    Effects3D/SpatialLighting/RoomCampfireEffect3D.h \
+    Effects3D/SpatialLighting/RoomLightProbeEffect3D.h \
     ui/PluginSettingsPaths.h \
     ui/ProfilesTabPanel.h \
     ui/GridSettingsPanel.h \
@@ -170,6 +175,8 @@ HEADERS += \
     ui/ControllerDisplayUtils.h \
     ui/LEDViewport3D.h \
     ui/ZoneControllerPickerDialog.h \
+    ui/CustomControllerTypes.h \
+    ui/CustomControllerGridKeys.h \
     ui/CustomControllerDialog.h \
     ui/ReferencePointDialog.h \
     ui/DisplayPlaneDialog.h \
@@ -294,6 +301,11 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftGame.cpp \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
+    SpatialLighting/SpatialLightingEngine.cpp \
+    SpatialLighting/SpatialLightingSceneProvider.cpp \
+    Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \
+    Effects3D/SpatialLighting/RoomCampfireEffect3D.cpp \
+    Effects3D/SpatialLighting/RoomLightProbeEffect3D.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/ProfilesTabPanel.cpp \
     ui/GridSettingsPanel.cpp \

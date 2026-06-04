@@ -255,6 +255,12 @@ void CustomControllerGridItem::paint(QPainter* painter, const QStyleOptionGraphi
                 painter->drawLine(tile.topLeft(), tile.bottomRight());
                 painter->drawLine(tile.topRight(), tile.bottomLeft());
             }
+            else if(cell->is_light_blocker)
+            {
+                painter->setPen(QPen(QColor(120, 70, 160), kCellBorderW));
+                painter->setBrush(QColor(55, 35, 75, 200));
+                painter->drawRect(tile);
+            }
 
             if(!cell->label.isEmpty())
             {

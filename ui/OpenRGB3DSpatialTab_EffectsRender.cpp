@@ -8,6 +8,7 @@
 #include "ScreenCaptureManager.h"
 #include "LogManager.h"
 #include "ControllerLayout3D.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialTabLedHelpers.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
@@ -15,6 +16,7 @@
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <cmath>
 #include <algorithm>
+#include <set>
 
 static float AverageAlongAxis(ControllerTransform* transform,
                               EffectAxis sort_axis,
@@ -109,6 +111,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     {
         return;
     }
+
+    SyncDisplayPlaneManager();
+    SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);
+    SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
 
     static uint64_t s_effect_render_sequence = 0;
     const uint64_t effect_render_sequence = ++s_effect_render_sequence;
@@ -319,6 +325,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
     {
+        SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
         struct OverlaySlotGridOverride
         {
             bool use_zone_grid = false;
@@ -368,6 +375,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 room_grid_overlay_buffer.resize(count);
             }
             const float time_val = effect_time;
+            SpatialLightingSceneProvider* spatial_scene = SpatialLightingSceneProvider::instance();
+            const bool prev_overlay_preview = spatial_scene->roomGridOverlayPreview();
+            spatial_scene->SetRoomGridOverlayPreview(true);
 
             for(int ix = 0; ix < nx; ix++)
             {
@@ -383,7 +393,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                         {
                             const RenderEffectSlot& slot = active_effects[effect_idx];
-                            if(!slot.effect) continue;
+                            if(!slot.effect)
+                            {
+                                continue;
+                            }
                             const OverlaySlotGridOverride& grid_override = overlay_slot_grid_overrides[effect_idx];
                             if(slot.effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                             {
@@ -398,8 +411,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               : grid_override.room_grid_local.get();
                             }
                             const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
-                            slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
-                            slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
+                            if(!slot.effect->SkipsSpatialSampleWarp())
+                            {
+                                slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
+                                slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
+                            }
                             RGBColor effect_color =
                                 slot.effect->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
                             if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
@@ -411,6 +427,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                 }
             }
+            spatial_scene->SetRoomGridOverlayPreview(prev_overlay_preview);
             viewport->SetRoomGridColorCallback(nullptr);
             viewport->SetRoomGridColorBuffer(room_grid_overlay_buffer);
         }
@@ -489,6 +506,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
 
         ControllerLayout3D::UpdateWorldPositions(transform);
+        SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(static_cast<int>(ctrl_idx));
 
         if(transform->virtual_controller && !transform->controller)
         {
@@ -572,8 +590,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         }
                         const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                         MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
-                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                        if(!effect->SkipsSpatialSampleWarp())
+                        {
+                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
+                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                        }
                         RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                         if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                             effect_color = 0x00000000;
@@ -690,8 +711,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                     const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
-                    effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
-                    effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                    if(!effect->SkipsSpatialSampleWarp())
+                    {
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
+                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                    }
                     RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
                     if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
                         effect_color = 0x00000000;

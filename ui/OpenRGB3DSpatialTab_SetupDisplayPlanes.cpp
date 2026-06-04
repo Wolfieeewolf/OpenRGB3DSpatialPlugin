@@ -161,14 +161,10 @@ void OpenRGB3DSpatialTab::on_display_planes_list_selection_changed(int row)
     }
 }
 
-void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
+void OpenRGB3DSpatialTab::SyncDisplayPlaneManager()
 {
-    if(viewport)
-    {
-        viewport->NotifyDisplayPlaneChanged();
-    }
-
     std::vector<DisplayPlane3D*> plane_ptrs;
+    plane_ptrs.reserve(display_planes.size());
     for(size_t plane_index = 0; plane_index < display_planes.size(); plane_index++)
     {
         std::unique_ptr<DisplayPlane3D>& plane = display_planes[plane_index];
@@ -178,7 +174,16 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
         }
     }
     DisplayPlaneManager::instance()->SetDisplayPlanes(plane_ptrs);
+}
 
+void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
+{
+    if(viewport)
+    {
+        viewport->NotifyDisplayPlaneChanged();
+    }
+
+    SyncDisplayPlaneManager();
     emit GridLayoutChanged();
 }
 

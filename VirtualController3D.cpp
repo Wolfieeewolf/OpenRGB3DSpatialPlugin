@@ -207,9 +207,14 @@ RGBController* PrimaryMappedController(const std::vector<GridLEDMapping>& mappin
 }
 
 VirtualController3D::VirtualController3D(const std::string& name,
-                                         int width, int height, int depth,
+                                         int width,
+                                         int height,
+                                         int depth,
                                          const std::vector<GridLEDMapping>& mappings,
-                                         float spacing_x, float spacing_y, float spacing_z)
+                                         float spacing_x,
+                                         float spacing_y,
+                                         float spacing_z,
+                                         const std::vector<CustomControllerLightBlocker>& blockers)
     : name(name),
       width(width),
       height(height),
@@ -217,7 +222,8 @@ VirtualController3D::VirtualController3D(const std::string& name,
       spacing_mm_x(spacing_x),
       spacing_mm_y(spacing_y),
       spacing_mm_z(spacing_z),
-      led_mappings(mappings)
+      led_mappings(mappings),
+      light_blockers(blockers)
 {
 }
 
@@ -303,6 +309,20 @@ json VirtualController3D::ToJson() const
         mappings_array.push_back(m);
     }
     j["mappings"] = mappings_array;
+
+    if(!light_blockers.empty())
+    {
+        json blockers_array = json::array();
+        for(const CustomControllerLightBlocker& blocker : light_blockers)
+        {
+            json b;
+            b["x"] = blocker.x;
+            b["y"] = blocker.y;
+            b["z"] = blocker.z;
+            blockers_array.push_back(b);
+        }
+        j["light_blockers"] = blockers_array;
+    }
 
     return j;
 }
@@ -408,7 +428,28 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
         return nullptr;
     }
 
-    return std::make_unique<VirtualController3D>(name, width, height, depth, mappings, spacing_x, spacing_y, spacing_z);
+    std::vector<CustomControllerLightBlocker> blockers;
+    if(j.contains("light_blockers") && j["light_blockers"].is_array())
+    {
+        for(const json& blocker_json : j["light_blockers"])
+        {
+            CustomControllerLightBlocker blocker{};
+            blocker.x = blocker_json.at("x").get<int>();
+            blocker.y = blocker_json.at("y").get<int>();
+            blocker.z = blocker_json.at("z").get<int>();
+            blockers.push_back(blocker);
+        }
+    }
+
+    return std::make_unique<VirtualController3D>(name,
+                                               width,
+                                               height,
+                                               depth,
+                                               mappings,
+                                               spacing_x,
+                                               spacing_y,
+                                               spacing_z,
+                                               blockers);
 }
 
 std::vector<GridLEDMapping> VirtualController3D::ImportMappingsFromCoordinateMapJson(

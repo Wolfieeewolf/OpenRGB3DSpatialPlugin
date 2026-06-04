@@ -328,8 +328,11 @@ public:
     float GetBoundaryMultiplier(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
     float ApplyEdgeToIntensity(float normalized_dist) const;
 
-    void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
-    void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
+    virtual void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
+    virtual void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
+
+    /** When true, stack origin/scale/rotation must not warp sample coordinates (spatial lighting). */
+    virtual bool SkipsSpatialSampleWarp() const { return false; }
 
     virtual bool RequiresWorldSpaceCoordinates() const { return true; }
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }

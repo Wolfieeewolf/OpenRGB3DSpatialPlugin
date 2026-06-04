@@ -574,6 +574,7 @@ private:
     void UpdateCurrentDisplayPlaneListItemLabel();
     void RefreshDisplayPlaneDetails();
     DisplayPlane3D* GetSelectedDisplayPlane();
+    void SyncDisplayPlaneManager();
     void NotifyDisplayPlaneChanged();
     void SyncDisplayPlaneControls(DisplayPlane3D* plane);
     void SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, bool visible);

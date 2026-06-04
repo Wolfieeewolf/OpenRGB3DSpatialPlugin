@@ -20,6 +20,9 @@ public:
     static Vector3D GetControllerCenterWorld(const ControllerTransform* ctrl_transform);
     static void UpdateWorldPositions(ControllerTransform* ctrl_transform);
     static void MarkWorldPositionsDirty(ControllerTransform* ctrl_transform);
+    static void CalculateControllerLocalBounds(const ControllerTransform* ctrl_transform,
+                                               Vector3D& min_bounds,
+                                               Vector3D& max_bounds);
 
     struct SpatialCell
     {

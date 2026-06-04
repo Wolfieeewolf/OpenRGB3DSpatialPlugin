@@ -7,6 +7,7 @@
 #include "GridSpaceUtils.h"
 
 #include <cmath>
+#include <map>
 #include <vector>
 
 #ifndef M_PI
@@ -191,6 +192,137 @@ void appendWorldQuadTriangles(GizmoDrawMesh& mesh,
 {
     viewportMeshAddTriangle(mesh, color, c0.x, c0.y, c0.z, c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
     viewportMeshAddTriangle(mesh, color, c0.x, c0.y, c0.z, c2.x, c2.y, c2.z, c3.x, c3.y, c3.z);
+}
+
+struct LightBlockerLayerExtent
+{
+    int min_x = 0;
+    int min_y = 0;
+    int max_x = 0;
+    int max_y = 0;
+    bool initialized = false;
+};
+
+void appendLocalFlatQuadXY(GizmoDrawMesh& mesh,
+                           float x0,
+                           float y0,
+                           float x1,
+                           float y1,
+                           float z,
+                           const float color[3])
+{
+    const Vector3D c0 = {x0, y0, z};
+    const Vector3D c1 = {x1, y0, z};
+    const Vector3D c2 = {x1, y1, z};
+    const Vector3D c3 = {x0, y1, z};
+    appendWorldQuadTriangles(mesh, c0, c1, c2, c3, color);
+}
+
+void appendLocalFlatQuadBorderXY(GizmoDrawMesh& mesh,
+                                 float x0,
+                                 float y0,
+                                 float x1,
+                                 float y1,
+                                 float z,
+                                 const float color[3],
+                                 float line_width)
+{
+    viewportMeshAddLine(mesh, line_width, color, x0, y0, z, x1, y0, z);
+    viewportMeshAddLine(mesh, line_width, color, x1, y0, z, x1, y1, z);
+    viewportMeshAddLine(mesh, line_width, color, x1, y1, z, x0, y1, z);
+    viewportMeshAddLine(mesh, line_width, color, x0, y1, z, x0, y0, z);
+}
+
+void appendLightBlockerLayers(GizmoDrawMesh& layer_fill_mesh,
+                              GizmoDrawMesh& cell_fill_mesh,
+                              GizmoDrawMesh& border_mesh,
+                              VirtualController3D* layout,
+                              float grid_scale_mm,
+                              float border_width)
+{
+    if(!layout)
+    {
+        return;
+    }
+
+    const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
+    if(blockers.empty())
+    {
+        return;
+    }
+
+    float scale_x = 1.0f;
+    float scale_y = 1.0f;
+    float scale_z = 1.0f;
+    if(layout->GetSpacingX() > 0.001f)
+    {
+        scale_x = MMToGridUnits(layout->GetSpacingX(), grid_scale_mm);
+    }
+    if(layout->GetSpacingY() > 0.001f)
+    {
+        scale_y = MMToGridUnits(layout->GetSpacingY(), grid_scale_mm);
+    }
+    if(layout->GetSpacingZ() > 0.001f)
+    {
+        scale_z = MMToGridUnits(layout->GetSpacingZ(), grid_scale_mm);
+    }
+
+    std::map<int, LightBlockerLayerExtent> layers;
+    for(const CustomControllerLightBlocker& blocker : blockers)
+    {
+        LightBlockerLayerExtent& layer = layers[blocker.z];
+        if(!layer.initialized)
+        {
+            layer.min_x = blocker.x;
+            layer.min_y = blocker.y;
+            layer.max_x = blocker.x;
+            layer.max_y = blocker.y;
+            layer.initialized = true;
+        }
+        else
+        {
+            if(blocker.x < layer.min_x) layer.min_x = blocker.x;
+            if(blocker.y < layer.min_y) layer.min_y = blocker.y;
+            if(blocker.x > layer.max_x) layer.max_x = blocker.x;
+            if(blocker.y > layer.max_y) layer.max_y = blocker.y;
+        }
+    }
+
+    const float layer_fill[3] = {0.35f, 0.22f, 0.45f};
+    const float cell_fill[3] = {0.22f, 0.14f, 0.29f};
+    const float border[3] = {0.47f, 0.27f, 0.63f};
+
+    for(const auto& layer_entry : layers)
+    {
+        const int layer_z = layer_entry.first;
+        const LightBlockerLayerExtent& extent = layer_entry.second;
+        if(!extent.initialized)
+        {
+            continue;
+        }
+
+        const float z_plane = static_cast<float>(layer_z + 1) * scale_z;
+        const float layer_x0 = static_cast<float>(extent.min_x) * scale_x;
+        const float layer_y0 = static_cast<float>(extent.min_y) * scale_y;
+        const float layer_x1 = static_cast<float>(extent.max_x + 1) * scale_x;
+        const float layer_y1 = static_cast<float>(extent.max_y + 1) * scale_y;
+
+        appendLocalFlatQuadXY(layer_fill_mesh, layer_x0, layer_y0, layer_x1, layer_y1, z_plane, layer_fill);
+        appendLocalFlatQuadBorderXY(border_mesh, layer_x0, layer_y0, layer_x1, layer_y1, z_plane, border,
+                                    border_width * 0.85f);
+    }
+
+    for(const CustomControllerLightBlocker& blocker : blockers)
+    {
+        const float x0 = static_cast<float>(blocker.x) * scale_x;
+        const float y0 = static_cast<float>(blocker.y) * scale_y;
+        const float x1 = static_cast<float>(blocker.x + 1) * scale_x;
+        const float y1 = static_cast<float>(blocker.y + 1) * scale_y;
+        const float z_plane = static_cast<float>(blocker.z + 1) * scale_z;
+
+        appendLocalFlatQuadXY(cell_fill_mesh, x0, y0, x1, y1, z_plane, cell_fill);
+        appendLocalFlatQuadBorderXY(border_mesh, x0, y0, x1, y1, z_plane, border, border_width);
+    }
 }
 
 void appendCalibrationPattern(GizmoDrawMesh& mesh, const Vector3D corners[4])
@@ -641,6 +773,33 @@ void LEDViewport3D::drawViewportSceneGpu()
             {
                 viewport_renderer_.drawColoredPoints(led_draw_positions, led_draw_colors, model,
                                                      ledPreviewPointSizeGl());
+            }
+
+            if(ctrl->virtual_controller && !ctrl->virtual_controller->GetLightBlockers().empty())
+            {
+                const bool is_primary = ((int)i == selected_controller_idx);
+                const bool is_selected = IsControllerSelected((int)i);
+                const float layer_alpha = is_primary ? 0.22f : (is_selected ? 0.18f : 0.14f);
+                const float cell_alpha = is_primary ? 0.50f : (is_selected ? 0.44f : 0.38f);
+                const float border_width = is_primary ? 2.5f : (is_selected ? 2.0f : 1.5f);
+
+                GizmoDrawMesh blocker_layer_fill_mesh;
+                GizmoDrawMesh blocker_cell_fill_mesh;
+                GizmoDrawMesh blocker_border_mesh;
+                appendLightBlockerLayers(blocker_layer_fill_mesh, blocker_cell_fill_mesh, blocker_border_mesh,
+                                         ctrl->virtual_controller, grid_scale_mm, border_width);
+                if(!blocker_layer_fill_mesh.triangle_positions.empty())
+                {
+                    viewport_renderer_.drawColoredTriangles(blocker_layer_fill_mesh.triangle_positions,
+                                                            blocker_layer_fill_mesh.triangle_colors, model,
+                                                            layer_alpha);
+                }
+                if(!blocker_cell_fill_mesh.triangle_positions.empty())
+                {
+                    viewport_renderer_.drawColoredTriangles(blocker_cell_fill_mesh.triangle_positions,
+                                                            blocker_cell_fill_mesh.triangle_colors, model, cell_alpha);
+                }
+                drawColoredMeshBatches(viewport_renderer_, blocker_border_mesh, model);
             }
         }
     }
