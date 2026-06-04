@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "SpatialEffect3D.h"
+
+#include "SpatialRoom/SpatialRoomDefaults.h"
+#include "SpatialRoom/SpatialRoomFrame.h"
 #include "EffectMotionPanel.h"
 #include "EffectOutputPanel.h"
 #include "EffectGeometryPanel.h"
@@ -1329,6 +1332,18 @@ void SpatialEffect3D::SyncSpatialMappingControlVisibility()
     {
         voxel_drive_combo->setEnabled(voxel_mode);
     }
+}
+
+SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::GetSpatialRoomCapabilities() const
+{
+    return SpatialRoom::DefaultCapabilitiesForMode(GetSpatialRoomMode());
+}
+
+SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::EffectiveSpatialRoomCapabilities() const
+{
+    SpatialRoom::SpatialRoomCapabilities caps = GetSpatialRoomCapabilities();
+    SpatialRoom::ApplyDepthPreset(caps, SpatialRoom::CurrentFrameContext().depth_preset);
+    return caps;
 }
 
 void SpatialEffect3D::SetSpatialMappingMode(SpatialMappingMode mode)

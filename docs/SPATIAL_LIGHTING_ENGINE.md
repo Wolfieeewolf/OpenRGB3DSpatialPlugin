@@ -121,15 +121,17 @@ Still planned: reference-point props, denser mesh occluders, screen-mirror coupl
 
 ---
 
-## Code placement (when building)
+## Code placement
 
-| Piece | Suggested location |
-|-------|-------------------|
-| Scene, lights, occluders | `SpatialLighting/` or `SpatialSamplers/SpatialLightingEngine.*` |
-| Shade API | `ShadeLed(room_pos, viewer_anchor, time) → RGBColor` |
-| Layout → occluders | Hook from `ZoneManager3D` / `DisplayPlaneManager` / room bounds |
-| Mapping mode enum | `SpatialEffect3D.h` |
-| Settings UI | Per-mode panels; hide origin-offset for lighting mode |
+| Piece | Location |
+|-------|----------|
+| Room taxonomy, frame context, depth preset | `SpatialRoom/` |
+| Scene, lights, occluders, `ShadeLed` | `SpatialLighting/` |
+| Game/voxel projection | `SpatialSamplers/` |
+| Lighting effect plugins | `Effects3D/SpatialLighting/` |
+| Effect hooks | `SpatialEffect3D::GetSpatialRoomMode()` |
+
+See [SPATIAL_ROOM.md](SPATIAL_ROOM.md).
 
 ---
 

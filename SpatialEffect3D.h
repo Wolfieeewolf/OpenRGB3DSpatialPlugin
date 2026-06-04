@@ -22,6 +22,7 @@
 
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
+#include "SpatialRoom/SpatialRoomTypes.h"
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
 #include "Effects3D/AudioReactiveCommon.h"
@@ -333,6 +334,11 @@ public:
 
     /** When true, stack origin/scale/rotation must not warp sample coordinates (spatial lighting). */
     virtual bool SkipsSpatialSampleWarp() const { return false; }
+
+    /** Room evaluation family (see SpatialRoom/ and docs/SPATIAL_ROOM.md). */
+    virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const { return SpatialRoom::SpatialRoomMode::OriginField; }
+    virtual SpatialRoom::SpatialRoomCapabilities GetSpatialRoomCapabilities() const;
+    SpatialRoom::SpatialRoomCapabilities EffectiveSpatialRoomCapabilities() const;
 
     virtual bool RequiresWorldSpaceCoordinates() const { return true; }
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }

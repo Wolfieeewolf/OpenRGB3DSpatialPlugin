@@ -111,6 +111,8 @@ INCLUDEPATH += \
     Effects3D \
     Game \
     SpatialSamplers \
+    SpatialRoom \
+    SpatialLighting \
     Shaders \
     Audio
 
@@ -148,6 +150,9 @@ HEADERS += \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftEffectLibrary.h \
+    SpatialRoom/SpatialRoomTypes.h \
+    SpatialRoom/SpatialRoomDefaults.h \
+    SpatialRoom/SpatialRoomFrame.h \
     SpatialLighting/SpatialLightingEngine.h \
     SpatialLighting/SpatialLightingSceneProvider.h \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
@@ -301,6 +306,8 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftGame.cpp \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
+    SpatialRoom/SpatialRoomDefaults.cpp \
+    SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/SpatialLightingEngine.cpp \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \

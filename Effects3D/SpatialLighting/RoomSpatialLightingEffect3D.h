@@ -5,6 +5,8 @@
 #define ROOMSPATIALLIGHTINGEFFECT3D_H
 
 #include "SpatialEffect3D.h"
+#include "SpatialRoom/SpatialRoomTypes.h"
+#include "SpatialRoom/SpatialRoomDefaults.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
 
 /** Stack reference = viewer only; do not warp LED sample coords around the anchor. */
@@ -12,6 +14,16 @@ class RoomSpatialLightingEffect3D : public SpatialEffect3D
 {
 public:
     using SpatialEffect3D::SpatialEffect3D;
+
+    SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const override
+    {
+        return SpatialRoom::SpatialRoomMode::SpatialLighting;
+    }
+
+    SpatialRoom::SpatialRoomCapabilities GetSpatialRoomCapabilities() const override
+    {
+        return SpatialRoom::DefaultCapabilitiesForMode(SpatialRoom::SpatialRoomMode::SpatialLighting);
+    }
 
     bool SkipsSpatialSampleWarp() const override { return true; }
     bool RequiresWorldSpaceCoordinates() const override { return false; }

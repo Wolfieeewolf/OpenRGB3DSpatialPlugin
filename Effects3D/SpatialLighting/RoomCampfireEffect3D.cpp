@@ -2,6 +2,8 @@
 
 #include "RoomCampfireEffect3D.h"
 
+#include "SpatialRoom/SpatialRoomFrame.h"
+#include "SpatialRoom/SpatialRoomDefaults.h"
 #include "EffectHelpers.h"
 #include "EffectUiRows.h"
 #include "EffectUiSync.h"
@@ -33,12 +35,15 @@ RoomCampfireEffect3D::RoomCampfireEffect3D(QWidget* parent) : RoomSpatialLightin
 
 void RoomCampfireEffect3D::ApplyLiveShadeSettings(SpatialLighting::RoomScene& scene) const
 {
+    SpatialRoom::ApplyDepthPresetToShadeSettings(scene.shade, SpatialRoom::CurrentFrameContext().depth_preset);
+
     scene.shade.ambient_level = 0.05f;
     scene.shade.ao_strength = ao_strength_ / 100.0f;
     scene.shade.room_fill_strength = (room_fill_ / 100.0f) * (effect_brightness / 100.0f);
     scene.shade.room_fill_atten = 1.0f;
-    scene.shade.use_occlusion = use_occlusion_;
-    scene.shade.use_ambient_occlusion = use_occlusion_ && ao_strength_ > 0.5f;
+    scene.shade.use_occlusion = scene.shade.use_occlusion && use_occlusion_;
+    scene.shade.use_ambient_occlusion =
+        scene.shade.use_ambient_occlusion && use_occlusion_ && ao_strength_ > 0.5f;
     scene.shade.direct_falloff = 0.9f;
 }
 

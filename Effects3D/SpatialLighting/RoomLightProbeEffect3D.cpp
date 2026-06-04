@@ -2,6 +2,8 @@
 
 #include "RoomLightProbeEffect3D.h"
 
+#include "SpatialRoom/SpatialRoomFrame.h"
+#include "SpatialRoom/SpatialRoomDefaults.h"
 #include "GridSpaceUtils.h"
 
 REGISTER_EFFECT_3D(RoomLightProbeEffect3D);
@@ -13,11 +15,11 @@ RoomLightProbeEffect3D::RoomLightProbeEffect3D(QWidget* parent) : RoomSpatialLig
 
 void RoomLightProbeEffect3D::ApplyLiveShadeSettings(SpatialLighting::RoomScene& scene) const
 {
+    SpatialRoom::ApplyDepthPresetToShadeSettings(scene.shade, SpatialRoom::CurrentFrameContext().depth_preset);
+
     scene.shade.ambient_level = 0.04f;
     scene.shade.ao_strength = 0.75f;
     scene.shade.room_fill_strength = 0.35f;
-    scene.shade.use_occlusion = true;
-    scene.shade.use_ambient_occlusion = true;
 }
 
 EffectInfo3D RoomLightProbeEffect3D::GetEffectInfo() const

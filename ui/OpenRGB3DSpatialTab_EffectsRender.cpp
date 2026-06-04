@@ -9,6 +9,7 @@
 #include "LogManager.h"
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
+#include "SpatialRoom/SpatialRoomFrame.h"
 #include "SpatialTabLedHelpers.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
@@ -118,6 +119,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     static uint64_t s_effect_render_sequence = 0;
     const uint64_t effect_render_sequence = ++s_effect_render_sequence;
+
+    SpatialRoom::BeginEffectRenderFrame(effect_render_sequence, SpatialRoom::SpatialRoomDepthPreset::Standard);
 
     ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
                                                               manual_room_width,
@@ -375,9 +378,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 room_grid_overlay_buffer.resize(count);
             }
             const float time_val = effect_time;
-            SpatialLightingSceneProvider* spatial_scene = SpatialLightingSceneProvider::instance();
-            const bool prev_overlay_preview = spatial_scene->roomGridOverlayPreview();
-            spatial_scene->SetRoomGridOverlayPreview(true);
+            SpatialRoom::BeginRoomGridOverlayPass();
 
             for(int ix = 0; ix < nx; ix++)
             {
@@ -427,7 +428,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                 }
             }
-            spatial_scene->SetRoomGridOverlayPreview(prev_overlay_preview);
+            SpatialRoom::EndRoomGridOverlayPass();
             viewport->SetRoomGridColorCallback(nullptr);
             viewport->SetRoomGridColorBuffer(room_grid_overlay_buffer);
         }
@@ -792,6 +793,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         viewport->UploadDisplayPlaneCaptureTexturesDuringEffectTick();
         viewport->UpdateColors();
     }
+
+    SpatialRoom::EndEffectRenderFrame();
 }
 
 SpatialEffectSettingsLayout OpenRGB3DSpatialTab::settingsLayoutForClass(const std::string& class_name) const
