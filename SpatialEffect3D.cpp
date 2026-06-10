@@ -24,6 +24,12 @@
 #include "VoxelMapping.h"
 #include "PluginUiUtils.h"
 #include "Effects3D/AudioReactiveCommon.h"
+#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
+#include "SpatialLighting/EmitterRelayMirror.h"
+#include "SpatialRoom/SpatialRoomFrame.h"
+#include "ui/widgets/EffectRoomOutputPanel.h"
+#include "GridSpaceUtils.h"
 #include <QColorDialog>
 #include <QSignalBlocker>
 #include <algorithm>
@@ -256,6 +262,13 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         start_effect_button = layer_banner->startEffectButton();
         stop_effect_button  = layer_banner->stopEffectButton();
     }
+
+    EnsureRoomOutputPanel();
+    PluginUiAddSectionBlock(main_layout, QStringLiteral("Room output"),
+                            QStringLiteral("How this layer uses room space: coordinates, emitter source, or relay shading."),
+                            room_output_panel_,
+                            &room_output_section,
+                            false);
 
     surfaces_group = new EffectSurfacesPanel(effect_surface_mask, this);
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Surfaces"),
@@ -1346,6 +1359,201 @@ SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::EffectiveSpatialRoomCapabi
     return caps;
 }
 
+bool SpatialEffect3D::SkipsSpatialSampleWarp() const
+{
+    return EffectiveSpatialRoomCapabilities().has(SpatialRoom::CapSkipSampleWarp);
+}
+
+void SpatialEffect3D::setRoomEmitterControllerIndex(int index, bool enabled)
+{
+    auto it = std::find(effect_emitter_controller_indices_.begin(), effect_emitter_controller_indices_.end(), index);
+    if(enabled)
+    {
+        if(it == effect_emitter_controller_indices_.end())
+        {
+            effect_emitter_controller_indices_.push_back(index);
+        }
+        auto recv_it = std::find(effect_receiver_controller_indices_.begin(),
+                                 effect_receiver_controller_indices_.end(),
+                                 index);
+        if(recv_it != effect_receiver_controller_indices_.end())
+        {
+            effect_receiver_controller_indices_.erase(recv_it);
+        }
+    }
+    else if(it != effect_emitter_controller_indices_.end())
+    {
+        effect_emitter_controller_indices_.erase(it);
+    }
+    relay_occluders_valid_ = false;
+}
+
+void SpatialEffect3D::setRoomReceiverControllerIndex(int index, bool enabled)
+{
+    if(enabled && isRoomEmitterController(index))
+    {
+        return;
+    }
+
+    auto it = std::find(effect_receiver_controller_indices_.begin(), effect_receiver_controller_indices_.end(), index);
+    if(enabled)
+    {
+        if(it == effect_receiver_controller_indices_.end())
+        {
+            effect_receiver_controller_indices_.push_back(index);
+        }
+        auto emit_it = std::find(effect_emitter_controller_indices_.begin(),
+                                 effect_emitter_controller_indices_.end(),
+                                 index);
+        if(emit_it != effect_emitter_controller_indices_.end())
+        {
+            effect_emitter_controller_indices_.erase(emit_it);
+        }
+    }
+    else if(it != effect_receiver_controller_indices_.end())
+    {
+        effect_receiver_controller_indices_.erase(it);
+    }
+    relay_occluders_valid_ = false;
+}
+
+bool SpatialEffect3D::isRoomEmitterController(int index) const
+{
+    return std::find(effect_emitter_controller_indices_.begin(),
+                     effect_emitter_controller_indices_.end(),
+                     index) != effect_emitter_controller_indices_.end();
+}
+
+bool SpatialEffect3D::isRoomReceiverController(int index) const
+{
+    if(!effect_receiver_controller_indices_.empty())
+    {
+        return std::find(effect_receiver_controller_indices_.begin(),
+                         effect_receiver_controller_indices_.end(),
+                         index) != effect_receiver_controller_indices_.end();
+    }
+    return !isRoomEmitterController(index);
+}
+
+SpatialRoom::SpatialRoomMode SpatialEffect3D::GetSpatialRoomMode() const
+{
+    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade ||
+       effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+    {
+        return SpatialRoom::SpatialRoomMode::EmissiveRelay;
+    }
+    if(effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped)
+    {
+        return SpatialRoom::SpatialRoomMode::RoomMappedPattern;
+    }
+    return SpatialRoom::SpatialRoomMode::OriginField;
+}
+
+void SpatialEffect3D::RefreshRoomOutputControllerLists()
+{
+    if(room_output_panel_)
+    {
+        room_output_panel_->refreshControllerLists();
+    }
+}
+
+void SpatialEffect3D::EnsureRoomOutputPanel()
+{
+    if(room_output_panel_)
+    {
+        return;
+    }
+    room_output_panel_ = new EffectRoomOutputPanel();
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+    room_output_panel_->bind(this,
+                             effect_room_coordinate_mode_,
+                             effect_room_output_role_,
+                             effect_room_relay_params_,
+                             effect_emitter_controller_indices_,
+                             effect_receiver_controller_indices_,
+                             on_changed);
+}
+
+void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
+{
+    const SpatialLighting::OccluderBuildOptions options =
+        RoomSpatialLightingUi::BuildOccluderOptions(effect_room_relay_params_);
+    SpatialLighting::BuildSpatialOccluders(relay_occluders_,
+                                           relay_occluder_aabbs_,
+                                           grid,
+                                           options);
+    relay_scene_cache_.occluders = relay_occluders_;
+    relay_scene_cache_.occluder_aabbs = relay_occluder_aabbs_;
+    relay_occluders_valid_ = true;
+}
+
+RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const
+{
+    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+    if(provider->emitterRelayMirrorActive())
+    {
+        if(relay_shade_prepared_for_ != grid.render_sequence || !relay_occluders_valid_)
+        {
+            RefreshRelayOccluders(grid);
+            SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
+                                                         SpatialRoom::CurrentFrameContext().depth_preset);
+            relay_scene_cache_.shade.ambient_level = 0.04f;
+            relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
+            relay_scene_cache_.shade.room_fill_strength =
+                (effect_room_relay_params_.room_fill / 100.0f) * (effect_brightness / 100.0f);
+            relay_scene_cache_.shade.room_fill_atten = 1.0f;
+            relay_scene_cache_.shade.use_occlusion =
+                relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
+            relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
+                                                             effect_room_relay_params_.use_occlusion &&
+                                                             effect_room_relay_params_.ao_strength > 0.01f;
+            relay_scene_cache_.shade.direct_falloff = 0.85f;
+            const float room_diag =
+                std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+            relay_scene_cache_.shade.ao_probe_span = std::clamp(room_diag * 0.035f, 0.35f, 8.0f);
+            relay_shade_prepared_for_ = grid.render_sequence;
+        }
+
+        EmitterRelayMirror::MirrorShadeContext shade_ctx{};
+        shade_ctx.shade = &relay_scene_cache_.shade;
+        shade_ctx.occluder_aabbs = &relay_occluder_aabbs_;
+        shade_ctx.occluders = &relay_occluders_;
+        shade_ctx.overlay_preview = provider->roomGridOverlayPreview();
+        return EmitterRelayMirror::SampleReceiver(provider->emitterRelayMirrorFrame(), x, y, z, &shade_ctx);
+    }
+    if(!provider->emitterRelayActive() || provider->emitterRelaySources().empty())
+    {
+        return 0x00000000;
+    }
+
+    if(relay_shade_prepared_for_ != grid.render_sequence || !relay_occluders_valid_)
+    {
+        RefreshRelayOccluders(grid);
+        relay_scene_cache_.sources = provider->emitterRelaySources();
+        relay_scene_cache_.source =
+            relay_scene_cache_.sources.empty() ? SpatialLighting::EmissiveSource{} : relay_scene_cache_.sources.front();
+        SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
+                                                     SpatialRoom::CurrentFrameContext().depth_preset);
+        relay_scene_cache_.shade.ambient_level = 0.04f;
+        relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
+        relay_scene_cache_.shade.room_fill_strength =
+            (effect_room_relay_params_.room_fill / 100.0f) * (effect_brightness / 100.0f);
+        relay_scene_cache_.shade.room_fill_atten = 1.0f;
+        relay_scene_cache_.shade.use_occlusion =
+            relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
+        relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
+                                                         effect_room_relay_params_.use_occlusion &&
+                                                         effect_room_relay_params_.ao_strength > 0.01f;
+        relay_scene_cache_.shade.direct_falloff = 0.85f;
+        const float room_diag =
+            std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+        relay_scene_cache_.shade.ao_probe_span = std::clamp(room_diag * 0.035f, 0.35f, 8.0f);
+        relay_shade_prepared_for_ = grid.render_sequence;
+    }
+
+    return SpatialLighting::ShadeLed(relay_scene_cache_, x, y, z);
+}
+
 void SpatialEffect3D::SetSpatialMappingMode(SpatialMappingMode mode)
 {
     spatial_mapping_mode = mode;
@@ -1556,6 +1764,10 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 
 Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 {
+    if(grid.use_grid_center_as_reference)
+    {
+        return {grid.center_x, grid.center_y, grid.center_z};
+    }
     if(use_custom_reference)
     {
         return custom_reference_point;
@@ -1715,6 +1927,55 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
 {
     const SpatialEffect3D* prev_eval_effect = g_tls_eval_effect;
     g_tls_eval_effect = this;
+
+    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade)
+    {
+        if(SpatialRoom::ShouldUseOverlayFastPreview())
+        {
+            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
+            if((relay & 0x00FFFFFFu) != 0u)
+            {
+                g_tls_eval_effect = prev_eval_effect;
+                return relay;
+            }
+            g_tls_eval_effect = prev_eval_effect;
+            return 0x00000000;
+        }
+        const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
+        if(shading_ctrl >= 0 && SpatialLightingSceneProvider::instance()->isEmitterController(shading_ctrl))
+        {
+            g_tls_eval_effect = prev_eval_effect;
+            return 0x00000000;
+        }
+        RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
+        g_tls_eval_effect = prev_eval_effect;
+        return relay;
+    }
+
+    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+    {
+        if(SpatialRoom::ShouldUseOverlayFastPreview())
+        {
+            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
+            g_tls_eval_effect = prev_eval_effect;
+            return relay;
+        }
+        const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
+        if(shading_ctrl >= 0 && isRoomEmitterController(shading_ctrl))
+        {
+            RGBColor pattern = CalculateColorGrid(x, y, z, time, grid);
+            g_tls_eval_effect = prev_eval_effect;
+            return pattern;
+        }
+        if(shading_ctrl >= 0 && isRoomReceiverController(shading_ctrl))
+        {
+            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
+            g_tls_eval_effect = prev_eval_effect;
+            return relay;
+        }
+        g_tls_eval_effect = prev_eval_effect;
+        return 0x00000000;
+    }
 
     if(UsesSpatialSamplingQuantization())
     {
@@ -2095,6 +2356,15 @@ float SpatialEffect3D::GetScaledFrequency() const
     return GetNormalizedFrequency() * freq_scale;
 }
 
+bool SpatialEffect3D::RequiresWorldSpaceCoordinates() const
+{
+    if(GetSpatialRoomMode() == SpatialRoom::SpatialRoomMode::EmissiveRelay)
+    {
+        return false;
+    }
+    return true;
+}
+
 bool SpatialEffect3D::UseZoneGrid() const
 {
     return (effect_bounds_mode == (int)BOUNDS_MODE_TARGET_ZONE);
@@ -2410,6 +2680,10 @@ void SpatialEffect3D::ApplyControlVisibility()
         effect_specific_section->setVisible(custom_effect_settings_host->layout()->count() > 0);
     }
 
+    if(room_output_section)
+    {
+        room_output_section->setVisible(info.show_room_output_control);
+    }
     if(surfaces_section)
     {
         surfaces_section->setVisible(info.show_surface_control);
@@ -2699,6 +2973,12 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["custom_ref_z"] = custom_reference_point.z;
     j["use_custom_ref"] = use_custom_reference;
 
+    j["room_coordinate_mode"] = (int)effect_room_coordinate_mode_;
+    j["room_output_role"] = (int)effect_room_output_role_;
+    RoomSpatialLightingUi::SaveParamsToJson(j, "room_relay_light", effect_room_relay_params_);
+    j["room_emitter_controllers"] = effect_emitter_controller_indices_;
+    j["room_receiver_controllers"] = effect_receiver_controller_indices_;
+
     if(GetEffectInfo().supports_height_bands)
     {
         SaveEffectStratumSettings(j);
@@ -2891,6 +3171,69 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("use_custom_ref"))
         SetUseCustomReference(settings["use_custom_ref"].get<bool>());
+
+    if(settings.contains("room_coordinate_mode") && settings["room_coordinate_mode"].is_number_integer())
+    {
+        effect_room_coordinate_mode_ = (SpatialRoom::SpatialRoomCoordinateMode)std::clamp(
+            settings["room_coordinate_mode"].get<int>(), 0, 1);
+    }
+    if(settings.contains("room_output_role") && settings["room_output_role"].is_number_integer())
+    {
+        effect_room_output_role_ =
+            (SpatialRoom::SpatialRoomOutputRole)std::clamp(settings["room_output_role"].get<int>(), 0, 3);
+        if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::Emitter ||
+           effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade)
+        {
+            effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
+        }
+    }
+    RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", "room_emissive_relay", effect_room_relay_params_);
+    effect_emitter_controller_indices_.clear();
+    if(settings.contains("room_emitter_controllers") && settings["room_emitter_controllers"].is_array())
+    {
+        for(const auto& v : settings["room_emitter_controllers"])
+        {
+            if(v.is_number_integer())
+            {
+                effect_emitter_controller_indices_.push_back(v.get<int>());
+            }
+        }
+    }
+    else if(settings.contains("emitter_controllers") && settings["emitter_controllers"].is_array())
+    {
+        for(const auto& v : settings["emitter_controllers"])
+        {
+            if(v.is_number_integer())
+            {
+                effect_emitter_controller_indices_.push_back(v.get<int>());
+            }
+        }
+    }
+    effect_receiver_controller_indices_.clear();
+    if(settings.contains("room_receiver_controllers") && settings["room_receiver_controllers"].is_array())
+    {
+        for(const auto& v : settings["room_receiver_controllers"])
+        {
+            if(v.is_number_integer())
+            {
+                effect_receiver_controller_indices_.push_back(v.get<int>());
+            }
+        }
+    }
+    effect_receiver_controller_indices_.erase(
+        std::remove_if(effect_receiver_controller_indices_.begin(),
+                       effect_receiver_controller_indices_.end(),
+                       [this](int idx) { return isRoomEmitterController(idx); }),
+        effect_receiver_controller_indices_.end());
+    relay_occluders_valid_ = false;
+    if(room_output_panel_)
+    {
+        room_output_panel_->syncFromState(effect_room_coordinate_mode_,
+                                          effect_room_output_role_,
+                                          effect_room_relay_params_,
+                                          effect_emitter_controller_indices_,
+                                          effect_receiver_controller_indices_);
+    }
 
     if(settings.contains("path_axis") && settings["path_axis"].is_number_integer())
         effect_path_axis = std::clamp(settings["path_axis"].get<int>(), 0, 2);

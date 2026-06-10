@@ -2,7 +2,9 @@
 
 #include "ControllerDisplayUtils.h"
 
+#include "LEDPosition3D.h"
 #include "RGBController/RGBController.h"
+#include "VirtualController3D.h"
 
 namespace ControllerDisplay
 {
@@ -80,6 +82,39 @@ QString FormatRgbControllerTitle(RGBController* controller)
     }
 
     return name;
+}
+
+QString FormatControllerTransformLabel(const ControllerTransform* ctrl, int index)
+{
+    if(!ctrl)
+    {
+        return QStringLiteral("Controller %1").arg(index);
+    }
+
+    if(ctrl->virtual_controller)
+    {
+        const QString custom_name = FromStd(ctrl->virtual_controller->GetName());
+        if(!custom_name.isEmpty())
+        {
+            return QStringLiteral("[Custom] ") + custom_name;
+        }
+    }
+
+    if(ctrl->controller)
+    {
+        QString name = FormatRgbControllerTitle(ctrl->controller);
+        if(ctrl->granularity == 1 && ctrl->item_idx >= 0 &&
+           ctrl->item_idx < static_cast<int>(ctrl->controller->zones.size()))
+        {
+            name += QStringLiteral(" — ") + FromStd(ctrl->controller->GetZoneName(static_cast<unsigned int>(ctrl->item_idx)));
+        }
+        if(!name.isEmpty())
+        {
+            return name;
+        }
+    }
+
+    return QStringLiteral("Controller %1").arg(index);
 }
 
 } // namespace ControllerDisplay

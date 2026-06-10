@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RoomWashLightSettingsPanel</class>
+ <widget class="QWidget" name="RoomWashLightSettingsPanel">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="EffectSectionHeading" name="washColorHeading" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectColorSwatchRow" name="washColorRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSectionHeading" name="placementHeading" native="true"/>
+   </item>
+   <item>
+    <widget class="RoomSpatialLightSettingsPanel" name="lightSettingsPanel" native="true"/>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectSectionHeading</class>
+   <extends>QWidget</extends>
+   <header>EffectSectionHeading.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectColorSwatchRow</class>
+   <extends>QWidget</extends>
+   <header>EffectColorSwatchRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>RoomSpatialLightSettingsPanel</class>
+   <extends>QWidget</extends>
+   <header>RoomSpatialLightSettingsPanel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

@@ -4,12 +4,9 @@
 #define ROOMCAMPFIREEFFECT3D_H
 
 #include "RoomSpatialLightingEffect3D.h"
+#include "RoomCampfireParams.h"
 #include "EffectRegisterer3D.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
-
-#include <vector>
-
-class QComboBox;
 
 class RoomCampfireEffect3D : public RoomSpatialLightingEffect3D
 {
@@ -18,7 +15,7 @@ class RoomCampfireEffect3D : public RoomSpatialLightingEffect3D
 public:
     explicit RoomCampfireEffect3D(QWidget* parent = nullptr);
 
-    EFFECT_REGISTERER_3D("RoomCampfire", "Room campfire / blob", "Spatial · Lighting",
+    EFFECT_REGISTERER_3D("RoomCampfire", "Room campfire", "Spatial · Lighting",
                           []() { return new RoomCampfireEffect3D; });
 
     EffectInfo3D GetEffectInfo() const override;
@@ -29,30 +26,34 @@ public:
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
 private:
-    void RebuildScene(const GridContext3D& grid);
-    void RefreshOccluders(const GridContext3D& grid) const;
-    void UpdateSourceFromSliders(const GridContext3D& grid) const;
+    struct FireAppearance
+    {
+        RGBColor source_color = 0;
+        float brightness = 1.0f;
+        float spark_add = 0.0f;
+    };
+
     void ApplyLiveShadeSettings(SpatialLighting::RoomScene& scene) const override;
-    SpatialLighting::Vec3 PlacementPosition(const GridContext3D& grid) const;
+    float RoomLightEmissiveMul() const override;
+    float RoomLightDirectMul() const override;
+    void SyncCampfireSettingsPanel();
+    float FlameHeightUnits(const GridContext3D& grid) const;
+    float FlameBaseRadiusUnits(const GridContext3D& grid) const;
+    float ComputeFlameTongueMask(float x,
+                                 float y,
+                                 float z,
+                                 float time,
+                                 const SpatialLighting::Vec3& fire_pos,
+                                 const GridContext3D& grid) const;
+    FireAppearance SampleFireAppearance(float x,
+                                        float y,
+                                        float z,
+                                        float time,
+                                        const SpatialLighting::Vec3& fire_pos,
+                                        const GridContext3D& grid) const;
+    RGBColor ApplySparkTint(RGBColor base, float spark_add) const;
 
-    int placement_mode_ = 0;
-    float custom_u_ = 0.15f;
-    float custom_v_ = 0.15f;
-    float custom_w_ = 0.12f;
-    bool use_occlusion_ = true;
-    bool use_room_walls_ = false;
-    bool use_controller_occlusion_ = true;
-    float ao_strength_ = 65.0f;
-    float glow_radius_mm_ = 45.0f;
-    float light_reach_mm_ = 280.0f;
-    float room_fill_ = 35.0f;
-
-    SpatialLighting::Vec3 frozen_light_pos_{};
-    bool frozen_light_valid_ = false;
-
-    mutable SpatialLighting::RoomScene cached_scene_{};
-    mutable std::vector<SpatialLighting::OccluderQuad> occluders_{};
-    mutable std::vector<SpatialLighting::OccluderAabb> occluder_aabbs_{};
+    RoomCampfireParams campfire_{};
 };
 
 #endif

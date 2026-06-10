@@ -240,6 +240,7 @@ private:
     bool PromptSaveIfDirty();
     void SaveCustomControllers();
     void LoadCustomControllers();
+    void RebindCustomControllerDeviceMappings();
     bool LoadControllerFromJsonFile(const filesystem::path& json_path, bool replace_if_same_filename);
     void RemoveVirtualControllerFromLibrary(int index);
     static std::string SafeControllerJsonFilename(const std::string& controller_name);
@@ -330,6 +331,7 @@ private:
     void MergePluginUiIntoSettings(nlohmann::json& settings) const;
     void RestoreProfileUiFromSettings();
     void RefreshEffectDisplay();
+    void SyncSpatialLightingSceneForUi();
 
     void SaveEffectStack();
     void LoadEffectStack();
@@ -583,6 +585,8 @@ private:
     int  FindAvailableControllerRow(int type_code, int object_index) const;
     void SelectAvailableControllerEntry(int type_code, int object_index);
     bool AddCustomControllerToScene(int virtual_controller_index);
+
+    static void OnOpenRgbDetectionEnded(void* context);
 };
 
 #endif

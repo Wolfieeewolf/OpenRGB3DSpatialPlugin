@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "CustomControllerDialog.h"
+#include "CustomControllerMappingUtils.h"
 
 #include "CustomControllerGridKeys.h"
 #include "ControllerDisplayUtils.h"
@@ -430,6 +431,14 @@ CustomControllerDialog::~CustomControllerDialog()
 void CustomControllerDialog::showEvent(QShowEvent* event)
 {
     QDialog::showEvent(event);
+
+    if(resource_manager)
+    {
+        std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+        CustomControllerMapping::RebindAll(led_mappings, controllers);
+        UpdateGridDisplay();
+        UpdateCellInfo();
+    }
 
     if(color_refresh_timer && !color_refresh_timer->isActive())
     {
@@ -1510,6 +1519,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int g
         mapping.zone_idx = pos.zone_idx;
         mapping.led_idx = pos.led_idx;
         mapping.granularity = 2;
+        CustomControllerMapping::FinalizeMapping(mapping);
         led_mappings.push_back(mapping);
         return true;
     };
@@ -1605,6 +1615,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int g
                 mapping.zone_idx = positions[p].zone_idx;
                 mapping.led_idx = positions[p].led_idx;
                 mapping.granularity = 2;
+                CustomControllerMapping::FinalizeMapping(mapping);
                 led_mappings.push_back(mapping);
                 return true;
             }
@@ -2112,6 +2123,24 @@ void CustomControllerDialog::on_save_clicked()
         return;
     }
 
+    const int unresolved = CustomControllerMapping::UnresolvedCount(led_mappings);
+    if(unresolved > 0)
+    {
+        const QMessageBox::StandardButton reply =
+            QMessageBox::warning(this,
+                                 tr("Missing devices"),
+                                 tr("%1 grid cell(s) reference OpenRGB devices that are not connected. "
+                                    "Those cells will not light up until the devices are found again.\n\n"
+                                    "Save anyway?")
+                                     .arg(unresolved),
+                                 QMessageBox::Yes | QMessageBox::No,
+                                 QMessageBox::No);
+        if(reply != QMessageBox::Yes)
+        {
+            return;
+        }
+    }
+
     accept();
 }
 
@@ -2219,6 +2248,11 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     height_spin->setValue(height);
     depth_spin->setValue(depth);
     led_mappings = mappings;
+    if(resource_manager)
+    {
+        std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+        CustomControllerMapping::RebindAll(led_mappings, controllers);
+    }
     light_blocker_cells_.clear();
     for(const CustomControllerLightBlocker& blocker : light_blockers)
     {

@@ -102,10 +102,10 @@ void ColorWheel::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {
-    Vector3D origin = GetEffectOriginGrid(grid);
+    const bool room_mapped = UsesRoomMappedCoordinates();
+    Vector3D origin = room_mapped ? Vector3D{grid.center_x, grid.center_y, grid.center_z}
+                                  : GetEffectOriginGrid(grid);
     float rel_x = x - origin.x, rel_y = y - origin.y, rel_z = z - origin.z;
-    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
-        return 0x00000000;
 
     float progress = CalculateProgress(time);
     float detail = std::max(0.05f, GetScaledDetail());
@@ -130,9 +130,27 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
     float ph_blend = bb.phase_deg;
 
     EffectGridAxisHalfExtents e = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
-    e.hw /= sz_mul;
-    e.hh /= sz_mul;
-    e.hd /= sz_mul;
+    if(room_mapped)
+    {
+        const float size_tight = 1.0f / std::max(0.2f, GetNormalizedSize());
+        e.hw /= sz_mul * size_tight;
+        e.hh /= sz_mul * size_tight;
+        e.hd /= sz_mul * size_tight;
+        if(std::fabs(lx) > e.hw || std::fabs(ly) > e.hh || std::fabs(lz) > e.hd)
+        {
+            return 0x00000000;
+        }
+    }
+    else
+    {
+        if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+        {
+            return 0x00000000;
+        }
+        e.hw /= sz_mul;
+        e.hh /= sz_mul;
+        e.hd /= sz_mul;
+    }
 
     int pl = GetPlane();
     const float dir = (direction == 0) ? 1.0f : -1.0f;

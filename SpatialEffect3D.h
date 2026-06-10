@@ -23,6 +23,8 @@
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
 #include "SpatialRoom/SpatialRoomTypes.h"
+#include "SpatialLighting/SpatialLightingEngine.h"
+#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
 #include "SpatialLayerCore.h"
 #include "EffectStratumBlend.h"
 #include "Effects3D/AudioReactiveCommon.h"
@@ -49,6 +51,9 @@ struct GridContext3D
     bool has_led_centroid = false;
 
     uint64_t render_sequence = 0;
+
+    /** When true, effect origin/reference uses this grid's center (per-emitter device canvas). */
+    bool use_grid_center_as_reference = false;
 
     GridContext3D(float minX,
                   float maxX,
@@ -205,6 +210,7 @@ struct EffectInfo3D
     bool                show_position_offset_control = true;
     bool                supports_height_bands = false;
     bool                supports_strip_colormap = false;
+    bool                show_room_output_control = true;
 };
 
 class SpatialEffect3D;
@@ -332,15 +338,29 @@ public:
     virtual void ApplyAxisScale(float& x, float& y, float& z, const GridContext3D& grid) const;
     virtual void ApplyEffectRotation(float& x, float& y, float& z, const GridContext3D& grid) const;
 
-    /** When true, stack origin/scale/rotation must not warp sample coordinates (spatial lighting). */
-    virtual bool SkipsSpatialSampleWarp() const { return false; }
+    /** When true, stack pre-sample axis scale / effect rotation are skipped (room-fixed patterns, lighting). */
+    virtual bool SkipsSpatialSampleWarp() const;
+
+    SpatialRoom::SpatialRoomCoordinateMode GetRoomCoordinateMode() const { return effect_room_coordinate_mode_; }
+    SpatialRoom::SpatialRoomOutputRole GetRoomOutputRole() const { return effect_room_output_role_; }
+    const std::vector<int>& roomEmitterControllerIndices() const { return effect_emitter_controller_indices_; }
+    const std::vector<int>& roomReceiverControllerIndices() const { return effect_receiver_controller_indices_; }
+    void setRoomEmitterControllerIndex(int index, bool enabled);
+    void setRoomReceiverControllerIndex(int index, bool enabled);
+    bool isRoomEmitterController(int index) const;
+    bool isRoomReceiverController(int index) const;
+    bool UsesRoomMappedCoordinates() const
+    {
+        return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;
+    }
+    const RoomSpatialLightingUi::RoomSpatialLightParams& roomRelayParams() const { return effect_room_relay_params_; }
 
     /** Room evaluation family (see SpatialRoom/ and docs/SPATIAL_ROOM.md). */
-    virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const { return SpatialRoom::SpatialRoomMode::OriginField; }
+    virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const;
     virtual SpatialRoom::SpatialRoomCapabilities GetSpatialRoomCapabilities() const;
     SpatialRoom::SpatialRoomCapabilities EffectiveSpatialRoomCapabilities() const;
 
-    virtual bool RequiresWorldSpaceCoordinates() const { return true; }
+    virtual bool RequiresWorldSpaceCoordinates() const;
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }
     virtual bool UseWorldGridBounds() const;
     virtual bool UseZoneGrid() const;
@@ -351,6 +371,7 @@ public:
     virtual void LoadSettings(const nlohmann::json& settings);
 
     void AttachRoomMappingPanel(QWidget* settings_host);
+    void RefreshRoomOutputControllerLists();
 
 signals:
     void ParametersChanged();
@@ -522,6 +543,25 @@ protected:
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;
     QWidget*            room_mapping_section = nullptr;
+    QWidget*            room_output_section = nullptr;
+    class EffectRoomOutputPanel* room_output_panel_ = nullptr;
+
+    SpatialRoom::SpatialRoomCoordinateMode effect_room_coordinate_mode_ =
+        SpatialRoom::SpatialRoomCoordinateMode::EffectOrigin;
+    SpatialRoom::SpatialRoomOutputRole effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::Direct;
+    RoomSpatialLightingUi::RoomSpatialLightParams effect_room_relay_params_{};
+    std::vector<int> effect_emitter_controller_indices_;
+    std::vector<int> effect_receiver_controller_indices_;
+
+    mutable SpatialLighting::RoomScene relay_scene_cache_{};
+    mutable std::vector<SpatialLighting::OccluderQuad> relay_occluders_{};
+    mutable std::vector<SpatialLighting::OccluderAabb> relay_occluder_aabbs_{};
+    mutable bool relay_occluders_valid_ = false;
+    mutable std::uint64_t relay_shade_prepared_for_ = 0;
+
+    void EnsureRoomOutputPanel();
+    RGBColor ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const;
+    void RefreshRelayOccluders(const GridContext3D& grid) const;
     QGroupBox*          path_plane_group;
     QComboBox*          path_axis_combo;
     QComboBox*          plane_combo;

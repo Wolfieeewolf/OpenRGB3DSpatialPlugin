@@ -51,6 +51,9 @@ public:
                                                     float spacing_y_mm = -1.0f,
                                                     float spacing_z_mm = -1.0f);
 
+    /** Re-resolve OpenRGB device pointers after rescan (uses stored name/location). */
+    void RebindControllerPointers(std::vector<RGBController*>& controllers);
+
     json ToJson() const;
     /** Shareable preset JSON (portable locations, brand/model metadata). */
     json ToPortablePresetJson() const;

@@ -10,9 +10,11 @@
 #include "VirtualController3D.h"
 #include "LogManager.h"
 #include "CustomControllerDialog.h"
+#include "CustomControllerMappingUtils.h"
 #include "SettingsManager.h"
 #include "PluginUiUtils.h"
 #include <QDialog>
+#include <QMetaObject>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -814,6 +816,57 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
 
     UpdateAvailableControllersList();
     UpdateCustomControllersList();
+    RebindCustomControllerDeviceMappings();
+}
+
+void OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded(void* context)
+{
+    auto* tab = static_cast<OpenRGB3DSpatialTab*>(context);
+    if(!tab)
+    {
+        return;
+    }
+
+    QMetaObject::invokeMethod(tab,
+                              [tab]() { tab->RebindCustomControllerDeviceMappings(); },
+                              Qt::QueuedConnection);
+}
+
+void OpenRGB3DSpatialTab::RebindCustomControllerDeviceMappings()
+{
+    if(!resource_manager)
+    {
+        return;
+    }
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    for(const std::unique_ptr<VirtualController3D>& virtual_ctrl : virtual_controllers)
+    {
+        if(virtual_ctrl)
+        {
+            virtual_ctrl->RebindControllerPointers(controllers);
+        }
+    }
+
+    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+    {
+        ControllerTransform* transform = transform_ptr.get();
+        if(!transform || !transform->virtual_controller)
+        {
+            continue;
+        }
+        RegenerateLEDPositions(transform);
+        ControllerLayout3D::MarkWorldPositionsDirty(transform);
+        ControllerLayout3D::UpdateWorldPositions(transform);
+    }
+
+    RefreshHiddenControllerStates();
+
+    if(viewport)
+    {
+        viewport->SetControllerTransforms(&controller_transforms);
+        viewport->update();
+    }
 }
 
 bool OpenRGB3DSpatialTab::IsItemInScene(RGBController* controller, int granularity, int item_idx) const

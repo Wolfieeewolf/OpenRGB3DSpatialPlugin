@@ -28,6 +28,28 @@ enum class SpatialRoomMode : int
     SurfaceMedia = 6,
     /** Strip-order or zone-local (minimal room use). */
     DeviceStrip = 7,
+    /** Shade receivers from emissive colors on selected controllers (layers below in stack). */
+    EmissiveRelay = 8,
+};
+
+/** Per-effect coordinate basis (UI on spatial pattern effects). */
+enum class SpatialRoomCoordinateMode : int
+{
+    EffectOrigin = 0,
+    RoomMapped = 1,
+};
+
+/** Per-effect room output role (UI on spatial pattern effects). */
+enum class SpatialRoomOutputRole : int
+{
+    /** Normal stack blend to LEDs on this layer's zone. */
+    Direct = 0,
+    /** Pattern on stack zone feeds relay layers above (legacy two-layer stack). */
+    Emitter = 1,
+    /** Shade non-emitter LEDs from emitter layers below (legacy two-layer stack). */
+    RelayShade = 2,
+    /** Pattern on chosen emitters; shaded relay on chosen receivers (single layer). */
+    EmitterRelay = 3,
 };
 
 /** Cost/quality preset for room features (occlusion, AO). */

@@ -380,3 +380,70 @@ void EffectCollapsibleSection::refreshToggleText()
     const QChar marker = ui->toggleButton->isChecked() ? QChar(0x25BC) : QChar(0x25B6);
     ui->toggleButton->setText(QStringLiteral("%1  %2").arg(marker).arg(title_));
 }
+#include "EffectColorSwatchRow.h"
+#include "ui_EffectColorSwatchRow.h"
+
+#include "Colors.h"
+#include "PluginUiUtils.h"
+#include "SpatialEffect3D.h"
+
+#include <QColorDialog>
+#include <QDialog>
+#include <vector>
+
+EffectColorSwatchRow::EffectColorSwatchRow(QWidget* parent)
+    : QWidget(parent)
+    , ui(new Ui::EffectColorSwatchRow)
+{
+    ui->setupUi(this);
+}
+
+EffectColorSwatchRow::~EffectColorSwatchRow()
+{
+    delete ui;
+}
+
+void EffectColorSwatchRow::setCaptionText(const QString& text)
+{
+    ui->captionLabel->setText(text);
+}
+
+void EffectColorSwatchRow::setSwatchColor(RGBColor color)
+{
+    PluginUiSetRgbSwatchButton(ui->swatchButton, color & 0xFF, (color >> 8) & 0xFF, (color >> 16) & 0xFF);
+}
+
+void EffectColorSwatchRow::bindColorIndex(SpatialEffect3D* effect,
+                                          int color_index,
+                                          const std::function<void()>& on_changed)
+{
+    if(!effect || color_index < 0)
+    {
+        return;
+    }
+
+    QObject::connect(ui->swatchButton, &QPushButton::clicked, this, [this, effect, color_index, on_changed]() {
+        std::vector<RGBColor> cols = effect->GetColors();
+        if(color_index >= static_cast<int>(cols.size()))
+        {
+            cols.resize(static_cast<size_t>(color_index + 1), COLOR_WHITE);
+        }
+        const RGBColor cur = cols[static_cast<size_t>(color_index)];
+        QColorDialog dialog(this);
+        dialog.setCurrentColor(QColor(cur & 0xFF, (cur >> 8) & 0xFF, (cur >> 16) & 0xFF));
+        if(dialog.exec() != QDialog::Accepted)
+        {
+            return;
+        }
+        const QColor chosen = dialog.currentColor();
+        cols[static_cast<size_t>(color_index)] =
+            ((unsigned int)chosen.blue() << 16) | ((unsigned int)chosen.green() << 8) | (unsigned int)chosen.red();
+        effect->SetColors(cols);
+        effect->SetRainbowMode(false);
+        setSwatchColor(cols[static_cast<size_t>(color_index)]);
+        if(on_changed)
+        {
+            on_changed();
+        }
+    });
+}

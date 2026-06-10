@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "VirtualController3D.h"
+
+#include "CustomControllerMappingUtils.h"
 #include "GridSpaceUtils.h"
-#include <cctype>
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -10,43 +12,6 @@ namespace
 {
 constexpr const char* kCustomControllerFormat = "OpenRGB3DSpatialCustomController";
 constexpr int         kCustomControllerVersion = 1;
-
-std::string ToLower(const std::string& s)
-{
-    std::string out;
-    out.reserve(s.size());
-    for(unsigned char c : s)
-        out += static_cast<char>(std::tolower(c));
-    return out;
-}
-
-bool StringsEqualCaseInsensitive(const std::string& a, const std::string& b)
-{
-    return ToLower(a) == ToLower(b);
-}
-
-RGBController* FindRgbControllerForMapping(std::vector<RGBController*>& controllers,
-                                           const std::string& ctrl_name,
-                                           const std::string& ctrl_location)
-{
-    const bool portable = ctrl_location.empty() || ctrl_location == "1:1";
-    for(RGBController* controller : controllers)
-    {
-        if(!controller || !StringsEqualCaseInsensitive(ctrl_name, controller->GetName()))
-        {
-            continue;
-        }
-        if(portable)
-        {
-            return controller;
-        }
-        if(controller->GetLocation() == ctrl_location)
-        {
-            return controller;
-        }
-    }
-    return nullptr;
-}
 
 void ValidateCustomControllerDocument(const json& j)
 {
@@ -273,6 +238,11 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
     return positions;
 }
 
+void VirtualController3D::RebindControllerPointers(std::vector<RGBController*>& controllers)
+{
+    CustomControllerMapping::RebindAll(led_mappings, controllers);
+}
+
 json VirtualController3D::ToJson() const
 {
     json j;
@@ -297,6 +267,11 @@ json VirtualController3D::ToJson() const
         {
             m["controller_name"] = led_mappings[i].controller->GetName();
             m["controller_location"] = led_mappings[i].controller->GetLocation();
+        }
+        else if(!led_mappings[i].controller_name.empty())
+        {
+            m["controller_name"] = led_mappings[i].controller_name;
+            m["controller_location"] = led_mappings[i].controller_location;
         }
         else
         {
@@ -416,10 +391,12 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
         mapping.x           = mapping_json.at("x").get<int>();
         mapping.y           = mapping_json.at("y").get<int>();
         mapping.z           = mapping_json.at("z").get<int>();
-        mapping.controller  = FindRgbControllerForMapping(controllers, ctrl_name, ctrl_location);
-        mapping.zone_idx    = mapping_json.at("zone_idx").get<unsigned int>();
-        mapping.led_idx     = mapping_json.at("led_idx").get<unsigned int>();
-        mapping.granularity = mapping_json.at("granularity").get<int>();
+        mapping.controller_name     = ctrl_name;
+        mapping.controller_location = ctrl_location;
+        mapping.controller          = CustomControllerMapping::FindByStoredIdentity(controllers, ctrl_name, ctrl_location);
+        mapping.zone_idx            = mapping_json.at("zone_idx").get<unsigned int>();
+        mapping.led_idx             = mapping_json.at("led_idx").get<unsigned int>();
+        mapping.granularity         = mapping_json.at("granularity").get<int>();
         mappings.push_back(mapping);
     }
 

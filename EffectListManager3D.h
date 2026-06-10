@@ -52,16 +52,29 @@ public:
 
     SpatialEffect3D* CreateEffect(const std::string& class_name)
     {
-        if(effects.find(class_name) != effects.end())
+        std::string resolved = class_name;
+        if(resolved == "RoomLightProbe" && effects.find("RoomWashLight") != effects.end())
         {
-            return effects.at(class_name).constructor();
+            resolved = "RoomWashLight";
+        }
+        if(effects.find(resolved) != effects.end())
+        {
+            return effects.at(resolved).constructor();
         }
         return nullptr;
     }
 
     bool IsEffectRegistered(const std::string& class_name) const
     {
-        return !class_name.empty() && effects.find(class_name) != effects.end();
+        if(class_name.empty())
+        {
+            return false;
+        }
+        if(class_name == "RoomLightProbe" && effects.find("RoomWashLight") != effects.end())
+        {
+            return true;
+        }
+        return effects.find(class_name) != effects.end();
     }
 
     std::vector<EffectRegistration3D> GetAllEffects() const

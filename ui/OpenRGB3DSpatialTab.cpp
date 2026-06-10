@@ -38,6 +38,7 @@
 #include "CustomControllerDialog.h"
 #include "DisplayPlaneManager.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "GridSpaceUtils.h"
 #include <QStackedWidget>
 #include <fstream>
@@ -121,6 +122,11 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::CoarseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
+
+    if(resource_manager)
+    {
+        resource_manager->RegisterDetectionEndCallback(&OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded, this);
+    }
 }
 
 void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
@@ -140,6 +146,11 @@ void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
+    if(resource_manager)
+    {
+        resource_manager->UnregisterDetectionEndCallback(&OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded, this);
+    }
+
     if(AudioInputManager* audio = AudioInputManager::instance())
     {
         audio->stop();
@@ -262,6 +273,7 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     ui->effectLibraryPanel->bindTab(this);
     ui->effectStackPanel->bindTab(this);
     ui->zonesPanel->bindTab(this);
+    connect(this, &OpenRGB3DSpatialTab::GridLayoutChanged, this, &OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi);
 
     ui->availableControllersPanel->bindTab(this, ControllerListPanel::Mode::Available);
     ui->controllersInScenePanel->bindTab(this, ControllerListPanel::Mode::InScene);
@@ -1512,6 +1524,18 @@ void OpenRGB3DSpatialTab::RefreshEffectDisplay()
     else if(viewport)
     {
         viewport->UpdateColors();
+    }
+}
+
+void OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi()
+{
+    if(!controller_transforms.empty())
+    {
+        SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);
+    }
+    if(current_effect_ui)
+    {
+        current_effect_ui->RefreshRoomOutputControllerLists();
     }
 }
 

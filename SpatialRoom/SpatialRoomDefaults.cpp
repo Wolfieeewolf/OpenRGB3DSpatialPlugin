@@ -13,12 +13,14 @@ SpatialRoomCapabilities DefaultCapabilitiesForMode(SpatialRoomMode mode)
     switch(mode)
     {
     case SpatialRoomMode::SpatialLighting:
+    case SpatialRoomMode::EmissiveRelay:
         caps.set(CapSkipSampleWarp);
         caps.set(CapRoomGridCoordinates);
         caps.set(CapUseOcclusion);
         caps.set(CapUseAmbientOcclusion);
         break;
     case SpatialRoomMode::RoomMappedPattern:
+        caps.set(CapSkipSampleWarp);
         caps.set(CapRoomGridCoordinates);
         caps.set(CapPreferLedOnlyIteration);
         break;
@@ -91,6 +93,8 @@ const char* LibraryGroupForMode(SpatialRoomMode mode)
     {
     case SpatialRoomMode::SpatialLighting:
         return "Spatial · Lighting";
+    case SpatialRoomMode::EmissiveRelay:
+        return "Spatial · Relay";
     case SpatialRoomMode::RoomMappedPattern:
         return "Spatial · Mapped";
     case SpatialRoomMode::HologramVolume:
@@ -111,7 +115,7 @@ const char* LibraryGroupForMode(SpatialRoomMode mode)
 
 bool ModeUsesSpatialLightingEngine(SpatialRoomMode mode)
 {
-    return mode == SpatialRoomMode::SpatialLighting;
+    return mode == SpatialRoomMode::SpatialLighting || mode == SpatialRoomMode::EmissiveRelay;
 }
 
 bool ModeSkipsRoomGridOverlayByDefault(SpatialRoomMode mode)

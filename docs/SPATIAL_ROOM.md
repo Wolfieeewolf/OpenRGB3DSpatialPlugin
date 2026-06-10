@@ -2,7 +2,7 @@
 
 How effects use the **3D layout** as a coordinate system—not a full game engine. Works for large room setups and small ones (few mapped LEDs).
 
-Related: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md), [SPATIAL_LIGHTING_TEST.md](SPATIAL_LIGHTING_TEST.md), [VIEWPORT.md](VIEWPORT.md).
+Related: [SPATIAL_MODES_GUIDE.md](SPATIAL_MODES_GUIDE.md) (user-facing split), [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md), [SPATIAL_LIGHTING_TEST.md](SPATIAL_LIGHTING_TEST.md), [VIEWPORT.md](VIEWPORT.md).
 
 ---
 
@@ -71,11 +71,11 @@ Room natives call `SpatialLighting::ShadeLed`. Mapped classics keep pattern math
 
 ## Phasing (next work)
 
-1. **Migrate classics** — e.g. Color Wheel → `RoomMappedPattern`, room coords + optional occlusion off by default.
-2. **Room natives** — disco ball (`RoomMappedPattern` or lighting rays).
-3. **Audio** — `AudioReactive` mode: spectrum/beat → position in room → existing audio color math.
-4. **LED-only iteration** — honor `CapPreferLedOnlyIteration` in `OpenRGB3DSpatialTab_EffectsRender.cpp`.
-5. **Game / mirror** — consume `SpatialRoom` + `SpatialLighting`, not duplicate.
+1. **Library split** — duplicate classics per `SpatialRoomMode` (separate effects, not mode dropdowns). See [SPATIAL_MODES_GUIDE.md](SPATIAL_MODES_GUIDE.md).
+2. **Mapped pilots** — e.g. Color wheel (room); pattern on room bounds only (no occlusion in this mode).
+3. **Lighting natives** — wash, campfire, future **emitter relay** (occlusion/AO on receivers).
+4. **Audio** — `AudioReactive` mode: spectrum/beat → position in room.
+5. **LED-only iteration** — honor `CapPreferLedOnlyIteration` in render path.
 
 ---
 

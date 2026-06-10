@@ -85,22 +85,22 @@ Waves that should stay origin-based keep `MappingMode::OriginField` and current 
 
 ## Phasing
 
-### Test effects (validate before other systems)
+### Production effects (validate before other systems)
 
 See [SPATIAL_LIGHTING_TEST.md](SPATIAL_LIGHTING_TEST.md).
 
 | Effect | Role |
 |--------|------|
-| **Room light probe (test)** | Static white source at room center — falloff + occlusion |
-| **Room campfire / blob** | Colored corner/center placement, AO, viewer rim, flicker |
+| **Room wash light** | Soft fill at fixed placement — falloff, color, occlusion |
+| **Room campfire** | Warm localized light, flicker via speed, full occlusion controls |
 
 Do **not** hook game or screen mirror until these pass the checklist.
 
 ### Phase A — Room campfire (first slice)
 
-- Effect: **Room campfire / blob** (`Spatial · Lighting`).
-- Emissive + direct light at fixed room placement; **user reference = viewer** (rim toward seat).
-- **Occlusion:** display planes block segment LED → fire; **AO:** axis probes darken ambient in shade.
+- Effect: **Room campfire** (`Spatial · Lighting`).
+- Emissive + direct light at fixed room placement; **user reference = viewer only** (does not move the source).
+- **Occlusion:** display planes block segment LED → source; **AO:** axis probes darken ambient in shade.
 
 ### Phase B — Occluders (in progress)
 

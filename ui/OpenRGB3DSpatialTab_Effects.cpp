@@ -642,6 +642,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     UpdateEffectStackRowSelectorVisibility();
+    SyncSpatialLightingSceneForUi();
 }
 
 void OpenRGB3DSpatialTab::configureScreenMirrorEffectUi(SpatialEffect3D* effect)

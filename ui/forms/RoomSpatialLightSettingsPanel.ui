@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RoomSpatialLightSettingsPanel</class>
+ <widget class="QWidget" name="RoomSpatialLightSettingsPanel">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="EffectLabeledComboRow" name="placementRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="customXRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="customYRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="customZRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="glowSizeRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="lightReachRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="roomFillRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectSliderRow" name="ambientOcclusionRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectCheckRow" name="shadowsRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectCheckRow" name="controllerBlockRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectCheckRow" name="roomWallsRow" native="true"/>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="hintLabel" native="true"/>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectLabeledComboRow</class>
+   <extends>QWidget</extends>
+   <header>EffectLabeledComboRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectSliderRow</class>
+   <extends>QWidget</extends>
+   <header>EffectSliderRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectCheckRow</class>
+   <extends>QWidget</extends>
+   <header>EffectCheckRow.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

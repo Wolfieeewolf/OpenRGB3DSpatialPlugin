@@ -877,7 +877,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
     UpdateAvailableControllersList();
     UpdateAvailableItemCombo();
-    RefreshHiddenControllerStates();
+    RebindCustomControllerDeviceMappings();
+    SyncSpatialLightingSceneForUi();
 }
 
 void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)

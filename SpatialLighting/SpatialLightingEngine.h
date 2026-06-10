@@ -5,9 +5,11 @@
 #define SPATIALLIGHTINGENGINE_H
 
 #include "RGBController.h"
-#include "SpatialEffect3D.h"
+#include "LEDPosition3D.h"
 
 #include <vector>
+
+struct GridContext3D;
 
 namespace SpatialLighting
 {
@@ -76,6 +78,8 @@ struct ShadeSettings
 struct RoomScene
 {
     EmissiveSource source{};
+    /** When non-empty, ShadeLed sums all entries (emitter relay). Else uses `source`. */
+    std::vector<EmissiveSource> sources;
     std::vector<OccluderQuad> occluders;
     std::vector<OccluderAabb> occluder_aabbs;
     ShadeSettings shade{};
@@ -95,7 +99,7 @@ void AppendRoomWallOccluders(std::vector<OccluderQuad>& out,
 void AppendControllerOccluders(std::vector<OccluderAabb>& out);
 
 void AppendCustomControllerLightBlockerAabbs(std::vector<OccluderAabb>& out,
-                                           struct ControllerTransform* ctrl,
+                                           ::ControllerTransform* ctrl,
                                            int controller_index,
                                            float grid_scale_mm);
 
@@ -107,6 +111,25 @@ void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
 Vec3 GridToVec3(float x, float y, float z);
 
 RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z);
+
+/** Line-of-sight test for mirror relay / receiver shading (skips receiver + optional emitter controller). */
+bool LedSegmentOccluded(float ax,
+                        float ay,
+                        float az,
+                        float bx,
+                        float by,
+                        float bz,
+                        const std::vector<OccluderAabb>& aabbs,
+                        const std::vector<OccluderQuad>& quads,
+                        int also_skip_controller = -1);
+
+/** Six-axis openness at a receiver LED (1 = fully open, 0 = fully occluded). */
+float ComputeLedAmbientOcclusion(float led_x,
+                                 float led_y,
+                                 float led_z,
+                                 const std::vector<OccluderAabb>& aabbs,
+                                 const std::vector<OccluderQuad>& quads,
+                                 float probe_span);
 
 } // namespace SpatialLighting
 

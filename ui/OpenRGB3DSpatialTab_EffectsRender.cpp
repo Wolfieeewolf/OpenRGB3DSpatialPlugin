@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
@@ -9,7 +9,15 @@
 #include "LogManager.h"
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
+#include "SpatialLighting/EmitterRelayMirror.h"
+#include "SpatialLighting/EmitterLocalSampling.h"
+#include "Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.h"
+#include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "VirtualController3D.h"
+#include "LEDPosition3D.h"
 #include "SpatialRoom/SpatialRoomFrame.h"
+#include "GridSpaceUtils.h"
+#include "ZoneManager3D.h"
 #include "SpatialTabLedHelpers.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
@@ -81,6 +89,35 @@ static float AverageAlongAxis(ControllerTransform* transform,
         }
     }
 }
+
+namespace
+{
+
+constexpr size_t kMaxEmitterRelaySources = 384u;
+
+bool EffectSlotAppliesToController(int slot_zone_index, int ctrl_idx, ZoneManager3D* zone_manager)
+{
+    if(slot_zone_index == -1)
+    {
+        return true;
+    }
+    if(slot_zone_index <= -1000)
+    {
+        const int target_ctrl_idx = -(slot_zone_index + 1000);
+        return target_ctrl_idx >= 0 && target_ctrl_idx == ctrl_idx;
+    }
+    if(zone_manager && slot_zone_index >= 0)
+    {
+        if(Zone3D* zone = zone_manager->GetZone(slot_zone_index))
+        {
+            const std::vector<int>& zone_controllers = zone->GetControllers();
+            return std::find(zone_controllers.begin(), zone_controllers.end(), ctrl_idx) != zone_controllers.end();
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 static bool TryGetGlobalLedIndex(RGBController* controller,
                                  unsigned int zone_idx,
@@ -241,21 +278,25 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
             if(transform->virtual_controller && !transform->controller)
             {
-                VirtualController3D* virtual_ctrl = transform->virtual_controller;
-                const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-                for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
+                for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); ++led_pos_idx)
                 {
-                    if(mapping_idx >= transform->led_positions.size()) continue;
-                    const GridLEDMapping& mapping = mappings[mapping_idx];
-                    transform->led_positions[mapping_idx].preview_color = black;
-                    if(mapping.controller && !mapping.controller->zones.empty() && !mapping.controller->colors.empty() &&
-                       mapping.zone_idx < mapping.controller->zones.size())
+                    LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
+                    led_position.preview_color = black;
+                    RGBController* mapping_controller = led_position.controller;
+                    if(!mapping_controller || mapping_controller->zones.empty() || mapping_controller->colors.empty())
+                    {
+                        continue;
+                    }
+                    if(led_position.zone_idx < mapping_controller->zones.size())
                     {
                         unsigned int led_global_idx = 0;
-                        if(TryGetGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &led_global_idx))
+                        if(TryGetGlobalLedIndex(mapping_controller,
+                                                led_position.zone_idx,
+                                                led_position.led_idx,
+                                                &led_global_idx))
                         {
-                            mapping.controller->colors[led_global_idx] = black;
-                            controllers_to_update.insert(mapping.controller);
+                            mapping_controller->colors[led_global_idx] = black;
+                            controllers_to_update.insert(mapping_controller);
                         }
                     }
                 }
@@ -326,6 +367,371 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
+    std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
+    {
+        ControllerTransform* transform = transform_ptr.get();
+        if(!transform || transform->virtual_controller == nullptr)
+        {
+            continue;
+        }
+
+        const std::vector<GridLEDMapping>& mappings = transform->virtual_controller->GetMappings();
+        for(const GridLEDMapping& mapping : mappings)
+        {
+            if(mapping.controller)
+            {
+                controllers_managed_by_virtuals.insert(mapping.controller);
+            }
+        }
+    }
+
+    struct SlotGridOverride
+    {
+        bool use_zone_grid = false;
+        std::unique_ptr<GridContext3D> room_grid_local;
+        std::unique_ptr<GridContext3D> world_grid_local;
+    };
+    std::vector<SlotGridOverride> slot_grid_overrides(active_effects.size());
+    for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
+    {
+        const RenderEffectSlot& slot = active_effects[effect_idx];
+        if(!slot.effect || !slot.effect->UseZoneGrid())
+        {
+            continue;
+        }
+        if(TryMakeZoneGridContextPair(zone_manager.get(),
+                                      controller_transforms,
+                                      slot.zone_index,
+                                      &controllers_managed_by_virtuals,
+                                      true,
+                                      room_grid.grid_scale_mm,
+                                      world_grid.grid_scale_mm,
+                                      slot_grid_overrides[effect_idx].room_grid_local,
+                                      slot_grid_overrides[effect_idx].world_grid_local))
+        {
+            slot_grid_overrides[effect_idx].use_zone_grid = true;
+            if(slot_grid_overrides[effect_idx].room_grid_local)
+            {
+                slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
+            }
+            if(slot_grid_overrides[effect_idx].world_grid_local)
+            {
+                slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
+            }
+        }
+    }
+
+    SpatialLightingSceneProvider::instance()->ClearEmitterRelayFrame();
+    {
+        size_t relay_stack_index = active_effects.size();
+        SpatialEffect3D* relay_layer_effect = nullptr;
+        RoomEmissiveRelayEffect3D* legacy_relay_effect = nullptr;
+        bool combined_emitter_relay = false;
+        for(size_t i = 0; i < active_effects.size(); ++i)
+        {
+            SpatialEffect3D* effect = active_effects[i].effect;
+            if(!effect)
+            {
+                continue;
+            }
+            if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+            {
+                relay_stack_index = i;
+                relay_layer_effect = effect;
+                combined_emitter_relay = true;
+                break;
+            }
+            if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::RelayShade)
+            {
+                relay_stack_index = i;
+                relay_layer_effect = effect;
+                break;
+            }
+            legacy_relay_effect = dynamic_cast<RoomEmissiveRelayEffect3D*>(effect);
+            if(legacy_relay_effect)
+            {
+                relay_stack_index = i;
+                relay_layer_effect = legacy_relay_effect;
+                break;
+            }
+        }
+
+        std::unordered_set<int> emitter_set;
+        if(relay_layer_effect && relay_stack_index < active_effects.size())
+        {
+            if(combined_emitter_relay)
+            {
+                for(int idx : relay_layer_effect->roomEmitterControllerIndices())
+                {
+                    emitter_set.insert(idx);
+                }
+            }
+            else
+            {
+                bool has_emitter_role_layer = false;
+                for(size_t layer_i = 0; layer_i < relay_stack_index; ++layer_i)
+                {
+                    const SpatialEffect3D* emitter_effect = active_effects[layer_i].effect;
+                    if(emitter_effect &&
+                       emitter_effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::Emitter)
+                    {
+                        has_emitter_role_layer = true;
+                        break;
+                    }
+                }
+
+                if(has_emitter_role_layer)
+                {
+                    for(size_t layer_i = 0; layer_i < relay_stack_index; ++layer_i)
+                    {
+                        const RenderEffectSlot& emitter_slot = active_effects[layer_i];
+                        if(!emitter_slot.effect ||
+                           emitter_slot.effect->GetRoomOutputRole() != SpatialRoom::SpatialRoomOutputRole::Emitter)
+                        {
+                            continue;
+                        }
+                        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ++ctrl_idx)
+                        {
+                            if(EffectSlotAppliesToController(emitter_slot.zone_index,
+                                                              (int)ctrl_idx,
+                                                              zone_manager.get()))
+                            {
+                                emitter_set.insert((int)ctrl_idx);
+                            }
+                        }
+                    }
+                }
+                else if(legacy_relay_effect)
+                {
+                    for(int idx : legacy_relay_effect->emitterControllerIndices())
+                    {
+                        emitter_set.insert(idx);
+                    }
+                }
+            }
+        }
+
+        const size_t emitter_sample_through =
+            combined_emitter_relay ? (relay_stack_index + 1) : relay_stack_index;
+
+        if(relay_layer_effect && relay_stack_index < active_effects.size() && !emitter_set.empty())
+        {
+            const RoomSpatialLightingUi::RoomSpatialLightParams& lp = relay_layer_effect->roomRelayParams();
+            const float glow_u = MMToGridUnits(lp.glow_radius_mm, room_grid.grid_scale_mm);
+            const float reach_u = MMToGridUnits(lp.light_reach_mm, room_grid.grid_scale_mm);
+            const float bright = std::max(0.15f, relay_layer_effect->GetBrightness() / 100.0f);
+
+            const auto sample_emitter_led = [&](const LEDPosition3D& led_position, int ctrl_idx) -> RGBColor {
+                ControllerTransform* emitter_transform = nullptr;
+                if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
+                {
+                    emitter_transform = controller_transforms[(size_t)ctrl_idx].get();
+                }
+
+                const Vector3D& world_pos = led_position.world_position;
+                const float room_x = led_position.room_position.x;
+                const float room_y = led_position.room_position.y;
+                const float room_z = led_position.room_position.z;
+
+                SpatialLightingSceneProvider* shade_provider = SpatialLightingSceneProvider::instance();
+                const int prev_shade_ctrl = shade_provider->shadingControllerIndex();
+                shade_provider->SetShadingControllerIndex(ctrl_idx);
+                RGBColor blended = ToRGBColor(0, 0, 0);
+                for(size_t effect_idx = 0; effect_idx < emitter_sample_through; ++effect_idx)
+                {
+                    const RenderEffectSlot& slot = active_effects[effect_idx];
+                    SpatialEffect3D* effect = slot.effect;
+                    if(!effect)
+                    {
+                        continue;
+                    }
+                    if(!EffectSlotAppliesToController(slot.zone_index, ctrl_idx, zone_manager.get()))
+                    {
+                        continue;
+                    }
+                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
+                    {
+                        continue;
+                    }
+                    const bool requires_world = effect->RequiresWorldSpaceCoordinates();
+                    const bool use_world_bounds = effect->UseWorldGridBounds();
+                    const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
+                    const GridContext3D* zone_grid = nullptr;
+                    if(grid_override.use_zone_grid)
+                    {
+                        zone_grid = use_world_bounds ? grid_override.world_grid_local.get()
+                                                     : grid_override.room_grid_local.get();
+                    }
+                    const GridContext3D& stack_grid = zone_grid ? *zone_grid : global_grid;
+
+                    GridContext3D emitter_local_grid = stack_grid;
+                    float sx = requires_world ? world_pos.x : room_x;
+                    float sy = requires_world ? world_pos.y : room_y;
+                    float sz = requires_world ? world_pos.z : room_z;
+                    const GridContext3D* active_grid = &stack_grid;
+                    if(emitter_transform && !effect->UsesRoomMappedCoordinates() &&
+                       EmitterLocalSampling::TryBuildEmitterLocalSample(emitter_transform,
+                                                                       led_position,
+                                                                       stack_grid.grid_scale_mm,
+                                                                       stack_grid.render_sequence,
+                                                                       sx,
+                                                                       sy,
+                                                                       sz,
+                                                                       emitter_local_grid))
+                    {
+                        active_grid = &emitter_local_grid;
+                    }
+
+                    if(!effect->SkipsSpatialSampleWarp())
+                    {
+                        effect->ApplyAxisScale(sx, sy, sz, *active_grid);
+                        effect->ApplyEffectRotation(sx, sy, sz, *active_grid);
+                    }
+                    RGBColor effect_color = effect->EvaluateColorGrid(sx, sy, sz, effect_time, *active_grid);
+                    if(!effect->IsPointOnActiveSurface(sx, sy, sz, *active_grid))
+                    {
+                        effect_color = 0x00000000;
+                    }
+                    effect_color = effect->PostProcessColorGrid(effect_color);
+                    blended = BlendColors(blended, effect_color, slot.blend_mode);
+                }
+                shade_provider->SetShadingControllerIndex(prev_shade_ctrl);
+                return blended;
+            };
+
+            if(combined_emitter_relay)
+            {
+                EmitterRelayMirror::MirrorFrame mirror{};
+                mirror.reference_room = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
+                mirror.grid_scale_mm = room_grid.grid_scale_mm;
+                const float room_diag_units = std::sqrt(room_grid.width * room_grid.width +
+                                                        room_grid.height * room_grid.height +
+                                                        room_grid.depth * room_grid.depth);
+                mirror.reference_max_distance_mm =
+                    std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
+                mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm, 1.0f),
+                                             0.15f,
+                                             2.5f);
+                mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
+                mirror.brightness = bright * (0.35f + (lp.room_fill / 100.0f) * 0.85f);
+
+                for(const int emitter_ctrl : emitter_set)
+                {
+                    if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
+                    {
+                        continue;
+                    }
+                    ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
+                    if(!emitter_transform || emitter_transform->hidden_by_virtual)
+                    {
+                        continue;
+                    }
+                    ControllerLayout3D::UpdateWorldPositions(emitter_transform);
+
+                    Vector3D min_bounds{};
+                    Vector3D max_bounds{};
+                    ControllerLayout3D::CalculateControllerLocalBounds(emitter_transform, min_bounds, max_bounds);
+                    const float span_x = std::max(max_bounds.x - min_bounds.x, 0.01f);
+                    const float span_y = std::max(max_bounds.y - min_bounds.y, 0.01f);
+
+                    std::vector<EmitterRelayMirror::LedColorSample> led_samples;
+                    led_samples.reserve(emitter_transform->led_positions.size());
+
+                    const auto push_led_sample = [&](const LEDPosition3D& led_position) {
+                        const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
+                        const uint8_t r = static_cast<uint8_t>(c & 0xFF);
+                        const uint8_t g = static_cast<uint8_t>((c >> 8) & 0xFF);
+                        const uint8_t b = static_cast<uint8_t>((c >> 16) & 0xFF);
+                        if(static_cast<int>(r) + static_cast<int>(g) + static_cast<int>(b) < 6)
+                        {
+                            return;
+                        }
+                        EmitterRelayMirror::LedColorSample sample{};
+                        sample.u = (led_position.local_position.x - min_bounds.x) / span_x;
+                        sample.v = (led_position.local_position.y - min_bounds.y) / span_y;
+                        sample.r = r;
+                        sample.g = g;
+                        sample.b = b;
+                        led_samples.push_back(sample);
+                    };
+
+                    for(const LEDPosition3D& led_position : emitter_transform->led_positions)
+                    {
+                        push_led_sample(led_position);
+                    }
+
+                    if(led_samples.empty())
+                    {
+                        continue;
+                    }
+
+                    EmitterRelayMirror::EmitterSurface surface{};
+                    EmitterRelayMirror::BuildSurfaceFromSamples(emitter_ctrl, emitter_transform, led_samples, surface);
+                    if(!surface.tex_rgb.empty())
+                    {
+                        mirror.surfaces.push_back(std::move(surface));
+                    }
+                }
+
+                SpatialLightingSceneProvider::instance()->SetEmitterRelayMirrorFrame(std::move(mirror),
+                                                                                     std::move(emitter_set));
+            }
+            else
+            {
+                std::vector<SpatialLighting::EmissiveSource> sources;
+                sources.reserve(128);
+
+                for(const int emitter_ctrl : emitter_set)
+                {
+                    if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
+                    {
+                        continue;
+                    }
+                    ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
+                    if(!emitter_transform || emitter_transform->hidden_by_virtual)
+                    {
+                        continue;
+                    }
+                    ControllerLayout3D::UpdateWorldPositions(emitter_transform);
+
+                    for(const LEDPosition3D& led_position : emitter_transform->led_positions)
+                    {
+                        if(sources.size() >= kMaxEmitterRelaySources)
+                        {
+                            break;
+                        }
+                        const float room_x = led_position.room_position.x;
+                        const float room_y = led_position.room_position.y;
+                        const float room_z = led_position.room_position.z;
+                        const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
+                        const float rf = static_cast<float>(c & 0xFF) / 255.0f;
+                        const float gf = static_cast<float>((c >> 8) & 0xFF) / 255.0f;
+                        const float bf = static_cast<float>((c >> 16) & 0xFF) / 255.0f;
+                        const float lum = (rf + gf + bf) / 3.0f;
+                        if(lum < 0.02f)
+                        {
+                            continue;
+                        }
+                        SpatialLighting::EmissiveSource src{};
+                        src.position = {room_x, room_y, room_z};
+                        src.r = rf;
+                        src.g = gf;
+                        src.b = bf;
+                        src.radius = std::max(0.015f, glow_u);
+                        src.light_radius = std::max(src.radius * 1.4f, reach_u);
+                        src.emissive_strength = 0.55f * bright * lum;
+                        src.light_strength = 1.0f * bright * lum;
+                        sources.push_back(src);
+                    }
+                }
+
+                SpatialLightingSceneProvider::instance()->SetEmitterRelayFrame(std::move(sources), std::move(emitter_set));
+            }
+        }
+    }
+
     if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
     {
         SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
@@ -346,7 +752,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             if(TryMakeZoneGridContextPair(zone_manager.get(),
                                           controller_transforms,
                                           slot.zone_index,
-                                          nullptr,
+                                          &controllers_managed_by_virtuals,
                                           true,
                                           room_grid.grid_scale_mm,
                                           world_grid.grid_scale_mm,
@@ -435,63 +841,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         viewport->update();
     }
 
-    std::unordered_set<RGBController*> controllers_managed_by_virtuals;
-    for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
-    {
-        ControllerTransform* transform = transform_ptr.get();
-        if(!transform || transform->virtual_controller == nullptr)
-        {
-            continue;
-        }
-
-        const std::vector<GridLEDMapping>& mappings = transform->virtual_controller->GetMappings();
-        for(const GridLEDMapping& mapping : mappings)
-        {
-            if(mapping.controller)
-            {
-                controllers_managed_by_virtuals.insert(mapping.controller);
-            }
-        }
-    }
-
-    struct SlotGridOverride
-    {
-        bool use_zone_grid = false;
-        std::unique_ptr<GridContext3D> room_grid_local;
-        std::unique_ptr<GridContext3D> world_grid_local;
-    };
-    std::vector<SlotGridOverride> slot_grid_overrides(active_effects.size());
-
-    for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
-    {
-        const RenderEffectSlot& slot = active_effects[effect_idx];
-        if(!slot.effect || !slot.effect->UseZoneGrid())
-        {
-            continue;
-        }
-
-        if(TryMakeZoneGridContextPair(zone_manager.get(),
-                                      controller_transforms,
-                                      slot.zone_index,
-                                      &controllers_managed_by_virtuals,
-                                      true,
-                                      room_grid.grid_scale_mm,
-                                      world_grid.grid_scale_mm,
-                                      slot_grid_overrides[effect_idx].room_grid_local,
-                                      slot_grid_overrides[effect_idx].world_grid_local))
-        {
-            slot_grid_overrides[effect_idx].use_zone_grid = true;
-            if(slot_grid_overrides[effect_idx].room_grid_local)
-            {
-                slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
-            }
-            if(slot_grid_overrides[effect_idx].world_grid_local)
-            {
-                slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
-            }
-        }
-    }
-
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
     {
         ControllerTransform* transform = controller_transforms[ctrl_idx].get();
@@ -511,17 +860,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
         if(transform->virtual_controller && !transform->controller)
         {
-            VirtualController3D* virtual_ctrl = transform->virtual_controller;
-            const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-            for(unsigned int mapping_idx = 0; mapping_idx < mappings.size(); mapping_idx++)
+            for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); ++led_pos_idx)
             {
-                const GridLEDMapping& mapping = mappings[mapping_idx];
-                if(mapping_idx >= transform->led_positions.size())
+                const LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
+                if(!led_position.controller)
                 {
                     continue;
                 }
 
-                const LEDPosition3D& led_position = transform->led_positions[mapping_idx];
                 const Vector3D& world_pos = led_position.world_position;
                 float room_x = led_position.room_position.x;
                 float room_y = led_position.room_position.y;
@@ -530,7 +876,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_y = world_pos.y;
                 float world_z = world_pos.z;
 
-                    RGBColor final_color = ToRGBColor(0, 0, 0);
+                RGBColor final_color = ToRGBColor(0, 0, 0);
                     for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                     {
                         const RenderEffectSlot& slot = active_effects[effect_idx];
@@ -589,34 +935,54 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             local_grid = use_world_bounds ? grid_override.world_grid_local.get()
                                                           : grid_override.room_grid_local.get();
                         }
-                        const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
-                        MinecraftGame::SetRenderSampleIndexContext((int)mapping_idx, (int)transform->led_positions.size());
+                        const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
+                        GridContext3D emitter_local_grid = stack_grid;
+                        const GridContext3D* sample_grid = &stack_grid;
+                        if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
+                           effect->isRoomEmitterController(static_cast<int>(ctrl_idx)) &&
+                           !effect->UsesRoomMappedCoordinates() &&
+                           EmitterLocalSampling::TryBuildEmitterLocalSample(transform,
+                                                                           led_position,
+                                                                           stack_grid.grid_scale_mm,
+                                                                           stack_grid.render_sequence,
+                                                                           sample_x,
+                                                                           sample_y,
+                                                                           sample_z,
+                                                                           emitter_local_grid))
+                        {
+                            sample_grid = &emitter_local_grid;
+                        }
+                        MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                         if(!effect->SkipsSpatialSampleWarp())
                         {
-                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
-                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, *sample_grid);
+                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, *sample_grid);
                         }
-                        RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
-                        if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
+                        RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, *sample_grid);
+                        if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, *sample_grid))
                             effect_color = 0x00000000;
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
-                    
-                transform->led_positions[mapping_idx].preview_color = final_color;
 
-                if(!mapping.controller || mapping.controller->zones.empty() || mapping.controller->colors.empty())
+                transform->led_positions[led_pos_idx].preview_color = final_color;
+
+                RGBController* mapping_controller = led_position.controller;
+                if(!mapping_controller || mapping_controller->zones.empty() || mapping_controller->colors.empty())
                 {
                     continue;
                 }
 
-                if(mapping.zone_idx < mapping.controller->zones.size())
+                if(led_position.zone_idx < mapping_controller->zones.size())
                 {
                     unsigned int led_global_idx = 0;
-                    if(TryGetGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &led_global_idx))
+                    if(TryGetGlobalLedIndex(mapping_controller,
+                                            led_position.zone_idx,
+                                            led_position.led_idx,
+                                            &led_global_idx))
                     {
-                        mapping.controller->colors[led_global_idx] = final_color;
+                        mapping_controller->colors[led_global_idx] = final_color;
                     }
                 }
             }
@@ -710,15 +1076,31 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         local_grid = use_world_bounds ? grid_override.world_grid_local.get()
                                                       : grid_override.room_grid_local.get();
                     }
-                    const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
+                    const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
+                    GridContext3D emitter_local_grid = stack_grid;
+                    const GridContext3D* sample_grid = &stack_grid;
+                    if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
+                       effect->isRoomEmitterController(static_cast<int>(ctrl_idx)) &&
+                       !effect->UsesRoomMappedCoordinates() &&
+                       EmitterLocalSampling::TryBuildEmitterLocalSample(transform,
+                                                                       led_position,
+                                                                       stack_grid.grid_scale_mm,
+                                                                       stack_grid.render_sequence,
+                                                                       sample_x,
+                                                                       sample_y,
+                                                                       sample_z,
+                                                                       emitter_local_grid))
+                    {
+                        sample_grid = &emitter_local_grid;
+                    }
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                     if(!effect->SkipsSpatialSampleWarp())
                     {
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, active_grid);
-                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, active_grid);
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, *sample_grid);
+                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, *sample_grid);
                     }
-                    RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, active_grid);
-                    if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, active_grid))
+                    RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, *sample_grid);
+                    if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, *sample_grid))
                         effect_color = 0x00000000;
                     effect_color = effect->PostProcessColorGrid(effect_color);
 

@@ -154,10 +154,16 @@ HEADERS += \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
     SpatialLighting/SpatialLightingEngine.h \
+    SpatialLighting/EmitterRelayMirror.h \
+    SpatialLighting/EmitterLocalSampling.h \
     SpatialLighting/SpatialLightingSceneProvider.h \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
     Effects3D/SpatialLighting/RoomCampfireEffect3D.h \
-    Effects3D/SpatialLighting/RoomLightProbeEffect3D.h \
+    Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
+    Effects3D/SpatialLighting/RoomCampfireParams.h \
+    Effects3D/SpatialLighting/RoomWashLightEffect3D.h \
+    Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.h \
+    Effects3D/RoomMapped/RoomColorWheelEffect3D.h \
     ui/PluginSettingsPaths.h \
     ui/ProfilesTabPanel.h \
     ui/GridSettingsPanel.h \
@@ -181,6 +187,7 @@ HEADERS += \
     ui/LEDViewport3D.h \
     ui/ZoneControllerPickerDialog.h \
     ui/CustomControllerTypes.h \
+    ui/CustomControllerMappingUtils.h \
     ui/CustomControllerGridKeys.h \
     ui/CustomControllerDialog.h \
     ui/ReferencePointDialog.h \
@@ -230,6 +237,11 @@ HEADERS += \
     ui/widgets/EffectInfoLabel.h \
     ui/widgets/EffectSectionHeading.h \
     ui/widgets/EffectCollapsibleSection.h \
+    ui/widgets/EffectColorSwatchRow.h \
+    ui/widgets/RoomSpatialLightSettingsPanel.h \
+    ui/widgets/EffectRoomOutputPanel.h \
+    ui/widgets/RoomCampfireSettingsPanel.h \
+    ui/widgets/RoomWashLightSettingsPanel.h \
     ui/widgets/EffectUiRows.h \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
@@ -309,10 +321,15 @@ SOURCES += \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/SpatialLightingEngine.cpp \
+    SpatialLighting/EmitterRelayMirror.cpp \
+    SpatialLighting/EmitterLocalSampling.cpp \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \
     Effects3D/SpatialLighting/RoomCampfireEffect3D.cpp \
-    Effects3D/SpatialLighting/RoomLightProbeEffect3D.cpp \
+    Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
+    Effects3D/SpatialLighting/RoomWashLightEffect3D.cpp \
+    Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.cpp \
+    Effects3D/RoomMapped/RoomColorWheelEffect3D.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/ProfilesTabPanel.cpp \
     ui/GridSettingsPanel.cpp \
@@ -347,6 +364,7 @@ SOURCES += \
     ui/LEDViewport3D_Gpu.cpp \
     ui/LEDViewport3D_SceneGpu.cpp \
     ui/CustomControllerDialog.cpp \
+    ui/CustomControllerMappingUtils.cpp \
     ui/ReferencePointDialog.cpp \
     ui/DisplayPlaneDialog.cpp \
     ui/custom-controller-grid/CustomControllerGridItem.cpp \
@@ -371,6 +389,10 @@ SOURCES += \
     ui/widgets/StripKernelColormapPanel.cpp \
     ui/widgets/EffectCommonPanels.cpp \
     ui/widgets/EffectRowWidgets.cpp \
+    ui/widgets/RoomSpatialLightSettingsPanel.cpp \
+    ui/widgets/EffectRoomOutputPanel.cpp \
+    ui/widgets/RoomCampfireSettingsPanel.cpp \
+    ui/widgets/RoomWashLightSettingsPanel.cpp \
     ui/widgets/EffectStackBlendRow.cpp \
     ui/widgets/EffectSamplerPanel.cpp \
     ui/widgets/EffectCustomHost.cpp \
@@ -490,6 +512,10 @@ FORMS += \
     ui/forms/EffectInfoLabel.ui \
     ui/forms/EffectSectionHeading.ui \
     ui/forms/EffectCollapsibleSection.ui \
+    ui/forms/EffectColorSwatchRow.ui \
+    ui/forms/RoomSpatialLightSettingsPanel.ui \
+    ui/forms/RoomCampfireSettingsPanel.ui \
+    ui/forms/RoomWashLightSettingsPanel.ui \
     ui/forms/ScreenMirrorCapturePanel.ui \
     ui/forms/ScreenMirrorMonitorSettings.ui \
     ui/forms/ScreenMirrorEffectShell.ui \
