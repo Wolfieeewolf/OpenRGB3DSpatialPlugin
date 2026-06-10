@@ -36,12 +36,9 @@ Each effect belongs to **one** primary mode. We are moving away from one effect 
 
 ### What “room mapped” is *not*
 
-**Color wheel (room)** is still a **rainbow pattern**. It does **not** run the lighting engine, so it will **not** show occlusion sliders. That is intentional: mapped = paint; lighting = rays.
+**Color Wheel** with **Room coordinates → Room mapped** is still a **rainbow pattern** on the room box. Occlusion sliders appear when **Room output → Emitter relay** (or relay shade) is selected.
 
-To get **rainbow + shadows**, use two stack layers (bottom → top), for example:
-
-1. **Color wheel (room)** — Multiply or Normal — gives the hue field on the room.
-2. **Room wash light** or **Room campfire** — a lighting layer with **Occlusion**, **Room fill**, **AO** — modulates how the room reads (or add a future **emitter relay** layer that shades from keyboard LEDs).
+To get **keyboard rainbow + shaded desk strips**, use **one layer** with **Emitter relay**, or two layers (emitter source + relay shade). See the recipe below.
 
 ---
 
@@ -78,8 +75,8 @@ Shader Field is its own effect; it does not add occlusion unless you stack a lig
 
 | Goal | Stack idea |
 |------|------------|
-| Keyboard runs rainbow; desk strips “see” the glow | **Room emissive relay** + **Color wheel (room)** on keyboard only (see below) |
-| Rainbow on full room, corners darker behind monitor | **Color wheel (room)** + **Room wash** with occlusion on |
+| Keyboard runs rainbow; desk strips “see” the glow | **Color Wheel** + **Room output → Emitter relay** (keyboard emitters) |
+| Rainbow on full room with relay shading | **Color Wheel** + **Room mapped** + **Emitter relay** with occlusion on |
 | Game biome colors on a wave effect | **Wave** + Room mapping **Compass** or **Voxel** |
 | Monitor colors on LEDs | **Screen mirror** (Media), not spatial lighting |
 
@@ -88,7 +85,7 @@ Shader Field is its own effect; it does not add occlusion unless you stack a lig
 ## Product direction (effects in the library)
 
 1. **Freeze** what each room mode means (this doc + [SPATIAL_ROOM.md](SPATIAL_ROOM.md)).
-2. **Duplicate** classics into the right group (e.g. Color Wheel → **Spatial** vs **Spatial · Mapped** vs later **Spatial · Lighting** variants), each with **only** controls that apply to that mode.
+2. **Configure** classics via **Room output** (coordinates, emitter, relay) instead of duplicating library entries per mode.
 3. **Hide** irrelevant panels per mode (no occlusion on mapped; no origin offset on room-fixed mapped; full occlusion panel on lighting).
 4. **New modes** (e.g. emissive relay: effect on keyboard → shade everywhere else) as **new library entries**, not extra dropdowns on Color Wheel.
 
@@ -96,18 +93,18 @@ Shader Field is its own effect; it does not add occlusion unless you stack a lig
 
 ## Quick FAQ
 
-**Why doesn’t Color wheel (room) have occlusion?**  
-Occlusion lives in **Spatial · Lighting** (`ShadeLed`). Mapped effects only set RGB per LED from a formula.
+**When do occlusion sliders appear?**  
+When **Room output** is **Emitter relay** or **Relay shade** — not for **Direct** output with origin coordinates only.
 
-**It looks like classic Color Wheel with Room center reference.**  
-Radial + room center is close to classic + **Reference → Room center**. Use **Room gradient** geometry and **Room edge fade** to see mapped behavior; use a **lighting** layer for physical depth.
+**Room mapped vs origin.**  
+Set **Room coordinates → Room mapped** on **Color Wheel** to paint the rainbow on room bounds instead of effect origin.
 
 ### Emitter + relay (one Color Wheel, stack recipe)
 
 1. **Layer 1** — **Color Wheel** — **Room output → Emitter source** — **Room coordinates → Room mapped** — stack zone = keyboard.
 2. **Layer 2** — **Color Wheel** (or any layer) — **Room output → Relay shade** — zone = All — blend **Add**. Occlusion / fill sliders appear under Relay.
 
-Legacy **Color wheel (room)** and **Room emissive relay** effects still work; prefer the **Room output** section on classic effects.
+Legacy **Room emissive relay** library entry still works; prefer **Room output** on classic effects.
 
 **What are we building next?**  
-More **mapped** duplicates, polish relay (multi-emitter defaults), then library split per mode.
+Polish relay defaults, preset migration, then more room-mode-specific controls on the shared **Room output** panel.

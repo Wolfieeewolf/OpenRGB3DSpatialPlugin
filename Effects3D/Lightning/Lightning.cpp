@@ -286,12 +286,18 @@ void Lightning::UpdateArchCache(float time, const GridContext3D& grid)
         float max_x = origin.x, max_y = origin.y, max_z = origin.z;
         for(const PlasmaArc3D& arc : cached_arches)
         {
-            if(arc.start.x < min_x) min_x = arc.start.x; if(arc.start.x > max_x) max_x = arc.start.x;
-            if(arc.start.y < min_y) min_y = arc.start.y; if(arc.start.y > max_y) max_y = arc.start.y;
-            if(arc.start.z < min_z) min_z = arc.start.z; if(arc.start.z > max_z) max_z = arc.start.z;
-            if(arc.end.x < min_x) min_x = arc.end.x; if(arc.end.x > max_x) max_x = arc.end.x;
-            if(arc.end.y < min_y) min_y = arc.end.y; if(arc.end.y > max_y) max_y = arc.end.y;
-            if(arc.end.z < min_z) min_z = arc.end.z; if(arc.end.z > max_z) max_z = arc.end.z;
+            if(arc.start.x < min_x) min_x = arc.start.x;
+            if(arc.start.x > max_x) max_x = arc.start.x;
+            if(arc.start.y < min_y) min_y = arc.start.y;
+            if(arc.start.y > max_y) max_y = arc.start.y;
+            if(arc.start.z < min_z) min_z = arc.start.z;
+            if(arc.start.z > max_z) max_z = arc.start.z;
+            if(arc.end.x < min_x) min_x = arc.end.x;
+            if(arc.end.x > max_x) max_x = arc.end.x;
+            if(arc.end.y < min_y) min_y = arc.end.y;
+            if(arc.end.y > max_y) max_y = arc.end.y;
+            if(arc.end.z < min_z) min_z = arc.end.z;
+            if(arc.end.z > max_z) max_z = arc.end.z;
         }
         arc_aabb_min_x = min_x - margin; arc_aabb_max_x = max_x + margin;
         arc_aabb_min_y = min_y - margin; arc_aabb_max_y = max_y + margin;

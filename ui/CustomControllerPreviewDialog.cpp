@@ -220,11 +220,11 @@ void CenterTransformOnPreviewGrid(ControllerTransform* transform,
 
 CustomControllerPreviewDialog::CustomControllerPreviewDialog(QWidget* parent)
     : QDialog(parent),
-      ui(new Ui::CustomControllerPreviewDialog),
       preview_grid_extent(PREVIEW_GRID_MIN_CELLS),
       preview_scale_x(1.0f),
       preview_scale_y(1.0f),
       preview_scale_z(1.0f),
+      ui(new Ui::CustomControllerPreviewDialog),
       source_editor(nullptr)
 {
     ui->setupUi(this);

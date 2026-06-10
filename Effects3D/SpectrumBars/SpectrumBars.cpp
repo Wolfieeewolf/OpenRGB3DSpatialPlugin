@@ -153,14 +153,6 @@ RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time,
     SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
     SpatialLayerCore::MapperSettings map;
     SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), detail);
-    SpatialLayerCore::SamplePoint sp{};
-    sp.grid_x = x;
-    sp.grid_y = y;
-    sp.grid_z = z;
-    sp.origin_x = origin.x;
-    sp.origin_y = origin.y;
-    sp.origin_z = origin.z;
-    sp.y_norm = coord2;
 
     AudioReactiveColorParams color_params;
     color_params.gradient_pos01 = axis_pos;

@@ -245,7 +245,7 @@ void SpatialShaderEngine::renderThreadMain()
         fbo->release();
         program.release();
 
-        emit frameReady(fbo->toImage().mirrored(false, true));
+        emit frameReady(fbo->toImage().flipped(Qt::Vertical));
         frame_sleep();
     }
 

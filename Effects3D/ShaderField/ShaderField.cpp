@@ -122,7 +122,9 @@ void ShaderField::SetupCustomUI(QWidget* parent)
     use_audio_check->setObjectName(QStringLiteral("useAudioCheck"));
     use_audio_check->setChecked(use_audio);
     shader_layout->addWidget(use_audio_check);
-    connect(use_audio_check, &QCheckBox::stateChanged, this, &ShaderField::OnUseAudioChanged);
+    connect(use_audio_check, &QCheckBox::checkStateChanged, this, [this](Qt::CheckState state) {
+        OnUseAudioChanged(static_cast<int>(state));
+    });
 
     auto* open_folder_button = new QPushButton(QStringLiteral("Open user shaders folder"), w);
     open_folder_button->setObjectName(QStringLiteral("openFolderButton"));

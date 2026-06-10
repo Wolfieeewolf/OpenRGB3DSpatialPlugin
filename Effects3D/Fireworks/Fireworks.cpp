@@ -541,9 +541,12 @@ RGBColor Fireworks::CalculateColorGrid(float x, float y, float z, float time, co
             float max_x = min_x, max_y = min_y, max_z = min_z;
             for(const CachedParticle& p : particle_cache)
             {
-                if(p.px < min_x) min_x = p.px; if(p.px > max_x) max_x = p.px;
-                if(p.py < min_y) min_y = p.py; if(p.py > max_y) max_y = p.py;
-                if(p.pz < min_z) min_z = p.pz; if(p.pz > max_z) max_z = p.pz;
+                if(p.px < min_x) min_x = p.px;
+                if(p.px > max_x) max_x = p.px;
+                if(p.py < min_y) min_y = p.py;
+                if(p.py > max_y) max_y = p.py;
+                if(p.pz < min_z) min_z = p.pz;
+                if(p.pz > max_z) max_z = p.pz;
             }
             particle_aabb_min_x = min_x - margin; particle_aabb_max_x = max_x + margin;
             particle_aabb_min_y = min_y - margin; particle_aabb_max_y = max_y + margin;

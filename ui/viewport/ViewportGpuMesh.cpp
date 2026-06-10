@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ViewportGpuMesh.h"
-#include "ViewportLegacyGL.h"
 
 #include <QOpenGLFunctions>
+
+#include "ViewportLegacyGL.h"
 
 void ViewportGpuMesh::destroy(QOpenGLFunctions* gl)
 {

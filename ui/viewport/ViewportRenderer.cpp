@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ViewportRenderer.h"
-#include "ViewportLegacyGL.h"
 
 #include <QImage>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFunctions>
+#include "ViewportLegacyGL.h"
 #include <QOpenGLWidget>
 #include <QMatrix4x4>
 #include <QSize>
@@ -461,7 +461,7 @@ void ViewportRenderer::uploadScreenOverlayFromImage(const QImage& image)
     }
 
     QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
-    rgba = rgba.mirrored(false, true);
+    rgba = rgba.flipped(Qt::Vertical);
 
     const int w = rgba.width();
     const int h = rgba.height();

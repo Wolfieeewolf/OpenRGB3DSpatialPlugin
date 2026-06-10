@@ -72,8 +72,8 @@ Room natives call `SpatialLighting::ShadeLed`. Mapped classics keep pattern math
 ## Phasing (next work)
 
 1. **Library split** — duplicate classics per `SpatialRoomMode` (separate effects, not mode dropdowns). See [SPATIAL_MODES_GUIDE.md](SPATIAL_MODES_GUIDE.md).
-2. **Mapped pilots** — e.g. Color wheel (room); pattern on room bounds only (no occlusion in this mode).
-3. **Lighting natives** — wash, campfire, future **emitter relay** (occlusion/AO on receivers).
+2. **Room output on classics** — Color Wheel + room mapped / emitter relay via **Room output** panel.
+3. **Relay shading** — emitter-relay path with occlusion/AO on receivers (see [SPATIAL_MODES_GUIDE.md](SPATIAL_MODES_GUIDE.md)).
 4. **Audio** — `AudioReactive` mode: spectrum/beat → position in room.
 5. **LED-only iteration** — honor `CapPreferLedOnlyIteration` in render path.
 

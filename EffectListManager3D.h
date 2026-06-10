@@ -52,11 +52,7 @@ public:
 
     SpatialEffect3D* CreateEffect(const std::string& class_name)
     {
-        std::string resolved = class_name;
-        if(resolved == "RoomLightProbe" && effects.find("RoomWashLight") != effects.end())
-        {
-            resolved = "RoomWashLight";
-        }
+        const std::string resolved = ResolveLegacyEffectClass(class_name);
         if(effects.find(resolved) != effects.end())
         {
             return effects.at(resolved).constructor();
@@ -70,11 +66,7 @@ public:
         {
             return false;
         }
-        if(class_name == "RoomLightProbe" && effects.find("RoomWashLight") != effects.end())
-        {
-            return true;
-        }
-        return effects.find(class_name) != effects.end();
+        return effects.find(ResolveLegacyEffectClass(class_name)) != effects.end();
     }
 
     std::vector<EffectRegistration3D> GetAllEffects() const
@@ -121,6 +113,17 @@ public:
 
 private:
     EffectListManager3D() {}
+
+    /** Map removed duplicate library entries to their replacements for preset load. */
+    std::string ResolveLegacyEffectClass(const std::string& class_name) const
+    {
+        if(class_name == "RoomColorWheel" && effects.find("ColorWheel") != effects.end())
+        {
+            return "ColorWheel";
+        }
+        return class_name;
+    }
+
     std::map<std::string, EffectRegistration3D> effects;
     std::vector<std::string> effect_order;
 };

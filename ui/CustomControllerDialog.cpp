@@ -386,8 +386,8 @@ static IdentifyUiState EvaluateIdentifyUiState(const std::set<std::pair<int, int
 CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
     : QDialog(parent),
       resource_manager(rm),
-      preview_dialog(nullptr),
       layout_grid(nullptr),
+      preview_dialog(nullptr),
       layout_grid_scale_mm(10.0f),
       current_layer(0),
       selected_row(-1),

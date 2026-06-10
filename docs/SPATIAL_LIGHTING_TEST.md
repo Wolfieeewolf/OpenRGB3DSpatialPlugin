@@ -1,56 +1,43 @@
 # Spatial lighting — validation checklist
 
-Validate the engine **before** wiring game effects or screen mirror. Effects live under **Spatial · Lighting**.
+Validate emitter-relay shading and occlusion **before** wiring game effects or screen mirror.
 
 Engine: `SpatialLighting/SpatialLightingEngine.*`  
-Design: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md)
+Design: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md), [SPATIAL_MODES_GUIDE.md](SPATIAL_MODES_GUIDE.md)
 
 ## Setup
 
 1. Rebuild and load the plugin.
-2. Layout: at least two controllers on opposite sides of the room.
-3. Stack **reference** → **User position** (your seat). This does **not** move the light.
-4. Prefer **manual room size** so placement corners match the visible room box.
-5. Optional: one **display plane** between a strip and the test light.
+2. Layout: keyboard (or other emitter) plus strips on opposite sides of the room.
+3. Stack **reference** → **User position** (your seat).
+4. Prefer **manual room size** so room bounds match the visible room box.
+5. Optional: one **display plane** between emitter and receiver strips.
 
-## Test A — Room wash light
+## Test A — Emitter + relay (Room output panel)
 
-**Effect:** Room wash light  
-**Purpose:** Soft fill at a fixed placement — easy to see falloff and blocking.
-
-| Check | Pass? |
-|-------|-------|
-| LEDs near the light are brightest; far LEDs dimmer (not uniform strip color) | |
-| **Brightness** and color wheel scale overall level and tint | |
-| Placement (center / corner / custom %) moves the bright region in room space | |
-| Plane between light and a strip: that strip drops sharply with **Shadows** on | |
-| **Block through controller bodies** on → strips behind another controller darken | |
-| **Ambient occlusion** higher → deeper shade in shielded spots | |
-| LEDs in corners / behind geometry slightly darker (AO) | |
-
-## Test B — Room campfire
-
-**Effect:** Room campfire  
-**Placement:** Corner (low) or Custom %
+**Effect:** **Color Wheel** (or any spatial pattern)  
+**Room output:** **Emitter relay** (or **Emitter source** on one layer + **Relay shade** on another)  
+**Purpose:** Keyboard runs the pattern; other LEDs shade from emitter colors with occlusion.
 
 | Check | Pass? |
 |-------|-------|
-| Glow stays in corner when you change reference / user position | |
-| **Core / Flame / Outer spill** swatches change hot vs cool regions | |
-| LEDs above the fire read brighter than below (**Flame rise**) | |
-| **Occlusion** off → blocking disabled; LEDs behind objects brighten | |
+| Emitter zone LEDs show the pattern; receivers shade from emitter colors | |
+| **Room coordinates → Room mapped** paints hue on room bounds, not effect origin | |
+| **Occlusion / Shadows** on → strips behind a display plane or controller darken | |
 | **Block through controller bodies** on → strips behind another controller darken | |
 | **Ambient occlusion** higher → deeper shade in shielded spots | |
-| **Speed** > 0 → flicker; **Sparks** > 0 → occasional bright pops | |
-| **Glow size** / **Light reach** (mm) change core vs how far light spreads | |
-| **Room spill** low + **Shadows** on → clearer shadows (not a full-room wash) | |
-| Changing spatial anchor does **not** move the fire | |
+| **Room fill** adjusts how much unoccluded ambient bleeds in | |
+| Changing stack anchor does **not** move emitter device selection | |
 
-## Test C — Reference = viewer, not emitter
+## Test B — Legacy Room emissive relay effect
 
-1. Campfire placement **Near corner (room min)** — note room min corner in viewport.
-2. Change stack anchor to **World origin (0,0,0)** vs **User position**.
-3. Fire should stay at the **same room corner**; brightness on strips may shift slightly. If the whole glow jumps to the anchor, rebuild — sample warp should be off.
+**Effect:** **Room emissive relay** (`Spatial · Relay`) — optional; prefer **Room output** on classic effects.
+
+| Check | Pass? |
+|-------|-------|
+| Emitter checkboxes match expected controllers | |
+| Receiver LEDs shade from emitter stack colors below | |
+| Occlusion toggles match Test A | |
 
 ## Occlusion sources (today)
 
@@ -65,11 +52,14 @@ Design: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md)
 
 1. Edit custom controller → select cells on a layer (e.g. under key switches).
 2. **Add light blocker** → cells show **B** (purple).
-3. Save layout, run spatial lighting with **Block through controller bodies** enabled.
+3. Save layout, run relay shading with **Block through controller bodies** enabled.
 
 ## Legacy presets
 
-Stacks saved with effect id **RoomLightProbe** load as **Room wash light** automatically.
+| Removed effect id | Load behaviour |
+|-------------------|----------------|
+| **RoomColorWheel** | Loads as **ColorWheel** — reconfigure **Room output** (room mapped / emitter relay) |
+| **RoomLightProbe**, **RoomWashLight**, **RoomCampfire** | No replacement — re-add layers using **Room output** on classic effects |
 
 ## Not in scope yet
 
@@ -79,4 +69,4 @@ Stacks saved with effect id **RoomLightProbe** load as **Room wash light** autom
 
 ## Report issues
 
-Note: placement, plane position, which LEDs wrong (too bright / dark / no block), Qt version, screenshot if possible.
+Note: emitter/receiver selection, plane position, which LEDs wrong (too bright / dark / no block), Qt version, screenshot if possible.

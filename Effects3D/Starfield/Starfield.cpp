@@ -230,9 +230,12 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
                     grid.center_z + star_bias_z + sz   * star_spread_z};
                 Vector3D rot = TransformPointByRotation(star_local.x, star_local.y, star_local.z, origin);
                 star_positions_cached[i] = rot;
-                if(rot.x < min_x) min_x = rot.x; if(rot.x > max_x) max_x = rot.x;
-                if(rot.y < min_y) min_y = rot.y; if(rot.y > max_y) max_y = rot.y;
-                if(rot.z < min_z) min_z = rot.z; if(rot.z > max_z) max_z = rot.z;
+                if(rot.x < min_x) min_x = rot.x;
+                if(rot.x > max_x) max_x = rot.x;
+                if(rot.y < min_y) min_y = rot.y;
+                if(rot.y > max_y) max_y = rot.y;
+                if(rot.z < min_z) min_z = rot.z;
+                if(rot.z > max_z) max_z = rot.z;
             }
             star_aabb_min_x = min_x - margin; star_aabb_max_x = max_x + margin;
             star_aabb_min_y = min_y - margin; star_aabb_max_y = max_y + margin;

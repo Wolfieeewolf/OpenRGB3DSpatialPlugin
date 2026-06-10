@@ -26,11 +26,11 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBController* contro
                                                              CustomControllerDialog* host,
                                                              QWidget* parent)
     : QWidget(parent),
-      ui(new Ui::CustomControllerDeviceWidget),
       controller_(controller),
       controller_index_(controller_index),
       host_(host),
-      row_selected_(false)
+      row_selected_(false),
+      ui(new Ui::CustomControllerDeviceWidget)
 {
     ui->setupUi(this);
 

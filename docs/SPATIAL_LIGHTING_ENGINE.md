@@ -89,18 +89,17 @@ Waves that should stay origin-based keep `MappingMode::OriginField` and current 
 
 See [SPATIAL_LIGHTING_TEST.md](SPATIAL_LIGHTING_TEST.md).
 
-| Effect | Role |
-|--------|------|
-| **Room wash light** | Soft fill at fixed placement — falloff, color, occlusion |
-| **Room campfire** | Warm localized light, flicker via speed, full occlusion controls |
+| Path | Role |
+|------|------|
+| **Room output → Emitter relay** on classic effects | Pattern on chosen emitters; shaded relay on receivers with occlusion |
+| **Room emissive relay** (legacy library entry) | Same idea as a dedicated effect; prefer **Room output** on classics |
 
 Do **not** hook game or screen mirror until these pass the checklist.
 
-### Phase A — Room campfire (first slice)
+### Phase A — Emitter relay (first slice)
 
-- Effect: **Room campfire** (`Spatial · Lighting`).
-- Emissive + direct light at fixed room placement; **user reference = viewer only** (does not move the source).
-- **Occlusion:** display planes block segment LED → source; **AO:** axis probes darken ambient in shade.
+- **Color Wheel** (or any spatial pattern) + **Room output → Emitter relay** on one stack layer.
+- Emitters run the pattern locally; receivers shade from emitter colors with **occlusion** and **AO**.
 
 ### Phase B — Occluders (in progress)
 

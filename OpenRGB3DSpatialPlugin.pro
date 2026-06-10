@@ -158,12 +158,8 @@ HEADERS += \
     SpatialLighting/EmitterLocalSampling.h \
     SpatialLighting/SpatialLightingSceneProvider.h \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
-    Effects3D/SpatialLighting/RoomCampfireEffect3D.h \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
-    Effects3D/SpatialLighting/RoomCampfireParams.h \
-    Effects3D/SpatialLighting/RoomWashLightEffect3D.h \
     Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.h \
-    Effects3D/RoomMapped/RoomColorWheelEffect3D.h \
     ui/PluginSettingsPaths.h \
     ui/ProfilesTabPanel.h \
     ui/GridSettingsPanel.h \
@@ -237,11 +233,8 @@ HEADERS += \
     ui/widgets/EffectInfoLabel.h \
     ui/widgets/EffectSectionHeading.h \
     ui/widgets/EffectCollapsibleSection.h \
-    ui/widgets/EffectColorSwatchRow.h \
     ui/widgets/RoomSpatialLightSettingsPanel.h \
     ui/widgets/EffectRoomOutputPanel.h \
-    ui/widgets/RoomCampfireSettingsPanel.h \
-    ui/widgets/RoomWashLightSettingsPanel.h \
     ui/widgets/EffectUiRows.h \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
@@ -325,11 +318,8 @@ SOURCES += \
     SpatialLighting/EmitterLocalSampling.cpp \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \
-    Effects3D/SpatialLighting/RoomCampfireEffect3D.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
-    Effects3D/SpatialLighting/RoomWashLightEffect3D.cpp \
     Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.cpp \
-    Effects3D/RoomMapped/RoomColorWheelEffect3D.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/ProfilesTabPanel.cpp \
     ui/GridSettingsPanel.cpp \
@@ -391,8 +381,6 @@ SOURCES += \
     ui/widgets/EffectRowWidgets.cpp \
     ui/widgets/RoomSpatialLightSettingsPanel.cpp \
     ui/widgets/EffectRoomOutputPanel.cpp \
-    ui/widgets/RoomCampfireSettingsPanel.cpp \
-    ui/widgets/RoomWashLightSettingsPanel.cpp \
     ui/widgets/EffectStackBlendRow.cpp \
     ui/widgets/EffectSamplerPanel.cpp \
     ui/widgets/EffectCustomHost.cpp \
@@ -512,17 +500,15 @@ FORMS += \
     ui/forms/EffectInfoLabel.ui \
     ui/forms/EffectSectionHeading.ui \
     ui/forms/EffectCollapsibleSection.ui \
-    ui/forms/EffectColorSwatchRow.ui \
     ui/forms/RoomSpatialLightSettingsPanel.ui \
-    ui/forms/RoomCampfireSettingsPanel.ui \
-    ui/forms/RoomWashLightSettingsPanel.ui \
     ui/forms/ScreenMirrorCapturePanel.ui \
     ui/forms/ScreenMirrorMonitorSettings.ui \
     ui/forms/ScreenMirrorEffectShell.ui \
     ui/forms/MinecraftGameSettingsScroll.ui
 
 unix:!macx {
-    QMAKE_CXXFLAGS += -Wno-psabi
+    # GCC 16 + Qt 6 / nlohmann json: false positives from system and bundled headers.
+    QMAKE_CXXFLAGS += -Wno-psabi -Wno-array-bounds -Wno-sfinae-incomplete
     target.path = $$PREFIX/lib/openrgb/plugins/
     INSTALLS += target
     LIBS += -lGL -lGLU

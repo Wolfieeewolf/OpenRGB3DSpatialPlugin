@@ -846,7 +846,8 @@ void AudioInputManager::processBuffer(const char* data, int bytes)
 
     float prev = current_level.load();
     float out = (float)(ema_smoothing * prev + (1.0 - ema_smoothing) * val);
-    if(out < 0.0f) out = 0.0f; if(out > 1.0f) out = 1.0f;
+    if(out < 0.0f) out = 0.0f;
+    if(out > 1.0f) out = 1.0f;
     current_level.store(out);
 
     if((int)sample_buffer.size() >= fft_size)
@@ -1004,7 +1005,9 @@ void AudioInputManager::computeSpectrum()
         float fb1 = f_min * std::pow(ratio, t1);
         int i0 = (int)std::floor(fb0 * n2 / f_max);
         int i1 = (int)std::ceil (fb1 * n2 / f_max);
-        if(i0 < 1) i0 = 1; if(i1 <= i0) i1 = i0 + 1; if(i1 >= n2) i1 = n2 - 1;
+        if(i0 < 1) i0 = 1;
+        if(i1 <= i0) i1 = i0 + 1;
+        if(i1 >= n2) i1 = n2 - 1;
         float accum = 0.0f; int cnt = 0;
         for(int i = i0; i < i1; i++) { accum += mags[i]; cnt++; }
         float v = (cnt > 0) ? (accum / cnt) : 0.0f;
@@ -1105,7 +1108,9 @@ void AudioInputManager::computeSpectrum()
         if(m_end < 0) m_end = 0;
         if(m_end > bands_count) m_end = bands_count;
 
-        if(b_end < 1) b_end = 1; if(m_end <= b_end) m_end = b_end + 1; if(m_end > bands_count) m_end = bands_count;
+        if(b_end < 1) b_end = 1;
+        if(m_end <= b_end) m_end = b_end + 1;
+        if(m_end > bands_count) m_end = bands_count;
         float bsum=0, msum=0, tsum=0;
         float bslow=0, mslow=0, tslow=0;
         int bc=0, mc=0, tc=0;
