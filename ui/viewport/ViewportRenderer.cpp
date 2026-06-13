@@ -11,6 +11,8 @@
 #include <QMatrix4x4>
 #include <QSize>
 
+#include "QtCompat.h"
+
 #include <cstring>
 
 ViewportRenderer::ViewportRenderer()
@@ -461,7 +463,7 @@ void ViewportRenderer::uploadScreenOverlayFromImage(const QImage& image)
     }
 
     QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
-    rgba = rgba.flipped(Qt::Vertical);
+    rgba = OpenRGB3DUi::FlipImageVertical(rgba);
 
     const int w = rgba.width();
     const int h = rgba.height();

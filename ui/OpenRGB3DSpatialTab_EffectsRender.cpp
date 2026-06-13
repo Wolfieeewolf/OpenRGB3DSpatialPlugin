@@ -11,7 +11,6 @@
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
 #include "SpatialLighting/EmitterLocalSampling.h"
-#include "Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
 #include "VirtualController3D.h"
 #include "LEDPosition3D.h"
@@ -426,7 +425,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     {
         size_t relay_stack_index = active_effects.size();
         SpatialEffect3D* relay_layer_effect = nullptr;
-        RoomEmissiveRelayEffect3D* legacy_relay_effect = nullptr;
         bool combined_emitter_relay = false;
         for(size_t i = 0; i < active_effects.size(); ++i)
         {
@@ -446,13 +444,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             {
                 relay_stack_index = i;
                 relay_layer_effect = effect;
-                break;
-            }
-            legacy_relay_effect = dynamic_cast<RoomEmissiveRelayEffect3D*>(effect);
-            if(legacy_relay_effect)
-            {
-                relay_stack_index = i;
-                relay_layer_effect = legacy_relay_effect;
                 break;
             }
         }
@@ -500,13 +491,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                 emitter_set.insert((int)ctrl_idx);
                             }
                         }
-                    }
-                }
-                else if(legacy_relay_effect)
-                {
-                    for(int idx : legacy_relay_effect->emitterControllerIndices())
-                    {
-                        emitter_set.insert(idx);
                     }
                 }
             }

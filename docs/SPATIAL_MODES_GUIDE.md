@@ -104,7 +104,7 @@ Set **Room coordinates → Room mapped** on **Color Wheel** to paint the rainbow
 1. **Layer 1** — **Color Wheel** — **Room output → Emitter source** — **Room coordinates → Room mapped** — stack zone = keyboard.
 2. **Layer 2** — **Color Wheel** (or any layer) — **Room output → Relay shade** — zone = All — blend **Add**. Occlusion / fill sliders appear under Relay.
 
-Legacy **Room emissive relay** library entry still works; prefer **Room output** on classic effects.
+Use **Room output → Emitter + relay (screen mirror)** on a single classic effect layer instead of a separate relay stack entry.
 
 **What are we building next?**  
 Polish relay defaults, preset migration, then more room-mode-specific controls on the shared **Room output** panel.

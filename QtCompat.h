@@ -4,11 +4,21 @@
 #define QTCOMPAT_H
 
 #include <QtGlobal>
+#include <QImage>
 
 namespace OpenRGB3DUi
 {
 /** ~20 FPS screen preview tick; lower CPU/GPU use than 30 FPS when mirroring displays. */
 inline constexpr int kScreenPreviewTimerIntervalMs = 50;
+
+inline QImage FlipImageVertical(const QImage& image)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    return image.flipped(Qt::Vertical);
+#else
+    return image.mirrored(false, true);
+#endif
+}
 }
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)

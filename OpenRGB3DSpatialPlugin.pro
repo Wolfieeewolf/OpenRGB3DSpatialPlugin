@@ -159,7 +159,6 @@ HEADERS += \
     SpatialLighting/SpatialLightingSceneProvider.h \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
-    Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.h \
     ui/PluginSettingsPaths.h \
     ui/ProfilesTabPanel.h \
     ui/GridSettingsPanel.h \
@@ -319,7 +318,6 @@ SOURCES += \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
-    Effects3D/SpatialLighting/RoomEmissiveRelayEffect3D.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/ProfilesTabPanel.cpp \
     ui/GridSettingsPanel.cpp \

@@ -92,7 +92,6 @@ See [SPATIAL_LIGHTING_TEST.md](SPATIAL_LIGHTING_TEST.md).
 | Path | Role |
 |------|------|
 | **Room output → Emitter relay** on classic effects | Pattern on chosen emitters; shaded relay on receivers with occlusion |
-| **Room emissive relay** (legacy library entry) | Same idea as a dedicated effect; prefer **Room output** on classics |
 
 Do **not** hook game or screen mirror until these pass the checklist.
 

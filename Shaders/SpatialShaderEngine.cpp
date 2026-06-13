@@ -8,6 +8,8 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 
+#include "QtCompat.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -245,7 +247,7 @@ void SpatialShaderEngine::renderThreadMain()
         fbo->release();
         program.release();
 
-        emit frameReady(fbo->toImage().flipped(Qt::Vertical));
+        emit frameReady(OpenRGB3DUi::FlipImageVertical(fbo->toImage()));
         frame_sleep();
     }
 

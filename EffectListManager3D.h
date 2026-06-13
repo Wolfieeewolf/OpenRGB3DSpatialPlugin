@@ -121,6 +121,10 @@ private:
         {
             return "ColorWheel";
         }
+        if(class_name == "RoomEmissiveRelay" && effects.find("ColorWheel") != effects.end())
+        {
+            return "ColorWheel";
+        }
         return class_name;
     }
 

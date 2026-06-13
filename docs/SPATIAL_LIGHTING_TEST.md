@@ -29,14 +29,14 @@ Design: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md), [SPATIAL_MODES
 | **Room fill** adjusts how much unoccluded ambient bleeds in | |
 | Changing stack anchor does **not** move emitter device selection | |
 
-## Test B — Legacy Room emissive relay effect
+## Test B — Emitter + relay (Room output)
 
-**Effect:** **Room emissive relay** (`Spatial · Relay`) — optional; prefer **Room output** on classic effects.
+**Effect:** Any classic spatial effect (e.g. **Color Wheel**) with **Room output → Emitter + relay (screen mirror)**.
 
 | Check | Pass? |
 |-------|-------|
 | Emitter checkboxes match expected controllers | |
-| Receiver LEDs shade from emitter stack colors below | |
+| Receiver LEDs shade from emitter pattern | |
 | Occlusion toggles match Test A | |
 
 ## Occlusion sources (today)
@@ -58,7 +58,7 @@ Design: [SPATIAL_LIGHTING_ENGINE.md](SPATIAL_LIGHTING_ENGINE.md), [SPATIAL_MODES
 
 | Removed effect id | Load behaviour |
 |-------------------|----------------|
-| **RoomColorWheel** | Loads as **ColorWheel** — reconfigure **Room output** (room mapped / emitter relay) |
+| **RoomColorWheel**, **RoomEmissiveRelay** | Load as **ColorWheel** — set **Room output** (room mapped / emitter relay) |
 | **RoomLightProbe**, **RoomWashLight**, **RoomCampfire** | No replacement — re-add layers using **Room output** on classic effects |
 
 ## Not in scope yet
