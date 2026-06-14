@@ -57,6 +57,7 @@ class SceneObjectEditHostPanel;
 class ObjectCreatorTabPanel;
 class ControllerListPanel;
 class PositionAxisDragController;
+class EffectGlobalSettingsPanel;
 
 namespace Ui
 {
@@ -332,6 +333,9 @@ private:
     void RestoreProfileUiFromSettings();
     void RefreshEffectDisplay();
     void SyncSpatialLightingSceneForUi();
+    void SetupStackRoomOutputPanel();
+    void SyncStackRoomOutputPanel();
+    QString sceneLabelForTransformIndex(int transform_index) const;
 
     void SaveEffectStack();
     void LoadEffectStack();
@@ -381,6 +385,7 @@ private:
     QPushButton* startAllEffectsButton() const;
     QPushButton* stopAllEffectsButton() const;
     QGroupBox*   effectConfigGroup() const;
+    EffectGlobalSettingsPanel* effectGlobalSettingsPanel() const;
     QLabel*      effectStackRowLabel() const;
     QComboBox*   effectCombo() const;
     QLabel*      effectZoneLabel() const;
@@ -488,6 +493,7 @@ private:
     QPushButton*                start_effect_button = nullptr;
     QPushButton*                stop_effect_button = nullptr;
     SpatialEffect3D*            current_effect_ui = nullptr;
+    class EffectRoomOutputPanel* stack_room_output_panel_ = nullptr;
     QTimer*                     auto_load_timer = nullptr;
     QTimer*                     effect_timer = nullptr;
     bool                        deferred_startup_done_ = false;

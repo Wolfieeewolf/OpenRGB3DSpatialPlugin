@@ -33,8 +33,9 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         tr("Target selection for the selected layer. "
            "Target zone bounds (below) needs a real zone or a meaningful selection so the local grid can be built."));
     ui->originCombo->setToolTip(
-        tr("Applied to every effect layer when rendering. Use \"Mapped lights center\" so origin-based math follows "
-           "your strips/hardware; pick Room box center only when you want the manual room middle."));
+        tr("Where patterns attach in space for this layer. "
+           "\"Room box center\" maps the pattern across the full room (replaces the old Room coordinates option). "
+           "\"Mapped lights center\" keeps origin-based math on your hardware layout."));
     ui->boundsCombo->setToolTip(
         tr("Global: sample using the normal room (or world) grid. "
            "Target zone: sample positions mapped across the zone (or target) bounding box so motion and detail read on "
@@ -95,3 +96,5 @@ QLabel* EffectGlobalSettingsPanel::boundsLabel() const { return ui->boundsLabel;
 QComboBox* EffectGlobalSettingsPanel::boundsCombo() const { return ui->boundsCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectTypeCombo() const { return ui->stackEffectTypeCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectZoneCombo() const { return ui->stackEffectZoneCombo; }
+QWidget* EffectGlobalSettingsPanel::roomOutputSection() const { return ui->roomOutputSection; }
+QWidget* EffectGlobalSettingsPanel::roomOutputHost() const { return ui->roomOutputHost; }

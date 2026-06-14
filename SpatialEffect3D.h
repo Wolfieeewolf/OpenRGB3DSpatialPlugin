@@ -19,6 +19,8 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <QString>
 
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
@@ -372,6 +374,12 @@ public:
 
     void AttachRoomMappingPanel(QWidget* settings_host);
     void RefreshRoomOutputControllerLists();
+    void ConnectStackRoomOutputPanel(class EffectRoomOutputPanel* panel,
+                                     const std::function<void()>& on_changed,
+                                     const std::function<QString(int)>& transform_label = {});
+    void DisconnectStackRoomOutputPanel();
+    void SyncRoomCoordinateModeFromReference();
+    bool ShowsRoomOutputControl() const;
 
 signals:
     void ParametersChanged();
@@ -543,7 +551,6 @@ protected:
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;
     QWidget*            room_mapping_section = nullptr;
-    QWidget*            room_output_section = nullptr;
     class EffectRoomOutputPanel* room_output_panel_ = nullptr;
 
     SpatialRoom::SpatialRoomCoordinateMode effect_room_coordinate_mode_ =
@@ -559,7 +566,6 @@ protected:
     mutable bool relay_occluders_valid_ = false;
     mutable std::uint64_t relay_shade_prepared_for_ = 0;
 
-    void EnsureRoomOutputPanel();
     RGBColor ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const;
     void RefreshRelayOccluders(const GridContext3D& grid) const;
     QGroupBox*          path_plane_group;

@@ -158,12 +158,16 @@ static bool IsLedMappedOnLayer(const std::vector<GridLEDMapping>& mappings,
                               RGBController*              controller,
                               unsigned int                zone_idx,
                               unsigned int                led_idx,
-                              int                         layer)
+                              int                         layer,
+                              const std::vector<RGBController*>& controllers)
 {
     for(const GridLEDMapping& mapping : mappings)
     {
-        if(mapping.controller == controller && mapping.zone_idx == zone_idx && mapping.led_idx == led_idx
-           && mapping.z == layer)
+        if(!CustomControllerMapping::MappingOwnedByController(mapping, controller, controllers))
+        {
+            continue;
+        }
+        if(mapping.zone_idx == zone_idx && mapping.led_idx == led_idx && mapping.z == layer)
         {
             return true;
         }
@@ -731,16 +735,17 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
 void CustomControllerDialog::removeSourceFromGrid(const CustomControllerSourceRef& source)
 {
     RGBController* controller = controllerForSource(source);
-    if(!controller)
+    if(!controller || !resource_manager)
     {
         return;
     }
 
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
     std::vector<GridLEDMapping> removed_mappings;
     for(auto it = led_mappings.begin(); it != led_mappings.end();)
     {
         const GridLEDMapping& mapping = *it;
-        if(mapping.controller != controller)
+        if(!CustomControllerMapping::MappingOwnedByController(mapping, controller, controllers))
         {
             ++it;
             continue;
@@ -1474,10 +1479,12 @@ void CustomControllerDialog::UpdateCellInfo()
 
 bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int granularity, int item_idx, int start_x, int start_y)
 {
-    if(!controller)
+    if(!controller || !resource_manager)
     {
         return false;
     }
+
+    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
 
     int grid_w = width_spin->value();
     int grid_h = height_spin->value();
@@ -1501,7 +1508,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int g
             return false;
         }
 
-        if(IsLedMappedOnLayer(led_mappings, controller, pos.zone_idx, pos.led_idx, current_layer))
+        if(IsLedMappedOnLayer(led_mappings, controller, pos.zone_idx, pos.led_idx, current_layer, controllers))
         {
             return false;
         }
@@ -1597,7 +1604,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int g
             if(global_led_idx == static_cast<unsigned int>(item_idx))
             {
                 if(IsLedMappedOnLayer(led_mappings, controller, positions[p].zone_idx, positions[p].led_idx,
-                                     current_layer))
+                                     current_layer, controllers))
                 {
                     return false;
                 }
@@ -2187,12 +2194,30 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
 
     const std::vector<GridLEDMapping>& mappings = led_mappings;
+    std::vector<RGBController*> controllers;
+    if(resource_manager)
+    {
+        controllers = resource_manager->GetRGBControllers();
+    }
+
+    auto mapping_owned_by_controller = [&](const GridLEDMapping& mapping) -> bool
+    {
+        if(mapping.controller == controller)
+        {
+            return true;
+        }
+        if(controllers.empty())
+        {
+            return false;
+        }
+        return CustomControllerMapping::MappingOwnedByController(mapping, controller, controllers);
+    };
 
     if(granularity == 0)
     {
         for(unsigned int i = 0; i < mappings.size(); i++)
         {
-            if(mappings[i].controller == controller)
+            if(mapping_owned_by_controller(mappings[i]))
             {
                 return true;
             }
@@ -2202,7 +2227,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     {
         for(unsigned int i = 0; i < mappings.size(); i++)
         {
-            if(mappings[i].controller == controller && mappings[i].zone_idx == (unsigned int)item_idx)
+            if(mapping_owned_by_controller(mappings[i]) && mappings[i].zone_idx == (unsigned int)item_idx)
             {
                 return true;
             }
@@ -2212,7 +2237,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     {
         for(unsigned int i = 0; i < mappings.size(); i++)
         {
-            if(mappings[i].controller != controller)
+            if(!mapping_owned_by_controller(mappings[i]))
             {
                 continue;
             }
@@ -2682,6 +2707,17 @@ void CustomControllerDialog::refresh_colors()
     if(shutting_down_ || !isVisible())
     {
         return;
+    }
+
+    if(resource_manager)
+    {
+        const int unresolved_before = CustomControllerMapping::UnresolvedCount(led_mappings);
+        CustomControllerMapping::RebindAll(led_mappings, resource_manager->GetRGBControllers());
+        const int unresolved_after = CustomControllerMapping::UnresolvedCount(led_mappings);
+        if(unresolved_before != unresolved_after)
+        {
+            refreshDeviceList();
+        }
     }
 
     UpdateGridColors();

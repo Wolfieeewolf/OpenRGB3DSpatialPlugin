@@ -2,7 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "AudioInputPanel.h"
-#include "ControllerListPanel.h"
+#include "ControllerDisplayUtils.h"
 #include "EffectControlsHostPanel.h"
 #include "EffectGlobalSettingsPanel.h"
 #include "EffectLibraryPanel.h"
@@ -12,6 +12,7 @@
 #include "ObjectCreatorTabPanel.h"
 #include "ProfilesTabPanel.h"
 #include "SceneTransformPanel.h"
+#include "ui/widgets/EffectRoomOutputPanel.h"
 #include "ZonesPanel.h"
 #include "PluginSettingsPaths.h"
 #include "SpatialControllerCardList.h"
@@ -28,6 +29,8 @@
 #include <QPushButton>
 #include <QShowEvent>
 #include <QScrollArea>
+#include <QPointer>
+#include <QVBoxLayout>
 #include <QSlider>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -321,6 +324,7 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     BindSettingsPanels();
 
     ui->effectGlobalSettingsPanel->bindTab(this);
+    SetupStackRoomOutputPanel();
     ui->effectControlsHostPanel->bindTab(this);
     ui->minecraftLibraryPanel->bindTab(this);
     ui->audioInputPanel->bindTab(this);
@@ -1222,11 +1226,19 @@ void OpenRGB3DSpatialTab::on_effect_changed(int index)
     {
         if(originLabel()) originLabel()->setVisible(false);
         if(effectOriginCombo()) effectOriginCombo()->setVisible(false);
+        if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
+        {
+            if(QWidget* room_section = global_panel->roomOutputSection())
+            {
+                room_section->setVisible(false);
+            }
+        }
     }
     else
     {
         if(originLabel()) originLabel()->setVisible(true);
         if(effectOriginCombo()) effectOriginCombo()->setVisible(true);
+        SyncStackRoomOutputPanel();
     }
 
     if(effectStackList()->currentRow() != index)
@@ -1525,6 +1537,87 @@ void OpenRGB3DSpatialTab::RefreshEffectDisplay()
     {
         viewport->UpdateColors();
     }
+}
+
+void OpenRGB3DSpatialTab::SetupStackRoomOutputPanel()
+{
+    EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel();
+    if(!global_panel || stack_room_output_panel_)
+    {
+        return;
+    }
+
+    QWidget* host = global_panel->roomOutputHost();
+    if(!host)
+    {
+        return;
+    }
+
+    auto* layout = new QVBoxLayout(host);
+    layout->setContentsMargins(0, 0, 0, 0);
+    stack_room_output_panel_ = new EffectRoomOutputPanel(host);
+    layout->addWidget(stack_room_output_panel_);
+
+    if(QWidget* section = global_panel->roomOutputSection())
+    {
+        section->setVisible(false);
+    }
+}
+
+QString OpenRGB3DSpatialTab::sceneLabelForTransformIndex(int transform_index) const
+{
+    const int list_row = TransformIndexToControllerListRow(transform_index);
+    if(list_row >= 0 && list_row < scene_controllers_.count())
+    {
+        return scene_controllers_.textAt(list_row);
+    }
+    if(transform_index >= 0 && transform_index < static_cast<int>(controller_transforms.size()))
+    {
+        return ControllerDisplay::FormatControllerTransformLabel(controller_transforms[transform_index].get(),
+                                                                 transform_index);
+    }
+    return QStringLiteral("Controller %1").arg(transform_index);
+}
+
+void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
+{
+    EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel();
+    if(!global_panel || !stack_room_output_panel_)
+    {
+        return;
+    }
+
+    QWidget* section = global_panel->roomOutputSection();
+    if(current_effect_ui)
+    {
+        current_effect_ui->DisconnectStackRoomOutputPanel();
+    }
+
+    if(!current_effect_ui || !current_effect_ui->ShowsRoomOutputControl())
+    {
+        if(section)
+        {
+            section->setVisible(false);
+        }
+        return;
+    }
+
+    if(section)
+    {
+        section->setVisible(true);
+    }
+
+    QPointer<SpatialEffect3D> captured_ui(current_effect_ui);
+    current_effect_ui->ConnectStackRoomOutputPanel(
+        stack_room_output_panel_,
+        [captured_ui]()
+        {
+            if(!captured_ui.isNull())
+            {
+                emit captured_ui->ParametersChanged();
+            }
+        },
+        [this](int transform_index) { return sceneLabelForTransformIndex(transform_index); });
 }
 
 void OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi()
@@ -1945,6 +2038,11 @@ QPushButton* OpenRGB3DSpatialTab::stopAllEffectsButton() const
 QGroupBox* OpenRGB3DSpatialTab::effectConfigGroup() const
 {
     return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel : nullptr;
+}
+
+EffectGlobalSettingsPanel* OpenRGB3DSpatialTab::effectGlobalSettingsPanel() const
+{
+    return ui ? ui->effectGlobalSettingsPanel : nullptr;
 }
 
 QLabel* OpenRGB3DSpatialTab::effectStackRowLabel() const

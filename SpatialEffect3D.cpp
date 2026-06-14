@@ -263,13 +263,6 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
         stop_effect_button  = layer_banner->stopEffectButton();
     }
 
-    EnsureRoomOutputPanel();
-    PluginUiAddSectionBlock(main_layout, QStringLiteral("Room output"),
-                            QStringLiteral("How this layer uses room space: coordinates, emitter source, or relay shading."),
-                            room_output_panel_,
-                            &room_output_section,
-                            false);
-
     surfaces_group = new EffectSurfacesPanel(effect_surface_mask, this);
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Surfaces"),
                             QStringLiteral("Optional: only light LEDs near the selected room shells (floor, ceiling, walls). "
@@ -1457,21 +1450,27 @@ void SpatialEffect3D::RefreshRoomOutputControllerLists()
     }
 }
 
-void SpatialEffect3D::EnsureRoomOutputPanel()
+void SpatialEffect3D::ConnectStackRoomOutputPanel(EffectRoomOutputPanel* panel,
+                                                  const std::function<void()>& on_changed,
+                                                  const std::function<QString(int)>& transform_label)
 {
-    if(room_output_panel_)
+    room_output_panel_ = panel;
+    if(!room_output_panel_)
     {
         return;
     }
-    room_output_panel_ = new EffectRoomOutputPanel();
-    const auto on_changed = [this]() { emit ParametersChanged(); };
     room_output_panel_->bind(this,
-                             effect_room_coordinate_mode_,
                              effect_room_output_role_,
                              effect_room_relay_params_,
                              effect_emitter_controller_indices_,
                              effect_receiver_controller_indices_,
-                             on_changed);
+                             on_changed,
+                             transform_label);
+}
+
+void SpatialEffect3D::DisconnectStackRoomOutputPanel()
+{
+    room_output_panel_ = nullptr;
 }
 
 void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
@@ -1713,6 +1712,19 @@ unsigned int SpatialEffect3D::GetDetail() const
 void SpatialEffect3D::SetReferenceMode(ReferenceMode mode)
 {
     reference_mode = mode;
+    SyncRoomCoordinateModeFromReference();
+}
+
+void SpatialEffect3D::SyncRoomCoordinateModeFromReference()
+{
+    effect_room_coordinate_mode_ =
+        (reference_mode == REF_MODE_ROOM_CENTER) ? SpatialRoom::SpatialRoomCoordinateMode::RoomMapped
+                                                 : SpatialRoom::SpatialRoomCoordinateMode::EffectOrigin;
+}
+
+bool SpatialEffect3D::ShowsRoomOutputControl() const
+{
+    return GetEffectInfo().show_room_output_control;
 }
 
 ReferenceMode SpatialEffect3D::GetReferenceMode() const
@@ -2680,10 +2692,6 @@ void SpatialEffect3D::ApplyControlVisibility()
         effect_specific_section->setVisible(custom_effect_settings_host->layout()->count() > 0);
     }
 
-    if(room_output_section)
-    {
-        room_output_section->setVisible(info.show_room_output_control);
-    }
     if(surfaces_section)
     {
         surfaces_section->setVisible(info.show_surface_control);
@@ -3149,7 +3157,19 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     }
 
     if(settings.contains("reference_mode"))
+    {
         SetReferenceMode((ReferenceMode)settings["reference_mode"].get<int>());
+    }
+    else if(settings.contains("room_coordinate_mode") && settings["room_coordinate_mode"].is_number_integer()
+            && settings["room_coordinate_mode"].get<int>()
+                   == (int)SpatialRoom::SpatialRoomCoordinateMode::RoomMapped)
+    {
+        SetReferenceMode(REF_MODE_ROOM_CENTER);
+    }
+    else
+    {
+        SyncRoomCoordinateModeFromReference();
+    }
 
     if(settings.contains("global_ref_x") && settings.contains("global_ref_y") && settings.contains("global_ref_z"))
     {
@@ -3172,11 +3192,8 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("use_custom_ref"))
         SetUseCustomReference(settings["use_custom_ref"].get<bool>());
 
-    if(settings.contains("room_coordinate_mode") && settings["room_coordinate_mode"].is_number_integer())
-    {
-        effect_room_coordinate_mode_ = (SpatialRoom::SpatialRoomCoordinateMode)std::clamp(
-            settings["room_coordinate_mode"].get<int>(), 0, 1);
-    }
+    SyncRoomCoordinateModeFromReference();
+
     if(settings.contains("room_output_role") && settings["room_output_role"].is_number_integer())
     {
         effect_room_output_role_ =
@@ -3228,8 +3245,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     relay_occluders_valid_ = false;
     if(room_output_panel_)
     {
-        room_output_panel_->syncFromState(effect_room_coordinate_mode_,
-                                          effect_room_output_role_,
+        room_output_panel_->syncFromState(effect_room_output_role_,
                                           effect_room_relay_params_,
                                           effect_emitter_controller_indices_,
                                           effect_receiver_controller_indices_);

@@ -109,9 +109,7 @@ void OpenRGB3DSpatialTab::LoadDevices()
     }
 
     UpdateAvailableControllersList();
-
-    if(viewport) viewport->SetControllerTransforms(&controller_transforms);
-    RefreshHiddenControllerStates();
+    RebindCustomControllerDeviceMappings();
 }
 
 void OpenRGB3DSpatialTab::UpdateAvailableControllersList()

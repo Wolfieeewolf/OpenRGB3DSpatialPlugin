@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "EffectGlobalSettingsPanel.h"
 #include "EffectStackBlendRow.h"
 #include "EffectTransportRow.h"
 #include "EffectListManager3D.h"
@@ -407,6 +408,7 @@ void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
         {
             effectControlsWidget()->setVisible(false);
         }
+        SyncStackRoomOutputPanel();
         return;
     }
 
@@ -642,6 +644,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     }
 
     UpdateEffectStackRowSelectorVisibility();
+    SyncStackRoomOutputPanel();
     SyncSpatialLightingSceneForUi();
 }
 
@@ -689,6 +692,13 @@ void OpenRGB3DSpatialTab::setStackLayerGlobalChromeVisible(bool visible)
     if(effectBoundsCombo())
     {
         effectBoundsCombo()->setVisible(visible);
+    }
+    if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
+    {
+        if(QWidget* room_section = global_panel->roomOutputSection())
+        {
+            room_section->setVisible(visible && current_effect_ui && current_effect_ui->ShowsRoomOutputControl());
+        }
     }
 }
 

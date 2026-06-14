@@ -234,6 +234,7 @@ HEADERS += \
     ui/widgets/EffectCollapsibleSection.h \
     ui/widgets/RoomSpatialLightSettingsPanel.h \
     ui/widgets/EffectRoomOutputPanel.h \
+    ui/widgets/RoomOutputDeviceCard.h \
     ui/widgets/EffectUiRows.h \
     ui/widgets/MediaTextureAmbienceBlock.h \
     ui/widgets/AudioEqBandColumn.h \
@@ -379,6 +380,7 @@ SOURCES += \
     ui/widgets/EffectRowWidgets.cpp \
     ui/widgets/RoomSpatialLightSettingsPanel.cpp \
     ui/widgets/EffectRoomOutputPanel.cpp \
+    ui/widgets/RoomOutputDeviceCard.cpp \
     ui/widgets/EffectStackBlendRow.cpp \
     ui/widgets/EffectSamplerPanel.cpp \
     ui/widgets/EffectCustomHost.cpp \

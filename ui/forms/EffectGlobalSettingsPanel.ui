@@ -57,7 +57,7 @@
         <string>Spatial anchor:</string>
        </property>
        <property name="toolTip">
-        <string>Where patterns attach in space for the whole stack. "Mapped lights center" (default) uses the average LED position so effects sit in your real layout, not an abstract room middle.</string>
+        <string>Where patterns attach in space for this layer. Room box center maps across the full room; other anchors use origin-based coordinates (see Room output below).</string>
        </property>
       </widget>
      </item>
@@ -82,6 +82,40 @@
       <widget class="QComboBox" name="boundsCombo"/>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="roomOutputSection" native="true">
+     <layout class="QVBoxLayout" name="roomOutputSectionLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>4</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="roomOutputSectionLabel">
+        <property name="text">
+         <string>Room output:</string>
+        </property>
+        <property name="toolTip">
+         <string>How this layer paints the room: direct on its zone, or emitter + relay mirror. Use Spatial anchor above for effect-origin vs room-mapped coordinates.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="roomOutputHost" native="true"/>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item>
     <widget class="QComboBox" name="stackEffectTypeCombo">

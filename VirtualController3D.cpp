@@ -238,9 +238,9 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
     return positions;
 }
 
-void VirtualController3D::RebindControllerPointers(std::vector<RGBController*>& controllers)
+bool VirtualController3D::RebindControllerPointers(std::vector<RGBController*>& controllers)
 {
-    CustomControllerMapping::RebindAll(led_mappings, controllers);
+    return CustomControllerMapping::RebindAll(led_mappings, controllers);
 }
 
 json VirtualController3D::ToJson() const
@@ -393,7 +393,7 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
         mapping.z           = mapping_json.at("z").get<int>();
         mapping.controller_name     = ctrl_name;
         mapping.controller_location = ctrl_location;
-        mapping.controller          = CustomControllerMapping::FindByStoredIdentity(controllers, ctrl_name, ctrl_location);
+        mapping.controller          = nullptr;
         mapping.zone_idx            = mapping_json.at("zone_idx").get<unsigned int>();
         mapping.led_idx             = mapping_json.at("led_idx").get<unsigned int>();
         mapping.granularity         = mapping_json.at("granularity").get<int>();
@@ -404,6 +404,8 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
     {
         return nullptr;
     }
+
+    CustomControllerMapping::RebindAll(mappings, controllers);
 
     std::vector<CustomControllerLightBlocker> blockers;
     if(j.contains("light_blockers") && j["light_blockers"].is_array())

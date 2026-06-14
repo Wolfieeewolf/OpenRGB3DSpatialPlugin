@@ -34,6 +34,8 @@ public:
     QComboBox* boundsCombo() const;
     QComboBox* stackEffectTypeCombo() const;
     QComboBox* stackEffectZoneCombo() const;
+    QWidget*   roomOutputSection() const;
+    QWidget*   roomOutputHost() const;
 
 private:
     Ui::EffectGlobalSettingsPanel* ui = nullptr;

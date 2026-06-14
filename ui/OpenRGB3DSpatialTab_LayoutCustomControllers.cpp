@@ -21,6 +21,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QSet>
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
@@ -303,6 +304,49 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
         summary += QString("\n\nFailed: %1 (%2)")
                        .arg(failed)
                        .arg(failed_names.join(QStringLiteral(", ")));
+    }
+
+    if(copied > 0)
+    {
+        RebindCustomControllerDeviceMappings();
+
+        int unresolved_cells = 0;
+        QSet<QString> missing_devices;
+        for(const std::unique_ptr<VirtualController3D>& virtual_ctrl : virtual_controllers)
+        {
+            if(!virtual_ctrl)
+            {
+                continue;
+            }
+
+            for(const GridLEDMapping& mapping : virtual_ctrl->GetMappings())
+            {
+                if(mapping.controller)
+                {
+                    continue;
+                }
+
+                ++unresolved_cells;
+                if(!mapping.controller_name.empty()
+                   && mapping.controller_name != "Unknown (not found on this system)")
+                {
+                    missing_devices.insert(QString::fromStdString(mapping.controller_name));
+                }
+            }
+        }
+
+        if(unresolved_cells > 0)
+        {
+            QStringList device_names = missing_devices.values();
+            device_names.sort(Qt::CaseInsensitive);
+            summary += QString(
+                            "\n\n%1 grid cell(s) are waiting for matching OpenRGB devices.\n"
+                            "Missing device name(s): %2\n\n"
+                            "Cell assignments are preserved — connect devices with those exact names "
+                            "and rescan, or edit the layout to remap.")
+                            .arg(unresolved_cells)
+                            .arg(device_names.join(QStringLiteral(", ")));
+        }
     }
 
     if(copied > 0)
@@ -840,11 +884,12 @@ void OpenRGB3DSpatialTab::RebindCustomControllerDeviceMappings()
     }
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    bool should_save                         = false;
     for(const std::unique_ptr<VirtualController3D>& virtual_ctrl : virtual_controllers)
     {
-        if(virtual_ctrl)
+        if(virtual_ctrl && virtual_ctrl->RebindControllerPointers(controllers))
         {
-            virtual_ctrl->RebindControllerPointers(controllers);
+            should_save = true;
         }
     }
 
@@ -858,6 +903,11 @@ void OpenRGB3DSpatialTab::RebindCustomControllerDeviceMappings()
         RegenerateLEDPositions(transform);
         ControllerLayout3D::MarkWorldPositionsDirty(transform);
         ControllerLayout3D::UpdateWorldPositions(transform);
+    }
+
+    if(should_save)
+    {
+        SaveCustomControllers();
     }
 
     RefreshHiddenControllerStates();

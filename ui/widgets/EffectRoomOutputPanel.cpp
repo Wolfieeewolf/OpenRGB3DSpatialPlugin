@@ -7,12 +7,16 @@
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "RoomSpatialLightSettingsPanel.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
+#include "RoomOutputDeviceCard.h"
 #include "LEDPosition3D.h"
+#include "ControllerLayout3D.h"
+#include "PluginUiUtils.h"
 
-#include <QCheckBox>
 #include <QComboBox>
+#include <QFrame>
 #include <QGroupBox>
 #include <QLabel>
+#include <QScrollArea>
 #include <QShowEvent>
 #include <QVBoxLayout>
 
@@ -23,27 +27,15 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    auto* coord_label = new QLabel(tr("Room coordinates:"));
-    coordinate_combo_ = new QComboBox();
-    coordinate_combo_->addItem(tr("Effect origin"), (int)SpatialRoom::SpatialRoomCoordinateMode::EffectOrigin);
-    coordinate_combo_->addItem(tr("Room mapped (full bounds)"),
-                               (int)SpatialRoom::SpatialRoomCoordinateMode::RoomMapped);
-    coordinate_combo_->setToolTip(tr(
-        "Effect origin: classic distance/angle from reference and offset.\n"
-        "Room mapped: pattern tied to room box center and walls."));
-    layout->addWidget(coord_label);
-    layout->addWidget(coordinate_combo_);
-
-    auto* output_label = new QLabel(tr("Room output:"));
     output_combo_ = new QComboBox();
-    output_combo_->addItem(tr("Direct (paint LEDs)"), (int)SpatialRoom::SpatialRoomOutputRole::Direct);
-    output_combo_->addItem(tr("Emitter + relay (screen mirror)"),
+    output_combo_->addItem(tr("Default"), (int)SpatialRoom::SpatialRoomOutputRole::Direct);
+    output_combo_->addItem(tr("Emitter + relay"),
                            (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay);
     output_combo_->setToolTip(tr(
-        "Direct: normal effect on this layer's zone.\n"
-        "Emitter + relay: emitters run the pattern; receivers sample it like Screen Mirror "
-        "(project each LED toward the emitter plane and read the color at that UV)."));
-    layout->addWidget(output_label);
+        "Default: normal effect on this layer's zone.\n"
+        "Emitter + relay: emitters run the pattern; receivers sample color from the emitter surface.\n\n"
+        "Use Spatial anchor (above) for coordinates: Room box center maps the pattern to the "
+        "full room; other anchors use origin-based math."));
     layout->addWidget(output_combo_);
 
     zone_hint_ = new QLabel(tr(
@@ -52,13 +44,35 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     zone_hint_->setVisible(false);
     layout->addWidget(zone_hint_);
 
-    emitters_group_ = new QGroupBox(tr("Emitter devices"));
-    emitters_layout_ = new QVBoxLayout(emitters_group_);
+    emitters_group_ = new QGroupBox(tr("Emitters"));
+    auto* emitters_outer = new QVBoxLayout(emitters_group_);
+    emitters_outer->setContentsMargins(0, 0, 0, 0);
+    emitters_scroll_ = new QScrollArea(emitters_group_);
+    emitters_scroll_->setWidgetResizable(true);
+    emitters_scroll_->setFrameShape(QFrame::NoFrame);
+    emitters_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    emitters_host_ = new QWidget();
+    emitters_layout_ = new QVBoxLayout(emitters_host_);
+    emitters_layout_->setContentsMargins(0, 0, 0, 0);
+    emitters_layout_->setSpacing(2);
+    emitters_scroll_->setWidget(emitters_host_);
+    emitters_outer->addWidget(emitters_scroll_);
     emitters_group_->setVisible(false);
     layout->addWidget(emitters_group_);
 
-    receivers_group_ = new QGroupBox(tr("Receiver devices"));
-    receivers_layout_ = new QVBoxLayout(receivers_group_);
+    receivers_group_ = new QGroupBox(tr("Receivers"));
+    auto* receivers_outer = new QVBoxLayout(receivers_group_);
+    receivers_outer->setContentsMargins(0, 0, 0, 0);
+    receivers_scroll_ = new QScrollArea(receivers_group_);
+    receivers_scroll_->setWidgetResizable(true);
+    receivers_scroll_->setFrameShape(QFrame::NoFrame);
+    receivers_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    receivers_host_ = new QWidget();
+    receivers_layout_ = new QVBoxLayout(receivers_host_);
+    receivers_layout_->setContentsMargins(0, 0, 0, 0);
+    receivers_layout_->setSpacing(2);
+    receivers_scroll_->setWidget(receivers_host_);
+    receivers_outer->addWidget(receivers_scroll_);
     receivers_group_->setVisible(false);
     layout->addWidget(receivers_group_);
 
@@ -66,7 +80,7 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     relay_panel_->setShowPlacement(false);
     relay_panel_->setShowRoomFill(true);
     relay_panel_->setHintText(tr(
-        "Reach/glow: Screen Mirror–style distance falloff. "
+        "Reach/glow: distance falloff from emitters. "
         "Shadows and ambient occlusion darken receivers behind controllers and in corners."));
     relay_panel_->setVisible(false);
     layout->addWidget(relay_panel_);
@@ -110,6 +124,113 @@ bool EffectRoomOutputPanel::isReceiverIndex(int index) const
     return !isEmitterIndex(index);
 }
 
+QString EffectRoomOutputPanel::titleForTransform(int transform_index,
+                                                 const ControllerTransform* transform) const
+{
+    if(transform_label_fn_)
+    {
+        const QString label = transform_label_fn_(transform_index);
+        if(!label.isEmpty())
+        {
+            return label;
+        }
+    }
+    return ControllerDisplay::FormatControllerTransformLabel(transform, transform_index);
+}
+
+void EffectRoomOutputPanel::appendDeviceCards(QVBoxLayout* layout,
+                                              const std::vector<std::pair<int, QString>>& devices,
+                                              bool emitter_role)
+{
+    if(!layout)
+    {
+        return;
+    }
+
+    if(devices.empty())
+    {
+        auto* empty_label = new QLabel(tr("No devices in the 3D scene."));
+        PluginUiApplyMutedSecondaryLabel(empty_label);
+        empty_label->setWordWrap(true);
+        layout->addWidget(empty_label);
+        return;
+    }
+
+    for(const std::pair<int, QString>& device : devices)
+    {
+        const int ctrl_idx = device.first;
+        const bool is_emitter = isEmitterIndex(ctrl_idx);
+        const bool explicit_receivers = bound_receivers_ && !bound_receivers_->empty();
+        const bool is_explicit_receiver =
+            explicit_receivers &&
+            std::find(bound_receivers_->begin(), bound_receivers_->end(), ctrl_idx) != bound_receivers_->end();
+
+        bool added = false;
+        bool enabled = true;
+        if(emitter_role)
+        {
+            added   = is_emitter;
+            enabled = !is_explicit_receiver;
+        }
+        else
+        {
+            added   = is_emitter ? false : isReceiverIndex(ctrl_idx);
+            enabled = !is_emitter;
+        }
+
+        auto* card = new RoomOutputDeviceCard(device.second);
+        card->setAdded(added);
+        card->setInteractionEnabled(enabled);
+        connect(card, &RoomOutputDeviceCard::actionToggled, this, [this, ctrl_idx, emitter_role](bool on) {
+            if(!bound_effect_)
+            {
+                return;
+            }
+
+            if(emitter_role)
+            {
+                bound_effect_->setRoomEmitterControllerIndex(ctrl_idx, on);
+            }
+            else if(bound_receivers_)
+            {
+                if(bound_receivers_->empty() && !on)
+                {
+                    const auto* transforms = SpatialLightingSceneProvider::instance()->controllers();
+                    if(transforms)
+                    {
+                        for(size_t j = 0; j < transforms->size(); ++j)
+                        {
+                            const ControllerTransform* t = (*transforms)[j].get();
+                            if(!t || t->hidden_by_virtual)
+                            {
+                                continue;
+                            }
+                            const int idx = static_cast<int>(j);
+                            if(!bound_effect_->isRoomEmitterController(idx) && idx != ctrl_idx)
+                            {
+                                bound_receivers_->push_back(idx);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    bound_effect_->setRoomReceiverControllerIndex(ctrl_idx, on);
+                }
+            }
+
+            refreshControllerLists();
+            if(on_changed_)
+            {
+                on_changed_();
+            }
+        });
+        layout->addWidget(card);
+    }
+
+    layout->addStretch();
+}
+
 void EffectRoomOutputPanel::refreshControllerLists()
 {
     rebuildControllerLists();
@@ -132,6 +253,8 @@ void EffectRoomOutputPanel::rebuildControllerLists()
         return;
     }
 
+    std::vector<std::pair<int, QString>> devices;
+    devices.reserve(transforms->size());
     for(size_t i = 0; i < transforms->size(); ++i)
     {
         const ControllerTransform* t = (*transforms)[i].get();
@@ -140,71 +263,11 @@ void EffectRoomOutputPanel::rebuildControllerLists()
             continue;
         }
         const int ctrl_idx = static_cast<int>(i);
-        const QString label = ControllerDisplay::FormatControllerTransformLabel(t, ctrl_idx);
-
-        const bool is_emitter = isEmitterIndex(ctrl_idx);
-        const bool explicit_receivers = bound_receivers_ && !bound_receivers_->empty();
-        const bool is_explicit_receiver =
-            explicit_receivers &&
-            std::find(bound_receivers_->begin(), bound_receivers_->end(), ctrl_idx) != bound_receivers_->end();
-
-        auto* emitter_box = new QCheckBox(label);
-        emitter_box->setChecked(is_emitter);
-        emitter_box->setEnabled(!is_explicit_receiver);
-        connect(emitter_box, &QCheckBox::toggled, this, [this, ctrl_idx](bool on) {
-            if(!bound_effect_)
-            {
-                return;
-            }
-            bound_effect_->setRoomEmitterControllerIndex(ctrl_idx, on);
-            refreshControllerLists();
-            if(on_changed_)
-            {
-                on_changed_();
-            }
-        });
-        emitters_layout_->addWidget(emitter_box);
-
-        auto* receiver_box = new QCheckBox(label);
-        receiver_box->setChecked(is_emitter ? false : isReceiverIndex(ctrl_idx));
-        receiver_box->setEnabled(!is_emitter);
-        connect(receiver_box, &QCheckBox::toggled, this, [this, ctrl_idx](bool on) {
-            if(!bound_effect_ || !bound_receivers_)
-            {
-                return;
-            }
-            if(bound_receivers_->empty() && !on)
-            {
-                const auto* transforms = SpatialLightingSceneProvider::instance()->controllers();
-                if(transforms)
-                {
-                    for(size_t j = 0; j < transforms->size(); ++j)
-                    {
-                        const ControllerTransform* t = (*transforms)[j].get();
-                        if(!t || t->hidden_by_virtual)
-                        {
-                            continue;
-                        }
-                        const int idx = (int)j;
-                        if(!bound_effect_->isRoomEmitterController(idx) && idx != ctrl_idx)
-                        {
-                            bound_receivers_->push_back(idx);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                bound_effect_->setRoomReceiverControllerIndex(ctrl_idx, on);
-            }
-            refreshControllerLists();
-            if(on_changed_)
-            {
-                on_changed_();
-            }
-        });
-        receivers_layout_->addWidget(receiver_box);
+        devices.emplace_back(ctrl_idx, titleForTransform(ctrl_idx, t));
     }
+
+    appendDeviceCards(emitters_layout_, devices, true);
+    appendDeviceCards(receivers_layout_, devices, false);
 }
 
 void EffectRoomOutputPanel::refreshRolePanels()
@@ -225,8 +288,7 @@ void EffectRoomOutputPanel::refreshRolePanels()
     }
 }
 
-void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomCoordinateMode coordinate_mode,
-                                          SpatialRoom::SpatialRoomOutputRole output_role,
+void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomOutputRole output_role,
                                           const RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
                                           const std::vector<int>& emitter_controllers,
                                           const std::vector<int>& receiver_controllers)
@@ -241,14 +303,6 @@ void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomCoordinateMode
         display_role = SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
     }
 
-    for(int i = 0; i < coordinate_combo_->count(); ++i)
-    {
-        if(coordinate_combo_->itemData(i).toInt() == (int)coordinate_mode)
-        {
-            coordinate_combo_->setCurrentIndex(i);
-            break;
-        }
-    }
     for(int i = 0; i < output_combo_->count(); ++i)
     {
         if(output_combo_->itemData(i).toInt() == (int)display_role)
@@ -266,26 +320,25 @@ void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomCoordinateMode
 }
 
 void EffectRoomOutputPanel::bind(SpatialEffect3D* effect,
-                                 SpatialRoom::SpatialRoomCoordinateMode& coordinate_mode,
                                  SpatialRoom::SpatialRoomOutputRole& output_role,
                                  RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
                                  std::vector<int>& emitter_controllers,
                                  std::vector<int>& receiver_controllers,
-                                 const std::function<void()>& on_changed)
+                                 const std::function<void()>& on_changed,
+                                 const std::function<QString(int)>& transform_label)
 {
-    bound_effect_ = effect;
-    bound_role_ = &output_role;
-    bound_emitters_ = &emitter_controllers;
-    bound_receivers_ = &receiver_controllers;
-    on_changed_ = on_changed;
-    syncFromState(coordinate_mode, output_role, relay_params, emitter_controllers, receiver_controllers);
+    if(output_combo_)
+    {
+        output_combo_->disconnect(this);
+    }
 
-    connect(coordinate_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [&coordinate_mode, on_changed, this](int index) {
-                coordinate_mode =
-                    (SpatialRoom::SpatialRoomCoordinateMode)coordinate_combo_->itemData(index).toInt();
-                on_changed();
-            });
+    bound_effect_         = effect;
+    bound_role_           = &output_role;
+    bound_emitters_       = &emitter_controllers;
+    bound_receivers_      = &receiver_controllers;
+    on_changed_           = on_changed;
+    transform_label_fn_     = transform_label;
+    syncFromState(output_role, relay_params, emitter_controllers, receiver_controllers);
 
     connect(output_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [&output_role, on_changed, this](int index) {
