@@ -107,7 +107,7 @@ int RoomOutputDeviceCard::nameLabelContentWidth() const
 
     const QMargins margins = inner->contentsMargins();
     int width                = card_frame_->width() - margins.left() - margins.right();
-    width -= action_button_->sizeHint().width() + inner->horizontalSpacing();
+    width -= action_button_->sizeHint().width() + inner->spacing();
     return std::max(0, width);
 }
 
