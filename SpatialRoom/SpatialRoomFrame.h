@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Per-frame room evaluation state (overlay preview, depth preset).
+// Per-frame room evaluation state (overlay sampling, depth preset).
 
 #ifndef SPATIALROOMFRAME_H
 #define SPATIALROOMFRAME_H
@@ -19,6 +19,7 @@ void BeginRoomGridOverlayPass();
 void EndRoomGridOverlayPass();
 
 bool IsRoomGridOverlayPass();
+/** @deprecated Use IsRoomGridOverlayPass(). */
 bool ShouldUseOverlayFastPreview();
 
 } // namespace SpatialRoom

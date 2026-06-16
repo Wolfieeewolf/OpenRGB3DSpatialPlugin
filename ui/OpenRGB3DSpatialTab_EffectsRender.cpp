@@ -10,7 +10,6 @@
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
-#include "SpatialLighting/EmitterLocalSampling.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
 #include "VirtualController3D.h"
 #include "LEDPosition3D.h"
@@ -25,6 +24,139 @@
 #include <cmath>
 #include <algorithm>
 #include <set>
+
+namespace
+{
+struct EffectSlotGridOverride
+{
+    bool use_zone_grid = false;
+    bool use_anchor_grid = false;
+    std::unique_ptr<GridContext3D> room_grid_local;
+    std::unique_ptr<GridContext3D> world_grid_local;
+};
+
+void ApplyZoneAnchorMetadata(GridContext3D& grid,
+                             ReferenceMode origin_mode,
+                             ZoneManager3D* zone_manager,
+                             const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
+                             int zone_index,
+                             const std::unordered_set<RGBController*>* skip_physical_controllers,
+                             bool room_aligned)
+{
+    if(zone_index == -1)
+    {
+        return;
+    }
+    if(origin_mode == REF_MODE_LED_CENTROID)
+    {
+        Vector3D centroid{};
+        if(TryComputeZoneLedCentroid(zone_manager,
+                                     controller_transforms,
+                                     zone_index,
+                                     skip_physical_controllers,
+                                     true,
+                                     room_aligned,
+                                     &centroid))
+        {
+            grid.SetLedCentroid(centroid.x, centroid.y, centroid.z);
+        }
+    }
+    else if(origin_mode == REF_MODE_TARGET_ZONE_CENTER)
+    {
+        Vector3D center{};
+        if(TryComputeZoneAnchorCenter(zone_manager,
+                                      controller_transforms,
+                                      zone_index,
+                                      skip_physical_controllers,
+                                      true,
+                                      room_aligned,
+                                      &center))
+        {
+            grid.SetAnchorOverride(center.x, center.y, center.z);
+        }
+    }
+}
+
+void PopulateEffectSlotGrids(EffectSlotGridOverride& slot_override,
+                             SpatialEffect3D* effect,
+                             int zone_index,
+                             ReferenceMode stack_origin_mode,
+                             ZoneManager3D* zone_manager,
+                             const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
+                             const std::unordered_set<RGBController*>* skip_physical_controllers,
+                             const GridContext3D& room_grid,
+                             const GridContext3D& world_grid,
+                             uint64_t render_sequence)
+{
+    slot_override = EffectSlotGridOverride{};
+    if(!effect)
+    {
+        return;
+    }
+    if(effect->UseZoneGrid())
+    {
+        if(TryMakeZoneGridContextPair(zone_manager,
+                                      controller_transforms,
+                                      zone_index,
+                                      skip_physical_controllers,
+                                      true,
+                                      room_grid.grid_scale_mm,
+                                      world_grid.grid_scale_mm,
+                                      slot_override.room_grid_local,
+                                      slot_override.world_grid_local))
+        {
+            slot_override.use_zone_grid = true;
+        }
+    }
+    else if(zone_index != -1 &&
+            (stack_origin_mode == REF_MODE_LED_CENTROID || stack_origin_mode == REF_MODE_TARGET_ZONE_CENTER))
+    {
+        slot_override.room_grid_local = std::make_unique<GridContext3D>(
+            room_grid.min_x, room_grid.max_x,
+            room_grid.min_y, room_grid.max_y,
+            room_grid.min_z, room_grid.max_z,
+            room_grid.grid_scale_mm);
+        slot_override.world_grid_local = std::make_unique<GridContext3D>(
+            world_grid.min_x, world_grid.max_x,
+            world_grid.min_y, world_grid.max_y,
+            world_grid.min_z, world_grid.max_z,
+            world_grid.grid_scale_mm);
+        ApplyZoneAnchorMetadata(*slot_override.room_grid_local,
+                                stack_origin_mode,
+                                zone_manager,
+                                controller_transforms,
+                                zone_index,
+                                skip_physical_controllers,
+                                true);
+        ApplyZoneAnchorMetadata(*slot_override.world_grid_local,
+                                stack_origin_mode,
+                                zone_manager,
+                                controller_transforms,
+                                zone_index,
+                                skip_physical_controllers,
+                                false);
+        slot_override.use_anchor_grid = true;
+    }
+    if(slot_override.room_grid_local)
+    {
+        slot_override.room_grid_local->render_sequence = render_sequence;
+    }
+    if(slot_override.world_grid_local)
+    {
+        slot_override.world_grid_local->render_sequence = render_sequence;
+    }
+}
+
+const GridContext3D* ResolveActiveSlotGrid(const EffectSlotGridOverride& slot_override,
+                                           bool use_world_bounds)
+{
+    if(slot_override.use_zone_grid || slot_override.use_anchor_grid)
+    {
+        return use_world_bounds ? slot_override.world_grid_local.get() : slot_override.room_grid_local.get();
+    }
+    return nullptr;
+}
+}
 
 static float AverageAlongAxis(ControllerTransform* transform,
                               EffectAxis sort_axis,
@@ -202,6 +334,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             else if(ref_idx == -3)
             {
                 stack_origin_mode = REF_MODE_WORLD_ORIGIN;
+            }
+            else if(ref_idx == -1)
+            {
+                stack_origin_mode = REF_MODE_ROOM_CENTER;
             }
             else if(ref_idx == -4)
             {
@@ -385,40 +521,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    struct SlotGridOverride
-    {
-        bool use_zone_grid = false;
-        std::unique_ptr<GridContext3D> room_grid_local;
-        std::unique_ptr<GridContext3D> world_grid_local;
-    };
-    std::vector<SlotGridOverride> slot_grid_overrides(active_effects.size());
+    std::vector<EffectSlotGridOverride> slot_grid_overrides(active_effects.size());
     for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
     {
         const RenderEffectSlot& slot = active_effects[effect_idx];
-        if(!slot.effect || !slot.effect->UseZoneGrid())
-        {
-            continue;
-        }
-        if(TryMakeZoneGridContextPair(zone_manager.get(),
-                                      controller_transforms,
-                                      slot.zone_index,
-                                      &controllers_managed_by_virtuals,
-                                      true,
-                                      room_grid.grid_scale_mm,
-                                      world_grid.grid_scale_mm,
-                                      slot_grid_overrides[effect_idx].room_grid_local,
-                                      slot_grid_overrides[effect_idx].world_grid_local))
-        {
-            slot_grid_overrides[effect_idx].use_zone_grid = true;
-            if(slot_grid_overrides[effect_idx].room_grid_local)
-            {
-                slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
-            }
-            if(slot_grid_overrides[effect_idx].world_grid_local)
-            {
-                slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
-            }
-        }
+        PopulateEffectSlotGrids(slot_grid_overrides[effect_idx],
+                                slot.effect,
+                                slot.zone_index,
+                                stack_origin_mode,
+                                zone_manager.get(),
+                                controller_transforms,
+                                &controllers_managed_by_virtuals,
+                                room_grid,
+                                world_grid,
+                                effect_render_sequence);
     }
 
     SpatialLightingSceneProvider::instance()->ClearEmitterRelayFrame();
@@ -534,7 +650,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         continue;
                     }
-                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                     if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                     {
                         continue;
@@ -542,39 +658,22 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     const bool requires_world = effect->RequiresWorldSpaceCoordinates();
                     const bool use_world_bounds = effect->UseWorldGridBounds();
                     const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                    const GridContext3D* zone_grid = nullptr;
-                    if(grid_override.use_zone_grid)
-                    {
-                        zone_grid = use_world_bounds ? grid_override.world_grid_local.get()
-                                                     : grid_override.room_grid_local.get();
-                    }
-                    const GridContext3D& stack_grid = zone_grid ? *zone_grid : global_grid;
+                    const GridContext3D* local_grid =
+                        ResolveActiveSlotGrid(grid_override, use_world_bounds);
+                    const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
 
-                    GridContext3D emitter_local_grid = stack_grid;
                     float sx = requires_world ? world_pos.x : room_x;
                     float sy = requires_world ? world_pos.y : room_y;
                     float sz = requires_world ? world_pos.z : room_z;
-                    const GridContext3D* active_grid = &stack_grid;
-                    if(emitter_transform && !effect->UsesRoomMappedCoordinates() &&
-                       EmitterLocalSampling::TryBuildEmitterLocalSample(emitter_transform,
-                                                                       led_position,
-                                                                       stack_grid.grid_scale_mm,
-                                                                       stack_grid.render_sequence,
-                                                                       sx,
-                                                                       sy,
-                                                                       sz,
-                                                                       emitter_local_grid))
-                    {
-                        active_grid = &emitter_local_grid;
-                    }
+                    const GridContext3D& active_grid = stack_grid;
 
                     if(!effect->SkipsSpatialSampleWarp())
                     {
-                        effect->ApplyAxisScale(sx, sy, sz, *active_grid);
-                        effect->ApplyEffectRotation(sx, sy, sz, *active_grid);
+                        effect->ApplyAxisScale(sx, sy, sz, active_grid);
+                        effect->ApplyEffectRotation(sx, sy, sz, active_grid);
                     }
-                    RGBColor effect_color = effect->EvaluateColorGrid(sx, sy, sz, effect_time, *active_grid);
-                    if(!effect->IsPointOnActiveSurface(sx, sy, sz, *active_grid))
+                    RGBColor effect_color = effect->EvaluateColorGrid(sx, sy, sz, effect_time, active_grid);
+                    if(!effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
                     {
                         effect_color = 0x00000000;
                     }
@@ -595,11 +694,14 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                         room_grid.depth * room_grid.depth);
                 mirror.reference_max_distance_mm =
                     std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
-                mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm, 1.0f),
-                                             0.15f,
-                                             2.5f);
+                mirror.light_reach_mm = lp.light_reach_mm;
+                mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.42f, 12.0f, 80.0f);
+                mirror.room_fill_strength = lp.room_fill / 100.0f;
+                mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
+                                             0.35f,
+                                             3.0f);
                 mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
-                mirror.brightness = bright * (0.35f + (lp.room_fill / 100.0f) * 0.85f);
+                mirror.brightness = bright * (0.65f + (lp.room_fill / 100.0f) * 0.45f);
 
                 for(const int emitter_ctrl : emitter_set)
                 {
@@ -703,10 +805,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         src.r = rf;
                         src.g = gf;
                         src.b = bf;
-                        src.radius = std::max(0.015f, glow_u);
-                        src.light_radius = std::max(src.radius * 1.4f, reach_u);
-                        src.emissive_strength = 0.55f * bright * lum;
-                        src.light_strength = 1.0f * bright * lum;
+                        src.radius = std::max(0.02f, glow_u);
+                        src.light_radius = std::max(src.radius * 1.25f, reach_u);
+                        src.emissive_strength = 0.9f * bright * lum;
+                        src.light_strength = 1.45f * bright * lum;
                         sources.push_back(src);
                     }
                 }
@@ -719,41 +821,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
     {
         SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
-        struct OverlaySlotGridOverride
-        {
-            bool use_zone_grid = false;
-            std::unique_ptr<GridContext3D> room_grid_local;
-            std::unique_ptr<GridContext3D> world_grid_local;
-        };
-        std::vector<OverlaySlotGridOverride> overlay_slot_grid_overrides(active_effects.size());
-        for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
-        {
-            const RenderEffectSlot& slot = active_effects[effect_idx];
-            if(!slot.effect || !slot.effect->UseZoneGrid())
-            {
-                continue;
-            }
-            if(TryMakeZoneGridContextPair(zone_manager.get(),
-                                          controller_transforms,
-                                          slot.zone_index,
-                                          &controllers_managed_by_virtuals,
-                                          true,
-                                          room_grid.grid_scale_mm,
-                                          world_grid.grid_scale_mm,
-                                          overlay_slot_grid_overrides[effect_idx].room_grid_local,
-                                          overlay_slot_grid_overrides[effect_idx].world_grid_local))
-            {
-                overlay_slot_grid_overrides[effect_idx].use_zone_grid = true;
-                if(overlay_slot_grid_overrides[effect_idx].room_grid_local)
-                {
-                    overlay_slot_grid_overrides[effect_idx].room_grid_local->render_sequence = effect_render_sequence;
-                }
-                if(overlay_slot_grid_overrides[effect_idx].world_grid_local)
-                {
-                    overlay_slot_grid_overrides[effect_idx].world_grid_local->render_sequence = effect_render_sequence;
-                }
-            }
-        }
 
         viewport->SetRoomGridOverlayBounds(room_bounds.min_x, room_bounds.max_x,
                                            room_bounds.min_y, room_bounds.max_y,
@@ -788,19 +855,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             {
                                 continue;
                             }
-                            const OverlaySlotGridOverride& grid_override = overlay_slot_grid_overrides[effect_idx];
+                            const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                             if(slot.effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                             {
                                 continue;
                             }
                             const bool use_world_bounds = slot.effect->UseWorldGridBounds();
                             const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                            const GridContext3D* local_grid = nullptr;
-                            if(grid_override.use_zone_grid)
-                            {
-                                local_grid = use_world_bounds ? grid_override.world_grid_local.get()
-                                                              : grid_override.room_grid_local.get();
-                            }
+                            const GridContext3D* local_grid =
+                                ResolveActiveSlotGrid(grid_override, use_world_bounds);
                             const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
                             if(!slot.effect->SkipsSpatialSampleWarp())
                             {
@@ -901,7 +964,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         {
                             continue;
                         }
-                        const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                        const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                         if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                         {
                             continue;
@@ -913,37 +976,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         float sample_z = requires_world ? world_z : room_z;
                         const bool use_world_bounds = effect->UseWorldGridBounds();
                         const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                        const GridContext3D* local_grid = nullptr;
-                        if(grid_override.use_zone_grid)
-                        {
-                            local_grid = use_world_bounds ? grid_override.world_grid_local.get()
-                                                          : grid_override.room_grid_local.get();
-                        }
+                        const GridContext3D* local_grid =
+                            ResolveActiveSlotGrid(grid_override, use_world_bounds);
                         const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
-                        GridContext3D emitter_local_grid = stack_grid;
-                        const GridContext3D* sample_grid = &stack_grid;
-                        if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
-                           effect->isRoomEmitterController(static_cast<int>(ctrl_idx)) &&
-                           !effect->UsesRoomMappedCoordinates() &&
-                           EmitterLocalSampling::TryBuildEmitterLocalSample(transform,
-                                                                           led_position,
-                                                                           stack_grid.grid_scale_mm,
-                                                                           stack_grid.render_sequence,
-                                                                           sample_x,
-                                                                           sample_y,
-                                                                           sample_z,
-                                                                           emitter_local_grid))
-                        {
-                            sample_grid = &emitter_local_grid;
-                        }
                         MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                         if(!effect->SkipsSpatialSampleWarp())
                         {
-                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, *sample_grid);
-                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, *sample_grid);
+                            effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
+                            effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
                         }
-                        RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, *sample_grid);
-                        if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, *sample_grid))
+                        RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, stack_grid);
+                        if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, stack_grid))
                             effect_color = 0x00000000;
                         effect_color = effect->PostProcessColorGrid(effect_color);
 
@@ -1042,7 +1085,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     {
                         continue;
                     }
-                    const SlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
+                    const EffectSlotGridOverride& grid_override = slot_grid_overrides[effect_idx];
                     if(effect->UseZoneGrid() && slot.zone_index != -1 && !grid_override.use_zone_grid)
                     {
                         continue;
@@ -1054,37 +1097,17 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     float sample_z = requires_world ? world_z : room_z;
                     const bool use_world_bounds = effect->UseWorldGridBounds();
                     const GridContext3D& global_grid = use_world_bounds ? world_grid : room_grid;
-                    const GridContext3D* local_grid = nullptr;
-                    if(grid_override.use_zone_grid)
-                    {
-                        local_grid = use_world_bounds ? grid_override.world_grid_local.get()
-                                                      : grid_override.room_grid_local.get();
-                    }
+                    const GridContext3D* local_grid =
+                        ResolveActiveSlotGrid(grid_override, use_world_bounds);
                     const GridContext3D& stack_grid = local_grid ? *local_grid : global_grid;
-                    GridContext3D emitter_local_grid = stack_grid;
-                    const GridContext3D* sample_grid = &stack_grid;
-                    if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay &&
-                       effect->isRoomEmitterController(static_cast<int>(ctrl_idx)) &&
-                       !effect->UsesRoomMappedCoordinates() &&
-                       EmitterLocalSampling::TryBuildEmitterLocalSample(transform,
-                                                                       led_position,
-                                                                       stack_grid.grid_scale_mm,
-                                                                       stack_grid.render_sequence,
-                                                                       sample_x,
-                                                                       sample_y,
-                                                                       sample_z,
-                                                                       emitter_local_grid))
-                    {
-                        sample_grid = &emitter_local_grid;
-                    }
                     MinecraftGame::SetRenderSampleIndexContext((int)led_pos_idx, (int)transform->led_positions.size());
                     if(!effect->SkipsSpatialSampleWarp())
                     {
-                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, *sample_grid);
-                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, *sample_grid);
+                        effect->ApplyAxisScale(sample_x, sample_y, sample_z, stack_grid);
+                        effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
                     }
-                    RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, *sample_grid);
-                    if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, *sample_grid))
+                    RGBColor effect_color = effect->EvaluateColorGrid(sample_x, sample_y, sample_z, effect_time, stack_grid);
+                    if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, stack_grid))
                         effect_color = 0x00000000;
                     effect_color = effect->PostProcessColorGrid(effect_color);
 

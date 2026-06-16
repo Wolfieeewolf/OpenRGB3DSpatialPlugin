@@ -52,6 +52,11 @@ struct GridContext3D
     float led_centroid_z = 0.0f;
     bool has_led_centroid = false;
 
+    float anchor_override_x = 0.0f;
+    float anchor_override_y = 0.0f;
+    float anchor_override_z = 0.0f;
+    bool has_anchor_override = false;
+
     uint64_t render_sequence = 0;
 
     /** When true, effect origin/reference uses this grid's center (per-emitter device canvas). */
@@ -84,6 +89,14 @@ struct GridContext3D
         led_centroid_y = cy;
         led_centroid_z = cz;
         has_led_centroid = true;
+    }
+
+    void SetAnchorOverride(float ax, float ay, float az)
+    {
+        anchor_override_x = ax;
+        anchor_override_y = ay;
+        anchor_override_z = az;
+        has_anchor_override = true;
     }
 };
 
@@ -378,6 +391,7 @@ public:
                                      const std::function<void()>& on_changed,
                                      const std::function<QString(int)>& transform_label = {});
     void DisconnectStackRoomOutputPanel();
+    void InvalidateRelayShadeCache();
     void SyncRoomCoordinateModeFromReference();
     bool ShowsRoomOutputControl() const;
 
@@ -564,8 +578,8 @@ protected:
     mutable std::vector<SpatialLighting::OccluderQuad> relay_occluders_{};
     mutable std::vector<SpatialLighting::OccluderAabb> relay_occluder_aabbs_{};
     mutable bool relay_occluders_valid_ = false;
-    mutable std::uint64_t relay_shade_prepared_for_ = 0;
 
+    void ApplyRelayShadeSettings(const GridContext3D& grid) const;
     RGBColor ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const;
     void RefreshRelayOccluders(const GridContext3D& grid) const;
     QGroupBox*          path_plane_group;

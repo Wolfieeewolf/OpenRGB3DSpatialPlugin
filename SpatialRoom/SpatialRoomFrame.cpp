@@ -2,8 +2,6 @@
 
 #include "SpatialRoomFrame.h"
 
-#include "SpatialLighting/SpatialLightingSceneProvider.h"
-
 namespace SpatialRoom
 {
 namespace
@@ -23,21 +21,18 @@ void BeginEffectRenderFrame(std::uint64_t render_sequence, SpatialRoomDepthPrese
     g_frame.depth_preset = preset;
     g_frame.room_grid_overlay_pass = false;
     g_overlay_pass_depth = 0;
-    SpatialLightingSceneProvider::instance()->SetRoomGridOverlayPreview(false);
 }
 
 void EndEffectRenderFrame()
 {
     g_overlay_pass_depth = 0;
     g_frame.room_grid_overlay_pass = false;
-    SpatialLightingSceneProvider::instance()->SetRoomGridOverlayPreview(false);
 }
 
 void BeginRoomGridOverlayPass()
 {
     ++g_overlay_pass_depth;
     g_frame.room_grid_overlay_pass = true;
-    SpatialLightingSceneProvider::instance()->SetRoomGridOverlayPreview(true);
 }
 
 void EndRoomGridOverlayPass()
@@ -50,7 +45,6 @@ void EndRoomGridOverlayPass()
     {
         g_overlay_pass_depth = 0;
         g_frame.room_grid_overlay_pass = false;
-        SpatialLightingSceneProvider::instance()->SetRoomGridOverlayPreview(false);
     }
 }
 

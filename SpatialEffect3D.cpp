@@ -1450,6 +1450,11 @@ void SpatialEffect3D::RefreshRoomOutputControllerLists()
     }
 }
 
+void SpatialEffect3D::InvalidateRelayShadeCache()
+{
+    relay_occluders_valid_ = false;
+}
+
 void SpatialEffect3D::ConnectStackRoomOutputPanel(EffectRoomOutputPanel* panel,
                                                   const std::function<void()>& on_changed,
                                                   const std::function<QString(int)>& transform_label)
@@ -1464,13 +1469,40 @@ void SpatialEffect3D::ConnectStackRoomOutputPanel(EffectRoomOutputPanel* panel,
                              effect_room_relay_params_,
                              effect_emitter_controller_indices_,
                              effect_receiver_controller_indices_,
-                             on_changed,
+                             [this, on_changed]()
+                             {
+                                 InvalidateRelayShadeCache();
+                                 if(on_changed)
+                                 {
+                                     on_changed();
+                                 }
+                             },
                              transform_label);
 }
 
 void SpatialEffect3D::DisconnectStackRoomOutputPanel()
 {
     room_output_panel_ = nullptr;
+}
+
+void SpatialEffect3D::ApplyRelayShadeSettings(const GridContext3D& grid) const
+{
+    SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
+                                                 SpatialRoom::CurrentFrameContext().depth_preset);
+    const float bright = std::max(0.15f, effect_brightness / 100.0f);
+    relay_scene_cache_.shade.ambient_level = 0.05f + (effect_room_relay_params_.room_fill / 100.0f) * 0.04f;
+    relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
+    relay_scene_cache_.shade.room_fill_strength =
+        (effect_room_relay_params_.room_fill / 100.0f) * bright * 1.15f;
+    relay_scene_cache_.shade.room_fill_atten = 0.72f;
+    relay_scene_cache_.shade.use_occlusion =
+        relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
+    relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
+                                                     effect_room_relay_params_.use_occlusion &&
+                                                     effect_room_relay_params_.ao_strength > 0.01f;
+    relay_scene_cache_.shade.direct_falloff = 0.62f;
+    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
+    relay_scene_cache_.shade.ao_probe_span = std::clamp(reach_u * 0.4f, 0.5f, 14.0f);
 }
 
 void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
@@ -1489,35 +1521,18 @@ void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
 RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const GridContext3D& grid) const
 {
     SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+    if(!relay_occluders_valid_)
+    {
+        RefreshRelayOccluders(grid);
+    }
+    ApplyRelayShadeSettings(grid);
+
     if(provider->emitterRelayMirrorActive())
     {
-        if(relay_shade_prepared_for_ != grid.render_sequence || !relay_occluders_valid_)
-        {
-            RefreshRelayOccluders(grid);
-            SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
-                                                         SpatialRoom::CurrentFrameContext().depth_preset);
-            relay_scene_cache_.shade.ambient_level = 0.04f;
-            relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-            relay_scene_cache_.shade.room_fill_strength =
-                (effect_room_relay_params_.room_fill / 100.0f) * (effect_brightness / 100.0f);
-            relay_scene_cache_.shade.room_fill_atten = 1.0f;
-            relay_scene_cache_.shade.use_occlusion =
-                relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
-            relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
-                                                             effect_room_relay_params_.use_occlusion &&
-                                                             effect_room_relay_params_.ao_strength > 0.01f;
-            relay_scene_cache_.shade.direct_falloff = 0.85f;
-            const float room_diag =
-                std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-            relay_scene_cache_.shade.ao_probe_span = std::clamp(room_diag * 0.035f, 0.35f, 8.0f);
-            relay_shade_prepared_for_ = grid.render_sequence;
-        }
-
         EmitterRelayMirror::MirrorShadeContext shade_ctx{};
         shade_ctx.shade = &relay_scene_cache_.shade;
         shade_ctx.occluder_aabbs = &relay_occluder_aabbs_;
         shade_ctx.occluders = &relay_occluders_;
-        shade_ctx.overlay_preview = provider->roomGridOverlayPreview();
         return EmitterRelayMirror::SampleReceiver(provider->emitterRelayMirrorFrame(), x, y, z, &shade_ctx);
     }
     if(!provider->emitterRelayActive() || provider->emitterRelaySources().empty())
@@ -1525,30 +1540,9 @@ RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const
         return 0x00000000;
     }
 
-    if(relay_shade_prepared_for_ != grid.render_sequence || !relay_occluders_valid_)
-    {
-        RefreshRelayOccluders(grid);
-        relay_scene_cache_.sources = provider->emitterRelaySources();
-        relay_scene_cache_.source =
-            relay_scene_cache_.sources.empty() ? SpatialLighting::EmissiveSource{} : relay_scene_cache_.sources.front();
-        SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
-                                                     SpatialRoom::CurrentFrameContext().depth_preset);
-        relay_scene_cache_.shade.ambient_level = 0.04f;
-        relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-        relay_scene_cache_.shade.room_fill_strength =
-            (effect_room_relay_params_.room_fill / 100.0f) * (effect_brightness / 100.0f);
-        relay_scene_cache_.shade.room_fill_atten = 1.0f;
-        relay_scene_cache_.shade.use_occlusion =
-            relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
-        relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
-                                                         effect_room_relay_params_.use_occlusion &&
-                                                         effect_room_relay_params_.ao_strength > 0.01f;
-        relay_scene_cache_.shade.direct_falloff = 0.85f;
-        const float room_diag =
-            std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-        relay_scene_cache_.shade.ao_probe_span = std::clamp(room_diag * 0.035f, 0.35f, 8.0f);
-        relay_shade_prepared_for_ = grid.render_sequence;
-    }
+    relay_scene_cache_.sources = provider->emitterRelaySources();
+    relay_scene_cache_.source =
+        relay_scene_cache_.sources.empty() ? SpatialLighting::EmissiveSource{} : relay_scene_cache_.sources.front();
 
     return SpatialLighting::ShadeLed(relay_scene_cache_, x, y, z);
 }
@@ -1791,6 +1785,10 @@ Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
         case REF_MODE_CUSTOM_POINT:
             return custom_reference_point;
         case REF_MODE_TARGET_ZONE_CENTER:
+            if(grid.has_anchor_override)
+            {
+                return {grid.anchor_override_x, grid.anchor_override_y, grid.anchor_override_z};
+            }
             return {grid.center_x, grid.center_y, grid.center_z};
         case REF_MODE_WORLD_ORIGIN:
             return {0.0f, 0.0f, 0.0f};
@@ -1942,7 +1940,7 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
 
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade)
     {
-        if(SpatialRoom::ShouldUseOverlayFastPreview())
+        if(SpatialRoom::IsRoomGridOverlayPass())
         {
             RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
             if((relay & 0x00FFFFFFu) != 0u)
@@ -1966,7 +1964,7 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
 
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
-        if(SpatialRoom::ShouldUseOverlayFastPreview())
+        if(SpatialRoom::IsRoomGridOverlayPass())
         {
             RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
             g_tls_eval_effect = prev_eval_effect;

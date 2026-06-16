@@ -94,7 +94,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->roomDepthSpin->setEnabled(manual_room);
 
     ui->roomGridOverlayCheckbox->setToolTip(
-        "Draw a dim grid of points in the room so you see the space. Real LEDs stand out.");
+        "Sample the effect stack at room grid points using the same shading as real LEDs "
+        "(occlusion, relay, falloff). Lower brightness only dims the preview dots.");
 
     ui->roomGuideLabelsCheckbox->setToolTip(
         "Wall, floor, ceiling, and origin hints in the 3D view. Gizmo rotate text while dragging is always shown.");
@@ -120,13 +121,14 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->overlayPointSlider->setRange(1, 12);
     ui->overlayStepSlider->setRange(1, 24);
 
-    ui->overlayBrightSlider->setToolTip("How bright the preview grid points are (0–100%).");
+    ui->overlayBrightSlider->setToolTip(
+        "Display gain for overlay points only (100% matches computed LED/light levels).");
     ui->overlayPointSlider->setToolTip("OpenGL point size for each overlay dot (1–12).");
     ui->overlayStepSlider->setToolTip(
         "Sample from the room origin (0) along each axis every N grid cells, through to the far wall. "
         "Smaller N = denser points; very large rooms may thin points for performance but still span the full room.");
 
-    int overlay_bright_pct = 35;
+    int overlay_bright_pct = 100;
     int overlay_point_size = 3;
     int overlay_step       = 4;
 
@@ -162,7 +164,7 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         {
             const nlohmann::json& rg = settings["RoomGrid"];
             bool show                = rg.value("Show", false);
-            overlay_bright_pct       = (int)(rg.value("Brightness", 0.35) * 100.0);
+            overlay_bright_pct       = (int)(rg.value("Brightness", 1.0) * 100.0);
             overlay_point_size       = (int)rg.value("PointSize", 3.0);
             overlay_step             = (int)rg.value("Step", 4);
             overlay_bright_pct       = std::max(0, std::min(100, overlay_bright_pct));

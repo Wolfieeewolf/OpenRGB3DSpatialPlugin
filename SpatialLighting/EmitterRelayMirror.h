@@ -45,6 +45,12 @@ struct MirrorFrame
     Vector3D reference_room{};
     float reference_max_distance_mm = 3000.0f;
     float grid_scale_mm = 10.0f;
+    /** Direct falloff range from emitters (mm). */
+    float light_reach_mm = 280.0f;
+    /** Edge feather for reach falloff (percent of range). */
+    float glow_feather_percent = 30.0f;
+    /** 0..1 room wash added on receivers. */
+    float room_fill_strength = 0.35f;
     float coverage = 1.0f;
     float edge_softness = 18.0f;
     float brightness = 1.0f;
@@ -55,7 +61,6 @@ struct MirrorShadeContext
     const SpatialLighting::ShadeSettings* shade = nullptr;
     const std::vector<SpatialLighting::OccluderAabb>* occluder_aabbs = nullptr;
     const std::vector<SpatialLighting::OccluderQuad>* occluders = nullptr;
-    bool overlay_preview = false;
 };
 
 void BuildSurfaceFromSamples(int controller_index,

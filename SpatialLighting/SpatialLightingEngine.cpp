@@ -507,7 +507,7 @@ void AppendCustomControllerLightBlockerAabbs(std::vector<OccluderAabb>& out,
     }
 }
 
-void AppendControllerOccluders(std::vector<OccluderAabb>& out)
+void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_mm)
 {
     const std::vector<std::unique_ptr<::ControllerTransform>>* transforms =
         SpatialLightingSceneProvider::instance()->controllers();
@@ -515,6 +515,9 @@ void AppendControllerOccluders(std::vector<OccluderAabb>& out)
     {
         return;
     }
+
+    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float body_pad = MMToGridUnits(22.0f, scale_mm);
 
     for(size_t ctrl_index = 0; ctrl_index < transforms->size(); ++ctrl_index)
     {
@@ -543,6 +546,35 @@ void AppendControllerOccluders(std::vector<OccluderAabb>& out)
         Vector3D local_min{};
         Vector3D local_max{};
         ControllerLayout3D::CalculateControllerLocalBounds(ctrl, local_min, local_max);
+
+        local_min.x -= body_pad;
+        local_min.y -= body_pad;
+        local_min.z -= body_pad;
+        local_max.x += body_pad;
+        local_max.y += body_pad;
+        local_max.z += body_pad;
+
+        const float span_x = local_max.x - local_min.x;
+        const float span_y = local_max.y - local_min.y;
+        const float span_z = local_max.z - local_min.z;
+        if(span_x < body_pad)
+        {
+            const float cx = (local_min.x + local_max.x) * 0.5f;
+            local_min.x = cx - body_pad * 0.5f;
+            local_max.x = cx + body_pad * 0.5f;
+        }
+        if(span_y < body_pad)
+        {
+            const float cy = (local_min.y + local_max.y) * 0.5f;
+            local_min.y = cy - body_pad * 0.5f;
+            local_max.y = cy + body_pad * 0.5f;
+        }
+        if(span_z < body_pad)
+        {
+            const float cz = (local_min.z + local_max.z) * 0.5f;
+            local_min.z = cz - body_pad * 0.5f;
+            local_max.z = cz + body_pad * 0.5f;
+        }
 
         const Vec3 w[8] = {
             ControllerLocalToWorld(ctrl, {local_min.x, local_min.y, local_min.z}),
@@ -602,7 +634,7 @@ void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
     }
     if(options.controllers)
     {
-        AppendControllerOccluders(aabbs);
+        AppendControllerOccluders(aabbs, grid.grid_scale_mm);
         AppendVirtualControllerBlockerAabbs(aabbs, grid.grid_scale_mm);
     }
 }
@@ -668,7 +700,6 @@ struct ShadeRgb
 ShadeRgb ShadeLedFromSource(const RoomScene& scene,
                             const Vec3& led,
                             const EmissiveSource& src,
-                            bool overlay_preview,
                             bool has_occluders,
                             float ao)
 {
@@ -686,7 +717,7 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
     const float falloff = 1.0f / (1.0f + norm_d * norm_d * scene.shade.direct_falloff);
 
     float visibility = 1.0f;
-    if(!overlay_preview && scene.shade.use_occlusion && has_occluders && dist > glow_r * 0.2f)
+    if(scene.shade.use_occlusion && has_occluders && dist > glow_r * 0.2f)
     {
         visibility = SegmentHitsOccluderSet(led, fire, scene.occluder_aabbs, scene.occluders) ? 0.0f : 1.0f;
     }
@@ -694,9 +725,9 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
     emissive *= visibility;
     const float direct = src.light_strength * falloff * visibility;
 
-    const float fill_atten = std::max(scene.shade.room_fill_atten, 0.15f);
+    const float fill_atten = std::max(scene.shade.room_fill_atten, 0.12f);
     const float room_fill =
-        scene.shade.room_fill_strength * std::exp(-dist / (light_r * fill_atten * 4.0f)) * visibility;
+        scene.shade.room_fill_strength * std::exp(-dist / (light_r * fill_atten * 2.2f)) * visibility;
 
     const float ambient = scene.shade.ambient_level * ao * visibility;
     const float total = emissive + direct + room_fill + ambient;
@@ -713,11 +744,10 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
 RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
 {
     const Vec3 led = {led_x, led_y, led_z};
-    const bool overlay_preview = SpatialLightingSceneProvider::instance()->roomGridOverlayPreview();
     const bool has_occluders = !scene.occluders.empty() || !scene.occluder_aabbs.empty();
 
     float ao = 1.0f;
-    if(!overlay_preview && scene.shade.use_occlusion && scene.shade.use_ambient_occlusion && has_occluders &&
+    if(scene.shade.use_occlusion && scene.shade.use_ambient_occlusion && has_occluders &&
        scene.shade.ao_strength > 0.001f)
     {
         ao = ComputeAmbientOcclusion(led, scene.occluder_aabbs, scene.occluders, scene.shade.ao_probe_span);
@@ -729,7 +759,7 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
     float sum_b = 0.0f;
     if(scene.sources.empty())
     {
-        const ShadeRgb c = ShadeLedFromSource(scene, led, scene.source, overlay_preview, has_occluders, ao);
+        const ShadeRgb c = ShadeLedFromSource(scene, led, scene.source, has_occluders, ao);
         sum_r = c.r;
         sum_g = c.g;
         sum_b = c.b;
@@ -738,7 +768,7 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
     {
         for(const EmissiveSource& src : scene.sources)
         {
-            const ShadeRgb c = ShadeLedFromSource(scene, led, src, overlay_preview, has_occluders, ao);
+            const ShadeRgb c = ShadeLedFromSource(scene, led, src, has_occluders, ao);
             sum_r += c.r;
             sum_g += c.g;
             sum_b += c.b;

@@ -96,7 +96,7 @@ void AppendRoomWallOccluders(std::vector<OccluderQuad>& out,
                              float max_y,
                              float max_z);
 
-void AppendControllerOccluders(std::vector<OccluderAabb>& out);
+void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_mm);
 
 void AppendCustomControllerLightBlockerAabbs(std::vector<OccluderAabb>& out,
                                            ::ControllerTransform* ctrl,

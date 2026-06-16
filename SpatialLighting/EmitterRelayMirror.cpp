@@ -160,12 +160,7 @@ void BuildSurfaceFromSamples(int controller_index,
     }
     else
     {
-        const Vector3D center_local = {
-            (min_bounds.x + max_bounds.x) * 0.5f,
-            (min_bounds.y + max_bounds.y) * 0.5f,
-            (min_bounds.z + max_bounds.z) * 0.5f,
-        };
-        out.plane_center_room = ControllerLayout3D::CalculateWorldPosition(center_local, ctrl->transform);
+        return;
     }
 
     const size_t px = static_cast<size_t>(out.tex_w * out.tex_h);
@@ -191,14 +186,13 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     }
 
     const Vector3D led_pos = {room_x, room_y, room_z};
-    const Vector3D& ref = frame.reference_room;
     const float scale_mm = (frame.grid_scale_mm > 0.001f) ? frame.grid_scale_mm : 10.0f;
 
     const bool shade_enabled = shade_ctx && shade_ctx->shade && shade_ctx->occluder_aabbs && shade_ctx->occluders;
     const bool has_occluders =
         shade_enabled && (!shade_ctx->occluder_aabbs->empty() || !shade_ctx->occluders->empty());
     const bool use_line_occlusion =
-        shade_enabled && !shade_ctx->overlay_preview && shade_ctx->shade->use_occlusion && has_occluders;
+        shade_enabled && shade_ctx->shade->use_occlusion && has_occluders;
 
     float total_r = 0.0f;
     float total_g = 0.0f;
@@ -207,10 +201,10 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
 
     for(const EmitterSurface& surface : frame.surfaces)
     {
-        DisplayPlane3D plane = MakeVirtualPlane(surface, frame.grid_scale_mm);
-
+        DisplayPlane3D plane = MakeVirtualPlane(surface, scale_mm);
+        const Vector3D emitter_ref = surface.plane_center_room;
         Geometry3D::PlaneProjection proj =
-            Geometry3D::SpatialMapToScreen(led_pos, plane, 0.0f, &ref, scale_mm);
+            Geometry3D::SpatialMapToScreen(led_pos, plane, 0.0f, &emitter_ref, scale_mm);
         if(!proj.is_valid)
         {
             continue;
@@ -245,9 +239,9 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
             continue;
         }
 
-        float effective_range = std::max(frame.reference_max_distance_mm * std::clamp(frame.coverage, 0.05f, 3.0f),
-                                         10.0f);
-        const float weight = Geometry3D::ComputeFalloff(proj.distance, effective_range, frame.edge_softness);
+        const float effective_range = std::max(frame.light_reach_mm, 80.0f);
+        const float feather_percent = std::clamp(frame.glow_feather_percent, 10.0f, 85.0f);
+        const float weight = Geometry3D::ComputeFalloff(proj.distance, effective_range, feather_percent);
         if(weight < 0.01f)
         {
             continue;
@@ -264,14 +258,15 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
         return 0x00000000;
     }
 
-    const float bright = std::max(0.05f, frame.brightness);
-    total_r = total_r / total_w * bright;
-    total_g = total_g / total_w * bright;
-    total_b = total_b / total_w * bright;
+    const float bright = std::max(0.08f, frame.brightness);
+    const float fill_mul = 1.0f + frame.room_fill_strength * 0.55f;
+    total_r = total_r / total_w * bright * fill_mul;
+    total_g = total_g / total_w * bright * fill_mul;
+    total_b = total_b / total_w * bright * fill_mul;
 
     float ao_factor = 1.0f;
-    if(shade_enabled && !shade_ctx->overlay_preview && shade_ctx->shade->use_occlusion &&
-       shade_ctx->shade->use_ambient_occlusion && has_occluders && shade_ctx->shade->ao_strength > 0.001f)
+    if(shade_enabled && shade_ctx->shade->use_occlusion && shade_ctx->shade->use_ambient_occlusion &&
+       has_occluders && shade_ctx->shade->ao_strength > 0.001f)
     {
         const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
                                                                            room_y,

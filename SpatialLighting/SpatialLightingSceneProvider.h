@@ -23,9 +23,9 @@ public:
     void SetShadingControllerIndex(int index) { shading_controller_index_ = index; }
     int shadingControllerIndex() const { return shading_controller_index_; }
 
-    /** Room grid overlay: skip AO and shadow rays; keep distance falloff (much faster). */
-    void SetRoomGridOverlayPreview(bool preview) { room_grid_overlay_preview_ = preview; }
-    bool roomGridOverlayPreview() const { return room_grid_overlay_preview_; }
+    /** Room grid overlay: sample relay/lighting at each voxel (same shading as LEDs). */
+    void SetRoomGridOverlayPreview(bool preview) { (void)preview; }
+    bool roomGridOverlayPreview() const { return false; }
 
     void ClearEmitterRelayFrame();
     void SetEmitterRelayFrame(std::vector<SpatialLighting::EmissiveSource> sources,
@@ -43,7 +43,6 @@ private:
 
     const std::vector<std::unique_ptr<ControllerTransform>>* controllers_ = nullptr;
     int shading_controller_index_ = -1;
-    bool room_grid_overlay_preview_ = false;
 
     bool emitter_relay_active_ = false;
     bool emitter_relay_mirror_active_ = false;

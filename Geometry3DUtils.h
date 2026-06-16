@@ -109,6 +109,46 @@ namespace Geometry3D
         };
     }
 
+    /** Inverse of TransformDisplayPlaneLocalToWorld (for emitter / display-plane UV). */
+    inline Vector3D TransformDisplayPlaneWorldToLocal(const Vector3D& world_pos, const Transform3D& transform)
+    {
+        Vector3D p{
+            world_pos.x - transform.position.x,
+            world_pos.y - transform.position.y,
+            world_pos.z - transform.position.z,
+        };
+
+        const float deg = 3.14159265359f / 180.0f;
+        const float rz = -transform.rotation.z * deg;
+        const float cz = std::cos(rz);
+        const float sz = std::sin(rz);
+        float tx = p.x * cz + p.y * sz;
+        float ty = -p.x * sz + p.y * cz;
+        p.x = tx;
+        p.y = ty;
+
+        const float ry = -transform.rotation.y * deg;
+        const float cy = std::cos(ry);
+        const float sy = std::sin(ry);
+        tx = p.x * cy - p.z * sy;
+        float tz = p.x * sy + p.z * cy;
+        p.x = tx;
+        p.z = tz;
+
+        const float rx = -transform.rotation.x * deg;
+        const float cx = std::cos(rx);
+        const float sx = std::sin(rx);
+        ty = p.y * cx + p.z * sx;
+        tz = -p.y * sx + p.z * cx;
+        p.y = ty;
+        p.z = tz;
+
+        const float inv_sx = (std::fabs(transform.scale.x) > 1e-8f) ? 1.0f / transform.scale.x : 1.0f;
+        const float inv_sy = (std::fabs(transform.scale.y) > 1e-8f) ? 1.0f / transform.scale.y : 1.0f;
+        const float inv_sz = (std::fabs(transform.scale.z) > 1e-8f) ? 1.0f / transform.scale.z : 1.0f;
+        return {p.x * inv_sx, p.y * inv_sy, p.z * inv_sz};
+    }
+
     inline float ComputeFalloff(float distance, float max_range, float feather_percent = 30.0f)
     {
         if (max_range <= 0.0f)

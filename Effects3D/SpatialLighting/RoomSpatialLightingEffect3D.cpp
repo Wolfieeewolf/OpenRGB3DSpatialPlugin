@@ -19,12 +19,13 @@ void RoomSpatialLightingEffect3D::ApplyLiveShadeSettings(SpatialLighting::RoomSc
 
     scene.shade.ambient_level = 0.05f;
     scene.shade.ao_strength = room_light_.ao_strength / 100.0f;
-    scene.shade.room_fill_strength = (room_light_.room_fill / 100.0f) * (effect_brightness / 100.0f);
+    scene.shade.room_fill_strength = (room_light_.room_fill / 100.0f) * (effect_brightness / 100.0f) * 1.15f;
     scene.shade.room_fill_atten = 1.0f;
     scene.shade.use_occlusion = scene.shade.use_occlusion && room_light_.use_occlusion;
     scene.shade.use_ambient_occlusion =
-        scene.shade.use_ambient_occlusion && room_light_.use_occlusion && room_light_.ao_strength > 0.5f;
-    scene.shade.direct_falloff = 0.9f;
+        scene.shade.use_ambient_occlusion && room_light_.use_occlusion && room_light_.ao_strength > 0.01f;
+    scene.shade.direct_falloff = 0.62f;
+    scene.shade.room_fill_atten = 0.72f;
 }
 
 void RoomSpatialLightingEffect3D::RefreshRoomLightOccluders(const GridContext3D& grid) const
@@ -53,7 +54,7 @@ void RoomSpatialLightingEffect3D::UpdateRoomLightSource(const GridContext3D& gri
 
     const float room_diag =
         std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-    cached_scene_.shade.ao_probe_span = std::clamp(room_diag * 0.035f, 0.35f, 8.0f);
+    cached_scene_.shade.ao_probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.04f), 0.5f, 14.0f);
 }
 
 void RoomSpatialLightingEffect3D::RebuildRoomLightScene(const GridContext3D& grid, RGBColor color)

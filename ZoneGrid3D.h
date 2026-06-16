@@ -26,4 +26,20 @@ bool TryMakeZoneGridContextPair(ZoneManager3D* zone_manager,
                                 std::unique_ptr<GridContext3D>& out_room_grid,
                                 std::unique_ptr<GridContext3D>& out_world_grid);
 
+bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
+                               const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
+                               int zone_index,
+                               const std::unordered_set<RGBController*>* skip_physical_controllers,
+                               bool skip_hidden_by_virtual,
+                               bool room_aligned,
+                               Vector3D* out_centroid);
+
+bool TryComputeZoneAnchorCenter(ZoneManager3D* zone_manager,
+                                const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
+                                int zone_index,
+                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                bool skip_hidden_by_virtual,
+                                bool room_aligned,
+                                Vector3D* out_center);
+
 #endif
