@@ -298,11 +298,6 @@ void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomOutputRole out
     (void)receiver_controllers;
 
     SpatialRoom::SpatialRoomOutputRole display_role = output_role;
-    if(display_role == SpatialRoom::SpatialRoomOutputRole::Emitter ||
-       display_role == SpatialRoom::SpatialRoomOutputRole::RelayShade)
-    {
-        display_role = SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
-    }
 
     for(int i = 0; i < output_combo_->count(); ++i)
     {

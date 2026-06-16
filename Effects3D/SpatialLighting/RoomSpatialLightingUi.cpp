@@ -55,25 +55,15 @@ void SaveParamsToJson(nlohmann::json& out_object, const char* key, const RoomSpa
 }
 
 void LoadParamsFromJson(const nlohmann::json& settings,
-                        const char* primary_key,
-                        const char* legacy_key,
+                        const char* key,
                         RoomSpatialLightParams& params)
 {
-    const nlohmann::json* src = nullptr;
-    if(settings.contains(primary_key) && settings[primary_key].is_object())
-    {
-        src = &settings[primary_key];
-    }
-    else if(legacy_key != nullptr && settings.contains(legacy_key) && settings[legacy_key].is_object())
-    {
-        src = &settings[legacy_key];
-    }
-    if(src == nullptr)
+    if(!settings.contains(key) || !settings[key].is_object())
     {
         return;
     }
 
-    const auto& rc = *src;
+    const auto& rc = settings[key];
     if(rc.contains("placement"))
     {
         params.placement_mode = rc["placement"].get<int>();

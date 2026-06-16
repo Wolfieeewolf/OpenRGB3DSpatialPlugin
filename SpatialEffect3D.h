@@ -36,7 +36,6 @@
 class EffectGeometryPanel;
 class StratumBandPanel;
 class StripKernelColormapPanel;
-class StripKernelColormapPanel;
 
 struct GridContext3D
 {
@@ -58,9 +57,6 @@ struct GridContext3D
     bool has_anchor_override = false;
 
     uint64_t render_sequence = 0;
-
-    /** When true, effect origin/reference uses this grid's center (per-emitter device canvas). */
-    bool use_grid_center_as_reference = false;
 
     GridContext3D(float minX,
                   float maxX,

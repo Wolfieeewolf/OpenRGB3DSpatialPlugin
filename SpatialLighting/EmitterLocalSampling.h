@@ -32,16 +32,6 @@ bool TryBuildCombinedEmitterCanvas(
     std::uint64_t render_sequence,
     CombinedEmitterCanvas& out);
 
-/** Build sample coords so the effect fills a single emitter device (origin at device center). */
-bool TryBuildEmitterLocalSample(const ControllerTransform* ctrl,
-                                const LEDPosition3D& led,
-                                float grid_scale_mm,
-                                std::uint64_t render_sequence,
-                                float& out_x,
-                                float& out_y,
-                                float& out_z,
-                                GridContext3D& out_grid);
-
 } // namespace EmitterLocalSampling
 
 #endif

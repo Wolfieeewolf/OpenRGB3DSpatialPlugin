@@ -1,5 +1,5 @@
-# Local scratch only (reference docs under docs/ are tracked)
-docs/_local/
+# Documentation is local-only in this fork
+docs/
 
 # Build directories
 build/

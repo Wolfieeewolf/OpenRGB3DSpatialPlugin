@@ -1434,8 +1434,6 @@ bool SpatialEffect3D::appliesRoomOutputToController(int controller_index) const
     {
     case SpatialRoom::SpatialRoomOutputRole::EmitterRelay:
         return isRoomEmitterController(controller_index) || isRoomReceiverController(controller_index);
-    case SpatialRoom::SpatialRoomOutputRole::RelayShade:
-        return isRoomReceiverController(controller_index);
     default:
         return true;
     }
@@ -1448,8 +1446,7 @@ RGBColor SpatialEffect3D::SampleRelayShadeAt(float x, float y, float z, const Gr
 
 SpatialRoom::SpatialRoomMode SpatialEffect3D::GetSpatialRoomMode() const
 {
-    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade ||
-       effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
         return SpatialRoom::SpatialRoomMode::EmissiveRelay;
     }
@@ -1553,16 +1550,7 @@ RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const
         shade_ctx.occluders = &relay_occluders_;
         return EmitterRelayMirror::SampleReceiver(provider->emitterRelayMirrorFrame(), x, y, z, &shade_ctx);
     }
-    if(!provider->emitterRelayActive() || provider->emitterRelaySources().empty())
-    {
-        return 0x00000000;
-    }
-
-    relay_scene_cache_.sources = provider->emitterRelaySources();
-    relay_scene_cache_.source =
-        relay_scene_cache_.sources.empty() ? SpatialLighting::EmissiveSource{} : relay_scene_cache_.sources.front();
-
-    return SpatialLighting::ShadeLed(relay_scene_cache_, x, y, z);
+    return 0x00000000;
 }
 
 void SpatialEffect3D::SetSpatialMappingMode(SpatialMappingMode mode)
@@ -1788,10 +1776,6 @@ Vector3D SpatialEffect3D::GetEffectOrigin() const
 
 Vector3D SpatialEffect3D::GetReferencePointGrid(const GridContext3D& grid) const
 {
-    if(grid.use_grid_center_as_reference)
-    {
-        return {grid.center_x, grid.center_y, grid.center_z};
-    }
     if(use_custom_reference)
     {
         return custom_reference_point;
@@ -1955,30 +1939,6 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
 {
     const SpatialEffect3D* prev_eval_effect = g_tls_eval_effect;
     g_tls_eval_effect = this;
-
-    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade)
-    {
-        if(SpatialRoom::IsRoomGridOverlayPass())
-        {
-            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
-            if((relay & 0x00FFFFFFu) != 0u)
-            {
-                g_tls_eval_effect = prev_eval_effect;
-                return relay;
-            }
-            g_tls_eval_effect = prev_eval_effect;
-            return 0x00000000;
-        }
-        const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
-        if(shading_ctrl >= 0 && SpatialLightingSceneProvider::instance()->isEmitterController(shading_ctrl))
-        {
-            g_tls_eval_effect = prev_eval_effect;
-            return 0x00000000;
-        }
-        RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
-        g_tls_eval_effect = prev_eval_effect;
-        return relay;
-    }
 
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
@@ -3212,15 +3172,17 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
 
     if(settings.contains("room_output_role") && settings["room_output_role"].is_number_integer())
     {
-        effect_room_output_role_ =
-            (SpatialRoom::SpatialRoomOutputRole)std::clamp(settings["room_output_role"].get<int>(), 0, 3);
-        if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::Emitter ||
-           effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade)
+        const int raw_role = settings["room_output_role"].get<int>();
+        if(raw_role == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
         {
             effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
         }
+        else
+        {
+            effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::Direct;
+        }
     }
-    RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", "room_emissive_relay", effect_room_relay_params_);
+    RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", effect_room_relay_params_);
     effect_emitter_controller_indices_.clear();
     if(settings.contains("room_emitter_controllers") && settings["room_emitter_controllers"].is_array())
     {

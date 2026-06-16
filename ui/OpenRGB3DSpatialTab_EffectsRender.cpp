@@ -225,8 +225,6 @@ static float AverageAlongAxis(ControllerTransform* transform,
 namespace
 {
 
-constexpr size_t kMaxEmitterRelaySources = 384u;
-
 bool EffectSlotAppliesToController(int slot_zone_index, int ctrl_idx, ZoneManager3D* zone_manager)
 {
     if(slot_zone_index == -1)
@@ -290,13 +288,10 @@ RGBColor SamplePatternOnEmitterCanvas(SpatialEffect3D* effect,
     {
         return 0x00000000;
     }
-    return effect->CalculateColorGrid(room_x, room_y, room_z, time, *canvas.grid);
+    return effect->EvaluateColorGrid(room_x, room_y, room_z, time, *canvas.grid);
 }
 
 RGBColor SampleStackLayerColor(SpatialEffect3D* effect,
-                               size_t effect_index,
-                               size_t relay_stack_index,
-                               bool combined_emitter_relay,
                                float x,
                                float y,
                                float z,
@@ -305,20 +300,6 @@ RGBColor SampleStackLayerColor(SpatialEffect3D* effect,
 {
     if(!effect)
     {
-        return 0x00000000;
-    }
-    if(combined_emitter_relay && effect_index == relay_stack_index)
-    {
-        const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
-        if(shading_ctrl >= 0 && effect->isRoomEmitterController(shading_ctrl))
-        {
-            return effect->CalculateColorGrid(x, y, z, time, grid);
-        }
-        if(shading_ctrl >= 0 && effect->isRoomReceiverController(shading_ctrl) &&
-           !effect->isRoomEmitterController(shading_ctrl))
-        {
-            return effect->SampleRelayShadeAt(x, y, z, grid);
-        }
         return 0x00000000;
     }
     return effect->EvaluateColorGrid(x, y, z, time, grid);
@@ -631,25 +612,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     SpatialLightingSceneProvider::instance()->ClearEmitterRelayFrame();
     size_t relay_stack_index = active_effects.size();
     SpatialEffect3D* relay_layer_effect = nullptr;
-    bool combined_emitter_relay = false;
     std::unordered_set<int> relay_emitter_controllers;
     EmitterLocalSampling::CombinedEmitterCanvas emitter_canvas{};
     {
         for(size_t i = 0; i < active_effects.size(); ++i)
         {
             SpatialEffect3D* effect = active_effects[i].effect;
-            if(!effect)
-            {
-                continue;
-            }
-            if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
-            {
-                relay_stack_index = i;
-                relay_layer_effect = effect;
-                combined_emitter_relay = true;
-                break;
-            }
-            if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::RelayShade)
+            if(effect && effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
             {
                 relay_stack_index = i;
                 relay_layer_effect = effect;
@@ -666,7 +635,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 {
                     relay_stack_index = i;
                     relay_layer_effect = current_effect_ui;
-                    combined_emitter_relay = true;
                     break;
                 }
             }
@@ -675,55 +643,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         std::unordered_set<int>& emitter_set = relay_emitter_controllers;
         if(relay_layer_effect && relay_stack_index < active_effects.size())
         {
-            if(combined_emitter_relay)
+            for(int idx : relay_layer_effect->roomEmitterControllerIndices())
             {
-                for(int idx : relay_layer_effect->roomEmitterControllerIndices())
-                {
-                    emitter_set.insert(idx);
-                }
-            }
-            else
-            {
-                bool has_emitter_role_layer = false;
-                for(size_t layer_i = 0; layer_i < relay_stack_index; ++layer_i)
-                {
-                    const SpatialEffect3D* emitter_effect = active_effects[layer_i].effect;
-                    if(emitter_effect &&
-                       emitter_effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::Emitter)
-                    {
-                        has_emitter_role_layer = true;
-                        break;
-                    }
-                }
-
-                if(has_emitter_role_layer)
-                {
-                    for(size_t layer_i = 0; layer_i < relay_stack_index; ++layer_i)
-                    {
-                        const RenderEffectSlot& emitter_slot = active_effects[layer_i];
-                        if(!emitter_slot.effect ||
-                           emitter_slot.effect->GetRoomOutputRole() != SpatialRoom::SpatialRoomOutputRole::Emitter)
-                        {
-                            continue;
-                        }
-                        for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ++ctrl_idx)
-                        {
-                            if(EffectSlotAppliesToController(emitter_slot.zone_index,
-                                                              (int)ctrl_idx,
-                                                              zone_manager.get()))
-                            {
-                                emitter_set.insert((int)ctrl_idx);
-                            }
-                        }
-                    }
-                }
+                emitter_set.insert(idx);
             }
         }
 
-        const size_t emitter_sample_through =
-            combined_emitter_relay ? (relay_stack_index + 1) : relay_stack_index;
+        const size_t emitter_sample_through = relay_stack_index + 1;
 
-        if(combined_emitter_relay && !emitter_set.empty())
+        if(relay_layer_effect && !emitter_set.empty())
         {
             EmitterLocalSampling::TryBuildCombinedEmitterCanvas(controller_transforms,
                                                                 emitter_set,
@@ -735,8 +663,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         if(relay_layer_effect && relay_stack_index < active_effects.size() && !emitter_set.empty())
         {
             const RoomSpatialLightingUi::RoomSpatialLightParams& lp = relay_layer_effect->roomRelayParams();
-            const float glow_u = MMToGridUnits(lp.glow_radius_mm, room_grid.grid_scale_mm);
-            const float reach_u = MMToGridUnits(lp.light_reach_mm, room_grid.grid_scale_mm);
             const float bright = std::max(0.15f, relay_layer_effect->GetBrightness() / 100.0f);
 
             const auto sample_emitter_led = [&](const LEDPosition3D& led_position, int ctrl_idx) -> RGBColor {
@@ -764,10 +690,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         continue;
                     }
                     if(!EffectSlotAppliesToController(slot.zone_index, ctrl_idx, zone_manager.get()))
-                    {
-                        continue;
-                    }
-                    if(combined_emitter_relay && effect_idx > relay_stack_index)
                     {
                         continue;
                     }
@@ -811,9 +733,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect->ApplyEffectRotation(sx, sy, sz, active_grid);
                         }
                         effect_color = SampleStackLayerColor(effect,
-                                                             effect_idx,
-                                                             relay_stack_index,
-                                                             combined_emitter_relay,
                                                              sx,
                                                              sy,
                                                              sz,
@@ -831,137 +750,83 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 return blended;
             };
 
-            if(combined_emitter_relay)
+            EmitterRelayMirror::MirrorFrame mirror{};
+            mirror.reference_room = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
+            mirror.grid_scale_mm = room_grid.grid_scale_mm;
+            const float room_diag_units = std::sqrt(room_grid.width * room_grid.width +
+                                                    room_grid.height * room_grid.height +
+                                                    room_grid.depth * room_grid.depth);
+            mirror.reference_max_distance_mm =
+                std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
+            mirror.light_reach_mm = lp.light_reach_mm;
+            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.42f, 12.0f, 80.0f);
+            mirror.room_fill_strength = lp.room_fill / 100.0f;
+            mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
+                                         0.35f,
+                                         3.0f);
+            mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
+            mirror.brightness = bright * (0.65f + (lp.room_fill / 100.0f) * 0.45f);
+
+            for(const int emitter_ctrl : emitter_set)
             {
-                EmitterRelayMirror::MirrorFrame mirror{};
-                mirror.reference_room = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
-                mirror.grid_scale_mm = room_grid.grid_scale_mm;
-                const float room_diag_units = std::sqrt(room_grid.width * room_grid.width +
-                                                        room_grid.height * room_grid.height +
-                                                        room_grid.depth * room_grid.depth);
-                mirror.reference_max_distance_mm =
-                    std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
-                mirror.light_reach_mm = lp.light_reach_mm;
-                mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.42f, 12.0f, 80.0f);
-                mirror.room_fill_strength = lp.room_fill / 100.0f;
-                mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
-                                             0.35f,
-                                             3.0f);
-                mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
-                mirror.brightness = bright * (0.65f + (lp.room_fill / 100.0f) * 0.45f);
-
-                for(const int emitter_ctrl : emitter_set)
+                if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
                 {
-                    if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
+                    continue;
+                }
+                ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
+                if(!emitter_transform || emitter_transform->hidden_by_virtual)
+                {
+                    continue;
+                }
+                ControllerLayout3D::UpdateWorldPositions(emitter_transform);
+
+                Vector3D min_bounds{};
+                Vector3D max_bounds{};
+                ControllerLayout3D::CalculateControllerLocalBounds(emitter_transform, min_bounds, max_bounds);
+                const float span_x = std::max(max_bounds.x - min_bounds.x, 0.01f);
+                const float span_y = std::max(max_bounds.y - min_bounds.y, 0.01f);
+
+                std::vector<EmitterRelayMirror::LedColorSample> led_samples;
+                led_samples.reserve(emitter_transform->led_positions.size());
+
+                const auto push_led_sample = [&](const LEDPosition3D& led_position) {
+                    const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
+                    const uint8_t r = static_cast<uint8_t>(c & 0xFF);
+                    const uint8_t g = static_cast<uint8_t>((c >> 8) & 0xFF);
+                    const uint8_t b = static_cast<uint8_t>((c >> 16) & 0xFF);
+                    if(static_cast<int>(r) + static_cast<int>(g) + static_cast<int>(b) < 6)
                     {
-                        continue;
+                        return;
                     }
-                    ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
-                    if(!emitter_transform || emitter_transform->hidden_by_virtual)
-                    {
-                        continue;
-                    }
-                    ControllerLayout3D::UpdateWorldPositions(emitter_transform);
+                    EmitterRelayMirror::LedColorSample sample{};
+                    sample.u = (led_position.local_position.x - min_bounds.x) / span_x;
+                    sample.v = (led_position.local_position.y - min_bounds.y) / span_y;
+                    sample.r = r;
+                    sample.g = g;
+                    sample.b = b;
+                    led_samples.push_back(sample);
+                };
 
-                    Vector3D min_bounds{};
-                    Vector3D max_bounds{};
-                    ControllerLayout3D::CalculateControllerLocalBounds(emitter_transform, min_bounds, max_bounds);
-                    const float span_x = std::max(max_bounds.x - min_bounds.x, 0.01f);
-                    const float span_y = std::max(max_bounds.y - min_bounds.y, 0.01f);
-
-                    std::vector<EmitterRelayMirror::LedColorSample> led_samples;
-                    led_samples.reserve(emitter_transform->led_positions.size());
-
-                    const auto push_led_sample = [&](const LEDPosition3D& led_position) {
-                        const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
-                        const uint8_t r = static_cast<uint8_t>(c & 0xFF);
-                        const uint8_t g = static_cast<uint8_t>((c >> 8) & 0xFF);
-                        const uint8_t b = static_cast<uint8_t>((c >> 16) & 0xFF);
-                        if(static_cast<int>(r) + static_cast<int>(g) + static_cast<int>(b) < 6)
-                        {
-                            return;
-                        }
-                        EmitterRelayMirror::LedColorSample sample{};
-                        sample.u = (led_position.local_position.x - min_bounds.x) / span_x;
-                        sample.v = (led_position.local_position.y - min_bounds.y) / span_y;
-                        sample.r = r;
-                        sample.g = g;
-                        sample.b = b;
-                        led_samples.push_back(sample);
-                    };
-
-                    for(const LEDPosition3D& led_position : emitter_transform->led_positions)
-                    {
-                        push_led_sample(led_position);
-                    }
-
-                    if(led_samples.empty())
-                    {
-                        continue;
-                    }
-
-                    EmitterRelayMirror::EmitterSurface surface{};
-                    EmitterRelayMirror::BuildSurfaceFromSamples(emitter_ctrl, emitter_transform, led_samples, surface);
-                    if(!surface.tex_rgb.empty())
-                    {
-                        mirror.surfaces.push_back(std::move(surface));
-                    }
+                for(const LEDPosition3D& led_position : emitter_transform->led_positions)
+                {
+                    push_led_sample(led_position);
                 }
 
-                SpatialLightingSceneProvider::instance()->SetEmitterRelayMirrorFrame(std::move(mirror),
-                                                                                     std::move(emitter_set));
-            }
-            else
-            {
-                std::vector<SpatialLighting::EmissiveSource> sources;
-                sources.reserve(128);
-
-                for(const int emitter_ctrl : emitter_set)
+                if(led_samples.empty())
                 {
-                    if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
-                    {
-                        continue;
-                    }
-                    ControllerTransform* emitter_transform = controller_transforms[(size_t)emitter_ctrl].get();
-                    if(!emitter_transform || emitter_transform->hidden_by_virtual)
-                    {
-                        continue;
-                    }
-                    ControllerLayout3D::UpdateWorldPositions(emitter_transform);
-
-                    for(const LEDPosition3D& led_position : emitter_transform->led_positions)
-                    {
-                        if(sources.size() >= kMaxEmitterRelaySources)
-                        {
-                            break;
-                        }
-                        const float room_x = led_position.room_position.x;
-                        const float room_y = led_position.room_position.y;
-                        const float room_z = led_position.room_position.z;
-                        const RGBColor c = sample_emitter_led(led_position, emitter_ctrl);
-                        const float rf = static_cast<float>(c & 0xFF) / 255.0f;
-                        const float gf = static_cast<float>((c >> 8) & 0xFF) / 255.0f;
-                        const float bf = static_cast<float>((c >> 16) & 0xFF) / 255.0f;
-                        const float lum = (rf + gf + bf) / 3.0f;
-                        if(lum < 0.02f)
-                        {
-                            continue;
-                        }
-                        SpatialLighting::EmissiveSource src{};
-                        src.position = {room_x, room_y, room_z};
-                        src.r = rf;
-                        src.g = gf;
-                        src.b = bf;
-                        src.radius = std::max(0.02f, glow_u);
-                        src.light_radius = std::max(src.radius * 1.25f, reach_u);
-                        src.emissive_strength = 0.9f * bright * lum;
-                        src.light_strength = 1.45f * bright * lum;
-                        sources.push_back(src);
-                    }
+                    continue;
                 }
 
-                SpatialLightingSceneProvider::instance()->SetEmitterRelayFrame(std::move(sources), std::move(emitter_set));
+                EmitterRelayMirror::EmitterSurface surface{};
+                EmitterRelayMirror::BuildSurfaceFromSamples(emitter_ctrl, emitter_transform, led_samples, surface);
+                if(!surface.tex_rgb.empty())
+                {
+                    mirror.surfaces.push_back(std::move(surface));
+                }
             }
+
+            SpatialLightingSceneProvider::instance()->SetEmitterRelayMirrorFrame(std::move(mirror),
+                                                                                 std::move(emitter_set));
         }
     }
 
@@ -1164,34 +1029,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             continue;
                         }
 
-                        bool apply_to_this_controller = false;
-
-                        if(slot.zone_index == -1)
-                        {
-                            apply_to_this_controller = true;
-                        }
-                        else if(slot.zone_index <= -1000)
-                        {
-                            int target_ctrl_idx = -(slot.zone_index + 1000);
-                            if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
-                            {
-                                apply_to_this_controller = true;
-                            }
-                        }
-                        else if(zone_manager && slot.zone_index >= 0)
-                        {
-                            Zone3D* zone = zone_manager->GetZone(slot.zone_index);
-                            if(zone)
-                            {
-                                const std::vector<int>& zone_controllers = zone->GetControllers();
-                                if(std::find(zone_controllers.begin(), zone_controllers.end(), (int)ctrl_idx) != zone_controllers.end())
-                                {
-                                    apply_to_this_controller = true;
-                                }
-                            }
-                        }
-
-                        if(!apply_to_this_controller)
+                        if(!EffectSlotAppliesToController(slot.zone_index,
+                                                          static_cast<int>(ctrl_idx),
+                                                          zone_manager.get()))
                         {
                             continue;
                         }
@@ -1225,9 +1065,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
                         }
                         RGBColor effect_color = SampleStackLayerColor(effect,
-                                                                      effect_idx,
-                                                                      relay_stack_index,
-                                                                      combined_emitter_relay,
                                                                       sample_x,
                                                                       sample_y,
                                                                       sample_z,
@@ -1365,34 +1202,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         continue;
                     }
 
-                    bool apply_to_this_controller = false;
-
-                    if(slot.zone_index == -1)
-                    {
-                        apply_to_this_controller = true;
-                    }
-                    else if(slot.zone_index <= -1000)
-                    {
-                        int target_ctrl_idx = -(slot.zone_index + 1000);
-                        if(target_ctrl_idx >= 0 && target_ctrl_idx < (int)controller_transforms.size() && target_ctrl_idx == (int)ctrl_idx)
-                        {
-                            apply_to_this_controller = true;
-                        }
-                    }
-                    else if(zone_manager && slot.zone_index >= 0)
-                    {
-                        Zone3D* zone = zone_manager->GetZone(slot.zone_index);
-                        if(zone)
-                        {
-                            const std::vector<int>& zone_controllers = zone->GetControllers();
-                            if(std::find(zone_controllers.begin(), zone_controllers.end(), (int)ctrl_idx) != zone_controllers.end())
-                            {
-                                apply_to_this_controller = true;
-                            }
-                        }
-                    }
-
-                    if(!apply_to_this_controller)
+                    if(!EffectSlotAppliesToController(slot.zone_index,
+                                                      static_cast<int>(ctrl_idx),
+                                                      zone_manager.get()))
                     {
                         continue;
                     }
@@ -1426,9 +1238,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         effect->ApplyEffectRotation(sample_x, sample_y, sample_z, stack_grid);
                     }
                     RGBColor effect_color = SampleStackLayerColor(effect,
-                                                                  effect_idx,
-                                                                  relay_stack_index,
-                                                                  combined_emitter_relay,
                                                                   sample_x,
                                                                   sample_y,
                                                                   sample_z,

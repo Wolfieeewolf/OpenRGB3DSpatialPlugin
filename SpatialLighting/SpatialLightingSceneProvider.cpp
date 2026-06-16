@@ -2,6 +2,8 @@
 
 #include "SpatialLightingSceneProvider.h"
 
+#include "ControllerLayout3D.h"
+
 SpatialLightingSceneProvider* SpatialLightingSceneProvider::instance()
 {
     static SpatialLightingSceneProvider inst;
@@ -16,30 +18,15 @@ void SpatialLightingSceneProvider::SetControllers(
 
 void SpatialLightingSceneProvider::ClearEmitterRelayFrame()
 {
-    emitter_relay_active_ = false;
     emitter_relay_mirror_active_ = false;
-    emitter_relay_sources_.clear();
     emitter_relay_mirror_ = EmitterRelayMirror::MirrorFrame{};
     emitter_controller_indices_.clear();
-}
-
-void SpatialLightingSceneProvider::SetEmitterRelayFrame(
-    std::vector<SpatialLighting::EmissiveSource> sources,
-    std::unordered_set<int> emitter_controller_indices)
-{
-    emitter_relay_mirror_active_ = false;
-    emitter_relay_mirror_ = EmitterRelayMirror::MirrorFrame{};
-    emitter_relay_active_ = !sources.empty();
-    emitter_relay_sources_ = std::move(sources);
-    emitter_controller_indices_ = std::move(emitter_controller_indices);
 }
 
 void SpatialLightingSceneProvider::SetEmitterRelayMirrorFrame(
     EmitterRelayMirror::MirrorFrame frame,
     std::unordered_set<int> emitter_controller_indices)
 {
-    emitter_relay_sources_.clear();
-    emitter_relay_active_ = false;
     emitter_relay_mirror_active_ = !frame.surfaces.empty();
     emitter_relay_mirror_ = std::move(frame);
     emitter_controller_indices_ = std::move(emitter_controller_indices);

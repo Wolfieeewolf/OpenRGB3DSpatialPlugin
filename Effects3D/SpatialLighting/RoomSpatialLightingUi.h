@@ -36,8 +36,7 @@ SpatialLighting::OccluderBuildOptions BuildOccluderOptions(const RoomSpatialLigh
 void SaveParamsToJson(nlohmann::json& out_object, const char* key, const RoomSpatialLightParams& params);
 
 void LoadParamsFromJson(const nlohmann::json& settings,
-                        const char* primary_key,
-                        const char* legacy_key,
+                        const char* key,
                         RoomSpatialLightParams& params);
 
 } // namespace RoomSpatialLightingUi

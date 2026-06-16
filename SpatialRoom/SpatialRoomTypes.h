@@ -44,9 +44,9 @@ enum class SpatialRoomOutputRole : int
 {
     /** Normal stack blend to LEDs on this layer's zone. */
     Direct = 0,
-    /** Pattern on stack zone feeds relay layers above (legacy two-layer stack). */
+    /** Pattern on stack zone feeds relay layers above (obsolete; load as Direct). */
     Emitter = 1,
-    /** Shade non-emitter LEDs from emitter layers below (legacy two-layer stack). */
+    /** Shade non-emitter LEDs from emitter layers below (obsolete; load as Direct). */
     RelayShade = 2,
     /** Pattern on chosen emitters; shaded relay on chosen receivers (single layer). */
     EmitterRelay = 3,
