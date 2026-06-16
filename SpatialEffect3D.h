@@ -364,6 +364,8 @@ public:
     void setRoomReceiverControllerIndex(int index, bool enabled);
     bool isRoomEmitterController(int index) const;
     bool isRoomReceiverController(int index) const;
+    bool appliesRoomOutputToController(int controller_index) const;
+    RGBColor SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const;
     bool UsesRoomMappedCoordinates() const
     {
         return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;

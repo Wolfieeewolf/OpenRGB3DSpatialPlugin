@@ -33,9 +33,10 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
                            (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay);
     output_combo_->setToolTip(tr(
         "Default: normal effect on this layer's zone.\n"
-        "Emitter + relay: emitters run the pattern; receivers sample color from the emitter surface.\n\n"
-        "Use Spatial anchor (above) for coordinates: Room box center maps the pattern to the "
-        "full room; other anchors use origin-based math."));
+        "Emitter + relay: the effect is painted once across all emitters (like one image "
+        "stretched over multiple monitors). Relays never run the effect — they only "
+        "catch light rays from emitter surfaces.\n\n"
+        "Use Spatial anchor (above) for pattern origin on the emitter group."));
     layout->addWidget(output_combo_);
 
     zone_hint_ = new QLabel(tr(

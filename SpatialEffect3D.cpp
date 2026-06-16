@@ -1428,6 +1428,24 @@ bool SpatialEffect3D::isRoomReceiverController(int index) const
     return !isRoomEmitterController(index);
 }
 
+bool SpatialEffect3D::appliesRoomOutputToController(int controller_index) const
+{
+    switch(effect_room_output_role_)
+    {
+    case SpatialRoom::SpatialRoomOutputRole::EmitterRelay:
+        return isRoomEmitterController(controller_index) || isRoomReceiverController(controller_index);
+    case SpatialRoom::SpatialRoomOutputRole::RelayShade:
+        return isRoomReceiverController(controller_index);
+    default:
+        return true;
+    }
+}
+
+RGBColor SpatialEffect3D::SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const
+{
+    return ShadeRelayReceiversAt(x, y, z, grid);
+}
+
 SpatialRoom::SpatialRoomMode SpatialEffect3D::GetSpatialRoomMode() const
 {
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::RelayShade ||
@@ -1971,17 +1989,17 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
             return relay;
         }
         const int shading_ctrl = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
+        if(shading_ctrl >= 0 && isRoomReceiverController(shading_ctrl) && !isRoomEmitterController(shading_ctrl))
+        {
+            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
+            g_tls_eval_effect = prev_eval_effect;
+            return relay;
+        }
         if(shading_ctrl >= 0 && isRoomEmitterController(shading_ctrl))
         {
             RGBColor pattern = CalculateColorGrid(x, y, z, time, grid);
             g_tls_eval_effect = prev_eval_effect;
             return pattern;
-        }
-        if(shading_ctrl >= 0 && isRoomReceiverController(shading_ctrl))
-        {
-            RGBColor relay = ShadeRelayReceiversAt(x, y, z, grid);
-            g_tls_eval_effect = prev_eval_effect;
-            return relay;
         }
         g_tls_eval_effect = prev_eval_effect;
         return 0x00000000;
