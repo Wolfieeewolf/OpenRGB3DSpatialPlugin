@@ -17,6 +17,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QShowEvent>
 #include <QVBoxLayout>
 
@@ -26,6 +27,7 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
 {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
 
     output_combo_ = new QComboBox();
     output_combo_->addItem(tr("Default"), (int)SpatialRoom::SpatialRoomOutputRole::Direct);
@@ -52,6 +54,9 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     emitters_scroll_->setWidgetResizable(true);
     emitters_scroll_->setFrameShape(QFrame::NoFrame);
     emitters_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    emitters_scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    emitters_scroll_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    emitters_scroll_->setMinimumHeight(170);
     emitters_host_ = new QWidget();
     emitters_layout_ = new QVBoxLayout(emitters_host_);
     emitters_layout_->setContentsMargins(0, 0, 0, 0);
@@ -68,6 +73,9 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     receivers_scroll_->setWidgetResizable(true);
     receivers_scroll_->setFrameShape(QFrame::NoFrame);
     receivers_scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    receivers_scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    receivers_scroll_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    receivers_scroll_->setMinimumHeight(170);
     receivers_host_ = new QWidget();
     receivers_layout_ = new QVBoxLayout(receivers_host_);
     receivers_layout_->setContentsMargins(0, 0, 0, 0);
@@ -85,6 +93,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
         "Shadows and ambient occlusion darken receivers behind controllers and in corners."));
     relay_panel_->setVisible(false);
     layout->addWidget(relay_panel_);
+    layout->setStretch(2, 1);
+    layout->setStretch(3, 1);
 }
 
 void EffectRoomOutputPanel::clearLayout(QVBoxLayout* layout)
@@ -97,7 +107,7 @@ void EffectRoomOutputPanel::clearLayout(QVBoxLayout* layout)
     {
         if(QWidget* w = item->widget())
         {
-            w->deleteLater();
+            delete w;
         }
         delete item;
     }
@@ -287,6 +297,18 @@ void EffectRoomOutputPanel::refreshRolePanels()
     {
         rebuildControllerLists();
     }
+
+    if(emitters_host_ && receivers_host_)
+    {
+        emitters_host_->adjustSize();
+        receivers_host_->adjustSize();
+    }
+    if(emitters_scroll_ && receivers_scroll_)
+    {
+        emitters_scroll_->updateGeometry();
+        receivers_scroll_->updateGeometry();
+    }
+    updateGeometry();
 }
 
 void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomOutputRole output_role,
