@@ -433,6 +433,10 @@ protected:
     QLabel*             smoothing_label;
     QSlider*            sampling_resolution_slider;
     QLabel*             sampling_resolution_label;
+    QSlider*            room_ao_slider = nullptr;
+    QLabel*             room_ao_label = nullptr;
+    QCheckBox*          room_blockers_check = nullptr;
+    QCheckBox*          room_walls_blockers_check = nullptr;
     QGroupBox*          edge_shape_group;
     QComboBox*          edge_profile_combo;
     QSlider*            edge_thickness_slider;
@@ -680,6 +684,7 @@ private slots:
     void OnAxisScaleRotationResetClicked();
 
 private:
+    void UpdateRoomShadingControlVisibility();
     void CreateColorControls();
     void CreateSamplerMapperControls();
     void ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel);

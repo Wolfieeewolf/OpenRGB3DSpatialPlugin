@@ -22,6 +22,8 @@ public:
 
     void setShowRoomFill(bool show);
     void setShowPlacement(bool show);
+    void setShowAmbientOcclusion(bool show);
+    void setShowBlockerControls(bool show);
     void setHintText(const QString& text);
 
     void bindParams(QObject* owner,

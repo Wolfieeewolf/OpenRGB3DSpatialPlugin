@@ -33,6 +33,7 @@ struct EmitterSurface
     Rotation3D plane_rotation{};
     float width_grid = 1.0f;
     float height_grid = 1.0f;
+    /** Filled per build from LED count + layout aspect (see ComputeAutoTextureDimensions). */
     int tex_w = 48;
     int tex_h = 48;
     std::vector<float> tex_rgb;

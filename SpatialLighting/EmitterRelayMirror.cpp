@@ -3,7 +3,6 @@
 #include "EmitterRelayMirror.h"
 
 #include "ControllerLayout3D.h"
-#include "DisplayPlane3D.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "LEDPosition3D.h"
@@ -35,59 +34,45 @@ void FinalizeSurface(EmitterSurface& surface)
     }
 }
 
-void SplatSample(EmitterSurface& surface, float u, float v, uint8_t r, uint8_t g, uint8_t b)
+void SplatSampleDominant(EmitterSurface& surface, float u, float v, uint8_t r, uint8_t g, uint8_t b)
 {
     u = std::clamp(u, 0.0f, 1.0f);
     v = std::clamp(v, 0.0f, 1.0f);
     const int x = std::clamp(static_cast<int>(u * static_cast<float>(surface.tex_w - 1)), 0, surface.tex_w - 1);
     const int y = std::clamp(static_cast<int>(v * static_cast<float>(surface.tex_h - 1)), 0, surface.tex_h - 1);
     const size_t idx = static_cast<size_t>(y * surface.tex_w + x);
-    surface.tex_rgb[idx * 3 + 0] += static_cast<float>(r);
-    surface.tex_rgb[idx * 3 + 1] += static_cast<float>(g);
-    surface.tex_rgb[idx * 3 + 2] += static_cast<float>(b);
-    if(surface.tex_weight[idx] < 255)
+    const float luma = static_cast<float>(r) + static_cast<float>(g) + static_cast<float>(b);
+    if(surface.tex_weight[idx] == 0)
     {
-        ++surface.tex_weight[idx];
+        surface.tex_rgb[idx * 3 + 0] = static_cast<float>(r);
+        surface.tex_rgb[idx * 3 + 1] = static_cast<float>(g);
+        surface.tex_rgb[idx * 3 + 2] = static_cast<float>(b);
+        surface.tex_weight[idx] = 1;
+        return;
+    }
+    const float existing_luma = surface.tex_rgb[idx * 3 + 0] + surface.tex_rgb[idx * 3 + 1] + surface.tex_rgb[idx * 3 + 2];
+    if(luma > existing_luma)
+    {
+        surface.tex_rgb[idx * 3 + 0] = static_cast<float>(r);
+        surface.tex_rgb[idx * 3 + 1] = static_cast<float>(g);
+        surface.tex_rgb[idx * 3 + 2] = static_cast<float>(b);
     }
 }
 
-RGBColor SampleBilinear(const EmitterSurface& surface, float u, float v)
+RGBColor SampleNearest(const EmitterSurface& surface, float u, float v)
 {
     u = std::clamp(u, 0.0f, 1.0f);
     v = std::clamp(v, 0.0f, 1.0f);
-    const float fx = u * static_cast<float>(surface.tex_w - 1);
-    const float fy = v * static_cast<float>(surface.tex_h - 1);
-    const int x0 = static_cast<int>(std::floor(fx));
-    const int y0 = static_cast<int>(std::floor(fy));
-    const int x1 = std::min(x0 + 1, surface.tex_w - 1);
-    const int y1 = std::min(y0 + 1, surface.tex_h - 1);
-    const float tx = fx - static_cast<float>(x0);
-    const float ty = fy - static_cast<float>(y0);
-
-    auto fetch = [&](int x, int y) -> std::array<float, 3> {
-        const size_t idx = static_cast<size_t>(y * surface.tex_w + x);
-        if(surface.tex_weight[idx] == 0)
-        {
-            return {0.0f, 0.0f, 0.0f};
-        }
-        return {surface.tex_rgb[idx * 3 + 0], surface.tex_rgb[idx * 3 + 1], surface.tex_rgb[idx * 3 + 2]};
-    };
-
-    const auto c00 = fetch(x0, y0);
-    const auto c10 = fetch(x1, y0);
-    const auto c01 = fetch(x0, y1);
-    const auto c11 = fetch(x1, y1);
-
-    float rf = (1.0f - tx) * (1.0f - ty) * c00[0] + tx * (1.0f - ty) * c10[0] + (1.0f - tx) * ty * c01[0] +
-               tx * ty * c11[0];
-    float gf = (1.0f - tx) * (1.0f - ty) * c00[1] + tx * (1.0f - ty) * c10[1] + (1.0f - tx) * ty * c01[1] +
-               tx * ty * c11[1];
-    float bf = (1.0f - tx) * (1.0f - ty) * c00[2] + tx * (1.0f - ty) * c10[2] + (1.0f - tx) * ty * c01[2] +
-               tx * ty * c11[2];
-
-    return ToRGBColor(static_cast<uint8_t>(std::clamp(rf, 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(gf, 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(bf, 0.0f, 255.0f)));
+    const int x = std::clamp(static_cast<int>(u * static_cast<float>(surface.tex_w - 1) + 0.5f), 0, surface.tex_w - 1);
+    const int y = std::clamp(static_cast<int>(v * static_cast<float>(surface.tex_h - 1) + 0.5f), 0, surface.tex_h - 1);
+    const size_t idx = static_cast<size_t>(y * surface.tex_w + x);
+    if(surface.tex_weight[idx] == 0)
+    {
+        return 0x00000000;
+    }
+    return ToRGBColor(static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 0], 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 1], 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 2], 0.0f, 255.0f)));
 }
 
 Vector3D SamplePointOnEmitterSurface(const EmitterSurface& surface, float u, float v)
@@ -106,17 +91,93 @@ Vector3D SamplePointOnEmitterSurface(const EmitterSurface& surface, float u, flo
     return Geometry3D::TransformDisplayPlaneLocalToWorld(local, transform);
 }
 
-DisplayPlane3D MakeVirtualPlane(const EmitterSurface& surface, float grid_scale_mm)
+struct EmitterReceiverProjection
 {
-    DisplayPlane3D plane("emitter");
-    Transform3D& t = plane.GetTransform();
-    t.position = surface.plane_center_room;
-    t.rotation = surface.plane_rotation;
-    t.scale = {1.0f, 1.0f, 1.0f};
+    float u = 0.5f;
+    float v = 0.5f;
+    float distance_mm = 0.0f;
+    bool is_valid = false;
+};
+
+/** Orthographic panel projection: receiver must sit under the emitter footprint (-normal side). */
+EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& receiver_room,
+                                                            const EmitterSurface& surface,
+                                                            float grid_scale_mm)
+{
+    EmitterReceiverProjection result{};
+    if(surface.width_grid < 1e-5f || surface.height_grid < 1e-5f)
+    {
+        return result;
+    }
+
+    Transform3D transform{};
+    transform.position = surface.plane_center_room;
+    transform.rotation = surface.plane_rotation;
+    transform.scale = {1.0f, 1.0f, 1.0f};
+
+    const Vector3D local = Geometry3D::TransformDisplayPlaneWorldToLocal(receiver_room, transform);
+    const float half_w = surface.width_grid * 0.5f;
+    const float half_h = surface.height_grid * 0.5f;
+    const float u = (local.x + half_w) / surface.width_grid;
+    const float v = (local.y + half_h) / surface.height_grid;
+
+    static constexpr float kBoundsEpsilon = 1e-4f;
+    if(u < -kBoundsEpsilon || u > 1.0f + kBoundsEpsilon || v < -kBoundsEpsilon || v > 1.0f + kBoundsEpsilon)
+    {
+        return result;
+    }
+
+    float rotation_matrix[9];
+    Geometry3D::ComputeRotationMatrix(surface.plane_rotation, rotation_matrix);
+    const Vector3D plane_normal = {rotation_matrix[2], rotation_matrix[5], rotation_matrix[8]};
+    const Vector3D ref_to_receiver = {
+        receiver_room.x - surface.plane_center_room.x,
+        receiver_room.y - surface.plane_center_room.y,
+        receiver_room.z - surface.plane_center_room.z,
+    };
+    const float facing =
+        ref_to_receiver.x * plane_normal.x + ref_to_receiver.y * plane_normal.y + ref_to_receiver.z * plane_normal.z;
+    static constexpr float kEmissionSideEpsilon = 0.002f;
+    if(facing > -kEmissionSideEpsilon)
+    {
+        return result;
+    }
+
     const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
-    plane.SetWidthMM(GridUnitsToMM(surface.width_grid, scale_mm));
-    plane.SetHeightMM(GridUnitsToMM(surface.height_grid, scale_mm));
-    return plane;
+    const float dist_units = std::sqrt(ref_to_receiver.x * ref_to_receiver.x + ref_to_receiver.y * ref_to_receiver.y +
+                                       ref_to_receiver.z * ref_to_receiver.z);
+    result.u = std::clamp(u, 0.0f, 1.0f);
+    result.v = std::clamp(v, 0.0f, 1.0f);
+    result.distance_mm = GridUnitsToMM(dist_units, scale_mm);
+    result.is_valid = true;
+    return result;
+}
+
+/** Per-emitter canvas size from LED count and controller footprint aspect (32–128 px per side). */
+void ComputeAutoTextureDimensions(size_t led_count, float width_grid, float height_grid, int& out_w, int& out_h)
+{
+    static constexpr int kMinSide = 32;
+    static constexpr int kMaxSide = 160;
+
+    const float led_f = static_cast<float>(std::max<size_t>(1, led_count));
+    int short_side = static_cast<int>(std::lround(std::sqrt(led_f) * 3.5f));
+    short_side = std::clamp(short_side, kMinSide, kMaxSide);
+
+    if(width_grid >= height_grid)
+    {
+        out_h = short_side;
+        out_w = static_cast<int>(std::lround(static_cast<float>(short_side) *
+                                              (width_grid / std::max(height_grid, 0.01f))));
+    }
+    else
+    {
+        out_w = short_side;
+        out_h = static_cast<int>(std::lround(static_cast<float>(short_side) *
+                                              (height_grid / std::max(width_grid, 0.01f))));
+    }
+
+    out_w = std::clamp(out_w, kMinSide, kMaxSide);
+    out_h = std::clamp(out_h, kMinSide, kMaxSide);
 }
 
 } // namespace
@@ -163,13 +224,17 @@ void BuildSurfaceFromSamples(int controller_index,
         return;
     }
 
+    const size_t layout_led_count =
+        ctrl->led_positions.empty() ? samples.size() : ctrl->led_positions.size();
+    ComputeAutoTextureDimensions(layout_led_count, span_x, span_y, out.tex_w, out.tex_h);
+
     const size_t px = static_cast<size_t>(out.tex_w * out.tex_h);
     out.tex_rgb.assign(px * 3, 0.0f);
     out.tex_weight.assign(px, 0);
 
     for(const LedColorSample& sample : samples)
     {
-        SplatSample(out, sample.u, sample.v, sample.r, sample.g, sample.b);
+        SplatSampleDominant(out, sample.u, sample.v, sample.r, sample.g, sample.b);
     }
     FinalizeSurface(out);
 }
@@ -201,17 +266,14 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
 
     for(const EmitterSurface& surface : frame.surfaces)
     {
-        DisplayPlane3D plane = MakeVirtualPlane(surface, scale_mm);
-        const Vector3D emitter_ref = surface.plane_center_room;
-        Geometry3D::PlaneProjection proj =
-            Geometry3D::SpatialMapToScreen(led_pos, plane, 0.0f, &emitter_ref, scale_mm);
+        const EmitterReceiverProjection proj = ProjectReceiverOntoEmitterSurface(led_pos, surface, scale_mm);
         if(!proj.is_valid)
         {
             continue;
         }
 
-        const float u = std::clamp(proj.u, 0.0f, 1.0f);
-        const float v = std::clamp(proj.v, 0.0f, 1.0f);
+        const float u = proj.u;
+        const float v = proj.v;
 
         if(use_line_occlusion)
         {
@@ -230,7 +292,7 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
             }
         }
 
-        RGBColor sampled = SampleBilinear(surface, u, v);
+        RGBColor sampled = SampleNearest(surface, u, v);
         const float rf = static_cast<float>(sampled & 0xFF);
         const float gf = static_cast<float>((sampled >> 8) & 0xFF);
         const float bf = static_cast<float>((sampled >> 16) & 0xFF);
@@ -240,8 +302,8 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
         }
 
         const float effective_range = std::max(frame.light_reach_mm, 80.0f);
-        const float feather_percent = std::clamp(frame.glow_feather_percent, 10.0f, 85.0f);
-        const float weight = Geometry3D::ComputeFalloff(proj.distance, effective_range, feather_percent);
+        const float feather_percent = std::clamp(frame.glow_feather_percent, 5.0f, 85.0f);
+        const float weight = Geometry3D::ComputeFalloff(proj.distance_mm, effective_range, feather_percent);
         if(weight < 0.01f)
         {
             continue;
@@ -259,7 +321,7 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     }
 
     const float bright = std::max(0.08f, frame.brightness);
-    const float fill_mul = 1.0f + frame.room_fill_strength * 0.55f;
+    const float fill_mul = 1.0f + frame.room_fill_strength * 0.18f;
     total_r = total_r / total_w * bright * fill_mul;
     total_g = total_g / total_w * bright * fill_mul;
     total_b = total_b / total_w * bright * fill_mul;

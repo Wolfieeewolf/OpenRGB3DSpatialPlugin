@@ -88,6 +88,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     relay_panel_ = new RoomSpatialLightSettingsPanel();
     relay_panel_->setShowPlacement(false);
     relay_panel_->setShowRoomFill(true);
+    relay_panel_->setShowAmbientOcclusion(false);
+    relay_panel_->setShowBlockerControls(false);
     relay_panel_->setHintText(tr(
         "Reach/glow: distance falloff from emitters. "
         "Shadows and ambient occlusion darken receivers behind controllers and in corners."));

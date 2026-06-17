@@ -46,9 +46,6 @@
     <widget class="EffectCheckRow" name="shadowsRow" native="true"/>
    </item>
    <item>
-    <widget class="EffectCheckRow" name="controllerBlockRow" native="true"/>
-   </item>
-   <item>
     <widget class="EffectCheckRow" name="roomWallsRow" native="true"/>
    </item>
    <item>

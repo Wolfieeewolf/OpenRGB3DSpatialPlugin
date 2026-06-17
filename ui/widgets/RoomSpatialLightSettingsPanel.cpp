@@ -47,8 +47,7 @@ void RoomSpatialLightSettingsPanel::configureStaticLabels()
     ui->roomFillRow->setCaptionText(QStringLiteral("Room fill:"));
     ui->ambientOcclusionRow->setCaptionText(QStringLiteral("Ambient occlusion:"));
 
-    ui->shadowsRow->configure(QStringLiteral("Shadows (occlusion)"), true);
-    ui->controllerBlockRow->configure(QStringLiteral("Block through controller bodies"), true);
+    ui->shadowsRow->configure(QStringLiteral("Blockers (shadows)"), true);
     ui->roomWallsRow->configure(QStringLiteral("Include room walls as blockers"), false);
 }
 
@@ -64,6 +63,17 @@ void RoomSpatialLightSettingsPanel::setShowPlacement(bool show)
     {
         setCustomPlacementVisible(false);
     }
+}
+
+void RoomSpatialLightSettingsPanel::setShowAmbientOcclusion(bool show)
+{
+    ui->ambientOcclusionRow->setVisible(show);
+}
+
+void RoomSpatialLightSettingsPanel::setShowBlockerControls(bool show)
+{
+    ui->shadowsRow->setVisible(show);
+    ui->roomWallsRow->setVisible(show);
 }
 
 void RoomSpatialLightSettingsPanel::setHintText(const QString& text)
@@ -101,7 +111,6 @@ void RoomSpatialLightSettingsPanel::syncFromParams(const RoomSpatialLightingUi::
                                              [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     ui->shadowsRow->checkBox()->setChecked(params.use_occlusion);
-    ui->controllerBlockRow->checkBox()->setChecked(params.use_controller_occlusion);
     ui->roomWallsRow->checkBox()->setChecked(params.use_room_walls);
 }
 
@@ -208,24 +217,17 @@ void RoomSpatialLightSettingsPanel::bindParams(QObject* owner,
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
-    ui->shadowsRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
-        params.use_occlusion = on;
-        if(on_tune_changed)
-        {
-            on_tune_changed();
-        }
-    });
-
-    ui->controllerBlockRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
-        params.use_controller_occlusion = on;
-        if(on_tune_changed)
-        {
-            on_tune_changed();
-        }
-    });
-
     ui->roomWallsRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
         params.use_room_walls = on;
+        if(on_tune_changed)
+        {
+            on_tune_changed();
+        }
+    });
+
+    ui->shadowsRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
+        params.use_occlusion = on;
+        params.use_controller_occlusion = on;
         if(on_tune_changed)
         {
             on_tune_changed();

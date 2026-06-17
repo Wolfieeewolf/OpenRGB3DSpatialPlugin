@@ -13,6 +13,7 @@
 #include "EffectColorPanel.h"
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
+#include "EffectUiRows.h"
 #include "StripKernelColormapPanel.h"
 #include "StratumBandPanel.h"
 #include "Colors.h"
@@ -319,6 +320,48 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
     sampling_resolution_slider = output_shaping_group->samplingResolutionSlider();
     sampling_resolution_label = output_shaping_group->samplingResolutionLabel();
 
+    if(QVBoxLayout* output_layout = qobject_cast<QVBoxLayout*>(output_shaping_group->layout()))
+    {
+        EffectSliderRow* room_ao_row = EffectUiRows::AppendSliderRow(
+            output_layout,
+            QStringLiteral("Room ambient occlusion"),
+            0,
+            100,
+            static_cast<int>(std::clamp(effect_room_relay_params_.ao_strength, 0.0f, 100.0f)),
+            QStringLiteral("Layer-wide AO amount used by room shading paths (including emitter/relay receivers)."));
+        if(room_ao_row)
+        {
+            room_ao_slider = room_ao_row->slider();
+            room_ao_label = room_ao_row->valueLabel();
+            if(room_ao_label)
+            {
+                room_ao_label->setText(QString::number(static_cast<int>(effect_room_relay_params_.ao_strength)) +
+                                       QStringLiteral("%"));
+            }
+        }
+
+        EffectCheckRow* room_blockers_row = EffectUiRows::AppendCheckRow(
+            output_layout,
+            QStringLiteral("Blockers (shadows)"),
+            effect_room_relay_params_.use_occlusion,
+            QStringLiteral("Enable occlusion from controller blockers and other room blockers."));
+        if(room_blockers_row)
+        {
+            room_blockers_check = room_blockers_row->checkBox();
+        }
+
+        EffectCheckRow* room_walls_row = EffectUiRows::AppendCheckRow(
+            output_layout,
+            QStringLiteral("Include room walls as blockers"),
+            effect_room_relay_params_.use_room_walls,
+            QStringLiteral("Treat room bounds as occluding surfaces when shading relay receivers."));
+        if(room_walls_row)
+        {
+            room_walls_blockers_check = room_walls_row->checkBox();
+        }
+    }
+    UpdateRoomShadingControlVisibility();
+
     PluginUiAddSectionBlock(main_layout, QStringLiteral("Output shaping"),
                    QStringLiteral("Final contrast and level before colors; pair with Brightness in Motion and pattern."),
                    output_shaping_group);
@@ -492,6 +535,24 @@ void SpatialEffect3D::ConnectCommonEffectControlSignals(EffectGeometryPanel* geo
     connect(sharpness_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(smoothing_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(sampling_resolution_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    if(room_ao_slider)
+    {
+        connect(room_ao_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
+    }
+    if(room_blockers_check)
+    {
+        connect(room_blockers_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
+    }
+    if(room_walls_blockers_check)
+    {
+        connect(room_walls_blockers_check, &QCheckBox::toggled, this, &SpatialEffect3D::OnParameterChanged);
+    }
+    if(room_blockers_check)
+    {
+        connect(room_blockers_check, &QCheckBox::toggled, this, [this](bool) {
+            UpdateRoomShadingControlVisibility();
+        });
+    }
     connect(scale_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_x_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
     connect(offset_y_slider, &QSlider::valueChanged, this, &SpatialEffect3D::OnParameterChanged);
@@ -2756,6 +2817,26 @@ void SpatialEffect3D::OnParameterChanged()
             sampling_resolution_label->setText(QString::number(effect_sampling_resolution));
         }
     }
+    if(room_ao_slider)
+    {
+        effect_room_relay_params_.ao_strength = static_cast<float>(std::clamp(room_ao_slider->value(), 0, 100));
+        if(room_ao_label)
+        {
+            room_ao_label->setText(QString::number(static_cast<int>(effect_room_relay_params_.ao_strength)) +
+                                   QStringLiteral("%"));
+        }
+    }
+    if(room_blockers_check)
+    {
+        const bool on = room_blockers_check->isChecked();
+        effect_room_relay_params_.use_occlusion = on;
+        effect_room_relay_params_.use_controller_occlusion = on;
+    }
+    if(room_walls_blockers_check)
+    {
+        effect_room_relay_params_.use_room_walls = room_walls_blockers_check->isChecked();
+    }
+    UpdateRoomShadingControlVisibility();
     if(edge_profile_combo)
     {
         effect_edge_profile = std::clamp(edge_profile_combo->currentIndex(), 0, 4);
@@ -2796,6 +2877,19 @@ void SpatialEffect3D::OnRotationChanged()
         }
     }
     emit ParametersChanged();
+}
+
+void SpatialEffect3D::UpdateRoomShadingControlVisibility()
+{
+    const bool blockers_on = room_blockers_check && room_blockers_check->isChecked();
+    if(room_walls_blockers_check && room_walls_blockers_check->parentWidget())
+    {
+        room_walls_blockers_check->parentWidget()->setVisible(blockers_on);
+    }
+    if(room_ao_slider && room_ao_slider->parentWidget())
+    {
+        room_ao_slider->parentWidget()->setVisible(blockers_on);
+    }
 }
 
 void SpatialEffect3D::OnRotationResetClicked()
@@ -3183,6 +3277,24 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
         }
     }
     RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", effect_room_relay_params_);
+    if(room_ao_slider)
+    {
+        const int ao_pct = std::clamp(static_cast<int>(effect_room_relay_params_.ao_strength), 0, 100);
+        room_ao_slider->setValue(ao_pct);
+        if(room_ao_label)
+        {
+            room_ao_label->setText(QString::number(ao_pct) + QStringLiteral("%"));
+        }
+    }
+    if(room_blockers_check)
+    {
+        room_blockers_check->setChecked(effect_room_relay_params_.use_occlusion);
+    }
+    if(room_walls_blockers_check)
+    {
+        room_walls_blockers_check->setChecked(effect_room_relay_params_.use_room_walls);
+    }
+    UpdateRoomShadingControlVisibility();
     effect_emitter_controller_indices_.clear();
     if(settings.contains("room_emitter_controllers") && settings["room_emitter_controllers"].is_array())
     {

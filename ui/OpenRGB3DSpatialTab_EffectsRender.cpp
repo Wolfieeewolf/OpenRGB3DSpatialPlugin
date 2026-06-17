@@ -759,13 +759,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             mirror.reference_max_distance_mm =
                 std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
             mirror.light_reach_mm = lp.light_reach_mm;
-            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.42f, 12.0f, 80.0f);
+            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 80.0f);
             mirror.room_fill_strength = lp.room_fill / 100.0f;
             mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
                                          0.35f,
                                          3.0f);
             mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
-            mirror.brightness = bright * (0.65f + (lp.room_fill / 100.0f) * 0.45f);
+            mirror.brightness = bright;
 
             for(const int emitter_ctrl : emitter_set)
             {
