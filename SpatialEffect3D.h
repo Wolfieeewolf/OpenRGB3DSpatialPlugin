@@ -367,6 +367,12 @@ public:
         return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;
     }
     const RoomSpatialLightingUi::RoomSpatialLightParams& roomRelayParams() const { return effect_room_relay_params_; }
+    /** Darken pattern/receiver color from layer AO when blockers are enabled (room-mapped path). */
+    RGBColor ApplyLayerRoomAmbientShading(float room_x,
+                                          float room_y,
+                                          float room_z,
+                                          RGBColor color,
+                                          const GridContext3D& grid) const;
 
     /** Room evaluation family (see SpatialRoom/ and docs/SPATIAL_ROOM.md). */
     virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const;

@@ -744,6 +744,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         }
                     }
                     effect_color = effect->PostProcessColorGrid(effect_color);
+                    effect_color =
+                        effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, active_grid);
                     blended = BlendColors(blended, effect_color, slot.blend_mode);
                 }
                 shade_provider->SetShadingControllerIndex(prev_shade_ctrl);
@@ -887,6 +889,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
                                 effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
+                            effect_color = slot.effect->ApplyLayerRoomAmbientShading(spx, spy, spz, effect_color, room_grid);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
                         room_grid_overlay_buffer[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
@@ -999,6 +1002,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect_color = 0x00000000;
                         }
                         effect_color = effect->PostProcessColorGrid(effect_color);
+                        effect_color =
+                            effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, *emitter_canvas.grid);
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
@@ -1073,7 +1078,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, stack_grid))
                             effect_color = 0x00000000;
                         effect_color = effect->PostProcessColorGrid(effect_color);
-
+                        effect_color =
+                            effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, room_grid);
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
 
@@ -1182,6 +1188,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             effect_color = 0x00000000;
                         }
                         effect_color = effect->PostProcessColorGrid(effect_color);
+                        effect_color =
+                            effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, *emitter_canvas.grid);
                         final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
@@ -1246,6 +1254,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     if(!effect->IsPointOnActiveSurface(sample_x, sample_y, sample_z, stack_grid))
                         effect_color = 0x00000000;
                     effect_color = effect->PostProcessColorGrid(effect_color);
+                    effect_color =
+                        effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, room_grid);
 
                     final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                 }

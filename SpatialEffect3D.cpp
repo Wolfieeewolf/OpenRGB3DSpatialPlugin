@@ -328,7 +328,7 @@ void SpatialEffect3D::CreateCommonEffectControls(QWidget* parent, bool include_s
             0,
             100,
             static_cast<int>(std::clamp(effect_room_relay_params_.ao_strength, 0.0f, 100.0f)),
-            QStringLiteral("Layer-wide AO amount used by room shading paths (including emitter/relay receivers)."));
+            QStringLiteral("Layer-wide AO for room-mapped patterns and emitter/relay receivers when blockers are on."));
         if(room_ao_row)
         {
             room_ao_slider = room_ao_row->slider();
@@ -1503,6 +1503,61 @@ bool SpatialEffect3D::appliesRoomOutputToController(int controller_index) const
 RGBColor SpatialEffect3D::SampleRelayShadeAt(float x, float y, float z, const GridContext3D& grid) const
 {
     return ShadeRelayReceiversAt(x, y, z, grid);
+}
+
+RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
+                                                       float room_y,
+                                                       float room_z,
+                                                       RGBColor color,
+                                                       const GridContext3D& grid) const
+{
+    if(color == 0x00000000)
+    {
+        return color;
+    }
+    if(!UsesRoomMappedCoordinates())
+    {
+        return color;
+    }
+    if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+    {
+        return color;
+    }
+    if(!effect_room_relay_params_.use_occlusion || effect_room_relay_params_.ao_strength < 0.01f)
+    {
+        return color;
+    }
+
+    if(!relay_occluders_valid_)
+    {
+        RefreshRelayOccluders(grid);
+    }
+    if(relay_occluder_aabbs_.empty() && relay_occluders_.empty())
+    {
+        return color;
+    }
+
+    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
+    const float probe_span = std::clamp(reach_u * 0.4f, 0.5f, 14.0f);
+    const float ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
+    const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
+                                                                       room_y,
+                                                                       room_z,
+                                                                       relay_occluder_aabbs_,
+                                                                       relay_occluders_,
+                                                                       probe_span);
+    const float ao_factor = 1.0f - ao_strength * (1.0f - openness);
+    if(ao_factor >= 0.999f)
+    {
+        return color;
+    }
+
+    const float rf = static_cast<float>(color & 0xFF) * ao_factor;
+    const float gf = static_cast<float>((color >> 8) & 0xFF) * ao_factor;
+    const float bf = static_cast<float>((color >> 16) & 0xFF) * ao_factor;
+    return ToRGBColor(static_cast<uint8_t>(std::clamp(rf, 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(gf, 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(bf, 0.0f, 255.0f)));
 }
 
 SpatialRoom::SpatialRoomMode SpatialEffect3D::GetSpatialRoomMode() const
@@ -2836,6 +2891,7 @@ void SpatialEffect3D::OnParameterChanged()
     {
         effect_room_relay_params_.use_room_walls = room_walls_blockers_check->isChecked();
     }
+    InvalidateRelayShadeCache();
     UpdateRoomShadingControlVisibility();
     if(edge_profile_combo)
     {
