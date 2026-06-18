@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Scene pointers for spatial lighting occlusion (synced during effect render).
 
 #ifndef SPATIALLIGHTINGSCENEPROVIDER_H
 #define SPATIALLIGHTINGSCENEPROVIDER_H
@@ -23,10 +22,6 @@ public:
 
     void SetShadingControllerIndex(int index) { shading_controller_index_ = index; }
     int shadingControllerIndex() const { return shading_controller_index_; }
-
-    /** Room grid overlay: sample relay/lighting at each voxel (same shading as LEDs). */
-    void SetRoomGridOverlayPreview(bool preview) { (void)preview; }
-    bool roomGridOverlayPreview() const { return false; }
 
     void ClearEmitterRelayFrame();
     void SetEmitterRelayMirrorFrame(EmitterRelayMirror::MirrorFrame frame,

@@ -21,7 +21,6 @@ void ApplyDepthPresetToShadeSettings(SpatialLighting::ShadeSettings& shade, Spat
 const char* LibraryGroupForMode(SpatialRoomMode mode);
 
 bool ModeUsesSpatialLightingEngine(SpatialRoomMode mode);
-bool ModeSkipsRoomGridOverlayByDefault(SpatialRoomMode mode);
 
 } // namespace SpatialRoom
 

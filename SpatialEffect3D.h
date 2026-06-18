@@ -367,7 +367,6 @@ public:
         return effect_room_coordinate_mode_ == SpatialRoom::SpatialRoomCoordinateMode::RoomMapped;
     }
     const RoomSpatialLightingUi::RoomSpatialLightParams& roomRelayParams() const { return effect_room_relay_params_; }
-    /** Darken pattern/receiver color from layer AO when blockers are enabled (room-mapped path). */
     RGBColor ApplyLayerRoomAmbientShading(float room_x,
                                           float room_y,
                                           float room_z,
@@ -582,7 +581,7 @@ protected:
     std::vector<int> effect_emitter_controller_indices_;
     std::vector<int> effect_receiver_controller_indices_;
 
-    mutable SpatialLighting::RoomScene relay_scene_cache_{};
+    mutable SpatialLighting::ShadeSettings relay_shade_{};
     mutable std::vector<SpatialLighting::OccluderQuad> relay_occluders_{};
     mutable std::vector<SpatialLighting::OccluderAabb> relay_occluder_aabbs_{};
     mutable bool relay_occluders_valid_ = false;

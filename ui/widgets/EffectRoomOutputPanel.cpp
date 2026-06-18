@@ -42,7 +42,8 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     layout->addWidget(output_combo_);
 
     zone_hint_ = new QLabel(tr(
-        "Set the stack zone to All so emitters and receivers on this layer are not limited by the top-bar zone."));
+        "Set the stack zone to All so emitters and receivers on this layer are not limited by the top-bar zone. "
+        "Use one Emitter + relay layer; pattern layers below it paint emitters."));
     zone_hint_->setWordWrap(true);
     zone_hint_->setVisible(false);
     layout->addWidget(zone_hint_);
@@ -92,7 +93,7 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     relay_panel_->setShowBlockerControls(false);
     relay_panel_->setHintText(tr(
         "Reach/glow: distance falloff from emitters. "
-        "Shadows and ambient occlusion darken receivers behind controllers and in corners."));
+        "Blockers and ambient occlusion are in Output shaping."));
     relay_panel_->setVisible(false);
     layout->addWidget(relay_panel_);
     layout->setStretch(2, 1);

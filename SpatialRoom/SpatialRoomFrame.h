@@ -19,8 +19,6 @@ void BeginRoomGridOverlayPass();
 void EndRoomGridOverlayPass();
 
 bool IsRoomGridOverlayPass();
-/** @deprecated Use IsRoomGridOverlayPass(). */
-bool ShouldUseOverlayFastPreview();
 
 } // namespace SpatialRoom
 

@@ -18,23 +18,6 @@ namespace EmitterRelayMirror
 namespace
 {
 
-void FinalizeSurface(EmitterSurface& surface)
-{
-    const size_t px = static_cast<size_t>(surface.tex_w * surface.tex_h);
-    for(size_t i = 0; i < px; ++i)
-    {
-        const uint8_t w = surface.tex_weight[i];
-        if(w == 0)
-        {
-            continue;
-        }
-        const float inv = 1.0f / static_cast<float>(w);
-        surface.tex_rgb[i * 3 + 0] *= inv;
-        surface.tex_rgb[i * 3 + 1] *= inv;
-        surface.tex_rgb[i * 3 + 2] *= inv;
-    }
-}
-
 void SplatSampleDominant(EmitterSurface& surface, float u, float v, uint8_t r, uint8_t g, uint8_t b)
 {
     u = std::clamp(u, 0.0f, 1.0f);
@@ -114,13 +97,11 @@ struct EmitterReceiverProjection
     bool is_valid = false;
 };
 
-/** Orthographic panel projection: receiver must sit under the emitter footprint. */
 EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& receiver_room,
                                                             const EmitterSurface& surface,
                                                             float grid_scale_mm)
 {
     EmitterReceiverProjection result{};
-    (void)grid_scale_mm;
     if(surface.width_grid < 1e-5f || surface.height_grid < 1e-5f)
     {
         return result;
@@ -143,23 +124,14 @@ EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& rece
         return result;
     }
 
-    const Vector3D ref_to_receiver = {
-        receiver_room.x - surface.plane_center_room.x,
-        receiver_room.y - surface.plane_center_room.y,
-        receiver_room.z - surface.plane_center_room.z,
-    };
-
     const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
-    const float dist_units = std::sqrt(ref_to_receiver.x * ref_to_receiver.x + ref_to_receiver.y * ref_to_receiver.y +
-                                       ref_to_receiver.z * ref_to_receiver.z);
     result.u = std::clamp(u, 0.0f, 1.0f);
     result.v = std::clamp(v, 0.0f, 1.0f);
-    result.distance_mm = GridUnitsToMM(dist_units, scale_mm);
+    result.distance_mm = GridUnitsToMM(std::fabs(local.z), scale_mm);
     result.is_valid = true;
     return result;
 }
 
-/** Per-emitter canvas size from LED count and controller footprint aspect (32–160 px per side). */
 void ComputeAutoTextureDimensions(size_t led_count, float width_grid, float height_grid, int& out_w, int& out_h)
 {
     static constexpr int kMinSide = 32;
@@ -223,7 +195,6 @@ void BuildSurfaceFromSamples(int controller_index,
     {
         SplatSampleDominant(out, sample.u, sample.v, sample.r, sample.g, sample.b);
     }
-    FinalizeSurface(out);
 }
 
 RGBColor SampleReceiver(const MirrorFrame& frame,
@@ -294,22 +265,36 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     total_g = total_g / total_w * bright * fill_mul;
     total_b = total_b / total_w * bright * fill_mul;
 
-    float ao_factor = 1.0f;
-    if(shade_enabled && shade_ctx->shade->use_occlusion && shade_ctx->shade->use_ambient_occlusion &&
-       has_occluders && shade_ctx->shade->ao_strength > 0.001f)
+    float shade_factor = 1.0f;
+    if(shade_enabled && shade_ctx->shade->use_occlusion && has_occluders)
     {
-        const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
-                                                                           room_y,
-                                                                           room_z,
-                                                                           *shade_ctx->occluder_aabbs,
-                                                                           *shade_ctx->occluders,
-                                                                           shade_ctx->shade->ao_probe_span);
-        ao_factor = 1.0f - shade_ctx->shade->ao_strength * (1.0f - openness);
+        if(SpatialLighting::LedSegmentOccluded(room_x,
+                                               room_y,
+                                               room_z,
+                                               frame.room_center.x,
+                                               frame.room_center.y,
+                                               frame.room_center.z,
+                                               *shade_ctx->occluder_aabbs,
+                                               *shade_ctx->occluders,
+                                               -1))
+        {
+            shade_factor *= 0.18f;
+        }
+        if(shade_ctx->shade->use_ambient_occlusion && shade_ctx->shade->ao_strength > 0.001f)
+        {
+            const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
+                                                                               room_y,
+                                                                               room_z,
+                                                                               *shade_ctx->occluder_aabbs,
+                                                                               *shade_ctx->occluders,
+                                                                               shade_ctx->shade->ao_probe_span);
+            shade_factor *= 1.0f - shade_ctx->shade->ao_strength * (1.0f - openness);
+        }
     }
 
-    total_r *= ao_factor;
-    total_g *= ao_factor;
-    total_b *= ao_factor;
+    total_r *= shade_factor;
+    total_g *= shade_factor;
+    total_b *= shade_factor;
 
     return ToRGBColor(static_cast<uint8_t>(std::clamp(total_r, 0.0f, 255.0f)),
                       static_cast<uint8_t>(std::clamp(total_g, 0.0f, 255.0f)),

@@ -53,9 +53,4 @@ bool IsRoomGridOverlayPass()
     return g_frame.room_grid_overlay_pass;
 }
 
-bool ShouldUseOverlayFastPreview()
-{
-    return g_frame.room_grid_overlay_pass;
-}
-
 } // namespace SpatialRoom

@@ -118,10 +118,4 @@ bool ModeUsesSpatialLightingEngine(SpatialRoomMode mode)
     return mode == SpatialRoomMode::SpatialLighting || mode == SpatialRoomMode::EmissiveRelay;
 }
 
-bool ModeSkipsRoomGridOverlayByDefault(SpatialRoomMode mode)
-{
-    (void)mode;
-    return false;
-}
-
 } // namespace SpatialRoom

@@ -1634,22 +1634,15 @@ void SpatialEffect3D::DisconnectStackRoomOutputPanel()
 
 void SpatialEffect3D::ApplyRelayShadeSettings(const GridContext3D& grid) const
 {
-    SpatialRoom::ApplyDepthPresetToShadeSettings(relay_scene_cache_.shade,
+    SpatialRoom::ApplyDepthPresetToShadeSettings(relay_shade_,
                                                  SpatialRoom::CurrentFrameContext().depth_preset);
-    const float bright = std::max(0.15f, effect_brightness / 100.0f);
-    relay_scene_cache_.shade.ambient_level = 0.05f + (effect_room_relay_params_.room_fill / 100.0f) * 0.04f;
-    relay_scene_cache_.shade.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    relay_scene_cache_.shade.room_fill_strength =
-        (effect_room_relay_params_.room_fill / 100.0f) * bright * 1.15f;
-    relay_scene_cache_.shade.room_fill_atten = 0.72f;
-    relay_scene_cache_.shade.use_occlusion =
-        relay_scene_cache_.shade.use_occlusion && effect_room_relay_params_.use_occlusion;
-    relay_scene_cache_.shade.use_ambient_occlusion = relay_scene_cache_.shade.use_occlusion &&
-                                                     effect_room_relay_params_.use_occlusion &&
-                                                     effect_room_relay_params_.ao_strength > 0.01f;
-    relay_scene_cache_.shade.direct_falloff = 0.62f;
+    relay_shade_.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
+    relay_shade_.use_occlusion = relay_shade_.use_occlusion && effect_room_relay_params_.use_occlusion;
+    relay_shade_.use_ambient_occlusion = relay_shade_.use_occlusion && effect_room_relay_params_.ao_strength > 0.01f;
     const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
-    relay_scene_cache_.shade.ao_probe_span = std::clamp(reach_u * 0.4f, 0.5f, 14.0f);
+    const float room_diag =
+        std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+    relay_shade_.ao_probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
 }
 
 void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
@@ -1660,8 +1653,6 @@ void SpatialEffect3D::RefreshRelayOccluders(const GridContext3D& grid) const
                                            relay_occluder_aabbs_,
                                            grid,
                                            options);
-    relay_scene_cache_.occluders = relay_occluders_;
-    relay_scene_cache_.occluder_aabbs = relay_occluder_aabbs_;
     relay_occluders_valid_ = true;
 }
 
@@ -1677,7 +1668,7 @@ RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const
     if(provider->emitterRelayMirrorActive())
     {
         EmitterRelayMirror::MirrorShadeContext shade_ctx{};
-        shade_ctx.shade = &relay_scene_cache_.shade;
+        shade_ctx.shade = &relay_shade_;
         shade_ctx.occluder_aabbs = &relay_occluder_aabbs_;
         shade_ctx.occluders = &relay_occluders_;
         return EmitterRelayMirror::SampleReceiver(provider->emitterRelayMirrorFrame(), x, y, z, &shade_ctx);

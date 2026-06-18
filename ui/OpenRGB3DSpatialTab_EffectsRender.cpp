@@ -251,21 +251,28 @@ bool ShouldApplyStackLayerToController(const SpatialEffect3D* effect,
                                        size_t effect_index,
                                        size_t relay_stack_index,
                                        bool has_relay_stack,
-                                       int ctrl_idx)
+                                       int ctrl_idx,
+                                       const std::unordered_set<int>* relay_emitter_indices = nullptr)
 {
     if(!effect)
     {
         return false;
     }
+    const auto is_relay_emitter = [&](int index) -> bool {
+        if(relay_emitter_indices)
+        {
+            return relay_emitter_indices->find(index) != relay_emitter_indices->end();
+        }
+        return SpatialLightingSceneProvider::instance()->isEmitterController(index);
+    };
     if(has_relay_stack)
     {
         if(effect->GetRoomOutputRole() == SpatialRoom::SpatialRoomOutputRole::Direct &&
-           !SpatialLightingSceneProvider::instance()->isEmitterController(ctrl_idx))
+           !is_relay_emitter(ctrl_idx))
         {
             return false;
         }
-        if(effect_index < relay_stack_index &&
-           !SpatialLightingSceneProvider::instance()->isEmitterController(ctrl_idx))
+        if(effect_index < relay_stack_index && !is_relay_emitter(ctrl_idx))
         {
             return false;
         }
@@ -649,7 +656,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
         }
 
-        const size_t emitter_sample_through = relay_stack_index + 1;
+        const bool has_relay_stack = relay_layer_effect != nullptr;
+        const size_t relay_idx = relay_stack_index;
 
         if(relay_layer_effect && !emitter_set.empty())
         {
@@ -666,12 +674,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             const float bright = std::max(0.15f, relay_layer_effect->GetBrightness() / 100.0f);
 
             const auto sample_emitter_led = [&](const LEDPosition3D& led_position, int ctrl_idx) -> RGBColor {
-                ControllerTransform* emitter_transform = nullptr;
-                if(ctrl_idx >= 0 && ctrl_idx < (int)controller_transforms.size())
-                {
-                    emitter_transform = controller_transforms[(size_t)ctrl_idx].get();
-                }
-
                 const Vector3D& world_pos = led_position.world_position;
                 const float room_x = led_position.room_position.x;
                 const float room_y = led_position.room_position.y;
@@ -681,7 +683,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 const int prev_shade_ctrl = shade_provider->shadingControllerIndex();
                 shade_provider->SetShadingControllerIndex(ctrl_idx);
                 RGBColor blended = ToRGBColor(0, 0, 0);
-                for(size_t effect_idx = 0; effect_idx < emitter_sample_through; ++effect_idx)
+                for(size_t effect_idx = 0; effect_idx < active_effects.size(); ++effect_idx)
                 {
                     const RenderEffectSlot& slot = active_effects[effect_idx];
                     SpatialEffect3D* effect = slot.effect;
@@ -690,6 +692,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         continue;
                     }
                     if(!EffectSlotAppliesToController(slot.zone_index, ctrl_idx, zone_manager.get()))
+                    {
+                        continue;
+                    }
+                    if(!ShouldApplyStackLayerToController(effect,
+                                                          effect_idx,
+                                                          relay_idx,
+                                                          has_relay_stack,
+                                                          ctrl_idx,
+                                                          &emitter_set))
                     {
                         continue;
                     }
@@ -751,21 +762,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             };
 
             EmitterRelayMirror::MirrorFrame mirror{};
-            mirror.reference_room = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
+            mirror.room_center = {room_grid.center_x, room_grid.center_y, room_grid.center_z};
             mirror.grid_scale_mm = room_grid.grid_scale_mm;
-            const float room_diag_units = std::sqrt(room_grid.width * room_grid.width +
-                                                    room_grid.height * room_grid.height +
-                                                    room_grid.depth * room_grid.depth);
-            mirror.reference_max_distance_mm =
-                std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
             mirror.light_reach_mm = lp.light_reach_mm;
             mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.38f, 5.0f, 90.0f);
             mirror.room_fill_strength = lp.room_fill / 100.0f;
-            mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
-                                         0.35f,
-                                         3.0f);
-            mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
-            mirror.brightness = bright * (0.92f + (lp.room_fill / 100.0f) * 0.35f);
+            mirror.brightness = bright;
 
             for(const int emitter_ctrl : emitter_set)
             {
