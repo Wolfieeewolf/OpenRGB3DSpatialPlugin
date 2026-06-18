@@ -1515,15 +1515,11 @@ RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
     {
         return color;
     }
-    if(!UsesRoomMappedCoordinates())
-    {
-        return color;
-    }
     if(effect_room_output_role_ == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
     {
         return color;
     }
-    if(!effect_room_relay_params_.use_occlusion || effect_room_relay_params_.ao_strength < 0.01f)
+    if(!effect_room_relay_params_.use_occlusion)
     {
         return color;
     }
@@ -1537,24 +1533,44 @@ RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
         return color;
     }
 
-    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
-    const float probe_span = std::clamp(reach_u * 0.4f, 0.5f, 14.0f);
+    float shade_factor = 1.0f;
+    if(SpatialLighting::LedSegmentOccluded(room_x,
+                                           room_y,
+                                           room_z,
+                                           grid.center_x,
+                                           grid.center_y,
+                                           grid.center_z,
+                                           relay_occluder_aabbs_,
+                                           relay_occluders_,
+                                           -1))
+    {
+        shade_factor *= 0.18f;
+    }
+
     const float ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
-                                                                       room_y,
-                                                                       room_z,
-                                                                       relay_occluder_aabbs_,
-                                                                       relay_occluders_,
-                                                                       probe_span);
-    const float ao_factor = 1.0f - ao_strength * (1.0f - openness);
-    if(ao_factor >= 0.999f)
+    if(ao_strength > 0.01f)
+    {
+        const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
+        const float room_diag =
+            std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+        const float probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
+        const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
+                                                                           room_y,
+                                                                           room_z,
+                                                                           relay_occluder_aabbs_,
+                                                                           relay_occluders_,
+                                                                           probe_span);
+        shade_factor *= 1.0f - ao_strength * (1.0f - openness);
+    }
+
+    if(shade_factor >= 0.999f)
     {
         return color;
     }
 
-    const float rf = static_cast<float>(color & 0xFF) * ao_factor;
-    const float gf = static_cast<float>((color >> 8) & 0xFF) * ao_factor;
-    const float bf = static_cast<float>((color >> 16) & 0xFF) * ao_factor;
+    const float rf = static_cast<float>(color & 0xFF) * shade_factor;
+    const float gf = static_cast<float>((color >> 8) & 0xFF) * shade_factor;
+    const float bf = static_cast<float>((color >> 16) & 0xFF) * shade_factor;
     return ToRGBColor(static_cast<uint8_t>(std::clamp(rf, 0.0f, 255.0f)),
                       static_cast<uint8_t>(std::clamp(gf, 0.0f, 255.0f)),
                       static_cast<uint8_t>(std::clamp(bf, 0.0f, 255.0f)));

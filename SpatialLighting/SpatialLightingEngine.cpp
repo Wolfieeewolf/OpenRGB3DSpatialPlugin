@@ -528,11 +528,6 @@ void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_
         }
 
         const int tag = static_cast<int>(ctrl_index);
-        if(ctrl->virtual_controller)
-        {
-            continue;
-        }
-
         if(ctrl->led_positions.empty())
         {
             continue;

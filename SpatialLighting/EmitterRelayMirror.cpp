@@ -9,6 +9,7 @@
 #include "SpatialLighting/SpatialLightingEngine.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace EmitterRelayMirror
@@ -59,36 +60,50 @@ void SplatSampleDominant(EmitterSurface& surface, float u, float v, uint8_t r, u
     }
 }
 
-RGBColor SampleNearest(const EmitterSurface& surface, float u, float v)
+RGBColor SampleBilinearWeighted(const EmitterSurface& surface, float u, float v)
 {
     u = std::clamp(u, 0.0f, 1.0f);
     v = std::clamp(v, 0.0f, 1.0f);
-    const int x = std::clamp(static_cast<int>(u * static_cast<float>(surface.tex_w - 1) + 0.5f), 0, surface.tex_w - 1);
-    const int y = std::clamp(static_cast<int>(v * static_cast<float>(surface.tex_h - 1) + 0.5f), 0, surface.tex_h - 1);
-    const size_t idx = static_cast<size_t>(y * surface.tex_w + x);
-    if(surface.tex_weight[idx] == 0)
+    const float fx = u * static_cast<float>(surface.tex_w - 1);
+    const float fy = v * static_cast<float>(surface.tex_h - 1);
+    const int x0 = static_cast<int>(std::floor(fx));
+    const int y0 = static_cast<int>(std::floor(fy));
+    const int x1 = std::min(x0 + 1, surface.tex_w - 1);
+    const int y1 = std::min(y0 + 1, surface.tex_h - 1);
+    const float tx = fx - static_cast<float>(x0);
+    const float ty = fy - static_cast<float>(y0);
+
+    auto fetch = [&](int x, int y) -> std::array<float, 3> {
+        const size_t idx = static_cast<size_t>(y * surface.tex_w + x);
+        if(surface.tex_weight[idx] == 0)
+        {
+            return {0.0f, 0.0f, 0.0f};
+        }
+        return {surface.tex_rgb[idx * 3 + 0], surface.tex_rgb[idx * 3 + 1], surface.tex_rgb[idx * 3 + 2]};
+    };
+
+    const auto c00 = fetch(x0, y0);
+    const auto c10 = fetch(x1, y0);
+    const auto c01 = fetch(x0, y1);
+    const auto c11 = fetch(x1, y1);
+
+    const float w00 = (surface.tex_weight[static_cast<size_t>(y0 * surface.tex_w + x0)] > 0) ? (1.0f - tx) * (1.0f - ty) : 0.0f;
+    const float w10 = (surface.tex_weight[static_cast<size_t>(y0 * surface.tex_w + x1)] > 0) ? tx * (1.0f - ty) : 0.0f;
+    const float w01 = (surface.tex_weight[static_cast<size_t>(y1 * surface.tex_w + x0)] > 0) ? (1.0f - tx) * ty : 0.0f;
+    const float w11 = (surface.tex_weight[static_cast<size_t>(y1 * surface.tex_w + x1)] > 0) ? tx * ty : 0.0f;
+    const float w_sum = w00 + w10 + w01 + w11;
+    if(w_sum < 1e-5f)
     {
         return 0x00000000;
     }
-    return ToRGBColor(static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 0], 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 1], 0.0f, 255.0f)),
-                      static_cast<uint8_t>(std::clamp(surface.tex_rgb[idx * 3 + 2], 0.0f, 255.0f)));
-}
 
-Vector3D SamplePointOnEmitterSurface(const EmitterSurface& surface, float u, float v)
-{
-    const float half_w = surface.width_grid * 0.5f;
-    const float half_h = surface.height_grid * 0.5f;
-    const Vector3D local = {
-        -half_w + u * surface.width_grid,
-        -half_h + v * surface.height_grid,
-        0.0f,
-    };
-    Transform3D transform{};
-    transform.position = surface.plane_center_room;
-    transform.rotation = surface.plane_rotation;
-    transform.scale = {1.0f, 1.0f, 1.0f};
-    return Geometry3D::TransformDisplayPlaneLocalToWorld(local, transform);
+    float rf = (w00 * c00[0] + w10 * c10[0] + w01 * c01[0] + w11 * c11[0]) / w_sum;
+    float gf = (w00 * c00[1] + w10 * c10[1] + w01 * c01[1] + w11 * c11[1]) / w_sum;
+    float bf = (w00 * c00[2] + w10 * c10[2] + w01 * c01[2] + w11 * c11[2]) / w_sum;
+
+    return ToRGBColor(static_cast<uint8_t>(std::clamp(rf, 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(gf, 0.0f, 255.0f)),
+                      static_cast<uint8_t>(std::clamp(bf, 0.0f, 255.0f)));
 }
 
 struct EmitterReceiverProjection
@@ -99,12 +114,13 @@ struct EmitterReceiverProjection
     bool is_valid = false;
 };
 
-/** Orthographic panel projection: receiver must sit under the emitter footprint (-normal side). */
+/** Orthographic panel projection: receiver must sit under the emitter footprint. */
 EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& receiver_room,
                                                             const EmitterSurface& surface,
                                                             float grid_scale_mm)
 {
     EmitterReceiverProjection result{};
+    (void)grid_scale_mm;
     if(surface.width_grid < 1e-5f || surface.height_grid < 1e-5f)
     {
         return result;
@@ -121,27 +137,17 @@ EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& rece
     const float u = (local.x + half_w) / surface.width_grid;
     const float v = (local.y + half_h) / surface.height_grid;
 
-    static constexpr float kBoundsEpsilon = 1e-4f;
-    if(u < -kBoundsEpsilon || u > 1.0f + kBoundsEpsilon || v < -kBoundsEpsilon || v > 1.0f + kBoundsEpsilon)
+    static constexpr float kFootprintBleed = 0.06f;
+    if(u < -kFootprintBleed || u > 1.0f + kFootprintBleed || v < -kFootprintBleed || v > 1.0f + kFootprintBleed)
     {
         return result;
     }
 
-    float rotation_matrix[9];
-    Geometry3D::ComputeRotationMatrix(surface.plane_rotation, rotation_matrix);
-    const Vector3D plane_normal = {rotation_matrix[2], rotation_matrix[5], rotation_matrix[8]};
     const Vector3D ref_to_receiver = {
         receiver_room.x - surface.plane_center_room.x,
         receiver_room.y - surface.plane_center_room.y,
         receiver_room.z - surface.plane_center_room.z,
     };
-    const float facing =
-        ref_to_receiver.x * plane_normal.x + ref_to_receiver.y * plane_normal.y + ref_to_receiver.z * plane_normal.z;
-    static constexpr float kEmissionSideEpsilon = 0.002f;
-    if(facing > -kEmissionSideEpsilon)
-    {
-        return result;
-    }
 
     const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
     const float dist_units = std::sqrt(ref_to_receiver.x * ref_to_receiver.x + ref_to_receiver.y * ref_to_receiver.y +
@@ -153,7 +159,7 @@ EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& rece
     return result;
 }
 
-/** Per-emitter canvas size from LED count and controller footprint aspect (32–128 px per side). */
+/** Per-emitter canvas size from LED count and controller footprint aspect (32–160 px per side). */
 void ComputeAutoTextureDimensions(size_t led_count, float width_grid, float height_grid, int& out_w, int& out_h)
 {
     static constexpr int kMinSide = 32;
@@ -203,26 +209,7 @@ void BuildSurfaceFromSamples(int controller_index,
     out.height_grid = span_y;
     out.plane_rotation = ctrl->transform.rotation;
 
-    float cx = 0.0f;
-    float cy = 0.0f;
-    float cz = 0.0f;
-    int room_count = 0;
-    for(const LEDPosition3D& led : ctrl->led_positions)
-    {
-        cx += led.room_position.x;
-        cy += led.room_position.y;
-        cz += led.room_position.z;
-        ++room_count;
-    }
-    if(room_count > 0)
-    {
-        const float inv = 1.0f / static_cast<float>(room_count);
-        out.plane_center_room = {cx * inv, cy * inv, cz * inv};
-    }
-    else
-    {
-        return;
-    }
+    out.plane_center_room = ControllerLayout3D::GetControllerCenterWorld(ctrl);
 
     const size_t layout_led_count =
         ctrl->led_positions.empty() ? samples.size() : ctrl->led_positions.size();
@@ -256,8 +243,6 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     const bool shade_enabled = shade_ctx && shade_ctx->shade && shade_ctx->occluder_aabbs && shade_ctx->occluders;
     const bool has_occluders =
         shade_enabled && (!shade_ctx->occluder_aabbs->empty() || !shade_ctx->occluders->empty());
-    const bool use_line_occlusion =
-        shade_enabled && shade_ctx->shade->use_occlusion && has_occluders;
 
     float total_r = 0.0f;
     float total_g = 0.0f;
@@ -275,36 +260,19 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
         const float u = proj.u;
         const float v = proj.v;
 
-        if(use_line_occlusion)
-        {
-            const Vector3D emitter_point = SamplePointOnEmitterSurface(surface, u, v);
-            if(SpatialLighting::LedSegmentOccluded(room_x,
-                                                     room_y,
-                                                     room_z,
-                                                     emitter_point.x,
-                                                     emitter_point.y,
-                                                     emitter_point.z,
-                                                     *shade_ctx->occluder_aabbs,
-                                                     *shade_ctx->occluders,
-                                                     surface.controller_index))
-            {
-                continue;
-            }
-        }
-
-        RGBColor sampled = SampleNearest(surface, u, v);
+        RGBColor sampled = SampleBilinearWeighted(surface, u, v);
         const float rf = static_cast<float>(sampled & 0xFF);
         const float gf = static_cast<float>((sampled >> 8) & 0xFF);
         const float bf = static_cast<float>((sampled >> 16) & 0xFF);
-        if(rf + gf + bf < 1.5f)
+        if(rf + gf + bf < 0.5f)
         {
             continue;
         }
 
-        const float effective_range = std::max(frame.light_reach_mm, 80.0f);
-        const float feather_percent = std::clamp(frame.glow_feather_percent, 5.0f, 85.0f);
+        const float effective_range = std::max(frame.light_reach_mm, 40.0f);
+        const float feather_percent = std::clamp(frame.glow_feather_percent, 5.0f, 90.0f);
         const float weight = Geometry3D::ComputeFalloff(proj.distance_mm, effective_range, feather_percent);
-        if(weight < 0.01f)
+        if(weight < 0.001f)
         {
             continue;
         }
@@ -320,8 +288,8 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
         return 0x00000000;
     }
 
-    const float bright = std::max(0.08f, frame.brightness);
-    const float fill_mul = 1.0f + frame.room_fill_strength * 0.18f;
+    const float bright = std::max(0.12f, frame.brightness);
+    const float fill_mul = 1.0f + frame.room_fill_strength * 0.42f;
     total_r = total_r / total_w * bright * fill_mul;
     total_g = total_g / total_w * bright * fill_mul;
     total_b = total_b / total_w * bright * fill_mul;

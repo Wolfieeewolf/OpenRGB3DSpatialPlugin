@@ -169,7 +169,7 @@ void RoomSpatialLightSettingsPanel::bindParams(QObject* owner,
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
-    ui->glowSizeRow->configure(10, 200, static_cast<int>(params.glow_radius_mm));
+    ui->glowSizeRow->configure(10, 400, static_cast<int>(params.glow_radius_mm));
     ui->glowSizeRow->bindValueChanged(
         owner,
         [&params, on_tune_changed](int v) {
@@ -181,7 +181,7 @@ void RoomSpatialLightSettingsPanel::bindParams(QObject* owner,
         },
         [](int v) { return QString::number(v) + QStringLiteral(" mm"); });
 
-    ui->lightReachRow->configure(50, 2000, static_cast<int>(params.light_reach_mm));
+    ui->lightReachRow->configure(50, 5000, static_cast<int>(params.light_reach_mm));
     ui->lightReachRow->bindValueChanged(
         owner,
         [&params, on_tune_changed](int v) {

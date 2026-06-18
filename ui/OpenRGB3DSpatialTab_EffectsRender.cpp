@@ -744,8 +744,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         }
                     }
                     effect_color = effect->PostProcessColorGrid(effect_color);
-                    effect_color =
-                        effect->ApplyLayerRoomAmbientShading(room_x, room_y, room_z, effect_color, active_grid);
                     blended = BlendColors(blended, effect_color, slot.blend_mode);
                 }
                 shade_provider->SetShadingControllerIndex(prev_shade_ctrl);
@@ -761,13 +759,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             mirror.reference_max_distance_mm =
                 std::max(GridUnitsToMM(room_diag_units, room_grid.grid_scale_mm), lp.light_reach_mm);
             mirror.light_reach_mm = lp.light_reach_mm;
-            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 80.0f);
+            mirror.glow_feather_percent = std::clamp(lp.glow_radius_mm * 0.38f, 5.0f, 90.0f);
             mirror.room_fill_strength = lp.room_fill / 100.0f;
             mirror.coverage = std::clamp(lp.light_reach_mm / std::max(mirror.reference_max_distance_mm * 0.45f, 1.0f),
                                          0.35f,
                                          3.0f);
             mirror.edge_softness = std::clamp(lp.glow_radius_mm * 0.35f, 5.0f, 50.0f);
-            mirror.brightness = bright;
+            mirror.brightness = bright * (0.92f + (lp.room_fill / 100.0f) * 0.35f);
 
             for(const int emitter_ctrl : emitter_set)
             {
