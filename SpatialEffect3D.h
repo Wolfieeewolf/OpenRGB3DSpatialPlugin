@@ -371,7 +371,8 @@ public:
                                           float room_y,
                                           float room_z,
                                           RGBColor color,
-                                          const GridContext3D& grid) const;
+                                          const GridContext3D& grid,
+                                          int shade_slot = -1) const;
 
     /** Room evaluation family (see SpatialRoom/ and docs/SPATIAL_ROOM.md). */
     virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const;

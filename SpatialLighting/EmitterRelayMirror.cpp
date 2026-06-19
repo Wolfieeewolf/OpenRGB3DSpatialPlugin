@@ -7,6 +7,7 @@
 #include "GridSpaceUtils.h"
 #include "LEDPosition3D.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
+#include "SpatialLighting/SpatialLightingSceneProvider.h"
 
 #include <algorithm>
 #include <array>
@@ -268,28 +269,21 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     float shade_factor = 1.0f;
     if(shade_enabled && shade_ctx->shade->use_occlusion && has_occluders)
     {
-        if(SpatialLighting::LedSegmentOccluded(room_x,
-                                               room_y,
-                                               room_z,
-                                               frame.room_center.x,
-                                               frame.room_center.y,
-                                               frame.room_center.z,
-                                               *shade_ctx->occluder_aabbs,
-                                               *shade_ctx->occluders,
-                                               -1))
-        {
-            shade_factor *= 0.18f;
-        }
-        if(shade_ctx->shade->use_ambient_occlusion && shade_ctx->shade->ao_strength > 0.001f)
-        {
-            const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
-                                                                               room_y,
-                                                                               room_z,
-                                                                               *shade_ctx->occluder_aabbs,
-                                                                               *shade_ctx->occluders,
-                                                                               shade_ctx->shade->ao_probe_span);
-            shade_factor *= 1.0f - shade_ctx->shade->ao_strength * (1.0f - openness);
-        }
+        const float ao_strength = shade_ctx->shade->use_ambient_occlusion ? shade_ctx->shade->ao_strength : 0.0f;
+        const std::vector<SpatialLighting::BlockerGridOccluder>& blocker_grids =
+            SpatialLightingSceneProvider::instance()->frameBlockerGrids();
+        shade_factor = SpatialLighting::ComputeRoomAmbientShadeFactor(room_x,
+                                                                        room_y,
+                                                                        room_z,
+                                                                        frame.room_center.x,
+                                                                        frame.room_center.y,
+                                                                        frame.room_center.z,
+                                                                        *shade_ctx->occluder_aabbs,
+                                                                        *shade_ctx->occluders,
+                                                                        blocker_grids,
+                                                                        ao_strength,
+                                                                        shade_ctx->shade->ao_probe_span,
+                                                                        nullptr);
     }
 
     total_r *= shade_factor;

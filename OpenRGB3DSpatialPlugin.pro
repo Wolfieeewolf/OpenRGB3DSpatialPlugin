@@ -149,6 +149,8 @@ HEADERS += \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
+    SpatialLighting/BlockerGridOccluder.h \
+    SpatialLighting/OccluderSpatialIndex.h \
     SpatialLighting/SpatialLightingEngine.h \
     SpatialLighting/EmitterRelayMirror.h \
     SpatialLighting/EmitterLocalSampling.h \
@@ -311,6 +313,8 @@ SOURCES += \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
+    SpatialLighting/BlockerGridOccluder.cpp \
+    SpatialLighting/OccluderSpatialIndex.cpp \
     SpatialLighting/SpatialLightingEngine.cpp \
     SpatialLighting/EmitterRelayMirror.cpp \
     SpatialLighting/EmitterLocalSampling.cpp \

@@ -157,6 +157,12 @@ const GridContext3D* ResolveActiveSlotGrid(const EffectSlotGridOverride& slot_ov
     }
     return nullptr;
 }
+
+int PackAmbientShadeSlot(int controller_index, int led_index)
+{
+    return (controller_index << 16) ^ (led_index & 0xFFFF);
+}
+
 }
 
 static float AverageAlongAxis(ControllerTransform* transform,
@@ -310,6 +316,7 @@ SpatialLighting::OccluderBuildOptions MergeStackOccluderOptions(const std::vecto
         merged.display_planes |= layer_opts.display_planes;
         merged.room_walls |= layer_opts.room_walls;
         merged.controllers |= layer_opts.controllers;
+        merged.light_blockers |= layer_opts.light_blockers;
     }
     return merged;
 }
@@ -917,10 +924,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
     const SpatialLighting::OccluderBuildOptions frame_occluder_options = MergeStackOccluderOptions(active_effects);
     if(frame_occluder_options.display_planes || frame_occluder_options.room_walls ||
-       frame_occluder_options.controllers)
+       frame_occluder_options.controllers || frame_occluder_options.light_blockers)
     {
         SpatialLightingSceneProvider::instance()->EnsureFrameOccluders(room_grid, frame_occluder_options);
     }
+
+    const float shade_cache_quant = MMToGridUnits(24.0f, room_grid.grid_scale_mm);
+    SpatialLightingSceneProvider::instance()->BeginAmbientShadeCacheFrame(effect_render_sequence, shade_cache_quant);
 
     if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
     {
@@ -1109,7 +1119,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                                                    room_y,
                                                                                    room_z,
                                                                                    final_color,
-                                                                                   room_grid);
+                                                                                   room_grid,
+                                                                                   PackAmbientShadeSlot(static_cast<int>(ctrl_idx),
+                                                                                                        static_cast<int>(led_pos_idx)));
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
 
@@ -1196,7 +1208,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                                                room_y,
                                                                                room_z,
                                                                                final_color,
-                                                                               room_grid);
+                                                                               room_grid,
+                                                                               PackAmbientShadeSlot(static_cast<int>(ctrl_idx),
+                                                                                                    static_cast<int>(led_pos_idx)));
                 }
 
                 transform->led_positions[led_pos_idx].preview_color = final_color;
@@ -1316,7 +1330,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                                                    room_y,
                                                                                    room_z,
                                                                                    final_color,
-                                                                                   room_grid);
+                                                                                   room_grid,
+                                                                                   PackAmbientShadeSlot(static_cast<int>(ctrl_idx),
+                                                                                                        static_cast<int>(led_pos_idx)));
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
                     if(led_global_idx < controller->colors.size())
@@ -1394,7 +1410,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                                                room_y,
                                                                                room_z,
                                                                                final_color,
-                                                                               room_grid);
+                                                                               room_grid,
+                                                                               PackAmbientShadeSlot(static_cast<int>(ctrl_idx),
+                                                                                                    static_cast<int>(led_pos_idx)));
                 }
 
                 transform->led_positions[led_pos_idx].preview_color = final_color;

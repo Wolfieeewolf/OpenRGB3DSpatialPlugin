@@ -2,6 +2,8 @@
 
 #include "RoomSpatialLightingEffect3D.h"
 
+#include "SpatialLighting/BlockerGridOccluder.h"
+#include "SpatialLighting/OccluderSpatialIndex.h"
 #include "SpatialRoom/SpatialRoomFrame.h"
 #include "GridSpaceUtils.h"
 
@@ -33,8 +35,16 @@ void RoomSpatialLightingEffect3D::RefreshRoomLightOccluders(const GridContext3D&
     const SpatialLighting::OccluderBuildOptions options =
         RoomSpatialLightingUi::BuildOccluderOptions(room_light_);
     SpatialLighting::BuildSpatialOccluders(occluders_, occluder_aabbs_, grid, options);
+    blocker_grids_.clear();
+    if(options.light_blockers)
+    {
+        SpatialLighting::BuildBlockerGridOccluders(blocker_grids_, grid.grid_scale_mm);
+    }
+    SpatialLighting::BuildOccluderAabbSpatialIndex(occluder_aabbs_, grid, occluder_aabb_index_);
     cached_scene_.occluders = occluders_;
     cached_scene_.occluder_aabbs = occluder_aabbs_;
+    cached_scene_.blocker_grids = blocker_grids_;
+    cached_scene_.occluder_aabb_index = occluder_aabb_index_.IsBuilt() ? &occluder_aabb_index_ : nullptr;
 }
 
 void RoomSpatialLightingEffect3D::UpdateRoomLightSource(const GridContext3D& grid, RGBColor color) const

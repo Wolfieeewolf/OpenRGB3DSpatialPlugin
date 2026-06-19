@@ -72,6 +72,30 @@ namespace Geometry3D
         };
     }
 
+    /** Inverse of TransformLocalToWorldScaled (controller-local grid units). */
+    inline Vector3D TransformWorldToLocalScaled(const Vector3D& world_pos, const Transform3D& transform)
+    {
+        const Vector3D translated = {
+            world_pos.x - transform.position.x,
+            world_pos.y - transform.position.y,
+            world_pos.z - transform.position.z,
+        };
+
+        float rotation_matrix[9];
+        ComputeRotationMatrix(transform.rotation, rotation_matrix);
+        const Vector3D rotated = {
+            rotation_matrix[0] * translated.x + rotation_matrix[3] * translated.y + rotation_matrix[6] * translated.z,
+            rotation_matrix[1] * translated.x + rotation_matrix[4] * translated.y + rotation_matrix[7] * translated.z,
+            rotation_matrix[2] * translated.x + rotation_matrix[5] * translated.y + rotation_matrix[8] * translated.z,
+        };
+
+        return {
+            (std::fabs(transform.scale.x) > 1e-8f) ? rotated.x / transform.scale.x : 0.0f,
+            (std::fabs(transform.scale.y) > 1e-8f) ? rotated.y / transform.scale.y : 0.0f,
+            (std::fabs(transform.scale.z) > 1e-8f) ? rotated.z / transform.scale.z : 0.0f,
+        };
+    }
+
     /** Matches display-plane viewport orientation (Euler XYZ + scale). */
     inline Vector3D TransformDisplayPlaneLocalToWorld(const Vector3D& local_pos, const Transform3D& transform)
     {

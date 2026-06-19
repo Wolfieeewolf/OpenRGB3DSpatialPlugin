@@ -1509,7 +1509,8 @@ RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
                                                        float room_y,
                                                        float room_z,
                                                        RGBColor color,
-                                                       const GridContext3D& grid) const
+                                                       const GridContext3D& grid,
+                                                       int shade_slot) const
 {
     if(color == 0x00000000)
     {
@@ -1527,41 +1528,27 @@ RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
     SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
     const std::vector<SpatialLighting::OccluderQuad>& occluders = provider->frameOccluderQuads();
     const std::vector<SpatialLighting::OccluderAabb>& occluder_aabbs = provider->frameOccluderAabbs();
-    if(occluder_aabbs.empty() && occluders.empty())
+    const std::vector<SpatialLighting::BlockerGridOccluder>& blocker_grids = provider->frameBlockerGrids();
+    if(occluder_aabbs.empty() && occluders.empty() && blocker_grids.empty())
     {
         return color;
     }
 
-    float shade_factor = 1.0f;
-    if(SpatialLighting::LedSegmentOccluded(room_x,
-                                           room_y,
-                                           room_z,
-                                           grid.center_x,
-                                           grid.center_y,
-                                           grid.center_z,
-                                           occluder_aabbs,
-                                           occluders,
-                                           -1))
-    {
-        shade_factor *= 0.18f;
-    }
-
     const float ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    if(ao_strength > 0.01f)
-    {
-        const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
-        const float room_diag =
-            std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
-        const float probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
-        const float openness = SpatialLighting::ComputeLedAmbientOcclusion(room_x,
-                                                                           room_y,
-                                                                           room_z,
-                                                                           occluder_aabbs,
-                                                                           occluders,
-                                                                           probe_span);
-        shade_factor *= 1.0f - ao_strength * (1.0f - openness);
-    }
+    const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
+    const float room_diag =
+        std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
+    const float probe_span = std::clamp(std::max(reach_u * 0.4f, room_diag * 0.05f), 0.5f, 18.0f);
 
+    const float shade_factor = provider->ComputeAmbientShadeFactorCached(shade_slot,
+                                                                       room_x,
+                                                                       room_y,
+                                                                       room_z,
+                                                                       grid.center_x,
+                                                                       grid.center_y,
+                                                                       grid.center_z,
+                                                                       ao_strength,
+                                                                       probe_span);
     if(shade_factor >= 0.999f)
     {
         return color;
@@ -2874,9 +2861,7 @@ void SpatialEffect3D::OnParameterChanged()
     }
     if(room_blockers_check)
     {
-        const bool on = room_blockers_check->isChecked();
-        effect_room_relay_params_.use_occlusion = on;
-        effect_room_relay_params_.use_controller_occlusion = on;
+        effect_room_relay_params_.use_occlusion = room_blockers_check->isChecked();
     }
     if(room_walls_blockers_check)
     {

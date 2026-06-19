@@ -7,9 +7,17 @@
 #include "RGBController.h"
 #include "LEDPosition3D.h"
 
+#include <cstdint>
 #include <vector>
 
+namespace SpatialLighting
+{
+class OccluderSpatialIndex;
+}
+
 struct GridContext3D;
+
+#include "SpatialLighting/BlockerGridOccluder.h"
 
 namespace SpatialLighting
 {
@@ -44,6 +52,8 @@ struct OccluderBuildOptions
     bool display_planes = true;
     bool room_walls = false;
     bool controllers = true;
+    /** Custom-controller light blocker cells (independent of full controller body occlusion). */
+    bool light_blockers = false;
 };
 
 struct EmissiveSource
@@ -82,6 +92,9 @@ struct RoomScene
     std::vector<EmissiveSource> sources;
     std::vector<OccluderQuad> occluders;
     std::vector<OccluderAabb> occluder_aabbs;
+    std::vector<BlockerGridOccluder> blocker_grids;
+    /** When set, AABB ray tests use this index (built from occluder_aabbs). */
+    const OccluderSpatialIndex* occluder_aabb_index = nullptr;
     ShadeSettings shade{};
 };
 
@@ -128,7 +141,26 @@ float ComputeLedAmbientOcclusion(float led_x,
                                  float led_z,
                                  const std::vector<OccluderAabb>& aabbs,
                                  const std::vector<OccluderQuad>& quads,
-                                 float probe_span);
+                                 float probe_span,
+                                 const OccluderSpatialIndex* aabb_index = nullptr);
+
+/** Receiver shading: center shadow + AO, combined into one multiplier in [0,1]. */
+float ComputeRoomAmbientShadeFactor(float room_x,
+                                    float room_y,
+                                    float room_z,
+                                    float room_center_x,
+                                    float room_center_y,
+                                    float room_center_z,
+                                    const std::vector<OccluderAabb>& aabbs,
+                                    const std::vector<OccluderQuad>& quads,
+                                    const std::vector<BlockerGridOccluder>& blocker_grids,
+                                    float ao_strength_norm,
+                                    float probe_span,
+                                    const OccluderSpatialIndex* aabb_index = nullptr);
+
+void BuildOccluderAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs,
+                                   const GridContext3D& grid,
+                                   OccluderSpatialIndex& out_index);
 
 } // namespace SpatialLighting
 

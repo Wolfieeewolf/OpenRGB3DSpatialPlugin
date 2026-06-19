@@ -7,6 +7,7 @@
 #include "SpatialEffect3D.h"
 #include "SpatialRoom/SpatialRoomTypes.h"
 #include "SpatialRoom/SpatialRoomDefaults.h"
+#include "SpatialLighting/OccluderSpatialIndex.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
 #include "RoomSpatialLightingUi.h"
 
@@ -61,6 +62,8 @@ protected:
     mutable SpatialLighting::RoomScene cached_scene_{};
     mutable std::vector<SpatialLighting::OccluderQuad> occluders_{};
     mutable std::vector<SpatialLighting::OccluderAabb> occluder_aabbs_{};
+    mutable SpatialLighting::OccluderSpatialIndex occluder_aabb_index_{};
+    mutable std::vector<SpatialLighting::BlockerGridOccluder> blocker_grids_{};
 
 private:
     SpatialLighting::Vec3 fixed_light_pos_{};

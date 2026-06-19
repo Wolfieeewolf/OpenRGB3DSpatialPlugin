@@ -3,7 +3,10 @@
 #include "SpatialLightingEngine.h"
 
 #include "SpatialEffect3D.h"
+#include "SpatialLighting/OccluderSpatialIndex.h"
+#include "SpatialLighting/BlockerGridOccluder.h"
 #include "SpatialLightingSceneProvider.h"
+#include "SpatialRoom/SpatialRoomFrame.h"
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "DisplayPlane3D.h"
@@ -164,8 +167,21 @@ static bool SegmentHitsOccluderSet(Vec3 a,
                                    Vec3 b,
                                    const std::vector<OccluderAabb>& aabbs,
                                    const std::vector<OccluderQuad>& quads,
-                                   int also_skip_controller = -1)
+                                   int also_skip_controller,
+                                   const OccluderSpatialIndex* aabb_index,
+                                   const std::vector<BlockerGridOccluder>* blocker_grids)
 {
+    const std::vector<BlockerGridOccluder>* grids = blocker_grids;
+    if(!grids)
+    {
+        grids = &SpatialLightingSceneProvider::instance()->frameBlockerGrids();
+    }
+    if(grids && !grids->empty() &&
+       SegmentHitsBlockerGrids(a.x, a.y, a.z, b.x, b.y, b.z, *grids, also_skip_controller))
+    {
+        return true;
+    }
+
     const Vec3 seg = Sub(b, a);
     const float seg_len = Len(seg);
     if(seg_len < 1e-5f)
@@ -181,18 +197,46 @@ static bool SegmentHitsOccluderSet(Vec3 a,
     }
 
     const int skip_controller = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
-    for(const OccluderAabb& box : aabbs)
+    thread_local std::vector<uint16_t> candidate_indices;
+    candidate_indices.clear();
+
+    if(aabb_index && aabb_index->IsBuilt())
     {
-        if((skip_controller >= 0 && box.controller_index == skip_controller) ||
-           (also_skip_controller >= 0 && box.controller_index == also_skip_controller))
+        aabb_index->CollectSegmentCandidates(a, b, candidate_indices);
+        for(uint16_t box_index : candidate_indices)
         {
-            continue;
-        }
-        if(SegmentHitsAabb(a, dir, t_min, t_max, box))
-        {
-            return true;
+            if(box_index >= aabbs.size())
+            {
+                continue;
+            }
+            const OccluderAabb& box = aabbs[box_index];
+            if((skip_controller >= 0 && box.controller_index == skip_controller) ||
+               (also_skip_controller >= 0 && box.controller_index == also_skip_controller))
+            {
+                continue;
+            }
+            if(SegmentHitsAabb(a, dir, t_min, t_max, box))
+            {
+                return true;
+            }
         }
     }
+    else
+    {
+        for(const OccluderAabb& box : aabbs)
+        {
+            if((skip_controller >= 0 && box.controller_index == skip_controller) ||
+               (also_skip_controller >= 0 && box.controller_index == also_skip_controller))
+            {
+                continue;
+            }
+            if(SegmentHitsAabb(a, dir, t_min, t_max, box))
+            {
+                return true;
+            }
+        }
+    }
+
     for(const OccluderQuad& quad : quads)
     {
         if((skip_controller >= 0 && quad.controller_index == skip_controller) ||
@@ -209,9 +253,11 @@ static bool SegmentHitsOccluderSet(Vec3 a,
 }
 
 static float ComputeAmbientOcclusion(Vec3 led,
-                              const std::vector<OccluderAabb>& aabbs,
-                              const std::vector<OccluderQuad>& quads,
-                              float probe_span)
+                                     const std::vector<OccluderAabb>& aabbs,
+                                     const std::vector<OccluderQuad>& quads,
+                                     float probe_span,
+                                     const OccluderSpatialIndex* aabb_index,
+                                     const std::vector<BlockerGridOccluder>* blocker_grids)
 {
     static const Vec3 kDirs[6] = {
         {1.0f, 0.0f, 0.0f},  {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
@@ -223,12 +269,22 @@ static float ComputeAmbientOcclusion(Vec3 led,
     for(const Vec3& d : kDirs)
     {
         const Vec3 probe = Add(led, Scale(d, span));
-        if(SegmentHitsOccluderSet(led, probe, aabbs, quads))
+        if(SegmentHitsOccluderSet(led, probe, aabbs, quads, -1, aabb_index, blocker_grids))
         {
             ++blocked;
         }
     }
     return 1.0f - (static_cast<float>(blocked) / 6.0f);
+}
+
+static const OccluderSpatialIndex* ResolveAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs)
+{
+    SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+    if(provider && &aabbs == &provider->frameOccluderAabbs() && provider->frameOccluderSpatialIndex().IsBuilt())
+    {
+        return &provider->frameOccluderSpatialIndex();
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -245,121 +301,7 @@ bool LedSegmentOccluded(float ax,
 {
     const Vec3 a = {ax, ay, az};
     const Vec3 b = {bx, by, bz};
-    const Vec3 seg = {b.x - a.x, b.y - a.y, b.z - a.z};
-    const float seg_len = std::sqrt(seg.x * seg.x + seg.y * seg.y + seg.z * seg.z);
-    if(seg_len < 1e-5f)
-    {
-        return false;
-    }
-    const Vec3 dir = {seg.x / seg_len, seg.y / seg_len, seg.z / seg_len};
-    constexpr float kRayEpsilon = 1e-4f;
-    constexpr float kMinSegBiasFrac = 0.02f;
-    const float t_min = std::max(kRayEpsilon * 4.0f, seg_len * kMinSegBiasFrac);
-    const float t_max = seg_len - t_min;
-    if(t_max <= t_min)
-    {
-        return false;
-    }
-
-    const int skip_controller = SpatialLightingSceneProvider::instance()->shadingControllerIndex();
-    for(const OccluderAabb& box : aabbs)
-    {
-        if((skip_controller >= 0 && box.controller_index == skip_controller) ||
-           (also_skip_controller >= 0 && box.controller_index == also_skip_controller))
-        {
-            continue;
-        }
-        float t0 = t_min;
-        float t1 = t_max;
-        const float origin_v[3] = {a.x, a.y, a.z};
-        const float dir_v[3] = {dir.x, dir.y, dir.z};
-        const float min_v[3] = {box.min.x, box.min.y, box.min.z};
-        const float max_v[3] = {box.max.x, box.max.y, box.max.z};
-        bool hit = true;
-        for(int axis = 0; axis < 3; ++axis)
-        {
-            if(std::fabs(dir_v[axis]) < 1e-8f)
-            {
-                if(origin_v[axis] < min_v[axis] || origin_v[axis] > max_v[axis])
-                {
-                    hit = false;
-                    break;
-                }
-            }
-            else
-            {
-                const float inv = 1.0f / dir_v[axis];
-                float t_near = (min_v[axis] - origin_v[axis]) * inv;
-                float t_far = (max_v[axis] - origin_v[axis]) * inv;
-                if(t_near > t_far)
-                {
-                    std::swap(t_near, t_far);
-                }
-                t0 = std::max(t0, t_near);
-                t1 = std::min(t1, t_far);
-                if(t0 > t1)
-                {
-                    hit = false;
-                    break;
-                }
-            }
-        }
-        if(hit)
-        {
-            return true;
-        }
-    }
-    for(const OccluderQuad& quad : quads)
-    {
-        if((skip_controller >= 0 && quad.controller_index == skip_controller) ||
-           (also_skip_controller >= 0 && quad.controller_index == also_skip_controller))
-        {
-            continue;
-        }
-        const Vec3 u_axis = {quad.corners[1].x - quad.corners[0].x,
-                             quad.corners[1].y - quad.corners[0].y,
-                             quad.corners[1].z - quad.corners[0].z};
-        const Vec3 v_axis = {quad.corners[3].x - quad.corners[0].x,
-                             quad.corners[3].y - quad.corners[0].y,
-                             quad.corners[3].z - quad.corners[0].z};
-        Vec3 normal = {u_axis.y * v_axis.z - u_axis.z * v_axis.y,
-                       u_axis.z * v_axis.x - u_axis.x * v_axis.z,
-                       u_axis.x * v_axis.y - u_axis.y * v_axis.x};
-        const float normal_len = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-        if(normal_len < 1e-8f)
-        {
-            continue;
-        }
-        normal = {normal.x / normal_len, normal.y / normal_len, normal.z / normal_len};
-        const float denom = dir.x * normal.x + dir.y * normal.y + dir.z * normal.z;
-        if(std::fabs(denom) < 1e-8f)
-        {
-            continue;
-        }
-        const float t_plane = ((quad.corners[0].x - a.x) * normal.x + (quad.corners[0].y - a.y) * normal.y +
-                               (quad.corners[0].z - a.z) * normal.z) /
-                              denom;
-        if(t_plane < t_min || t_plane > t_max)
-        {
-            continue;
-        }
-        const Vec3 hit = {a.x + dir.x * t_plane, a.y + dir.y * t_plane, a.z + dir.z * t_plane};
-        const Vec3 rel = {hit.x - quad.corners[0].x, hit.y - quad.corners[0].y, hit.z - quad.corners[0].z};
-        const float uu = u_axis.x * u_axis.x + u_axis.y * u_axis.y + u_axis.z * u_axis.z;
-        const float vv = v_axis.x * v_axis.x + v_axis.y * v_axis.y + v_axis.z * v_axis.z;
-        if(uu < 1e-10f || vv < 1e-10f)
-        {
-            continue;
-        }
-        const float u = (rel.x * u_axis.x + rel.y * u_axis.y + rel.z * u_axis.z) / uu;
-        const float v = (rel.x * v_axis.x + rel.y * v_axis.y + rel.z * v_axis.z) / vv;
-        constexpr float kPad = 0.02f;
-        if(u >= -kPad && u <= 1.0f + kPad && v >= -kPad && v <= 1.0f + kPad)
-        {
-            return true;
-        }
-    }
-    return false;
+    return SegmentHitsOccluderSet(a, b, aabbs, quads, also_skip_controller, ResolveAabbSpatialIndex(aabbs), nullptr);
 }
 
 float ComputeLedAmbientOcclusion(float led_x,
@@ -367,24 +309,78 @@ float ComputeLedAmbientOcclusion(float led_x,
                                  float led_z,
                                  const std::vector<OccluderAabb>& aabbs,
                                  const std::vector<OccluderQuad>& quads,
-                                 float probe_span)
+                                 float probe_span,
+                                 const OccluderSpatialIndex* aabb_index)
 {
-    static const Vec3 kDirs[6] = {
-        {1.0f, 0.0f, 0.0f},  {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
-        {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},  {0.0f, 0.0f, -1.0f},
-    };
-    const float span = std::max(probe_span, 0.15f);
-    int blocked = 0;
-    for(const Vec3& d : kDirs)
+    const OccluderSpatialIndex* index = aabb_index;
+    if(!index)
     {
-        const Vec3 probe = {led_x + d.x * span, led_y + d.y * span, led_z + d.z * span};
-        if(LedSegmentOccluded(led_x, led_y, led_z, probe.x, probe.y, probe.z, aabbs, quads, -1))
-        {
-            ++blocked;
-        }
+        index = ResolveAabbSpatialIndex(aabbs);
     }
-    const float openness = 1.0f - (static_cast<float>(blocked) / 6.0f);
-    return openness;
+    return ComputeAmbientOcclusion({led_x, led_y, led_z}, aabbs, quads, probe_span, index, nullptr);
+}
+
+float ComputeRoomAmbientShadeFactor(float room_x,
+                                    float room_y,
+                                    float room_z,
+                                    float room_center_x,
+                                    float room_center_y,
+                                    float room_center_z,
+                                    const std::vector<OccluderAabb>& aabbs,
+                                    const std::vector<OccluderQuad>& quads,
+                                    const std::vector<BlockerGridOccluder>& blocker_grids,
+                                    float ao_strength_norm,
+                                    float probe_span,
+                                    const OccluderSpatialIndex* aabb_index)
+{
+    if(aabbs.empty() && quads.empty() && blocker_grids.empty())
+    {
+        return 1.0f;
+    }
+
+    const OccluderSpatialIndex* index = aabb_index;
+    if(!index)
+    {
+        index = ResolveAabbSpatialIndex(aabbs);
+    }
+
+    const std::vector<BlockerGridOccluder>* grids =
+        blocker_grids.empty() ? nullptr : &blocker_grids;
+
+    float shade_factor = 1.0f;
+    const Vec3 led = {room_x, room_y, room_z};
+    const Vec3 center = {room_center_x, room_center_y, room_center_z};
+    if(SegmentHitsOccluderSet(led, center, aabbs, quads, -1, index, grids))
+    {
+        shade_factor *= 0.18f;
+    }
+
+    float effective_ao = ao_strength_norm;
+    if(SpatialRoom::IsRoomGridOverlayPass())
+    {
+        effective_ao = 0.0f;
+    }
+
+    if(effective_ao > 0.01f)
+    {
+        const float openness = ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids);
+        shade_factor *= 1.0f - effective_ao * (1.0f - openness);
+    }
+
+    return shade_factor;
+}
+
+void BuildOccluderAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs,
+                                   const GridContext3D& grid,
+                                   OccluderSpatialIndex& out_index)
+{
+    out_index.Build(aabbs,
+                    grid.min_x,
+                    grid.min_y,
+                    grid.min_z,
+                    grid.max_x,
+                    grid.max_y,
+                    grid.max_z);
 }
 
 Vec3 GridToVec3(float x, float y, float z)
@@ -643,7 +639,6 @@ void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
     if(options.controllers)
     {
         AppendControllerOccluders(aabbs, grid.grid_scale_mm);
-        AppendVirtualControllerBlockerAabbs(aabbs);
     }
 }
 
@@ -727,7 +722,15 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
     float visibility = 1.0f;
     if(scene.shade.use_occlusion && has_occluders && dist > glow_r * 0.2f)
     {
-        visibility = SegmentHitsOccluderSet(led, fire, scene.occluder_aabbs, scene.occluders) ? 0.0f : 1.0f;
+        visibility = SegmentHitsOccluderSet(led,
+                                            fire,
+                                            scene.occluder_aabbs,
+                                            scene.occluders,
+                                            -1,
+                                            scene.occluder_aabb_index,
+                                            scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids)
+                         ? 0.0f
+                         : 1.0f;
     }
 
     emissive *= visibility;
@@ -758,7 +761,12 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
     if(scene.shade.use_occlusion && scene.shade.use_ambient_occlusion && has_occluders &&
        scene.shade.ao_strength > 0.001f)
     {
-        ao = ComputeAmbientOcclusion(led, scene.occluder_aabbs, scene.occluders, scene.shade.ao_probe_span);
+        ao = ComputeAmbientOcclusion(led,
+                                     scene.occluder_aabbs,
+                                     scene.occluders,
+                                     scene.shade.ao_probe_span,
+                                     scene.occluder_aabb_index,
+                                     scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids);
         ao = 1.0f - scene.shade.ao_strength * (1.0f - ao);
     }
 
