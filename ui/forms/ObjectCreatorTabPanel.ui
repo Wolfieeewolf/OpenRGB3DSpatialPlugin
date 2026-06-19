@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ObjectCreatorTabPanel</class>
+ <widget class="QWidget" name="ObjectCreatorTabPanel">
+  <property name="windowTitle">
+   <string>Object Creator</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>4</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="objectTypeLabel">
+     <property name="text">
+      <string>Object Type:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="objectTypeCombo">
+     <property name="minimumSize">
+      <size>
+       <width>240</width>
+       <height>0</height>
+      </size>
+     </property>
+     <item>
+      <property name="text">
+       <string>Select to Create...</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Custom Controller</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Reference Point</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Display Plane</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QStackedWidget" name="contentStack">
+<widget class="QWidget" name="emptyPage">
+  <layout class="QVBoxLayout" name="emptyPageLayout">
+   <item>
+    <widget class="EffectInfoLabel" name="emptyHelpLabel" native="true" />
+   </item>
+   <item>
+    <spacer name="emptyPageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ 
+<widget class="QWidget" name="customPage">
+  <layout class="QVBoxLayout" name="customPageLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="customListLabel">
+     <property name="text">
+      <string>Controller layouts:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="customSubtitleLabel" native="true">
+     <property name="text">
+      <string>Create a grid of LEDs from your physical devices, then add it to the 3D view from the Available Controllers list.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="customControllersList">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>150</height>
+      </size>
+     </property>
+     <property name="toolTip">
+      <string>Select a custom controller to edit or export</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="customControllersEmptyLabel" native="true">
+     <property name="text">
+      <string>No controllers yet. Import .json layouts, copy files into the controllers folder, or create one.</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="createCustomControllerButton">
+     <property name="text">
+      <string>Create New Custom Controller</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="customIoLayout">
+     <item>
+      <widget class="QPushButton" name="importCustomControllerButton">
+       <property name="text">
+        <string>Import…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="exportCustomControllerButton">
+       <property name="text">
+        <string>Export</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="editCustomControllerButton">
+       <property name="text">
+        <string>Edit</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="deleteCustomControllerButton">
+       <property name="text">
+        <string>Delete</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="customPageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ 
+<widget class="QWidget" name="referencePage">
+  <layout class="QVBoxLayout" name="referencePageLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="refListLabel">
+     <property name="text">
+      <string>Reference Points:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="refSubtitleLabel" native="true">
+     <property name="text">
+      <string>Mark positions in the 3D room (e.g. monitor center). Add to the 3D view from Available Controllers.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="referencePointsList">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>150</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="refPointsEmptyLabel" native="true">
+     <property name="text">
+      <string>No reference points yet. Click Create New Reference Point to create one.</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="refHelpLabel" native="true">
+     <property name="text">
+      <string>Select a reference point to position it with the Scene object tab and 3D gizmo. Use Edit to change name, type, and color.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="createReferencePointButton">
+     <property name="text">
+      <string>Create New Reference Point</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="refButtonsRow">
+     <item>
+      <widget class="QPushButton" name="editReferencePointButton">
+       <property name="text">
+        <string>Edit</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="removeRefPointButton">
+       <property name="text">
+        <string>Delete</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="referencePageSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ 
+<widget class="QWidget" name="displayPage">
+  <layout class="QVBoxLayout" name="displayPageLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="displayListLabel">
+     <property name="text">
+      <string>Display Planes:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="displaySubtitleLabel" native="true">
+     <property name="text">
+      <string>Add virtual screens for Screen Mirror and other effects. Add to the 3D view from Available Controllers.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="displayPlanesList">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>200</height>
+      </size>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="uniformItemSizes">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="EffectInfoLabel" name="displayPlanesEmptyLabel" native="true">
+     <property name="text">
+      <string>No display planes yet. Click Create New Display Plane to create one.</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="createDisplayPlaneButton">
+     <property name="text">
+      <string>Create New Display Plane</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="displayButtonsRow">
+     <item>
+      <widget class="QPushButton" name="editDisplayPlaneButton">
+       <property name="text">
+        <string>Edit</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="removeDisplayPlaneButton">
+       <property name="text">
+        <string>Delete</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ 
+    </widget>
+   </item>
+   <item>
+    <spacer name="mainBottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

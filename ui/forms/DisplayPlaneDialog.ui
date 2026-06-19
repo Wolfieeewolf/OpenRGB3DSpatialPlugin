@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DisplayPlaneDialog</class>
+ <widget class="QDialog" name="DisplayPlaneDialog">
+  <property name="windowTitle">
+   <string>Display Plane</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <item>
+    <widget class="EffectInfoLabel" name="panelSizeHintLabel" native="true">
+     <property name="text">
+      <string>Enter the panel width and height in millimeters. Look up your monitor on DisplaySpecifications if you do not know them.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="nameRow">
+     <item>
+      <widget class="QLabel" name="nameCaption">
+       <property name="text">
+        <string>Name:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="nameEdit"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="openSpecsButton">
+     <property name="text">
+      <string>Open DisplaySpecifications.com…</string>
+     </property>
+     <property name="toolTip">
+      <string>Opens https://www.displayspecifications.com in your browser.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="sizeGrid">
+     <property name="horizontalSpacing">
+      <number>8</number>
+     </property>
+     <property name="verticalSpacing">
+      <number>6</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="widthCaption">
+       <property name="text">
+        <string>Width (mm):</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QDoubleSpinBox" name="widthSpin">
+       <property name="toolTip">
+        <string>Visible panel width in millimeters (not bezel or stand).</string>
+       </property>
+       <property name="decimals">
+        <number>1</number>
+       </property>
+       <property name="minimum">
+        <double>50.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>5000.000000000000000</double>
+       </property>
+       <property name="singleStep">
+        <double>10.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="heightCaption">
+       <property name="text">
+        <string>Height (mm):</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QDoubleSpinBox" name="heightSpin">
+       <property name="toolTip">
+        <string>Visible panel height in millimeters (not bezel or stand).</string>
+       </property>
+       <property name="decimals">
+        <number>1</number>
+       </property>
+       <property name="minimum">
+        <double>50.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>5000.000000000000000</double>
+       </property>
+       <property name="singleStep">
+        <double>10.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="captureCaption">
+       <property name="text">
+        <string>Capture Source:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1" colspan="2">
+      <widget class="QComboBox" name="captureCombo">
+       <property name="toolTip">
+        <string>Select which monitor/capture source to use</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QPushButton" name="refreshCaptureButton">
+       <property name="text">
+        <string>Refresh</string>
+       </property>
+       <property name="toolTip">
+        <string>Refresh list of available capture sources</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>DisplayPlaneDialog</receiver>
+   <slot>accept()</slot>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>DisplayPlaneDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

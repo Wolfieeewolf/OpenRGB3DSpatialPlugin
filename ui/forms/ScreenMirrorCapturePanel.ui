@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ScreenMirrorCapturePanel</class>
+ <widget class="QWidget" name="ScreenMirrorCapturePanel">
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="statusGroup">
+     <property name="title">
+      <string>Multi-Monitor Status</string>
+     </property>
+     <layout class="QVBoxLayout" name="statusLayout">
+      <item>
+       <widget class="QLabel" name="statusInfoLabel">
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Uses every active display plane automatically.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="monitorStatusLabel">
+        <property name="text">
+         <string>Calculating...</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="captureGroup">
+     <property name="title">
+      <string>Capture Quality</string>
+     </property>
+     <layout class="QVBoxLayout" name="captureLayout">
+      <item>
+       <layout class="QHBoxLayout" name="qualityRow">
+        <item>
+         <widget class="QLabel" name="qualityCaption">
+          <property name="text">
+           <string>Resolution:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="captureQualityCombo">
+          <property name="toolTip">
+           <string>Downscaled capture size before color extraction. Higher = sharper, heavier CPU/GPU/RAM.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="backendRow">
+        <item>
+         <widget class="QLabel" name="backendCaption">
+          <property name="text">
+           <string>Capture API:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="captureBackendCombo">
+          <property name="toolTip">
+           <string>Windows: Auto uses GDI when DXGI stalls (static pages). Lock DXGI or GDI to reduce API-mix flicker. DXGI-only skips BitBlt (idle desktop may barely update). No effect on Linux/macOS.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

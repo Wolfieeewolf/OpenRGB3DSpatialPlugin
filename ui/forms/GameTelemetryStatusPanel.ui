@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GameTelemetryStatusPanel</class>
+ <widget class="QGroupBox" name="GameTelemetryStatusPanel">
+  <property name="title">
+   <string>Game telemetry (UDP)</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <widget class="EffectInfoLabel" name="helpLabel" native="true">
+     <property name="text">
+      <string>Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. You do not need a separate 'OpenRGB server' for this. Enable the 3D Spatial plugin; counters should increase while the game runs with the sender mod.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string>Listener: waiting</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="countersLabel">
+     <property name="text">
+      <string>Packets 0 | Valid 0 | Errors 0</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EffectInfoLabel</class>
+   <extends>QWidget</extends>
+   <header>EffectInfoLabel.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

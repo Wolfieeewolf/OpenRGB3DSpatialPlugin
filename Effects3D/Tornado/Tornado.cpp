@@ -1,0 +1,272 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "Tornado.h"
+#include "SpatialKernelColormap.h"
+#include "SpatialLayerCore.h"
+#include "EffectUiRows.h"
+#include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+REGISTER_EFFECT_3D(Tornado);
+
+Tornado::Tornado(QWidget* parent) : SpatialEffect3D(parent)
+{
+    core_radius_slider = nullptr;
+    height_slider      = nullptr;
+    core_radius = 80;
+    tornado_height = 250;
+    SetRainbowMode(true);
+    SetFrequency(50);
+}
+
+Tornado::~Tornado() = default;
+
+EffectInfo3D Tornado::GetEffectInfo() const
+{
+    EffectInfo3D info;
+    info.info_version = 3;
+    info.effect_name = "Tornado";
+    info.effect_description = "Spinning vortex; optional floor/mid/ceiling band tuning (speed, tightness, phase)";
+    info.category = "Spatial";
+    info.effect_type = SPATIAL_EFFECT_TORNADO;
+    info.is_reversible = true;
+    info.supports_random = true;
+    info.max_speed = 100;
+    info.min_speed = 1;
+    info.user_colors = 0;
+    info.has_custom_settings = true;
+    info.needs_3d_origin = true;
+    info.needs_direction = false;
+    info.needs_thickness = false;
+    info.needs_arms = false;
+    info.needs_frequency = true;
+
+    info.default_speed_scale = 25.0f;
+    info.default_frequency_scale = 6.0f;
+    info.use_size_parameter = true;
+
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = true;
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_color_controls = true;
+
+    info.supports_height_bands = true;
+    info.supports_strip_colormap = true;
+
+    return info;
+}
+
+void Tornado::SetupCustomUI(QWidget* parent)
+{
+    QWidget* w = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(w);
+    layout->setContentsMargins(0, 0, 0, 0);
+    const auto on_changed = [this]() { emit ParametersChanged(); };
+
+    EffectSliderRow* core_radius_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Core Radius:"),
+        20,
+        300,
+        (int)core_radius,
+        QStringLiteral("Tornado core radius (affects base funnel size)"));
+    core_radius_row->setObjectName(QStringLiteral("coreRadiusRow"));
+    core_radius_slider = core_radius_row->slider();
+    core_radius_row->bindValueChanged(
+        this,
+        [this](int v) { core_radius = (unsigned int)v; },
+        [](int v) { return QString::number(v); },
+        on_changed);
+
+    EffectSliderRow* height_row = EffectUiRows::AppendSliderRow(
+        layout,
+        QStringLiteral("Height:"),
+        50,
+        500,
+        (int)tornado_height,
+        QStringLiteral("Tornado height (relative to room height)"));
+    height_row->setObjectName(QStringLiteral("heightRow"));
+    height_slider = height_row->slider();
+    height_row->bindValueChanged(
+        this,
+        [this](int v) { tornado_height = (unsigned int)v; },
+        [](int v) { return QString::number(v); },
+        on_changed);
+
+    AddWidgetToParent(w, parent);
+}
+
+void Tornado::UpdateParams(SpatialEffectParams& params)
+{
+    params.type = SPATIAL_EFFECT_TORNADO;
+}
+
+void Tornado::OnTornadoParameterChanged()
+{
+    if(core_radius_slider)
+    {
+        core_radius = (unsigned int)core_radius_slider->value();
+    }
+    if(height_slider)
+    {
+        tornado_height = (unsigned int)height_slider->value();
+    }
+    emit ParametersChanged();
+}
+
+RGBColor Tornado::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    if(EffectGridSampleOutsideVolume(x, y, z, grid))
+    {
+        return 0x00000000;
+    }
+    Vector3D origin = GetEffectOriginGrid(grid);
+
+    float speed = GetScaledSpeed();
+    float rate = GetScaledFrequency();
+    float detail = std::max(0.05f, GetScaledDetail());
+    float size_m = GetNormalizedSize();
+    float progress = CalculateProgress(time);
+
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_y = rotated_pos.y - origin.y;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    float axial = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+    SpatialLayerCore::MapperSettings strat_st;
+    EffectStratumBlend::InitStratumBreaks(strat_st);
+    float swt[3];
+    EffectStratumBlend::WeightsForYNorm(axial, strat_st, swt);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), swt, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(swt, grid, x, y, z, origin, time);
+
+    float progress_e = progress * bb.speed_mul;
+    float detail_e = detail * bb.tight_mul;
+
+    float height_center = 0.5f;
+    float height_range_val = (tornado_height / 500.0f) * 0.5f;
+    float h_norm = fmax(0.0f, fmin(1.0f, (axial - (height_center - height_range_val)) / (2.0f * height_range_val + 0.0001f)));
+    EffectGridAxisHalfExtents ex = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float base_radius = std::max(ex.hw, ex.hd);
+    float core_scale = 0.04f + (core_radius / 300.0f) * 0.56f;
+    constexpr float kTornadoGridFill = 2.5f;
+    float funnel_radius = (base_radius * core_scale) * (0.6f + 0.4f * h_norm) * size_m * kTornadoGridFill;
+
+    float a = atan2f(rot_rel_z, rot_rel_x);
+    float rad = sqrtf(rot_rel_x*rot_rel_x + rot_rel_z*rot_rel_z);
+    float along = rot_rel_y;
+    float swirl = a + along * (0.015f * detail_e) - time * speed * 0.25f * bb.speed_mul +
+        EffectStratumBlend::ApplyMotionToAngleRad(EffectStratumBlend::PhaseShiftRad(bb), stratum_mot01);
+
+    float ring = fabsf(rad - funnel_radius);
+    float thickness_base = (ex.hw + ex.hd) * 0.01f;
+    float ring_thickness = thickness_base * (0.6f + 1.2f * size_m);
+    float ring_intensity = fmax(0.0f, 1.0f - ring / ring_thickness);
+
+    float arms = 4.0f + 4.0f * size_m;
+    float band = 0.5f * (1.0f + cosf(swirl * arms));
+    float band2 = 0.2f * (1.0f + cosf(swirl * arms * 2.0f + progress_e));
+    band = fmin(1.0f, band + band2);
+
+    float y_fade = fmax(0.0f, 1.0f - fabsf(axial - 0.5f) / (height_range_val + 0.001f));
+    
+    float radial_glow = 0.15f * (1.0f - fmin(1.0f, rad / (funnel_radius * 3.0f)));
+
+    float intensity = ring_intensity * (0.5f + 0.5f * band) * y_fade + radial_glow;
+    intensity = fmax(0.0f, fmin(1.0f, intensity));
+
+    SpatialLayerCore::Basis compass_basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), compass_basis);
+    SpatialLayerCore::MapperSettings compass_map;
+    EffectStratumBlend::InitStratumBreaks(compass_map);
+    compass_map.blend_softness =
+        std::clamp(0.09f + 0.04f * (1.0f - detail), 0.05f, 0.20f);
+    compass_map.center_size = std::clamp(0.10f + 0.20f * size_m, 0.06f, 0.50f);
+    compass_map.directional_sharpness = std::clamp(1.0f + detail * 0.1f, 0.85f, 2.3f);
+
+    SpatialLayerCore::SamplePoint sp{};
+    sp.grid_x = x;
+    sp.grid_y = y;
+    sp.grid_z = z;
+    sp.origin_x = origin.x;
+    sp.origin_y = origin.y;
+    sp.origin_z = origin.z;
+    sp.y_norm = axial;
+
+    const float phase01 = std::fmod(progress_e * 0.25f + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(UseEffectStripColormap())
+    {
+        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                                 GetEffectStripColormapRepeats(),
+                                                 GetEffectStripColormapUnfold(),
+                                                 GetEffectStripColormapDirectionDeg(),
+                                                 phase01,
+                                                 time,
+                                                 grid,
+                                                 size_m,
+                                                 origin,
+                                                 rotated_pos);
+    }
+
+    RGBColor final_color;
+    if(GetRainbowMode())
+    {
+        float hue =
+            200.0f + swirl * 57.2958f * 0.2f + h_norm * 80.0f + time * rate * 12.0f * bb.speed_mul;
+        if(UseEffectStripColormap())
+            hue = strip_p01 * 360.0f + time * rate * 12.0f * bb.speed_mul;
+        hue = ApplySpatialRainbowHue(hue, std::clamp(h_norm, 0.0f, 1.0f), compass_basis, sp, compass_map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float pos = fmodf(0.5f + 0.5f * intensity + time * rate * 0.02f * bb.speed_mul, 1.0f);
+        if(UseEffectStripColormap())
+            pos = strip_p01;
+        if(pos < 0.0f) pos += 1.0f;
+        float p = ApplySpatialPalette01(pos, compass_basis, sp, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
+    }
+
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    r = (unsigned char)(r * intensity);
+    g = (unsigned char)(g * intensity);
+    b = (unsigned char)(b * intensity);
+    return (b << 16) | (g << 8) | r;
+}
+
+nlohmann::json Tornado::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["core_radius"] = core_radius;
+    j["tornado_height"] = tornado_height;
+    return j;
+}
+
+void Tornado::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("core_radius")) core_radius = settings["core_radius"];
+    if(settings.contains("tornado_height")) tornado_height = settings["tornado_height"];
+    if(core_radius_slider) core_radius_slider->setValue(core_radius);
+    if(height_slider) height_slider->setValue(tornado_height);
+}

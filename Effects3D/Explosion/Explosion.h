@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#ifndef Explosion_H
+#define Explosion_H
+
+#include "SpatialEffect3D.h"
+#include "EffectRegisterer3D.h"
+#include "EffectStratumBlend.h"
+
+class QCheckBox;
+class QComboBox;
+class QSlider;
+class QSpinBox;
+class Explosion : public SpatialEffect3D
+{
+    Q_OBJECT
+
+public:
+    explicit Explosion(QWidget* parent = nullptr);
+    ~Explosion() override = default;
+
+    EFFECT_REGISTERER_3D("Explosion", "Explosion", "Spatial", [](){ return new Explosion; });
+
+    static std::string const ClassName() { return "Explosion"; }
+    static std::string const UIName() { return "Explosion"; }
+
+    EffectInfo3D GetEffectInfo() const override;
+    void SetupCustomUI(QWidget* parent) override;
+    void UpdateParams(SpatialEffectParams& params) override;
+    RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
+
+    nlohmann::json SaveSettings() const override;
+    void LoadSettings(const nlohmann::json& settings) override;
+
+private slots:
+    void OnExplosionParameterChanged();
+private:
+    static float explosionHash(unsigned int seed, unsigned int salt);
+    float particleDebrisAt(float x, float y, float z, float burst_phase, float distance, float radius, int type_id) const;
+
+    QSlider*   intensity_slider = nullptr;
+    QComboBox* type_combo       = nullptr;
+    QSpinBox*  burst_count_spin = nullptr;
+    QCheckBox* loop_check       = nullptr;
+    QSlider*   particle_slider  = nullptr;
+
+    unsigned int    explosion_intensity;
+    float           progress;
+    int             explosion_type;
+    int             burst_count;      
+    bool            loop;
+    int             particle_amount;  
+    static constexpr float CYCLE_DURATION = 2.5f;
+};
+
+#endif

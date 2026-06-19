@@ -1,0 +1,413 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "Spiral.h"
+#include "SpatialKernelColormap.h"
+#include "EffectStratumBlend.h"
+#include "SpatialLayerCore.h"
+
+REGISTER_EFFECT_3D(Spiral);
+#include <algorithm>
+#include <QComboBox>
+#include "EffectUiRows.h"
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+Spiral::Spiral(QWidget* parent) : SpatialEffect3D(parent)
+{
+    arms_slider    = nullptr;
+    pattern_combo  = nullptr;
+    gap_slider     = nullptr;
+    num_arms = 3;
+    pattern_type = 0;
+    gap_size = 30;
+    progress = 0.0f;
+
+    SetFrequency(50);
+    SetRainbowMode(true);
+
+    std::vector<RGBColor> default_colors;
+    default_colors.push_back(0x000000FF);
+    default_colors.push_back(0x0000FF00);
+    default_colors.push_back(0x00FF0000);
+    SetColors(default_colors);
+}
+
+Spiral::~Spiral() = default;
+
+EffectInfo3D Spiral::GetEffectInfo() const
+{
+    EffectInfo3D info;
+    info.info_version = 3;
+    info.effect_name = "Spiral";
+    info.effect_description = "Spiral pattern with arms/gap; optional per-height-band speed, tightness, and phase";
+    info.category = "Spatial";
+    info.effect_type = SPATIAL_EFFECT_SPIRAL;
+    info.is_reversible = true;
+    info.supports_random = false;
+    info.max_speed = 100;
+    info.min_speed = 1;
+    info.user_colors = 2;
+    info.has_custom_settings = true;
+    info.needs_3d_origin = false;
+    info.needs_direction = false;
+    info.needs_thickness = false;
+    info.needs_arms = true;
+    info.needs_frequency = false;
+
+    info.default_speed_scale = 35.0f;
+    info.default_frequency_scale = 40.0f;
+    info.use_size_parameter = true;
+
+    info.show_speed_control = true;
+    info.show_brightness_control = true;
+    info.show_frequency_control = true;
+    info.show_size_control = true;
+    info.show_scale_control = true;
+    info.show_color_controls = true;
+
+    info.supports_strip_colormap = true;
+    info.supports_height_bands = true;
+
+    return info;
+}
+
+void Spiral::SetupCustomUI(QWidget* parent)
+{
+    QWidget* w = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(w);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    EffectLabeledComboRow* pattern_row = EffectUiRows::AppendComboRow(layout, QStringLiteral("Pattern:"));
+    pattern_row->setObjectName(QStringLiteral("patternRow"));
+    pattern_combo = pattern_row->combo();
+    pattern_combo->addItem(QStringLiteral("Smooth Spiral"));
+    pattern_combo->addItem(QStringLiteral("Pinwheel"));
+    pattern_combo->addItem(QStringLiteral("Sharp Blades"));
+    pattern_combo->addItem(QStringLiteral("Swirl Circles"));
+    pattern_combo->addItem(QStringLiteral("Hypnotic"));
+    pattern_combo->addItem(QStringLiteral("Simple Spin"));
+    pattern_combo->setCurrentIndex(std::clamp(pattern_type, 0, kSpiralPatternCount - 1));
+    pattern_combo->setToolTip(QStringLiteral(
+        "Spiral field recipe (changes both shape and rainbow hue layout). "
+        "Arms and Gap matter for pinwheel and blade styles; use Scale and zone bounds on sparse layouts."));
+    pattern_combo->setItemData(0, QStringLiteral("Classic logarithmic spiral—smooth color roll-off."), Qt::ToolTipRole);
+    pattern_combo->setItemData(1, QStringLiteral("Radial wedges like a pinwheel; pair with Arms."), Qt::ToolTipRole);
+    pattern_combo->setItemData(2, QStringLiteral("High-contrast blades; Gap Size sets dark spacing."), Qt::ToolTipRole);
+    pattern_combo->setItemData(3, QStringLiteral("Concentric rings with twist—strong center read."), Qt::ToolTipRole);
+    pattern_combo->setItemData(4, QStringLiteral("Multi-frequency twist; busy, hypnotic motion."), Qt::ToolTipRole);
+    pattern_combo->setItemData(5, QStringLiteral("Lightweight angular spin—fewer features, very legible."), Qt::ToolTipRole);
+    pattern_type = pattern_combo->currentIndex();
+    connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Spiral::OnSpiralParameterChanged);
+
+    EffectSliderRow* arms_row = EffectUiRows::AppendSliderRow(
+        layout, QStringLiteral("Arms:"), 2, 8, (int)num_arms, QStringLiteral("Number of spiral arms"));
+    arms_row->setObjectName(QStringLiteral("armsRow"));
+    arms_slider = arms_row->slider();
+    arms_row->bindValueChanged(
+        this,
+        [this](int v) {
+            num_arms = (unsigned int)v;
+            OnSpiralParameterChanged();
+        },
+        [](int v) { return QString::number(v); },
+        nullptr);
+
+    EffectSliderRow* gap_row = EffectUiRows::AppendSliderRow(
+        layout, QStringLiteral("Gap Size:"), 10, 80, (int)gap_size, QStringLiteral("Gap size between blades"));
+    gap_row->setObjectName(QStringLiteral("gapRow"));
+    gap_slider = gap_row->slider();
+    gap_row->bindValueChanged(
+        this,
+        [this](int v) {
+            gap_size = (unsigned int)v;
+            OnSpiralParameterChanged();
+        },
+        [](int v) { return QString::number(v); },
+        nullptr);
+
+    AddWidgetToParent(w, parent);
+}
+
+void Spiral::UpdateParams(SpatialEffectParams& params)
+{
+    params.type = SPATIAL_EFFECT_SPIRAL;
+}
+
+void Spiral::OnSpiralParameterChanged()
+{
+    if(pattern_combo)
+        pattern_type = std::clamp(pattern_combo->currentIndex(), 0, kSpiralPatternCount - 1);
+    if(arms_slider)
+        num_arms = (unsigned int)arms_slider->value();
+    if(gap_slider)
+        gap_size = (unsigned int)gap_slider->value();
+    emit ParametersChanged();
+}
+
+RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
+{
+    Vector3D origin = GetEffectOriginGrid(grid);
+    float rel_x = x - origin.x;
+    float rel_y = y - origin.y;
+    float rel_z = z - origin.z;
+
+    if(!IsWithinEffectBoundary(rel_x, rel_y, rel_z, grid))
+    {
+        return 0x00000000;
+    }
+
+    float rate = GetScaledFrequency();
+    float detail = std::max(0.05f, GetScaledDetail());
+    progress = CalculateProgress(time);
+
+    float size_multiplier = GetNormalizedSize();
+
+    Vector3D rotated_pos = TransformPointByRotation(x, y, z, origin);
+    float rot_rel_x = rotated_pos.x - origin.x;
+    float rot_rel_z = rotated_pos.z - origin.z;
+
+    float angle = atan2(rot_rel_z, rot_rel_x);
+    EffectGridAxisHalfExtents ex = MakeEffectGridAxisHalfExtents(grid, GetNormalizedScale());
+    float r_xz = EffectGridHorizontalRadialNormXZ(rot_rel_x, rot_rel_z, ex.hw, ex.hd);
+    float norm_radius = EffectGridHorizontalRadialNorm01(r_xz);
+    norm_radius = fmaxf(0.0f, fminf(1.0f, norm_radius));
+
+    float norm_twist = NormalizeGridAxis01(rotated_pos.y, grid.min_y, grid.max_y);
+
+    SpatialLayerCore::MapperSettings strat_map;
+    EffectStratumBlend::InitStratumBreaks(strat_map);
+    float sw[3];
+    EffectStratumBlend::WeightsForYNorm(norm_twist, strat_map, sw);
+    const EffectStratumBlend::BandBlendScalars bb =
+        EffectStratumBlend::BlendBands(GetStratumLayoutMode(), sw, GetStratumTuning());
+    const float stratum_mot01 =
+        ComputeStratumMotion01(sw, grid, x, y, z, origin, time);
+    float spd_mul = bb.speed_mul;
+    float tight_mul = bb.tight_mul;
+
+    const float detail_e = detail * tight_mul;
+    const float rate_e = rate * spd_mul;
+    const float progress_e = progress * spd_mul;
+    const float freq_scale_e = detail_e * 0.15f / fmax(0.1f, size_multiplier);
+    float z_twist = norm_twist * (0.35f + 0.25f * detail_e);
+    float spiral_angle =
+        angle * (float)num_arms + norm_radius * (detail_e * 6.5f) + z_twist - progress_e * 1.35f;
+    spiral_angle += EffectStratumBlend::PhaseShiftRad(bb);
+    spiral_angle += stratum_mot01 * 6.2831853f * 0.55f;
+
+    float spiral_value;
+    float gap_factor = gap_size / 100.0f;
+
+    switch(pattern_type)
+    {
+        case 0:
+            spiral_value = sin(spiral_angle) * (1.0f + 0.4f * cos(norm_twist * freq_scale_e * 3.0f + progress_e * 0.7f));
+            spiral_value += 0.3f * cos(spiral_angle * 0.5f + norm_twist * freq_scale_e * 4.5f + progress_e * 1.2f);
+            spiral_value = (spiral_value + 1.5f) / 3.0f;
+            spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            break;
+        case 1:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = arm_angle / blade_width;
+                    spiral_value = 0.5f + 0.5f * cos(blade_position * 3.14159f);
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
+                spiral_value = spiral_value * radial_fade + 0.1f * radial_fade;
+            }
+            break;
+        case 2:
+            {
+                float arm_angle = fmod(spiral_angle, 6.28318f / num_arms);
+                if(arm_angle < 0) arm_angle += 6.28318f / num_arms;
+                float blade_width = (1.0f - gap_factor) * (6.28318f / num_arms);
+                if(arm_angle < blade_width)
+                {
+                    float blade_position = fabs(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    spiral_value = 1.0f - blade_position * blade_position;
+                }
+                else
+                {
+                    spiral_value = 0.0f;
+                }
+                float energy_pulse = 0.2f * sin(norm_radius * (detail_e * 1.2f) - progress_e * 2.0f);
+                spiral_value = fmax(0.0f, spiral_value + energy_pulse);
+                float radial_fade = 0.4f + 0.6f * (1.0f - exp(-norm_radius * (detail_e * 0.8f)));
+                spiral_value *= radial_fade;
+            }
+            break;
+        case 3:
+            {
+                float circle_angle = atan2(rot_rel_z, rot_rel_x) + progress_e * 2.0f;
+                float ring_phase = norm_radius * (detail_e * 8.0f) * (float)num_arms - circle_angle * (float)num_arms;
+                spiral_value = 0.5f + 0.5f * sin(ring_phase) * (1.0f - norm_radius * 0.3f);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 4:
+            {
+                float hyp_angle = atan2(rot_rel_z, rot_rel_x) - progress_e * 3.0f;
+                float hyp_radius = norm_radius * (detail_e * 4.0f);
+                spiral_value = 0.5f + 0.5f * sin(hyp_angle * 2.0f + hyp_radius - progress_e * 2.0f) * cos(norm_twist * freq_scale_e * 3.0f + progress_e);
+                spiral_value = fmax(0.0f, fmin(1.0f, spiral_value));
+            }
+            break;
+        case 5:
+            {
+                float period = 6.28318f / (float)num_arms;
+                float arm_angle = fmod(spiral_angle, period);
+                if(arm_angle < 0.0f) arm_angle += period;
+                float blade_width = 0.4f * period;
+                float blade_core = (arm_angle < blade_width) ? (1.0f - arm_angle / blade_width) : 0.0f;
+                float blade_glow = 0.0f;
+                if(arm_angle < blade_width * 1.5f)
+                {
+                    float glow_dist = fabsf(arm_angle - blade_width * 0.5f) / (blade_width * 0.5f);
+                    blade_glow = 0.3f * (1.0f - glow_dist);
+                }
+                spiral_value = fmin(1.0f, blade_core + blade_glow);
+                float radial_fade = 0.35f + 0.65f * (1.0f - fmin(1.0f, norm_radius) * 0.6f);
+                spiral_value = spiral_value * radial_fade + 0.08f * radial_fade;
+            }
+            break;
+        default:
+            spiral_value = 0.5f;
+            break;
+    }
+
+    const float phase01 =
+        std::fmod(progress_e * 0.25f + EffectStratumBlend::CombinedPhase01(bb, stratum_mot01) + 1.0f, 1.0f);
+    float strip_p01 = 0.0f;
+    if(UseEffectStripColormap())
+    {
+        strip_p01 = SampleStripKernelPalette01(GetEffectStripColormapKernel(),
+                                               GetEffectStripColormapRepeats(),
+                                               GetEffectStripColormapUnfold(),
+                                               GetEffectStripColormapDirectionDeg(),
+                                               phase01,
+                                               time,
+                                               grid,
+                                               size_multiplier,
+                                               origin,
+                                               rotated_pos);
+    }
+
+    SpatialLayerCore::Basis compass_basis;
+    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), compass_basis);
+    SpatialLayerCore::MapperSettings compass_map;
+    compass_map.floor_end = 0.30f;
+    compass_map.desk_end = 0.55f;
+    compass_map.upper_end = 0.78f;
+    compass_map.blend_softness =
+        std::clamp(0.08f + 0.05f * (1.0f - detail), 0.05f, 0.20f);
+    compass_map.center_size = std::clamp(0.10f + 0.22f * size_multiplier, 0.06f, 0.50f);
+    compass_map.directional_sharpness = std::clamp(1.0f + detail * 0.15f, 0.85f, 2.4f);
+
+    SpatialLayerCore::SamplePoint compass_sample{};
+    compass_sample.grid_x = x;
+    compass_sample.grid_y = y;
+    compass_sample.grid_z = z;
+    compass_sample.origin_x = origin.x;
+    compass_sample.origin_y = origin.y;
+    compass_sample.origin_z = origin.z;
+    compass_sample.y_norm = norm_twist;
+
+    RGBColor final_color;
+    if(UseEffectStripColormap())
+    {
+        float textured_p01 = std::fmod(strip_p01 + spiral_value * 0.35f + 1.0f, 1.0f);
+        float p01v = ApplyVoxelDriveToPalette01(textured_p01, x, y, z, time, grid);
+        final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
+                                                   rate_e * 12.0f);
+    }
+    else if((pattern_type == 1 || pattern_type == 2 || pattern_type == 5) && !GetRainbowMode())
+    {
+        float arm_index = fmod(spiral_angle / (6.28318f / num_arms), (float)num_arms);
+        if(arm_index < 0) arm_index += num_arms;
+        float pos = fmodf((arm_index / (float)num_arms) + time * rate_e * 0.02f, 1.0f);
+        if(pos < 0.0f) pos += 1.0f;
+        float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
+    }
+    else if(GetRainbowMode())
+    {
+        float hue = spiral_angle * 57.2958f + spiral_value * 200.0f + norm_twist * 40.0f + time * rate_e * 12.0f;
+        hue = ApplySpatialRainbowHue(hue, fmodf(spiral_value + 0.25f, 1.0f), compass_basis, compass_sample, compass_map, time, &grid);
+        float p01 = std::fmod(hue / 360.0f, 1.0f);
+        if(p01 < 0.0f)
+        {
+            p01 += 1.0f;
+        }
+        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        final_color = GetRainbowColor(p01 * 360.0f);
+    }
+    else
+    {
+        float pos = fmodf(spiral_value + time * rate_e * 0.02f, 1.0f);
+        if(pos < 0.0f) pos += 1.0f;
+        float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
+        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
+        final_color = GetColorAtPosition(p);
+    }
+
+    float spiral_mask = std::clamp(spiral_value, 0.0f, 1.0f);
+    spiral_mask = std::pow(spiral_mask, 0.85f);
+
+    unsigned char r = final_color & 0xFF;
+    unsigned char g = (final_color >> 8) & 0xFF;
+    unsigned char b = (final_color >> 16) & 0xFF;
+    r = (unsigned char)std::clamp((int)std::lround((float)r * spiral_mask), 0, 255);
+    g = (unsigned char)std::clamp((int)std::lround((float)g * spiral_mask), 0, 255);
+    b = (unsigned char)std::clamp((int)std::lround((float)b * spiral_mask), 0, 255);
+    return (b << 16) | (g << 8) | r;
+}
+
+nlohmann::json Spiral::SaveSettings() const
+{
+    nlohmann::json j = SpatialEffect3D::SaveSettings();
+    j["num_arms"] = num_arms;
+    j["pattern_type"] = pattern_type;
+    j["gap_size"] = gap_size;
+    return j;
+}
+
+void Spiral::LoadSettings(const nlohmann::json& settings)
+{
+    SpatialEffect3D::LoadSettings(settings);
+    if(settings.contains("num_arms"))
+    {
+        num_arms = settings["num_arms"].get<unsigned int>();
+        if(arms_slider)
+        {
+            arms_slider->setValue((int)num_arms);
+        }
+    }
+    if(settings.contains("pattern_type") && settings["pattern_type"].is_number_integer())
+    {
+        pattern_type = std::clamp(settings["pattern_type"].get<int>(), 0, kSpiralPatternCount - 1);
+        if(pattern_combo)
+        {
+            pattern_combo->setCurrentIndex(pattern_type);
+        }
+    }
+    if(settings.contains("gap_size"))
+    {
+        gap_size = settings["gap_size"].get<unsigned int>();
+        if(gap_slider)
+        {
+            gap_slider->setValue((int)gap_size);
+        }
+    }
+}

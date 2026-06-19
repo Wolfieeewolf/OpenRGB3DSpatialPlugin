@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EffectMotionPanel</class>
+ <widget class="QWidget" name="EffectMotionPanel">
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="speedRow">
+     <item>
+      <widget class="QLabel" name="speedCaption">
+       <property name="text">
+        <string>Speed:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="speedSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Effect animation speed (uses logarithmic curve for smooth control)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="speedLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="brightnessRow">
+     <item>
+      <widget class="QLabel" name="brightnessCaption">
+       <property name="text">
+        <string>Brightness:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="brightnessSlider">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>100</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Overall effect brightness (applied after intensity/sharpness)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="brightnessLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="frequencyRow">
+     <item>
+      <widget class="QLabel" name="frequencyCaption">
+       <property name="text">
+        <string>Frequency:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="frequencySlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Temporal rate (pattern motion and color cycles). When a layer exposes Room &amp; voxel mapping and Compass mode is on, this also speeds compass-based palette scrolling.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="frequencyLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="detailRow">
+     <item>
+      <widget class="QLabel" name="detailCaption">
+       <property name="text">
+        <string>Detail:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="detailSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Spatial detail (higher = more pattern/color detail across space)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="detailLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="sizeRow">
+     <item>
+      <widget class="QLabel" name="sizeCaption">
+       <property name="text">
+        <string>Size:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="sizeSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Spatial scale (bigger = larger features / wider bands)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="sizeLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="scaleRow">
+     <item>
+      <widget class="QLabel" name="scaleCaption">
+       <property name="text">
+        <string>Scale:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="scaleSlider">
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>300</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Effect coverage: 0-200 = 0-100% of room (200=fill grid), 201-300 = 101-200% (beyond room)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="scaleLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="scaleInvertCheck">
+       <property name="text">
+        <string>Invert</string>
+       </property>
+       <property name="toolTip">
+        <string>Collapse effect toward the reference point instead of expanding outward.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="fpsRow">
+     <item>
+      <widget class="QLabel" name="fpsCaption">
+       <property name="text">
+        <string>FPS:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="fpsSlider">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>120</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="toolTip">
+        <string>Effect refresh rate (1–120 Hz). When an effect is running, the plugin timer uses this layer’s value (single effect) or the maximum across enabled stack layers so motion stays smooth.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="fpsLabel">
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

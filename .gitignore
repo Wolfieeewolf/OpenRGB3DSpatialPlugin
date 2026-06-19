@@ -1,0 +1,63 @@
+# Documentation is local-only in this fork
+docs/
+
+# Build directories
+build/
+debug/
+release/
+
+# aqtinstall (local Qt install / CI)
+aqtinstall.log
+aqtinstall*.log
+_intermediate_debug/
+_intermediate_release/
+
+# qmake run in repository root (prefer a dedicated build/ directory)
+/Makefile
+/Makefile.*
+/.qmake.stash
+
+# Qt files
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.autosave
+
+# Object files
+*.o
+*.obj
+
+# Libraries
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+.qtcreator/
+.cursor/
+.cursorignore
+**/.qtc_clangd/
+*.swp
+*.swo
+*~
+
+# Gradle (MinecraftSenderMod)
+MinecraftSenderMod/**/.gradle/
+MinecraftSenderMod/**/build/
