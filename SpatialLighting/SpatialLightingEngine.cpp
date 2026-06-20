@@ -13,7 +13,6 @@
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
 #include "LEDPosition3D.h"
-#include "VirtualController3D.h"
 
 #include <algorithm>
 #include <cmath>
@@ -463,52 +462,6 @@ static void PushControllerAabbFromPoints(std::vector<OccluderAabb>& out,
     out.push_back(box);
 }
 
-void AppendCustomControllerLightBlockerAabbs(std::vector<OccluderAabb>& out,
-                                           ::ControllerTransform* ctrl,
-                                           int controller_index)
-{
-    if(!ctrl || !ctrl->virtual_controller)
-    {
-        return;
-    }
-
-    VirtualController3D* layout = ctrl->virtual_controller;
-    const std::vector<CustomControllerLightBlocker>& blockers = layout->GetLightBlockers();
-    if(blockers.empty())
-    {
-        return;
-    }
-
-    if(ctrl->world_positions_dirty)
-    {
-        ControllerLayout3D::UpdateWorldPositions(ctrl);
-    }
-
-    const Vector3D center_offset = ControllerLocalCenterOffset(ctrl);
-
-    for(const CustomControllerLightBlocker& blocker : blockers)
-    {
-        Vector3D local_min{};
-        Vector3D local_max{};
-        layout->CellLocalBoundsMm(blocker.x, blocker.y, blocker.z, &local_min, &local_max);
-
-        const Vector3D local_corners[4] = {
-            {local_min.x, local_min.y, local_max.z},
-            {local_max.x, local_min.y, local_max.z},
-            {local_min.x, local_max.y, local_max.z},
-            {local_max.x, local_max.y, local_max.z},
-        };
-
-        Vec3 world_corners[4];
-        for(int i = 0; i < 4; ++i)
-        {
-            world_corners[i] = ControllerLocalToWorld(ctrl, local_corners[i], center_offset);
-        }
-
-        PushControllerAabbFromPoints(out, controller_index, world_corners, 4);
-    }
-}
-
 void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_mm)
 {
     const std::vector<std::unique_ptr<::ControllerTransform>>* transforms =
@@ -592,26 +545,6 @@ void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_
         }
 
         PushControllerAabbFromPoints(out, tag, world_corners, 8);
-    }
-}
-
-static void AppendVirtualControllerBlockerAabbs(std::vector<OccluderAabb>& out)
-{
-    const std::vector<std::unique_ptr<::ControllerTransform>>* transforms =
-        SpatialLightingSceneProvider::instance()->controllers();
-    if(!transforms)
-    {
-        return;
-    }
-
-    for(size_t ctrl_index = 0; ctrl_index < transforms->size(); ++ctrl_index)
-    {
-        ::ControllerTransform* ctrl = (*transforms)[ctrl_index].get();
-        if(!ctrl || ctrl->hidden_by_virtual || !ctrl->virtual_controller)
-        {
-            continue;
-        }
-        AppendCustomControllerLightBlockerAabbs(out, ctrl, static_cast<int>(ctrl_index));
     }
 }
 

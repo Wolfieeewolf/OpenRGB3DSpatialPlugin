@@ -111,10 +111,6 @@ void AppendRoomWallOccluders(std::vector<OccluderQuad>& out,
 
 void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_mm);
 
-void AppendCustomControllerLightBlockerAabbs(std::vector<OccluderAabb>& out,
-                                           ::ControllerTransform* ctrl,
-                                           int controller_index);
-
 void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
                            std::vector<OccluderAabb>& aabbs,
                            const GridContext3D& grid,
