@@ -177,6 +177,13 @@ private:
     void focusSelectionFromKeyboard();
     void resetCameraFromKeyboard();
     void clearCameraDragState();
+    void getRoomTurntablePivot(float& pivot_x, float& pivot_y, float& pivot_z) const;
+    ViewportMat4 roomTurntableMatrix() const;
+    void transformPickRay(float ray_origin[3], float ray_direction[3]) const;
+    void multiplyModelviewByRoomTurntable(float modelview[16]) const;
+    bool buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3]);
+    bool pickRoomFloor(int win_x, int win_y);
+    void pushRoomTurntableLegacyGl() const;
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
     void applyGizmoFreeroamMode();
@@ -333,6 +340,8 @@ private:
     bool    dragging_rotate;
     bool    dragging_pan;
     bool    dragging_grab;
+    bool    dragging_room_turntable;
+    float   room_turntable_yaw_deg;
     QPoint  last_mouse_pos;
     QPoint  click_start_pos;
 

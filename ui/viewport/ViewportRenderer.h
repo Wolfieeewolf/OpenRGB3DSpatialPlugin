@@ -40,8 +40,8 @@ public:
     bool sceneFramebufferReady() const;
 
     void setFloorGridMesh(const std::vector<float>& positions, const std::vector<float>& colors);
-    void drawFloorGridLines();
-    void drawFloorGridPerimeter(float max_x, float max_z);
+    void drawFloorGridLines(const ViewportMat4& model = ViewportMath::Identity());
+    void drawFloorGridPerimeter(float max_x, float max_z, const ViewportMat4& model = ViewportMath::Identity());
 
     void drawColoredLines(const std::vector<float>& positions,
                           const std::vector<float>& colors,

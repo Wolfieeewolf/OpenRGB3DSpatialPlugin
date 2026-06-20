@@ -476,7 +476,8 @@ void LEDViewport3D::ensureRoomGridOverlayBuffers()
 
 void LEDViewport3D::drawViewportSceneGpu()
 {
-    const ViewportMat4 identity = ViewportMath::Identity();
+    const ViewportMat4 scene_root = roomTurntableMatrix();
+    using namespace ViewportMath;
 
     const GridExtents extents = GetRoomExtents();
     const float max_x = extents.width_units;
@@ -488,9 +489,9 @@ void LEDViewport3D::drawViewportSceneGpu()
     if(!cached_floor_grid_vertices.empty())
     {
         viewport_renderer_.setFloorGridMesh(cached_floor_grid_vertices, cached_floor_grid_colors);
-        viewport_renderer_.drawFloorGridLines();
+        viewport_renderer_.drawFloorGridLines(scene_root);
     }
-    viewport_renderer_.drawFloorGridPerimeter(max_x, max_z);
+    viewport_renderer_.drawFloorGridPerimeter(max_x, max_z, scene_root);
 
     {
         GizmoDrawMesh mesh;
@@ -503,7 +504,7 @@ void LEDViewport3D::drawViewportSceneGpu()
         viewportMeshAddTriangle(mesh, red, 3.0f, 0.0f, 0.0f, 2.7f, 0.15f, 0.0f, 2.7f, -0.15f, 0.0f);
         viewportMeshAddTriangle(mesh, green, 0.0f, 3.0f, 0.0f, 0.15f, 2.7f, 0.0f, -0.15f, 2.7f, 0.0f);
         viewportMeshAddTriangle(mesh, blue, 0.0f, 0.0f, 3.0f, 0.15f, 0.0f, 2.7f, -0.15f, 0.0f, 2.7f);
-        drawColoredMeshBatches(viewport_renderer_, mesh, identity);
+        drawColoredMeshBatches(viewport_renderer_, mesh, scene_root);
     }
 
     if(use_manual_room_dimensions)
@@ -523,7 +524,7 @@ void LEDViewport3D::drawViewportSceneGpu()
         viewportMeshAddLine(mesh, 2.0f, cyan, max_x, 0.0f, 0.0f, max_x, max_y, 0.0f);
         viewportMeshAddLine(mesh, 2.0f, cyan, max_x, 0.0f, max_z, max_x, max_y, max_z);
         viewportMeshAddLine(mesh, 2.0f, cyan, 0.0f, 0.0f, max_z, 0.0f, max_y, max_z);
-        drawColoredMeshBatches(viewport_renderer_, mesh, identity);
+        drawColoredMeshBatches(viewport_renderer_, mesh, scene_root);
     }
 
     if(display_planes)
@@ -582,7 +583,7 @@ void LEDViewport3D::drawViewportSceneGpu()
             {
                 GizmoDrawMesh cal_mesh;
                 appendCalibrationPattern(cal_mesh, world_corners);
-                drawColoredMeshBatches(viewport_renderer_, cal_mesh, identity, 0.85f);
+                drawColoredMeshBatches(viewport_renderer_, cal_mesh, scene_root, 0.85f);
             }
             else if(wants_prev)
             {
@@ -606,20 +607,20 @@ void LEDViewport3D::drawViewportSceneGpu()
                         world_corners[3].x, world_corners[3].y, world_corners[3].z,
                     };
                     const std::vector<float> uvs = {0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
-                    viewport_renderer_.drawTexturedQuad(positions, uvs, texture_id, identity, 0.85f);
+                    viewport_renderer_.drawTexturedQuad(positions, uvs, texture_id, scene_root, 0.85f);
                 }
                 else
                 {
                     GizmoDrawMesh cal_mesh;
                     appendCalibrationPattern(cal_mesh, world_corners);
-                    drawColoredMeshBatches(viewport_renderer_, cal_mesh, identity, 0.85f);
+                    drawColoredMeshBatches(viewport_renderer_, cal_mesh, scene_root, 0.85f);
                 }
             }
             else
             {
                 GizmoDrawMesh fill_mesh;
                 appendWorldQuadTriangles(fill_mesh, world_corners[0], world_corners[1], world_corners[2], world_corners[3], fill_color);
-                viewport_renderer_.drawColoredTriangles(fill_mesh.triangle_positions, fill_mesh.triangle_colors, identity,
+                viewport_renderer_.drawColoredTriangles(fill_mesh.triangle_positions, fill_mesh.triangle_colors, scene_root,
                                                         selected ? 0.30f : 0.18f);
             }
 
@@ -636,7 +637,7 @@ void LEDViewport3D::drawViewportSceneGpu()
             viewportMeshAddLine(border_mesh, border_width, border_color,
                                 world_corners[3].x, world_corners[3].y, world_corners[3].z,
                                 world_corners[0].x, world_corners[0].y, world_corners[0].z);
-            drawColoredMeshBatches(viewport_renderer_, border_mesh, identity);
+            drawColoredMeshBatches(viewport_renderer_, border_mesh, scene_root);
         }
     }
 
@@ -645,7 +646,7 @@ void LEDViewport3D::drawViewportSceneGpu()
         ensureRoomGridOverlayBuffers();
         if(!room_grid_overlay_positions.empty())
         {
-            viewport_renderer_.drawColoredPoints(room_grid_overlay_positions, room_grid_overlay_colors, identity,
+            viewport_renderer_.drawColoredPoints(room_grid_overlay_positions, room_grid_overlay_colors, scene_root,
                                                    room_grid_point_size);
         }
     }
@@ -692,7 +693,7 @@ void LEDViewport3D::drawViewportSceneGpu()
             const float center_z = (min_bounds.z + max_bounds.z) * 0.5f;
             appendControllerTopIndicator(mesh, center_x, top_y, center_z, 0.15f);
 
-            const ViewportMat4 model = buildControllerLocalMatrix(ctrl->transform, center_offset);
+            const ViewportMat4 model = Multiply(scene_root, buildControllerLocalMatrix(ctrl->transform, center_offset));
             drawColoredMeshBatches(viewport_renderer_, mesh, model);
             if(fillLedDrawBuffers(ctrl))
             {
@@ -744,7 +745,7 @@ void LEDViewport3D::drawViewportSceneGpu()
 
             if(ref_point->GetType() == REF_POINT_USER)
             {
-                const ViewportMat4 model = buildObjectLocalMatrix(pos.x, pos.y, pos.z, rot);
+                const ViewportMat4 model = Multiply(scene_root, buildObjectLocalMatrix(pos.x, pos.y, pos.z, rot));
                 GizmoDrawMesh mesh;
                 const int segments = 20;
                 for(int i = 0; i < segments; i++)
@@ -783,7 +784,7 @@ void LEDViewport3D::drawViewportSceneGpu()
                 continue;
             }
 
-            const ViewportMat4 model = buildObjectLocalMatrix(pos.x, pos.y, pos.z, rot);
+            const ViewportMat4 model = Multiply(scene_root, buildObjectLocalMatrix(pos.x, pos.y, pos.z, rot));
             GizmoDrawMesh mesh;
             appendLocalSphere(mesh, 0.3f, rgb);
             drawColoredMeshBatches(viewport_renderer_, mesh, model);
@@ -839,7 +840,8 @@ void LEDViewport3D::renderGizmoGpu()
     gizmo.GetPosition(gx, gy, gz);
 
     using namespace ViewportMath;
-    const ViewportMat4 model = Translation(gx, gy, gz);
+    const ViewportMat4 scene_root = roomTurntableMatrix();
+    const ViewportMat4 model = Multiply(scene_root, Translation(gx, gy, gz));
 
     const auto drawPass = [&](bool depth_occluded_pass) {
         viewport_renderer_.setGpuDepthState(depth_occluded_pass, false);

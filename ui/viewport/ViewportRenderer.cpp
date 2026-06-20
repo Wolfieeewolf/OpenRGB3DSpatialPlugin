@@ -305,7 +305,7 @@ void ViewportRenderer::setFloorGridMesh(const std::vector<float>& positions, con
     floor_grid_mesh_.upload(gl_, positions, colors);
 }
 
-void ViewportRenderer::drawFloorGridLines()
+void ViewportRenderer::drawFloorGridLines(const ViewportMat4& model)
 {
     if(!gl_ || !gpu_ready_ || !gpu_frame_active_ || !floor_grid_mesh_.isValid())
     {
@@ -313,12 +313,12 @@ void ViewportRenderer::drawFloorGridLines()
     }
 
     bindColoredProgram();
-    setMvpUniform(ViewportMath::Identity());
+    setMvpUniform(model);
     glLineWidth(1.0f);
     floor_grid_mesh_.draw(gl_, GL_LINES, core_profile_);
 }
 
-void ViewportRenderer::drawFloorGridPerimeter(float max_x, float max_z)
+void ViewportRenderer::drawFloorGridPerimeter(float max_x, float max_z, const ViewportMat4& model)
 {
     const std::vector<float> positions = {
         0.0f, 0.0f, 0.0f,
@@ -334,7 +334,7 @@ void ViewportRenderer::drawFloorGridPerimeter(float max_x, float max_z)
         0.6f, 0.8f, 0.6f,
         0.6f, 0.8f, 0.6f,
     };
-    drawColoredLines(positions, colors, ViewportMath::Identity(), 2.0f);
+    drawColoredLines(positions, colors, model, 2.0f);
 }
 
 void ViewportRenderer::drawDynamicMesh(const std::vector<float>& positions,
