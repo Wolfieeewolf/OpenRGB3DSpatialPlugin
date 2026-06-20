@@ -169,12 +169,14 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
 
 private:
     void focusSelectionFromKeyboard();
     void resetCameraFromKeyboard();
+    void clearCameraDragState();
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
     void applyGizmoFreeroamMode();

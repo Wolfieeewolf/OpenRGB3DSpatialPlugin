@@ -168,17 +168,44 @@ static bool SegmentHitsOccluderSet(Vec3 a,
                                    const std::vector<OccluderQuad>& quads,
                                    int also_skip_controller,
                                    const OccluderSpatialIndex* aabb_index,
-                                   const std::vector<BlockerGridOccluder>* blocker_grids)
+                                   const std::vector<BlockerGridOccluder>* blocker_grids,
+                                   const RoomBlockerField* room_blocker_field)
 {
-    const std::vector<BlockerGridOccluder>* grids = blocker_grids;
-    if(!grids)
+    const RoomBlockerField* merged_field = room_blocker_field;
+    if(!merged_field || !merged_field->IsValid())
     {
-        grids = &SpatialLightingSceneProvider::instance()->frameBlockerGrids();
+        SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
+        if(provider && provider->frameRoomBlockerField().IsValid())
+        {
+            merged_field = &provider->frameRoomBlockerField();
+        }
     }
-    if(grids && !grids->empty() &&
-       SegmentHitsBlockerGrids(a.x, a.y, a.z, b.x, b.y, b.z, *grids, also_skip_controller))
+    if(merged_field && merged_field->IsValid())
     {
-        return true;
+        if(SegmentHitsRoomBlockerField(a.x,
+                                       a.y,
+                                       a.z,
+                                       b.x,
+                                       b.y,
+                                       b.z,
+                                       *merged_field,
+                                       also_skip_controller))
+        {
+            return true;
+        }
+    }
+    else
+    {
+        const std::vector<BlockerGridOccluder>* grids = blocker_grids;
+        if(!grids)
+        {
+            grids = &SpatialLightingSceneProvider::instance()->frameBlockerGrids();
+        }
+        if(grids && !grids->empty() &&
+           SegmentHitsBlockerGrids(a.x, a.y, a.z, b.x, b.y, b.z, *grids, also_skip_controller))
+        {
+            return true;
+        }
     }
 
     const Vec3 seg = Sub(b, a);
@@ -256,7 +283,8 @@ static float ComputeAmbientOcclusion(Vec3 led,
                                      const std::vector<OccluderQuad>& quads,
                                      float probe_span,
                                      const OccluderSpatialIndex* aabb_index,
-                                     const std::vector<BlockerGridOccluder>* blocker_grids)
+                                     const std::vector<BlockerGridOccluder>* blocker_grids,
+                                     const RoomBlockerField* room_blocker_field)
 {
     static const Vec3 kDirs[6] = {
         {1.0f, 0.0f, 0.0f},  {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
@@ -268,7 +296,7 @@ static float ComputeAmbientOcclusion(Vec3 led,
     for(const Vec3& d : kDirs)
     {
         const Vec3 probe = Add(led, Scale(d, span));
-        if(SegmentHitsOccluderSet(led, probe, aabbs, quads, -1, aabb_index, blocker_grids))
+        if(SegmentHitsOccluderSet(led, probe, aabbs, quads, -1, aabb_index, blocker_grids, room_blocker_field))
         {
             ++blocked;
         }
@@ -300,7 +328,7 @@ bool LedSegmentOccluded(float ax,
 {
     const Vec3 a = {ax, ay, az};
     const Vec3 b = {bx, by, bz};
-    return SegmentHitsOccluderSet(a, b, aabbs, quads, also_skip_controller, ResolveAabbSpatialIndex(aabbs), nullptr);
+    return SegmentHitsOccluderSet(a, b, aabbs, quads, also_skip_controller, ResolveAabbSpatialIndex(aabbs), nullptr, nullptr);
 }
 
 float ComputeLedAmbientOcclusion(float led_x,
@@ -316,7 +344,7 @@ float ComputeLedAmbientOcclusion(float led_x,
     {
         index = ResolveAabbSpatialIndex(aabbs);
     }
-    return ComputeAmbientOcclusion({led_x, led_y, led_z}, aabbs, quads, probe_span, index, nullptr);
+    return ComputeAmbientOcclusion({led_x, led_y, led_z}, aabbs, quads, probe_span, index, nullptr, nullptr);
 }
 
 float ComputeRoomAmbientShadeFactor(float room_x,
@@ -330,9 +358,11 @@ float ComputeRoomAmbientShadeFactor(float room_x,
                                     const std::vector<BlockerGridOccluder>& blocker_grids,
                                     float ao_strength_norm,
                                     float probe_span,
-                                    const OccluderSpatialIndex* aabb_index)
+                                    const OccluderSpatialIndex* aabb_index,
+                                    const RoomBlockerField* room_blocker_field)
 {
-    if(aabbs.empty() && quads.empty() && blocker_grids.empty())
+    if(aabbs.empty() && quads.empty() && blocker_grids.empty() &&
+       (!room_blocker_field || !room_blocker_field->IsValid()))
     {
         return 1.0f;
     }
@@ -345,11 +375,12 @@ float ComputeRoomAmbientShadeFactor(float room_x,
 
     const std::vector<BlockerGridOccluder>* grids =
         blocker_grids.empty() ? nullptr : &blocker_grids;
+    const RoomBlockerField* merged_field = room_blocker_field;
 
     float shade_factor = 1.0f;
     const Vec3 led = {room_x, room_y, room_z};
     const Vec3 center = {room_center_x, room_center_y, room_center_z};
-    if(SegmentHitsOccluderSet(led, center, aabbs, quads, -1, index, grids))
+    if(SegmentHitsOccluderSet(led, center, aabbs, quads, -1, index, grids, merged_field))
     {
         shade_factor *= 0.18f;
     }
@@ -362,7 +393,7 @@ float ComputeRoomAmbientShadeFactor(float room_x,
 
     if(effective_ao > 0.01f)
     {
-        const float openness = ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids);
+        const float openness = ComputeAmbientOcclusion(led, aabbs, quads, probe_span, index, grids, merged_field);
         shade_factor *= 1.0f - effective_ao * (1.0f - openness);
     }
 
@@ -661,7 +692,8 @@ ShadeRgb ShadeLedFromSource(const RoomScene& scene,
                                             scene.occluders,
                                             -1,
                                             scene.occluder_aabb_index,
-                                            scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids)
+                                            scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids,
+                                            scene.room_blocker_field.IsValid() ? &scene.room_blocker_field : nullptr)
                          ? 0.0f
                          : 1.0f;
     }
@@ -699,7 +731,8 @@ RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z)
                                      scene.occluders,
                                      scene.shade.ao_probe_span,
                                      scene.occluder_aabb_index,
-                                     scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids);
+                                     scene.blocker_grids.empty() ? nullptr : &scene.blocker_grids,
+                                     scene.room_blocker_field.IsValid() ? &scene.room_blocker_field : nullptr);
         ao = 1.0f - scene.shade.ao_strength * (1.0f - ao);
     }
 

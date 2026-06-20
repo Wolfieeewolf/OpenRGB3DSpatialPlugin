@@ -36,14 +36,17 @@ void RoomSpatialLightingEffect3D::RefreshRoomLightOccluders(const GridContext3D&
         RoomSpatialLightingUi::BuildOccluderOptions(room_light_);
     SpatialLighting::BuildSpatialOccluders(occluders_, occluder_aabbs_, grid, options);
     blocker_grids_.clear();
+    room_blocker_field_ = SpatialLighting::RoomBlockerField{};
     if(options.light_blockers)
     {
         SpatialLighting::BuildBlockerGridOccluders(blocker_grids_, grid.grid_scale_mm);
+        SpatialLighting::BuildRoomBlockerField(room_blocker_field_, grid.grid_scale_mm, &grid);
     }
     SpatialLighting::BuildOccluderAabbSpatialIndex(occluder_aabbs_, grid, occluder_aabb_index_);
     cached_scene_.occluders = occluders_;
     cached_scene_.occluder_aabbs = occluder_aabbs_;
     cached_scene_.blocker_grids = blocker_grids_;
+    cached_scene_.room_blocker_field = room_blocker_field_;
     cached_scene_.occluder_aabb_index = occluder_aabb_index_.IsBuilt() ? &occluder_aabb_index_ : nullptr;
 }
 

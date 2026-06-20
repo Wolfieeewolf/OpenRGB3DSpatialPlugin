@@ -64,6 +64,7 @@ protected:
     mutable std::vector<SpatialLighting::OccluderAabb> occluder_aabbs_{};
     mutable SpatialLighting::OccluderSpatialIndex occluder_aabb_index_{};
     mutable std::vector<SpatialLighting::BlockerGridOccluder> blocker_grids_{};
+    mutable SpatialLighting::RoomBlockerField room_blocker_field_{};
 
 private:
     SpatialLighting::Vec3 fixed_light_pos_{};

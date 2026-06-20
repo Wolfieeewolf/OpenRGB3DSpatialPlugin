@@ -1152,6 +1152,13 @@ float LEDViewport3D::ledPreviewPointSizeGl() const
     return std::max(4.0f, std::min(12.0f, size));
 }
 
+void LEDViewport3D::clearCameraDragState()
+{
+    dragging_rotate = false;
+    dragging_pan = false;
+    dragging_grab = false;
+}
+
 void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 {
     setFocus(Qt::MouseFocusReason);
@@ -1247,14 +1254,20 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         }
 
         dragging_grab = true;
+        dragging_pan = false;
+        dragging_rotate = false;
         return;
     }
     else if(event->button() == Qt::MiddleButton)
     {
+        dragging_grab = false;
         dragging_pan = true;
+        dragging_rotate = false;
     }
     else if(event->button() == Qt::RightButton)
     {
+        dragging_grab = false;
+        dragging_pan = false;
         dragging_rotate = true;
     }
 }
@@ -1279,7 +1292,8 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
     gizmo.SetCameraDistance(camera_distance);
 
-    if(gizmo.HandleMouseMove(event, gl_win_x, gl_win_y, modelview, projection, viewport))
+    const bool left_held = (event->buttons() & Qt::LeftButton) != 0;
+    if(left_held && gizmo.HandleMouseMove(event, gl_win_x, gl_win_y, modelview, projection, viewport))
     {
         if(gizmo.IsDragging())
         {
@@ -1301,7 +1315,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if(gizmo.IsActive())
+    if(left_held && gizmo.IsActive())
     {
         const GizmoAxis hover = gizmo.GetHoverAxis();
         if(hover != last_gizmo_hover_axis)
@@ -1313,7 +1327,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         }
     }
 
-    if(dragging_grab)
+    if(dragging_grab && left_held)
     {
         float grab_sensitivity = 0.003f * camera_distance;
 
@@ -1333,38 +1347,40 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
         update();
     }
-    else if(dragging_rotate)
+    else if(dragging_rotate && (event->buttons() & Qt::RightButton))
     {
         float orbit_sensitivity = 0.3f;
-        camera_yaw += delta_x_gl * orbit_sensitivity;
-        camera_pitch += delta_y_gl * orbit_sensitivity;
+        camera_yaw -= delta_x_gl * orbit_sensitivity;
+        camera_pitch -= delta_y_gl * orbit_sensitivity;
 
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
 
         update();
     }
-    else if(dragging_pan)
+    else if(dragging_pan && (event->buttons() & Qt::MiddleButton))
     {
         float pan_sensitivity = 0.002f * camera_distance;
 
-        float yaw_rad = camera_yaw * M_PI / 180.0f;
-        float pitch_rad = camera_pitch * M_PI / 180.0f;
+        const float right_x = modelview[0];
+        const float right_y = modelview[4];
+        const float right_z = modelview[8];
+        const float up_x = modelview[1];
+        const float up_y = modelview[5];
+        const float up_z = modelview[9];
 
-        float right_x = -sinf(yaw_rad);
-        float right_z = cosf(yaw_rad);
-
-        float up_x = cosf(yaw_rad) * sinf(pitch_rad);
-        float up_y = cosf(pitch_rad);
-        float up_z = sinf(yaw_rad) * sinf(pitch_rad);
-
-        camera_target_x += right_x * delta_x_gl * pan_sensitivity;
-        camera_target_z += right_z * delta_x_gl * pan_sensitivity;
-        camera_target_x += up_x * delta_y_gl * pan_sensitivity;
-        camera_target_y += up_y * delta_y_gl * pan_sensitivity;
-        camera_target_z += up_z * delta_y_gl * pan_sensitivity;
+        camera_target_x -= right_x * delta_x_gl * pan_sensitivity;
+        camera_target_y -= right_y * delta_x_gl * pan_sensitivity;
+        camera_target_z -= right_z * delta_x_gl * pan_sensitivity;
+        camera_target_x -= up_x * delta_y_gl * pan_sensitivity;
+        camera_target_y -= up_y * delta_y_gl * pan_sensitivity;
+        camera_target_z -= up_z * delta_y_gl * pan_sensitivity;
 
         update();
+    }
+    else
+    {
+        clearCameraDragState();
     }
 
     last_mouse_pos = current_pos;
@@ -1455,10 +1471,25 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     {
         emitGizmoDragCompleted();
     }
-    dragging_rotate = false;
-    dragging_pan = false;
-    dragging_grab = false;
+    if(event->button() == Qt::LeftButton)
+    {
+        dragging_grab = false;
+    }
+    else if(event->button() == Qt::MiddleButton)
+    {
+        dragging_pan = false;
+    }
+    else if(event->button() == Qt::RightButton)
+    {
+        dragging_rotate = false;
+    }
     update();
+}
+
+void LEDViewport3D::leaveEvent(QEvent *event)
+{
+    QOpenGLWidget::leaveEvent(event);
+    clearCameraDragState();
 }
 
 void LEDViewport3D::wheelEvent(QWheelEvent *event)

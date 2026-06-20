@@ -179,19 +179,6 @@ Optional local notes may live in a gitignored **`docs/`** folder on your machine
 - **No custom UI chrome styling:** do not use `setStyleSheet` on plugin widgets, and do not override `QPalette` on panels, frames, `QGroupBox`, or other structural chrome—widgets must inherit the host OpenRGB / system theme. Layout, `QFrame` shape/shadow, `autoFillBackground`, and standard Qt widgets only. (Helpers like dimmed helper labels or RGB swatch icons are content, not theme overrides for containers.)
 - **Exception — list/card selection:** controller and custom-device cards may tint `cardFrame` using `PluginUiPaletteColor` / `QPalette::Highlight` from the host theme only (see `SpatialControllerCardWidget`, `CustomControllerDeviceWidget`). Do not introduce new `setStyleSheet` or fixed RGB chrome colours.
 
-## Building
-
-- **Qt 5.15** — required for **current OpenRGB releases** (upstream still ships Qt 5 builds). CI always builds this matrix leg.
-- **Qt 6.0+** — any 6.x in the series; source uses `QT_VERSION` guards, not a fixed minor. Build and test against Qt 6 now so the plugin is ready when OpenRGB ships a Qt 6–compatible host. CI pins Windows Qt **6.10.3** (aqtinstall 3.3.x); Linux CI uses distro `qt6-base-dev` (often an older 6.x) for broader Qt 6.x coverage.
-- The plugin must be built with the **same Qt major** (and ideally the same toolchain) as the OpenRGB binary that loads it.
-- Windows: Qt 5 → **MSVC 2019** (`msvc2019_64`); Qt 6 → **MSVC 2022** (`msvc2022_64`).
-- OpenRGB submodule initialized.
-- Prefer an **out-of-tree** build so generated files stay out of the source tree, for example:
-  - `mkdir build && cd build && qmake ../OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` (Windows MSVC kit) or `make -j$(nproc)` (Linux).
-- In-tree alternative: from the repository root, `qmake OpenRGB3DSpatialPlugin.pro CONFIG+=release` then `nmake` / `make`; remove generated `Makefile`, `Makefile.*`, and `.qmake.stash` afterward if you do not want them in the tree (they are gitignored and must not be committed).
-- Linux install prefix when packaging: `qmake OpenRGB3DSpatialPlugin.pro PREFIX=/usr` (then `make`).
-- For full OpenRGB build prerequisites, see `OpenRGB/Documentation/Compiling.md`.
-
 ## Pre-submit checklist (plugin-owned code)
 
 Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs in **OpenRGB reference documentation** above (minimum: **`RGBControllerAPI.md`** when touching LEDs/zones/colors).
@@ -211,9 +198,3 @@ Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs 
 - Effect stack code should call **`SpatialEffect3D::EvaluateColorGrid`** (applies global **Sampling** / spatial quantization where enabled), not `CalculateColorGrid` directly.
 - Implement per-effect color in **`CalculateColorGrid`**; override **`UsesSpatialSamplingQuantization()`** only when the effect already handles resolution in UV space (e.g. texture projection, screen mirror).
 - **Texture / GIF effects:** reuse **`MediaTextureEffectUtils.h`** (`MediaTextureEffect` namespace) for bilinear sampling, ambience gain, and RGB lerp—avoid duplicating those helpers in individual `.cpp` files.
-
-## Releasing
-
-- `PROJECT_VERSION` / release naming: calendar-style `YY.MM.DD.V` (e.g. `26.04.06.1`).
-- **Tag on GitLab** (`v26.04.06.1` or `26.04.06.1`). The `release` job in `.gitlab-ci.yml` publishes a [GitLab Release](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/releases) with Windows `.zip` and Linux `.deb` / `.tar.gz` assets from all build jobs.
-- The `mirror-to-github` job pushes the tag to the GitHub mirror when `GITHUB_MIRROR_TOKEN` is configured.

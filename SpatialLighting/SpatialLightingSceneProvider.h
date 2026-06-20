@@ -41,6 +41,7 @@ public:
     const std::vector<SpatialLighting::OccluderAabb>& frameOccluderAabbs() const { return frame_occluder_aabbs_; }
     const SpatialLighting::OccluderSpatialIndex& frameOccluderSpatialIndex() const { return frame_occluder_index_; }
     const std::vector<SpatialLighting::BlockerGridOccluder>& frameBlockerGrids() const { return frame_blocker_grids_; }
+    const SpatialLighting::RoomBlockerField& frameRoomBlockerField() const { return frame_room_blocker_field_; }
 
     void BeginAmbientShadeCacheFrame(std::uint64_t render_sequence, float quant_size);
     float ComputeAmbientShadeFactorCached(int shade_slot,
@@ -69,11 +70,10 @@ private:
     std::vector<SpatialLighting::OccluderAabb> frame_occluder_aabbs_;
     SpatialLighting::OccluderSpatialIndex frame_occluder_index_;
     std::vector<SpatialLighting::BlockerGridOccluder> frame_blocker_grids_;
+    SpatialLighting::RoomBlockerField frame_room_blocker_field_;
 
-    std::uint64_t shade_cache_epoch_ = 0;
+    std::uint64_t scene_geometry_epoch_ = 0;
     float shade_cache_quant_ = 1.0f;
-    std::unordered_map<std::uint64_t, float> shade_cache_;
-    std::unordered_map<int, float> shade_slot_cache_;
 };
 
 #endif

@@ -270,8 +270,8 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     if(shade_enabled && shade_ctx->shade->use_occlusion && has_occluders)
     {
         const float ao_strength = shade_ctx->shade->use_ambient_occlusion ? shade_ctx->shade->ao_strength : 0.0f;
-        const std::vector<SpatialLighting::BlockerGridOccluder>& blocker_grids =
-            SpatialLightingSceneProvider::instance()->frameBlockerGrids();
+        const SpatialLighting::RoomBlockerField& room_blocker_field =
+            SpatialLightingSceneProvider::instance()->frameRoomBlockerField();
         shade_factor = SpatialLighting::ComputeRoomAmbientShadeFactor(room_x,
                                                                         room_y,
                                                                         room_z,
@@ -280,10 +280,12 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
                                                                         frame.room_center.z,
                                                                         *shade_ctx->occluder_aabbs,
                                                                         *shade_ctx->occluders,
-                                                                        blocker_grids,
+                                                                        {},
                                                                         ao_strength,
                                                                         shade_ctx->shade->ao_probe_span,
-                                                                        nullptr);
+                                                                        nullptr,
+                                                                        room_blocker_field.IsValid() ? &room_blocker_field
+                                                                                                     : nullptr);
     }
 
     total_r *= shade_factor;

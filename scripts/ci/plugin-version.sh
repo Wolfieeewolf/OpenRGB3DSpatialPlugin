@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# Print plugin version for packaging (PROJECT_VERSION or calendar fallback).
+# Print plugin version for packaging (git tag, else 0.0.0).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if [ -f "$ROOT/PROJECT_VERSION" ]; then
-  head -n1 "$ROOT/PROJECT_VERSION" | tr -d '\r\n'
-  exit 0
+cd "$ROOT"
+
+describe="$(git describe --tags --always 2>/dev/null || true)"
+if [ -n "$describe" ]; then
+  tag="${describe#v}"
+  tag="${tag%%-*}"
+  if [[ "$tag" == *.* ]]; then
+    echo "$tag"
+    exit 0
+  fi
 fi
-date -u +%y.%m.%d.1
+
+echo "0.0.0"

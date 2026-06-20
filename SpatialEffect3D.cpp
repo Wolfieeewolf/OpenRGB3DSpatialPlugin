@@ -1528,8 +1528,8 @@ RGBColor SpatialEffect3D::ApplyLayerRoomAmbientShading(float room_x,
     SpatialLightingSceneProvider* provider = SpatialLightingSceneProvider::instance();
     const std::vector<SpatialLighting::OccluderQuad>& occluders = provider->frameOccluderQuads();
     const std::vector<SpatialLighting::OccluderAabb>& occluder_aabbs = provider->frameOccluderAabbs();
-    const std::vector<SpatialLighting::BlockerGridOccluder>& blocker_grids = provider->frameBlockerGrids();
-    if(occluder_aabbs.empty() && occluders.empty() && blocker_grids.empty())
+    const SpatialLighting::RoomBlockerField& room_blocker_field = provider->frameRoomBlockerField();
+    if(occluder_aabbs.empty() && occluders.empty() && !room_blocker_field.IsValid())
     {
         return color;
     }

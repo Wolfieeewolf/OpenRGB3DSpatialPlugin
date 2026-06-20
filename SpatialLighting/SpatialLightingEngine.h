@@ -93,6 +93,7 @@ struct RoomScene
     std::vector<OccluderQuad> occluders;
     std::vector<OccluderAabb> occluder_aabbs;
     std::vector<BlockerGridOccluder> blocker_grids;
+    RoomBlockerField room_blocker_field;
     /** When set, AABB ray tests use this index (built from occluder_aabbs). */
     const OccluderSpatialIndex* occluder_aabb_index = nullptr;
     ShadeSettings shade{};
@@ -152,7 +153,8 @@ float ComputeRoomAmbientShadeFactor(float room_x,
                                     const std::vector<BlockerGridOccluder>& blocker_grids,
                                     float ao_strength_norm,
                                     float probe_span,
-                                    const OccluderSpatialIndex* aabb_index = nullptr);
+                                    const OccluderSpatialIndex* aabb_index = nullptr,
+                                    const RoomBlockerField* room_blocker_field = nullptr);
 
 void BuildOccluderAabbSpatialIndex(const std::vector<OccluderAabb>& aabbs,
                                    const GridContext3D& grid,

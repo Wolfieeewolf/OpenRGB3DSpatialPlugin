@@ -14,12 +14,6 @@ msvc {
 
 win32:DEFINES += NOMINMAX WIN32_LEAN_AND_MEAN
 
-exists(PROJECT_VERSION) {
-    win32: VERSION_FROM_FILE = $$system(powershell -NoProfile -Command "(Get-Content PROJECT_VERSION -TotalCount 1).Trim()")
-    else: VERSION_FROM_FILE = $$system(head -n1 PROJECT_VERSION 2>/dev/null | tr -d '\\r\\n' | xargs)
-    !isEmpty(VERSION_FROM_FILE): VERSION_NUM = $$VERSION_FROM_FILE
-}
-
 isEmpty(VERSION_NUM) {
     GIT_DESCRIBE = $$system("git describe --tags --always 2>nul || git describe --tags --always 2>/dev/null || echo ''")
     !isEmpty(GIT_DESCRIBE) {
@@ -32,13 +26,7 @@ isEmpty(VERSION_NUM) {
 }
 
 isEmpty(VERSION_NUM) {
-    win32:DATE_YEAR = $$system(powershell -Command "(Get-Date).ToString('yy')")
-    win32:DATE_MONTH = $$system(powershell -Command "(Get-Date).ToString('MM')")
-    win32:DATE_DAY = $$system(powershell -Command "(Get-Date).ToString('dd')")
-    unix:DATE_YEAR = $$system(date +%y)
-    unix:DATE_MONTH = $$system(date +%m)
-    unix:DATE_DAY = $$system(date +%d)
-    VERSION_NUM = $$DATE_YEAR"."$$DATE_MONTH"."$$DATE_DAY".1"
+    VERSION_NUM = 0.0.0
 }
 
 VERSION_STR = $$VERSION_NUM
