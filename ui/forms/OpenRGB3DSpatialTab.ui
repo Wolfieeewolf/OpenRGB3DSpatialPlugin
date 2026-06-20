@@ -216,7 +216,7 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>3D view (camera only; does not change effect math): Right drag = orbit | Middle drag = pan | Left drag on empty = slide target on floor | Left drag on room floor = spin room (viewport only) | Wheel = zoom | Left click = select. Gizmo when selected: W = move, E = rotate, R = view-plane move, Q = grid snap; F = frame selection; Home = reset camera + room spin; click yellow sphere to cycle mode. Delete/Backspace = remove controller. Wall/floor/origin labels and shader room are in Grid Settings → 3D view overlay.</string>
+          <string>3D view (camera only; does not change effect math): Right drag = orbit | Middle drag = pan | Left drag on empty = slide target on floor | Click room volume to select; while selected, left-drag anywhere to spin room (yaw + pitch, viewport only) | Wheel = zoom | Left click = select. Gizmo when selected: W = move, E = rotate, R = view-plane move, Q = grid snap; F = frame selection; Home = reset camera + room spin; Esc = clear selection; click yellow sphere to cycle mode. Delete/Backspace = remove controller. Wall/floor/origin labels and shader room are in Grid Settings → 3D view overlay.</string>
          </property>
          <property name="wordWrap">
           <bool>true</bool>

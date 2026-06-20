@@ -257,6 +257,9 @@ void OpenRGB3DSpatialTab::InitLedViewport()
         on_ref_point_selected(index, false);
     });
     connect(viewport, &LEDViewport3D::DisplayPlaneSelected, this, &OpenRGB3DSpatialTab::on_viewport_display_plane_selected);
+    connect(viewport, &LEDViewport3D::RoomViewportSelected, this, [this](bool) {
+        UpdateSelectionInfo();
+    });
     connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::on_ref_point_position_changed);
     connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::on_display_plane_position_signal);
     connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
@@ -1183,7 +1186,12 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
     QFont info_font = selectionInfoLabel()->font();
     info_font.setBold(true);
 
-    if(selected.empty())
+    if(viewport->IsRoomViewportSelected())
+    {
+        selectionInfoLabel()->setText("Selected: Room (viewport spin)");
+        info_font.setItalic(false);
+    }
+    else if(selected.empty())
     {
         selectionInfoLabel()->setText("No selection");
         info_font.setItalic(true);

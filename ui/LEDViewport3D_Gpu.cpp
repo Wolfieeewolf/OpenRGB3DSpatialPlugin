@@ -577,6 +577,8 @@ void LEDViewport3D::paintGlGpu()
 
     drawViewportSceneGpu();
 
+    renderRoomViewportSelectionGpu();
+
     const bool has_controller_selected = (selected_controller_idx >= 0 && controller_transforms &&
                                           selected_controller_idx < (int)controller_transforms->size());
     const bool has_ref_point_selected = (selected_ref_point_idx >= 0 && reference_points &&

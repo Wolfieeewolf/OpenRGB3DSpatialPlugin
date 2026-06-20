@@ -57,6 +57,13 @@ static inline Vector3D Subtract(const Vector3D& a, const Vector3D& b)
     return { a.x - b.x, a.y - b.y, a.z - b.z };
 }
 
+namespace
+{
+constexpr float kRoomTurntableSpinSensitivity = 0.25f;
+constexpr float kRoomTurntablePitchLimitDeg = 89.0f;
+constexpr float kRoomVolumePickPadUnits = 0.02f;
+}
+
 static void DrawAxisAlignedBoxFaces(float x0, float y0, float z0, float x1, float y1, float z1,
                                     float r, float g, float b, float alpha)
 {
@@ -311,7 +318,9 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , dragging_pan(false)
     , dragging_grab(false)
     , dragging_room_turntable(false)
+    , room_viewport_selected_(false)
     , room_turntable_yaw_deg(0.0f)
+    , room_turntable_pitch_deg(0.0f)
     , last_gizmo_hover_axis(GIZMO_AXIS_NONE)
     , cached_floor_grid_max_x(-1.0f)
     , cached_floor_grid_max_z(-1.0f)
@@ -670,7 +679,18 @@ bool LEDViewport3D::FocusSelectionInView()
     }
     else
     {
-        return false;
+        if(room_viewport_selected_)
+        {
+            const GridExtents extents = GetRoomExtents();
+            focus_x = extents.width_units * 0.5f;
+            focus_y = extents.height_units * 0.5f;
+            focus_z = extents.depth_units * 0.5f;
+            span_units = std::max(extents.width_units, std::max(extents.height_units, extents.depth_units)) * 1.1f;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     span_units = std::max(span_units, 1.5f);
@@ -962,6 +982,10 @@ void LEDViewport3D::paintGlLegacyScene()
     DrawGrid();
     DrawAxes();
     DrawRoomBoundary();
+    if(room_viewport_selected_)
+    {
+        DrawRoomViewportSelection();
+    }
 
     DrawDisplayPlanes();
     if(show_room_grid_overlay)
@@ -1152,13 +1176,29 @@ void LEDViewport3D::getRoomTurntablePivot(float& pivot_x, float& pivot_y, float&
 {
     const GridExtents extents = GetRoomExtents();
     pivot_x = extents.width_units * 0.5f;
-    pivot_y = 0.0f;
+    pivot_y = extents.height_units * 0.5f;
     pivot_z = extents.depth_units * 0.5f;
+}
+
+void LEDViewport3D::getRoomVolumeAabb(Vector3D& box_min, Vector3D& box_max) const
+{
+    const GridExtents extents = GetRoomExtents();
+    box_min.x = -kRoomVolumePickPadUnits;
+    box_min.y = -kRoomVolumePickPadUnits;
+    box_min.z = -kRoomVolumePickPadUnits;
+    box_max.x = extents.width_units + kRoomVolumePickPadUnits;
+    box_max.y = extents.height_units + kRoomVolumePickPadUnits;
+    box_max.z = extents.depth_units + kRoomVolumePickPadUnits;
+}
+
+bool LEDViewport3D::hasRoomPreviewRotation() const
+{
+    return std::fabs(room_turntable_yaw_deg) > 1e-4f || std::fabs(room_turntable_pitch_deg) > 1e-4f;
 }
 
 ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
 {
-    if(std::fabs(room_turntable_yaw_deg) < 1e-4f)
+    if(!hasRoomPreviewRotation())
     {
         return ViewportMath::Identity();
     }
@@ -1169,12 +1209,13 @@ ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
     getRoomTurntablePivot(pivot_x, pivot_y, pivot_z);
     using namespace ViewportMath;
     return Multiply(Translation(pivot_x, pivot_y, pivot_z),
-                    Multiply(RotationY(room_turntable_yaw_deg), Translation(-pivot_x, -pivot_y, -pivot_z)));
+                    Multiply(RotationY(room_turntable_yaw_deg),
+                             Multiply(RotationX(room_turntable_pitch_deg), Translation(-pivot_x, -pivot_y, -pivot_z))));
 }
 
 void LEDViewport3D::transformPickRay(float ray_origin[3], float ray_direction[3]) const
 {
-    if(std::fabs(room_turntable_yaw_deg) < 1e-4f)
+    if(!hasRoomPreviewRotation())
     {
         return;
     }
@@ -1267,7 +1308,7 @@ bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], floa
     return true;
 }
 
-bool LEDViewport3D::pickRoomFloor(int win_x, int win_y)
+bool LEDViewport3D::pickRoomVolume(int win_x, int win_y)
 {
     float ray_origin[3]{};
     float ray_direction[3]{};
@@ -1276,27 +1317,53 @@ bool LEDViewport3D::pickRoomFloor(int win_x, int win_y)
         return false;
     }
 
-    if(std::fabs(ray_direction[1]) < 1e-5f)
+    Vector3D box_min{};
+    Vector3D box_max{};
+    getRoomVolumeAabb(box_min, box_max);
+
+    float distance = 0.0f;
+    return RayBoxIntersect(ray_origin, ray_direction, box_min, box_max, distance);
+}
+
+void LEDViewport3D::clearSceneObjectSelection()
+{
+    selected_controller_indices.clear();
+    selected_controller_idx = -1;
+    selected_display_plane_idx = -1;
+    selected_ref_point_idx = -1;
+    gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
+}
+
+void LEDViewport3D::selectRoomViewport()
+{
+    clearSceneObjectSelection();
+    if(room_viewport_selected_)
     {
-        return false;
+        return;
     }
 
-    const float t = -ray_origin[1] / ray_direction[1];
-    if(t < 0.0f)
-    {
-        return false;
-    }
+    room_viewport_selected_ = true;
+    emit RoomViewportSelected(true);
+    emit ControllerSelected(-1);
+    emit ReferencePointSelected(-1);
+    emit DisplayPlaneSelected(-1);
+    update();
+}
 
-    const float hit_x = ray_origin[0] + ray_direction[0] * t;
-    const float hit_z = ray_origin[2] + ray_direction[2] * t;
-    const GridExtents extents = GetRoomExtents();
-    constexpr float kPad = 0.05f;
-    return hit_x >= -kPad && hit_x <= extents.width_units + kPad && hit_z >= -kPad && hit_z <= extents.depth_units + kPad;
+void LEDViewport3D::deselectRoomViewport()
+{
+    if(!room_viewport_selected_)
+    {
+        return;
+    }
+    room_viewport_selected_ = false;
+    emit RoomViewportSelected(false);
+    update();
 }
 
 void LEDViewport3D::pushRoomTurntableLegacyGl() const
 {
-    if(std::fabs(room_turntable_yaw_deg) < 1e-4f)
+    if(!hasRoomPreviewRotation())
     {
         return;
     }
@@ -1307,12 +1374,13 @@ void LEDViewport3D::pushRoomTurntableLegacyGl() const
     getRoomTurntablePivot(pivot_x, pivot_y, pivot_z);
     glTranslatef(pivot_x, pivot_y, pivot_z);
     glRotatef(room_turntable_yaw_deg, 0.0f, 1.0f, 0.0f);
+    glRotatef(room_turntable_pitch_deg, 1.0f, 0.0f, 0.0f);
     glTranslatef(-pivot_x, -pivot_y, -pivot_z);
 }
 
 void LEDViewport3D::multiplyModelviewByRoomTurntable(float modelview[16]) const
 {
-    if(std::fabs(room_turntable_yaw_deg) < 1e-4f)
+    if(!hasRoomPreviewRotation())
     {
         return;
     }
@@ -1323,11 +1391,64 @@ void LEDViewport3D::multiplyModelviewByRoomTurntable(float modelview[16]) const
     std::memcpy(modelview, combined.m, sizeof(combined.m));
 }
 
+void LEDViewport3D::resetRoomPreviewSpin()
+{
+    room_turntable_yaw_deg = 0.0f;
+    room_turntable_pitch_deg = 0.0f;
+}
+
+void LEDViewport3D::clampRoomTurntablePitch()
+{
+    if(room_turntable_pitch_deg > kRoomTurntablePitchLimitDeg)
+    {
+        room_turntable_pitch_deg = kRoomTurntablePitchLimitDeg;
+    }
+    if(room_turntable_pitch_deg < -kRoomTurntablePitchLimitDeg)
+    {
+        room_turntable_pitch_deg = -kRoomTurntablePitchLimitDeg;
+    }
+}
+
+void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
+{
+    const int picked_controller = PickController(gl_win_x, gl_win_y);
+    if(picked_controller >= 0)
+    {
+        ClearSelection();
+        AddControllerToSelection(picked_controller);
+        SelectController(picked_controller);
+        emit ControllerSelected(picked_controller);
+        return;
+    }
+
+    const int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
+    if(picked_plane >= 0)
+    {
+        ClearSelection();
+        SelectDisplayPlane(picked_plane);
+        emit DisplayPlaneSelected(picked_plane);
+        return;
+    }
+
+    if(pickRoomVolume(gl_win_x, gl_win_y))
+    {
+        selectRoomViewport();
+        return;
+    }
+
+    ClearSelection();
+    SelectDisplayPlane(-1);
+    emit ControllerSelected(-1);
+    emit ReferencePointSelected(-1);
+    emit DisplayPlaneSelected(-1);
+}
+
 void LEDViewport3D::ResetCameraToDefault()
 {
     DefaultCamera(camera_distance, camera_yaw, camera_pitch,
                   camera_target_x, camera_target_y, camera_target_z);
-    room_turntable_yaw_deg = 0.0f;
+    resetRoomPreviewSpin();
+    deselectRoomViewport();
     update();
 }
 
@@ -1443,8 +1564,14 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         dragging_grab = false;
         dragging_pan = false;
         dragging_rotate = false;
-        if(pickRoomFloor(gl_win_x, gl_win_y))
+        if(room_viewport_selected_)
         {
+            dragging_room_turntable = true;
+            return;
+        }
+        if(pickRoomVolume(gl_win_x, gl_win_y))
+        {
+            selectRoomViewport();
             dragging_room_turntable = true;
             return;
         }
@@ -1527,8 +1654,9 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
     if(dragging_room_turntable && left_held)
     {
-        const float turntable_sensitivity = 0.25f;
-        room_turntable_yaw_deg -= delta_x_gl * turntable_sensitivity;
+        room_turntable_yaw_deg += delta_x_gl * kRoomTurntableSpinSensitivity;
+        room_turntable_pitch_deg += delta_y_gl * kRoomTurntableSpinSensitivity;
+        clampRoomTurntablePitch();
         update();
     }
     else if(dragging_grab && left_held)
@@ -1543,19 +1671,19 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         float forward_x = cosf(yaw_rad);
         float forward_z = sinf(yaw_rad);
 
-        camera_target_x += right_x * delta_x_gl * grab_sensitivity;
-        camera_target_z += right_z * delta_x_gl * grab_sensitivity;
+        camera_target_x -= right_x * delta_x_gl * grab_sensitivity;
+        camera_target_z -= right_z * delta_x_gl * grab_sensitivity;
 
-        camera_target_x -= forward_x * delta_y_gl * grab_sensitivity;
-        camera_target_z -= forward_z * delta_y_gl * grab_sensitivity;
+        camera_target_x += forward_x * delta_y_gl * grab_sensitivity;
+        camera_target_z += forward_z * delta_y_gl * grab_sensitivity;
 
         update();
     }
     else if(dragging_rotate && (event->buttons() & Qt::RightButton))
     {
         float orbit_sensitivity = 0.3f;
-        camera_yaw -= delta_x_gl * orbit_sensitivity;
-        camera_pitch -= delta_y_gl * orbit_sensitivity;
+        camera_yaw += delta_x_gl * orbit_sensitivity;
+        camera_pitch += delta_y_gl * orbit_sensitivity;
 
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
@@ -1573,12 +1701,12 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         const float up_y = modelview[5];
         const float up_z = modelview[9];
 
-        camera_target_x -= right_x * delta_x_gl * pan_sensitivity;
-        camera_target_y -= right_y * delta_x_gl * pan_sensitivity;
-        camera_target_z -= right_z * delta_x_gl * pan_sensitivity;
-        camera_target_x -= up_x * delta_y_gl * pan_sensitivity;
-        camera_target_y -= up_y * delta_y_gl * pan_sensitivity;
-        camera_target_z -= up_z * delta_y_gl * pan_sensitivity;
+        camera_target_x += right_x * delta_x_gl * pan_sensitivity;
+        camera_target_y += right_y * delta_x_gl * pan_sensitivity;
+        camera_target_z += right_z * delta_x_gl * pan_sensitivity;
+        camera_target_x += up_x * delta_y_gl * pan_sensitivity;
+        camera_target_y += up_y * delta_y_gl * pan_sensitivity;
+        camera_target_z += up_z * delta_y_gl * pan_sensitivity;
 
         update();
     }
@@ -1606,32 +1734,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 
         if(distance < kViewportClickSlopGlPx)
         {
-            int picked_controller = PickController(gl_win_x, gl_win_y);
-            if(picked_controller >= 0)
-            {
-                ClearSelection();
-                AddControllerToSelection(picked_controller);
-                SelectController(picked_controller);
-                emit ControllerSelected(picked_controller);
-            }
-            else
-            {
-                int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
-                if(picked_plane >= 0)
-                {
-                    ClearSelection();
-                    SelectDisplayPlane(picked_plane);
-                    emit DisplayPlaneSelected(picked_plane);
-                }
-                else
-                {
-                    ClearSelection();
-                    SelectDisplayPlane(-1);
-                    emit ControllerSelected(-1);
-                    emit ReferencePointSelected(-1);
-                    emit DisplayPlaneSelected(-1);
-                }
-            }
+            applyViewportClickPick(gl_win_x, gl_win_y);
         }
     }
     else if(event->button() == Qt::MiddleButton)
@@ -1640,32 +1743,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
         const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
         if(distance < kViewportClickSlopGlPx)
         {
-            int picked_controller = PickController(gl_win_x, gl_win_y);
-            if(picked_controller >= 0)
-            {
-                ClearSelection();
-                AddControllerToSelection(picked_controller);
-                SelectController(picked_controller);
-                emit ControllerSelected(picked_controller);
-            }
-            else
-            {
-                int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
-                if(picked_plane >= 0)
-                {
-                    ClearSelection();
-                    SelectDisplayPlane(picked_plane);
-                    emit DisplayPlaneSelected(picked_plane);
-                }
-                else
-                {
-                    ClearSelection();
-                    SelectDisplayPlane(-1);
-                    emit ControllerSelected(-1);
-                    emit ReferencePointSelected(-1);
-                    emit DisplayPlaneSelected(-1);
-                }
-            }
+            applyViewportClickPick(gl_win_x, gl_win_y);
         }
     }
 
@@ -1674,6 +1752,15 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     if(gizmo_was_dragging)
     {
         emitGizmoDragCompleted();
+    }
+    if(dragging_room_turntable && event->button() == Qt::LeftButton)
+    {
+        const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
+        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
+        if(distance < kViewportClickSlopGlPx && !pickRoomVolume(gl_win_x, gl_win_y))
+        {
+            deselectRoomViewport();
+        }
     }
     if(event->button() == Qt::LeftButton)
     {
@@ -1854,6 +1941,12 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
     if(event->key() == Qt::Key_Home)
     {
         resetCameraFromKeyboard();
+        event->accept();
+        return;
+    }
+    if(event->key() == Qt::Key_Escape)
+    {
+        ClearSelection();
         event->accept();
         return;
     }
@@ -2166,6 +2259,86 @@ void LEDViewport3D::DrawAxisLabels(const float modelview_f[16], const float proj
 void LEDViewport3D::focusInEvent(QFocusEvent *event)
 {
     QOpenGLWidget::focusInEvent(event);
+}
+
+void LEDViewport3D::fillRoomViewportSelectionLineBuffers(std::vector<float>& positions, std::vector<float>& colors) const
+{
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
+
+    const auto add_line = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
+        positions.push_back(x0);
+        positions.push_back(y0);
+        positions.push_back(z0);
+        positions.push_back(x1);
+        positions.push_back(y1);
+        positions.push_back(z1);
+        for(int i = 0; i < 2; ++i)
+        {
+            colors.push_back(1.0f);
+            colors.push_back(0.85f);
+            colors.push_back(0.1f);
+            colors.push_back(1.0f);
+        }
+    };
+
+    add_line(0.0f, 0.0f, 0.0f, max_x, 0.0f, 0.0f);
+    add_line(max_x, 0.0f, 0.0f, max_x, 0.0f, max_z);
+    add_line(max_x, 0.0f, max_z, 0.0f, 0.0f, max_z);
+    add_line(0.0f, 0.0f, max_z, 0.0f, 0.0f, 0.0f);
+    add_line(0.0f, max_y, 0.0f, max_x, max_y, 0.0f);
+    add_line(max_x, max_y, 0.0f, max_x, max_y, max_z);
+    add_line(max_x, max_y, max_z, 0.0f, max_y, max_z);
+    add_line(0.0f, max_y, max_z, 0.0f, max_y, 0.0f);
+    add_line(0.0f, 0.0f, 0.0f, 0.0f, max_y, 0.0f);
+    add_line(max_x, 0.0f, 0.0f, max_x, max_y, 0.0f);
+    add_line(max_x, 0.0f, max_z, max_x, max_y, max_z);
+    add_line(0.0f, 0.0f, max_z, 0.0f, max_y, max_z);
+}
+
+void LEDViewport3D::DrawRoomViewportSelection()
+{
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glLineWidth(3.0f);
+
+    const GridExtents extents = GetRoomExtents();
+    const float max_x = extents.width_units;
+    const float max_y = extents.height_units;
+    const float max_z = extents.depth_units;
+
+    glColor4f(1.0f, 0.85f, 0.1f, 0.95f);
+    glBegin(GL_LINES);
+    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(max_x, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, 0.0f, max_z);
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(0.0f, 0.0f, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, max_y, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
+    glVertex3f(max_x, max_y, 0.0f);     glVertex3f(max_x, max_y, max_z);
+    glVertex3f(max_x, max_y, max_z);    glVertex3f(0.0f, max_y, max_z);
+    glVertex3f(0.0f, max_y, max_z);     glVertex3f(0.0f, max_y, 0.0f);
+    glVertex3f(0.0f, 0.0f, 0.0f);       glVertex3f(0.0f, max_y, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);      glVertex3f(max_x, max_y, 0.0f);
+    glVertex3f(max_x, 0.0f, max_z);     glVertex3f(max_x, max_y, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);      glVertex3f(0.0f, max_y, max_z);
+    glEnd();
+
+    glColor4f(1.0f, 0.85f, 0.1f, 0.12f);
+    glBegin(GL_QUADS);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, 0.0f);
+    glVertex3f(max_x, 0.0f, max_z);
+    glVertex3f(0.0f, 0.0f, max_z);
+    glEnd();
+
+    glDisable(GL_BLEND);
+    glLineWidth(1.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
 }
 
 void LEDViewport3D::DrawRoomBoundary()
@@ -3708,11 +3881,8 @@ void LEDViewport3D::RemoveControllerFromSelection(int index)
 
 void LEDViewport3D::ClearSelection()
 {
-    selected_controller_indices.clear();
-    selected_controller_idx = -1;
-    selected_display_plane_idx = -1;
-    selected_ref_point_idx = -1;
-    gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
+    clearSceneObjectSelection();
+    deselectRoomViewport();
 }
 
 bool LEDViewport3D::IsControllerSelected(int index) const

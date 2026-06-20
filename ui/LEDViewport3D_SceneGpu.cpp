@@ -861,3 +861,20 @@ void LEDViewport3D::renderGizmoGpu()
     drawPass(true);
     drawPass(false);
 }
+
+void LEDViewport3D::renderRoomViewportSelectionGpu()
+{
+    if(!room_viewport_selected_)
+    {
+        return;
+    }
+
+    std::vector<float> positions;
+    std::vector<float> colors;
+    fillRoomViewportSelectionLineBuffers(positions, colors);
+
+    using namespace ViewportMath;
+    const ViewportMat4 model = roomTurntableMatrix();
+    viewport_renderer_.setGpuDepthState(true, false);
+    viewport_renderer_.drawColoredLines(positions, colors, model, 3.0f);
+}

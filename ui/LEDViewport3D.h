@@ -131,6 +131,7 @@ public:
     int                     GetSelectedControllerIndex() const { return selected_controller_idx; }
     int                     GetSelectedReferencePointIndex() const { return selected_ref_point_idx; }
     int                     GetSelectedDisplayPlaneIndex() const { return selected_display_plane_idx; }
+    bool                    IsRoomViewportSelected() const { return room_viewport_selected_; }
 
     void update();
 
@@ -156,6 +157,7 @@ signals:
     void DisplayPlaneSelected(int index);
     void DisplayPlanePositionChanged(int index, float x, float y, float z);
     void DisplayPlaneRotationChanged(int index, float x, float y, float z);
+    void RoomViewportSelected(bool selected);
 
 protected:
     void initializeGL() override;
@@ -177,13 +179,23 @@ private:
     void focusSelectionFromKeyboard();
     void resetCameraFromKeyboard();
     void clearCameraDragState();
+    void clearSceneObjectSelection();
+    void resetRoomPreviewSpin();
+    void clampRoomTurntablePitch();
+    void applyViewportClickPick(int gl_win_x, int gl_win_y);
+    void selectRoomViewport();
+    void deselectRoomViewport();
+    bool hasRoomPreviewRotation() const;
+    void getRoomVolumeAabb(Vector3D& box_min, Vector3D& box_max) const;
     void getRoomTurntablePivot(float& pivot_x, float& pivot_y, float& pivot_z) const;
     ViewportMat4 roomTurntableMatrix() const;
     void transformPickRay(float ray_origin[3], float ray_direction[3]) const;
     void multiplyModelviewByRoomTurntable(float modelview[16]) const;
     bool buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3]);
-    bool pickRoomFloor(int win_x, int win_y);
+    bool pickRoomVolume(int win_x, int win_y);
     void pushRoomTurntableLegacyGl() const;
+    void DrawRoomViewportSelection();
+    void fillRoomViewportSelectionLineBuffers(std::vector<float>& positions, std::vector<float>& colors) const;
     void applyGizmoMoveMode();
     void applyGizmoRotateMode();
     void applyGizmoFreeroamMode();
@@ -231,6 +243,7 @@ private:
     void FillPickMatrices(float modelview[16], float projection[16], int viewport[4]) const;
     void drawViewportSceneGpu();
     void renderGizmoGpu();
+    void renderRoomViewportSelectionGpu();
     ViewportMat4 buildControllerLocalMatrix(const Transform3D& transform, const Vector3D& center_offset) const;
     ViewportMat4 buildObjectLocalMatrix(float px, float py, float pz, const Rotation3D& rot) const;
     bool fillLedDrawBuffers(ControllerTransform* ctrl);
@@ -341,7 +354,9 @@ private:
     bool    dragging_pan;
     bool    dragging_grab;
     bool    dragging_room_turntable;
+    bool    room_viewport_selected_;
     float   room_turntable_yaw_deg;
+    float   room_turntable_pitch_deg;
     QPoint  last_mouse_pos;
     QPoint  click_start_pos;
 
