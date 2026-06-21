@@ -2086,7 +2086,8 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
                                                      origin.x,
                                                      origin.y,
                                                      origin.z,
-                                                     &got_voxel_sample);
+                                                     &got_voxel_sample,
+                                                     false);
         if(got_voxel_sample)
         {
             const float t = (float)effect_voxel_volume_mix / 100.0f;
@@ -2265,7 +2266,8 @@ bool SpatialEffect3D::SampleVoxelRgbAtRoom(float x,
                                              origin.x,
                                              origin.y,
                                              origin.z,
-                                             &got_hit);
+                                             &got_hit,
+                                             false);
     return got_hit;
 }
 

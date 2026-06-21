@@ -8,6 +8,7 @@
 #include <map>
 #include <functional>
 #include <algorithm>
+#include <utility>
 
 class SpatialEffect3D;
 
@@ -16,6 +17,8 @@ struct EffectRegistration3D
     std::string class_name;
     std::string ui_name;
     std::string category;
+    std::string game_id;
+    std::string game_label;
     std::function<SpatialEffect3D*()> constructor;
 };
 
@@ -31,12 +34,16 @@ public:
     void RegisterEffect(const std::string& class_name,
                        const std::string& ui_name,
                        const std::string& category,
+                       const std::string& game_id,
+                       const std::string& game_label,
                        std::function<SpatialEffect3D*()> constructor)
     {
         EffectRegistration3D reg;
         reg.class_name = class_name;
         reg.ui_name = ui_name;
         reg.category = category;
+        reg.game_id = game_id;
+        reg.game_label = game_label;
         reg.constructor = constructor;
 
         std::map<std::string, EffectRegistration3D>::iterator existing = effects.find(class_name);
@@ -52,10 +59,10 @@ public:
 
     SpatialEffect3D* CreateEffect(const std::string& class_name)
     {
-        const std::string resolved = ResolveLegacyEffectClass(class_name);
-        if(effects.find(resolved) != effects.end())
+        std::map<std::string, EffectRegistration3D>::iterator it = effects.find(class_name);
+        if(it != effects.end())
         {
-            return effects.at(resolved).constructor();
+            return it->second.constructor();
         }
         return nullptr;
     }
@@ -66,7 +73,7 @@ public:
         {
             return false;
         }
-        return effects.find(ResolveLegacyEffectClass(class_name)) != effects.end();
+        return effects.find(class_name) != effects.end();
     }
 
     std::vector<EffectRegistration3D> GetAllEffects() const
@@ -85,9 +92,10 @@ public:
 
     EffectRegistration3D GetEffectInfo(const std::string& class_name) const
     {
-        if(effects.find(class_name) != effects.end())
+        std::map<std::string, EffectRegistration3D>::const_iterator it = effects.find(class_name);
+        if(it != effects.end())
         {
-            return effects.at(class_name);
+            return it->second;
         }
         return EffectRegistration3D();
     }
@@ -111,22 +119,39 @@ public:
         return result;
     }
 
+    /** Unique game_id / game_label pairs from Game-category registrations, sorted by label. */
+    std::vector<std::pair<std::string, std::string>> GetRegisteredGames() const
+    {
+        std::map<std::string, std::string> games;
+        for(size_t i = 0; i < effect_order.size(); i++)
+        {
+            std::map<std::string, EffectRegistration3D>::const_iterator it = effects.find(effect_order[i]);
+            if(it == effects.end())
+            {
+                continue;
+            }
+            const EffectRegistration3D& reg = it->second;
+            if(reg.category != "Game" || reg.game_id.empty())
+            {
+                continue;
+            }
+            games[reg.game_id] = reg.game_label;
+        }
+
+        std::vector<std::pair<std::string, std::string>> result;
+        result.reserve(games.size());
+        for(std::map<std::string, std::string>::const_iterator git = games.begin(); git != games.end(); ++git)
+        {
+            result.emplace_back(git->first, git->second);
+        }
+        std::sort(result.begin(), result.end(),
+                  [](const std::pair<std::string, std::string>& a,
+                     const std::pair<std::string, std::string>& b) { return a.second < b.second; });
+        return result;
+    }
+
 private:
     EffectListManager3D() {}
-
-    /** Map removed duplicate library entries to their replacements for preset load. */
-    std::string ResolveLegacyEffectClass(const std::string& class_name) const
-    {
-        if(class_name == "RoomColorWheel" && effects.find("ColorWheel") != effects.end())
-        {
-            return "ColorWheel";
-        }
-        if(class_name == "RoomEmissiveRelay" && effects.find("ColorWheel") != effects.end())
-        {
-            return "ColorWheel";
-        }
-        return class_name;
-    }
 
     std::map<std::string, EffectRegistration3D> effects;
     std::vector<std::string> effect_order;

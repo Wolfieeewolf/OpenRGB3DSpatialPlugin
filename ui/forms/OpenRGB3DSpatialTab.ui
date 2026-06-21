@@ -278,9 +278,6 @@
           <widget class="EffectControlsHostPanel" name="effectControlsHostPanel"/>
          </item>
          <item>
-          <widget class="MinecraftLibraryPanel" name="minecraftLibraryPanel"/>
-         </item>
-         <item>
           <widget class="AudioInputPanel" name="audioInputPanel"/>
          </item>
          <item>
@@ -406,11 +403,6 @@
    <class>EffectControlsHostPanel</class>
    <extends>QWidget</extends>
    <header>EffectControlsHostPanel.h</header>
-  </customwidget>
-  <customwidget>
-   <class>MinecraftLibraryPanel</class>
-   <extends>QGroupBox</extends>
-   <header>MinecraftLibraryPanel.h</header>
   </customwidget>
   <customwidget>
    <class>AudioInputPanel</class>

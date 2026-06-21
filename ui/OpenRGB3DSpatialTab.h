@@ -77,7 +77,6 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class EffectStackPanel;
     friend class ZonesPanel;
     friend class EffectGlobalSettingsPanel;
-    friend class MinecraftLibraryPanel;
     friend class AudioInputPanel;
     friend class AudioAdvancedSettingsDialog;
     friend class EffectControlsHostPanel;
@@ -182,12 +181,11 @@ private slots:
     void UpdateEffectOriginCombo();
 
     void on_effect_library_category_changed(int index);
+    void on_effect_library_game_changed(int index);
     void on_effect_library_search_changed(const QString& text);
     void on_effect_library_add_clicked();
     void on_effect_library_item_double_clicked(QListWidgetItem* item);
     void on_effect_library_selection_changed(int row);
-    void on_minecraft_library_layer_combo_changed(int index);
-    void on_minecraft_library_add_clicked();
 
     void on_start_all_effects_clicked();
     void on_stop_all_effects_clicked();
@@ -309,10 +307,6 @@ private:
     void ClearCustomEffectUI();
     void RegenerateLEDPositions(ControllerTransform* transform);
 
-    bool effectLibraryRowIsMinecraftHub(int row) const;
-    void ShowMinecraftHubConfigurator();
-    void rebuildMinecraftHubPreviewEffect();
-    void ClearMinecraftLibraryPanel();
     void UpdateEffectStackRowSelectorVisibility();
 
     void UpdateEffectStackList();
@@ -366,19 +360,21 @@ private:
     void UpdateAudioPanelVisibility();
     bool IsAudioEffectClass(const std::string& class_name) const;
     void PopulateEffectLibraryCategories();
+    void PopulateEffectLibraryGames();
+    void UpdateEffectLibraryGameFilterVisibility();
     void PopulateEffectLibrary();
     void AddEffectInstanceToStack(const QString& class_name,
                                   const QString& ui_name,
                                   int zone_index = -1,
                                   BlendMode blend_mode = BlendMode::NO_BLEND,
                                   const nlohmann::json* preset_settings = nullptr,
-                                  bool enabled = true,
-                                  bool keep_minecraft_hub_panel_after_add = false);
+                                  bool enabled = true);
 
     QListWidget* zonesList() const;
     QPushButton* editZoneButton() const;
     QPushButton* deleteZoneButton() const;
     QComboBox*   effectCategoryCombo() const;
+    QComboBox*   effectLibraryGameCombo() const;
     QLineEdit*   effectLibrarySearch() const;
     QListWidget* effectLibraryList() const;
     QPushButton* effectLibraryAddButton() const;
@@ -433,9 +429,6 @@ private:
     QWidget*     effectControlsWidget() const;
     QVBoxLayout* effectControlsLayout() const;
 
-    QComboBox*   minecraftLibraryLayerCombo() const;
-    QWidget*     minecraftHubPreviewHolder() const;
-
     QComboBox*      audioDeviceCombo() const;
     QSlider*        audioGainSlider() const;
     QSlider*        audioClaritySlider() const;
@@ -489,8 +482,6 @@ private:
 
     SpatialAvailableControllerBacking available_controllers_;
     SpatialSceneControllerBacking     scene_controllers_;
-    bool                        minecraft_library_hub_active = false;
-    SpatialEffect3D*            minecraft_hub_preview_effect = nullptr;
 
     QPushButton*                start_effect_button = nullptr;
     QPushButton*                stop_effect_button = nullptr;

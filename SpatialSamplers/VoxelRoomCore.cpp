@@ -150,6 +150,57 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
     const float ty = gy - (float)iy0;
     const float tz = gz - (float)iz0;
 
+    if(settings.nearest_sample)
+    {
+        int ix = (int)std::floor(gx + 0.5f);
+        int iy = (int)std::floor(gy + 0.5f);
+        int iz = (int)std::floor(gz + 0.5f);
+        ix = std::clamp(ix, 0, grid.size_x - 1);
+        iy = std::clamp(iy, 0, grid.size_y - 1);
+        iz = std::clamp(iz, 0, grid.size_z - 1);
+
+        float r = 0.0f;
+        float g = 0.0f;
+        float b = 0.0f;
+        float a = 0.0f;
+        if(FetchVoxelRgba(grid, ix, iy, iz, r, g, b, a) && a > settings.alpha_cutoff)
+        {
+            if(out_used_voxel)
+            {
+                *out_used_voxel = true;
+            }
+            const int r8 = ClampByte((int)std::lround(255.0f * Clamp01(r)));
+            const int g8 = ClampByte((int)std::lround(255.0f * Clamp01(g)));
+            const int b8 = ClampByte((int)std::lround(255.0f * Clamp01(b)));
+            return (RGBColor)((b8 << 16) | (g8 << 8) | r8);
+        }
+
+        static const int kNeighborOffsets[6][3] = {{1, 0, 0},  {-1, 0, 0}, {0, 1, 0},
+                                                   {0, -1, 0}, {0, 0, 1},  {0, 0, -1}};
+        for(const auto& off : kNeighborOffsets)
+        {
+            const int nx = ix + off[0];
+            const int ny = iy + off[1];
+            const int nz = iz + off[2];
+            float nr = 0.0f;
+            float ng = 0.0f;
+            float nb = 0.0f;
+            float na = 0.0f;
+            if(FetchVoxelRgba(grid, nx, ny, nz, nr, ng, nb, na) && na > settings.alpha_cutoff)
+            {
+                if(out_used_voxel)
+                {
+                    *out_used_voxel = true;
+                }
+                const int r8 = ClampByte((int)std::lround(255.0f * Clamp01(nr)));
+                const int g8 = ClampByte((int)std::lround(255.0f * Clamp01(ng)));
+                const int b8 = ClampByte((int)std::lround(255.0f * Clamp01(nb)));
+                return (RGBColor)((b8 << 16) | (g8 << 8) | r8);
+            }
+        }
+        return (RGBColor)0x00000000;
+    }
+
     float out_r = 0.0f;
     float out_g = 0.0f;
     float out_b = 0.0f;

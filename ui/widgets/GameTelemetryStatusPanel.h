@@ -5,6 +5,7 @@
 
 #include <QGroupBox>
 
+class QLabel;
 class QTimer;
 
 namespace Ui {
@@ -29,6 +30,7 @@ private slots:
 private:
     Ui::GameTelemetryStatusPanel* ui = nullptr;
     QTimer* refresh_timer = nullptr;
+    QLabel* signals_label = nullptr;
 };
 
 #endif

@@ -3,7 +3,6 @@
 #include "MinecraftSubEffect3D.h"
 #include "MinecraftGame.h"
 #include "Game/GameTelemetryBridge.h"
-#include "EffectRegisterer3D.h"
 
 MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* effect_title, QWidget* parent)
     : SpatialEffect3D(parent),
@@ -101,142 +100,16 @@ RGBColor MinecraftSubEffect3D::CalculateColorGrid(float gx, float gy, float gz, 
 {
     const GameTelemetryBridge::TelemetrySnapshot t = GameTelemetryBridge::GetTelemetrySnapshot();
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
-    MinecraftGame::WorldTintSmoothState* wp = nullptr;
-    if((channels_ & MinecraftGame::ChWorldTint) != 0u)
+    RGBColor c = MinecraftGame::RenderColor(t, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
+                                            mc_settings_, channels_);
+    if((channels_ & MinecraftGame::ChWorldTint) != 0u || (channels_ & MinecraftGame::ChRoomVrTint) != 0u)
     {
-        wp = &world_smooth_;
+        return c;
     }
-    RGBColor c = MinecraftGame::RenderColor(t, time, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
-                                            mc_settings_, channels_, wp);
     return RemapSaturatedRgbWithRoomMapping(c, gx, gy, gz, time, grid);
 }
 
 bool MinecraftSubEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const
 {
     return true;
-}
-
-namespace
-{
-using namespace MinecraftGame;
-
-class MinecraftHealthEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftHealthEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChHealth, "Minecraft - Health", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Health from Fabric UDP (127.0.0.1:9876): gradient or per-heart strip. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftHealth", "Minecraft - Health", "Game", []() { return new MinecraftHealthEffect3D; })
-};
-
-class MinecraftHungerEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftHungerEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChHunger, "Minecraft - Hunger", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Hunger gradient from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftHunger", "Minecraft - Hunger", "Game", []() { return new MinecraftHungerEffect3D; })
-};
-
-class MinecraftAirEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftAirEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChAir, "Minecraft - Air", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Air/breathing gradient from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftAir", "Minecraft - Air", "Game", []() { return new MinecraftAirEffect3D; })
-};
-
-class MinecraftDurabilityEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftDurabilityEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChDurability, "Minecraft - Durability", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Main-hand item durability from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftDurability", "Minecraft - Durability", "Game", []() { return new MinecraftDurabilityEffect3D; })
-};
-
-class MinecraftDamageEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftDamageEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChDamage, "Minecraft - Damage", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Directional damage flash from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftDamage", "Minecraft - Damage", "Game", []() { return new MinecraftDamageEffect3D; })
-};
-
-class MinecraftWorldTintEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftWorldTintEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChWorldTint, "Minecraft - World tint", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Sky/mid/ground ambient tint from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftWorldTint", "Minecraft - World tint", "Game", []() { return new MinecraftWorldTintEffect3D; })
-};
-
-class MinecraftLightningEffect3D : public MinecraftSubEffect3D
-{
-public:
-    explicit MinecraftLightningEffect3D(QWidget* parent = nullptr)
-        : MinecraftSubEffect3D(ChLightning, "Minecraft - Lightning", parent)
-    {
-    }
-    EffectInfo3D GetEffectInfo() const override
-    {
-        EffectInfo3D info = BaseMinecraftEffectInfo();
-        info.effect_description = "Lightning flash (sky-heavy) from Fabric UDP. Stack per controller.";
-        return info;
-    }
-    EFFECT_REGISTERER_3D("MinecraftLightning", "Minecraft - Lightning", "Game", []() { return new MinecraftLightningEffect3D; })
-};
-
-REGISTER_EFFECT_3D(MinecraftHealthEffect3D);
-REGISTER_EFFECT_3D(MinecraftHungerEffect3D);
-REGISTER_EFFECT_3D(MinecraftAirEffect3D);
-REGISTER_EFFECT_3D(MinecraftDurabilityEffect3D);
-REGISTER_EFFECT_3D(MinecraftDamageEffect3D);
-REGISTER_EFFECT_3D(MinecraftWorldTintEffect3D);
-REGISTER_EFFECT_3D(MinecraftLightningEffect3D);
 }

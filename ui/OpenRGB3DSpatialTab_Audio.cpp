@@ -502,16 +502,13 @@ void OpenRGB3DSpatialTab::UpdateAudioPanelVisibility()
     }
 
     bool show = false;
-    if(!minecraft_library_hub_active)
+    for(const std::unique_ptr<EffectInstance3D>& inst_ptr : effect_stack)
     {
-        for(const std::unique_ptr<EffectInstance3D>& inst_ptr : effect_stack)
+        const EffectInstance3D* inst = inst_ptr.get();
+        if(inst && IsAudioEffectClass(inst->effect_class_name))
         {
-            const EffectInstance3D* inst = inst_ptr.get();
-            if(inst && IsAudioEffectClass(inst->effect_class_name))
-            {
-                show = true;
-                break;
-            }
+            show = true;
+            break;
         }
     }
 

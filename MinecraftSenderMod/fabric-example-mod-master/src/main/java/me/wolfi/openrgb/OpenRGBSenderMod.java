@@ -22,8 +22,6 @@ import java.util.Locale;
 
 public class OpenRGBSenderMod implements ClientModInitializer
 {
-    private static final String HOST = "127.0.0.1";
-    private static final int PORT = 9876;
     private static final long DAMAGE_DIR_MAX_AGE_MS = 450L;
     private static final long LIGHTNING_EVENT_COOLDOWN_MS = 250L;
     private static final long LIGHTNING_EVENT_MAX_AGE_MS = 450L;
@@ -31,11 +29,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private static OpenRGBSenderMod instance;
 
     private float lastHealth = -1.0f;
-    /** ~10 Hz at 20 tps: send every other client tick. */
     private int clientTickCounter = 0;
 
     private static DatagramSocket sharedUdpSocket;
-    private static InetAddress sharedLoopback;
+    private static InetAddress sharedUdpAddress;
+    private static String cachedHost = null;
+    private static int cachedPort = -1;
     private static final Object sharedUdpLock = new Object();
     private boolean hasSmoothedWorld = false;
     private int smoothSkyR = 140, smoothSkyG = 170, smoothSkyB = 220;
@@ -43,6 +42,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
     private float smoothWorldIntensity = 0.6f;
     private long lastLightningSentMs = 0L;
+    /** Send voxel_frame every fourth telemetry batch (~2.5 Hz). */
+    private int voxelSendCounter = 0;
+    private static final int VOXEL_SIZE_X = 18;
+    private static final int VOXEL_SIZE_Y = 12;
+    private static final int VOXEL_SIZE_Z = 18;
+    private static final float VOXEL_COLOR_SATURATION = 1.28f;
     /** Exponential smoothing for directional probe RGB (reduces twitchy room tint). */
     private static final float PROBE_COLOR_SMOOTH = 0.11f;
     private static final float AMBIENT_RGB_SMOOTH = 0.14f;
@@ -55,6 +60,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
     public void onInitializeClient()
     {
         instance = this;
+        OpenRGBSenderConfig.get();
+    }
+
+    public static void invalidateUdpTarget()
+    {
+        synchronized(sharedUdpLock)
+        {
+            if(sharedUdpSocket != null)
+            {
+                sharedUdpSocket.close();
+                sharedUdpSocket = null;
+            }
+            sharedUdpAddress = null;
+            cachedHost = null;
+            cachedPort = -1;
+        }
     }
 
     /**
@@ -75,19 +96,32 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             return;
         }
+        final OpenRGBSenderConfig cfg = OpenRGBSenderConfig.get();
+        if(!cfg.enabled)
+        {
+            return;
+        }
         clientTickCounter++;
-        if((clientTickCounter & 1) != 0)
+        if(clientTickCounter % cfg.telemetryTickDivisor != 0)
         {
             return;
         }
         try
         {
-            DatagramSocket socket = ensureSharedUdp();
-            InetAddress address = sharedLoopback;
+            DatagramSocket socket = ensureSharedUdp(cfg);
+            InetAddress address = sharedUdpAddress;
             ClientPlayerEntity player = client.player;
-            sendPlayerPose(socket, address, player);
+            sendPlayerPose(socket, address, player, cfg);
             sendHealthState(socket, address, player);
             sendWorldLight(socket, address, player, client.world);
+            if(cfg.sendVoxelFrames)
+            {
+                voxelSendCounter++;
+                if(voxelSendCounter % cfg.voxelSendInterval == 0)
+                {
+                    sendVoxelFrame(socket, address, player, client.world);
+                }
+            }
             sendLightningEventIfNeeded(socket, address);
             sendDamageEventIfNeeded(socket, address, player);
         }
@@ -96,27 +130,36 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
     }
 
-    private static DatagramSocket ensureSharedUdp() throws Exception
+    private static DatagramSocket ensureSharedUdp(OpenRGBSenderConfig cfg) throws Exception
     {
         synchronized(sharedUdpLock)
         {
-            if(sharedUdpSocket == null || sharedUdpSocket.isClosed())
+            if(sharedUdpSocket != null && !sharedUdpSocket.isClosed() &&
+               cfg.host.equals(cachedHost) && cfg.port == cachedPort && sharedUdpAddress != null)
             {
-                sharedUdpSocket = new DatagramSocket();
-                sharedLoopback = InetAddress.getByName(HOST);
+                return sharedUdpSocket;
             }
+            if(sharedUdpSocket != null)
+            {
+                sharedUdpSocket.close();
+            }
+            sharedUdpSocket = new DatagramSocket();
+            sharedUdpAddress = InetAddress.getByName(cfg.host);
+            cachedHost = cfg.host;
+            cachedPort = cfg.port;
             return sharedUdpSocket;
         }
     }
 
-    private void sendPlayerPose(DatagramSocket socket, InetAddress address, ClientPlayerEntity player) throws Exception
+    private void sendPlayerPose(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, OpenRGBSenderConfig cfg) throws Exception
     {
         Vec3d look = player.getRotationVec(1.0f);
         String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0,\"blocks_per_m\":1.0}",
+                "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0,\"blocks_per_m\":%.4f}",
                 System.currentTimeMillis(),
                 player.getX(), player.getY(), player.getZ(),
-                look.x, look.y, look.z);
+                look.x, look.y, look.z,
+                cfg.blocksPerMeter);
         sendJson(socket, address, json);
     }
 
@@ -673,6 +716,79 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
+    private static int[] sampleVoxelCellRgba(World world, BlockPos pos)
+    {
+        if(world.isAir(pos))
+        {
+            return new int[] {0, 0, 0, 0};
+        }
+
+        int sky = world.getLightLevel(LightType.SKY, pos);
+        int block = world.getLightLevel(LightType.BLOCK, pos);
+        int light = Math.max(sky, block);
+        float k = 0.42f + 0.58f * (light / 15.0f);
+
+        int rgb = getMapColorRgb(world, pos, 0x606060);
+        int r = clamp255((int)(((rgb >> 16) & 0xFF) * k));
+        int g = clamp255((int)(((rgb >> 8) & 0xFF) * k));
+        int b = clamp255((int)((rgb & 0xFF) * k));
+        return boostSaturationRgba(r, g, b, VOXEL_COLOR_SATURATION, 255);
+    }
+
+    private static int[] boostSaturationRgba(int r, int g, int b, float saturation, int alpha)
+    {
+        float gray = (r + g + b) / 3.0f;
+        int outR = clamp255(Math.round(gray + (r - gray) * saturation));
+        int outG = clamp255(Math.round(gray + (g - gray) * saturation));
+        int outB = clamp255(Math.round(gray + (b - gray) * saturation));
+        return new int[] {outR, outG, outB, alpha};
+    }
+
+    private void sendVoxelFrame(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, World world) throws Exception
+    {
+        final int sx = VOXEL_SIZE_X;
+        final int sy = VOXEL_SIZE_Y;
+        final int sz = VOXEL_SIZE_Z;
+        final int ox = (int)Math.floor(player.getX()) - sx / 2;
+        final int oy = (int)Math.floor(player.getY()) - 1;
+        final int oz = (int)Math.floor(player.getZ()) - sz / 2;
+        final long now = System.currentTimeMillis();
+        final int frameId = (int)(now & 0x7FFFFFFFL);
+
+        StringBuilder sb = new StringBuilder(sx * sy * sz * 16 + 320);
+        sb.append("{\"version\":1,\"type\":\"voxel_frame\",\"timestamp_ms\":");
+        sb.append(now);
+        sb.append(",\"source\":\"minecraft-fabric\",\"voxel_frame_id\":");
+        sb.append(frameId);
+        sb.append(",\"voxel_size_x\":").append(sx);
+        sb.append(",\"voxel_size_y\":").append(sy);
+        sb.append(",\"voxel_size_z\":").append(sz);
+        sb.append(",\"voxel_origin_x\":").append(ox);
+        sb.append(",\"voxel_origin_y\":").append(oy);
+        sb.append(",\"voxel_origin_z\":").append(oz);
+        sb.append(",\"voxel_cell_size\":1.0,\"voxel_rgba\":[");
+        boolean first = true;
+        for(int ix = 0; ix < sx; ix++)
+        {
+            for(int iy = 0; iy < sy; iy++)
+            {
+                for(int iz = 0; iz < sz; iz++)
+                {
+                    BlockPos pos = new BlockPos(ox + ix, oy + iy, oz + iz);
+                    int[] rgba = sampleVoxelCellRgba(world, pos);
+                    if(!first)
+                    {
+                        sb.append(',');
+                    }
+                    first = false;
+                    sb.append(rgba[0]).append(',').append(rgba[1]).append(',').append(rgba[2]).append(',').append(rgba[3]);
+                }
+            }
+        }
+        sb.append("]}");
+        sendJson(socket, address, sb.toString());
+    }
+
     private static int getMapColorRgb(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
     {
         try
@@ -831,8 +947,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
 
     private static void sendJson(DatagramSocket socket, InetAddress address, String json) throws Exception
     {
+        final int port = OpenRGBSenderConfig.get().port;
         byte[] data = json.getBytes(StandardCharsets.UTF_8);
-        DatagramPacket packet = new DatagramPacket(data, data.length, address, PORT);
+        DatagramPacket packet = new DatagramPacket(data, data.length, address, port);
         socket.send(packet);
     }
 }

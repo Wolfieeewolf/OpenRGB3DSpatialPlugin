@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "MinecraftWorldTintEffect3D.h"
+#include "../MinecraftGame.h"
+
+REGISTER_EFFECT_3D(MinecraftWorldTintEffect3D);
+
+MinecraftWorldTintEffect3D::MinecraftWorldTintEffect3D(QWidget* parent)
+    : MinecraftSubEffect3D(MinecraftGame::ChWorldTint, "World tint", parent)
+{
+}
+
+EffectInfo3D MinecraftWorldTintEffect3D::GetEffectInfo() const
+{
+    EffectInfo3D info = BaseMinecraftEffectInfo();
+    info.effect_description =
+        "MineLights-style 3D world tint: directional biome/light probes from Fabric world_light, "
+        "mapped by room position and player heading. Set 3D origin at your standing reference.";
+    return info;
+}
+
+void MinecraftWorldTintEffect3D::SetupCustomUI(QWidget* parent)
+{
+    QWidget* w = MinecraftGame::CreateEffectWidget(parent,
+                                                   QString::fromUtf8("World tint"),
+                                                   mc_settings_,
+                                                   channels_,
+                                                   this,
+                                                   [this]() { emit ParametersChanged(); });
+    AddWidgetToParent(w, parent);
+}

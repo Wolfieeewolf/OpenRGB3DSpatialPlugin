@@ -108,7 +108,8 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
                           float origin_x,
                           float origin_y,
                           float origin_z,
-                          bool* out_got_room_sample)
+                          bool* out_got_room_sample,
+                          bool nearest_sample)
 {
     thread_local VoxelRoomCore::VoxelGrid tl_grid;
     thread_local std::uint64_t tl_voxel_key = 0;
@@ -174,8 +175,9 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     sp.origin_z = origin_z;
 
     VoxelRoomCore::MapperSettings ms;
-    ms.room_to_world_scale = std::clamp(room_to_world_scale, 0.02f, 0.80f);
+    ms.room_to_world_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
     ms.alpha_cutoff = std::max(1e-4f, alpha_cutoff);
+    ms.nearest_sample = nearest_sample;
 
     bool used = false;
     RGBColor c = VoxelRoomCore::ComputeRoomMappedVoxelColor(tl_grid, basis, sp, ax, ay, az, ms, &used);

@@ -8,7 +8,6 @@
 #include "EffectLibraryPanel.h"
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
-#include "MinecraftLibraryPanel.h"
 #include "ObjectCreatorTabPanel.h"
 #include "ProfilesTabPanel.h"
 #include "SceneTransformPanel.h"
@@ -77,7 +76,6 @@
 #include "SettingsManager.h"
 #include "Audio/AudioInputManager.h"
 #include "Zone3D.h"
-#include "Effects3D/Games/Minecraft/MinecraftEffectLibrary.h"
 #include "TooltipProxy.h"
 
 namespace
@@ -329,7 +327,6 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     ui->effectGlobalSettingsPanel->bindTab(this);
     SetupStackRoomOutputPanel();
     ui->effectControlsHostPanel->bindTab(this);
-    ui->minecraftLibraryPanel->bindTab(this);
     ui->audioInputPanel->bindTab(this);
 
     LoadStackPresets();
@@ -410,7 +407,60 @@ void OpenRGB3DSpatialTab::PopulateEffectLibraryCategories()
     }
     effectCategoryCombo()->blockSignals(restore_signals);
     effectCategoryCombo()->setCurrentIndex(0);
+    UpdateEffectLibraryGameFilterVisibility();
     PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::UpdateEffectLibraryGameFilterVisibility()
+{
+    bool show_game_filter = false;
+    if(effectCategoryCombo())
+    {
+        const QVariant category_data = effectCategoryCombo()->currentData();
+        show_game_filter = category_data.isValid()
+                           && category_data.toString().compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0;
+    }
+
+    if(ui && ui->effectLibraryPanel)
+    {
+        if(QLabel* label = ui->effectLibraryPanel->gameLabel())
+        {
+            label->setVisible(show_game_filter);
+        }
+        if(QComboBox* combo = ui->effectLibraryPanel->gameCombo())
+        {
+            combo->setVisible(show_game_filter);
+        }
+    }
+}
+
+void OpenRGB3DSpatialTab::PopulateEffectLibraryGames()
+{
+    QComboBox* game_combo = effectLibraryGameCombo();
+    if(!game_combo)
+    {
+        return;
+    }
+
+    const QString preserve_game_id = game_combo->currentData().toString();
+    const bool restore_signals = game_combo->blockSignals(true);
+    game_combo->clear();
+    game_combo->addItem(tr("Select game"), QVariant());
+
+    const std::vector<std::pair<std::string, std::string>> games =
+        EffectListManager3D::get()->GetRegisteredGames();
+    for(const std::pair<std::string, std::string>& game : games)
+    {
+        game_combo->addItem(QString::fromStdString(game.second), QString::fromStdString(game.first));
+    }
+
+    int select_index = preserve_game_id.isEmpty() ? -1 : game_combo->findData(preserve_game_id);
+    if(select_index < 0)
+    {
+        select_index = games.empty() ? 0 : 1;
+    }
+    game_combo->setCurrentIndex(select_index);
+    game_combo->blockSignals(restore_signals);
 }
 
 bool OpenRGB3DSpatialTab::PrepareStackForPlayback()
@@ -508,6 +558,8 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
         return;
     }
 
+    UpdateEffectLibraryGameFilterVisibility();
+
     bool restore_signals = effectLibraryList()->blockSignals(true);
     effectLibraryList()->clear();
 
@@ -548,25 +600,53 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     std::vector<LibRow> rows;
     const bool game_category = (selected_category.compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0);
     const bool audio_category = (selected_category.compare(QStringLiteral("Audio"), Qt::CaseInsensitive) == 0);
-    const bool show_minecraft_panel = game_category && MinecraftEffectLibrary::SearchMatchesFamily(search);
+
+    QString selected_game_id;
+    if(game_category)
+    {
+        QComboBox* game_combo = effectLibraryGameCombo();
+        if(game_combo)
+        {
+            if(!search.isEmpty())
+            {
+                for(int i = 1; i < game_combo->count(); ++i)
+                {
+                    if(game_combo->itemText(i).contains(search, Qt::CaseInsensitive))
+                    {
+                        game_combo->setCurrentIndex(i);
+                        break;
+                    }
+                }
+            }
+            selected_game_id = game_combo->currentData().toString();
+        }
+    }
 
     for(const EffectRegistration3D& reg : effects)
     {
-        if(MinecraftEffectLibrary::IsCollapsedClass(reg.class_name))
+        if(game_category)
+        {
+            if(selected_game_id.isEmpty() || QString::fromStdString(reg.game_id) != selected_game_id)
+            {
+                continue;
+            }
+            if(!search.isEmpty())
+            {
+                const QString ui_name = QString::fromStdString(reg.ui_name);
+                const QString game_label = QString::fromStdString(reg.game_label);
+                if(!ui_name.contains(search, Qt::CaseInsensitive)
+                   && !game_label.contains(search, Qt::CaseInsensitive))
+                {
+                    continue;
+                }
+            }
+        }
+        else if(!search.isEmpty() && !QString::fromStdString(reg.ui_name).contains(search, Qt::CaseInsensitive))
         {
             continue;
         }
-        if(!search.isEmpty() && !QString::fromStdString(reg.ui_name).contains(search, Qt::CaseInsensitive))
-        {
-            continue;
-        }
+
         rows.push_back({QString::fromStdString(reg.ui_name), QString::fromStdString(reg.class_name), selected_category});
-    }
-    if(show_minecraft_panel)
-    {
-        rows.push_back({QStringLiteral("Minecraft (Fabric)"),
-                        QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId()),
-                        selected_category});
     }
 
     std::sort(rows.begin(), rows.end(), [](const LibRow& a, const LibRow& b) {
@@ -576,17 +656,15 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     for(const LibRow& r : rows)
     {
         QListWidgetItem* item = new QListWidgetItem(r.text);
-        if(r.class_name == QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId()))
-        {
-            item->setToolTip(tr(
-                "Single-click opens the hub on the right; double-click opens it again if the panel switched away. "
-                "Configure, then use Add Minecraft layer or Add To Stack to append a layer (the hub stays open)."));
-        }
-        else if(audio_category)
+        if(audio_category)
         {
             item->setToolTip(tr(
                 "Adds this audio-reactive effect as its own stack layer. "
                 "Use Audio Input below to start capture; set Low/High Hz in the effect settings."));
+        }
+        else if(game_category)
+        {
+            item->setToolTip(tr("Adds this game effect as its own stack layer. Configure it in the panel on the right."));
         }
         else
         {
@@ -612,8 +690,7 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
                                                    int zone_index,
                                                    BlendMode blend_mode,
                                                    const nlohmann::json* preset_settings,
-                                                   bool enabled,
-                                                   bool keep_minecraft_hub_panel_after_add)
+                                                   bool enabled)
 {
     if(class_name.isEmpty())
     {
@@ -644,35 +721,6 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
     }
     UpdateEffectStackList();
     EffectInstance3D* new_instance = effect_stack[new_index].get();
-
-    if(keep_minecraft_hub_panel_after_add)
-    {
-        if(effectStackList())
-        {
-            effectStackList()->setCurrentRow(new_index);
-        }
-        if(new_instance && effectZoneCombo())
-        {
-            QSignalBlocker zb(effectZoneCombo());
-            int zone_combo_index = effectZoneCombo()->findData(new_instance->zone_index);
-            if(zone_combo_index >= 0)
-            {
-                effectZoneCombo()->setCurrentIndex(zone_combo_index);
-            }
-        }
-        UpdateEffectCombo();
-        UpdateAudioPanelVisibility();
-        if(effectStackList())
-        {
-            effectStackList()->blockSignals(restore_stack_list_signals);
-        }
-        SaveEffectStack();
-        if(effectLibraryList() && effectLibraryRowIsMinecraftHub(effectLibraryList()->currentRow()))
-        {
-            ShowMinecraftHubConfigurator();
-        }
-        return;
-    }
 
     if(new_instance)
     {
@@ -705,29 +753,37 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
 
 void OpenRGB3DSpatialTab::on_effect_library_category_changed(int)
 {
+    UpdateEffectLibraryGameFilterVisibility();
+    if(effectCategoryCombo())
+    {
+        const QVariant category_data = effectCategoryCombo()->currentData();
+        if(category_data.isValid()
+           && category_data.toString().compare(QStringLiteral("Game"), Qt::CaseInsensitive) == 0)
+        {
+            PopulateEffectLibraryGames();
+        }
+    }
+    PopulateEffectLibrary();
+}
+
+void OpenRGB3DSpatialTab::on_effect_library_game_changed(int)
+{
     PopulateEffectLibrary();
 }
 
 void OpenRGB3DSpatialTab::on_effect_library_selection_changed(int row)
 {
-    if(effectLibraryRowIsMinecraftHub(row))
+    const int si = effectStackList() ? effectStackList()->currentRow() : -1;
+    if(si >= 0 && si < (int)effect_stack.size())
     {
-        ShowMinecraftHubConfigurator();
+        LoadStackEffectControls(effect_stack[si].get());
     }
     else
     {
-        const int si = effectStackList() ? effectStackList()->currentRow() : -1;
-        if(si >= 0 && si < (int)effect_stack.size())
+        LoadStackEffectControls(nullptr);
+        if(effectConfigGroup())
         {
-            LoadStackEffectControls(effect_stack[si].get());
-        }
-        else
-        {
-            LoadStackEffectControls(nullptr);
-            if(effectConfigGroup())
-            {
-                effectConfigGroup()->setVisible(false);
-            }
+            effectConfigGroup()->setVisible(false);
         }
     }
 
@@ -749,11 +805,6 @@ void OpenRGB3DSpatialTab::on_effect_library_add_clicked()
     int current_row = effectLibraryList()->currentRow();
     if(current_row < 0)
     {
-        return;
-    }
-    if(effectLibraryRowIsMinecraftHub(current_row))
-    {
-        on_minecraft_library_add_clicked();
         return;
     }
     QListWidgetItem* item = effectLibraryList()->item(current_row);
@@ -778,11 +829,6 @@ void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem*
     {
         return;
     }
-    if(item->data(Qt::UserRole).toString() == QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId()))
-    {
-        ShowMinecraftHubConfigurator();
-        return;
-    }
     QString class_name;
     QString ui_name;
     ResolveEffectLibraryItem(item, class_name, ui_name);
@@ -791,136 +837,6 @@ void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem*
         return;
     }
     AddEffectInstanceToStack(class_name, ui_name);
-}
-
-bool OpenRGB3DSpatialTab::effectLibraryRowIsMinecraftHub(int row) const
-{
-    if(row < 0 || !effectLibraryList())
-    {
-        return false;
-    }
-    QListWidgetItem* it = effectLibraryList()->item(row);
-    return it && it->data(Qt::UserRole).toString() == QString::fromUtf8(MinecraftEffectLibrary::LibraryHubClassId());
-}
-
-void OpenRGB3DSpatialTab::ClearMinecraftLibraryPanel()
-{
-    SpatialEffect3D* preview = minecraft_hub_preview_effect;
-    if(preview)
-    {
-        disconnect(preview, nullptr, this, nullptr);
-        if(start_effect_button)
-        {
-            disconnect(start_effect_button, nullptr, this, nullptr);
-        }
-        if(stop_effect_button)
-        {
-            disconnect(stop_effect_button, nullptr, this, nullptr);
-        }
-    }
-
-    if(current_effect_ui == preview)
-    {
-        current_effect_ui = nullptr;
-        start_effect_button = nullptr;
-        stop_effect_button = nullptr;
-    }
-
-    minecraft_hub_preview_effect   = nullptr;
-    minecraft_library_hub_active   = false;
-
-    if(minecraftHubPreviewHolder())
-    {
-        if(QLayout* hl = minecraftHubPreviewHolder()->layout())
-        {
-            QLayoutItem* item = nullptr;
-            while((item = hl->takeAt(0)) != nullptr)
-            {
-                if(QWidget* w = item->widget())
-                {
-                    w->deleteLater();
-                }
-                delete item;
-            }
-        }
-    }
-
-    if(ui && ui->minecraftLibraryPanel)
-    {
-        ui->minecraftLibraryPanel->setVisible(false);
-    }
-    UpdateAudioPanelVisibility();
-}
-
-void OpenRGB3DSpatialTab::ShowMinecraftHubConfigurator()
-{
-    if(!ui || !ui->minecraftLibraryPanel)
-    {
-        return;
-    }
-
-    if(ui->leftModeTabs && ui->leftModeTabs->currentIndex() != 0)
-    {
-        ui->leftModeTabs->setCurrentIndex(0);
-    }
-
-    LoadStackEffectControls(nullptr);
-
-    if(effectConfigGroup())
-    {
-        effectConfigGroup()->setVisible(true);
-    }
-    if(effectZoneCombo())
-    {
-        effectZoneCombo()->setEnabled(true);
-    }
-    if(effectOriginCombo())
-    {
-        effectOriginCombo()->setEnabled(true);
-    }
-    if(originLabel())
-    {
-        originLabel()->setVisible(true);
-    }
-
-    if(!minecraftLibraryLayerCombo() || !minecraftHubPreviewHolder())
-    {
-        return;
-    }
-
-    minecraft_library_hub_active = true;
-    rebuildMinecraftHubPreviewEffect();
-    ui->minecraftLibraryPanel->setVisible(true);
-    ui->minecraftLibraryPanel->updateGeometry();
-
-    if(effectControlsWidget())
-    {
-        effectControlsWidget()->setVisible(false);
-    }
-
-    QTimer::singleShot(0, this, [this]() {
-        if(!ui || !ui->minecraftLibraryPanel || !ui->minecraftLibraryPanel->isVisible())
-        {
-            return;
-        }
-        QWidget* detail = ui->minecraftLibraryPanel->parentWidget();
-        if(!detail)
-        {
-            return;
-        }
-        QWidget* detail_parent = detail->parentWidget();
-        if(!detail_parent)
-        {
-            return;
-        }
-        if(QScrollArea* sa = qobject_cast<QScrollArea*>(detail_parent->parentWidget()))
-        {
-            sa->ensureWidgetVisible(ui->minecraftLibraryPanel, 0, 32);
-        }
-    });
-
-    UpdateEffectStackRowSelectorVisibility();
-    UpdateAudioPanelVisibility();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
@@ -935,125 +851,6 @@ void OpenRGB3DSpatialTab::UpdateEffectStackRowSelectorVisibility()
         effectStackRowLabel()->setVisible(show_effect_row);
     }
     effectCombo()->setVisible(show_effect_row);
-}
-
-void OpenRGB3DSpatialTab::rebuildMinecraftHubPreviewEffect()
-{
-    if(!minecraft_library_hub_active || !minecraftLibraryLayerCombo() || !minecraftHubPreviewHolder())
-    {
-        return;
-    }
-
-    QVBoxLayout* hl = qobject_cast<QVBoxLayout*>(minecraftHubPreviewHolder()->layout());
-    if(!hl)
-    {
-        return;
-    }
-
-    while(QLayoutItem* item = hl->takeAt(0))
-    {
-        if(QWidget* w = item->widget())
-        {
-            w->setVisible(false);
-            w->setParent(nullptr);
-            w->deleteLater();
-        }
-        delete item;
-    }
-
-    if(minecraft_hub_preview_effect)
-    {
-        disconnect(minecraft_hub_preview_effect, nullptr, this, nullptr);
-        if(start_effect_button)
-        {
-            disconnect(start_effect_button, nullptr, this, nullptr);
-        }
-        if(stop_effect_button)
-        {
-            disconnect(stop_effect_button, nullptr, this, nullptr);
-        }
-        minecraft_hub_preview_effect = nullptr;
-        current_effect_ui = nullptr;
-        start_effect_button = nullptr;
-        stop_effect_button = nullptr;
-    }
-
-    const QString class_name = minecraftLibraryLayerCombo()->currentData().toString();
-    if(class_name.isEmpty())
-    {
-        return;
-    }
-
-    SpatialEffect3D* effect = EffectListManager3D::get()->CreateEffect(class_name.toStdString());
-    if(!effect)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Minecraft hub: failed to create effect: %s", class_name.toStdString().c_str());
-        return;
-    }
-
-    effect->setParent(minecraftHubPreviewHolder());
-    effect->MountSettingsUi(minecraftHubPreviewHolder(), SpatialEffectSettingsLayout::FullWithTransport);
-
-    minecraft_hub_preview_effect = effect;
-    current_effect_ui = effect;
-
-    if(QPushButton* sb = effect->GetStartButton())
-    {
-        start_effect_button = sb;
-        connect(start_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
-    }
-    if(QPushButton* stb = effect->GetStopButton())
-    {
-        stop_effect_button = stb;
-        connect(stop_effect_button, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
-    }
-
-    connect(effect, &SpatialEffect3D::ParametersChanged, this, [this]() {
-        RefreshEffectDisplay();
-    });
-
-    effect->adjustSize();
-    minecraftHubPreviewHolder()->adjustSize();
-
-    if(ui && ui->minecraftLibraryPanel)
-    {
-        ui->minecraftLibraryPanel->updateGeometry();
-    }
-}
-
-void OpenRGB3DSpatialTab::on_minecraft_library_layer_combo_changed(int)
-{
-    rebuildMinecraftHubPreviewEffect();
-}
-
-void OpenRGB3DSpatialTab::on_minecraft_library_add_clicked()
-{
-    if(!minecraft_library_hub_active || !minecraftLibraryLayerCombo())
-    {
-        return;
-    }
-    const QString class_name = minecraftLibraryLayerCombo()->currentData().toString();
-    if(class_name.isEmpty())
-    {
-        return;
-    }
-    int zone_index = -1;
-    if(effectZoneCombo() && effectZoneCombo()->currentIndex() >= 0)
-    {
-        zone_index = effectZoneCombo()->currentData().toInt();
-    }
-    EffectRegistration3D info = EffectListManager3D::get()->GetEffectInfo(class_name.toStdString());
-    const QString ui_name = info.ui_name.empty() ? minecraftLibraryLayerCombo()->currentText()
-                                                 : QString::fromStdString(info.ui_name);
-    if(minecraft_hub_preview_effect)
-    {
-        nlohmann::json preset = minecraft_hub_preview_effect->SaveSettings();
-        AddEffectInstanceToStack(class_name, ui_name, zone_index, BlendMode::NO_BLEND, &preset, true, true);
-    }
-    else
-    {
-        AddEffectInstanceToStack(class_name, ui_name, zone_index, BlendMode::NO_BLEND, nullptr, true, true);
-    }
 }
 
 void OpenRGB3DSpatialTab::ClearCustomEffectUI()
@@ -2008,6 +1805,11 @@ QComboBox* OpenRGB3DSpatialTab::effectCategoryCombo() const
     return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->categoryCombo() : nullptr;
 }
 
+QComboBox* OpenRGB3DSpatialTab::effectLibraryGameCombo() const
+{
+    return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->gameCombo() : nullptr;
+}
+
 QLineEdit* OpenRGB3DSpatialTab::effectLibrarySearch() const
 {
     return ui && ui->effectLibraryPanel ? ui->effectLibraryPanel->searchEdit() : nullptr;
@@ -2251,16 +2053,6 @@ QWidget* OpenRGB3DSpatialTab::effectControlsWidget() const
 QVBoxLayout* OpenRGB3DSpatialTab::effectControlsLayout() const
 {
     return ui && ui->effectControlsHostPanel ? ui->effectControlsHostPanel->contentLayout() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::minecraftLibraryLayerCombo() const
-{
-    return ui && ui->minecraftLibraryPanel ? ui->minecraftLibraryPanel->layerCombo() : nullptr;
-}
-
-QWidget* OpenRGB3DSpatialTab::minecraftHubPreviewHolder() const
-{
-    return ui && ui->minecraftLibraryPanel ? ui->minecraftLibraryPanel->hubPreviewHolder() : nullptr;
 }
 
 QComboBox* OpenRGB3DSpatialTab::audioDeviceCombo() const

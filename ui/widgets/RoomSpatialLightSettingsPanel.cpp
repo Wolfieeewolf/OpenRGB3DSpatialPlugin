@@ -47,7 +47,7 @@ void RoomSpatialLightSettingsPanel::configureStaticLabels()
     ui->roomFillRow->setCaptionText(QStringLiteral("Room fill:"));
     ui->ambientOcclusionRow->setCaptionText(QStringLiteral("Ambient occlusion:"));
 
-    ui->shadowsRow->configure(QStringLiteral("Blockers (shadows)"), true);
+    ui->shadowsRow->configure(QStringLiteral("Blockers (shadows)"), false);
     ui->roomWallsRow->configure(QStringLiteral("Include room walls as blockers"), false);
 }
 

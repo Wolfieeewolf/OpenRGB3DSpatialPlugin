@@ -16,7 +16,6 @@ protected:
     std::uint32_t channels_ = 0;
     const char* effect_title_ = "";
     MinecraftGame::Settings mc_settings_{};
-    MinecraftGame::WorldTintSmoothState world_smooth_{};
 
     nlohmann::json SaveMinecraftJson() const;
     void LoadMinecraftJson(const nlohmann::json& settings);

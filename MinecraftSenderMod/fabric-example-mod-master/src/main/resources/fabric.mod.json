@@ -3,17 +3,22 @@
   "id": "openrgb-minecraft-sender",
   "version": "${version}",
   "name": "OpenRGB Minecraft Sender",
-  "description": "Telemetry for OpenRGB 3D Spatial: world_light (world tint layers), player_pose, health_state, and damage_event over UDP 127.0.0.1:9876.",
+  "description": "Telemetry for OpenRGB 3D Spatial over UDP (world_light, player_pose, voxel_frame, health_state, damage_event). Configure in-game via Mod Settings (F6) or Mod Menu when installed.",
   "authors": ["wolfi"],
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "client": ["me.wolfi.openrgb.OpenRGBSenderMod"]
+    "client": ["me.wolfi.openrgb.OpenRGBSenderMod"],
+    "modmenu": ["me.wolfi.openrgb.ModMenuIntegration"]
   },
   "depends": {
-    "fabricloader": ">=0.16.0",
-    "minecraft": "~1.21.1",
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.8",
     "java": ">=21"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "modsettings": "*"
   },
   "mixins": [
     "openrgb-sender.mixins.json"

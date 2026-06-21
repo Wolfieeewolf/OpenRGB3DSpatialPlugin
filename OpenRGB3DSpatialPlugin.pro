@@ -129,11 +129,17 @@ HEADERS += \
     SpatialSamplers/SpatialLayerCore.h \
     SpatialSamplers/VoxelRoomCore.h \
     SpatialSamplers/VoxelMapping.h \
-    Effects3D/Games/Minecraft/MinecraftGameEffect3D.h \
     Effects3D/Games/Minecraft/MinecraftGame.h \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
-    Effects3D/Games/Minecraft/MinecraftEffectLibrary.h \
+    Effects3D/Games/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftWorldTint/MinecraftWorldTintEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftRoomVrTint/MinecraftRoomVrTintEffect3D.h \
+    Effects3D/Games/Minecraft/MinecraftLightning/MinecraftLightningEffect3D.h \
     SpatialRoom/SpatialRoomTypes.h \
     SpatialRoom/SpatialRoomDefaults.h \
     SpatialRoom/SpatialRoomFrame.h \
@@ -158,7 +164,6 @@ HEADERS += \
     ui/EffectStackPanel.h \
     ui/ZonesPanel.h \
     ui/EffectGlobalSettingsPanel.h \
-    ui/MinecraftLibraryPanel.h \
     ui/AudioInputPanel.h \
     ui/AudioAdvancedSettingsDialog.h \
     ui/EffectControlsHostPanel.h \
@@ -233,33 +238,22 @@ HEADERS += \
     Shaders/SpatialShaderEngine.h \
     Shaders/SpatialShaderUniforms.h \
     Shaders/SpatialShaderCatalog.h \
-    Effects3D/BandScan/BandScan.h \
     Effects3D/AudioReactiveUi.h \
     Effects3D/AudioLevel/AudioLevel.h \
     Effects3D/AudioPulse/AudioPulse.h \
-    Effects3D/FreqFill/FreqFill.h \
-    Effects3D/DiscoFlash/DiscoFlash.h \
-    Effects3D/CubeLayer/CubeLayer.h \
     Audio/AudioInputManager.h \
     Effects3D/Plasma/Plasma.h \
     Effects3D/Spiral/Spiral.h \
-    Effects3D/Explosion/Explosion.h \
     Effects3D/TravelingLight/TravelingLight.h \
     Effects3D/Wave/Wave.h \
     Effects3D/BreathingSphere/BreathingSphere.h \
     Effects3D/DNAHelix/DNAHelix.h \
-    Effects3D/Tornado/Tornado.h \
-    Effects3D/Lightning/Lightning.h \
-    Effects3D/Matrix/Matrix.h \
     Effects3D/BouncingBall/BouncingBall.h \
-    Effects3D/WireframeCube/WireframeCube.h \
     Effects3D/PulseRing/PulseRing.h \
     Effects3D/SurfaceAmbient/SurfaceAmbient.h \
     Effects3D/Starfield/Starfield.h \
-    Effects3D/Fireworks/Fireworks.h \
     Effects3D/Bubbles/Bubbles.h \
     Effects3D/ColorWheel/ColorWheel.h \
-    Effects3D/Sunrise/Sunrise.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
@@ -270,11 +264,8 @@ HEADERS += \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.h \
     Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.h \
     Effects3D/HarmonicPulse/HarmonicPulse.h \
-    Effects3D/Bouncer/Bouncer.h \
     Effects3D/HexLattice/HexLattice.h \
-    Effects3D/DepthTone/DepthTone.h \
-    Effects3D/SharpPulse/SharpPulse.h \
-    Effects3D/XorField/XorField.h
+    Effects3D/DepthTone/DepthTone.h
 
 SOURCES += \
     OpenRGB3DSpatialPlugin.cpp \
@@ -295,10 +286,17 @@ SOURCES += \
     SpatialSamplers/SpatialLayerCore.cpp \
     SpatialSamplers/VoxelRoomCore.cpp \
     SpatialSamplers/VoxelMapping.cpp \
-    Effects3D/Games/Minecraft/MinecraftGameEffect3D.cpp \
     Effects3D/Games/Minecraft/MinecraftGame.cpp \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftHealth/MinecraftHealthEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftHunger/MinecraftHungerEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftAir/MinecraftAirEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftDurability/MinecraftDurabilityEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftDamage/MinecraftDamageEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftWorldTint/MinecraftWorldTintEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftRoomVrTint/MinecraftRoomVrTintEffect3D.cpp \
+    Effects3D/Games/Minecraft/MinecraftLightning/MinecraftLightningEffect3D.cpp \
     SpatialRoom/SpatialRoomDefaults.cpp \
     SpatialRoom/SpatialRoomFrame.cpp \
     SpatialLighting/BlockerGridOccluder.cpp \
@@ -323,7 +321,6 @@ SOURCES += \
     ui/EffectStackPanel.cpp \
     ui/ZonesPanel.cpp \
     ui/EffectGlobalSettingsPanel.cpp \
-    ui/MinecraftLibraryPanel.cpp \
     ui/AudioInputPanel.cpp \
     ui/AudioAdvancedSettingsDialog.cpp \
     ui/EffectControlsHostPanel.cpp \
@@ -379,34 +376,23 @@ SOURCES += \
     ui/widgets/AudioEqBandColumn.cpp \
     Effects3D/Plasma/Plasma.cpp \
     Effects3D/Spiral/Spiral.cpp \
-    Effects3D/Explosion/Explosion.cpp \
     Effects3D/TravelingLight/TravelingLight.cpp \
     Effects3D/Wave/Wave.cpp \
     Effects3D/BreathingSphere/BreathingSphere.cpp \
     Effects3D/DNAHelix/DNAHelix.cpp \
-    Effects3D/Tornado/Tornado.cpp \
-    Effects3D/Lightning/Lightning.cpp \
-    Effects3D/Matrix/Matrix.cpp \
     Effects3D/BouncingBall/BouncingBall.cpp \
     Effects3D/SpectrumBars/SpectrumBars.cpp \
     Effects3D/AudioStripVisualizer/AudioStripVisualizer.cpp \
     Effects3D/ShaderField/ShaderField.cpp \
     Shaders/SpatialShaderEngine.cpp \
     Shaders/SpatialShaderCatalog.cpp \
-    Effects3D/BandScan/BandScan.cpp \
     Effects3D/AudioLevel/AudioLevel.cpp \
     Effects3D/AudioPulse/AudioPulse.cpp \
-    Effects3D/FreqFill/FreqFill.cpp \
-    Effects3D/DiscoFlash/DiscoFlash.cpp \
-    Effects3D/CubeLayer/CubeLayer.cpp \
-    Effects3D/WireframeCube/WireframeCube.cpp \
     Effects3D/PulseRing/PulseRing.cpp \
     Effects3D/SurfaceAmbient/SurfaceAmbient.cpp \
     Effects3D/Starfield/Starfield.cpp \
-    Effects3D/Fireworks/Fireworks.cpp \
     Effects3D/Bubbles/Bubbles.cpp \
     Effects3D/ColorWheel/ColorWheel.cpp \
-    Effects3D/Sunrise/Sunrise.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
     Effects3D/TextureProjection/TextureProjection.cpp \
@@ -416,11 +402,8 @@ SOURCES += \
     Effects3D/SpatialPatternKernels/SpatialPatternPalettes.cpp \
     Effects3D/RotatingConeSpotlights/RotatingConeSpotlights.cpp \
     Effects3D/HarmonicPulse/HarmonicPulse.cpp \
-    Effects3D/Bouncer/Bouncer.cpp \
     Effects3D/HexLattice/HexLattice.cpp \
     Effects3D/DepthTone/DepthTone.cpp \
-    Effects3D/SharpPulse/SharpPulse.cpp \
-    Effects3D/XorField/XorField.cpp \
     Audio/AudioInputManager.cpp
 
 win32:CONFIG += QTPLUGIN
@@ -457,7 +440,6 @@ FORMS += \
     ui/forms/EffectStackPanel.ui \
     ui/forms/ZonesPanel.ui \
     ui/forms/EffectGlobalSettingsPanel.ui \
-    ui/forms/MinecraftLibraryPanel.ui \
     ui/forms/AudioInputPanel.ui \
     ui/forms/AudioAdvancedSettingsDialog.ui \
     ui/forms/EffectLayerBanner.ui \

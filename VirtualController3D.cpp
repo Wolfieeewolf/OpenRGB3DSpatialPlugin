@@ -689,20 +689,6 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
         }
     }
 
-    const bool has_cell_size_arrays = !column_widths.empty() || !row_heights.empty() || !layer_depths.empty();
-    if(!has_cell_size_arrays)
-    {
-        const float legacy_x = j.value("blocker_size_mm_x", spacing_x);
-        const float legacy_y = j.value("blocker_size_mm_y", spacing_y);
-        const float legacy_z = j.value("blocker_size_mm_z", spacing_z);
-        if(j.contains("blocker_size_mm_x") || j.contains("blocker_size_mm_y") || j.contains("blocker_size_mm_z"))
-        {
-            column_widths.assign(static_cast<size_t>(width), legacy_x);
-            row_heights.assign(static_cast<size_t>(height), legacy_y);
-            layer_depths.assign(static_cast<size_t>(depth), legacy_z);
-        }
-    }
-
     const std::string name = j["name"].get<std::string>();
     const json&         mappings_json = j["mappings"];
 

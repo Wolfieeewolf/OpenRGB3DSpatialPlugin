@@ -6,6 +6,7 @@
 #include "ui_GameTelemetryStatusPanel.h"
 
 #include <QHideEvent>
+#include <QLabel>
 #include <QShowEvent>
 #include <QTimer>
 
@@ -15,6 +16,9 @@ GameTelemetryStatusPanel::GameTelemetryStatusPanel(QWidget* parent)
 {
     ui->setupUi(this);
     PluginUiApplyMutedSecondaryLabel(ui->helpLabel->label());
+
+    signals_label = new QLabel(this);
+    ui->mainLayout->addWidget(signals_label);
 
     refresh_timer = new QTimer(this);
     refresh_timer->setTimerType(Qt::CoarseTimer);
@@ -67,4 +71,14 @@ void GameTelemetryStatusPanel::RefreshStatus()
                                    .arg(total)
                                    .arg(valid)
                                    .arg(error));
+
+    const GameTelemetryBridge::TelemetrySnapshot snap = GameTelemetryBridge::GetTelemetrySnapshot();
+    if(signals_label)
+    {
+        signals_label->setText(QStringLiteral("Pose: %1 | Probes: %2 | Voxel: %3 | World light: %4")
+                                   .arg(snap.has_player_pose ? QStringLiteral("yes") : QStringLiteral("no"),
+                                        snap.has_layered_world_probes ? QStringLiteral("yes") : QStringLiteral("no"),
+                                        snap.voxel_frame.has_voxel_frame ? QStringLiteral("yes") : QStringLiteral("no"),
+                                        snap.has_world_light ? QStringLiteral("yes") : QStringLiteral("no")));
+    }
 }

@@ -6,7 +6,6 @@
 #include "EffectTransportRow.h"
 #include "EffectListManager3D.h"
 #include "ZoneGrid3D.h"
-#include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
 #include "LogManager.h"
@@ -115,11 +114,6 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     SaveEffectStack();
 
     RenderEffectStack();
-
-    if(effect_stack.empty() && effectLibraryList() && effectLibraryRowIsMinecraftHub(effectLibraryList()->currentRow()))
-    {
-        ShowMinecraftHubConfigurator();
-    }
 }
 
 void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
@@ -366,7 +360,6 @@ void OpenRGB3DSpatialTab::UpdateStackEffectZoneCombo()
 
 void OpenRGB3DSpatialTab::LoadStackEffectControls(EffectInstance3D* instance)
 {
-    ClearMinecraftLibraryPanel();
     UpdateAudioPanelVisibility();
 
     QScrollArea* detail_scroll = ui ? ui->effectsDetailScroll : nullptr;
@@ -504,17 +497,6 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
         direct_start = transport_row->startEffectButton();
         direct_stop = transport_row->stopEffectButton();
         effectControlsLayout()->addWidget(transport_row);
-    }
-
-    if(instance->effect_class_name == "MinecraftGame")
-    {
-        QLabel* bundled_hint = new QLabel(tr(
-            "This stack row is the bundled Minecraft layer (all channels in one effect). "
-            "To build your stack one channel at a time, use the Effect Library: Filter \u2192 Game, select "
-            "Minecraft (Fabric), pick a single layer in the dropdown, then Add Minecraft layer."));
-        bundled_hint->setWordWrap(true);
-        PluginUiApplyMutedSecondaryLabel(bundled_hint);
-        effectControlsLayout()->addWidget(bundled_hint);
     }
 
     EffectSettingsUiMount mount = createEffectSettingsUi(effectControlsWidget(),

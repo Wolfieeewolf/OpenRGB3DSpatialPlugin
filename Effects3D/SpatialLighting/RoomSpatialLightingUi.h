@@ -20,9 +20,9 @@ struct RoomSpatialLightParams
     float custom_u = 0.15f;
     float custom_v = 0.15f;
     float custom_w = 0.12f;
-    bool use_occlusion = true;
+    bool use_occlusion = false;
     bool use_room_walls = false;
-    bool use_controller_occlusion = true;
+    bool use_controller_occlusion = false;
     float ao_strength = 65.0f;
     float glow_radius_mm = 45.0f;
     float light_reach_mm = 280.0f;

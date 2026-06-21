@@ -6,6 +6,7 @@
 #include <QGroupBox>
 
 class QComboBox;
+class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
@@ -27,6 +28,8 @@ public:
     void bindTab(OpenRGB3DSpatialTab* tab);
 
     QComboBox*   categoryCombo() const;
+    QLabel*      gameLabel() const;
+    QComboBox*   gameCombo() const;
     QLineEdit*   searchEdit() const;
     QListWidget* libraryList() const;
     QPushButton* addToStackButton() const;

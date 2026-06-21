@@ -5,15 +5,26 @@
 
 #include "EffectListManager3D.h"
 
-#define EFFECT_REGISTERER_3D(_classname, _ui_name, _category, _constructor) \
-    static class _register                                                   \
-    {                                                                        \
-     public:                                                                 \
-       _register()                                                           \
-       {                                                                     \
-           EffectListManager3D::get()->RegisterEffect(_classname, _ui_name, \
-                                                       _category, _constructor); \
-        }                                                                    \
+#define EFFECT_REGISTERER_3D(_classname, _ui_name, _category, _constructor)          \
+    static class _register                                                           \
+    {                                                                                \
+     public:                                                                         \
+       _register()                                                                   \
+       {                                                                             \
+           EffectListManager3D::get()->RegisterEffect(_classname, _ui_name,        \
+                                                       _category, "", "", _constructor); \
+        }                                                                            \
+    } _registerer;
+
+#define EFFECT_REGISTERER_3D_GAME(_classname, _ui_name, _game_id, _game_label, _constructor) \
+    static class _register                                                                    \
+    {                                                                                         \
+     public:                                                                                  \
+       _register()                                                                            \
+       {                                                                                      \
+           EffectListManager3D::get()->RegisterEffect(_classname, _ui_name,                 \
+                                                       "Game", _game_id, _game_label, _constructor); \
+        }                                                                                     \
     } _registerer;
 
 #define REGISTER_EFFECT_3D(T) T::_register T::_registerer;

@@ -133,7 +133,7 @@ Aligned with `OpenRGB/Documentation/RGBControllerAPI.md` and safe patterns for m
 ## Game / Minecraft and similar effects
 
 - Telemetry (e.g. UDP on localhost) is separate from the RGBController wire protocol; still apply logging, validation, and thread-safety patterns from the rest of the plugin.
-- Effect UI that targets the stack (library hub, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
+- Effect UI that targets the stack (effect library, global settings, add-to-stack flow) must keep **list/combo/signal** state consistent—see **UI** below.
 
 ## UI
 
@@ -153,7 +153,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 
 **Add new UI only when** the control is truly effect-specific or no shared helper exists yet—and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path ([EFFECTS.md](docs/EFFECTS.md#legacy-ui-and-settings--remove-do-not-preserve)). **`EffectSamplerPanel`** (room / compass / voxel mapping) is **not** in the default common stack: it is created only when an effect calls `SpatialEffect3D::AttachRoomMappingPanel` — today **Minecraft** (`MinecraftGameEffect3D`, `MinecraftSubEffect3D`) only. Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead; they do not attach this panel. Layout is in `ui/forms/EffectSamplerPanel.ui`; combo items and initial values are still set in `EffectSamplerPanel.cpp` after `setupUi`.
+Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path ([EFFECTS.md](docs/EFFECTS.md#legacy-ui-and-settings--remove-do-not-preserve)). **`EffectSamplerPanel`** (room / compass / voxel mapping) is **not** in the default common stack: it is created only when an effect calls `SpatialEffect3D::AttachRoomMappingPanel` — today **Minecraft** sub-effects (`MinecraftSubEffect3D` and per-channel classes under `Effects3D/Games/Minecraft/`) only. Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead; they do not attach this panel. Layout is in `ui/forms/EffectSamplerPanel.ui`; combo items and initial values are still set in `EffectSamplerPanel.cpp` after `setupUi`.
 
 ### Effect settings tab order (stack / library)
 
@@ -167,9 +167,9 @@ Within **Effect-specific settings**, stack rows in a **`QVBoxLayout`** via **`Ef
 
 **Audio effects:** same reuse rule as above. Each algorithm is its own stack layer. Prefer **strip-first** effects (e.g. **Audio Strip Visualizer**) with **zone / single-controller** targeting for floor, wall, and ceiling strips; use full-room 3D audio effects when one layer should cover everything. Shared audio helpers live in `Effects3D/AudioReactiveUi.h` (`AppendStandardFrequencyBandSection`, `AppendStandardDriveSection`, `AppendStandardResponseSection`, `AppendStandardBeatWaveSection`, `AppendStandardSpectrumAnalyzerSections`). Global **16-band EQ** is on the **Audio Input** panel. Show that panel when any audio layer is on the stack.
 
-- **Spectrum bin effects** (Band Scan, Spectrum Bars, Audio Strip Visualizer) use frequency band + response only—no drive-mode row; they sample raw FFT bins in the Hz range.
-- **Level-driven effects** (Frequency Fill, Audio Level, Cube Layer) use frequency band + drive + response.
-- **Audio Pulse** uses the full beat-wave section; **Disco Flash** is scattered beat flashes only (no beat-wave overlay). In Disco Flash **sparkle** mode, frequency/drive/response panels are hidden; flash blob radius uses common **Size**, not a duplicate slider.
+- **Spectrum bin effects** (Spectrum Bars, Audio Strip Visualizer) use frequency band + response only—no drive-mode row; they sample raw FFT bins in the Hz range.
+- **Level-driven effects** (Audio Level) use frequency band + drive + response.
+- **Audio Pulse** uses the full beat-wave section for beat-triggered shockwaves from the origin.
 
 Optional local notes may live in a gitignored **`docs/`** folder on your machine; they are not part of the published repo.
 

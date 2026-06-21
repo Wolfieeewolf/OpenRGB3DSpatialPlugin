@@ -48,6 +48,7 @@ struct MapperSettings
 {
     float room_to_world_scale = 0.18f;
     float alpha_cutoff = 0.02f;
+    bool nearest_sample = false;
 };
 
 RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,

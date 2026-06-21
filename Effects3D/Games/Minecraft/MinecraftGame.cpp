@@ -4,9 +4,8 @@
 #include "MinecraftGameSettings.h"
 #include "GameTelemetryStatusPanel.h"
 #include "SpatialBasisUtils.h"
-#include "SpatialLayerCore.h"
-#include "VoxelRoomCore.h"
 #include "SpatialEffect3D.h"
+#include "VoxelMapping.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -18,14 +17,11 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
-#include <array>
-#include <functional>
-#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <functional>
 
 namespace MinecraftGame
 {
@@ -34,104 +30,6 @@ namespace
 {
 thread_local int tls_led_index = -1;
 thread_local int tls_led_count = 0;
-
-struct AdaptiveLayerState
-{
-    std::array<unsigned int, 48> y_hist{};
-    unsigned int y_samples = 0;
-    bool has_gamma = false;
-    float gamma = 1.0f;
-    bool has_auto_bounds = false;
-    float auto_floor_end = 0.30f;
-    float auto_desk_end = 0.55f;
-    float auto_upper_end = 0.78f;
-};
-
-thread_local AdaptiveLayerState tls_layer_state;
-
-std::atomic<int> g_spatial_sweep_live{0};
-std::atomic<int> g_spatial_sweep_step{0};
-std::atomic<int> g_spatial_sweep_step_count{0};
-std::atomic<int> g_spatial_sweep_layer_count{0};
-std::atomic<int> g_spatial_sweep_top_band{0};
-std::atomic<int> g_spatial_sweep_sector{0};
-
-static float QuantileFromHist(const std::array<unsigned int, 48>& hist, unsigned int total, float q)
-{
-    if(total == 0)
-    {
-        return 0.5f;
-    }
-    const float target = std::clamp(q, 0.0f, 1.0f) * (float)total;
-    unsigned int run = 0;
-    for(size_t i = 0; i < hist.size(); i++)
-    {
-        run += hist[i];
-        if((float)run >= target)
-        {
-            const float b0 = (float)i / (float)hist.size();
-            const float b1 = (float)(i + 1) / (float)hist.size();
-            return 0.5f * (b0 + b1);
-        }
-    }
-    return 1.0f;
-}
-
-static void FinalizeAdaptiveLayerState()
-{
-    if(tls_layer_state.y_samples < 8)
-    {
-        tls_layer_state.y_hist.fill(0u);
-        tls_layer_state.y_samples = 0;
-        return;
-    }
-
-    const float q10 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.10f);
-    const float q25 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.25f);
-    const float q50 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.50f);
-    const float q75 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.75f);
-    const float q90 = QuantileFromHist(tls_layer_state.y_hist, tls_layer_state.y_samples, 0.90f);
-    const float spread = q90 - q10;
-
-    float target_gamma = 1.0f;
-    if(spread > 0.10f)
-    {
-        const float target_mid = 0.46f;
-        const float m = std::clamp(q50, 0.05f, 0.95f);
-        target_gamma = std::log(target_mid) / std::log(m);
-        target_gamma = std::clamp(target_gamma, 0.65f, 1.35f);
-    }
-
-    if(!tls_layer_state.has_gamma)
-    {
-        tls_layer_state.gamma = target_gamma;
-        tls_layer_state.has_gamma = true;
-    }
-    else
-    {
-        tls_layer_state.gamma = tls_layer_state.gamma + (target_gamma - tls_layer_state.gamma) * 0.25f;
-    }
-
-    const float floor_target = std::clamp(q25 + 0.02f, 0.10f, 0.48f);
-    const float desk_target = std::clamp(q50 + 0.04f, floor_target + 0.08f, 0.80f);
-    const float upper_target = std::clamp(q75 + 0.03f, desk_target + 0.08f, 0.94f);
-    if(!tls_layer_state.has_auto_bounds)
-    {
-        tls_layer_state.auto_floor_end = floor_target;
-        tls_layer_state.auto_desk_end = desk_target;
-        tls_layer_state.auto_upper_end = upper_target;
-        tls_layer_state.has_auto_bounds = true;
-    }
-    else
-    {
-        tls_layer_state.auto_floor_end += (floor_target - tls_layer_state.auto_floor_end) * 0.25f;
-        tls_layer_state.auto_desk_end += (desk_target - tls_layer_state.auto_desk_end) * 0.25f;
-        tls_layer_state.auto_upper_end += (upper_target - tls_layer_state.auto_upper_end) * 0.25f;
-    }
-
-    tls_layer_state.y_hist.fill(0u);
-    tls_layer_state.y_samples = 0;
-}
 }
 
 void SetRenderSampleIndexContext(int led_index, int led_count)
@@ -142,7 +40,6 @@ void SetRenderSampleIndexContext(int led_index, int led_count)
 
 void ClearRenderSampleIndexContext()
 {
-    FinalizeAdaptiveLayerState();
     tls_led_index = -1;
     tls_led_count = 0;
 }
@@ -277,180 +174,36 @@ RGBColor MakeRgb(unsigned char r, unsigned char g, unsigned char b)
     return (RGBColor)(((int)b << 16) | ((int)g << 8) | (int)r);
 }
 
-RGBColor SuppressWhites(RGBColor c)
-{
-    float r = (float)(c & 0xFF) / 255.0f;
-    float g = (float)((c >> 8) & 0xFF) / 255.0f;
-    float b = (float)((c >> 16) & 0xFF) / 255.0f;
-    float maxc = std::max(r, std::max(g, b));
-    float minc = std::min(r, std::min(g, b));
-    float chroma = maxc - minc;
-    if(maxc > 0.68f && chroma < 0.14f)
-    {
-        float k = std::clamp((0.14f - chroma) / 0.14f, 0.0f, 1.0f) * std::clamp((maxc - 0.68f) / 0.32f, 0.0f, 1.0f);
-        float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-        float target = luma * (0.88f - 0.22f * k);
-        r = std::clamp(r + (target - r) * 0.50f * k, 0.0f, 1.0f);
-        g = std::clamp(g + (target - g) * 0.50f * k, 0.0f, 1.0f);
-        b = std::clamp(b + (target - b) * 0.50f * k, 0.0f, 1.0f);
-    }
-    const int ri = std::clamp((int)std::round(r * 255.0f), 0, 255);
-    const int gi = std::clamp((int)std::round(g * 255.0f), 0, 255);
-    const int bi = std::clamp((int)std::round(b * 255.0f), 0, 255);
-    return (RGBColor)((bi << 16) | (gi << 8) | ri);
-}
-
-RGBColor ApplyVividness(RGBColor c, float vividness)
-{
-    const float v = std::clamp(vividness, 0.60f, 2.00f);
-    if(std::fabs(v - 1.0f) < 1e-4f)
-    {
-        return c;
-    }
-    float r = (float)(c & 0xFF) / 255.0f;
-    float g = (float)((c >> 8) & 0xFF) / 255.0f;
-    float b = (float)((c >> 16) & 0xFF) / 255.0f;
-    const float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-    r = luma + (r - luma) * v;
-    g = luma + (g - luma) * v;
-    b = luma + (b - luma) * v;
-    const float value_gain = 1.0f + 0.10f * (v - 1.0f);
-    r = std::clamp(r * value_gain, 0.0f, 1.0f);
-    g = std::clamp(g * value_gain, 0.0f, 1.0f);
-    b = std::clamp(b * value_gain, 0.0f, 1.0f);
-    const int ri = std::clamp((int)std::round(r * 255.0f), 0, 255);
-    const int gi = std::clamp((int)std::round(g * 255.0f), 0, 255);
-    const int bi = std::clamp((int)std::round(b * 255.0f), 0, 255);
-    return (RGBColor)((bi << 16) | (gi << 8) | ri);
-}
-
 static bool ch(std::uint32_t mask, std::uint32_t bit) { return (mask & bit) != 0u; }
 
-static SpatialLayerCore::LayerProfileMode ResolveLayerProfileMode(const Settings& s)
+static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per_m, float scale_tune)
 {
-    if(s.spatial_layer_profile_mode == 3)
+    const float bpm = std::max(0.05f, blocks_per_m);
+    const float mm_per_block = 1000.0f / bpm;
+    const float grid_mm = std::max(0.001f, grid.grid_scale_mm);
+    const float grid_units_per_block = mm_per_block / grid_mm;
+    if(grid_units_per_block < 1e-3f)
     {
-        return SpatialLayerCore::LayerProfileMode::ThreeLayer;
+        return 0.18f;
     }
-    if(s.spatial_layer_profile_mode == 4)
-    {
-        return SpatialLayerCore::LayerProfileMode::FourLayer;
-    }
-    return SpatialLayerCore::LayerProfileMode::Auto;
+    return std::clamp(scale_tune, 0.5f, 2.0f) / grid_units_per_block;
 }
 
-static int ResolveLayerCountForDebug(const Settings& s)
+static RGBColor EnhanceRoomVrColor(RGBColor c, float saturation, float contrast)
 {
-    if(s.spatial_layer_profile_mode == 3)
-    {
-        return 3;
-    }
-    return 4;
-}
-
-static SpatialLayerCore::ProbeInput BuildProbeInput(const GameTelemetryBridge::TelemetrySnapshot& t)
-{
-    SpatialLayerCore::ProbeInput input;
-    if(t.has_layered_world_probes &&
-       (t.layered_probe_layer_count == 3 || t.layered_probe_layer_count == 4) &&
-       t.layered_probe_sector_count == 9)
-    {
-        input.layered.has_layered = true;
-        input.layered.layer_count = t.layered_probe_layer_count;
-        const int count = t.layered_probe_layer_count * t.layered_probe_sector_count;
-        for(int i = 0; i < count; i++)
-        {
-            const int off = i * 3;
-            const unsigned char r = t.layered_probe_rgb[(size_t)off + 0];
-            const unsigned char g = t.layered_probe_rgb[(size_t)off + 1];
-            const unsigned char b = t.layered_probe_rgb[(size_t)off + 2];
-            input.layered.colors[(size_t)i] = MakeRgb(r, g, b);
-        }
-    }
-    return input;
-}
-
-static void MinecraftRoomHorizontalBasis(float look_x,
-                                         float look_y,
-                                         float look_z,
-                                         float heading_offset_deg,
-                                         float& out_ux,
-                                         float& out_uy,
-                                         float& out_uz,
-                                         float& out_fx,
-                                         float& out_fy,
-                                         float& out_fz,
-                                         float& out_rx,
-                                         float& out_ry,
-                                         float& out_rz)
-{
-    out_ux = 0.0f;
-    out_uy = 1.0f;
-    out_uz = 0.0f;
-    float lx = look_x;
-    float ly = look_y;
-    float lz = look_z;
-    float ll = std::sqrt(lx * lx + ly * ly + lz * lz);
-    if(ll <= 1e-5f)
-    {
-        lx = 0.0f;
-        ly = 0.0f;
-        lz = 1.0f;
-    }
-    else
-    {
-        lx /= ll;
-        ly /= ll;
-        lz /= ll;
-    }
-    const float horiz = lx * out_ux + ly * out_uy + lz * out_uz;
-    out_fx = lx - horiz * out_ux;
-    out_fy = ly - horiz * out_uy;
-    out_fz = lz - horiz * out_uz;
-    float fl = std::sqrt(out_fx * out_fx + out_fy * out_fy + out_fz * out_fz);
-    if(fl <= 1e-5f)
-    {
-        out_fx = 0.0f;
-        out_fy = 0.0f;
-        out_fz = 1.0f;
-    }
-    else
-    {
-        out_fx /= fl;
-        out_fy /= fl;
-        out_fz /= fl;
-    }
-    out_rx = out_fy * out_uz - out_fz * out_uy;
-    out_ry = out_fz * out_ux - out_fx * out_uz;
-    out_rz = out_fx * out_uy - out_fy * out_ux;
-    float rl = std::sqrt(out_rx * out_rx + out_ry * out_ry + out_rz * out_rz);
-    if(rl <= 1e-5f)
-    {
-        out_rx = 1.0f;
-        out_ry = 0.0f;
-        out_rz = 0.0f;
-    }
-    else
-    {
-        out_rx /= rl;
-        out_ry /= rl;
-        out_rz /= rl;
-    }
-
-    const float yaw = heading_offset_deg * 0.01745329251f;
-    if(std::fabs(yaw) > 1e-5f)
-    {
-        const float c = std::cos(yaw);
-        const float s = std::sin(yaw);
-        const float fx2 = out_fx * c + out_rx * s;
-        const float fy2 = out_fy * c + out_ry * s;
-        const float fz2 = out_fz * c + out_rz * s;
-        const float rx2 = out_rx * c - out_fx * s;
-        const float ry2 = out_ry * c - out_fy * s;
-        const float rz2 = out_rz * c - out_fz * s;
-        out_fx = fx2; out_fy = fy2; out_fz = fz2;
-        out_rx = rx2; out_ry = ry2; out_rz = rz2;
-    }
+    float r = (float)(c & 0xFF) / 255.0f;
+    float g = (float)((c >> 8) & 0xFF) / 255.0f;
+    float b = (float)((c >> 16) & 0xFF) / 255.0f;
+    const float gray = (r + g + b) / 3.0f;
+    r = gray + (r - gray) * saturation;
+    g = gray + (g - gray) * saturation;
+    b = gray + (b - gray) * saturation;
+    r = (r - 0.5f) * contrast + 0.5f;
+    g = (g - 0.5f) * contrast + 0.5f;
+    b = (b - 0.5f) * contrast + 0.5f;
+    return MakeRgb((unsigned char)std::clamp((int)std::lround(r * 255.0f), 0, 255),
+                   (unsigned char)std::clamp((int)std::lround(g * 255.0f), 0, 255),
+                   (unsigned char)std::clamp((int)std::lround(b * 255.0f), 0, 255));
 }
 
 static inline void RoomLedToSpatialCore(float rx,
@@ -487,24 +240,148 @@ static inline float NormalizeRoomVertical01(float y, const GridContext3D& grid, 
     return std::clamp((y - floor_y) / (ceil_y - floor_y), 0.0f, 1.0f);
 }
 
-enum class SpatialMappingMode : int
+/** When a controller has no room Y span (flat strip), drive sky/mid/ground along its longest horizontal axis. */
+static inline float ResolveTintLayerNorm(float grid_x,
+                                         float grid_z,
+                                         const GridContext3D& grid,
+                                         float y_norm)
 {
-    Compass = 0,
-    Voxel = 1,
-    Classic = 2
-};
+    const float y_span = std::fabs(grid.max_y - grid.min_y);
+    if(y_span > 1e-4f)
+    {
+        return y_norm;
+    }
+    const float z_span = std::fabs(grid.max_z - grid.min_z);
+    const float x_span = std::fabs(grid.max_x - grid.min_x);
+    if(z_span >= x_span && z_span > 1e-4f)
+    {
+        return std::clamp((grid_z - grid.min_z) / z_span, 0.0f, 1.0f);
+    }
+    if(x_span > 1e-4f)
+    {
+        return std::clamp((grid_x - grid.min_x) / x_span, 0.0f, 1.0f);
+    }
+    return y_norm;
+}
 
-static SpatialMappingMode ResolveSpatialMappingMode(const Settings& s)
+static RGBColor SampleWorldProbeCell(const GameTelemetryBridge::TelemetrySnapshot& t, int layer, int sector)
 {
-    if(s.spatial_mapping_mode == 1)
+    const int cell = layer * 9 + sector;
+    const int idx = cell * 3;
+    if(idx + 2 >= (int)t.layered_probe_rgb.size())
     {
-        return SpatialMappingMode::Voxel;
+        return (RGBColor)0;
     }
-    if(s.spatial_mapping_mode == 2)
+    return MakeRgb(t.layered_probe_rgb[(size_t)idx],
+                   t.layered_probe_rgb[(size_t)idx + 1],
+                   t.layered_probe_rgb[(size_t)idx + 2]);
+}
+
+static RGBColor SampleVerticalWorldLayers(const GameTelemetryBridge::TelemetrySnapshot& t, float layer_norm)
+{
+    if(!t.has_world_layers)
     {
-        return SpatialMappingMode::Classic;
+        return MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b);
     }
-    return SpatialMappingMode::Compass;
+    constexpr float kGroundEnd = 0.30f;
+    constexpr float kSkyStart = 0.68f;
+    const RGBColor sky = MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b);
+    const RGBColor mid = MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b);
+    const RGBColor ground = MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b);
+    if(layer_norm < kGroundEnd)
+    {
+        return LerpColor(ground, mid, layer_norm / kGroundEnd);
+    }
+    if(layer_norm > kSkyStart)
+    {
+        const float denom = std::max(1e-3f, 1.0f - kSkyStart);
+        return LerpColor(mid, sky, (layer_norm - kSkyStart) / denom);
+    }
+    return mid;
+}
+
+/** MineLights-style 3D tint: bilinear sample of 4x9 directional world probes per room LED. */
+static RGBColor SampleLayeredWorldProbe(const GameTelemetryBridge::TelemetrySnapshot& t,
+                                        float grid_x,
+                                        float grid_y,
+                                        float grid_z,
+                                        float origin_x,
+                                        float origin_y,
+                                        float origin_z,
+                                        const GridContext3D& grid,
+                                        float heading_offset_deg)
+{
+    if(!t.has_layered_world_probes)
+    {
+        return (RGBColor)0;
+    }
+
+    const float y_norm = ResolveTintLayerNorm(grid_x,
+                                              grid_z,
+                                              grid,
+                                              NormalizeRoomVertical01(grid_y, grid, origin_y));
+    const float layer_f = std::clamp(y_norm * 3.0f, 0.0f, 3.0f);
+    const int layer0 = std::clamp((int)std::floor(layer_f), 0, 3);
+    const int layer1 = std::min(layer0 + 1, 3);
+    const float layer_t = layer_f - (float)layer0;
+
+    auto sample_vertical_center = [&]() {
+        return LerpColor(SampleWorldProbeCell(t, layer0, 8), SampleWorldProbeCell(t, layer1, 8), layer_t);
+    };
+
+    if(!t.has_player_pose)
+    {
+        return sample_vertical_center();
+    }
+
+    SpatialBasisUtils::BasisVectors basis = SpatialBasisUtils::BuildOrthonormalBasis(t.forward_x,
+                                                                                      t.forward_y,
+                                                                                      t.forward_z,
+                                                                                      t.up_x,
+                                                                                      t.up_y,
+                                                                                      t.up_z);
+    const float wx = grid_x - origin_x;
+    const float wy = grid_y - origin_y;
+    const float wz = grid_z - origin_z;
+    float lx = 0.0f;
+    float ly = 0.0f;
+    float lz = 0.0f;
+    SpatialBasisUtils::ToLocal(basis, wx, wy, wz, lx, ly, lz);
+
+    const float yaw = heading_offset_deg * 0.01745329251f;
+    if(std::fabs(yaw) > 1e-5f)
+    {
+        const float c = std::cos(yaw);
+        const float s = std::sin(yaw);
+        const float lx2 = lx * c + lz * s;
+        const float lz2 = -lx * s + lz * c;
+        lx = lx2;
+        lz = lz2;
+    }
+
+    const float horiz_len = std::sqrt(lx * lx + lz * lz);
+    if(horiz_len < 0.08f)
+    {
+        return sample_vertical_center();
+    }
+
+    float angle = std::atan2(lx, lz);
+    float sector_f = angle * 1.27323954f;
+    if(sector_f < 0.0f)
+    {
+        sector_f += 8.0f;
+    }
+    const int sector0 = ((int)std::floor(sector_f)) % 8;
+    const int sector1 = (sector0 + 1) % 8;
+    const float sector_t = sector_f - std::floor(sector_f);
+
+    const RGBColor c00 = SampleWorldProbeCell(t, layer0, sector0);
+    const RGBColor c01 = SampleWorldProbeCell(t, layer0, sector1);
+    const RGBColor c10 = SampleWorldProbeCell(t, layer1, sector0);
+    const RGBColor c11 = SampleWorldProbeCell(t, layer1, sector1);
+    const RGBColor c0 = LerpColor(c00, c01, sector_t);
+    const RGBColor c1 = LerpColor(c10, c11, sector_t);
+    return LerpColor(c0, c1, layer_t);
 }
 
 static bool ComputeNormalizedSampleVector(float grid_x,
@@ -531,65 +408,6 @@ static bool ComputeNormalizedSampleVector(float grid_x,
                          soy,
                          soz);
     return SpatialBasisUtils::NormalizeDirection(sx - sox, sy - soy, sz - soz, out_x, out_y, out_z);
-}
-
-static float ComputeDirectionalFactorHorizontalPose(const GameTelemetryBridge::TelemetrySnapshot& t,
-                                                    float dir_x,
-                                                    float dir_y,
-                                                    float dir_z,
-                                                    float grid_x,
-                                                    float grid_y,
-                                                    float grid_z,
-                                                    float origin_x,
-                                                    float origin_y,
-                                                    float origin_z,
-                                                    float heading_offset_deg,
-                                                    float mix,
-                                                    float sharpness,
-                                                    float min_factor)
-{
-    if(!t.has_player_pose || mix <= 1e-4f)
-    {
-        return 1.0f;
-    }
-
-    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
-    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
-    float rx = 1.0f, ry = 0.0f, rz = 0.0f;
-    MinecraftRoomHorizontalBasis(t.forward_x,
-                                 t.forward_y,
-                                 t.forward_z,
-                                 heading_offset_deg,
-                                 ux,
-                                 uy,
-                                 uz,
-                                 fx,
-                                 fy,
-                                 fz,
-                                 rx,
-                                 ry,
-                                 rz);
-
-    float ldx, ldy, ldz;
-    if(!SpatialBasisUtils::NormalizeDirection(dir_x, dir_y, dir_z, ldx, ldy, ldz))
-    {
-        return 1.0f;
-    }
-
-    const float lx = ldx * rx + ldy * ry + ldz * rz;
-    const float ly = ldx * ux + ldy * uy + ldz * uz;
-    const float lz = ldx * fx + ldy * fy + ldz * fz;
-
-    float ox, oy, oz;
-    if(!ComputeNormalizedSampleVector(grid_x, grid_y, grid_z, origin_x, origin_y, origin_z, ox, oy, oz))
-    {
-        return 1.0f;
-    }
-
-    const float sa = std::clamp(ox * lx + oy * ly + oz * lz, -1.0f, 1.0f);
-    const float hemi = 0.5f * (sa + 1.0f);
-    const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.8f, sharpness));
-    return (1.0f - mix) + mix * (min_factor + (1.0f - min_factor) * shaped);
 }
 
 static float ComputeDirectionalFactorFullPose(const GameTelemetryBridge::TelemetrySnapshot& t,
@@ -636,307 +454,6 @@ static float ComputeDirectionalFactorFullPose(const GameTelemetryBridge::Telemet
     const float shaped = std::pow(std::clamp(hemi, 0.0f, 1.0f), std::max(0.5f, sharpness));
     return (1.0f - mix) + mix * (min_factor + (1.0f - min_factor) * shaped);
 }
-
-static void StampPreviewVoxelBox(VoxelRoomCore::VoxelGrid& grid,
-                                 float cx,
-                                 float cy,
-                                 float cz,
-                                 float hx,
-                                 float hy,
-                                 float hz,
-                                 RGBColor c,
-                                 float alpha)
-{
-    const unsigned char rr = (unsigned char)(c & 0xFF);
-    const unsigned char gg = (unsigned char)((c >> 8) & 0xFF);
-    const unsigned char bb = (unsigned char)((c >> 16) & 0xFF);
-    const unsigned char aa = (unsigned char)std::clamp((int)std::lround(alpha * 255.0f), 0, 255);
-    for(int ix = 0; ix < grid.size_x; ix++)
-    {
-        const float x = grid.min_x + ((float)ix + 0.5f) * grid.voxel_size;
-        if(std::fabs(x - cx) > hx)
-        {
-            continue;
-        }
-        for(int iy = 0; iy < grid.size_y; iy++)
-        {
-            const float y = grid.min_y + ((float)iy + 0.5f) * grid.voxel_size;
-            if(std::fabs(y - cy) > hy)
-            {
-                continue;
-            }
-            for(int iz = 0; iz < grid.size_z; iz++)
-            {
-                const float z = grid.min_z + ((float)iz + 0.5f) * grid.voxel_size;
-                if(std::fabs(z - cz) > hz)
-                {
-                    continue;
-                }
-                const int idx = ((ix * grid.size_y + iy) * grid.size_z + iz) * 4;
-                if(idx < 0 || idx + 3 >= (int)grid.rgba.size())
-                {
-                    continue;
-                }
-                grid.rgba[(size_t)(idx + 0)] = rr;
-                grid.rgba[(size_t)(idx + 1)] = gg;
-                grid.rgba[(size_t)(idx + 2)] = bb;
-                grid.rgba[(size_t)(idx + 3)] = aa;
-            }
-        }
-    }
-}
-
-static const VoxelRoomCore::VoxelGrid& GetPreviewVoxelGrid()
-{
-    static VoxelRoomCore::VoxelGrid grid;
-    static bool initialized = false;
-    if(!initialized)
-    {
-        initialized = true;
-        grid.valid = true;
-        grid.size_x = 28;
-        grid.size_y = 18;
-        grid.size_z = 28;
-        grid.voxel_size = 0.25f;
-        grid.min_x = -3.5f;
-        grid.min_y = -0.5f;
-        grid.min_z = -3.5f;
-        grid.rgba.resize((size_t)grid.size_x * (size_t)grid.size_y * (size_t)grid.size_z * 4u, 0u);
-
-        StampPreviewVoxelBox(grid, -1.35f, 0.30f, -0.15f, 0.55f, 0.20f, 0.90f, (RGBColor)0x00B45CE0, 0.88f);
-        StampPreviewVoxelBox(grid, 1.25f, 1.05f, 0.35f, 0.30f, 0.30f, 0.30f, (RGBColor)0x0040B0FF, 0.85f);
-        StampPreviewVoxelBox(grid, 0.00f, 1.90f, 0.00f, 0.95f, 0.18f, 0.95f, (RGBColor)0x00FFE8CC, 0.38f);
-        StampPreviewVoxelBox(grid, 0.00f, -0.15f, 0.00f, 3.20f, 0.10f, 3.20f, (RGBColor)0x00162A32, 0.22f);
-    }
-    return grid;
-}
-
-static RGBColor RenderVoxelRoomPreviewColor(const GameTelemetryBridge::TelemetrySnapshot& t,
-                                            float grid_x,
-                                            float grid_y,
-                                            float grid_z,
-                                            float origin_x,
-                                            float origin_y,
-                                            float origin_z,
-                                            const Settings& s)
-{
-    VoxelRoomCore::VoxelGrid vg = GetPreviewVoxelGrid();
-    if(t.voxel_frame.has_voxel_frame &&
-       t.voxel_frame.size_x > 0 &&
-       t.voxel_frame.size_y > 0 &&
-       t.voxel_frame.size_z > 0)
-    {
-        vg.valid = true;
-        vg.size_x = t.voxel_frame.size_x;
-        vg.size_y = t.voxel_frame.size_y;
-        vg.size_z = t.voxel_frame.size_z;
-        vg.min_x = t.voxel_frame.origin_x;
-        vg.min_y = t.voxel_frame.origin_y;
-        vg.min_z = t.voxel_frame.origin_z;
-        vg.voxel_size = std::max(1e-4f, t.voxel_frame.voxel_size);
-        vg.rgba = t.voxel_frame.rgba;
-    }
-    if(!vg.valid)
-    {
-        return (RGBColor)0x00000000;
-    }
-
-    VoxelRoomCore::Basis basis;
-    basis.valid = true;
-    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
-    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
-    float rx = 0.0f, ry = 0.0f, rz = 0.0f;
-    if(t.has_player_pose)
-    {
-        MinecraftRoomHorizontalBasis(t.forward_x,
-                                     t.forward_y,
-                                     t.forward_z,
-                                     s.spatial_heading_offset_deg,
-                                     ux,
-                                     uy,
-                                     uz,
-                                     fx,
-                                     fy,
-                                     fz,
-                                     rx,
-                                     ry,
-                                     rz);
-    }
-    else
-    {
-        MinecraftRoomHorizontalBasis(0.0f,
-                                     0.0f,
-                                     1.0f,
-                                     s.spatial_heading_offset_deg,
-                                     ux,
-                                     uy,
-                                     uz,
-                                     fx,
-                                     fy,
-                                     fz,
-                                     rx,
-                                     ry,
-                                     rz);
-    }
-    basis.forward_x = fx;
-    basis.forward_y = fy;
-    basis.forward_z = fz;
-    basis.up_x = ux;
-    basis.up_y = uy;
-    basis.up_z = uz;
-
-    VoxelRoomCore::RoomSamplePoint sp;
-    RoomLedToSpatialCore(grid_x,
-                         grid_y,
-                         grid_z,
-                         origin_x,
-                         origin_y,
-                         origin_z,
-                         sp.room_x,
-                         sp.room_y,
-                         sp.room_z,
-                         sp.origin_x,
-                         sp.origin_y,
-                         sp.origin_z);
-
-    VoxelRoomCore::MapperSettings ms;
-    ms.room_to_world_scale = std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f);
-    ms.alpha_cutoff = 0.01f;
-
-    bool used = false;
-    const float ax = t.has_player_pose ? t.player_x : 0.0f;
-    const float ay = t.has_player_pose ? t.player_y : 0.0f;
-    const float az = t.has_player_pose ? t.player_z : 0.0f;
-    RGBColor out = VoxelRoomCore::ComputeRoomMappedVoxelColor(vg, basis, sp, ax, ay, az, ms, &used);
-    if(!used)
-    {
-        return (RGBColor)0x00000000;
-    }
-    return out;
-}
-
-static RGBColor LayerDebugColorByTopIndex(int top_layer_idx, int layer_count)
-{
-    if(layer_count <= 3)
-    {
-        if(top_layer_idx <= 0) return (RGBColor)0x00E0A060;
-        if(top_layer_idx == 1) return (RGBColor)0x0060E060;
-        return (RGBColor)0x0060A0E0;
-    }
-    if(top_layer_idx <= 0) return (RGBColor)0x00E0A060;
-    if(top_layer_idx == 1) return (RGBColor)0x0090D060;
-    if(top_layer_idx == 2) return (RGBColor)0x0060D0A0;
-    return (RGBColor)0x0060A0E0;
-}
-
-static RGBColor RenderSpatialLayerSweepDebug(float time,
-                                             const GameTelemetryBridge::TelemetrySnapshot& t,
-                                             float grid_x,
-                                             float grid_y,
-                                             float grid_z,
-                                             float origin_x,
-                                             float origin_y,
-                                             float origin_z,
-                                             float y_norm,
-                                             const Settings& s,
-                                             float floor_end,
-                                             float desk_end,
-                                             float upper_end)
-{
-    const int layer_count = ResolveLayerCountForDebug(s);
-    const int step_count = layer_count * 9;
-    const float hz = std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f);
-    const int step = (int)std::floor(std::max(0.0f, time) * hz);
-    const int active = (step_count > 0) ? (step % step_count) : 0;
-    const int active_top_layer = active / 9;
-    const int active_sector = active % 9;
-    const int active_layer = (layer_count - 1) - active_top_layer;
-
-    g_spatial_sweep_live.store(1, std::memory_order_relaxed);
-    g_spatial_sweep_step.store(active, std::memory_order_relaxed);
-    g_spatial_sweep_step_count.store(step_count, std::memory_order_relaxed);
-    g_spatial_sweep_layer_count.store(layer_count, std::memory_order_relaxed);
-    g_spatial_sweep_top_band.store(active_top_layer, std::memory_order_relaxed);
-    g_spatial_sweep_sector.store(active_sector, std::memory_order_relaxed);
-
-    SpatialLayerCore::ProbeInput probe_input;
-    probe_input.layered.has_layered = true;
-    probe_input.layered.layer_count = layer_count;
-    for(int l = 0; l < layer_count; l++)
-    {
-        for(int sec = 0; sec < 9; sec++)
-        {
-            probe_input.layered.colors[(size_t)(l * 9 + sec)] = (RGBColor)0x00000000;
-        }
-    }
-    probe_input.layered.colors[(size_t)(active_layer * 9 + active_sector)] = LayerDebugColorByTopIndex(active_top_layer, layer_count);
-
-    float ux = 0.0f, uy = 1.0f, uz = 0.0f;
-    float fx = 0.0f, fy = 0.0f, fz = 1.0f;
-    float rx = 1.0f, ry = 0.0f, rz = 0.0f;
-    if(t.has_player_pose)
-    {
-        MinecraftRoomHorizontalBasis(t.forward_x,
-                                     t.forward_y,
-                                     t.forward_z,
-                                     s.spatial_heading_offset_deg,
-                                     ux,
-                                     uy,
-                                     uz,
-                                     fx,
-                                     fy,
-                                     fz,
-                                     rx,
-                                     ry,
-                                     rz);
-    }
-
-    SpatialLayerCore::Basis basis;
-    basis.forward_x = fx;
-    basis.forward_y = fy;
-    basis.forward_z = fz;
-    basis.up_x = ux;
-    basis.up_y = uy;
-    basis.up_z = uz;
-    basis.valid = true;
-
-    SpatialLayerCore::MapperSettings map_settings;
-    map_settings.profile_mode = (layer_count == 3)
-        ? SpatialLayerCore::LayerProfileMode::ThreeLayer
-        : SpatialLayerCore::LayerProfileMode::FourLayer;
-    map_settings.directional_response = 1.0f;
-    map_settings.directional_sharpness = std::max(1.2f, std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f));
-    map_settings.center_size = std::clamp(s.spatial_center_size, 0.02f, 0.65f);
-    map_settings.blend_softness = std::clamp(s.spatial_blend_softness, 0.02f, 0.35f);
-    map_settings.floor_end = floor_end;
-    map_settings.desk_end = desk_end;
-    map_settings.upper_end = upper_end;
-    map_settings.compass_azimuth_offset_rad = s.spatial_compass_offset_deg * 0.01745329252f;
-
-    SpatialLayerCore::SamplePoint sample;
-    RoomLedToSpatialCore(grid_x,
-                         grid_y,
-                         grid_z,
-                         origin_x,
-                         origin_y,
-                         origin_z,
-                         sample.grid_x,
-                         sample.grid_y,
-                         sample.grid_z,
-                         sample.origin_x,
-                         sample.origin_y,
-                         sample.origin_z);
-    sample.y_norm = y_norm;
-
-    bool used_layered = false;
-    RGBColor c = SpatialLayerCore::ComputeProjectedProbeColor(probe_input, basis, sample, map_settings, &used_layered);
-    if(!used_layered)
-    {
-        return (RGBColor)0x00000000;
-    }
-    return c;
-}
-
 static int ResolveHealthStripAxis(const GridContext3D& grid, int axis_in)
 {
     if(axis_in >= 1 && axis_in <= 3)
@@ -1059,21 +576,16 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
     QVBoxLayout* content_layout = scroll_ui.contentLayout;
     QWidget* panel = scroll_ui.scrollContents;
 
-    const bool all = (channels == ChAll);
-
     QVBoxLayout* vitals_layout = content_layout;
-    if(all || ch(channels, ChHealth) || ch(channels, ChHunger) || ch(channels, ChAir) || ch(channels, ChDurability))
+    if(ch(channels, ChHealth) || ch(channels, ChHunger) || ch(channels, ChAir) || ch(channels, ChDurability))
     {
         if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Vitals")))
         {
             vitals_layout = body;
         }
     }
-    if(all || ch(channels, ChHealth))
+    if(ch(channels, ChHealth))
     {
-        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable health gradient"), s.enable_health_gradient,
-                    [&s](bool v) { s.enable_health_gradient = v; });
-
         AddCheckRow(vitals_layout, panel, "Per-heart strip (each heart uses LEDs along layout axis)", s.health_per_heart_strip,
                     [&s](bool v) { s.health_per_heart_strip = v; });
 
@@ -1106,40 +618,32 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                     [&s](bool v) { s.health_strip_invert = v; });
 
     }
-    if(all || ch(channels, ChHunger))
+    if(ch(channels, ChHunger))
     {
-        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable hunger gradient"), s.enable_hunger_gradient,
-                    [&s](bool v) { s.enable_hunger_gradient = v; });
         AddCheckRow(vitals_layout, panel, "Per-strip hunger (uses strip/index settings above)", s.hunger_per_strip,
                     [&s](bool v) { s.hunger_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Hunger gradient strength"), &s.hunger_mix);
     }
-    if(all || ch(channels, ChAir))
+    if(ch(channels, ChAir))
     {
-        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable air gradient"), s.enable_air_gradient,
-                    [&s](bool v) { s.enable_air_gradient = v; });
         AddCheckRow(vitals_layout, panel, "Per-strip air (uses strip/index settings above)", s.air_per_strip,
                     [&s](bool v) { s.air_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Air gradient strength"), &s.air_mix);
     }
-    if(all || ch(channels, ChDurability))
+    if(ch(channels, ChDurability))
     {
-        AddCheckRow(vitals_layout, panel, QStringLiteral("Enable item durability gradient"), s.enable_durability_gradient,
-                    [&s](bool v) { s.enable_durability_gradient = v; });
         AddCheckRow(vitals_layout, panel, "Per-strip durability (uses strip/index settings above)", s.durability_per_strip,
                     [&s](bool v) { s.durability_per_strip = v; });
         AddPctSlider(vitals_layout, panel, QStringLiteral("Item durability gradient strength"), &s.durability_mix);
     }
 
-    if(all || ch(channels, ChDamage))
+    if(ch(channels, ChDamage))
     {
         QVBoxLayout* damage_layout = content_layout;
         if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Damage")))
         {
             damage_layout = body;
         }
-        AddCheckRow(damage_layout, panel, QStringLiteral("Enable damage flash"), s.enable_damage_flash,
-                    [&s](bool v) { s.enable_damage_flash = v; });
         AddPctSlider(damage_layout, panel, QStringLiteral("Directional hit (vs uniform)"), &s.damage_directional_mix);
         AddSliderRow(damage_layout, panel, QStringLiteral("Damage direction sharpness"), 50, 400, (int)std::lround(s.damage_dir_sharpness * 100.0f),
                      [&s](int x) { s.damage_dir_sharpness = std::clamp(x / 100.0f, 0.5f, 5.0f); },
@@ -1150,213 +654,73 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         AddPctSlider(damage_layout, panel, QStringLiteral("Damage flash strength"), &s.damage_flash_strength);
     }
 
-    if(all || ch(channels, ChWorldTint))
+    if(ch(channels, ChWorldTint))
     {
         QVBoxLayout* world_layout = content_layout;
         if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("World tint")))
         {
             world_layout = body;
         }
-        AddCheckRow(world_layout, panel, QStringLiteral("Enable ambient world tint"), s.enable_ambient_world_tint,
-                    [&s](bool v) { s.enable_ambient_world_tint = v; });
-
+        QLabel* hint = new QLabel(
+            QStringLiteral(
+                "MineLights-style 3D world color: each LED samples directional biome/light probes "
+                "from world_light (4 height layers × 8 compass sectors). Set the effect 3D origin at "
+                "your standing reference; use heading offset to align room north with in-game look."),
+            panel);
+        hint->setWordWrap(true);
+        world_layout->addWidget(hint);
         AddSliderRow(world_layout, panel, QStringLiteral("World tint strength"), 0, 100, (int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("World tint vividness"), 60, 200, (int)std::lround(std::clamp(s.world_tint_vividness, 0.60f, 2.00f) * 100.0f),
-                     [&s](int x) { s.world_tint_vividness = std::clamp(x / 100.0f, 0.60f, 2.00f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("World tint smoothing"), 0, 95, (int)std::lround(std::clamp(s.world_tint_smoothing, 0.0f, 0.95f) * 100.0f),
-                     [&s](int x) { s.world_tint_smoothing = std::clamp(x / 100.0f, 0.0f, 0.95f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("World tint directional response"), 0, 100, (int)std::lround(std::clamp(s.world_tint_directional, 0.0f, 1.0f) * 100.0f),
-                     [&s](int x) { s.world_tint_directional = std::clamp(x / 100.0f, 0.0f, 1.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("World tint directional sharpness"), 80, 320, (int)std::lround(std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f) * 100.0f),
-                     [&s](int x) { s.world_tint_dir_sharpness = std::clamp(x / 100.0f, 0.8f, 3.2f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        QComboBox* profileCombo = AddComboRow(world_layout, QStringLiteral("Spatial layer profile"));
-        profileCombo->addItem(QStringLiteral("Auto"), 0);
-        profileCombo->addItem(QStringLiteral("3-layer (floor/mid/ceiling)"), 3);
-        profileCombo->addItem(QStringLiteral("4-layer (floor/desk/upper/ceiling)"), 4);
-        const int profileIdx = std::max(0, profileCombo->findData(s.spatial_layer_profile_mode));
-        profileCombo->setCurrentIndex(profileIdx);
-        QObject::connect(profileCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, profileCombo](int idx) {
-            const QVariant v = profileCombo->itemData(idx);
-            s.spatial_layer_profile_mode = v.isValid() ? v.toInt() : 0;
-        });
-        QComboBox* mapModeCombo = AddComboRow(world_layout, QStringLiteral("Spatial mapping mode"));
-        mapModeCombo->addItem(QStringLiteral("Classic world tint (MineLights style)"), 2);
-        mapModeCombo->addItem(QStringLiteral("Compass directional probes"), 0);
-        mapModeCombo->addItem(QStringLiteral("Voxel room mapping (core preview)"), 1);
-        const QString mapModeTip = QStringLiteral(
-            "Choose how ambient world tint is projected: Classic = stable sky/mid/ground layers, "
-            "Compass = directional layered probes around horizontal player yaw (matches Room heading offset), "
-            "Voxel = sample an RGBA volume: built-in preview boxes, or live frames from UDP "
-            "(voxel_size_*, voxel_origin_* corner, voxel_cell_size, voxel_rgba x-major).");
-        mapModeCombo->setToolTip(mapModeTip);
-        const int mapModeIdx = std::max(0, mapModeCombo->findData(s.spatial_mapping_mode));
-        mapModeCombo->setCurrentIndex(mapModeIdx);
-        QObject::connect(mapModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), panel, [&s, mapModeCombo](int idx) {
-            const QVariant v = mapModeCombo->itemData(idx);
-            s.spatial_mapping_mode = v.isValid() ? v.toInt() : 0;
-        });
-        AddSliderRow(world_layout, panel, QStringLiteral("Center sector size"), 2, 65, (int)std::lround(std::clamp(s.spatial_center_size, 0.02f, 0.65f) * 100.0f),
-                     [&s](int x) { s.spatial_center_size = std::clamp(x / 100.0f, 0.02f, 0.65f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Layer blend softness"), 2, 35, (int)std::lround(std::clamp(s.spatial_blend_softness, 0.02f, 0.35f) * 100.0f),
-                     [&s](int x) { s.spatial_blend_softness = std::clamp(x / 100.0f, 0.02f, 0.35f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Room heading offset (deg)"), -180, 180, (int)std::lround(std::clamp(s.spatial_heading_offset_deg, -180.0f, 180.0f)),
-                     [&s](int x) { s.spatial_heading_offset_deg = std::clamp((float)x, -180.0f, 180.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("\u00B0"); });
-        AddSliderRow(world_layout,
-                     panel,
-                     QStringLiteral("Compass sector offset (deg)"),
-                     -180,
-                     180,
-                     (int)std::lround(std::clamp(s.spatial_compass_offset_deg, -180.0f, 180.0f)),
-                     [&s](int x) { s.spatial_compass_offset_deg = std::clamp((float)x, -180.0f, 180.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("\u00B0"); },
-                     QStringLiteral(
-                         "Rotates which direction maps to layered probe N, NE, … (independent of room heading). "
-                         "Default −45° lines North up with the room front wall for the usual 8-sector order."));
-        AddSliderRow(world_layout,
-                     panel,
-                     QStringLiteral("Voxel room scale"),
-                     2,
-                     80,
-                     (int)std::lround(std::clamp(s.spatial_voxel_room_scale, 0.02f, 0.80f) * 100.0f),
-                     [&s](int x) { s.spatial_voxel_room_scale = std::clamp(x / 100.0f, 0.02f, 0.80f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral(
-                         "How large the room maps into voxel world space (LED offset → world ray into the volume). "
-                         "Tune with live frames if the mod sends voxel_origin_* as the grid corner in the same units as player position."));
-        AddSliderRow(world_layout,
-                     panel,
-                     QStringLiteral("Voxel room mix"),
-                     0,
-                     100,
-                     (int)std::lround(std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f) * 100.0f),
-                     [&s](int x) { s.spatial_voxel_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
-                     QStringLiteral(
-                         "Blend live voxel RGBA into ambient tint. Requires UDP events with voxel_size_x/y/z, voxel_origin_x/y/z, "
-                         "voxel_cell_size, and voxel_rgba byte array in x-major order ((x*sy+y)*sz+z)*4 — see GameTelemetryBridge."));
-        AddCheckRow(world_layout, panel, "Debug layered sweep (step through compass cells)", s.spatial_debug_sweep_enabled,
-                    [&s](bool v) { s.spatial_debug_sweep_enabled = v; });
-
-        EffectInfoLabel* dbgSweepStatus = EffectUiRows::AppendInfoLabel(world_layout, QStringLiteral("Sweep status: —"));
-
-        QTimer* dbgSweepTimer = new QTimer(panel);
-        dbgSweepTimer->setInterval(120);
-        QObject::connect(dbgSweepTimer, &QTimer::timeout, panel, [dbgSweepStatus, &s]() {
-            static const char* kSec[9] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW", "C"};
-            if(!s.spatial_debug_sweep_enabled)
-            {
-                dbgSweepStatus->setText(QStringLiteral("Sweep status: off"));
-                return;
-            }
-            if(!s.enable_ambient_world_tint)
-            {
-                dbgSweepStatus->setText(QStringLiteral("Sweep status: enable Ambient World Tint to run"));
-                return;
-            }
-            if(g_spatial_sweep_live.load(std::memory_order_relaxed) == 0)
-            {
-                dbgSweepStatus->setText(QStringLiteral("Sweep status: waiting for render…"));
-                return;
-            }
-            const int lc = g_spatial_sweep_layer_count.load(std::memory_order_relaxed);
-            const int top = g_spatial_sweep_top_band.load(std::memory_order_relaxed);
-            const int sec = g_spatial_sweep_sector.load(std::memory_order_relaxed);
-            const int step = g_spatial_sweep_step.load(std::memory_order_relaxed);
-            const int sc = g_spatial_sweep_step_count.load(std::memory_order_relaxed);
-            QString band;
-            if(lc <= 3)
-            {
-                if(top <= 0)
-                {
-                    band = QStringLiteral("Top");
-                }
-                else if(top == 1)
-                {
-                    band = QStringLiteral("Mid");
-                }
-                else
-                {
-                    band = QStringLiteral("Bottom");
-                }
-            }
-            else
-            {
-                if(top <= 0)
-                {
-                    band = QStringLiteral("Ceiling");
-                }
-                else if(top == 1)
-                {
-                    band = QStringLiteral("Upper");
-                }
-                else if(top == 2)
-                {
-                    band = QStringLiteral("Desk");
-                }
-                else
-                {
-                    band = QStringLiteral("Floor");
-                }
-            }
-            const char* sn = (sec >= 0 && sec < 9) ? kSec[sec] : "?";
-            dbgSweepStatus->setText(QStringLiteral("Sweep: %1 / %2 — %3 — %4")
-                                        .arg(step + 1)
-                                        .arg(sc)
-                                        .arg(band)
-                                        .arg(QString::fromUtf8(sn)));
-        });
-        dbgSweepTimer->start();
-
-        AddSliderRow(world_layout,
-                     panel,
-                     QStringLiteral("Debug sweep speed (cells/sec)"),
-                     2,
-                     120,
-                     (int)std::lround(std::clamp(s.spatial_debug_sweep_hz, 0.2f, 12.0f) * 10.0f),
-                     [&s](int x) { s.spatial_debug_sweep_hz = std::clamp(x / 10.0f, 0.2f, 12.0f); },
-                     [](int x) { return QString::number(x / 10.0f, 'f', 1); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Auto floor boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_floor_offset, -0.30f, 0.30f) * 100.0f),
-                     [&s](int x) { s.spatial_floor_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Auto desk boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_desk_offset, -0.30f, 0.30f) * 100.0f),
-                     [&s](int x) { s.spatial_desk_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Auto upper boundary offset"), -30, 30, (int)std::lround(std::clamp(s.spatial_upper_offset, -0.30f, 0.30f) * 100.0f),
-                     [&s](int x) { s.spatial_upper_offset = std::clamp(x / 100.0f, -0.30f, 0.30f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Ground-to-mid blend ends (grid Y %)"), 10, 55, (int)std::lround(std::clamp(s.tint_layer_ground_end, 0.10f, 0.55f) * 100.0f),
-                     [&s](int x) { s.tint_layer_ground_end = std::clamp(x / 100.0f, 0.08f, 0.55f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Mid-to-sky blend starts (grid Y %)"), 40, 85, (int)std::lround(std::clamp(s.tint_layer_sky_start, 0.40f, 0.85f) * 100.0f),
-                     [&s](int x) { s.tint_layer_sky_start = std::clamp(x / 100.0f, 0.40f, 0.92f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddPctSlider(world_layout, panel, QStringLiteral("Biome sky overlay (BiomeEffects sky)"), &s.biome_sky_overlay);
-        AddPctSlider(world_layout, panel, QStringLiteral("Rain darkens sky layer"), &s.env_rain_darken_sky);
-        AddPctSlider(world_layout, panel, QStringLiteral("Thunder darkens sky layer"), &s.env_thunder_darken_sky);
+        AddSliderRow(world_layout, panel, QStringLiteral("Heading offset (deg)"), -180, 180, (int)std::lround(s.world_heading_offset_deg),
+                     [&s](int x) { s.world_heading_offset_deg = (float)std::clamp(x, -180, 180); },
+                     [](int x) { return QString::number(x) + QStringLiteral("°"); });
     }
 
-    if(all || ch(channels, ChLightning))
+    if(ch(channels, ChRoomVrTint))
+    {
+        QVBoxLayout* room_layout = content_layout;
+        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Room tint (VR)")))
+        {
+            room_layout = body;
+        }
+        QLabel* hint = new QLabel(
+            QStringLiteral(
+                "VR-room mode: your physical room maps 1:1 into Minecraft. Stand at your player "
+                "reference, set this effect's 3D origin there, and enable voxel frames in the Fabric mod. "
+                "At grid scale 10 mm with blocks_per_m=1, one block equals one meter."),
+            panel);
+        hint->setWordWrap(true);
+        room_layout->addWidget(hint);
+        AddSliderRow(room_layout, panel, QStringLiteral("Room VR strength"), 0, 100, (int)std::lround(std::clamp(s.room_vr_mix, 0.0f, 1.0f) * 100.0f),
+                     [&s](int x) { s.room_vr_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+        AddSliderRow(room_layout, panel, QStringLiteral("Heading offset (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
+                     [&s](int x) { s.room_vr_heading_offset_deg = (float)std::clamp(x, -180, 180); },
+                     [](int x) { return QString::number(x) + QStringLiteral("°"); });
+        AddSliderRow(room_layout, panel, QStringLiteral("Scale tune"), 50, 200, (int)std::lround(std::clamp(s.room_vr_scale_tune, 0.5f, 2.0f) * 100.0f),
+                     [&s](int x) { s.room_vr_scale_tune = std::clamp(x / 100.0f, 0.5f, 2.0f); },
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+        AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_vr_saturation, 0.8f, 2.5f) * 100.0f),
+                     [&s](int x) { s.room_vr_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+        AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_vr_contrast, 0.8f, 2.0f) * 100.0f),
+                     [&s](int x) { s.room_vr_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+        AddCheckRow(room_layout, panel, QStringLiteral("Sharp block sampling (less blur)"), s.room_vr_sharp_sampling,
+                    [&s](bool v) { s.room_vr_sharp_sampling = v; });
+    }
+
+    if(ch(channels, ChLightning))
     {
         QVBoxLayout* lightning_layout = content_layout;
-        if(!all && !ch(channels, ChWorldTint))
+        if(!ch(channels, ChWorldTint))
         {
             if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Lightning")))
             {
                 lightning_layout = body;
             }
         }
-        AddCheckRow(lightning_layout, panel, QStringLiteral("Enable lightning flash"), s.enable_lightning_flash,
-                    [&s](bool v) { s.enable_lightning_flash = v; });
-
         AddSliderRow(lightning_layout, panel, QStringLiteral("Lightning flash strength"), 0, 150, (int)std::lround(std::clamp(s.lightning_flash_strength, 0.0f, 1.5f) * 100.0f),
                      [&s](int x) { s.lightning_flash_strength = std::clamp(x / 100.0f, 0.0f, 1.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
@@ -1370,13 +734,6 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
     }
 
     QVBoxLayout* output_layout = content_layout;
-    if(all)
-    {
-        if(QVBoxLayout* body = EffectUiRows::AppendCollapsibleSectionBody(content_layout, QStringLiteral("Output")))
-        {
-            output_layout = body;
-        }
-    }
     {
         AddSliderRow(output_layout, panel, QStringLiteral("Base brightness"), 80, 150, (int)std::lround(std::clamp(s.base_brightness, 0.8f, 1.5f) * 100.0f),
                      [&s](int x) { s.base_brightness = std::clamp(x / 100.0f, 0.8f, 1.5f); },
@@ -1418,7 +775,7 @@ static RGBColor ApplyDamageFlashChannel(RGBColor in_color,
                                         float origin_z,
                                         const Settings& s)
 {
-    if(!s.enable_damage_flash || !t.has_damage_event || t.damage_received_ms == 0)
+    if(!t.has_damage_event || t.damage_received_ms == 0)
     {
         return in_color;
     }
@@ -1463,7 +820,7 @@ static RGBColor ApplyLightningFlashChannel(RGBColor in_color,
                                            const GridContext3D& grid,
                                            const Settings& s)
 {
-    if(!s.enable_lightning_flash || !t.has_lightning_event || t.lightning_received_ms == 0)
+    if(!t.has_lightning_event || t.lightning_received_ms == 0)
     {
         return in_color;
     }
@@ -1503,7 +860,6 @@ static RGBColor ApplyLightningFlashChannel(RGBColor in_color,
 }
 
 RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
-                     float time,
                      float grid_x,
                      float grid_y,
                      float grid_z,
@@ -1512,8 +868,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                      float origin_z,
                      const GridContext3D& grid,
                      const Settings& s,
-                     std::uint32_t channels,
-                     WorldTintSmoothState* world_smooth)
+                     std::uint32_t channels)
 {
     const RGBColor low_health = (RGBColor)0x000022FF;
     const RGBColor high_health = (RGBColor)0x0000FF22;
@@ -1543,7 +898,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         return HealthStripBrightnessAlongSlots(fill_end, total_slots, u);
     };
 
-    if(ch(channels, ChHealth) && s.enable_health_gradient && t.has_health_state && t.hearts_max > 1e-4f)
+    if(ch(channels, ChHealth) && t.has_health_state && t.hearts_max > 1e-4f)
     {
         const float max_h = std::max(t.hearts_max, 1e-4f);
         const float cur_h = std::clamp(t.hearts, 0.0f, max_h);
@@ -1576,7 +931,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             out = LerpColor(low_health, high_health, health_norm);
         }
     }
-    if(ch(channels, ChHunger) && s.enable_hunger_gradient && t.has_health_state && t.hunger_max > 0.01f)
+    if(ch(channels, ChHunger) && t.has_health_state && t.hunger_max > 0.01f)
     {
         const float hunger_norm = std::clamp(t.hunger / t.hunger_max, 0.0f, 1.0f);
         const RGBColor hunger_color = LerpColor(low_hunger, high_hunger, hunger_norm);
@@ -1593,7 +948,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             out = LerpColor(out, hunger_color, std::clamp(s.hunger_mix, 0.0f, 1.0f));
         }
     }
-    if(ch(channels, ChAir) && s.enable_air_gradient && t.has_health_state && t.air_max > 0.01f)
+    if(ch(channels, ChAir) && t.has_health_state && t.air_max > 0.01f)
     {
         const float air_norm = std::clamp(t.air / t.air_max, 0.0f, 1.0f);
         const RGBColor air_color = LerpColor(low_air, high_air, air_norm);
@@ -1610,7 +965,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             out = LerpColor(out, air_color, std::clamp(s.air_mix, 0.0f, 1.0f));
         }
     }
-    if(ch(channels, ChDurability) && s.enable_durability_gradient && t.has_health_state && t.has_item_durability && t.item_durability_max > 0.01f)
+    if(ch(channels, ChDurability) && t.has_health_state && t.has_item_durability && t.item_durability_max > 0.01f)
     {
         const float dura_norm = std::clamp(t.item_durability / t.item_durability_max, 0.0f, 1.0f);
         const RGBColor dura_color = LerpColor(low_durability, high_durability, dura_norm);
@@ -1628,282 +983,56 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         }
     }
 
-    if(ch(channels, ChWorldTint) && s.enable_ambient_world_tint && world_smooth != nullptr)
+    if(ch(channels, ChWorldTint) && t.has_world_light)
     {
-        const SpatialMappingMode mapping_mode = ResolveSpatialMappingMode(s);
-        const float y_norm_raw = NormalizeRoomVertical01(grid_y, grid, origin_y);
-        const int bin_count = (int)tls_layer_state.y_hist.size();
-        const int bin = std::clamp((int)(std::clamp(y_norm_raw, 0.0f, 1.0f) * (float)bin_count), 0, bin_count - 1);
-        tls_layer_state.y_hist[(size_t)bin]++;
-        tls_layer_state.y_samples++;
-        const float gamma = tls_layer_state.has_gamma ? tls_layer_state.gamma : 1.0f;
-        const float y_norm = std::pow(std::clamp(y_norm_raw, 0.0f, 1.0f), gamma);
+        const float y_norm = NormalizeRoomVertical01(grid_y, grid, origin_y);
+        const float layer_norm = ResolveTintLayerNorm(grid_x, grid_z, grid, y_norm);
 
-        float floor_end_dbg = tls_layer_state.has_auto_bounds
-            ? tls_layer_state.auto_floor_end
-            : s.tint_layer_ground_end;
-        float desk_end_dbg = tls_layer_state.has_auto_bounds
-            ? tls_layer_state.auto_desk_end
-            : (s.tint_layer_ground_end + s.tint_layer_sky_start) * 0.5f;
-        float upper_end_dbg = tls_layer_state.has_auto_bounds
-            ? tls_layer_state.auto_upper_end
-            : s.tint_layer_sky_start;
-        floor_end_dbg = std::clamp(floor_end_dbg + s.spatial_floor_offset, 0.08f, 0.52f);
-        desk_end_dbg = std::clamp(desk_end_dbg + s.spatial_desk_offset, floor_end_dbg + 0.06f, 0.88f);
-        upper_end_dbg = std::clamp(upper_end_dbg + s.spatial_upper_offset, desk_end_dbg + 0.06f, 0.95f);
-
-        if(!s.spatial_debug_sweep_enabled)
+        RGBColor projected;
+        if(t.has_layered_world_probes)
         {
-            g_spatial_sweep_live.store(0, std::memory_order_relaxed);
+            projected = SampleLayeredWorldProbe(t,
+                                                grid_x,
+                                                grid_y,
+                                                grid_z,
+                                                origin_x,
+                                                origin_y,
+                                                origin_z,
+                                                grid,
+                                                s.world_heading_offset_deg);
+        }
+        else
+        {
+            projected = SampleVerticalWorldLayers(t, layer_norm);
         }
 
-        if(s.spatial_debug_sweep_enabled)
+        const float wi = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
+        const float mix = std::clamp(s.world_light_mix * wi, 0.0f, 1.0f);
+        out = LerpColor(out, projected, mix);
+    }
+
+    if(ch(channels, ChRoomVrTint) && t.voxel_frame.has_voxel_frame)
+    {
+        const float blocks_per_m = t.has_player_blocks_per_m ? t.player_blocks_per_m : 1.0f;
+        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, s.room_vr_scale_tune);
+        bool got_room_sample = false;
+        RGBColor voxel = VoxelMapping::SampleAtRoomGrid(t,
+                                                        s.room_vr_heading_offset_deg,
+                                                        room_scale,
+                                                        0.02f,
+                                                        grid_x,
+                                                        grid_y,
+                                                        grid_z,
+                                                        origin_x,
+                                                        origin_y,
+                                                        origin_z,
+                                                        &got_room_sample,
+                                                        s.room_vr_sharp_sampling);
+        if(got_room_sample)
         {
-            out = RenderSpatialLayerSweepDebug(time,
-                                               t,
-                                               grid_x,
-                                               grid_y,
-                                               grid_z,
-                                               origin_x,
-                                               origin_y,
-                                               origin_z,
-                                               y_norm,
-                                               s,
-                                               floor_end_dbg,
-                                               desk_end_dbg,
-                                               upper_end_dbg);
-            const int dr = std::clamp((int)((out & 0xFF) * s.base_brightness), 0, 255);
-            const int dg = std::clamp((int)(((out >> 8) & 0xFF) * s.base_brightness), 0, 255);
-            const int db = std::clamp((int)(((out >> 16) & 0xFF) * s.base_brightness), 0, 255);
-            return (RGBColor)((db << 16) | (dg << 8) | dr);
-        }
-
-        switch(mapping_mode)
-        {
-        case SpatialMappingMode::Voxel:
-        {
-            RGBColor voxel_c = RenderVoxelRoomPreviewColor(t,
-                                                           grid_x,
-                                                           grid_y,
-                                                           grid_z,
-                                                           origin_x,
-                                                           origin_y,
-                                                           origin_z,
-                                                           s);
-            if(voxel_c != (RGBColor)0x00000000)
-            {
-                out = LerpColor(out, voxel_c, std::clamp(s.spatial_voxel_mix, 0.0f, 1.0f));
-            }
-            break;
-        }
-        case SpatialMappingMode::Classic:
-        case SpatialMappingMode::Compass:
-            if(t.has_world_light)
-            {
-                RGBColor wl = SuppressWhites(MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b));
-                if(t.has_world_layers)
-                {
-            RGBColor sky = SuppressWhites(MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b));
-            RGBColor mid = SuppressWhites(MakeRgb(t.world_mid_r, t.world_mid_g, t.world_mid_b));
-            RGBColor ground = SuppressWhites(MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b));
-            if(t.has_vanilla_biome_colors)
-            {
-                if(s.biome_sky_overlay > 1e-4f)
-                {
-                    RGBColor bioSky = SuppressWhites(MakeRgb(t.biome_sky_r, t.biome_sky_g, t.biome_sky_b));
-                    sky = LerpColor(sky, bioSky, std::clamp(s.biome_sky_overlay, 0.0f, 1.0f));
-                }
-            }
-            const float waterK = std::clamp(t.water_submerge, 0.0f, 1.0f);
-            if(waterK > 1e-4f)
-            {
-                RGBColor wFog = SuppressWhites(MakeRgb(t.water_fog_r, t.water_fog_g, t.water_fog_b));
-                const float gk = std::clamp(0.30f + 0.70f * waterK, 0.0f, 1.0f);
-                const float mk = std::clamp(0.20f + 0.68f * waterK, 0.0f, 1.0f);
-                const float sk = std::clamp(0.10f + 0.52f * waterK, 0.0f, 1.0f);
-                ground = LerpColor(ground, wFog, gk);
-                mid = LerpColor(mid, wFog, mk);
-                sky = LerpColor(sky, wFog, sk);
-            }
-            const float rainK = std::clamp(t.env_rain, 0.0f, 1.0f);
-            const float thK = std::clamp(t.env_thunder, 0.0f, 1.0f);
-            const float weatherK = std::clamp(rainK * s.env_rain_darken_sky + thK * s.env_thunder_darken_sky, 0.0f, 1.0f);
-            if(weatherK > 1e-4f)
-            {
-                sky = LerpColor(sky, (RGBColor)0x00002218, weatherK);
-            }
-            const float vivid = std::clamp(s.world_tint_vividness, 0.60f, 2.00f);
-            sky = ApplyVividness(sky, vivid);
-            mid = ApplyVividness(mid, vivid);
-            ground = ApplyVividness(ground, vivid);
-            wl = ApplyVividness(wl, vivid);
-            if(t.world_light_received_ms != 0 && t.world_light_received_ms != world_smooth->last_sample_ms)
-            {
-                world_smooth->last_sample_ms = t.world_light_received_ms;
-                if(!world_smooth->has_smoothed)
-                {
-                    world_smooth->smooth_sky = sky;
-                    world_smooth->smooth_mid = mid;
-                    world_smooth->smooth_ground = ground;
-                    world_smooth->has_smoothed = true;
-                }
-                else
-                {
-                    const float alpha = std::clamp(1.0f - s.world_tint_smoothing, 0.02f, 1.0f);
-                    world_smooth->smooth_sky = LerpColor(world_smooth->smooth_sky, sky, alpha);
-                    world_smooth->smooth_mid = LerpColor(world_smooth->smooth_mid, mid, alpha);
-                    world_smooth->smooth_ground = LerpColor(world_smooth->smooth_ground, ground, alpha);
-                }
-            }
-            if(world_smooth->has_smoothed)
-            {
-                sky = world_smooth->smooth_sky;
-                mid = world_smooth->smooth_mid;
-                ground = world_smooth->smooth_ground;
-            }
-            RGBColor projected = mid;
-            const float gEnd = std::clamp(s.tint_layer_ground_end, 0.08f, 0.49f);
-            const float sStart = std::clamp(s.tint_layer_sky_start, gEnd + 0.04f, 0.92f);
-            if(y_norm < gEnd)
-            {
-                projected = LerpColor(ground, mid, y_norm / gEnd);
-            }
-            else if(y_norm > sStart)
-            {
-                const float denom = std::max(1e-3f, 1.0f - sStart);
-                projected = LerpColor(mid, sky, (y_norm - sStart) / denom);
-            }
-            if(t.has_vanilla_biome_colors)
-            {
-                RGBColor bioSky = SuppressWhites(MakeRgb(t.biome_sky_r, t.biome_sky_g, t.biome_sky_b));
-                const float sky_top = std::clamp((y_norm - (sStart - 0.03f)) / std::max(1e-3f, 1.0f - (sStart - 0.03f)), 0.0f, 1.0f);
-                const float sky_focus = sky_top * sky_top;
-                const float sky_keep = std::clamp((0.25f + 0.75f * s.biome_sky_overlay) * sky_focus, 0.0f, 0.85f);
-                projected = LerpColor(projected, bioSky, sky_keep);
-            }
-            if(mapping_mode == SpatialMappingMode::Compass && t.has_layered_world_probes && t.has_player_pose)
-            {
-                SpatialLayerCore::ProbeInput probe_input = BuildProbeInput(t);
-                float ux = 0.0f;
-                float uy = 1.0f;
-                float uz = 0.0f;
-                float fx = 0.0f;
-                float fy = 0.0f;
-                float fz = 1.0f;
-                float rx = 1.0f;
-                float ry = 0.0f;
-                float rz = 0.0f;
-                MinecraftRoomHorizontalBasis(t.forward_x,
-                                             t.forward_y,
-                                             t.forward_z,
-                                             s.spatial_heading_offset_deg,
-                                             ux,
-                                             uy,
-                                             uz,
-                                             fx,
-                                             fy,
-                                             fz,
-                                             rx,
-                                             ry,
-                                             rz);
-                SpatialLayerCore::Basis basis;
-                basis.forward_x = fx;
-                basis.forward_y = fy;
-                basis.forward_z = fz;
-                basis.up_x = ux;
-                basis.up_y = uy;
-                basis.up_z = uz;
-                basis.valid = true;
-
-                float floor_end = t.has_layered_world_probes && tls_layer_state.has_auto_bounds
-                    ? tls_layer_state.auto_floor_end
-                    : s.tint_layer_ground_end;
-                float desk_end = tls_layer_state.has_auto_bounds
-                    ? tls_layer_state.auto_desk_end
-                    : (s.tint_layer_ground_end + s.tint_layer_sky_start) * 0.5f;
-                float upper_end = t.has_layered_world_probes && tls_layer_state.has_auto_bounds
-                    ? tls_layer_state.auto_upper_end
-                    : s.tint_layer_sky_start;
-                floor_end = std::clamp(floor_end + s.spatial_floor_offset, 0.08f, 0.52f);
-                desk_end = std::clamp(desk_end + s.spatial_desk_offset, floor_end + 0.06f, 0.88f);
-                upper_end = std::clamp(upper_end + s.spatial_upper_offset, desk_end + 0.06f, 0.95f);
-
-                SpatialLayerCore::MapperSettings map_settings;
-                map_settings.profile_mode = ResolveLayerProfileMode(s);
-                map_settings.directional_response = std::clamp(s.world_tint_directional, 0.0f, 1.0f);
-                map_settings.directional_sharpness = std::clamp(s.world_tint_dir_sharpness, 0.8f, 3.2f);
-                map_settings.center_size = std::clamp(s.spatial_center_size, 0.02f, 0.65f);
-                map_settings.blend_softness = std::clamp(s.spatial_blend_softness, 0.02f, 0.35f);
-                map_settings.floor_end = floor_end;
-                map_settings.desk_end = desk_end;
-                map_settings.upper_end = upper_end;
-                map_settings.compass_azimuth_offset_rad = s.spatial_compass_offset_deg * 0.01745329252f;
-
-                SpatialLayerCore::SamplePoint sample;
-                RoomLedToSpatialCore(grid_x,
-                                     grid_y,
-                                     grid_z,
-                                     origin_x,
-                                     origin_y,
-                                     origin_z,
-                                     sample.grid_x,
-                                     sample.grid_y,
-                                     sample.grid_z,
-                                     sample.origin_x,
-                                     sample.origin_y,
-                                     sample.origin_z);
-                sample.y_norm = y_norm;
-
-                bool used_layered = false;
-                RGBColor probe_projected = SpatialLayerCore::ComputeProjectedProbeColor(probe_input,
-                                                                                         basis,
-                                                                                         sample,
-                                                                                         map_settings,
-                                                                                         &used_layered);
-                if(probe_input.layered.has_layered)
-                {
-                    probe_projected = ApplyVividness(SuppressWhites(probe_projected), vivid);
-                    const float layered_bonus = used_layered ? 0.08f : 0.0f;
-                    const float probe_mix = std::clamp(0.20f + 0.60f * s.world_tint_directional + layered_bonus, 0.0f, 0.88f);
-                    projected = LerpColor(projected, probe_projected, probe_mix);
-                }
-            }
-            const float wi_disp = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
-            const float dark_gate = std::clamp((wi_disp - 0.035f) / 0.215f, 0.0f, 1.0f);
-            const float layer_mix = std::clamp((0.10f + 0.80f * s.world_light_mix) * wi_disp * dark_gate, 0.0f, 1.0f);
-            float dirMul = 1.0f;
-            if(mapping_mode == SpatialMappingMode::Compass &&
-               t.world_light_focus > 1e-4f &&
-               s.world_tint_directional > 1e-4f)
-            {
-                const float focus = std::clamp(t.world_light_focus, 0.0f, 1.0f);
-                const float dm = std::clamp(s.world_tint_directional * (0.25f + 0.75f * focus), 0.0f, 1.0f);
-                dirMul = ComputeDirectionalFactorHorizontalPose(t,
-                                                                t.world_light_dir_x,
-                                                                t.world_light_dir_y,
-                                                                t.world_light_dir_z,
-                                                                grid_x,
-                                                                grid_y,
-                                                                grid_z,
-                                                                origin_x,
-                                                                origin_y,
-                                                                origin_z,
-                                                                s.spatial_heading_offset_deg,
-                                                                dm,
-                                                                s.world_tint_dir_sharpness,
-                                                                0.30f);
-            }
-            out = LerpColor(out, projected, std::clamp(layer_mix * dirMul, 0.0f, 1.0f));
-            wl = LerpColor(wl, projected, 0.6f);
-        }
-            const float wi_disp2 = std::clamp(t.world_light_intensity, 0.0f, 1.0f);
-            const float dark_gate2 = std::clamp((wi_disp2 - 0.035f) / 0.215f, 0.0f, 1.0f);
-            const float wl_mix = std::clamp((0.05f + 0.35f * s.world_light_mix) * wi_disp2 * dark_gate2, 0.0f, 0.40f);
-                out = LerpColor(out, wl, wl_mix);
-            }
-            break;
-        default:
-            break;
+            voxel = EnhanceRoomVrColor(voxel, s.room_vr_saturation, s.room_vr_contrast);
+            const float mix = std::clamp(s.room_vr_mix, 0.0f, 1.0f);
+            out = LerpColor(out, voxel, mix);
         }
     }
 
