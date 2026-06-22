@@ -11,7 +11,10 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.MapColor;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.LightType;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 import java.net.DatagramPacket;
@@ -43,7 +46,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
     private float smoothWorldIntensity = 0.6f;
     private long lastLightningSentMs = 0L;
-    /** Send voxel_frame every fourth telemetry batch (~2.5 Hz). */
+    /** Voxel frames sent every telemetry batch by default (~10 Hz with divisor 2). */
     private int voxelSendCounter = 0;
     private static final int VOXEL_SIZE_X = 25;
     private static final int VOXEL_SIZE_Y = 17;
@@ -745,6 +748,31 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return new int[] {outR, outG, outB, alpha};
     }
 
+    /**
+     * Line-of-sight shell: march from the player's eyes toward the cell center and sample the
+     * first solid block hit (walls/floor/ceiling), not the block at the far grid coordinate.
+     */
+    private static BlockPos raycastFirstSolidToward(World world, ClientPlayerEntity player, Vec3d targetCenter)
+    {
+        final Vec3d start = player.getEyePos();
+        if(start.squaredDistanceTo(targetCenter) < 1.0e-4)
+        {
+            return BlockPos.ofFloored(targetCenter);
+        }
+
+        final BlockHitResult hit = world.raycast(new RaycastContext(
+                start,
+                targetCenter,
+                RaycastContext.ShapeType.OUTLINE,
+                RaycastContext.FluidHandling.NONE,
+                player));
+        if(hit.getType() == HitResult.Type.BLOCK)
+        {
+            return hit.getBlockPos();
+        }
+        return BlockPos.ofFloored(targetCenter);
+    }
+
     private void sendVoxelFrame(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, World world) throws Exception
     {
         final int sx = VOXEL_SIZE_X;
@@ -769,7 +797,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
             {
                 for(int iz = 0; iz < sz; iz++)
                 {
-                    BlockPos pos = new BlockPos(ox + ix, oy + iy, oz + iz);
+                    final Vec3d cellCenter = new Vec3d(ox + ix + 0.5, oy + iy + 0.5, oz + iz + 0.5);
+                    final BlockPos pos = raycastFirstSolidToward(world, player, cellCenter);
                     int[] cell = sampleVoxelCellRgba(world, pos);
                     rgba[rgbaIndex++] = (byte)cell[0];
                     rgba[rgbaIndex++] = (byte)cell[1];

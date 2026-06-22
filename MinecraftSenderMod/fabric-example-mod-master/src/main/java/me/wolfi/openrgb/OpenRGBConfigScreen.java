@@ -74,7 +74,7 @@ public class OpenRGBConfigScreen extends Screen
         voxelIntervalField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Voxel send interval"));
         voxelIntervalField.setMaxLength(2);
         voxelIntervalField.setText(Integer.toString(config.voxelSendInterval));
-        voxelIntervalField.setPlaceholder(Text.literal("4"));
+        voxelIntervalField.setPlaceholder(Text.literal("1"));
         addDrawableChild(voxelIntervalField);
         y += 36;
 

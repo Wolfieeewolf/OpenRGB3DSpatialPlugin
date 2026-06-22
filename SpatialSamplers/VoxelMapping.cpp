@@ -3,6 +3,7 @@
 #include "VoxelMapping.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 
@@ -10,6 +11,52 @@ namespace VoxelMapping
 {
 namespace
 {
+static unsigned long long NowMs()
+{
+    return (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+static float SmoothStep01(float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static RGBColor LerpRgbColor(RGBColor a, RGBColor b, float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    const int ar = (int)(a & 0xFF);
+    const int ag = (int)((a >> 8) & 0xFF);
+    const int ab = (int)((a >> 16) & 0xFF);
+    const int br = (int)(b & 0xFF);
+    const int bg = (int)((b >> 8) & 0xFF);
+    const int bb = (int)((b >> 16) & 0xFF);
+    const int r = (int)std::lround(ar + (br - ar) * t);
+    const int g = (int)std::lround(ag + (bg - ag) * t);
+    const int bl = (int)std::lround(ab + (bb - ab) * t);
+    return (RGBColor)(((bl & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF));
+}
+
+static void CopyVoxelFrameToGrid(const GameTelemetryBridge::VoxelFrameChannel& vf, VoxelRoomCore::VoxelGrid& grid)
+{
+    grid.valid = true;
+    grid.size_x = vf.size_x;
+    grid.size_y = vf.size_y;
+    grid.size_z = vf.size_z;
+    grid.min_x = vf.origin_x;
+    grid.min_y = vf.origin_y;
+    grid.min_z = vf.origin_z;
+    grid.voxel_size = std::max(1e-4f, vf.voxel_size);
+    grid.rgba = vf.rgba;
+}
+
+static bool GridTopologyMatches(const VoxelRoomCore::VoxelGrid& a, const VoxelRoomCore::VoxelGrid& b)
+{
+    return a.valid && b.valid && a.size_x == b.size_x && a.size_y == b.size_y && a.size_z == b.size_z &&
+           a.rgba.size() == b.rgba.size();
+}
 static void BuildHorizontalVoxelBasis(float look_x,
                                       float look_y,
                                       float look_z,
@@ -115,7 +162,11 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
                           float pos_offset_up_blocks)
 {
     thread_local VoxelRoomCore::VoxelGrid tl_grid;
+    thread_local VoxelRoomCore::VoxelGrid tl_grid_prev;
     thread_local std::uint64_t tl_voxel_key = 0;
+    thread_local unsigned long long tl_frame_ms = 0;
+    thread_local float tl_frame_interval_ms = 200.0f;
+    thread_local bool tl_has_prev_frame = false;
 
     if(out_got_room_sample)
     {
@@ -134,15 +185,21 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     if(vkey != tl_voxel_key || tl_grid.size_x != vf.size_x || tl_grid.size_y != vf.size_y ||
        tl_grid.size_z != vf.size_z)
     {
-        tl_grid.valid = true;
-        tl_grid.size_x = vf.size_x;
-        tl_grid.size_y = vf.size_y;
-        tl_grid.size_z = vf.size_z;
-        tl_grid.min_x = vf.origin_x;
-        tl_grid.min_y = vf.origin_y;
-        tl_grid.min_z = vf.origin_z;
-        tl_grid.voxel_size = std::max(1e-4f, vf.voxel_size);
-        tl_grid.rgba = vf.rgba;
+        if(tl_grid.valid && !tl_grid.rgba.empty() && tl_grid.size_x == vf.size_x && tl_grid.size_y == vf.size_y &&
+           tl_grid.size_z == vf.size_z)
+        {
+            tl_grid_prev = tl_grid;
+            tl_has_prev_frame = true;
+        }
+
+        if(tl_frame_ms > 0 && vf.received_ms > tl_frame_ms)
+        {
+            const float dt = (float)(vf.received_ms - tl_frame_ms);
+            tl_frame_interval_ms = std::clamp(0.72f * tl_frame_interval_ms + 0.28f * dt, 80.0f, 450.0f);
+        }
+        tl_frame_ms = vf.received_ms;
+
+        CopyVoxelFrameToGrid(vf, tl_grid);
         tl_voxel_key = vkey;
     }
 
@@ -189,17 +246,39 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
     ms.alpha_cutoff = std::max(1e-4f, alpha_cutoff);
     ms.nearest_sample = nearest_sample;
 
-    bool used = false;
-    RGBColor c = VoxelRoomCore::ComputeRoomMappedVoxelColor(tl_grid, basis, sp, ax, ay, az, ms, &used);
-    if(!used)
+    bool used_cur = false;
+    RGBColor c_cur =
+        VoxelRoomCore::ComputeRoomMappedVoxelColor(tl_grid, basis, sp, ax, ay, az, ms, &used_cur);
+    if(!used_cur)
     {
         return (RGBColor)0;
     }
+
+    float blend_t = 1.0f;
+    if(tl_has_prev_frame && GridTopologyMatches(tl_grid, tl_grid_prev) && tl_frame_ms > 0)
+    {
+        const unsigned long long now_ms = NowMs();
+        const float elapsed = (float)((now_ms > tl_frame_ms) ? (now_ms - tl_frame_ms) : 0ULL);
+        blend_t = SmoothStep01(elapsed / std::max(40.0f, tl_frame_interval_ms));
+    }
+
+    RGBColor out = c_cur;
+    if(blend_t < 0.999f)
+    {
+        bool used_prev = false;
+        const RGBColor c_prev =
+            VoxelRoomCore::ComputeRoomMappedVoxelColor(tl_grid_prev, basis, sp, ax, ay, az, ms, &used_prev);
+        if(used_prev)
+        {
+            out = LerpRgbColor(c_prev, c_cur, blend_t);
+        }
+    }
+
     if(out_got_room_sample)
     {
         *out_got_room_sample = true;
     }
-    return c;
+    return out;
 }
 
 }

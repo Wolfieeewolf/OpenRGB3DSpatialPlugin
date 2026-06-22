@@ -23,8 +23,8 @@ public final class OpenRGBSenderConfig
     public boolean sendVoxelFrames = true;
     /** Client ticks between telemetry batches (2 ≈ 10 Hz at 20 tps). */
     public int telemetryTickDivisor = 2;
-    /** Telemetry batches between voxel_frame packets. */
-    public int voxelSendInterval = 4;
+    /** Telemetry batches between voxel_frame packets (1 = every batch, ~10 Hz with divisor 2). */
+    public int voxelSendInterval = 1;
 
     public static OpenRGBSenderConfig get()
     {
