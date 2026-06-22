@@ -689,6 +689,32 @@ bool OpenRGB3DSpatialTab::IsAmbilightEffectClass(const std::string& class_name) 
     return class_name == "ScreenMirror";
 }
 
+bool OpenRGB3DSpatialTab::PlaybackUsesScreenMirror() const
+{
+    for(size_t i = 0; i < effect_stack.size(); i++)
+    {
+        const std::unique_ptr<EffectInstance3D>& inst = effect_stack[i];
+        if(inst && inst->enabled && inst->effect_class_name == "ScreenMirror")
+        {
+            return true;
+        }
+    }
+
+    if(effect_stack.empty() && current_effect_ui)
+    {
+        return dynamic_cast<ScreenMirror*>(current_effect_ui) != nullptr;
+    }
+
+    return false;
+}
+
+void OpenRGB3DSpatialTab::SyncScreenCaptureSession()
+{
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+    const bool want_capture = effect_running && PlaybackUsesScreenMirror();
+    capture_mgr.SetCaptureSessionActive(want_capture);
+}
+
 void OpenRGB3DSpatialTab::RefreshAmbilightReferencePointDropdowns()
 {
     for(unsigned int i = 0; i < effect_stack.size(); i++)
@@ -792,6 +818,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
         if(start_effect_button) start_effect_button->setEnabled(false);
         if(stop_effect_button) stop_effect_button->setEnabled(true);
         UpdateStartStopAllButtons();
+        SyncScreenCaptureSession();
         return;
     }
 
@@ -828,11 +855,13 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
 
     if(start_effect_button) start_effect_button->setEnabled(false);
     if(stop_effect_button) stop_effect_button->setEnabled(true);
+    SyncScreenCaptureSession();
 }
 
 void OpenRGB3DSpatialTab::on_stop_effect_clicked()
 {
     effect_running = false;
+    SyncScreenCaptureSession();
     if(effect_timer && effect_timer->isActive())
     {
         effect_timer->stop();

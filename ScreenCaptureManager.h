@@ -68,6 +68,10 @@ public:
     void SetWindowsCaptureBackendMode(int mode);
     int GetWindowsCaptureBackendMode() const { return windows_capture_backend_mode.load(); }
 
+    /** When false, DXGI/GDI capture threads are not started (enumeration still works). */
+    void SetCaptureSessionActive(bool active);
+    bool IsCaptureSessionActive() const { return capture_session_active.load(); }
+
 private:
     ScreenCaptureManager();
     ~ScreenCaptureManager();
@@ -82,6 +86,7 @@ private:
     void StopCapturePlatform(const std::string& source_id);
     void CaptureThreadFunction(const std::string& source_id);
     std::atomic<bool>                       initialized;
+    std::atomic<bool>                       capture_session_active;
     std::atomic<int>                        target_width;
     std::atomic<int>                        target_height;
     std::atomic<int>                        target_fps;

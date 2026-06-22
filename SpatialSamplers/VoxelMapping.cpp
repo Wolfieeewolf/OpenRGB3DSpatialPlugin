@@ -109,7 +109,10 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
                           float origin_y,
                           float origin_z,
                           bool* out_got_room_sample,
-                          bool nearest_sample)
+                          bool nearest_sample,
+                          float pos_offset_forward_blocks,
+                          float pos_offset_right_blocks,
+                          float pos_offset_up_blocks)
 {
     thread_local VoxelRoomCore::VoxelGrid tl_grid;
     thread_local std::uint64_t tl_voxel_key = 0;
@@ -162,20 +165,27 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
         BuildHorizontalVoxelBasis(0.0f, 0.0f, 1.0f, heading_offset_deg, basis);
     }
 
-    const float ax = telemetry.has_player_pose ? telemetry.player_x : 0.0f;
-    const float ay = telemetry.has_player_pose ? telemetry.player_y : 0.0f;
-    const float az = telemetry.has_player_pose ? telemetry.player_z : 0.0f;
+    const float ax = vf.has_anchor_position ? vf.anchor_x
+                                            : (telemetry.has_player_pose ? telemetry.player_x : 0.0f);
+    const float ay = vf.has_anchor_position ? vf.anchor_y
+                                            : (telemetry.has_player_pose ? telemetry.player_y : 0.0f);
+    const float az = vf.has_anchor_position ? vf.anchor_z
+                                            : (telemetry.has_player_pose ? telemetry.player_z : 0.0f);
+
+    const float scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
+    const float grid_units_per_block = 1.0f / scale;
 
     VoxelRoomCore::RoomSamplePoint sp{};
     sp.room_x = grid_x;
     sp.room_y = grid_y;
     sp.room_z = grid_z;
-    sp.origin_x = origin_x;
-    sp.origin_y = origin_y;
-    sp.origin_z = origin_z;
+    // See SpatialCoordinateSpaces.h — offsets shift the room origin in fixed RoomGrid axes.
+    sp.origin_x = origin_x - pos_offset_right_blocks * grid_units_per_block;
+    sp.origin_y = origin_y - pos_offset_up_blocks * grid_units_per_block;
+    sp.origin_z = origin_z + pos_offset_forward_blocks * grid_units_per_block;
 
     VoxelRoomCore::MapperSettings ms;
-    ms.room_to_world_scale = std::clamp(room_to_world_scale, 0.005f, 0.80f);
+    ms.room_to_world_scale = scale;
     ms.alpha_cutoff = std::max(1e-4f, alpha_cutoff);
     ms.nearest_sample = nearest_sample;
 

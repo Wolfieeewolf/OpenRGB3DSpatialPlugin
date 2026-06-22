@@ -126,6 +126,7 @@ HEADERS += \
     Game/GameTelemetryBridge.h \
     Game/LedLayoutCoordinateMap.h \
     SpatialSamplers/SpatialBasisUtils.h \
+    SpatialSamplers/SpatialCoordinateSpaces.h \
     SpatialSamplers/SpatialLayerCore.h \
     SpatialSamplers/VoxelRoomCore.h \
     SpatialSamplers/VoxelMapping.h \

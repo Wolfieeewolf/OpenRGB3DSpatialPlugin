@@ -2870,6 +2870,11 @@ void LEDViewport3D::UpdateDisplayPlaneTextures()
     if(!display_planes) return;
 
     ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+    if(!capture_mgr.IsCaptureSessionActive())
+    {
+        return;
+    }
+
     if(!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();

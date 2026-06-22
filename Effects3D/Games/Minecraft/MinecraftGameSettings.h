@@ -26,6 +26,10 @@ struct Settings
     float world_heading_offset_deg = 0.0f;
     float room_vr_mix = 1.0f;
     float room_vr_heading_offset_deg = 0.0f;
+    /** Player anchor shift in MC blocks (local forward/right/up), not room rotation. */
+    float room_vr_pos_offset_forward_blocks = 0.0f;
+    float room_vr_pos_offset_right_blocks = 0.0f;
+    float room_vr_pos_offset_up_blocks = 0.0f;
     float room_vr_scale_tune = 1.0f;
     float room_vr_saturation = 1.45f;
     float room_vr_contrast = 1.12f;

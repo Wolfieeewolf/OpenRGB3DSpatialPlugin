@@ -634,9 +634,14 @@ void ScreenMirror::RefreshFrameCacheForRenderSequence(const GridContext3D& grid)
         return;
     }
 
+    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
+    if(!capture_mgr.IsCaptureSessionActive())
+    {
+        return;
+    }
+
     frame_cache_planes_ = DisplayPlaneManager::instance()->GetDisplayPlanes();
     std::unordered_set<std::string> seen_capture_ids;
-    ScreenCaptureManager& capture_mgr = ScreenCaptureManager::Instance();
     if(!capture_mgr.IsInitialized())
     {
         capture_mgr.Initialize();

@@ -16,6 +16,8 @@
 #include <climits>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
+#include <string>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -45,6 +47,34 @@ static unsigned long long NowMs()
 static float LerpFloat(float a, float b, float t)
 {
     return a + (b - a) * t;
+}
+
+static SpatialCoordinateSpaces::GameWorldConvention ParseWorldConvention(const nlohmann::json& msg)
+{
+    if(msg.contains("world_convention"))
+    {
+        if(msg["world_convention"].is_string())
+        {
+            const std::string s = msg["world_convention"].get<std::string>();
+            if(s == "unity" || s == "left_handed_y_up")
+            {
+                return SpatialCoordinateSpaces::GameWorldConvention::LeftHandedYUpUnity;
+            }
+            if(s == "unreal" || s == "left_handed_z_up")
+            {
+                return SpatialCoordinateSpaces::GameWorldConvention::LeftHandedZUpUnreal;
+            }
+        }
+        else if(msg["world_convention"].is_number_integer())
+        {
+            const int v = msg["world_convention"].get<int>();
+            if(v >= 0 && v <= 2)
+            {
+                return static_cast<SpatialCoordinateSpaces::GameWorldConvention>(v);
+            }
+        }
+    }
+    return SpatialCoordinateSpaces::GameWorldConvention::RightHandedYUp;
 }
 
 static void ApplyPlayerPoseEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
@@ -98,6 +128,7 @@ static void ApplyPlayerPoseEvent(GameTelemetryBridge::TelemetrySnapshot& telemet
         telemetry.pose.up_x = telemetry.up_x;
         telemetry.pose.up_y = telemetry.up_y;
         telemetry.pose.up_z = telemetry.up_z;
+        telemetry.pose.world_convention = ParseWorldConvention(msg);
     }
     if(msg.contains("blocks_per_m") && msg["blocks_per_m"].is_number())
     {
@@ -191,17 +222,98 @@ static bool TryComputeVoxelRgbaBytes(int x, int y, int z, size_t& out_bytes)
     return true;
 }
 
+static bool DecodeBase64(const std::string& in, std::vector<unsigned char>& out)
+{
+    out.clear();
+    if(in.empty())
+    {
+        return false;
+    }
+
+    static const int8_t kDecode[256] = {
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+        -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+        -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    };
+
+    size_t i = 0;
+    while(i < in.size() && (in[i] == ' ' || in[i] == '\n' || in[i] == '\r' || in[i] == '\t'))
+    {
+        ++i;
+    }
+    size_t end = in.size();
+    while(end > i && (in[end - 1] == ' ' || in[end - 1] == '\n' || in[end - 1] == '\r' || in[end - 1] == '\t'))
+    {
+        --end;
+    }
+
+    int val = 0;
+    int valb = -8;
+    for(size_t pos = i; pos < end; ++pos)
+    {
+        const unsigned char c = (unsigned char)in[pos];
+        if(c == '=')
+        {
+            break;
+        }
+        const int8_t d = kDecode[c];
+        if(d < 0)
+        {
+            continue;
+        }
+        val = (val << 6) + d;
+        valb += 6;
+        if(valb >= 0)
+        {
+            out.push_back((unsigned char)((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return !out.empty();
+}
+
+static bool FillVoxelRgbaFromJsonArray(const nlohmann::json& rgba, size_t expected, std::vector<unsigned char>& out)
+{
+    if(!rgba.is_array() || rgba.size() < expected)
+    {
+        return false;
+    }
+    out.resize(expected);
+    for(size_t i = 0; i < expected; i++)
+    {
+        int v = 0;
+        if(rgba[i].is_number_integer())
+        {
+            v = rgba[i].get<int>();
+        }
+        else if(rgba[i].is_number_float())
+        {
+            v = (int)rgba[i].get<float>();
+        }
+        out[i] = (unsigned char)(std::max)(0, (std::min)(255, v));
+    }
+    return true;
+}
+
 static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
 {
     const int sx = msg.value("voxel_size_x", 0);
     const int sy = msg.value("voxel_size_y", 0);
     const int sz = msg.value("voxel_size_z", 0);
     if(sx <= 0 || sy <= 0 || sz <= 0)
-    {
-        ClearVoxelFrame(telemetry);
-        return;
-    }
-    if(!msg.contains("voxel_rgba") || !msg["voxel_rgba"].is_array())
     {
         ClearVoxelFrame(telemetry);
         return;
@@ -213,8 +325,29 @@ static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemet
         ClearVoxelFrame(telemetry);
         return;
     }
-    const nlohmann::json& rgba = msg["voxel_rgba"];
-    if(rgba.size() < expected)
+
+    std::vector<unsigned char> rgba_bytes;
+    if(msg.contains("voxel_rgba_b64") && msg["voxel_rgba_b64"].is_string())
+    {
+        const std::string b64 = msg["voxel_rgba_b64"].get<std::string>();
+        if(!DecodeBase64(b64, rgba_bytes) || rgba_bytes.size() < expected)
+        {
+            LOG_WARNING("[3DSpatial] voxel_frame base64 decode failed (%zu bytes, need %zu)",
+                        rgba_bytes.size(),
+                        expected);
+            ClearVoxelFrame(telemetry);
+            return;
+        }
+    }
+    else if(msg.contains("voxel_rgba") && msg["voxel_rgba"].is_array())
+    {
+        if(!FillVoxelRgbaFromJsonArray(msg["voxel_rgba"], expected, rgba_bytes))
+        {
+            ClearVoxelFrame(telemetry);
+            return;
+        }
+    }
+    else
     {
         ClearVoxelFrame(telemetry);
         return;
@@ -229,20 +362,18 @@ static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemet
     telemetry.voxel_frame.origin_y = msg.value("voxel_origin_y", 0.0f);
     telemetry.voxel_frame.origin_z = msg.value("voxel_origin_z", 0.0f);
     telemetry.voxel_frame.voxel_size = (std::max)(1e-4f, msg.value("voxel_cell_size", 1.0f));
-    telemetry.voxel_frame.rgba.resize(expected);
-    for(size_t i = 0; i < expected; i++)
+    if(msg.contains("anchor_x") && msg.contains("anchor_y") && msg.contains("anchor_z"))
     {
-        int v = 0;
-        if(rgba[i].is_number_integer())
-        {
-            v = rgba[i].get<int>();
-        }
-        else if(rgba[i].is_number_float())
-        {
-            v = (int)rgba[i].get<float>();
-        }
-        telemetry.voxel_frame.rgba[i] = (unsigned char)(std::max)(0, (std::min)(255, v));
+        telemetry.voxel_frame.has_anchor_position = true;
+        telemetry.voxel_frame.anchor_x = msg["anchor_x"].get<float>();
+        telemetry.voxel_frame.anchor_y = msg["anchor_y"].get<float>();
+        telemetry.voxel_frame.anchor_z = msg["anchor_z"].get<float>();
     }
+    else
+    {
+        telemetry.voxel_frame.has_anchor_position = false;
+    }
+    telemetry.voxel_frame.rgba = std::move(rgba_bytes);
     telemetry.voxel_frame.received_ms = NowMs();
 }
 

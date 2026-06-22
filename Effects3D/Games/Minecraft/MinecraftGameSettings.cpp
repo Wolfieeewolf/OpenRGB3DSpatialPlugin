@@ -38,6 +38,9 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_f(j, "world_heading_offset_deg", s.world_heading_offset_deg);
     put_f(j, "room_vr_mix", s.room_vr_mix);
     put_f(j, "room_vr_heading_offset_deg", s.room_vr_heading_offset_deg);
+    put_f(j, "room_vr_pos_offset_forward_blocks", s.room_vr_pos_offset_forward_blocks);
+    put_f(j, "room_vr_pos_offset_right_blocks", s.room_vr_pos_offset_right_blocks);
+    put_f(j, "room_vr_pos_offset_up_blocks", s.room_vr_pos_offset_up_blocks);
     put_f(j, "room_vr_scale_tune", s.room_vr_scale_tune);
     put_f(j, "room_vr_saturation", s.room_vr_saturation);
     put_f(j, "room_vr_contrast", s.room_vr_contrast);
@@ -71,6 +74,9 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.room_vr_mix = get_f(j, "room_vr_mix", get_f(j, "room_world_mix", s.room_vr_mix));
     s.room_vr_heading_offset_deg =
         get_f(j, "room_vr_heading_offset_deg", get_f(j, "room_heading_offset_deg", s.room_vr_heading_offset_deg));
+    s.room_vr_pos_offset_forward_blocks = get_f(j, "room_vr_pos_offset_forward_blocks", s.room_vr_pos_offset_forward_blocks);
+    s.room_vr_pos_offset_right_blocks = get_f(j, "room_vr_pos_offset_right_blocks", s.room_vr_pos_offset_right_blocks);
+    s.room_vr_pos_offset_up_blocks = get_f(j, "room_vr_pos_offset_up_blocks", s.room_vr_pos_offset_up_blocks);
     s.room_vr_scale_tune = get_f(j, "room_vr_scale_tune", get_f(j, "room_scale_tune", s.room_vr_scale_tune));
     s.room_vr_saturation = get_f(j, "room_vr_saturation", s.room_vr_saturation);
     s.room_vr_contrast = get_f(j, "room_vr_contrast", s.room_vr_contrast);
@@ -100,6 +106,9 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.world_heading_offset_deg = std::clamp(s.world_heading_offset_deg, -180.0f, 180.0f);
     s.room_vr_mix = std::clamp(s.room_vr_mix, 0.0f, 1.0f);
     s.room_vr_heading_offset_deg = std::clamp(s.room_vr_heading_offset_deg, -180.0f, 180.0f);
+    s.room_vr_pos_offset_forward_blocks = std::clamp(s.room_vr_pos_offset_forward_blocks, -8.0f, 8.0f);
+    s.room_vr_pos_offset_right_blocks = std::clamp(s.room_vr_pos_offset_right_blocks, -8.0f, 8.0f);
+    s.room_vr_pos_offset_up_blocks = std::clamp(s.room_vr_pos_offset_up_blocks, -8.0f, 8.0f);
     s.room_vr_scale_tune = std::clamp(s.room_vr_scale_tune, 0.5f, 2.0f);
     s.room_vr_saturation = std::clamp(s.room_vr_saturation, 0.8f, 2.5f);
     s.room_vr_contrast = std::clamp(s.room_vr_contrast, 0.8f, 2.0f);

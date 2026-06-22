@@ -665,14 +665,14 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
             QStringLiteral(
                 "MineLights-style 3D world color: each LED samples directional biome/light probes "
                 "from world_light (4 height layers × 8 compass sectors). Set the effect 3D origin at "
-                "your standing reference; use heading offset to align room north with in-game look."),
+                "your standing reference. Room yaw aligns your room layout with in-game look (not player position)."),
             panel);
         hint->setWordWrap(true);
         world_layout->addWidget(hint);
         AddSliderRow(world_layout, panel, QStringLiteral("World tint strength"), 0, 100, (int)std::lround(std::clamp(s.world_light_mix, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.world_light_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(world_layout, panel, QStringLiteral("Heading offset (deg)"), -180, 180, (int)std::lround(s.world_heading_offset_deg),
+        AddSliderRow(world_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.world_heading_offset_deg),
                      [&s](int x) { s.world_heading_offset_deg = (float)std::clamp(x, -180, 180); },
                      [](int x) { return QString::number(x) + QStringLiteral("°"); });
     }
@@ -687,17 +687,45 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QLabel* hint = new QLabel(
             QStringLiteral(
                 "VR-room mode: your physical room maps 1:1 into Minecraft. Stand at your player "
-                "reference, set this effect's 3D origin there, and enable voxel frames in the Fabric mod. "
-                "At grid scale 10 mm with blocks_per_m=1, one block equals one meter."),
+                "reference and set this effect's 3D origin there. Room yaw rotates the room against "
+                "your in-game look. Player position offsets slide the room origin in fixed grid axes "
+                "(right / up / forward depth) so turning does not undo your calibration."),
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
         AddSliderRow(room_layout, panel, QStringLiteral("Room VR strength"), 0, 100, (int)std::lround(std::clamp(s.room_vr_mix, 0.0f, 1.0f) * 100.0f),
                      [&s](int x) { s.room_vr_mix = std::clamp(x / 100.0f, 0.0f, 1.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
-        AddSliderRow(room_layout, panel, QStringLiteral("Heading offset (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
+        AddSliderRow(room_layout, panel, QStringLiteral("Room yaw (deg)"), -180, 180, (int)std::lround(s.room_vr_heading_offset_deg),
                      [&s](int x) { s.room_vr_heading_offset_deg = (float)std::clamp(x, -180, 180); },
                      [](int x) { return QString::number(x) + QStringLiteral("°"); });
+        auto pos_offset_label = [](int tenths) {
+            return QString::number(tenths / 10.0, 'f', 1) + QStringLiteral(" blk");
+        };
+        AddSliderRow(room_layout,
+                     panel,
+                     QStringLiteral("Player offset forward"),
+                     -80,
+                     80,
+                     (int)std::lround(std::clamp(s.room_vr_pos_offset_forward_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_vr_pos_offset_forward_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     pos_offset_label);
+        AddSliderRow(room_layout,
+                     panel,
+                     QStringLiteral("Player offset right"),
+                     -80,
+                     80,
+                     (int)std::lround(std::clamp(s.room_vr_pos_offset_right_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_vr_pos_offset_right_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     pos_offset_label);
+        AddSliderRow(room_layout,
+                     panel,
+                     QStringLiteral("Player offset up"),
+                     -80,
+                     80,
+                     (int)std::lround(std::clamp(s.room_vr_pos_offset_up_blocks, -8.0f, 8.0f) * 10.0f),
+                     [&s](int x) { s.room_vr_pos_offset_up_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
+                     pos_offset_label);
         AddSliderRow(room_layout, panel, QStringLiteral("Scale tune"), 50, 200, (int)std::lround(std::clamp(s.room_vr_scale_tune, 0.5f, 2.0f) * 100.0f),
                      [&s](int x) { s.room_vr_scale_tune = std::clamp(x / 100.0f, 0.5f, 2.0f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
@@ -1027,7 +1055,10 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                                                         origin_y,
                                                         origin_z,
                                                         &got_room_sample,
-                                                        s.room_vr_sharp_sampling);
+                                                        s.room_vr_sharp_sampling,
+                                                        s.room_vr_pos_offset_forward_blocks,
+                                                        s.room_vr_pos_offset_right_blocks,
+                                                        s.room_vr_pos_offset_up_blocks);
         if(got_room_sample)
         {
             voxel = EnhanceRoomVrColor(voxel, s.room_vr_saturation, s.room_vr_contrast);

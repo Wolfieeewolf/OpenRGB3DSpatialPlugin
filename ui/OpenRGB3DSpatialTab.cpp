@@ -865,6 +865,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
         effect_timer->stop();
     }
     effect_running = false;
+    SyncScreenCaptureSession();
 
     if(current_effect_ui)
     {

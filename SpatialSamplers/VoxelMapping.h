@@ -21,7 +21,10 @@ RGBColor SampleAtRoomGrid(const GameTelemetryBridge::TelemetrySnapshot& telemetr
                           float origin_y,
                           float origin_z,
                           bool* out_got_room_sample,
-                          bool nearest_sample);
+                          bool nearest_sample,
+                          float pos_offset_forward_blocks = 0.0f,
+                          float pos_offset_right_blocks = 0.0f,
+                          float pos_offset_up_blocks = 0.0f);
 
 }
 

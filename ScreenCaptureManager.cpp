@@ -32,6 +32,7 @@ ScreenCaptureManager& ScreenCaptureManager::Instance()
 
 ScreenCaptureManager::ScreenCaptureManager()
     : initialized(false)
+    , capture_session_active(false)
     , target_width(480)
     , target_height(270)
     , target_fps(30)
@@ -140,6 +141,11 @@ std::vector<CaptureSourceInfo> ScreenCaptureManager::GetAvailableSources() const
 
 bool ScreenCaptureManager::StartCapture(const std::string& source_id)
 {
+    if(!capture_session_active.load())
+    {
+        return false;
+    }
+
     {
         std::lock_guard<std::mutex> lock(sources_mutex);
         if(sources.find(source_id) == sources.end())
@@ -290,6 +296,27 @@ void ScreenCaptureManager::SetTargetFPS(int fps)
 void ScreenCaptureManager::SetWindowsCaptureBackendMode(int mode)
 {
     windows_capture_backend_mode.store((std::clamp)(mode, 0, 2));
+}
+
+void ScreenCaptureManager::SetCaptureSessionActive(bool active)
+{
+    const bool was_active = capture_session_active.exchange(active);
+    if(active)
+    {
+        if(!was_active)
+        {
+            Initialize();
+            RefreshSources();
+            LOG_INFO("[ScreenCapture] Capture session started (DXGI/GDI enabled)");
+        }
+        return;
+    }
+
+    if(was_active)
+    {
+        Shutdown();
+        LOG_INFO("[ScreenCapture] Capture session stopped (DXGI/GDI released)");
+    }
 }
 
 #ifdef _WIN32

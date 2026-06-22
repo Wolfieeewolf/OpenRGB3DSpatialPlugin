@@ -11,7 +11,18 @@
 #include <vector>
 #include <cstdint>
 
+#include "SpatialCoordinateSpaces.h"
+
 class ResourceManagerInterface;
+
+// UDP telemetry pose contract (type "player_pose"):
+//   x,y,z     — player position in the game's native GameWorld space.
+//   fx,fy,fz  — unit look / forward vector in the same space.
+//   ux,uy,uz  — unit up vector in the same space (omit only if world Y is always up).
+// Optional: world_convention — see SpatialCoordinateSpaces::GameWorldConvention
+//   (default RightHandedYUp). Unity/Unreal mods should set this when added.
+// The plugin derives a right-handed PlayerLocal basis (right = forward × up) and never
+// assumes game +Z equals room +Z or player forward.
 
 class GameTelemetryBridge
 {
@@ -28,6 +39,9 @@ public:
         float up_x = 0.0f;
         float up_y = 1.0f;
         float up_z = 0.0f;
+        /** Native world axis layout from sender; default matches Minecraft / glTF-style. */
+        SpatialCoordinateSpaces::GameWorldConvention world_convention =
+            SpatialCoordinateSpaces::GameWorldConvention::RightHandedYUp;
     };
 
     struct HealthChannel
@@ -57,6 +71,10 @@ public:
         float origin_y = 0.0f;
         float origin_z = 0.0f;
         float voxel_size = 1.0f;
+        bool has_anchor_position = false;
+        float anchor_x = 0.0f;
+        float anchor_y = 0.0f;
+        float anchor_z = 0.0f;
         std::vector<unsigned char> rgba;
         unsigned long long received_ms = 0;
     };

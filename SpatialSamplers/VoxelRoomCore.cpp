@@ -2,6 +2,7 @@
 
 #include "VoxelRoomCore.h"
 #include "SpatialBasisUtils.h"
+#include "SpatialCoordinateSpaces.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -121,13 +122,27 @@ RGBColor ComputeRoomMappedVoxelColor(const VoxelGrid& grid,
 
     const SpatialBasisUtils::BasisVectors b = ResolveBasis(basis);
 
-    const float dx = (sample.room_x - sample.origin_x) * settings.room_to_world_scale;
-    const float dy = (sample.room_y - sample.origin_y) * settings.room_to_world_scale;
-    const float dz = (sample.room_z - sample.origin_z) * settings.room_to_world_scale;
+    const float blocks_per_grid = settings.room_to_world_scale;
+    const SpatialCoordinateSpaces::RoomGridDelta local =
+        SpatialCoordinateSpaces::RoomGridToPlayerLocalBlocks(sample.room_x,
+                                                             sample.room_y,
+                                                             sample.room_z,
+                                                             sample.origin_x,
+                                                             sample.origin_y,
+                                                             sample.origin_z,
+                                                             blocks_per_grid);
 
-    const float world_x = anchor_world_x + dx * b.right_x + dy * b.up_x + dz * b.forward_x;
-    const float world_y = anchor_world_y + dx * b.right_y + dy * b.up_y + dz * b.forward_y;
-    const float world_z = anchor_world_z + dx * b.right_z + dy * b.up_z + dz * b.forward_z;
+    float world_x = 0.0f;
+    float world_y = 0.0f;
+    float world_z = 0.0f;
+    SpatialCoordinateSpaces::PlayerLocalBlocksToGameWorld(b,
+                                                          anchor_world_x,
+                                                          anchor_world_y,
+                                                          anchor_world_z,
+                                                          local,
+                                                          world_x,
+                                                          world_y,
+                                                          world_z);
 
     const float gx = (world_x - grid.min_x) / grid.voxel_size;
     const float gy = (world_y - grid.min_y) / grid.voxel_size;

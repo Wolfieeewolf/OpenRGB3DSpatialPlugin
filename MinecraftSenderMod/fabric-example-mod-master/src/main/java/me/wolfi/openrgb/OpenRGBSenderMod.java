@@ -18,6 +18,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Locale;
 
 public class OpenRGBSenderMod implements ClientModInitializer
@@ -44,9 +45,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private long lastLightningSentMs = 0L;
     /** Send voxel_frame every fourth telemetry batch (~2.5 Hz). */
     private int voxelSendCounter = 0;
-    private static final int VOXEL_SIZE_X = 18;
-    private static final int VOXEL_SIZE_Y = 12;
-    private static final int VOXEL_SIZE_Z = 18;
+    private static final int VOXEL_SIZE_X = 25;
+    private static final int VOXEL_SIZE_Y = 17;
+    private static final int VOXEL_SIZE_Z = 25;
     private static final float VOXEL_COLOR_SATURATION = 1.28f;
     /** Exponential smoothing for directional probe RGB (reduces twitchy room tint). */
     private static final float PROBE_COLOR_SMOOTH = 0.11f;
@@ -749,25 +750,19 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int sx = VOXEL_SIZE_X;
         final int sy = VOXEL_SIZE_Y;
         final int sz = VOXEL_SIZE_Z;
-        final int ox = (int)Math.floor(player.getX()) - sx / 2;
-        final int oy = (int)Math.floor(player.getY()) - 1;
-        final int oz = (int)Math.floor(player.getZ()) - sz / 2;
+        final double px = player.getX();
+        final double py = player.getY();
+        final double pz = player.getZ();
+        // Odd-sized grid centered on player block column (symmetric around feet).
+        final int ox = (int)Math.floor(px) - (sx / 2);
+        final int oy = (int)Math.floor(py) - 1;
+        final int oz = (int)Math.floor(pz) - (sz / 2);
         final long now = System.currentTimeMillis();
         final int frameId = (int)(now & 0x7FFFFFFFL);
 
-        StringBuilder sb = new StringBuilder(sx * sy * sz * 16 + 320);
-        sb.append("{\"version\":1,\"type\":\"voxel_frame\",\"timestamp_ms\":");
-        sb.append(now);
-        sb.append(",\"source\":\"minecraft-fabric\",\"voxel_frame_id\":");
-        sb.append(frameId);
-        sb.append(",\"voxel_size_x\":").append(sx);
-        sb.append(",\"voxel_size_y\":").append(sy);
-        sb.append(",\"voxel_size_z\":").append(sz);
-        sb.append(",\"voxel_origin_x\":").append(ox);
-        sb.append(",\"voxel_origin_y\":").append(oy);
-        sb.append(",\"voxel_origin_z\":").append(oz);
-        sb.append(",\"voxel_cell_size\":1.0,\"voxel_rgba\":[");
-        boolean first = true;
+        final int rgbaCount = sx * sy * sz * 4;
+        final byte[] rgba = new byte[rgbaCount];
+        int rgbaIndex = 0;
         for(int ix = 0; ix < sx; ix++)
         {
             for(int iy = 0; iy < sy; iy++)
@@ -775,18 +770,30 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 for(int iz = 0; iz < sz; iz++)
                 {
                     BlockPos pos = new BlockPos(ox + ix, oy + iy, oz + iz);
-                    int[] rgba = sampleVoxelCellRgba(world, pos);
-                    if(!first)
-                    {
-                        sb.append(',');
-                    }
-                    first = false;
-                    sb.append(rgba[0]).append(',').append(rgba[1]).append(',').append(rgba[2]).append(',').append(rgba[3]);
+                    int[] cell = sampleVoxelCellRgba(world, pos);
+                    rgba[rgbaIndex++] = (byte)cell[0];
+                    rgba[rgbaIndex++] = (byte)cell[1];
+                    rgba[rgbaIndex++] = (byte)cell[2];
+                    rgba[rgbaIndex++] = (byte)cell[3];
                 }
             }
         }
-        sb.append("]}");
-        sendJson(socket, address, sb.toString());
+
+        final String b64 = Base64.getEncoder().encodeToString(rgba);
+        final String json = String.format(Locale.US,
+                "{\"version\":1,\"type\":\"voxel_frame\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\","
+                        + "\"voxel_frame_id\":%d,"
+                        + "\"anchor_x\":%.4f,\"anchor_y\":%.4f,\"anchor_z\":%.4f,"
+                        + "\"voxel_size_x\":%d,\"voxel_size_y\":%d,\"voxel_size_z\":%d,"
+                        + "\"voxel_origin_x\":%d,\"voxel_origin_y\":%d,\"voxel_origin_z\":%d,"
+                        + "\"voxel_cell_size\":1.0,\"voxel_rgba_b64\":\"%s\"}",
+                now,
+                frameId,
+                px, py, pz,
+                sx, sy, sz,
+                ox, oy, oz,
+                b64);
+        sendJson(socket, address, json);
     }
 
     private static int getMapColorRgb(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
