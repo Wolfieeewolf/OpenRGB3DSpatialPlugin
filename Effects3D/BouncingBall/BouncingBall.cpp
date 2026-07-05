@@ -396,7 +396,7 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
     RGBColor final_color;
     if(UseEffectStripColormap())
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_p01_bb, x, y, z, time, grid);
+        float p01v = strip_p01_bb;
         const float rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
         final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v,
                                                    GetEffectStripColormapColorStyle(), time, rbow_mul);
@@ -409,13 +409,11 @@ RGBColor BouncingBall::CalculateColorGrid(float x, float y, float z, float time,
         {
             p01 += 1.0f;
         }
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
         float p = ApplySpatialPalette01(pos_driver, basis, sp, map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         final_color = GetColorAtPosition(p);
     }
     unsigned char r = final_color & 0xFF;

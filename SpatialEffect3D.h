@@ -285,8 +285,6 @@ public:
 
     SpatialMappingMode GetSpatialMappingMode() const { return spatial_mapping_mode; }
     void SetSpatialMappingMode(SpatialMappingMode mode);
-    VoxelDriveMode GetVoxelDriveMode() const { return effect_voxel_drive_mode; }
-    void SetVoxelDriveMode(VoxelDriveMode mode);
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
     virtual void SetDetail(unsigned int detail);
@@ -389,7 +387,6 @@ public:
     virtual nlohmann::json SaveSettings() const;
     virtual void LoadSettings(const nlohmann::json& settings);
 
-    void AttachRoomMappingPanel(QWidget* settings_host);
     void RefreshRoomOutputControllerLists();
     void ConnectStackRoomOutputPanel(class EffectRoomOutputPanel* panel,
                                      const std::function<void()>& on_changed,
@@ -480,24 +477,6 @@ protected:
     StripKernelColormapPanel* shared_strip_cmap_panel = nullptr;
     QCheckBox*          rainbow_mode_check;
 
-    QWidget*            sampler_mapper_group;
-    QGroupBox*          compass_sampler_group;
-    QComboBox*          spatial_mapping_combo;
-    QComboBox*          compass_layer_spin_combo;
-    QSlider*            sampler_influence_slider;
-    QLabel*             sampler_influence_label;
-    QSlider*            sampler_compass_north_slider;
-    QLabel*             sampler_compass_north_label;
-    QCheckBox*          compass_discrete_zones_check;
-
-    QGroupBox*          voxel_volume_group;
-    QSlider*            voxel_volume_mix_slider;
-    QLabel*             voxel_volume_mix_label;
-    QSlider*            voxel_volume_scale_slider;
-    QLabel*             voxel_volume_scale_label;
-    QSlider*            voxel_volume_heading_slider;
-    QLabel*             voxel_volume_heading_label;
-    QComboBox*          voxel_drive_combo;
     QWidget*            color_buttons_widget;
     QHBoxLayout*        color_buttons_layout;
     QPushButton*        add_color_button;
@@ -524,10 +503,6 @@ protected:
     int                 compass_layer_spin_preset;
     float               rainbow_progress;
 
-    unsigned int        effect_voxel_volume_mix;
-    int                 effect_voxel_room_scale_centi;
-    int                 effect_voxel_heading_offset;
-    VoxelDriveMode      effect_voxel_drive_mode;
     int                 effect_sampler_influence_centi;
     int                 effect_sampler_compass_north_offset_deg;
     bool                effect_compass_discrete_zones;
@@ -572,7 +547,6 @@ protected:
     QWidget*            colors_patterns_section = nullptr;
     QWidget*            band_modulation_section = nullptr;
     QWidget*            effect_specific_section = nullptr;
-    QWidget*            room_mapping_section = nullptr;
     class EffectRoomOutputPanel* room_output_panel_ = nullptr;
 
     SpatialRoom::SpatialRoomCoordinateMode effect_room_coordinate_mode_ =
@@ -651,14 +625,6 @@ protected:
                                  const SpatialLayerCore::MapperSettings& map,
                                  float time,
                                  const GridContext3D* grid = nullptr) const;
-    float ApplyVoxelDriveToPalette01(float palette01, float x, float y, float z, float time, const GridContext3D& grid) const;
-
-    RGBColor RemapSaturatedRgbWithRoomMapping(RGBColor col,
-                                              float x,
-                                              float y,
-                                              float z,
-                                              float time,
-                                              const GridContext3D& grid) const;
 
     bool IsWithinEffectBoundary(float rel_x, float rel_y, float rel_z, const GridContext3D& grid) const;
 
@@ -670,9 +636,6 @@ protected:
 private slots:
     void OnParameterChanged();
     void OnRainbowModeChanged();
-    void OnSpatialMappingComboChanged();
-    void OnCompassLayerSpinComboChanged();
-    void OnVoxelDriveComboChanged();
     void OnEffectStratumBandChanged();
     void OnEffectStripColormapChanged();
     void OnAddColorClicked();
@@ -688,12 +651,9 @@ private slots:
 private:
     void UpdateRoomShadingControlVisibility();
     void CreateColorControls();
-    void CreateSamplerMapperControls();
     void ConnectCommonEffectControlSignals(EffectGeometryPanel* geometry_panel);
     void CreateColorButton(RGBColor color);
     void RemoveLastColorButton();
-    bool SampleVoxelRgbAtRoom(float x, float y, float z, const GridContext3D& grid, RGBColor& out_rgb, bool& got_hit) const;
-    void SyncSpatialMappingControlVisibility();
 };
 
 #endif

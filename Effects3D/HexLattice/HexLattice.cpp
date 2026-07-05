@@ -236,7 +236,6 @@ RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, c
                                                GetNormalizedSize(),
                                                origin,
                                                rot);
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = ResolveStripKernelFinalColor(*this,
                                          SpatialPatternKernelClamp(GetEffectStripColormapKernel()),
                                          p01,

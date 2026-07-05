@@ -327,7 +327,7 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
     if(UseEffectStripColormap())
     {
         float textured_p01 = std::fmod(strip_p01 + spiral_value * 0.35f + 1.0f, 1.0f);
-        float p01v = ApplyVoxelDriveToPalette01(textured_p01, x, y, z, time, grid);
+        float p01v = textured_p01;
         final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                    rate_e * 12.0f);
     }
@@ -338,7 +338,6 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         float pos = fmodf((arm_index / (float)num_arms) + time * rate_e * 0.02f, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
         float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         final_color = GetColorAtPosition(p);
     }
     else if(GetRainbowMode())
@@ -350,7 +349,6 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         {
             p01 += 1.0f;
         }
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
@@ -358,7 +356,6 @@ RGBColor Spiral::CalculateColorGrid(float x, float y, float z, float time, const
         float pos = fmodf(spiral_value + time * rate_e * 0.02f, 1.0f);
         if(pos < 0.0f) pos += 1.0f;
         float p = ApplySpatialPalette01(pos, compass_basis, compass_sample, compass_map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         final_color = GetColorAtPosition(p);
     }
 

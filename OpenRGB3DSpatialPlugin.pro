@@ -124,12 +124,20 @@ HEADERS += \
     QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     Game/GameTelemetryBridge.h \
+    Game/RoomSampleFrameProtocol.h \
+    Game/RoomSampleShmPaths.h \
+    Game/RoomSampleFrameShmReader.h \
+    Game/RoomSampleConfigPublisher.h \
+    Game/GpuPanoramaFrameProtocol.h \
+    Game/GpuPanoramaShmPaths.h \
+    Game/GpuPanoramaFrameShmReader.h \
     Game/LedLayoutCoordinateMap.h \
     SpatialSamplers/SpatialBasisUtils.h \
     SpatialSamplers/SpatialCoordinateSpaces.h \
     SpatialSamplers/SpatialLayerCore.h \
-    SpatialSamplers/VoxelRoomCore.h \
-    SpatialSamplers/VoxelMapping.h \
+    SpatialSamplers/RoomMappingCore.h \
+    SpatialSamplers/RoomSampleMapping.h \
+    SpatialSamplers/GpuPanoramaMapping.h \
     Effects3D/Games/Minecraft/MinecraftGame.h \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
@@ -215,7 +223,6 @@ HEADERS += \
     ui/widgets/EffectSurfacesPanel.h \
     ui/widgets/EffectLayerBanner.h \
     ui/widgets/EffectStackBlendRow.h \
-    ui/widgets/EffectSamplerPanel.h \
     ui/widgets/EffectColorPanel.h \
     ui/widgets/EffectCustomHost.h \
     ui/widgets/EffectTransportRow.h \
@@ -284,9 +291,13 @@ SOURCES += \
     ScreenCaptureManager.cpp \
     ui/widgets/GameTelemetryStatusPanel.cpp \
     Game/GameTelemetryBridge.cpp \
+    Game/RoomSampleFrameShmReader.cpp \
+    Game/RoomSampleConfigPublisher.cpp \
+    Game/GpuPanoramaFrameShmReader.cpp \
+    Game/lz4/lz4.c \
     SpatialSamplers/SpatialLayerCore.cpp \
-    SpatialSamplers/VoxelRoomCore.cpp \
-    SpatialSamplers/VoxelMapping.cpp \
+    SpatialSamplers/RoomSampleMapping.cpp \
+    SpatialSamplers/GpuPanoramaMapping.cpp \
     Effects3D/Games/Minecraft/MinecraftGame.cpp \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
@@ -370,7 +381,6 @@ SOURCES += \
     ui/widgets/EffectRoomOutputPanel.cpp \
     ui/widgets/RoomOutputDeviceCard.cpp \
     ui/widgets/EffectStackBlendRow.cpp \
-    ui/widgets/EffectSamplerPanel.cpp \
     ui/widgets/EffectCustomHost.cpp \
     ui/widgets/EffectTransportRow.cpp \
     ui/widgets/MediaTextureAmbienceBlock.cpp \
@@ -450,7 +460,6 @@ FORMS += \
     ui/forms/EffectGeometryPanel.ui \
     ui/forms/EffectColorPanel.ui \
     ui/forms/ZoneControllerPickerDialog.ui \
-    ui/forms/EffectSamplerPanel.ui \
     ui/forms/EffectStackBlendRow.ui \
     ui/forms/CustomControllerDialog.ui \
     ui/forms/ReferencePointDialog.ui \

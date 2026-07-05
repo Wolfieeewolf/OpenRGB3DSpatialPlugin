@@ -221,7 +221,7 @@ RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float tim
     }
     const float tl_rbow_mul = GetScaledFrequency() * 12.0f * bb.speed_mul;
     auto tl_strip_rgb = [&](float p01_k) -> RGBColor {
-        float pv = ApplyVoxelDriveToPalette01(p01_k, x, y, z, time, grid);
+        float pv = p01_k;
         return ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), pv, GetEffectStripColormapColorStyle(), time,
                                              tl_rbow_mul);
     };

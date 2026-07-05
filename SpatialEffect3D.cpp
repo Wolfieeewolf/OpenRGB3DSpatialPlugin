@@ -9,7 +9,6 @@
 #include "EffectGeometryPanel.h"
 #include "EffectSurfacesPanel.h"
 #include "EffectLayerBanner.h"
-#include "EffectSamplerPanel.h"
 #include "EffectColorPanel.h"
 #include "EffectCustomHost.h"
 #include "EffectControlsRoot.h"
@@ -22,7 +21,6 @@
 #include "Geometry3DUtils.h"
 #include "MediaTextureEffectUtils.h"
 #include "GameTelemetryBridge.h"
-#include "VoxelMapping.h"
 #include "PluginUiUtils.h"
 #include "Effects3D/AudioReactiveCommon.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
@@ -85,10 +83,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     compass_layer_spin_preset = 2;
     rainbow_progress = 0.0f;
 
-    effect_voxel_volume_mix = 0;
-    effect_voxel_room_scale_centi = 18;
-    effect_voxel_heading_offset = 0;
-    effect_voxel_drive_mode = VoxelDriveMode::Off;
     effect_sampler_influence_centi = 100;
     effect_sampler_compass_north_offset_deg = 0;
     effect_compass_discrete_zones = false;
@@ -146,24 +140,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     color_pattern_settings_host = nullptr;
     band_modulation_settings_host = nullptr;
     rainbow_mode_check = nullptr;
-    sampler_mapper_group = nullptr;
-    compass_sampler_group = nullptr;
-    spatial_mapping_combo = nullptr;
-    compass_layer_spin_combo = nullptr;
-    sampler_influence_slider = nullptr;
-    sampler_influence_label = nullptr;
-    sampler_compass_north_slider = nullptr;
-    sampler_compass_north_label = nullptr;
-    compass_discrete_zones_check = nullptr;
-
-    voxel_volume_group = nullptr;
-    voxel_volume_mix_slider = nullptr;
-    voxel_volume_mix_label = nullptr;
-    voxel_volume_scale_slider = nullptr;
-    voxel_volume_scale_label = nullptr;
-    voxel_volume_heading_slider = nullptr;
-    voxel_volume_heading_label = nullptr;
-    voxel_drive_combo = nullptr;
     color_buttons_widget = nullptr;
     color_buttons_layout = nullptr;
     add_color_button = nullptr;
@@ -224,7 +200,6 @@ SpatialEffect3D::SpatialEffect3D(QWidget* parent) : QWidget(parent)
     colors_patterns_section = nullptr;
     band_modulation_section = nullptr;
     effect_specific_section = nullptr;
-    room_mapping_section = nullptr;
     path_plane_group = nullptr;
     path_axis_combo = nullptr;
     plane_combo = nullptr;
@@ -1004,119 +979,6 @@ void SpatialEffect3D::RemoveLastColorButton()
     }
 }
 
-void SpatialEffect3D::CreateSamplerMapperControls()
-{
-    if(sampler_mapper_group)
-    {
-        return;
-    }
-    auto* mapper = new EffectSamplerPanel(spatial_mapping_mode,
-                                         compass_layer_spin_preset,
-                                         effect_sampler_influence_centi,
-                                         effect_sampler_compass_north_offset_deg,
-                                         effect_compass_discrete_zones,
-                                         effect_voxel_volume_mix,
-                                         effect_voxel_room_scale_centi,
-                                         effect_voxel_heading_offset,
-                                         effect_voxel_drive_mode);
-    sampler_mapper_group = mapper;
-    sampler_mapper_group->setToolTip(
-        QStringLiteral("Uses LED position in the room (and optional game voxel data) to steer hue / palette. "
-                       "This panel is not in the default effect stack: only layers that call AttachRoomMappingPanel show it "
-                       "(e.g. Minecraft game integration)."));
-
-    compass_sampler_group = mapper->compassSamplerGroup();
-    spatial_mapping_combo = mapper->spatialMappingCombo();
-    compass_layer_spin_combo = mapper->compassLayerSpinCombo();
-    sampler_influence_slider = mapper->samplerInfluenceSlider();
-    sampler_influence_label = mapper->samplerInfluenceLabel();
-    sampler_compass_north_slider = mapper->samplerCompassNorthSlider();
-    sampler_compass_north_label = mapper->samplerCompassNorthLabel();
-    compass_discrete_zones_check = mapper->compassDiscreteZonesCheck();
-    voxel_volume_group = mapper->voxelVolumeGroup();
-    voxel_volume_mix_slider = mapper->voxelVolumeMixSlider();
-    voxel_volume_mix_label = mapper->voxelVolumeMixLabel();
-    voxel_volume_scale_slider = mapper->voxelVolumeScaleSlider();
-    voxel_volume_scale_label = mapper->voxelVolumeScaleLabel();
-    voxel_volume_heading_slider = mapper->voxelVolumeHeadingSlider();
-    voxel_volume_heading_label = mapper->voxelVolumeHeadingLabel();
-    voxel_drive_combo = mapper->voxelDriveCombo();
-
-    connect(spatial_mapping_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
-            &SpatialEffect3D::OnSpatialMappingComboChanged);
-    connect(compass_layer_spin_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
-            &SpatialEffect3D::OnCompassLayerSpinComboChanged);
-    connect(sampler_influence_slider, &QSlider::valueChanged, this, [this](int v) {
-        effect_sampler_influence_centi = std::clamp(v, 0, 250);
-        if(sampler_influence_label)
-        {
-            sampler_influence_label->setText(QString::number(effect_sampler_influence_centi) + QStringLiteral("%"));
-        }
-        emit ParametersChanged();
-    });
-    connect(sampler_compass_north_slider, &QSlider::valueChanged, this, [this](int v) {
-        effect_sampler_compass_north_offset_deg = std::clamp(v, -180, 180);
-        if(sampler_compass_north_label)
-        {
-            sampler_compass_north_label->setText(QString::number(effect_sampler_compass_north_offset_deg) +
-                                                 QStringLiteral("°"));
-        }
-        emit ParametersChanged();
-    });
-    connect(compass_discrete_zones_check, &QCheckBox::toggled, this, [this](bool on) {
-        effect_compass_discrete_zones = on;
-        emit ParametersChanged();
-    });
-    connect(voxel_volume_mix_slider, &QSlider::valueChanged, this, [this](int v) {
-        effect_voxel_volume_mix = (unsigned int)std::clamp(v, 0, 100);
-        if(voxel_volume_mix_label)
-        {
-            voxel_volume_mix_label->setText(QString::number((int)effect_voxel_volume_mix) + QStringLiteral("%"));
-        }
-        emit ParametersChanged();
-    });
-    connect(voxel_volume_scale_slider, &QSlider::valueChanged, this, [this](int v) {
-        effect_voxel_room_scale_centi = std::clamp(v, 2, 80);
-        if(voxel_volume_scale_label)
-        {
-            voxel_volume_scale_label->setText(QString::number(effect_voxel_room_scale_centi / 100.0f, 'f', 2));
-        }
-        emit ParametersChanged();
-    });
-    connect(voxel_volume_heading_slider, &QSlider::valueChanged, this, [this](int v) {
-        effect_voxel_heading_offset = std::clamp(v, -180, 180);
-        if(voxel_volume_heading_label)
-        {
-            voxel_volume_heading_label->setText(QString::number(effect_voxel_heading_offset) + QStringLiteral("°"));
-        }
-        emit ParametersChanged();
-    });
-    connect(voxel_drive_combo, qOverload<int>(&QComboBox::currentIndexChanged), this, &SpatialEffect3D::OnVoxelDriveComboChanged);
-
-    SyncSpatialMappingControlVisibility();
-}
-
-void SpatialEffect3D::AttachRoomMappingPanel(QWidget* settings_host)
-{
-    if(!settings_host || room_mapping_section)
-    {
-        return;
-    }
-    QVBoxLayout* lay = qobject_cast<QVBoxLayout*>(settings_host->layout());
-    if(!lay)
-    {
-        lay = new QVBoxLayout(settings_host);
-        settings_host->setLayout(lay);
-    }
-    CreateSamplerMapperControls();
-    PluginUiAddSectionBlock(lay,
-                            QStringLiteral("Room & voxel mapping"),
-                            QStringLiteral("Compass-style palette mapping and voxel colour blend for layers that opt in. "
-                                           "Generic spatial motion uses Height motion bands in the main stack."),
-                            sampler_mapper_group,
-                            &room_mapping_section,
-                            false);
-}
 
 RGBColor SpatialEffect3D::GetRainbowColor(float hue) const
 {
@@ -1238,7 +1100,6 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                    GetNormalizedSize(),
                                                    p.origin,
                                                    p.rotated_pos);
-            p01 = ApplyVoxelDriveToPalette01(p01, p.grid_x, p.grid_y, p.grid_z, p.time, *p.grid);
             return ResolveStripKernelFinalColor(*this,
                                                 GetEffectStripColormapKernel(),
                                                 p01,
@@ -1288,7 +1149,6 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
                                                GetNormalizedSize(),
                                                p.origin,
                                                p.rotated_pos);
-        p01 = ApplyVoxelDriveToPalette01(p01, p.grid_x, p.grid_y, p.grid_z, p.time, *p.grid);
         spatial_color = ResolveStripKernelFinalColor(*this,
                                                      GetEffectStripColormapKernel(),
                                                      std::min(p01, 1.0f),
@@ -1307,13 +1167,11 @@ RGBColor SpatialEffect3D::ResolveAudioReactiveColor(const AudioReactiveSettings3
         {
             p01 += 1.0f;
         }
-        p01 = ApplyVoxelDriveToPalette01(p01, p.grid_x, p.grid_y, p.grid_z, p.time, *p.grid);
         spatial_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
         float pal = ApplySpatialPalette01(gradient_pos, basis, sp, map, p.time, p.grid);
-        pal = ApplyVoxelDriveToPalette01(pal, p.grid_x, p.grid_y, p.grid_z, p.time, *p.grid);
         spatial_color = GetColorAtPosition(std::min(pal, 1.0f));
     }
 
@@ -1328,78 +1186,9 @@ void SpatialEffect3D::OnRainbowModeChanged()
     emit ParametersChanged();
 }
 
-void SpatialEffect3D::OnSpatialMappingComboChanged()
-{
-    if(!spatial_mapping_combo)
-    {
-        return;
-    }
-    const int v = spatial_mapping_combo->currentData().toInt();
-    spatial_mapping_mode = static_cast<SpatialMappingMode>(std::clamp(v, 0, 3));
-    SyncSpatialMappingControlVisibility();
-    emit ParametersChanged();
-}
 
-void SpatialEffect3D::OnCompassLayerSpinComboChanged()
-{
-    if(!compass_layer_spin_combo)
-    {
-        return;
-    }
-    compass_layer_spin_preset = std::clamp(compass_layer_spin_combo->currentIndex(), 0, 3);
-    emit ParametersChanged();
-}
 
-void SpatialEffect3D::OnVoxelDriveComboChanged()
-{
-    if(!voxel_drive_combo)
-    {
-        return;
-    }
-    const int v = voxel_drive_combo->currentData().toInt();
-    effect_voxel_drive_mode = static_cast<VoxelDriveMode>(std::clamp(v, 0, 5));
-    emit ParametersChanged();
-}
 
-void SpatialEffect3D::SyncSpatialMappingControlVisibility()
-{
-    const bool compass_mode = (spatial_mapping_mode == SpatialMappingMode::CompassPalette);
-    const bool room_active = (spatial_mapping_mode != SpatialMappingMode::Off);
-    const bool voxel_mode = (spatial_mapping_mode == SpatialMappingMode::VoxelVolume);
-
-    if(sampler_influence_slider)
-    {
-        sampler_influence_slider->setEnabled(room_active);
-    }
-    if(sampler_influence_label)
-    {
-        sampler_influence_label->setEnabled(room_active);
-    }
-    if(compass_layer_spin_combo)
-    {
-        compass_layer_spin_combo->setEnabled(compass_mode);
-    }
-    if(sampler_compass_north_slider)
-    {
-        sampler_compass_north_slider->setEnabled(room_active);
-    }
-    if(sampler_compass_north_label)
-    {
-        sampler_compass_north_label->setEnabled(room_active);
-    }
-    if(compass_discrete_zones_check)
-    {
-        compass_discrete_zones_check->setEnabled(compass_mode);
-    }
-    if(voxel_volume_group)
-    {
-        voxel_volume_group->setEnabled(voxel_mode);
-    }
-    if(voxel_drive_combo)
-    {
-        voxel_drive_combo->setEnabled(voxel_mode);
-    }
-}
 
 SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::GetSpatialRoomCapabilities() const
 {
@@ -1650,37 +1439,9 @@ RGBColor SpatialEffect3D::ShadeRelayReceiversAt(float x, float y, float z, const
 void SpatialEffect3D::SetSpatialMappingMode(SpatialMappingMode mode)
 {
     spatial_mapping_mode = mode;
-    if(spatial_mapping_combo)
-    {
-        QSignalBlocker b(spatial_mapping_combo);
-        for(int i = 0; i < spatial_mapping_combo->count(); i++)
-        {
-            if(spatial_mapping_combo->itemData(i).toInt() == (int)spatial_mapping_mode)
-            {
-                spatial_mapping_combo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-    SyncSpatialMappingControlVisibility();
 }
 
-void SpatialEffect3D::SetVoxelDriveMode(VoxelDriveMode mode)
-{
-    effect_voxel_drive_mode = mode;
-    if(voxel_drive_combo)
-    {
-        QSignalBlocker b(voxel_drive_combo);
-        for(int i = 0; i < voxel_drive_combo->count(); i++)
-        {
-            if(voxel_drive_combo->itemData(i).toInt() == (int)effect_voxel_drive_mode)
-            {
-                voxel_drive_combo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-}
+
 
 void SpatialEffect3D::OnAddColorClicked()
 {
@@ -2009,22 +1770,6 @@ void ApplySpatialSamplingQuantization(float& x, float& y, float& z, const GridCo
     z = grid.min_z + nz * sz;
 }
 
-static RGBColor BlendRgbForVoxel(RGBColor rgb_a, RGBColor rgb_b, float mix01)
-{
-    mix01 = std::clamp(mix01, 0.0f, 1.0f);
-    const int ar = (int)RGBGetRValue(rgb_a);
-    const int ag = (int)RGBGetGValue(rgb_a);
-    const int ab = (int)RGBGetBValue(rgb_a);
-    const int br = (int)RGBGetRValue(rgb_b);
-    const int bg = (int)RGBGetGValue(rgb_b);
-    const int bb = (int)RGBGetBValue(rgb_b);
-    const int rr = (int)std::lround(ar + (br - ar) * mix01);
-    const int gg = (int)std::lround(ag + (bg - ag) * mix01);
-    const int bl = (int)std::lround(ab + (bb - ab) * mix01);
-    return ToRGBColor((unsigned char)std::clamp(rr, 0, 255),
-                      (unsigned char)std::clamp(gg, 0, 255),
-                      (unsigned char)std::clamp(bl, 0, 255));
-}
 }
 
 static thread_local const SpatialEffect3D* g_tls_eval_effect = nullptr;
@@ -2064,36 +1809,6 @@ RGBColor SpatialEffect3D::EvaluateColorGrid(float x, float y, float z, float tim
         ApplySpatialSamplingQuantization(x, y, z, grid, GetSamplingResolution());
     }
     RGBColor base = CalculateColorGrid(x, y, z, time, grid);
-    if(effect_voxel_volume_mix > 0)
-    {
-        thread_local std::uint64_t tls_telemetry_rev = ~(std::uint64_t)0;
-        thread_local GameTelemetryBridge::TelemetrySnapshot tls_telemetry;
-        const std::uint64_t rev = GameTelemetryBridge::TelemetryDataRevision();
-        if(rev != tls_telemetry_rev)
-        {
-            tls_telemetry = GameTelemetryBridge::GetTelemetrySnapshot();
-            tls_telemetry_rev = rev;
-        }
-        Vector3D origin = GetEffectOriginGrid(grid);
-        bool got_voxel_sample = false;
-        RGBColor vx = VoxelMapping::SampleAtRoomGrid(tls_telemetry,
-                                                     (float)effect_voxel_heading_offset,
-                                                     effect_voxel_room_scale_centi / 100.0f,
-                                                     0.02f,
-                                                     x,
-                                                     y,
-                                                     z,
-                                                     origin.x,
-                                                     origin.y,
-                                                     origin.z,
-                                                     &got_voxel_sample,
-                                                     false);
-        if(got_voxel_sample)
-        {
-            const float t = (float)effect_voxel_volume_mix / 100.0f;
-            base = BlendRgbForVoxel(base, vx, t);
-        }
-    }
     g_tls_eval_effect = prev_eval_effect;
     return base;
 }
@@ -2145,29 +1860,6 @@ float SpatialEffect3D::ApplySpatialPalette01(float base_pos01,
         const float plane_mix = 0.58f * std::clamp(GetScaledDetail(), 0.05f, 1.f) * infl;
         return SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, base_pos01);
     }
-    case SpatialMappingMode::VoxelVolume:
-    {
-        if(!grid)
-        {
-            return base_pos01;
-        }
-        const float nx = NormalizeGridAxis01(sp.grid_x, grid->min_x, grid->max_x);
-        const float ny = sp.y_norm;
-        const float nz = NormalizeGridAxis01(sp.grid_z, grid->min_z, grid->max_z);
-        const float vol01 =
-            std::fmod(0.41f * nx + 0.33f * ny + 0.37f * nz + 0.11f * (nx * ny * nz), 1.0f);
-        const float rx = (sp.grid_x - sp.origin_x) / std::max(grid->width, 1e-3f);
-        const float ry = (sp.grid_y - sp.origin_y) / std::max(grid->height, 1e-3f);
-        const float rz = (sp.grid_z - sp.origin_z) / std::max(grid->depth, 1e-3f);
-        const float ref01 = std::fmod(0.29f * rx + 0.31f * ry + 0.27f * rz + 1.0f, 1.0f);
-        float p = base_pos01 + infl * (0.78f * (vol01 - 0.5f) + 0.45f * (ref01 - 0.5f));
-        p = std::fmod(p, 1.0f);
-        if(p < 0.0f)
-        {
-            p += 1.0f;
-        }
-        return p;
-    }
     }
     return base_pos01;
 }
@@ -2216,208 +1908,10 @@ float SpatialEffect3D::ApplySpatialRainbowHue(float hue_deg,
             SpatialLayerCore::CompassStratumPalettePosition01(css, spins, scroll, plane_mix, plane_pos01);
         return pos01 * 360.0f + hue_deg * 0.22f;
     }
-    case SpatialMappingMode::VoxelVolume:
-    {
-        if(!grid)
-        {
-            return hue_deg;
-        }
-        const float nx = NormalizeGridAxis01(sp.grid_x, grid->min_x, grid->max_x);
-        const float ny = sp.y_norm;
-        const float nz = NormalizeGridAxis01(sp.grid_z, grid->min_z, grid->max_z);
-        const float vol01 =
-            std::fmod(0.41f * nx + 0.33f * ny + 0.37f * nz + 0.11f * (nx * ny * nz), 1.0f);
-        const float rx = (sp.grid_x - sp.origin_x) / std::max(grid->width, 1e-3f);
-        const float ry = (sp.grid_y - sp.origin_y) / std::max(grid->height, 1e-3f);
-        const float rz = (sp.grid_z - sp.origin_z) / std::max(grid->depth, 1e-3f);
-        const float ref01 = std::fmod(0.29f * rx + 0.31f * ry + 0.27f * rz + 1.0f, 1.0f);
-        const float delta_deg = infl * 360.0f * (0.78f * (vol01 - 0.5f) + 0.45f * (ref01 - 0.5f));
-        return hue_deg + delta_deg;
-    }
     }
     return hue_deg;
 }
 
-bool SpatialEffect3D::SampleVoxelRgbAtRoom(float x,
-                                           float y,
-                                           float z,
-                                           const GridContext3D& grid,
-                                           RGBColor& out_rgb,
-                                           bool& got_hit) const
-{
-    out_rgb = (RGBColor)0;
-    got_hit = false;
-    thread_local std::uint64_t tls_telemetry_rev = ~(std::uint64_t)0;
-    thread_local GameTelemetryBridge::TelemetrySnapshot tls_telemetry;
-    const std::uint64_t rev = GameTelemetryBridge::TelemetryDataRevision();
-    if(rev != tls_telemetry_rev)
-    {
-        tls_telemetry = GameTelemetryBridge::GetTelemetrySnapshot();
-        tls_telemetry_rev = rev;
-    }
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    out_rgb = VoxelMapping::SampleAtRoomGrid(tls_telemetry,
-                                             (float)effect_voxel_heading_offset,
-                                             effect_voxel_room_scale_centi / 100.0f,
-                                             0.02f,
-                                             x,
-                                             y,
-                                             z,
-                                             origin.x,
-                                             origin.y,
-                                             origin.z,
-                                             &got_hit,
-                                             false);
-    return got_hit;
-}
-
-float SpatialEffect3D::ApplyVoxelDriveToPalette01(float palette01,
-                                                  float x,
-                                                  float y,
-                                                  float z,
-                                                  float time,
-                                                  const GridContext3D& grid) const
-{
-    float p01 = palette01;
-    if(spatial_mapping_mode != SpatialMappingMode::Off)
-    {
-        SpatialLayerCore::Basis basis;
-        SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
-        SpatialLayerCore::MapperSettings map;
-        SpatialLayerCore::InitAudioEffectMapperSettings(map, GetNormalizedScale(), std::max(0.05f, GetScaledDetail()));
-        Vector3D origin = GetEffectOriginGrid(grid);
-        SpatialLayerCore::SamplePoint sp{};
-        sp.grid_x = x;
-        sp.grid_y = y;
-        sp.grid_z = z;
-        sp.origin_x = origin.x;
-        sp.origin_y = origin.y;
-        sp.origin_z = origin.z;
-        sp.y_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-        p01 = ApplySpatialPalette01(p01, basis, sp, map, time, &grid);
-    }
-
-    if(effect_voxel_drive_mode == VoxelDriveMode::Off)
-    {
-        return p01;
-    }
-    const float infl = std::clamp((float)effect_sampler_influence_centi / 100.0f, 0.0f, 2.5f);
-    if(infl <= 1e-5f)
-    {
-        return p01;
-    }
-    const float detail_gate = std::clamp(GetScaledDetail(), 0.05f, 1.f);
-    float drive = 0.0f;
-
-    switch(effect_voxel_drive_mode)
-    {
-    case VoxelDriveMode::Off:
-        return p01;
-    case VoxelDriveMode::LumaField:
-    {
-        RGBColor vx{};
-        bool got = false;
-        SampleVoxelRgbAtRoom(x, y, z, grid, vx, got);
-        if(!got)
-        {
-            return p01;
-        }
-        const float r = (float)(vx & 0xFF);
-        const float g = (float)((vx >> 8) & 0xFF);
-        const float b = (float)((vx >> 16) & 0xFF);
-        drive = (r + g + b) / (3.0f * 255.0f);
-        break;
-    }
-    case VoxelDriveMode::ScrollRoomX:
-        drive = NormalizeGridAxis01(x, grid.min_x, grid.max_x);
-        break;
-    case VoxelDriveMode::ScrollRoomY:
-        drive = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-        break;
-    case VoxelDriveMode::ScrollRoomZ:
-        drive = NormalizeGridAxis01(z, grid.min_z, grid.max_z);
-        break;
-    case VoxelDriveMode::VolumeRoll:
-    {
-        RGBColor vx{};
-        bool got = false;
-        SampleVoxelRgbAtRoom(x, y, z, grid, vx, got);
-        const Vector3D o = GetEffectOriginGrid(grid);
-        constexpr float kPi = 3.14159265f;
-        float a = std::atan2(z - o.z, x - o.x) * (0.5f / kPi) + 0.5f;
-        float luma = 0.5f;
-        if(got)
-        {
-            luma = ((float)(vx & 0xFF) + (float)((vx >> 8) & 0xFF) + (float)((vx >> 16) & 0xFF)) / (3.0f * 255.0f);
-        }
-        drive = std::fmod(a * 0.65f + luma * 0.35f + time * 0.03f * detail_gate * infl, 1.0f);
-        if(drive < 0.0f)
-        {
-            drive += 1.0f;
-        }
-        float p = std::fmod(p01 + 0.55f * detail_gate * infl * drive, 1.0f);
-        if(p < 0.0f)
-        {
-            p += 1.0f;
-        }
-        return p;
-    }
-    }
-    const float mix_strength = 0.45f * detail_gate * infl;
-    float p = std::fmod(p01 + mix_strength * drive, 1.0f);
-    if(p < 0.0f)
-    {
-        p += 1.0f;
-    }
-    return p;
-}
-
-RGBColor SpatialEffect3D::RemapSaturatedRgbWithRoomMapping(RGBColor col,
-                                                          float x,
-                                                          float y,
-                                                          float z,
-                                                          float time,
-                                                          const GridContext3D& grid) const
-{
-    if(spatial_mapping_mode == SpatialMappingMode::Off && effect_voxel_drive_mode == VoxelDriveMode::Off)
-    {
-        return col;
-    }
-    constexpr float kSatGate = 0.04f;
-    const float rf = (float)RGBGetRValue(col);
-    const float gf = (float)RGBGetGValue(col);
-    const float bf = (float)RGBGetBValue(col);
-    float h_deg = 0.0f;
-    float s = 0.0f;
-    float v = 0.0f;
-    MediaTextureEffect::RgbBytesToHsv(rf, gf, bf, h_deg, s, v);
-    if(s < kSatGate || v < 1e-3f)
-    {
-        return col;
-    }
-    const Vector3D origin = GetEffectOriginGrid(grid);
-    SpatialLayerCore::Basis basis;
-    SpatialLayerCore::MakeBasisFromEffectEulerDegrees(GetRotationYaw(), GetRotationPitch(), GetRotationRoll(), basis);
-    SpatialLayerCore::MapperSettings map;
-    EffectStratumBlend::InitStratumBreaks(map);
-    const float detail = std::max(0.05f, GetScaledDetail());
-    map.blend_softness = std::clamp(0.09f + 0.08f * (1.0f - detail), 0.05f, 0.20f);
-    map.center_size = std::clamp(0.10f + 0.22f * GetNormalizedScale(), 0.06f, 0.50f);
-    map.directional_sharpness = std::clamp(0.95f + detail * 0.1f, 0.85f, 2.2f);
-    SpatialLayerCore::SamplePoint sp{};
-    sp.grid_x = x;
-    sp.grid_y = y;
-    sp.grid_z = z;
-    sp.origin_x = origin.x;
-    sp.origin_y = origin.y;
-    sp.origin_z = origin.z;
-    sp.y_norm = NormalizeGridAxis01(y, grid.min_y, grid.max_y);
-    float pal01 = h_deg * (1.0f / 360.0f);
-    pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
-    pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
-    h_deg = pal01 * 360.0f;
-    return MediaTextureEffect::HsvToRgbBytes(h_deg, s, v);
-}
 
 unsigned int SpatialEffect3D::GetTargetFPS() const
 {
@@ -3031,10 +2525,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["rainbow_mode"] = rainbow_mode;
     j["spatial_mapping_mode"] = (int)spatial_mapping_mode;
     j["compass_layer_spin_preset"] = compass_layer_spin_preset;
-    j["effect_voxel_volume_mix"] = effect_voxel_volume_mix;
-    j["effect_voxel_room_scale_centi"] = effect_voxel_room_scale_centi;
-    j["effect_voxel_heading_offset"] = effect_voxel_heading_offset;
-    j["effect_voxel_drive_mode"] = (int)effect_voxel_drive_mode;
     j["effect_sampler_influence_centi"] = effect_sampler_influence_centi;
     j["effect_sampler_compass_north_offset_deg"] = effect_sampler_compass_north_offset_deg;
     j["effect_compass_discrete_zones"] = effect_compass_discrete_zones;
@@ -3127,30 +2617,12 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("spatial_mapping_mode"))
     {
         const int v = settings["spatial_mapping_mode"].get<int>();
-        SetSpatialMappingMode(static_cast<SpatialMappingMode>(std::clamp(v, 0, 3)));
+        SetSpatialMappingMode(static_cast<SpatialMappingMode>(std::clamp(v, 0, 2)));
     }
 
     if(settings.contains("compass_layer_spin_preset"))
     {
         compass_layer_spin_preset = std::clamp(settings["compass_layer_spin_preset"].get<int>(), 0, 3);
-        if(compass_layer_spin_combo)
-        {
-            QSignalBlocker b(compass_layer_spin_combo);
-            compass_layer_spin_combo->setCurrentIndex(compass_layer_spin_preset);
-        }
-    }
-
-    if(settings.contains("effect_voxel_volume_mix"))
-        effect_voxel_volume_mix = std::clamp(settings["effect_voxel_volume_mix"].get<unsigned int>(), 0u, 100u);
-    if(settings.contains("effect_voxel_room_scale_centi"))
-        effect_voxel_room_scale_centi = std::clamp(settings["effect_voxel_room_scale_centi"].get<int>(), 2, 80);
-    if(settings.contains("effect_voxel_heading_offset"))
-        effect_voxel_heading_offset = std::clamp(settings["effect_voxel_heading_offset"].get<int>(), -180, 180);
-
-    if(settings.contains("effect_voxel_drive_mode"))
-    {
-        const int vd = settings["effect_voxel_drive_mode"].get<int>();
-        SetVoxelDriveMode(static_cast<VoxelDriveMode>(std::clamp(vd, 0, 5)));
     }
 
     if(settings.contains("effect_sampler_influence_centi"))
@@ -3165,11 +2637,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("effect_compass_discrete_zones"))
     {
         effect_compass_discrete_zones = settings["effect_compass_discrete_zones"].get<bool>();
-    }
-    if(compass_discrete_zones_check)
-    {
-        QSignalBlocker b(compass_discrete_zones_check);
-        compass_discrete_zones_check->setChecked(effect_compass_discrete_zones);
     }
 
     if(settings.contains("effect_bounds_mode"))
@@ -3450,89 +2917,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         QSignalBlocker blocker(rainbow_mode_check);
         rainbow_mode_check->setChecked(rainbow_mode);
-    }
-
-    if(spatial_mapping_combo)
-    {
-        QSignalBlocker blocker(spatial_mapping_combo);
-        for(int i = 0; i < spatial_mapping_combo->count(); i++)
-        {
-            if(spatial_mapping_combo->itemData(i).toInt() == (int)spatial_mapping_mode)
-            {
-                spatial_mapping_combo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-    if(compass_layer_spin_combo)
-    {
-        QSignalBlocker blocker(compass_layer_spin_combo);
-        compass_layer_spin_combo->setCurrentIndex(std::clamp(compass_layer_spin_preset, 0, 3));
-    }
-    SyncSpatialMappingControlVisibility();
-
-    if(voxel_volume_mix_slider)
-    {
-        QSignalBlocker b(voxel_volume_mix_slider);
-        voxel_volume_mix_slider->setValue((int)effect_voxel_volume_mix);
-    }
-    if(voxel_volume_mix_label)
-    {
-        voxel_volume_mix_label->setText(QString::number((int)effect_voxel_volume_mix) + "%");
-    }
-    if(voxel_volume_scale_slider)
-    {
-        QSignalBlocker b(voxel_volume_scale_slider);
-        voxel_volume_scale_slider->setValue(effect_voxel_room_scale_centi);
-    }
-    if(voxel_volume_scale_label)
-    {
-        voxel_volume_scale_label->setText(QString::number(effect_voxel_room_scale_centi / 100.0f, 'f', 2));
-    }
-    if(voxel_volume_heading_slider)
-    {
-        QSignalBlocker b(voxel_volume_heading_slider);
-        voxel_volume_heading_slider->setValue(effect_voxel_heading_offset);
-    }
-    if(voxel_volume_heading_label)
-    {
-        voxel_volume_heading_label->setText(QString::number(effect_voxel_heading_offset) + QStringLiteral("°"));
-    }
-    if(voxel_drive_combo)
-    {
-        QSignalBlocker b(voxel_drive_combo);
-        for(int i = 0; i < voxel_drive_combo->count(); i++)
-        {
-            if(voxel_drive_combo->itemData(i).toInt() == (int)effect_voxel_drive_mode)
-            {
-                voxel_drive_combo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-    if(sampler_influence_slider)
-    {
-        QSignalBlocker b(sampler_influence_slider);
-        sampler_influence_slider->setValue(effect_sampler_influence_centi);
-    }
-    if(sampler_influence_label)
-    {
-        sampler_influence_label->setText(QString::number(effect_sampler_influence_centi) + QStringLiteral("%"));
-    }
-    if(sampler_compass_north_slider)
-    {
-        QSignalBlocker b(sampler_compass_north_slider);
-        sampler_compass_north_slider->setValue(effect_sampler_compass_north_offset_deg);
-    }
-    if(sampler_compass_north_label)
-    {
-        sampler_compass_north_label->setText(QString::number(effect_sampler_compass_north_offset_deg) +
-                                             QStringLiteral("°"));
-    }
-    if(compass_discrete_zones_check)
-    {
-        QSignalBlocker b(compass_discrete_zones_check);
-        compass_discrete_zones_check->setChecked(effect_compass_discrete_zones);
     }
 
     if(intensity_slider)

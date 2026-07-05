@@ -88,17 +88,6 @@ enum class SpatialMappingMode : int
     Off = 0,
     SubtleTint = 1,
     CompassPalette = 2,
-    VoxelVolume = 3,
-};
-
-enum class VoxelDriveMode : int
-{
-    Off = 0,
-    LumaField = 1,
-    ScrollRoomX = 2,
-    ScrollRoomY = 3,
-    ScrollRoomZ = 4,
-    VolumeRoll = 5,
 };
 
 enum SurfaceMask

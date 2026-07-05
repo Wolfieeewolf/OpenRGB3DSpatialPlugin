@@ -113,7 +113,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Temporal rate (pattern motion and color cycles). When a layer exposes Room &amp; voxel mapping and Compass mode is on, this also speeds compass-based palette scrolling.</string>
+        <string>Temporal rate (pattern motion and color cycles). When Compass room mapping is on, this also speeds compass-based palette scrolling.</string>
        </property>
       </widget>
      </item>

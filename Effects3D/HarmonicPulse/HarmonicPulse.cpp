@@ -247,7 +247,6 @@ RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time
                                                  size_m,
                                                  origin,
                                                  rot);
-        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
         const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,

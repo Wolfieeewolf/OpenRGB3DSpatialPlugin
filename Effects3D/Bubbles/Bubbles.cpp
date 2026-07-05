@@ -311,7 +311,6 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
                                                  origin,
                                                  rp);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
-        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
         final_color = ResolveStripKernelFinalColor(*this,
                                                    GetEffectStripColormapKernel(),
                                                    std::clamp(pal01, 0.0f, 1.0f),
@@ -332,13 +331,11 @@ RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, cons
                                                &grid);
             float p01 = std::fmod(hue / 360.0f, 1.0f);
             if(p01 < 0.0f) p01 += 1.0f;
-            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
             final_color = GetRainbowColor(p01 * 360.0f);
         }
         else
         {
             float p = ApplySpatialPalette01(0.5f, basis, sp, map, time, &grid);
-            p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
             final_color = GetColorAtPosition(p);
         }
     }

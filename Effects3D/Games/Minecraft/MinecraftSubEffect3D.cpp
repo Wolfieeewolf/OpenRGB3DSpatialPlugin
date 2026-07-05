@@ -57,7 +57,6 @@ void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
                                                    this,
                                                    [this]() { emit ParametersChanged(); });
     AddWidgetToParent(w, parent);
-    AttachRoomMappingPanel(parent);
 }
 
 void MinecraftSubEffect3D::UpdateParams(SpatialEffectParams& params)
@@ -98,18 +97,25 @@ void MinecraftSubEffect3D::LoadSettings(const nlohmann::json& settings)
 
 RGBColor MinecraftSubEffect3D::CalculateColorGrid(float gx, float gy, float gz, float time, const GridContext3D& grid)
 {
-    const GameTelemetryBridge::TelemetrySnapshot t = GameTelemetryBridge::GetTelemetrySnapshot();
+    (void)time;
     const Vector3D effect_origin = GetEffectOriginGrid(grid);
-    RGBColor c = MinecraftGame::RenderColor(t, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
-                                            mc_settings_, channels_);
-    if((channels_ & MinecraftGame::ChWorldTint) != 0u || (channels_ & MinecraftGame::ChRoomVrTint) != 0u)
-    {
-        return c;
-    }
-    return RemapSaturatedRgbWithRoomMapping(c, gx, gy, gz, time, grid);
+    const GameTelemetryBridge::TelemetrySnapshot& t =
+        MinecraftGame::PrepareRenderFrame(grid, mc_settings_, channels_, effect_origin.x, effect_origin.y, effect_origin.z);
+    return MinecraftGame::RenderColor(t, gx, gy, gz, effect_origin.x, effect_origin.y, effect_origin.z, grid,
+                                      mc_settings_, channels_);
 }
 
 bool MinecraftSubEffect3D::IsPointOnActiveSurface(float, float, float, const GridContext3D&) const
+{
+    return true;
+}
+
+bool MinecraftSubEffect3D::RequiresWorldSpaceCoordinates() const
+{
+    return false;
+}
+
+bool MinecraftSubEffect3D::SkipsSpatialSampleWarp() const
 {
     return true;
 }

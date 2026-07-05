@@ -255,7 +255,7 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
     if(UseEffectStripColormap())
     {
         float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
-        float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
+        float p01v = p_mapped;
         const int color_style =
             UseEffectStripColormap() ? GetEffectStripColormapColorStyle() : strip_shell_color_style;
         c = ResolveStripKernelFinalColor(*this, pat, p01v, color_style, time, rate * 12.0f);
@@ -269,13 +269,13 @@ RGBColor ShellPattern::CalculateColorGrid(float x, float y, float z, float time,
         {
             p01 += 1.0f;
         }
-        float p01v = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
+        float p01v = p01;
         c = GetRainbowColor(p01v * 360.0f);
     }
     else
     {
         float p_mapped = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
-        float p01v = ApplyVoxelDriveToPalette01(p_mapped, x, y, z, time, grid);
+        float p01v = p_mapped;
         c = GetColorAtPosition(p01v);
     }
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));

@@ -182,7 +182,6 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
                                                  origin,
                                                  rot);
         pal01 = ApplySpatialPalette01(pal01, basis, sp, map, time, &grid);
-        pal01 = ApplyVoxelDriveToPalette01(pal01, x, y, z, time, grid);
         const int kid = SpatialPatternKernelClamp(GetEffectStripColormapKernel());
         RGBColor c = ResolveStripKernelFinalColor(*this,
                                                   kid,
@@ -208,12 +207,10 @@ RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, co
         hue = ApplySpatialRainbowHue(hue, nz, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f) p01 += 1.0f;
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         return Hsv01ToBgr(p01, 1.0f, v);
     }
 
     float p = ApplySpatialPalette01(hue01, basis, sp, map, time, &grid);
-    p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
     RGBColor c = GetColorAtPosition(p);
     int r = (int)((float)(c & 0xFF) * v);
     int g = (int)((float)((c >> 8) & 0xFF) * v);

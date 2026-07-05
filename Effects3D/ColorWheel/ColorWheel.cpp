@@ -228,8 +228,6 @@ RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, c
                                                origin,
                                                rot);
     }
-    palette01 = ApplyVoxelDriveToPalette01(palette01, x, y, z, time, grid);
-
     if(UseEffectStripColormap())
     {
         return ResolveStripKernelFinalColor(*this,

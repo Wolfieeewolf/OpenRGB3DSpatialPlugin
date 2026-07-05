@@ -1,0 +1,41 @@
+﻿OpenRGB Minecraft Sender — required mod stack (Minecraft 26.2)
+=============================================================
+
+Target game version: Minecraft 26.2 (Chaos Cubed)
+Build tool: Fabric Loom 1.17+, Java 25
+
+Required (runtime)
+------------------
+1. Fabric Loader >= 0.19.3 (latest stable for 26.2)
+   https://fabricmc.net/use/installer/
+
+2. Fabric API 0.154.0+26.2 (latest 26.2 release, Jul 2026)
+   https://modrinth.com/mod/fabric-api
+   https://github.com/FabricMC/fabric-api
+
+3. openrgb-minecraft-sender 0.9.1+
+   Built from this repo: MinecraftSenderMod/fabric-example-mod-master
+
+Optional (in-game config UI)
+------------------------------
+4. Mod Menu 20.0.0-beta.4 (latest for 26.2)
+   https://modrinth.com/mod/modmenu
+5. placeholder-api 3.1.0-beta.1+26.2 (required by Mod Menu, not by our mod)
+
+Not required (removed / safe to remove)
+---------------------------------------
+- cloth-config (removed from mods folder)
+- modsettings
+- MineLights / minelights
+- Any 1.21.x-era Fabric API or Mod Menu jars
+
+Gradle compile dependencies (from gradle.properties)
+------------------------------------------------------
+minecraft_version=26.2
+loader_version=0.19.3
+fabric_api_version=0.154.0+26.2
+modmenu_version=20.0.0-beta.4
+mod_version=0.9.1
+loom_version=1.17-SNAPSHOT
+
+Verified against Modrinth + meta.fabricmc.net on 2026-07-05.

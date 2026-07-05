@@ -294,7 +294,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
         RGBColor c;
         if(UseEffectStripColormap())
         {
-            float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        float p01v = strip_p01;
             c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                               rate * 12.0f * bb.speed_mul);
         }
@@ -428,7 +428,7 @@ RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float ti
     RGBColor final_color;
     if(UseEffectStripColormap())
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        float p01v = strip_p01;
         final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                    rate * 12.0f * bb.speed_mul);
     }

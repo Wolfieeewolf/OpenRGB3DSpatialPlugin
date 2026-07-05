@@ -294,7 +294,7 @@ RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, co
         RGBColor c;
         if(UseEffectStripColormap())
         {
-            float pv = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        float pv = strip_p01;
             c      = ResolveStripKernelFinalColor(*this,
                                                    GetEffectStripColormapKernel(),
                                                    std::clamp(pv, 0.0f, 1.0f),

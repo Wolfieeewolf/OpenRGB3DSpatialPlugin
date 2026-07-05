@@ -3,7 +3,7 @@
   "id": "openrgb-minecraft-sender",
   "version": "${version}",
   "name": "OpenRGB Minecraft Sender",
-  "description": "Telemetry for OpenRGB 3D Spatial over UDP (world_light, player_pose, voxel_frame, health_state, damage_event). Configure in-game via Mod Settings (F6) or Mod Menu when installed.",
+  "description": "Telemetry for OpenRGB 3D Spatial over UDP and shared memory (room samples, ambient cubemap, player_pose, health_state, damage_event). Configure in-game via Mod Menu when installed.",
   "authors": ["wolfi"],
   "license": "MIT",
   "environment": "client",
@@ -12,13 +12,13 @@
     "modmenu": ["me.wolfi.openrgb.ModMenuIntegration"]
   },
   "depends": {
-    "fabricloader": ">=0.16.14",
-    "minecraft": "~1.21.8",
-    "java": ">=21"
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
   },
   "suggests": {
-    "modmenu": "*",
-    "modsettings": "*"
+    "modmenu": "*"
   },
   "mixins": [
     "openrgb-sender.mixins.json"

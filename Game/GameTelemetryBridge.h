@@ -12,6 +12,10 @@
 #include <cstdint>
 
 #include "SpatialCoordinateSpaces.h"
+#include "RoomSampleFrameProtocol.h"
+#include "GpuPanoramaFrameProtocol.h"
+
+#include <memory>
 
 class ResourceManagerInterface;
 
@@ -60,30 +64,46 @@ public:
         float item_durability_max = 1.0f;
     };
 
-    struct VoxelFrameChannel
+    struct RoomSampleFrameChannel
     {
-        bool has_voxel_frame = false;
+        bool has_frame = false;
         unsigned int frame_id = 0;
+        unsigned int config_id = 0;
         int size_x = 0;
         int size_y = 0;
         int size_z = 0;
-        float origin_x = 0.0f;
-        float origin_y = 0.0f;
-        float origin_z = 0.0f;
-        float voxel_size = 1.0f;
-        bool has_anchor_position = false;
+        float room_min_x = 0.0f;
+        float room_min_y = 0.0f;
+        float room_min_z = 0.0f;
+        float room_max_x = 0.0f;
+        float room_max_y = 0.0f;
+        float room_max_z = 0.0f;
+        std::shared_ptr<const std::vector<unsigned char>> rgba;
+        unsigned long long received_ms = 0;
+        int transport = 0;
+    };
+
+    struct GpuPanoramaFrameChannel
+    {
+        bool has_frame = false;
+        unsigned int frame_id = 0;
+        int face_w = 0;
+        int face_h = 0;
+        int face_count = 0;
         float anchor_x = 0.0f;
         float anchor_y = 0.0f;
         float anchor_z = 0.0f;
-        std::vector<unsigned char> rgba;
+        std::shared_ptr<const std::vector<unsigned char>> rgba;
         unsigned long long received_ms = 0;
+        int transport = 0;
     };
 
     struct TelemetrySnapshot
     {
         PoseChannel pose;
         HealthChannel health_state;
-        VoxelFrameChannel voxel_frame;
+        RoomSampleFrameChannel room_sample;
+        GpuPanoramaFrameChannel gpu_panorama;
 
         bool has_player_pose = false;
         float player_blocks_per_m = 1.0f;
@@ -189,6 +209,11 @@ public:
     static TelemetrySnapshot GetTelemetrySnapshot();
 
     static std::uint64_t TelemetryDataRevision();
+    static void NotifyTelemetryDataUpdated();
+    static void ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol::FrameHeader& hdr,
+                                        std::vector<unsigned char> rgba);
+    static void ApplyGpuPanoramaShmFrame(const GpuPanoramaFrameProtocol::FrameHeader& hdr,
+                                         std::vector<unsigned char> rgba);
 
 private:
     void StartUdpListener();

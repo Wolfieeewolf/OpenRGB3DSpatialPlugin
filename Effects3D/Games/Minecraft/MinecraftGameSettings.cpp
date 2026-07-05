@@ -45,6 +45,7 @@ void SettingsToJson(const Settings& s, nlohmann::json& j)
     put_f(j, "room_vr_saturation", s.room_vr_saturation);
     put_f(j, "room_vr_contrast", s.room_vr_contrast);
     put_bool(j, "room_vr_sharp_sampling", s.room_vr_sharp_sampling);
+    put_i(j, "room_vr_sample_target_cells", s.room_vr_sample_target_cells);
     put_f(j, "lightning_flash_strength", s.lightning_flash_strength);
     put_f(j, "lightning_flash_decay_s", s.lightning_flash_decay_s);
     put_f(j, "lightning_directional_mix", s.lightning_directional_mix);
@@ -81,6 +82,7 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.room_vr_saturation = get_f(j, "room_vr_saturation", s.room_vr_saturation);
     s.room_vr_contrast = get_f(j, "room_vr_contrast", s.room_vr_contrast);
     s.room_vr_sharp_sampling = get_bool(j, "room_vr_sharp_sampling", s.room_vr_sharp_sampling);
+    s.room_vr_sample_target_cells = get_i(j, "room_vr_sample_target_cells", s.room_vr_sample_target_cells);
     s.lightning_flash_strength = get_f(j, "lightning_flash_strength", s.lightning_flash_strength);
     s.lightning_flash_decay_s = get_f(j, "lightning_flash_decay_s", s.lightning_flash_decay_s);
     s.lightning_directional_mix = get_f(j, "lightning_directional_mix", s.lightning_directional_mix);
@@ -112,6 +114,7 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.room_vr_scale_tune = std::clamp(s.room_vr_scale_tune, 0.5f, 2.0f);
     s.room_vr_saturation = std::clamp(s.room_vr_saturation, 0.8f, 2.5f);
     s.room_vr_contrast = std::clamp(s.room_vr_contrast, 0.8f, 2.0f);
+    s.room_vr_sample_target_cells = std::clamp(s.room_vr_sample_target_cells, 4096, 512000);
     s.lightning_flash_strength = std::clamp(s.lightning_flash_strength, 0.0f, 1.5f);
     s.lightning_flash_decay_s = std::clamp(s.lightning_flash_decay_s, 0.08f, 0.90f);
     s.lightning_directional_mix = std::clamp(s.lightning_directional_mix, 0.0f, 1.0f);

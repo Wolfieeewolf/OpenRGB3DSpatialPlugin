@@ -231,7 +231,7 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
     RGBColor c;
     if(UseEffectStripColormap())
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        float p01v = strip_p01;
         c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                           GetScaledFrequency() * 12.0f);
     }
@@ -252,13 +252,11 @@ RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, co
         {
             p01 += 1.0f;
         }
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         c = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
         float p = ApplySpatialPalette01(pos_norm, basis, sp, map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         c = GetColorAtPosition(p);
     }
     int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));

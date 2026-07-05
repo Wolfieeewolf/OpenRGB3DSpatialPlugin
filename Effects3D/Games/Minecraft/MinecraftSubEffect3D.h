@@ -25,6 +25,8 @@ public:
     void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool IsPointOnActiveSurface(float x, float y, float z, const GridContext3D& grid) const override;
+    bool RequiresWorldSpaceCoordinates() const override;
+    bool SkipsSpatialSampleWarp() const override;
     void ApplyControlVisibility() override;
     nlohmann::json SaveSettings() const override;
     void LoadSettings(const nlohmann::json& settings) override;

@@ -55,7 +55,7 @@ EffectInfo3D Wave::GetEffectInfo() const
     info.info_version = 3;
     info.effect_name = "Wave";
     info.effect_description =
-        "Wave line or 3D surface; optional floor/mid/ceiling band tuning; room mapper and voxel drive on output";
+        "Wave line or 3D surface; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
     info.effect_type = SPATIAL_EFFECT_WAVE;
     info.is_reversible = true;
@@ -391,7 +391,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         RGBColor c;
         if(UseEffectStripColormap())
         {
-            float p01v = ApplyVoxelDriveToPalette01(strip_surf_p01, x, y, z, time, grid);
+        float p01v = strip_surf_p01;
             c = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                              rate * 12.0f);
         }
@@ -402,13 +402,11 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
             hue2 = ApplySpatialRainbowHue(hue2, pos_norm, basis, sp, map, time, &grid);
             float p01 = std::fmod(hue2 / 360.0f, 1.0f);
             if(p01 < 0.0f) p01 += 1.0f;
-            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
             c = GetRainbowColor(p01 * 360.0f);
         }
         else
         {
             float p = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
-            p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
             c = GetColorAtPosition(p);
         }
         int r_ = std::min(255, std::max(0, (int)((c & 0xFF) * intensity)));
@@ -505,7 +503,7 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
     RGBColor final_color;
     if(UseEffectStripColormap())
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_line_p01, x, y, z, time, grid);
+        float p01v = strip_line_p01;
         final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                     rate * 12.0f);
     }
@@ -519,7 +517,6 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         hue = ApplySpatialRainbowHue(hue, pos_for_spatial, basis, sp, map, time, &grid);
         float p01 = std::fmod(hue / 360.0f, 1.0f);
         if(p01 < 0.0f) p01 += 1.0f;
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
@@ -527,7 +524,6 @@ RGBColor Wave::CalculateColorGrid(float x, float y, float z, float time, const G
         float pos_color = fmodf(pos_for_spatial + time * rate * 0.02f, 1.0f);
         if(pos_color < 0.0f) pos_color += 1.0f;
         float p = ApplySpatialPalette01(pos_color, basis, sp, map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         final_color = GetColorAtPosition(p);
     }
     unsigned char r = final_color & 0xFF;

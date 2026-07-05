@@ -5,7 +5,11 @@
 #include "GameTelemetryStatusPanel.h"
 #include "SpatialBasisUtils.h"
 #include "SpatialEffect3D.h"
-#include "VoxelMapping.h"
+#include "RoomSampleMapping.h"
+#include "GpuPanoramaMapping.h"
+#include "Game/RoomSampleConfigPublisher.h"
+#include "GpuPanoramaFrameShmReader.h"
+#include "RoomSampleFrameShmReader.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -186,7 +190,50 @@ static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per
     {
         return 0.18f;
     }
-    return std::clamp(scale_tune, 0.5f, 2.0f) / grid_units_per_block;
+    return std::clamp(scale_tune, 0.1f, 6.0f) / grid_units_per_block;
+}
+
+const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridContext3D& grid,
+                                                                 const Settings& settings,
+                                                                 std::uint32_t channels,
+                                                                 float origin_x,
+                                                                 float origin_y,
+                                                                 float origin_z)
+{
+    struct FrameState
+    {
+        std::uint64_t prepared_sequence = UINT64_MAX;
+        bool room_config_published = false;
+    };
+    static thread_local FrameState state;
+    static thread_local GameTelemetryBridge::TelemetrySnapshot snapshot;
+
+    const bool preview_pass = (grid.render_sequence == 0);
+    const bool new_frame = preview_pass || state.prepared_sequence != grid.render_sequence;
+
+    if(new_frame)
+    {
+        GpuPanoramaFrameShmReader::TryApplyLatest();
+        RoomSampleFrameShmReader::TryApplyLatest();
+        if(!preview_pass)
+        {
+            state.prepared_sequence = grid.render_sequence;
+        }
+        state.room_config_published = false;
+    }
+
+    snapshot = GameTelemetryBridge::GetTelemetrySnapshot();
+
+    if(ch(channels, ChRoomVrTint) && !state.room_config_published)
+    {
+        const float blocks_per_m =
+            snapshot.has_player_blocks_per_m ? snapshot.player_blocks_per_m : 1.0f;
+        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, settings.room_vr_scale_tune);
+        RoomSampleConfigPublisher::PublishIfNeeded(grid, settings, origin_x, origin_y, origin_z, room_scale);
+        state.room_config_published = true;
+    }
+
+    return snapshot;
 }
 
 static RGBColor EnhanceRoomVrColor(RGBColor c, float saturation, float contrast)
@@ -726,9 +773,12 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
                      (int)std::lround(std::clamp(s.room_vr_pos_offset_up_blocks, -8.0f, 8.0f) * 10.0f),
                      [&s](int x) { s.room_vr_pos_offset_up_blocks = std::clamp(x / 10.0f, -8.0f, 8.0f); },
                      pos_offset_label);
-        AddSliderRow(room_layout, panel, QStringLiteral("Scale tune"), 50, 200, (int)std::lround(std::clamp(s.room_vr_scale_tune, 0.5f, 2.0f) * 100.0f),
-                     [&s](int x) { s.room_vr_scale_tune = std::clamp(x / 100.0f, 0.5f, 2.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+        AddSliderRow(room_layout, panel, QStringLiteral("MC world scale"), 10, 600, (int)std::lround(std::clamp(s.room_vr_scale_tune, 0.1f, 6.0f) * 100.0f),
+                     [&s](int x) { s.room_vr_scale_tune = std::clamp(x / 100.0f, 0.1f, 6.0f); },
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
+                     QStringLiteral("How many Minecraft blocks map to 1 metre of physical room (relative to blocks-per-metre). "
+                                    "Higher = more MC blocks visible across the room = finer colour detail per LED. "
+                                    "100% = 1:1 with blocks-per-metre setting. Try 200-400% for good block-level variety."));
         AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_vr_saturation, 0.8f, 2.5f) * 100.0f),
                      [&s](int x) { s.room_vr_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
                      [](int x) { return QString::number(x) + QStringLiteral("%"); });
@@ -1039,31 +1089,64 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
         out = LerpColor(out, projected, mix);
     }
 
-    if(ch(channels, ChRoomVrTint) && t.voxel_frame.has_voxel_frame)
+    if(ch(channels, ChRoomVrTint))
     {
         const float blocks_per_m = t.has_player_blocks_per_m ? t.player_blocks_per_m : 1.0f;
         const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, s.room_vr_scale_tune);
         bool got_room_sample = false;
-        RGBColor voxel = VoxelMapping::SampleAtRoomGrid(t,
-                                                        s.room_vr_heading_offset_deg,
-                                                        room_scale,
-                                                        0.02f,
-                                                        grid_x,
-                                                        grid_y,
-                                                        grid_z,
-                                                        origin_x,
-                                                        origin_y,
-                                                        origin_z,
-                                                        &got_room_sample,
-                                                        s.room_vr_sharp_sampling,
-                                                        s.room_vr_pos_offset_forward_blocks,
-                                                        s.room_vr_pos_offset_right_blocks,
-                                                        s.room_vr_pos_offset_up_blocks);
+        RGBColor room_rgb = (RGBColor)0;
+
+        // Primary: room sample grid — true 1:1 per-LED game-world block colours.
+        if(t.room_sample.has_frame)
+        {
+            room_rgb = RoomSampleMapping::SampleAtRoomGrid(t, grid_x, grid_y, grid_z, &got_room_sample);
+        }
+
+        // Secondary: GPU panorama cubemap (directional ambient fallback).
+        if(!got_room_sample && t.gpu_panorama.has_frame)
+        {
+            room_rgb = GpuPanoramaMapping::SampleRoomPoint(t,
+                                                           room_scale,
+                                                           s.room_vr_heading_offset_deg,
+                                                           grid_x,
+                                                           grid_y,
+                                                           grid_z,
+                                                           origin_x,
+                                                           origin_y,
+                                                           origin_z,
+                                                           s.room_vr_pos_offset_forward_blocks,
+                                                           s.room_vr_pos_offset_right_blocks,
+                                                           s.room_vr_pos_offset_up_blocks,
+                                                           &got_room_sample);
+        }
+
+        // World-layer fallback for transparent/unsampled cells (e.g., outdoor sky/ceiling/walls in air).
+        // Ceiling LEDs → sky colour; floor LEDs → ground colour; mid-height → world ambient.
+        if(!got_room_sample || (room_rgb & 0x00FFFFFFu) == 0u)
+        {
+            const float local_y = grid_y - origin_y;
+            if(local_y > 0.5f && t.has_world_layers)
+            {
+                room_rgb = MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b);
+                got_room_sample = true;
+            }
+            else if(local_y < -0.5f && t.has_world_layers)
+            {
+                room_rgb = MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b);
+                got_room_sample = true;
+            }
+            else if(t.has_world_light)
+            {
+                room_rgb = MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b);
+                got_room_sample = true;
+            }
+        }
+
         if(got_room_sample)
         {
-            voxel = EnhanceRoomVrColor(voxel, s.room_vr_saturation, s.room_vr_contrast);
+            room_rgb = EnhanceRoomVrColor(room_rgb, s.room_vr_saturation, s.room_vr_contrast);
             const float mix = std::clamp(s.room_vr_mix, 0.0f, 1.0f);
-            out = LerpColor(out, voxel, mix);
+            out = LerpColor(out, room_rgb, mix);
         }
     }
 

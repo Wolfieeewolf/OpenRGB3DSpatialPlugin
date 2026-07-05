@@ -9,7 +9,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. You do not need a separate 'OpenRGB server' for this. Enable the 3D Spatial plugin; counters should increase while the game runs with the sender mod.</string>
+      <string>Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. Room VR tint uses the GPU cubemap (SHM) plus player pose; CPU room raycasts are an optional fallback only when GPU cubemap is off in the mod settings (F6).</string>
      </property>
     </widget>
    </item>

@@ -1,27 +1,27 @@
 package me.wolfi.openrgb;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.CyclingButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 
 public class OpenRGBConfigScreen extends Screen
 {
     private final Screen parent;
     private final OpenRGBSenderConfig config;
-    private CyclingButtonWidget enabledButton;
-    private CyclingButtonWidget voxelButton;
-    private TextFieldWidget hostField;
-    private TextFieldWidget portField;
-    private TextFieldWidget blocksField;
-    private TextFieldWidget tickDivisorField;
-    private TextFieldWidget voxelIntervalField;
+    private CycleButton<Boolean> enabledButton;
+    private CycleButton<Boolean> gpuPanoramaButton;
+    private CycleButton<Boolean> roomSampleButton;
+    private EditBox hostField;
+    private EditBox portField;
+    private EditBox blocksField;
+    private EditBox tickDivisorField;
 
     public OpenRGBConfigScreen(Screen parent)
     {
-        super(Text.literal("OpenRGB Minecraft Sender"));
+        super(Component.literal("OpenRGB Minecraft Sender"));
         this.parent = parent;
         this.config = OpenRGBSenderConfig.get();
     }
@@ -33,68 +33,65 @@ public class OpenRGBConfigScreen extends Screen
         int cx = width / 2 - bw / 2;
         int y = height / 6;
 
-        enabledButton = CyclingButtonWidget.onOffBuilder(config.enabled)
-                .build(cx, y, bw, 20, Text.literal("Send telemetry"), (btn, val) -> config.enabled = val);
-        addDrawableChild(enabledButton);
+        enabledButton = CycleButton.onOffBuilder(config.enabled)
+                .create(cx, y, bw, 20, Component.literal("Send telemetry"), (btn, val) -> config.enabled = val);
+        addRenderableWidget(enabledButton);
         y += 28;
 
-        hostField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Host"));
+        hostField = new EditBox(font, cx, y, bw, 20, Component.literal("Host"));
         hostField.setMaxLength(128);
-        hostField.setText(config.host);
-        hostField.setPlaceholder(Text.literal("127.0.0.1"));
-        addDrawableChild(hostField);
+        hostField.setValue(config.host);
+        hostField.setHint(Component.literal("127.0.0.1"));
+        addRenderableWidget(hostField);
         y += 28;
 
-        portField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Port"));
+        portField = new EditBox(font, cx, y, bw, 20, Component.literal("Port"));
         portField.setMaxLength(5);
-        portField.setText(Integer.toString(config.port));
-        portField.setPlaceholder(Text.literal("9876"));
-        addDrawableChild(portField);
+        portField.setValue(Integer.toString(config.port));
+        portField.setHint(Component.literal("9876"));
+        addRenderableWidget(portField);
         y += 28;
 
-        blocksField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Blocks per meter"));
+        blocksField = new EditBox(font, cx, y, bw, 20, Component.literal("Blocks per meter (0.25-16)"));
         blocksField.setMaxLength(8);
-        blocksField.setText(String.format(java.util.Locale.US, "%.2f", config.blocksPerMeter));
-        blocksField.setPlaceholder(Text.literal("1.00"));
-        addDrawableChild(blocksField);
+        blocksField.setValue(String.format(java.util.Locale.US, "%.2f", config.blocksPerMeter));
+        blocksField.setHint(Component.literal("4.00"));
+        addRenderableWidget(blocksField);
         y += 28;
 
-        voxelButton = CyclingButtonWidget.onOffBuilder(config.sendVoxelFrames)
-                .build(cx, y, bw, 20, Text.literal("Send voxel frames (room VR tint)"), (btn, val) -> config.sendVoxelFrames = val);
-        addDrawableChild(voxelButton);
+        gpuPanoramaButton = CycleButton.onOffBuilder(config.sendGpuPanoramaFrames)
+                .create(cx, y, bw, 20, Component.literal("Ambient cubemap (probe fill)"), (btn, val) -> config.sendGpuPanoramaFrames = val);
+        addRenderableWidget(gpuPanoramaButton);
         y += 28;
 
-        tickDivisorField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Telemetry tick divisor"));
+        roomSampleButton = CycleButton.onOffBuilder(config.sendRoomSampleFrames)
+                .create(cx, y, bw, 20, Component.literal("Room sample grid (per-LED)"), (btn, val) -> config.sendRoomSampleFrames = val);
+        addRenderableWidget(roomSampleButton);
+        y += 28;
+
+        tickDivisorField = new EditBox(font, cx, y, bw, 20, Component.literal("Telemetry tick divisor"));
         tickDivisorField.setMaxLength(2);
-        tickDivisorField.setText(Integer.toString(config.telemetryTickDivisor));
-        tickDivisorField.setPlaceholder(Text.literal("2"));
-        addDrawableChild(tickDivisorField);
-        y += 28;
-
-        voxelIntervalField = new TextFieldWidget(textRenderer, cx, y, bw, 20, Text.literal("Voxel send interval"));
-        voxelIntervalField.setMaxLength(2);
-        voxelIntervalField.setText(Integer.toString(config.voxelSendInterval));
-        voxelIntervalField.setPlaceholder(Text.literal("1"));
-        addDrawableChild(voxelIntervalField);
+        tickDivisorField.setValue(Integer.toString(config.telemetryTickDivisor));
+        tickDivisorField.setHint(Component.literal("1"));
+        addRenderableWidget(tickDivisorField);
         y += 36;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), btn -> closeAndSave())
-                .dimensions(cx, y, bw, 20)
+        addRenderableWidget(Button.builder(Component.literal("Done"), btn -> closeAndSave())
+                .bounds(cx, y, bw, 20)
                 .build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn -> client.setScreen(parent))
-                .dimensions(cx, y + 24, bw, 20)
+        addRenderableWidget(Button.builder(Component.literal("Cancel"), btn -> onClose())
+                .bounds(cx, y + 24, bw, 20)
                 .build());
     }
 
     private void closeAndSave()
     {
-        config.host = hostField.getText().trim();
-        config.port = parseInt(portField.getText(), config.port);
-        config.blocksPerMeter = parseFloat(blocksField.getText(), config.blocksPerMeter);
-        config.telemetryTickDivisor = parseInt(tickDivisorField.getText(), config.telemetryTickDivisor);
-        config.voxelSendInterval = parseInt(voxelIntervalField.getText(), config.voxelSendInterval);
+        config.host = hostField.getValue().trim();
+        config.port = parseInt(portField.getValue(), config.port);
+        config.blocksPerMeter = parseFloat(blocksField.getValue(), config.blocksPerMeter);
+        config.telemetryTickDivisor = parseInt(tickDivisorField.getValue(), config.telemetryTickDivisor);
         config.save();
-        client.setScreen(parent);
+        onClose();
     }
 
     private static int parseInt(String text, int fallback)
@@ -122,17 +119,8 @@ public class OpenRGBConfigScreen extends Screen
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta)
+    public void onClose()
     {
-        renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
-        final int titleWidth = textRenderer.getWidth(title);
-        context.drawText(textRenderer, title, (width - titleWidth) / 2, 12, 0xFFFFFF, true);
-    }
-
-    @Override
-    public void close()
-    {
-        client.setScreen(parent);
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 }

@@ -1,31 +1,35 @@
 package me.wolfi.openrgb;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.color.world.BiomeColors;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.fluid.Fluids;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.MapColor;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.LightType;
-import net.minecraft.world.RaycastContext;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.ArrayList;
 import java.util.Locale;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class OpenRGBSenderMod implements ClientModInitializer
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final long DAMAGE_DIR_MAX_AGE_MS = 450L;
     private static final long LIGHTNING_EVENT_COOLDOWN_MS = 250L;
     private static final long LIGHTNING_EVENT_MAX_AGE_MS = 450L;
@@ -46,12 +50,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private int smoothGroundR = 90, smoothGroundG = 100, smoothGroundB = 70;
     private float smoothWorldIntensity = 0.6f;
     private long lastLightningSentMs = 0L;
-    /** Voxel frames sent every telemetry batch by default (~10 Hz with divisor 2). */
-    private int voxelSendCounter = 0;
-    private static final int VOXEL_SIZE_X = 25;
-    private static final int VOXEL_SIZE_Y = 17;
-    private static final int VOXEL_SIZE_Z = 25;
-    private static final float VOXEL_COLOR_SATURATION = 1.28f;
+    /** Increments every client tick (not gated by telemetryTickDivisor) for maximum room sample rate. */
+    private int roomTickCounter = 0;
+    /** One block per cell; dense cube is only a transport cache — see room_sample_frame plan. */
+    private static final float BLOCK_COLOR_SATURATION = 1.72f;
     /** Exponential smoothing for directional probe RGB (reduces twitchy room tint). */
     private static final float PROBE_COLOR_SMOOTH = 0.11f;
     private static final float AMBIENT_RGB_SMOOTH = 0.14f;
@@ -59,6 +61,28 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private boolean hasSmoothLayeredProbeRgb = false;
     private int smoothAmbR = 0, smoothAmbG = 0, smoothAmbB = 0;
     private boolean hasSmoothAmbientRgb = false;
+    private final RoomSampleConfigReader roomSampleConfigReader = new RoomSampleConfigReader();
+    private final RoomSampleFrameShmWriter roomSampleFrameShmWriter = new RoomSampleFrameShmWriter();
+    private final GpuPanoramaFrameShmWriter cubemapShmWriter = new GpuPanoramaFrameShmWriter();
+    private boolean loggedRoomShmPath = false;
+    /** Reused across frames to avoid per-tick allocation. Resized only when grid dimensions change. */
+    private byte[] roomSampleRgbaBuffer = new byte[0];
+    /** Reused cubemap pixel buffer (16×16×6×4 bytes). */
+    private static final int CMAP_W = 16;
+    private final byte[] cubemapBuffer = new byte[CMAP_W * CMAP_W * 6 * 4];
+    private int cubemapFrameId = 0;
+
+    // -----------------------------------------------------------------------
+    //  Cached world-light data — populated in sendWorldLight each tick,
+    //  consumed one tick later in buildAndSendCubemap (50 ms lag, imperceptible).
+    // -----------------------------------------------------------------------
+    private boolean hasCachedWorldData = false;
+    private int cSkyR = 140, cSkyG = 180, cSkyB = 220;
+    private int cFogR = 160, cFogG = 185, cFogB = 210;
+    private int cGndR = 90,  cGndG = 110, cGndB = 70;
+    private float cRain = 0f, cThunder = 0f, cIntensity = 1f;
+    private float cFwdX = 0f, cFwdZ = 1f;
+    private final int[][] cProbe = new int[4 * 9][3];
 
     @Override
     public void onInitializeClient()
@@ -85,18 +109,58 @@ public class OpenRGBSenderMod implements ClientModInitializer
     /**
      * Called from {@link me.wolfi.openrgb.mixin.MinecraftClientMixin} at end of each client tick (main thread only).
      */
-    public static void onClientTick(MinecraftClient client)
+    public static void onClientTick(Minecraft client)
     {
         if(instance == null || client == null)
         {
             return;
         }
+        // Block-raycast cubemap fallback (only when room samples are off).
+        GpuPanoramaCapturer.onClientTick(client);
+        // Room samples run every tick independently — not gated by telemetryTickDivisor —
+        // so LED colours stay in sync with the game world at up to 20 Hz regardless of telemetry rate.
+        instance.tickRoomSamples(client);
         instance.tickSendTelemetry(client);
     }
 
-    private void tickSendTelemetry(MinecraftClient client)
+    private void tickRoomSamples(Minecraft client)
     {
-        if(client.player == null || client.world == null)
+        if(client.player == null || client.level == null)
+        {
+            return;
+        }
+        final OpenRGBSenderConfig cfg = OpenRGBSenderConfig.get();
+        if(!cfg.enabled || !cfg.sendRoomSampleFrames)
+        {
+            return;
+        }
+        roomTickCounter++;
+        try
+        {
+            // Read config once and share with both interval check and frame send.
+            final RoomSampleConfigReader.Config roomCfg = roomSampleConfigReader.readLatest();
+            final int roomInterval = effectiveRoomSampleInterval(cfg, roomCfg);
+            if(roomTickCounter % roomInterval == 0)
+            {
+                DatagramSocket socket = ensureSharedUdp(cfg);
+                sendRoomSampleFrame(socket, sharedUdpAddress, client.player, client.level, roomCfg);
+                // Rebuild the semantic cubemap alongside the room sample frame so the
+                // plugin has an atmospherically-correct ambient backdrop for any LED that
+                // the room sample grid doesn't cover (e.g. extreme ceiling/wall angles).
+                if(cfg.sendGpuPanoramaFrames)
+                {
+                    buildAndSendCubemap(socket, sharedUdpAddress);
+                }
+            }
+        }
+        catch(Exception ignored)
+        {
+        }
+    }
+
+    private void tickSendTelemetry(Minecraft client)
+    {
+        if(client.player == null || client.level == null)
         {
             return;
         }
@@ -114,18 +178,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             DatagramSocket socket = ensureSharedUdp(cfg);
             InetAddress address = sharedUdpAddress;
-            ClientPlayerEntity player = client.player;
+            LocalPlayer player = client.player;
             sendPlayerPose(socket, address, player, cfg);
             sendHealthState(socket, address, player);
-            sendWorldLight(socket, address, player, client.world);
-            if(cfg.sendVoxelFrames)
-            {
-                voxelSendCounter++;
-                if(voxelSendCounter % cfg.voxelSendInterval == 0)
-                {
-                    sendVoxelFrame(socket, address, player, client.world);
-                }
-            }
+            sendWorldLight(socket, address, player, client.level);
             sendLightningEventIfNeeded(socket, address);
             sendDamageEventIfNeeded(socket, address, player);
         }
@@ -155,9 +211,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
     }
 
-    private void sendPlayerPose(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, OpenRGBSenderConfig cfg) throws Exception
+    private void sendPlayerPose(DatagramSocket socket, InetAddress address, LocalPlayer player, OpenRGBSenderConfig cfg) throws Exception
     {
-        Vec3d look = player.getRotationVec(1.0f);
+        Vec3 look = player.getViewVector(1.0f);
         String json = String.format(Locale.US,
                 "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0,\"blocks_per_m\":%.4f}",
                 System.currentTimeMillis(),
@@ -167,16 +223,16 @@ public class OpenRGBSenderMod implements ClientModInitializer
         sendJson(socket, address, json);
     }
 
-    private void sendHealthState(DatagramSocket socket, InetAddress address, ClientPlayerEntity player) throws Exception
+    private void sendHealthState(DatagramSocket socket, InetAddress address, LocalPlayer player) throws Exception
     {
-        final int hunger = player.getHungerManager().getFoodLevel();
+        final int hunger = player.getFoodData().getFoodLevel();
         final int maxHunger = 20;
-        final int air = player.getAir();
-        final int maxAir = player.getMaxAir();
-        final var held = player.getMainHandStack();
-        final boolean hasDurability = !held.isEmpty() && held.isDamageable();
+        final int air = player.getAirSupply();
+        final int maxAir = player.getMaxAirSupply();
+        final var held = player.getMainHandItem();
+        final boolean hasDurability = !held.isEmpty() && held.getMaxDamage() > 0;
         final int durabilityMax = hasDurability ? Math.max(1, held.getMaxDamage()) : 1;
-        final int durability = hasDurability ? Math.max(0, durabilityMax - held.getDamage()) : 0;
+        final int durability = hasDurability ? Math.max(0, durabilityMax - held.getDamageValue()) : 0;
         final float hpPerHeart = 2.0f;
         final float hearts = player.getHealth() / hpPerHeart;
         final float heartsMax = Math.max(0.01f, player.getMaxHealth() / hpPerHeart);
@@ -190,10 +246,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
         sendJson(socket, address, json);
     }
 
-    private void sendWorldLight(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, net.minecraft.world.World world) throws Exception
+    private void sendWorldLight(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world) throws Exception
     {
-        var pos = player.getBlockPos();
-        Vec3d lightDir = estimateLocalLightDirection(world, player, pos);
+        var pos = player.blockPosition();
+        Vec3 lightDir = estimateLocalLightDirection(world, player, pos);
         float lightFocus = clamp01((float)lightDir.length());
         if(lightFocus > 1e-4f)
         {
@@ -201,31 +257,29 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         else
         {
-            lightDir = Vec3d.ZERO;
+            lightDir = Vec3.ZERO;
         }
-        int blockLight = world.getLightLevel(LightType.BLOCK, pos);
-        int skyLight = world.getLightLevel(LightType.SKY, pos);
+        int blockLight = world.getBrightness(LightLayer.BLOCK, pos);
+        int skyLight = world.getBrightness(LightLayer.SKY, pos);
         // Block-only is ~0 in open daylight (sky lights the scene); plugin multiplies tint by intensity,
         // so world tint never showed outdoors. Use max(sky, block) for blend weight.
         int combined = Math.max(blockLight, skyLight);
         float intensity = Math.max(0.0f, Math.min(1.0f, combined / 15.0f));
 
-        // MineLights-style read: biome carries distinct hue (forest green, desert sand, etc.) — see
-        // https://github.com/megabytesme/MineLights — we sample vanilla grass + foliage tint.
-        int grass = BiomeColors.getGrassColor(world, pos);
-        int foliage = BiomeColors.getFoliageColor(world, pos);
-        int bioR = (((grass >> 16) & 0xFF) + ((foliage >> 16) & 0xFF)) / 2;
-        int bioG = (((grass >> 8) & 0xFF) + ((foliage >> 8) & 0xFF)) / 2;
-        int bioB = ((grass & 0xFF) + (foliage & 0xFF)) / 2;
-        int water = BiomeColors.getWaterColor(world, pos);
+        // Biome grass/foliage/water tints from the 26.2 client renderer.
+        int grass = AtmosphereSampler.sampleGrassColor(world, pos, 0x7FB238);
+        int bioR = ((grass >> 16) & 0xFF);
+        int bioG = ((grass >> 8) & 0xFF);
+        int bioB = (grass & 0xFF);
+        int water = AtmosphereSampler.sampleWaterColor(world, pos, 0x3F76E4);
         int waterR = (water >> 16) & 0xFF;
         int waterG = (water >> 8) & 0xFF;
         int waterB = water & 0xFF;
 
-        float rain = world.getRainGradient(1.0f);
-        float thunder = world.getThunderGradient(1.0f);
-        int rawSky = sampleRawSkyColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
-        int rawFog = sampleRawFogColor(world, pos, rawSky);
+        float rain = world.getRainLevel(1.0f);
+        float thunder = world.getThunderLevel(1.0f);
+        int rawSky = AtmosphereSampler.sampleSkyColor(world, pos, ((bioR & 0xFF) << 16) | ((bioG & 0xFF) << 8) | (bioB & 0xFF));
+        int rawFog = AtmosphereSampler.sampleFogColor(world, pos, rawSky);
         int rawSkyR = (rawSky >> 16) & 0xFF;
         int rawSkyG = (rawSky >> 8) & 0xFF;
         int rawSkyB = rawSky & 0xFF;
@@ -257,7 +311,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
             g = clamp255(Math.round(skyAmbientG * skyWeight + blockG * blockWeight));
             bl = clamp255(Math.round(skyAmbientB * skyWeight + blockB * blockWeight));
         }
-        int skyLightHere = world.getLightLevel(LightType.SKY, pos);
+        int skyLightHere = world.getBrightness(LightLayer.SKY, pos);
         int skyR;
         int skyG;
         int skyB;
@@ -298,7 +352,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         int groundR = (groundColor >> 16) & 0xFF;
         int groundG = (groundColor >> 8) & 0xFF;
         int groundB = groundColor & 0xFF;
-        Vec3d look = player.getRotationVec(1.0f);
+        Vec3 look = player.getViewVector(1.0f);
         double fx = look.x;
         double fz = look.z;
         double fl = Math.sqrt(fx * fx + fz * fz);
@@ -439,7 +493,22 @@ public class OpenRGBSenderMod implements ClientModInitializer
         g = smoothAmbG;
         bl = smoothAmbB;
 
-        String dimensionId = sanitizeDimensionKey(world.getRegistryKey());
+        // Cache the latest atmospheric and probe data so buildAndSendCubemap can use
+        // it on the next tick (≤50 ms lag — completely imperceptible for LED ambient).
+        cSkyR = rawSkyR; cSkyG = rawSkyG; cSkyB = rawSkyB;
+        cFogR = rawFogR; cFogG = rawFogG; cFogB = rawFogB;
+        cGndR = groundR; cGndG = groundG; cGndB = groundB;
+        cRain = rain; cThunder = thunder; cIntensity = smoothWorldIntensity;
+        cFwdX = (float)fx; cFwdZ = (float)fz;
+        for(int i = 0; i < 4 * 9; i++)
+        {
+            cProbe[i][0] = smoothLayeredProbeRgb[i][0];
+            cProbe[i][1] = smoothLayeredProbeRgb[i][1];
+            cProbe[i][2] = smoothLayeredProbeRgb[i][2];
+        }
+        hasCachedWorldData = true;
+
+        String dimensionId = sanitizeDimensionKey(world.dimension());
 
         String json = String.format(Locale.US,
                 "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"biome_sky_r\":%d,\"biome_sky_g\":%d,\"biome_sky_b\":%d,\"biome_fog_r\":%d,\"biome_fog_g\":%d,\"biome_fog_b\":%d,\"water_fog_r\":%d,\"water_fog_g\":%d,\"water_fog_b\":%d,\"water_submerge\":%.4f,\"env_rain\":%.4f,\"env_thunder\":%.4f,\"dimension\":\"%s\",\"probe_layer_profile\":4,\"probe_layer_count\":4,\"probe_sector_count\":9,\"probe_rgb\":[%s]}",
@@ -460,8 +529,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
         sendJson(socket, address, json);
     }
 
-    private static int sampleDirectionalColor(net.minecraft.world.World world,
-                                              net.minecraft.util.math.BlockPos center,
+    private static int sampleDirectionalColor(net.minecraft.world.level.Level world,
+                                              net.minecraft.core.BlockPos center,
                                               double dirX,
                                               double dirZ,
                                               int yOffset,
@@ -476,7 +545,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             int ox = (int)Math.round(dirX * d);
             int oz = (int)Math.round(dirZ * d);
-            net.minecraft.util.math.BlockPos p = center.add(ox, yOffset, oz);
+            net.minecraft.core.BlockPos p = center.offset(ox, yOffset, oz);
             int c = getMapColorRgb(world, p, fallback);
             sumR += (c >> 16) & 0xFF;
             sumG += (c >> 8) & 0xFF;
@@ -493,9 +562,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
-    private static Vec3d estimateLocalLightDirection(net.minecraft.world.World world, ClientPlayerEntity player, BlockPos center)
+    private static Vec3 estimateLocalLightDirection(net.minecraft.world.level.Level world, LocalPlayer player, BlockPos center)
     {
-        Vec3d eye = player.getEyePos();
+        Vec3 eye = player.getEyePosition();
         double ax = 0.0, ay = 0.0, az = 0.0;
         double aw = 0.0;
         for(int dx = -4; dx <= 4; dx++)
@@ -504,16 +573,16 @@ public class OpenRGBSenderMod implements ClientModInitializer
             {
                 for(int dz = -4; dz <= 4; dz++)
                 {
-                    BlockPos p = center.add(dx, dy, dz);
+                    BlockPos p = center.offset(dx, dy, dz);
                     var state = world.getBlockState(p);
-                    int lum = state.getLuminance();
+                    int lum = state.getLightEmission();
                     if(lum <= 0)
                     {
                         continue;
                     }
-                    Vec3d src = new Vec3d(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
-                    Vec3d d = src.subtract(eye);
-                    double dist2 = Math.max(0.20, d.lengthSquared());
+                    Vec3 src = new Vec3(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
+                    Vec3 d = src.subtract(eye);
+                    double dist2 = Math.max(0.20, d.lengthSqr());
                     double w = (double)lum / dist2;
                     ax += d.x * w;
                     ay += d.y * w;
@@ -524,12 +593,12 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         if(aw <= 1e-6)
         {
-            return Vec3d.ZERO;
+            return Vec3.ZERO;
         }
-        return new Vec3d(ax / aw, ay / aw, az / aw);
+        return new Vec3(ax / aw, ay / aw, az / aw);
     }
 
-    private static int sampleLocalBlockLightColor(net.minecraft.world.World world, BlockPos center, int fallback)
+    private static int sampleLocalBlockLightColor(net.minecraft.world.level.Level world, BlockPos center, int fallback)
     {
         double sr = 0.0;
         double sg = 0.0;
@@ -541,9 +610,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
             {
                 for(int dz = -4; dz <= 4; dz++)
                 {
-                    BlockPos p = center.add(dx, dy, dz);
+                    BlockPos p = center.offset(dx, dy, dz);
                     var state = world.getBlockState(p);
-                    int lum = state.getLuminance();
+                    int lum = state.getLightEmission();
                     if(lum <= 0)
                     {
                         continue;
@@ -572,9 +641,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
-    private static float estimateWaterSubmerge(net.minecraft.world.World world, ClientPlayerEntity player)
+    private static float estimateWaterSubmerge(net.minecraft.world.level.Level world, LocalPlayer player)
     {
-        final Box bb = player.getBoundingBox();
+        final AABB bb = player.getBoundingBox();
         final double cx = (bb.minX + bb.maxX) * 0.5;
         final double cz = (bb.minZ + bb.maxZ) * 0.5;
         final double[] ySamples = {0.06, 0.22, 0.38, 0.56, 0.74, 0.90};
@@ -594,10 +663,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
             {
                 final double x = cx + off[0];
                 final double z = cz + off[1];
-                BlockPos p = BlockPos.ofFloored(x, y, z);
+                BlockPos p = BlockPos.containing(x, y, z);
                 var fs = world.getFluidState(p);
                 total++;
-                if(fs.isOf(Fluids.WATER))
+                if(fs.is(Fluids.WATER))
                 {
                     float fh = fs.getHeight(world, p);
                     double levelY = p.getY() + fh;
@@ -615,7 +684,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return clamp01((float)waterHits / (float)total);
     }
 
-    private static float estimateWarmLightBias(net.minecraft.world.World world, BlockPos center)
+    private static float estimateWarmLightBias(net.minecraft.world.level.Level world, BlockPos center)
     {
         int warm = 0;
         int total = 0;
@@ -625,27 +694,27 @@ public class OpenRGBSenderMod implements ClientModInitializer
             {
                 for(int dz = -2; dz <= 2; dz++)
                 {
-                    BlockPos p = center.add(dx, dy, dz);
+                    BlockPos p = center.offset(dx, dy, dz);
                     var state = world.getBlockState(p);
-                    int lum = state.getLuminance();
+                    int lum = state.getLightEmission();
                     if(lum <= 0)
                     {
                         continue;
                     }
                     total += lum;
                     boolean isWarm =
-                            state.isOf(Blocks.FIRE) ||
-                            state.isOf(Blocks.SOUL_FIRE) ||
-                            state.isOf(Blocks.LAVA) ||
-                            state.isOf(Blocks.MAGMA_BLOCK) ||
-                            state.isOf(Blocks.TORCH) ||
-                            state.isOf(Blocks.WALL_TORCH) ||
-                            state.isOf(Blocks.SOUL_TORCH) ||
-                            state.isOf(Blocks.SOUL_WALL_TORCH) ||
-                            state.isOf(Blocks.LANTERN) ||
-                            state.isOf(Blocks.SOUL_LANTERN) ||
-                            state.isOf(Blocks.CAMPFIRE) ||
-                            state.isOf(Blocks.SOUL_CAMPFIRE);
+                            state.is(Blocks.FIRE) ||
+                            state.is(Blocks.SOUL_FIRE) ||
+                            state.is(Blocks.LAVA) ||
+                            state.is(Blocks.MAGMA_BLOCK) ||
+                            state.is(Blocks.TORCH) ||
+                            state.is(Blocks.WALL_TORCH) ||
+                            state.is(Blocks.SOUL_TORCH) ||
+                            state.is(Blocks.SOUL_WALL_TORCH) ||
+                            state.is(Blocks.LANTERN) ||
+                            state.is(Blocks.SOUL_LANTERN) ||
+                            state.is(Blocks.CAMPFIRE) ||
+                            state.is(Blocks.SOUL_CAMPFIRE);
                     if(isWarm)
                     {
                         warm += lum;
@@ -660,9 +729,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return clamp01((float)warm / (float)total);
     }
 
-    private static int sampleGroundColor(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
+    private static int sampleGroundColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
     {
-        net.minecraft.util.math.BlockPos p = pos.down();
+        net.minecraft.core.BlockPos p = pos.below();
         for(int i = 0; i < 8; i++)
         {
             if(!world.getBlockState(p).isAir())
@@ -673,14 +742,14 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     return c;
                 }
             }
-            p = p.down();
+            p = p.below();
         }
         return fallback;
     }
 
-    private static int sampleCeilingColor(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
+    private static int sampleCeilingColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
     {
-        net.minecraft.util.math.BlockPos p = pos.up();
+        net.minecraft.core.BlockPos p = pos.above();
         for(int i = 0; i < 10; i++)
         {
             if(!world.getBlockState(p).isAir())
@@ -691,19 +760,19 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     return c;
                 }
             }
-            p = p.up();
+            p = p.above();
         }
         return fallback;
     }
 
-    private static int sampleHorizontalColor(net.minecraft.world.World world, net.minecraft.util.math.BlockPos center, int fallback)
+    private static int sampleHorizontalColor(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos center, int fallback)
     {
         int[] ox = {3, -3, 0, 0, 2, 2, -2, -2};
         int[] oz = {0, 0, 3, -3, 2, -2, 2, -2};
         int sumR = 0, sumG = 0, sumB = 0, count = 0;
         for(int i = 0; i < ox.length; i++)
         {
-            net.minecraft.util.math.BlockPos p = center.add(ox[i], -1, oz[i]);
+            net.minecraft.core.BlockPos p = center.offset(ox[i], -1, oz[i]);
             int c = getMapColorRgb(world, p, fallback);
             sumR += (c >> 16) & 0xFF;
             sumG += (c >> 8) & 0xFF;
@@ -720,86 +789,154 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
 
-    private static int[] sampleVoxelCellRgba(World world, BlockPos pos)
+    private static void sampleBlockCellRgba(Level world, BlockPos pos, int[] out)
     {
-        if(world.isAir(pos))
+        if(world.isEmptyBlock(pos))
         {
-            return new int[] {0, 0, 0, 0};
+            out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+            return;
         }
 
-        int sky = world.getLightLevel(LightType.SKY, pos);
-        int block = world.getLightLevel(LightType.BLOCK, pos);
+        int sky = world.getBrightness(LightLayer.SKY, pos);
+        int block = world.getBrightness(LightLayer.BLOCK, pos);
         int light = Math.max(sky, block);
-        float k = 0.42f + 0.58f * (light / 15.0f);
+        float k = 0.55f + 0.45f * (light / 15.0f);
 
-        int rgb = getMapColorRgb(world, pos, 0x606060);
+        int rgb = resolveBlockDisplayRgb(world, pos, 0x606060);
         int r = clamp255((int)(((rgb >> 16) & 0xFF) * k));
         int g = clamp255((int)(((rgb >> 8) & 0xFF) * k));
         int b = clamp255((int)((rgb & 0xFF) * k));
-        return boostSaturationRgba(r, g, b, VOXEL_COLOR_SATURATION, 255);
+        boostSaturationRgba(r, g, b, BLOCK_COLOR_SATURATION, 255, out);
     }
 
-    private static int[] boostSaturationRgba(int r, int g, int b, float saturation, int alpha)
+    private static void boostSaturationRgba(int r, int g, int b, float saturation, int alpha, int[] out)
     {
         float gray = (r + g + b) / 3.0f;
-        int outR = clamp255(Math.round(gray + (r - gray) * saturation));
-        int outG = clamp255(Math.round(gray + (g - gray) * saturation));
-        int outB = clamp255(Math.round(gray + (b - gray) * saturation));
-        return new int[] {outR, outG, outB, alpha};
+        out[0] = clamp255(Math.round(gray + (r - gray) * saturation));
+        out[1] = clamp255(Math.round(gray + (g - gray) * saturation));
+        out[2] = clamp255(Math.round(gray + (b - gray) * saturation));
+        out[3] = alpha;
     }
 
     /**
      * Line-of-sight shell: march from the player's eyes toward the cell center and sample the
      * first solid block hit (walls/floor/ceiling), not the block at the far grid coordinate.
      */
-    private static BlockPos raycastFirstSolidToward(World world, ClientPlayerEntity player, Vec3d targetCenter)
+    private static BlockPos raycastFirstSolidToward(Level world, LocalPlayer player, Vec3 targetCenter)
     {
-        final Vec3d start = player.getEyePos();
-        if(start.squaredDistanceTo(targetCenter) < 1.0e-4)
+        final Vec3 start = player.getEyePosition();
+        if(start.distanceToSqr(targetCenter) < 1.0e-4)
         {
-            return BlockPos.ofFloored(targetCenter);
+            return BlockPos.containing(targetCenter);
         }
 
-        final BlockHitResult hit = world.raycast(new RaycastContext(
+        final BlockHitResult hit = world.clip(new ClipContext(
                 start,
                 targetCenter,
-                RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
                 player));
         if(hit.getType() == HitResult.Type.BLOCK)
         {
             return hit.getBlockPos();
         }
-        return BlockPos.ofFloored(targetCenter);
+        return BlockPos.containing(targetCenter);
     }
 
-    private void sendVoxelFrame(DatagramSocket socket, InetAddress address, ClientPlayerEntity player, World world) throws Exception
+    private static int resolveBlockDisplayRgb(Level world, BlockPos pos, int fallback)
     {
-        final int sx = VOXEL_SIZE_X;
-        final int sy = VOXEL_SIZE_Y;
-        final int sz = VOXEL_SIZE_Z;
-        final double px = player.getX();
-        final double py = player.getY();
-        final double pz = player.getZ();
-        // Odd-sized grid centered on player block column (symmetric around feet).
-        final int ox = (int)Math.floor(px) - (sx / 2);
-        final int oy = (int)Math.floor(py) - 1;
-        final int oz = (int)Math.floor(pz) - (sz / 2);
-        final long now = System.currentTimeMillis();
-        final int frameId = (int)(now & 0x7FFFFFFFL);
+        return getMapColorRgb(world, pos, fallback);
+    }
 
+    private static int effectiveRoomSampleInterval(OpenRGBSenderConfig cfg, RoomSampleConfigReader.Config roomCfg)
+    {
+        int interval = Math.max(1, cfg.roomSampleSendInterval);
+        if(roomCfg != null && roomCfg.isEnabled())
+        {
+            final long cells = (long)roomCfg.sizeX * (long)roomCfg.sizeY * (long)roomCfg.sizeZ;
+            if(cells > 300000L)
+            {
+                interval = Math.max(interval, 20);
+            }
+            else if(cells > 100000L)
+            {
+                interval = Math.max(interval, 10);
+            }
+            else if(cells > 30000L)
+            {
+                interval = Math.max(interval, 5);
+            }
+            else if(cells > 10000L)
+            {
+                interval = Math.max(interval, 3);
+            }
+            else if(cells > 4096L)
+            {
+                interval = Math.max(interval, 2);
+            }
+        }
+        return interval;
+    }
+
+    private static void sampleRoomCellAtWorldTarget(Level world, Vec3 target, int[] out)
+    {
+        final BlockPos at = BlockPos.containing(target.x, target.y, target.z);
+        if(!world.getBlockState(at).isAir())
+        {
+            sampleBlockCellRgba(world, at, out);
+            return;
+        }
+        // Air cell: scan downward to find the nearest ground block.
+        // This is much cheaper than a full line-of-sight raycast from the player's eye.
+        // Ceiling/sky cells that find no ground within range return transparent (alpha=0),
+        // which triggers the plugin's sky-colour fallback for those LEDs.
+        for(int dy = 1; dy <= 16; dy++)
+        {
+            final BlockPos below = BlockPos.containing(target.x, target.y - dy, target.z);
+            if(!world.getBlockState(below).isAir())
+            {
+                sampleBlockCellRgba(world, below, out);
+                return;
+            }
+        }
+        out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    }
+
+    private void sendRoomSampleFrame(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world,
+                                     RoomSampleConfigReader.Config cfg) throws Exception
+    {
+        if(cfg == null || !cfg.isEnabled())
+        {
+            return;
+        }
+
+        final int sx = cfg.sizeX;
+        final int sy = cfg.sizeY;
+        final int sz = cfg.sizeZ;
         final int rgbaCount = sx * sy * sz * 4;
-        final byte[] rgba = new byte[rgbaCount];
+        if(rgbaCount <= 0)
+        {
+            return;
+        }
+
+        if(roomSampleRgbaBuffer.length != rgbaCount)
+        {
+            roomSampleRgbaBuffer = new byte[rgbaCount];
+        }
+        final byte[] rgba = roomSampleRgbaBuffer;
         int rgbaIndex = 0;
+        final int[] cell = new int[4];
         for(int ix = 0; ix < sx; ix++)
         {
             for(int iy = 0; iy < sy; iy++)
             {
                 for(int iz = 0; iz < sz; iz++)
                 {
-                    final Vec3d cellCenter = new Vec3d(ox + ix + 0.5, oy + iy + 0.5, oz + iz + 0.5);
-                    final BlockPos pos = raycastFirstSolidToward(world, player, cellCenter);
-                    int[] cell = sampleVoxelCellRgba(world, pos);
+                    final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
+                    final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
+                    final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
+                    final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
+                    sampleRoomCellAtWorldTarget(world, target, cell);
                     rgba[rgbaIndex++] = (byte)cell[0];
                     rgba[rgbaIndex++] = (byte)cell[1];
                     rgba[rgbaIndex++] = (byte)cell[2];
@@ -808,31 +945,168 @@ public class OpenRGBSenderMod implements ClientModInitializer
             }
         }
 
-        final String b64 = Base64.getEncoder().encodeToString(rgba);
-        final String json = String.format(Locale.US,
-                "{\"version\":1,\"type\":\"voxel_frame\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\","
-                        + "\"voxel_frame_id\":%d,"
-                        + "\"anchor_x\":%.4f,\"anchor_y\":%.4f,\"anchor_z\":%.4f,"
-                        + "\"voxel_size_x\":%d,\"voxel_size_y\":%d,\"voxel_size_z\":%d,"
-                        + "\"voxel_origin_x\":%d,\"voxel_origin_y\":%d,\"voxel_origin_z\":%d,"
-                        + "\"voxel_cell_size\":1.0,\"voxel_rgba_b64\":\"%s\"}",
-                now,
-                frameId,
-                px, py, pz,
-                sx, sy, sz,
-                ox, oy, oz,
-                b64);
-        sendJson(socket, address, json);
+        final long now = System.currentTimeMillis();
+        final int frameId = (int)(now & 0x7FFFFFFFL);
+        if(roomSampleFrameShmWriter.writeFrame(frameId, now, cfg.configId, sx, sy, sz, rgba))
+        {
+            if(!loggedRoomShmPath)
+            {
+                loggedRoomShmPath = true;
+                LOGGER.info("Room VR samples via shared memory ({}x{}x{} cells)", sx, sy, sz);
+            }
+            sendRoomSampleShmNotify(socket, address, frameId, now, cfg.configId);
+        }
     }
 
-    private static int getMapColorRgb(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, int fallback)
+
+    // -----------------------------------------------------------------------
+    //  Semantic cubemap: reconstruct a 6-face × 16×16 ambient cubemap from the
+    //  cached per-direction probe colors, sky/fog/weather data.  No GPU readback,
+    //  no raycasts — just smooth bilinear reconstruction at essentially zero cost.
+    // -----------------------------------------------------------------------
+
+    private void buildAndSendCubemap(DatagramSocket socket, InetAddress address) throws Exception
+    {
+        if(!hasCachedWorldData)
+        {
+            return;
+        }
+
+        // Player forward azimuth in world space: atan2(fwdZ, fwdX).
+        // Sectors in cProbe are player-relative (sector 0 = player forward), so we
+        // need this to convert a world-space direction to the correct sector index.
+        final double fwdAz = Math.atan2(cFwdZ, cFwdX);
+
+        // Weather and time-of-day modifiers.
+        final float weatherDark = Math.min(1.0f, cRain * 0.55f + cThunder * 0.35f);
+        final float nightFactor  = 1.0f - clamp01(cIntensity);
+
+        final int W = CMAP_W;
+        int off = 0;
+        for(int face = 0; face < 6; face++)
+        {
+            for(int fv = 0; fv < W; fv++)
+            {
+                final float v = (fv + 0.5f) / W * 2.0f - 1.0f;
+                for(int fu = 0; fu < W; fu++)
+                {
+                    final float u = (fu + 0.5f) / W * 2.0f - 1.0f;
+
+                    // Unnormalized world direction (same convention as GpuPanoramaCapturer).
+                    final double wx, wy, wz;
+                    switch(face)
+                    {
+                        case 0: wx =  1; wy = -v; wz = -u; break; // +X east
+                        case 1: wx = -1; wy = -v; wz =  u; break; // -X west
+                        case 2: wx =  u; wy =  1; wz =  v; break; // +Y sky
+                        case 3: wx =  u; wy = -1; wz = -v; break; // -Y ground
+                        case 4: wx =  u; wy = -v; wz =  1; break; // +Z south
+                        default: wx = -u; wy = -v; wz = -1; break; // -Z north
+                    }
+                    final double wlen = Math.sqrt(wx*wx + wy*wy + wz*wz);
+                    final float ndx = (float)(wx / wlen);
+                    final float ndy = (float)(wy / wlen);
+                    final float ndz = (float)(wz / wlen);
+
+                    int[] rgb = sampleProbeAtDirection(ndx, ndy, ndz, fwdAz, weatherDark, nightFactor);
+
+                    cubemapBuffer[off    ] = (byte)rgb[0];
+                    cubemapBuffer[off + 1] = (byte)rgb[1];
+                    cubemapBuffer[off + 2] = (byte)rgb[2];
+                    cubemapBuffer[off + 3] = (byte)0xFF;
+                    off += 4;
+                }
+            }
+        }
+
+        cubemapFrameId++;
+        final long now = System.currentTimeMillis();
+        if(cubemapShmWriter.writeFrame(cubemapFrameId, now, 0.0f, 0.0f, 0.0f, W, W, 6, cubemapBuffer))
+        {
+            notifyGpuPanoramaShmFrame(cubemapFrameId, now);
+        }
+    }
+
+    /**
+     * Sample the ambient color field at a given world-space unit direction using the cached
+     * 4-layer × 8-sector directional probe plus atmospheric blending.
+     *
+     * The probe is player-relative (sector 0 = player forward), so {@code fwdAz} (the world
+     * azimuth of the player's forward vector) is needed to convert world directions to sectors.
+     */
+    private int[] sampleProbeAtDirection(float dx, float dy, float dz,
+                                         double fwdAz, float weatherDark, float nightFactor)
+    {
+        // --- Elevation → probe layer (0=ground … 3=sky) ---
+        final float horiz  = (float)Math.sqrt(dx * dx + dz * dz);
+        final float elev   = (float)Math.atan2(dy, horiz);          // −π/2 … +π/2
+        // Layers map to yOffsets [−1, 0, 1, 2]; distribute elevation evenly.
+        final float layerF = (elev / ((float)Math.PI * 0.5f) + 1.0f) * 1.5f; // 0…3
+        final int   lay0   = Math.max(0, Math.min(3, (int)layerF));
+        final int   lay1   = Math.min(3, lay0 + 1);
+        final float layT   = layerF - lay0;
+
+        // --- World azimuth → player-relative sector (0=forward, clockwise) ---
+        // In Minecraft, clockwise in XZ means decreasing standard-math azimuth.
+        double worldAz   = Math.atan2(dz, dx);                       // −π … +π
+        double relAz     = fwdAz - worldAz;                          // clockwise from forward
+        // Wrap to [0, 2π)
+        while(relAz <  0)       relAz += 2.0 * Math.PI;
+        while(relAz >= 2.0 * Math.PI) relAz -= 2.0 * Math.PI;
+        final float secF = (float)(relAz / (Math.PI * 0.25));         // 0…8
+        final int   sec0 = (int)secF % 8;
+        final int   sec1 = (sec0 + 1) % 8;
+        final float secT = secF - (int)secF;
+
+        // --- Bilinear interpolate 4 probe corners ---
+        final int r = bilerp(cProbe[lay0*9+sec0][0], cProbe[lay0*9+sec1][0],
+                             cProbe[lay1*9+sec0][0], cProbe[lay1*9+sec1][0], secT, layT);
+        final int g = bilerp(cProbe[lay0*9+sec0][1], cProbe[lay0*9+sec1][1],
+                             cProbe[lay1*9+sec0][1], cProbe[lay1*9+sec1][1], secT, layT);
+        final int b = bilerp(cProbe[lay0*9+sec0][2], cProbe[lay0*9+sec1][2],
+                             cProbe[lay1*9+sec0][2], cProbe[lay1*9+sec1][2], secT, layT);
+
+        // --- Atmospheric overlays ---
+        // Upward-facing pixels blend toward the actual sky color.
+        final float skyBlend    = clamp01(dy * 2.0f);
+        // Horizon-facing pixels gain fog/haze (maximises at elevation≈0).
+        final float fogStrength = clamp01((1.0f - Math.abs(dy) * 2.5f) * (0.25f + cRain * 0.4f));
+
+        int outR = lerpInt(r, cSkyR, skyBlend);
+        int outG = lerpInt(g, cSkyG, skyBlend);
+        int outB = lerpInt(b, cSkyB, skyBlend);
+        outR = lerpInt(outR, cFogR, fogStrength);
+        outG = lerpInt(outG, cFogG, fogStrength);
+        outB = lerpInt(outB, cFogB, fogStrength);
+
+        // Weather darkening (rain/thunder desaturates and dims).
+        outR = clamp255(Math.round(outR * (1.0f - weatherDark * 0.45f)));
+        outG = clamp255(Math.round(outG * (1.0f - weatherDark * 0.45f)));
+        outB = clamp255(Math.round(outB * (1.0f - weatherDark * 0.20f)));
+
+        // Night darkening.
+        outR = clamp255(Math.round(outR * (1.0f - nightFactor * 0.75f)));
+        outG = clamp255(Math.round(outG * (1.0f - nightFactor * 0.75f)));
+        outB = clamp255(Math.round(outB * (1.0f - nightFactor * 0.55f)));
+
+        return new int[]{outR, outG, outB};
+    }
+
+    private static int bilerp(int c00, int c10, int c01, int c11, float tx, float ty)
+    {
+        float lo = c00 + (c10 - c00) * tx;
+        float hi = c01 + (c11 - c01) * tx;
+        return clamp255(Math.round(lo + (hi - lo) * ty));
+    }
+
+    private static int getMapColorRgb(net.minecraft.world.level.Level world, net.minecraft.core.BlockPos pos, int fallback)
     {
         try
         {
             MapColor mapColor = world.getBlockState(pos).getMapColor(world, pos);
             if(mapColor != null)
             {
-                return mapColor.color;
+                return mapColor.col;
             }
         }
         catch(Exception ignored)
@@ -844,30 +1118,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private static int clamp255(int v)
     {
         return Math.max(0, Math.min(255, v));
-    }
-
-    private static int sampleRawSkyColor(World world, BlockPos pos, int fallback)
-    {
-        try
-        {
-            return world.getBiome(pos).value().getSkyColor();
-        }
-        catch(Throwable ignored)
-        {
-        }
-        return fallback;
-    }
-
-    private static int sampleRawFogColor(World world, BlockPos pos, int fallback)
-    {
-        try
-        {
-            return world.getBiome(pos).value().getFogColor();
-        }
-        catch(Throwable ignored)
-        {
-        }
-        return fallback;
     }
 
     private static float clamp01(float v)
@@ -924,7 +1174,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
     }
 
-    private void sendDamageEventIfNeeded(DatagramSocket socket, InetAddress address, ClientPlayerEntity player) throws Exception
+    private void sendDamageEventIfNeeded(DatagramSocket socket, InetAddress address, LocalPlayer player) throws Exception
     {
         float health = player.getHealth();
         if(lastHealth >= 0.0f && health < lastHealth)
@@ -958,13 +1208,13 @@ public class OpenRGBSenderMod implements ClientModInitializer
         lastHealth = health;
     }
 
-    private static String sanitizeDimensionKey(RegistryKey<World> key)
+    private static String sanitizeDimensionKey(ResourceKey<Level> key)
     {
         if(key == null)
         {
             return "unknown";
         }
-        String id = key.getValue().toString();
+        String id = key.registry().toString();
         StringBuilder sb = new StringBuilder(id.length());
         for(int i = 0; i < id.length(); i++)
         {
@@ -980,6 +1230,51 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         return sb.toString();
     }
+
+    private static void sendGpuPanoramaShmNotify(DatagramSocket socket, InetAddress address, int frameId, long timestampMs) throws Exception
+    {
+        final String json = String.format(Locale.US,
+                "{\"version\":1,\"type\":\"gpu_panorama_shm_notify\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\","
+                        + "\"gpu_panorama_frame_id\":%d}",
+                timestampMs,
+                frameId);
+        sendJson(socket, address, json);
+    }
+
+    /** Called from {@link GpuPanoramaCapturer} after a full cubemap is written to SHM. */
+    public static void notifyGpuPanoramaShmFrame(int frameId, long timestampMs)
+    {
+        if(instance == null)
+        {
+            return;
+        }
+        try
+        {
+            final OpenRGBSenderConfig cfg = OpenRGBSenderConfig.get();
+            if(!cfg.enabled)
+            {
+                return;
+            }
+            DatagramSocket socket = ensureSharedUdp(cfg);
+            InetAddress address = sharedUdpAddress;
+            sendGpuPanoramaShmNotify(socket, address, frameId, timestampMs);
+        }
+        catch(Exception ignored)
+        {
+        }
+    }
+
+    private static void sendRoomSampleShmNotify(DatagramSocket socket, InetAddress address, int frameId, long timestampMs, int configId) throws Exception
+    {
+        final String json = String.format(Locale.US,
+                "{\"version\":1,\"type\":\"room_sample_shm_notify\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\","
+                        + "\"room_sample_frame_id\":%d,\"room_sample_config_id\":%d}",
+                timestampMs,
+                frameId,
+                configId);
+        sendJson(socket, address, json);
+    }
+
 
     private static void sendJson(DatagramSocket socket, InetAddress address, String json) throws Exception
     {

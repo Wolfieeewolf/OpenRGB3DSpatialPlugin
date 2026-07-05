@@ -150,7 +150,7 @@
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="toolTip">
-        <string>Global sampling detail (100 = full, 0 = blocky). Image/GIF layers: UV quantization (× per-media Resolution). Other effects: LED positions snap to a coarser voxel grid in room bounds (retro / low-res look).</string>
+        <string>Global sampling detail (100 = full, 0 = blocky). Image/GIF layers: UV quantization (× per-media Resolution). Other effects: LED positions snap to a coarser grid in room bounds (retro / low-res look).</string>
        </property>
       </widget>
      </item>

@@ -279,7 +279,7 @@ RGBColor SurfaceAmbient::CalculateColorGrid(float x, float y, float z, float tim
     }
     else if(UseEffectStripColormap())
     {
-        float sp = ApplyVoxelDriveToPalette01(palette_driver, x, y, z, time, grid);
+        float sp = palette_driver;
         c      = ResolveStripKernelFinalColor(*this,
                                                GetEffectStripColormapKernel(),
                                                std::clamp(sp, 0.0f, 1.0f),

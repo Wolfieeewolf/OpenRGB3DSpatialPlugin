@@ -19,12 +19,19 @@ public final class OpenRGBSenderConfig
     public boolean enabled = true;
     public String host = "127.0.0.1";
     public int port = 9876;
-    public float blocksPerMeter = 1.0f;
-    public boolean sendVoxelFrames = true;
-    /** Client ticks between telemetry batches (2 ≈ 10 Hz at 20 tps). */
-    public int telemetryTickDivisor = 2;
-    /** Telemetry batches between voxel_frame packets (1 = every batch, ~10 Hz with divisor 2). */
-    public int voxelSendInterval = 1;
+    public float blocksPerMeter = 4.0f;
+    /** Per-LED room sample grid — 1:1 block colours for each physical LED position. */
+    public boolean sendRoomSampleFrames = true;
+    /** Probe-based ambient cubemap (cheap CPU reconstruction from world_light probes). */
+    public boolean sendGpuPanoramaFrames = false;
+    /** Use shared-memory files under %ProgramData%/OpenRGB3DSpatial. */
+    public boolean useSharedMemory = true;
+    /** Client ticks between telemetry batches (1 = 20 Hz at 20 tps; room samples always run every tick). */
+    public int telemetryTickDivisor = 1;
+    /** Telemetry batches between room_sample frames (auto-increases for large grids). */
+    public int roomSampleSendInterval = 1;
+    /** Target sample count (default 800×600). Plugin publishes actual grid size. */
+    public int roomSampleTargetCells = 480000;
 
     public static OpenRGBSenderConfig get()
     {
@@ -46,16 +53,39 @@ public final class OpenRGBSenderConfig
         }
         try(Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8))
         {
-            OpenRGBSenderConfig loaded = GSON.fromJson(reader, OpenRGBSenderConfig.class);
+            final String raw = Files.readString(path, StandardCharsets.UTF_8);
+            OpenRGBSenderConfig loaded = GSON.fromJson(raw, OpenRGBSenderConfig.class);
             if(loaded != null)
             {
                 enabled = loaded.enabled;
                 host = loaded.host != null ? loaded.host : host;
                 port = loaded.port;
                 blocksPerMeter = loaded.blocksPerMeter;
-                sendVoxelFrames = loaded.sendVoxelFrames;
-                telemetryTickDivisor = loaded.telemetryTickDivisor;
-                voxelSendInterval = loaded.voxelSendInterval;
+                if(raw.contains("\"sendRoomSampleFrames\""))
+                {
+                    sendRoomSampleFrames = loaded.sendRoomSampleFrames;
+                }
+                if(raw.contains("\"sendGpuPanoramaFrames\""))
+                {
+                    sendGpuPanoramaFrames = loaded.sendGpuPanoramaFrames;
+                }
+                if(raw.contains("\"useSharedMemory\""))
+                {
+                    useSharedMemory = loaded.useSharedMemory;
+                }
+                else
+                {
+                    useSharedMemory = true;
+                }
+                telemetryTickDivisor = loaded.telemetryTickDivisor > 0 ? loaded.telemetryTickDivisor : 1;
+                if(loaded.roomSampleSendInterval > 0)
+                {
+                    roomSampleSendInterval = loaded.roomSampleSendInterval;
+                }
+                if(loaded.roomSampleTargetCells > 0)
+                {
+                    roomSampleTargetCells = loaded.roomSampleTargetCells;
+                }
             }
         }
         catch(IOException | RuntimeException ignored)
@@ -90,9 +120,10 @@ public final class OpenRGBSenderConfig
         }
         host = host.trim();
         port = Math.max(1, Math.min(65535, port));
-        blocksPerMeter = Math.max(0.25f, Math.min(4.0f, blocksPerMeter));
+        blocksPerMeter = Math.max(0.25f, Math.min(16.0f, blocksPerMeter));
         telemetryTickDivisor = Math.max(1, Math.min(20, telemetryTickDivisor));
-        voxelSendInterval = Math.max(1, Math.min(32, voxelSendInterval));
+        roomSampleSendInterval = Math.max(1, Math.min(32, roomSampleSendInterval));
+        roomSampleTargetCells = Math.max(4096, Math.min(512000, roomSampleTargetCells));
     }
 
     private static Path configPath()

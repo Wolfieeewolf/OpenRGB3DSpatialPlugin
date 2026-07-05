@@ -403,7 +403,6 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
                                                origin,
                                                rotated_pos);
         strip_p01 = ApplySpatialPalette01(strip_p01, basis, sp, map, time, &grid);
-        strip_p01 = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
     }
 
     RGBColor final_color;
@@ -422,7 +421,6 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
         {
             float p01 = std::fmod(hue / 360.0f, 1.0f);
             if(p01 < 0.0f) p01 += 1.0f;
-            p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
             hue = p01 * 360.0f;
         }
         final_color = GetRainbowColor(hue);
@@ -438,7 +436,6 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
             else
             {
                 pos = ApplySpatialPalette01(pos, basis, sp, map, time, &grid);
-                pos = ApplyVoxelDriveToPalette01(pos, x, y, z, time, grid);
             }
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);
@@ -452,7 +449,6 @@ RGBColor DNAHelix::CalculateColorGrid(float x, float y, float z, float time, con
             else
             {
                 pos = ApplySpatialPalette01(pos, basis, sp, map, time, &grid);
-                pos = ApplyVoxelDriveToPalette01(pos, x, y, z, time, grid);
             }
             if(pos < 0.0f) pos += 1.0f;
             final_color = GetColorAtPosition(pos);

@@ -7,9 +7,12 @@
 #endif
 
 #include "GameTelemetryBridge.h"
+#include "RoomSampleFrameShmReader.h"
+#include "GpuPanoramaFrameShmReader.h"
+#include "RoomSampleConfigPublisher.h"
+#include "RoomSampleFrameProtocol.h"
+#include "GpuPanoramaFrameProtocol.h"
 #include "LogManager.h"
-
-#include <nlohmann/json.hpp>
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -189,193 +192,6 @@ static void ApplyHealthStateEvent(GameTelemetryBridge::TelemetrySnapshot& teleme
     telemetry.health_state.item_durability_max = telemetry.item_durability_max;
 }
 
-static void ClearVoxelFrame(GameTelemetryBridge::TelemetrySnapshot& telemetry)
-{
-    telemetry.voxel_frame.has_voxel_frame = false;
-    telemetry.voxel_frame.rgba.clear();
-}
-
-static bool TryComputeVoxelRgbaBytes(int x, int y, int z, size_t& out_bytes)
-{
-    if(x <= 0 || y <= 0 || z <= 0)
-    {
-        return false;
-    }
-    const size_t sx = (size_t)x;
-    const size_t sy = (size_t)y;
-    const size_t sz = (size_t)z;
-    if(sx > (SIZE_MAX / sy))
-    {
-        return false;
-    }
-    const size_t xy = sx * sy;
-    if(xy > (SIZE_MAX / sz))
-    {
-        return false;
-    }
-    const size_t xyz = xy * sz;
-    if(xyz > (SIZE_MAX / 4u))
-    {
-        return false;
-    }
-    out_bytes = xyz * 4u;
-    return true;
-}
-
-static bool DecodeBase64(const std::string& in, std::vector<unsigned char>& out)
-{
-    out.clear();
-    if(in.empty())
-    {
-        return false;
-    }
-
-    static const int8_t kDecode[256] = {
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
-        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
-        -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
-        -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    };
-
-    size_t i = 0;
-    while(i < in.size() && (in[i] == ' ' || in[i] == '\n' || in[i] == '\r' || in[i] == '\t'))
-    {
-        ++i;
-    }
-    size_t end = in.size();
-    while(end > i && (in[end - 1] == ' ' || in[end - 1] == '\n' || in[end - 1] == '\r' || in[end - 1] == '\t'))
-    {
-        --end;
-    }
-
-    int val = 0;
-    int valb = -8;
-    for(size_t pos = i; pos < end; ++pos)
-    {
-        const unsigned char c = (unsigned char)in[pos];
-        if(c == '=')
-        {
-            break;
-        }
-        const int8_t d = kDecode[c];
-        if(d < 0)
-        {
-            continue;
-        }
-        val = (val << 6) + d;
-        valb += 6;
-        if(valb >= 0)
-        {
-            out.push_back((unsigned char)((val >> valb) & 0xFF));
-            valb -= 8;
-        }
-    }
-    return !out.empty();
-}
-
-static bool FillVoxelRgbaFromJsonArray(const nlohmann::json& rgba, size_t expected, std::vector<unsigned char>& out)
-{
-    if(!rgba.is_array() || rgba.size() < expected)
-    {
-        return false;
-    }
-    out.resize(expected);
-    for(size_t i = 0; i < expected; i++)
-    {
-        int v = 0;
-        if(rgba[i].is_number_integer())
-        {
-            v = rgba[i].get<int>();
-        }
-        else if(rgba[i].is_number_float())
-        {
-            v = (int)rgba[i].get<float>();
-        }
-        out[i] = (unsigned char)(std::max)(0, (std::min)(255, v));
-    }
-    return true;
-}
-
-static void ApplyVoxelFrameEvent(GameTelemetryBridge::TelemetrySnapshot& telemetry, const nlohmann::json& msg)
-{
-    const int sx = msg.value("voxel_size_x", 0);
-    const int sy = msg.value("voxel_size_y", 0);
-    const int sz = msg.value("voxel_size_z", 0);
-    if(sx <= 0 || sy <= 0 || sz <= 0)
-    {
-        ClearVoxelFrame(telemetry);
-        return;
-    }
-
-    size_t expected = 0;
-    if(!TryComputeVoxelRgbaBytes(sx, sy, sz, expected) || expected == 0 || expected > (size_t)INT_MAX)
-    {
-        ClearVoxelFrame(telemetry);
-        return;
-    }
-
-    std::vector<unsigned char> rgba_bytes;
-    if(msg.contains("voxel_rgba_b64") && msg["voxel_rgba_b64"].is_string())
-    {
-        const std::string b64 = msg["voxel_rgba_b64"].get<std::string>();
-        if(!DecodeBase64(b64, rgba_bytes) || rgba_bytes.size() < expected)
-        {
-            LOG_WARNING("[3DSpatial] voxel_frame base64 decode failed (%zu bytes, need %zu)",
-                        rgba_bytes.size(),
-                        expected);
-            ClearVoxelFrame(telemetry);
-            return;
-        }
-    }
-    else if(msg.contains("voxel_rgba") && msg["voxel_rgba"].is_array())
-    {
-        if(!FillVoxelRgbaFromJsonArray(msg["voxel_rgba"], expected, rgba_bytes))
-        {
-            ClearVoxelFrame(telemetry);
-            return;
-        }
-    }
-    else
-    {
-        ClearVoxelFrame(telemetry);
-        return;
-    }
-
-    telemetry.voxel_frame.has_voxel_frame = true;
-    telemetry.voxel_frame.frame_id = (unsigned int)msg.value("voxel_frame_id", 0);
-    telemetry.voxel_frame.size_x = sx;
-    telemetry.voxel_frame.size_y = sy;
-    telemetry.voxel_frame.size_z = sz;
-    telemetry.voxel_frame.origin_x = msg.value("voxel_origin_x", 0.0f);
-    telemetry.voxel_frame.origin_y = msg.value("voxel_origin_y", 0.0f);
-    telemetry.voxel_frame.origin_z = msg.value("voxel_origin_z", 0.0f);
-    telemetry.voxel_frame.voxel_size = (std::max)(1e-4f, msg.value("voxel_cell_size", 1.0f));
-    if(msg.contains("anchor_x") && msg.contains("anchor_y") && msg.contains("anchor_z"))
-    {
-        telemetry.voxel_frame.has_anchor_position = true;
-        telemetry.voxel_frame.anchor_x = msg["anchor_x"].get<float>();
-        telemetry.voxel_frame.anchor_y = msg["anchor_y"].get<float>();
-        telemetry.voxel_frame.anchor_z = msg["anchor_z"].get<float>();
-    }
-    else
-    {
-        telemetry.voxel_frame.has_anchor_position = false;
-    }
-    telemetry.voxel_frame.rgba = std::move(rgba_bytes);
-    telemetry.voxel_frame.received_ms = NowMs();
-}
 
 static void CloseSocketFd(int& fd)
 {
@@ -396,6 +212,9 @@ std::mutex GameTelemetryBridge::stats_mutex;
 GameTelemetryBridge::Stats GameTelemetryBridge::stats;
 GameTelemetryBridge::TelemetrySnapshot GameTelemetryBridge::telemetry;
 
+static RoomSampleFrameShmReader g_room_sample_shm_reader;
+static GpuPanoramaFrameShmReader g_gpu_panorama_shm_reader;
+
 GameTelemetryBridge::GameTelemetryBridge()
 {
     udp_running = false;
@@ -411,12 +230,16 @@ bool GameTelemetryBridge::Register(ResourceManagerInterface* rm)
 {
     (void)rm;
     StartUdpListener();
+    g_room_sample_shm_reader.Start();
+    g_gpu_panorama_shm_reader.Start();
     return true;
 }
 
 void GameTelemetryBridge::Unregister(ResourceManagerInterface* rm)
 {
     (void)rm;
+    g_room_sample_shm_reader.Stop();
+    g_gpu_panorama_shm_reader.Stop();
     StopUdpListener();
 }
 
@@ -603,9 +426,13 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 {
                     ApplyHealthStateEvent(telemetry, msg);
                 }
-                else if(out_type == "voxel_frame")
+                else if(out_type == "room_sample_shm_notify")
                 {
-                    ApplyVoxelFrameEvent(telemetry, msg);
+                    RoomSampleFrameShmReader::TryApplyLatest();
+                }
+                else if(out_type == "gpu_panorama_shm_notify")
+                {
+                    GpuPanoramaFrameShmReader::TryApplyLatest();
                 }
                 else if(out_type == "world_light")
                 {
@@ -762,6 +589,72 @@ GameTelemetryBridge::TelemetrySnapshot GameTelemetryBridge::GetTelemetrySnapshot
 std::uint64_t GameTelemetryBridge::TelemetryDataRevision()
 {
     return g_telemetry_data_revision.load(std::memory_order_relaxed);
+}
+
+void GameTelemetryBridge::NotifyTelemetryDataUpdated()
+{
+    g_telemetry_data_revision.fetch_add(1, std::memory_order_relaxed);
+}
+
+void GameTelemetryBridge::ApplyRoomSampleShmFrame(const RoomSampleFrameProtocol::FrameHeader& hdr,
+                                                  std::vector<unsigned char> rgba)
+{
+    RoomSampleFrameProtocol::ConfigHeader cfg{};
+    if(!RoomSampleConfigPublisher::GetLastPublishedConfig(cfg))
+    {
+        return;
+    }
+    if(cfg.config_id != 0 && hdr.config_id != 0 && cfg.config_id != hdr.config_id)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(stats_mutex);
+    telemetry.room_sample.has_frame = true;
+    telemetry.room_sample.frame_id = hdr.frame_id;
+    telemetry.room_sample.config_id = hdr.config_id;
+    telemetry.room_sample.size_x = hdr.size_x;
+    telemetry.room_sample.size_y = hdr.size_y;
+    telemetry.room_sample.size_z = hdr.size_z;
+    telemetry.room_sample.room_min_x = cfg.room_min_x;
+    telemetry.room_sample.room_min_y = cfg.room_min_y;
+    telemetry.room_sample.room_min_z = cfg.room_min_z;
+    telemetry.room_sample.room_max_x = cfg.room_max_x;
+    telemetry.room_sample.room_max_y = cfg.room_max_y;
+    telemetry.room_sample.room_max_z = cfg.room_max_z;
+    telemetry.room_sample.rgba = std::make_shared<const std::vector<unsigned char>>(std::move(rgba));
+    telemetry.room_sample.received_ms =
+        (hdr.timestamp_ms > 0) ? hdr.timestamp_ms
+                               : (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now().time_since_epoch())
+                                     .count();
+    telemetry.room_sample.transport = 1;
+}
+
+void GameTelemetryBridge::ApplyGpuPanoramaShmFrame(const GpuPanoramaFrameProtocol::FrameHeader& hdr,
+                                                   std::vector<unsigned char> rgba)
+{
+    if(rgba.empty())
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(stats_mutex);
+    telemetry.gpu_panorama.has_frame = true;
+    telemetry.gpu_panorama.frame_id = hdr.frame_id;
+    telemetry.gpu_panorama.face_w = hdr.face_w;
+    telemetry.gpu_panorama.face_h = hdr.face_h;
+    telemetry.gpu_panorama.face_count = hdr.face_count;
+    telemetry.gpu_panorama.anchor_x = hdr.anchor_x;
+    telemetry.gpu_panorama.anchor_y = hdr.anchor_y;
+    telemetry.gpu_panorama.anchor_z = hdr.anchor_z;
+    telemetry.gpu_panorama.rgba = std::make_shared<const std::vector<unsigned char>>(std::move(rgba));
+    telemetry.gpu_panorama.received_ms =
+        (hdr.timestamp_ms > 0) ? hdr.timestamp_ms
+                               : (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now().time_since_epoch())
+                                     .count();
+    telemetry.gpu_panorama.transport = 1;
 }
 
 void GameTelemetryBridge::GetStats(unsigned int& packets_total,

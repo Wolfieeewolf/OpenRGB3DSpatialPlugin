@@ -31,9 +31,14 @@ struct Settings
     float room_vr_pos_offset_right_blocks = 0.0f;
     float room_vr_pos_offset_up_blocks = 0.0f;
     float room_vr_scale_tune = 1.0f;
-    float room_vr_saturation = 1.45f;
-    float room_vr_contrast = 1.12f;
-    bool room_vr_sharp_sampling = true;
+    float room_vr_saturation = 1.65f;
+    float room_vr_contrast = 1.18f;
+    bool room_vr_sharp_sampling = false;
+    /** Maximum sample cells the mod may compute per frame. The actual grid is auto-sized to match
+     *  Minecraft block resolution at the current scale (one cell per MC block per axis), so most
+     *  configurations use far fewer cells than this ceiling and update at full 20 Hz.
+     *  Only increase if you want very fine zoom (high blocks-per-metre × high MC world scale). */
+    int room_vr_sample_target_cells = 65536;
     float lightning_flash_strength = 0.72f;
     float lightning_flash_decay_s = 0.28f;
     float lightning_directional_mix = 0.65f;

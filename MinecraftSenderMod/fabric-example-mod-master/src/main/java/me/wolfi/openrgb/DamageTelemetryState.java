@@ -1,8 +1,8 @@
 package me.wolfi.openrgb;
 
 /**
- * Populated from {@link net.minecraft.client.network.ClientPlayNetworkHandler#onEntityDamage}
- * via mixin — uses the same {@link net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket}
+ * Populated from {@link net.minecraft.client.multiplayer.ClientPacketListener#onEntityDamage}
+ * via mixin — uses the same {@link net.minecraft.network.protocol.game.ClientboundDamageEventPacket}
  * data the client applies for damage.
  */
 public final class DamageTelemetryState

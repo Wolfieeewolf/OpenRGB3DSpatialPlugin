@@ -287,7 +287,7 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
 
     if(UseEffectStripColormap())
     {
-        float p01v = ApplyVoxelDriveToPalette01(strip_p01, x, y, z, time, grid);
+        float p01v = strip_p01;
         final_color = ResolveStripKernelFinalColor(*this, GetEffectStripColormapKernel(), p01v, GetEffectStripColormapColorStyle(), time,
                                                    rate * 12.0f);
     }
@@ -300,13 +300,11 @@ RGBColor Plasma::CalculateColorGrid(float x, float y, float z, float time, const
         {
             p01 += 1.0f;
         }
-        p01 = ApplyVoxelDriveToPalette01(p01, x, y, z, time, grid);
         final_color = GetRainbowColor(p01 * 360.0f);
     }
     else
     {
         float p = ApplySpatialPalette01(plasma_value, basis, sp, map, time, &grid);
-        p = ApplyVoxelDriveToPalette01(p, x, y, z, time, grid);
         final_color = GetColorAtPosition(p);
     }
 

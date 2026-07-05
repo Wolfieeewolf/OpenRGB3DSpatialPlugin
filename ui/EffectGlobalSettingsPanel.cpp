@@ -57,7 +57,7 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->boundsCombo->addItem(tr("Global bounds"), QVariant((int)SpatialEffect3D::BOUNDS_MODE_GLOBAL));
     ui->boundsCombo->setItemData(
         0,
-        tr("Use the full room or world grid bounds for this layer's pattern math (same space as the voxel preview)."),
+        tr("Use the full room or world grid bounds for this layer's pattern math (same space as the 3D viewport)."),
         Qt::ToolTipRole);
     ui->boundsCombo->addItem(tr("Target zone bounds"), QVariant((int)SpatialEffect3D::BOUNDS_MODE_TARGET_ZONE));
     ui->boundsCombo->setItemData(

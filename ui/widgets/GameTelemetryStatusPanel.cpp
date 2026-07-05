@@ -2,6 +2,7 @@
 
 #include "GameTelemetryStatusPanel.h"
 #include "GameTelemetryBridge.h"
+#include "GpuPanoramaMapping.h"
 #include "PluginUiUtils.h"
 #include "ui_GameTelemetryStatusPanel.h"
 
@@ -75,10 +76,34 @@ void GameTelemetryStatusPanel::RefreshStatus()
     const GameTelemetryBridge::TelemetrySnapshot snap = GameTelemetryBridge::GetTelemetrySnapshot();
     if(signals_label)
     {
-        signals_label->setText(QStringLiteral("Pose: %1 | Probes: %2 | Voxel: %3 | World light: %4")
+        QString gpu_detail = QStringLiteral("no");
+        if(snap.gpu_panorama.has_frame)
+        {
+            const std::size_t rgba_bytes =
+                snap.gpu_panorama.rgba ? snap.gpu_panorama.rgba->size() : 0u;
+            const float forward_luma = GpuPanoramaMapping::EstimateForwardFaceLuminance(snap.gpu_panorama);
+            gpu_detail = QStringLiteral("yes (SHM %1×%1 × %2 faces, %3 MB, max luma %4)")
+                             .arg(snap.gpu_panorama.face_w)
+                             .arg(snap.gpu_panorama.face_count)
+                             .arg(rgba_bytes / (1024u * 1024u))
+                             .arg(forward_luma, 0, 'f', 2);
+        }
+        QString room_detail = QStringLiteral("no");
+        if(snap.room_sample.has_frame)
+        {
+            room_detail = QStringLiteral("yes (CPU SHM %1×%2×%3)")
+                              .arg(snap.room_sample.size_x)
+                              .arg(snap.room_sample.size_y)
+                              .arg(snap.room_sample.size_z);
+        }
+        else if(snap.gpu_panorama.has_frame)
+        {
+            room_detail = QStringLiteral("off (GPU cubemap active)");
+        }
+        signals_label->setText(QStringLiteral("Pose: %1 | GPU cubemap: %2 | CPU room: %3 | World light: %4")
                                    .arg(snap.has_player_pose ? QStringLiteral("yes") : QStringLiteral("no"),
-                                        snap.has_layered_world_probes ? QStringLiteral("yes") : QStringLiteral("no"),
-                                        snap.voxel_frame.has_voxel_frame ? QStringLiteral("yes") : QStringLiteral("no"),
+                                        gpu_detail,
+                                        room_detail,
                                         snap.has_world_light ? QStringLiteral("yes") : QStringLiteral("no")));
     }
 }
