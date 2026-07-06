@@ -2,6 +2,7 @@
 
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerDisplayUtils.h"
+#include "GridSpaceUtils.h"
 #include "PluginUiUtils.h"
 #include "ReferencePointDialog.h"
 #include "ZoneControllerPickerDialog.h"
@@ -87,7 +88,7 @@ bool RunZoneControllerPicker(QWidget* parent,
 }
 }
 
-void OpenRGB3DSpatialTab::on_create_zone_clicked()
+void OpenRGB3DSpatialTab::createZoneClicked()
 {
     if(!zone_manager) return;
     UpdateDeviceList();
@@ -141,7 +142,7 @@ void OpenRGB3DSpatialTab::on_create_zone_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_edit_zone_clicked()
+void OpenRGB3DSpatialTab::editZoneClicked()
 {
     QListWidget* list = zonesList();
     if(!list || !zone_manager) return;
@@ -176,7 +177,7 @@ void OpenRGB3DSpatialTab::on_edit_zone_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_delete_zone_clicked()
+void OpenRGB3DSpatialTab::deleteZoneClicked()
 {
     QListWidget* list = zonesList();
     if(!list || !zone_manager) return;
@@ -209,7 +210,7 @@ void OpenRGB3DSpatialTab::on_delete_zone_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_zone_selected(int index)
+void OpenRGB3DSpatialTab::zoneSelected(int index)
 {
     if(!zone_manager) return;
     bool has_selection = (index >= 0 && index < zone_manager->GetZoneCount());
@@ -253,7 +254,7 @@ void OpenRGB3DSpatialTab::UpdateZonesList()
     }
     else
     {
-        on_zone_selected(-1);
+        zoneSelected(-1);
     }
 }
 
@@ -345,7 +346,7 @@ void OpenRGB3DSpatialTab::SaveZones()
     SetLayoutDirty();
 }
 
-void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
+void OpenRGB3DSpatialTab::addRefPointClicked()
 {
     if(!referencePointsList())
     {
@@ -389,7 +390,7 @@ void OpenRGB3DSpatialTab::on_add_ref_point_clicked()
 
 }
 
-void OpenRGB3DSpatialTab::on_edit_reference_point_clicked()
+void OpenRGB3DSpatialTab::editReferencePointClicked()
 {
     if(!referencePointsList())
     {
@@ -406,7 +407,7 @@ void OpenRGB3DSpatialTab::on_edit_reference_point_clicked()
     EditReferencePointAtIndex(ref_index);
 }
 
-void OpenRGB3DSpatialTab::on_reference_points_list_selection_changed(int row)
+void OpenRGB3DSpatialTab::referencePointsListSelectionChanged(int row)
 {
     Q_UNUSED(row);
     const bool has_selection = (ReferencePointIndexFromListRow(referencePointsList() ? referencePointsList()->currentRow() : -1) >= 0);
@@ -466,7 +467,7 @@ bool OpenRGB3DSpatialTab::EditReferencePointAtIndex(int ref_index)
     return true;
 }
 
-void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
+void OpenRGB3DSpatialTab::removeRefPointClicked()
 {
     if(!referencePointsList()) return;
     int index = ReferencePointIndexFromListRow(referencePointsList()->currentRow());
@@ -498,14 +499,14 @@ void OpenRGB3DSpatialTab::on_remove_ref_point_clicked()
     UpdateAvailableControllersList();
 }
 
-void OpenRGB3DSpatialTab::on_ref_point_selected(int index, bool from_scene_controller_list)
+void OpenRGB3DSpatialTab::refPointSelected(int index, bool from_scene_controller_list)
 {
     if(!from_scene_controller_list && index >= 0)
     {
         const int scene_row = FindSceneRowForReferencePoint(index);
         if(scene_row >= 0)
         {
-            on_scene_controller_cards_selection_changed(scene_row);
+            sceneControllerCardsSelectionChanged(scene_row);
             ShowSceneObjectEditPanel(scene_row, false);
             return;
         }
@@ -518,7 +519,7 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index, bool from_scene_contr
             ControllerTransform* transform = controller_transforms[ti].get();
             if(transform && transform->linked_reference_point_index == index)
             {
-                on_controller_selected(static_cast<int>(ti));
+                controllerSelected(static_cast<int>(ti));
                 return;
             }
         }
@@ -588,11 +589,10 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index, bool from_scene_contr
             return;
         }
         Vector3D pos = ref_point->GetPosition();
-        double scale_mm = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-        if(scale_mm < 0.001) scale_mm = 10.0;
-        double pos_x_mm = (double)pos.x * scale_mm;
-        double pos_y_mm = (double)pos.y * scale_mm;
-        double pos_z_mm = (double)pos.z * scale_mm;
+        const float scale_mm = static_cast<float>(EffectiveGridScaleMm());
+        const double pos_x_mm = static_cast<double>(GridUnitsToMM(pos.x, scale_mm));
+        const double pos_y_mm = static_cast<double>(GridUnitsToMM(pos.y, scale_mm));
+        const double pos_z_mm = static_cast<double>(GridUnitsToMM(pos.z, scale_mm));
 
         SetScenePositionControlsMm(pos_x_mm, pos_y_mm, pos_z_mm);
 
@@ -639,7 +639,7 @@ void OpenRGB3DSpatialTab::on_ref_point_selected(int index, bool from_scene_contr
     }
 }
 
-void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, float y, float z)
+void OpenRGB3DSpatialTab::refPointPositionChanged(int index, float x, float y, float z)
 {
     if(index < 0 || index >= (int)reference_points.size()) return;
     if(!posXSlider() || !posXSpin()) return;
@@ -674,11 +674,10 @@ void OpenRGB3DSpatialTab::on_ref_point_position_changed(int index, float x, floa
     Vector3D pos = {x, y, z};
     ref_point->SetPosition(pos);
 
-    double scale_mm = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-    if(scale_mm < 0.001) scale_mm = 10.0;
-    double x_mm = (double)x * scale_mm;
-    double y_mm = (double)y * scale_mm;
-    double z_mm = (double)z * scale_mm;
+    const float scale_mm = static_cast<float>(EffectiveGridScaleMm());
+    const double x_mm = static_cast<double>(GridUnitsToMM(x, scale_mm));
+    const double y_mm = static_cast<double>(GridUnitsToMM(y, scale_mm));
+    const double z_mm = static_cast<double>(GridUnitsToMM(z, scale_mm));
 
     SetScenePositionControlsMm(x_mm, y_mm, z_mm);
 
@@ -719,7 +718,7 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     }
     else if(referencePointsList()->count() == 0)
     {
-        on_ref_point_selected(-1);
+        refPointSelected(-1);
     }
 
     UpdateEffectOriginCombo();

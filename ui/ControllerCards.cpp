@@ -50,15 +50,15 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
     applyColumnStretches();
 
     ui->nameLabel->setMinimumWidth(0);
-    connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &SpatialControllerCardWidget::on_name_clicked);
+    connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &SpatialControllerCardWidget::nameClicked);
 
     ui->actionButton->setFont(OpenRGBPluginsFont::GetFont());
     ui->actionButton->setToolTip(mode_ == Mode::Available ? tr("Add to 3D scene") : tr("Remove from 3D scene"));
-    connect(ui->actionButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::on_action_clicked);
+    connect(ui->actionButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::actionClicked);
 
     ui->editButton->setVisible(mode_ == Mode::InScene);
     ui->editButton->setToolTip(tr("Edit position, rotation, and spacing in the settings panel"));
-    connect(ui->editButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::on_edit_clicked);
+    connect(ui->editButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::editClicked);
 
     ui->granularityCombo->addItem(tr("Device"));
     ui->granularityCombo->addItem(tr("Zone"));
@@ -66,12 +66,12 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
     applyGranularityComboStyle(ui->granularityCombo);
     ui->granularityCombo->setToolTip(tr("What to add: whole device, one zone, or one LED"));
     connect(ui->granularityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &SpatialControllerCardWidget::on_granularity_changed);
+            &SpatialControllerCardWidget::granularityChanged);
 
     applyItemComboStyle(ui->itemCombo);
     ui->itemCombo->setToolTip(tr("Zone or LED to add to the 3D scene"));
     connect(ui->itemCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &SpatialControllerCardWidget::on_item_changed);
+            &SpatialControllerCardWidget::itemChanged);
 
     PluginUiApplyMutedSecondaryLabel(ui->spacingCaption);
     ui->spacingCaption->setToolTip(tr("Distance between LEDs along each axis when placed in the 3D scene"));
@@ -82,11 +82,11 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
     ui->spacingYSpin->setToolTip(tr("Vertical spacing (up / down)"));
     ui->spacingZSpin->setToolTip(tr("Depth spacing (front / back)"));
     connect(ui->spacingXSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &SpatialControllerCardWidget::on_spacing_changed);
+            &SpatialControllerCardWidget::spacingChanged);
     connect(ui->spacingYSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &SpatialControllerCardWidget::on_spacing_changed);
+            &SpatialControllerCardWidget::spacingChanged);
     connect(ui->spacingZSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &SpatialControllerCardWidget::on_spacing_changed);
+            &SpatialControllerCardWidget::spacingChanged);
 
     applyOptionalRowVisibility();
     setSpacingMm(spacing_x_mm, spacing_y_mm, spacing_z_mm);
@@ -415,29 +415,29 @@ void SpatialControllerCardWidget::notifySpacingEdited()
     }
 }
 
-void SpatialControllerCardWidget::on_name_clicked()
+void SpatialControllerCardWidget::nameClicked()
 {
     emit cardActivated(key_);
 }
 
-void SpatialControllerCardWidget::on_granularity_changed(int)
+void SpatialControllerCardWidget::granularityChanged(int)
 {
     rebuildItemCombo();
     emit cardActivated(key_);
 }
 
-void SpatialControllerCardWidget::on_item_changed(int)
+void SpatialControllerCardWidget::itemChanged(int)
 {
     updateActionEnabled();
     emit cardActivated(key_);
 }
 
-void SpatialControllerCardWidget::on_spacing_changed(double)
+void SpatialControllerCardWidget::spacingChanged(double)
 {
     notifySpacingEdited();
 }
 
-void SpatialControllerCardWidget::on_edit_clicked()
+void SpatialControllerCardWidget::editClicked()
 {
     if(mode_ == Mode::InScene)
     {
@@ -445,7 +445,7 @@ void SpatialControllerCardWidget::on_edit_clicked()
     }
 }
 
-void SpatialControllerCardWidget::on_action_clicked()
+void SpatialControllerCardWidget::actionClicked()
 {
     if(mode_ == Mode::InScene)
     {
@@ -615,7 +615,7 @@ void SpatialControllerCardList::rebuildAvailable(OpenRGB3DSpatialTab* host)
                     applyAvailableSelection();
                     emit availableSelectionChanged(key);
                 });
-        connect(card, &SpatialControllerCardWidget::addRequested, host, &OpenRGB3DSpatialTab::on_available_card_add);
+        connect(card, &SpatialControllerCardWidget::addRequested, host, &OpenRGB3DSpatialTab::availableCardAdd);
 
         content_layout_->addWidget(card);
         cards_.push_back(card);
@@ -689,8 +689,8 @@ void SpatialControllerCardList::rebuildInScene(OpenRGB3DSpatialTab* host)
                     applySceneSelection();
                     emit sceneSelectionChanged(row);
                 });
-        connect(card, &SpatialControllerCardWidget::removeRequested, host, &OpenRGB3DSpatialTab::on_scene_card_remove);
-        connect(card, &SpatialControllerCardWidget::editRequested, host, &OpenRGB3DSpatialTab::on_scene_card_edit);
+        connect(card, &SpatialControllerCardWidget::removeRequested, host, &OpenRGB3DSpatialTab::sceneCardRemove);
+        connect(card, &SpatialControllerCardWidget::editRequested, host, &OpenRGB3DSpatialTab::sceneCardEdit);
 
         content_layout_->addWidget(card);
         cards_.push_back(card);

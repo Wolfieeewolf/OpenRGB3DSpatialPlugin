@@ -125,7 +125,7 @@ EmitterReceiverProjection ProjectReceiverOntoEmitterSurface(const Vector3D& rece
         return result;
     }
 
-    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     result.u = std::clamp(u, 0.0f, 1.0f);
     result.v = std::clamp(v, 0.0f, 1.0f);
     result.distance_mm = GridUnitsToMM(std::fabs(local.z), scale_mm);
@@ -210,7 +210,7 @@ RGBColor SampleReceiver(const MirrorFrame& frame,
     }
 
     const Vector3D led_pos = {room_x, room_y, room_z};
-    const float scale_mm = (frame.grid_scale_mm > 0.001f) ? frame.grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(frame.grid_scale_mm);
 
     const bool shade_enabled = shade_ctx && shade_ctx->shade && shade_ctx->occluder_aabbs && shade_ctx->occluders;
     const bool has_occluders =

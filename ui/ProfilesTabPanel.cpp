@@ -65,28 +65,28 @@ void ProfilesTabPanel::connectTab(OpenRGB3DSpatialTab* tab)
         "Open plugins/settings/OpenRGB3DSpatialPlugin/");
 
     connect(ui->layoutProfilesCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_layout_profile_changed);
+            &OpenRGB3DSpatialTab::layoutProfileChanged);
     connect(ui->saveLayoutButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_quick_save_layout_clicked);
+            &OpenRGB3DSpatialTab::quickSaveLayoutClicked);
     connect(ui->saveAsLayoutButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_save_layout_clicked);
+            &OpenRGB3DSpatialTab::saveLayoutClicked);
     connect(ui->loadLayoutButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_load_layout_clicked);
+            &OpenRGB3DSpatialTab::loadLayoutClicked);
     connect(ui->deleteLayoutButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_delete_layout_clicked);
+            &OpenRGB3DSpatialTab::deleteLayoutClicked);
     connect(ui->autoLoadLayoutCheckbox, &QCheckBox::toggled, tab,
             &OpenRGB3DSpatialTab::SaveCurrentLayoutName);
 
     connect(ui->effectProfilesCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_profile_changed);
+            &OpenRGB3DSpatialTab::effectProfileChanged);
     connect(ui->saveEffectProfileButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_save_effect_profile_clicked);
+            &OpenRGB3DSpatialTab::saveEffectProfileClicked);
     connect(ui->loadEffectProfileButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_load_effect_profile_clicked);
+            &OpenRGB3DSpatialTab::loadEffectProfileClicked);
     connect(ui->deleteEffectProfileButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_delete_effect_profile_clicked);
+            &OpenRGB3DSpatialTab::deleteEffectProfileClicked);
     connect(ui->autoLoadEffectProfileCheckbox, &QCheckBox::toggled, tab,
             &OpenRGB3DSpatialTab::SaveCurrentEffectProfileName);
     connect(ui->openConfigFolderButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_open_config_folder_clicked);
+            &OpenRGB3DSpatialTab::openConfigFolderClicked);
 }

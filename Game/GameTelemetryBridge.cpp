@@ -395,6 +395,10 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 out_type = msg["type"].get<std::string>();
                 out_source = msg["source"].get<std::string>();
 
+                bool apply_room_sample_shm = false;
+                bool apply_gpu_panorama_shm = false;
+
+                {
                 std::lock_guard<std::mutex> guard(stats_mutex);
                 telemetry.last_source = out_source;
                 telemetry.last_type = out_type;
@@ -428,11 +432,12 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                 }
                 else if(out_type == "room_sample_shm_notify")
                 {
-                    RoomSampleFrameShmReader::TryApplyLatest();
+                    // Deferred: TryApplyLatest locks stats_mutex again.
+                    apply_room_sample_shm = true;
                 }
                 else if(out_type == "gpu_panorama_shm_notify")
                 {
-                    GpuPanoramaFrameShmReader::TryApplyLatest();
+                    apply_gpu_panorama_shm = true;
                 }
                 else if(out_type == "world_light")
                 {
@@ -562,6 +567,16 @@ bool GameTelemetryBridge::ProcessIncomingJson(const char* data, size_t size, std
                     telemetry.world_light_received_ms = NowMs();
                 }
                 g_telemetry_data_revision.fetch_add(1, std::memory_order_relaxed);
+                }
+
+                if(apply_room_sample_shm)
+                {
+                    RoomSampleFrameShmReader::TryApplyLatest();
+                }
+                if(apply_gpu_panorama_shm)
+                {
+                    GpuPanoramaFrameShmReader::TryApplyLatest();
+                }
                 return true;
             }
         }

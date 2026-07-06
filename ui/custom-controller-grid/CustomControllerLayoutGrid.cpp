@@ -3,6 +3,7 @@
 #include "CustomControllerGridItem.h"
 #include "CustomControllerGridLayoutMath.h"
 #include "CustomControllerGridScene.h"
+#include "GridSpaceUtils.h"
 #include <QHelpEvent>
 #include <QContextMenuEvent>
 #include <QMouseEvent>
@@ -63,7 +64,7 @@ qreal CustomControllerLayoutGrid::HitSlopScene() const
 }
 float CustomControllerLayoutGrid::MmPerSceneUnit() const
 {
-    return grid_item_ ? grid_item_->MmPerSceneUnit() : kDefaultMmPerUnit;
+    return grid_item_ ? grid_item_->MmPerSceneUnit() : DEFAULT_GRID_SCALE_MM;
 }
 void CustomControllerLayoutGrid::SetMmPerSceneUnit(float mm_per_unit)
 {

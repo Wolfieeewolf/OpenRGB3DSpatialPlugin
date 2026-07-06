@@ -164,27 +164,27 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     connect(ui->customControllersList, &QListWidget::currentRowChanged, tab,
 
-            &OpenRGB3DSpatialTab::on_custom_controller_selection_changed);
+            &OpenRGB3DSpatialTab::customControllerSelectionChanged);
 
     connect(ui->createCustomControllerButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_create_custom_controller_clicked);
+            &OpenRGB3DSpatialTab::createCustomControllerClicked);
 
     connect(ui->importCustomControllerButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_import_custom_controller_clicked);
+            &OpenRGB3DSpatialTab::importCustomControllerClicked);
 
     connect(ui->exportCustomControllerButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_export_custom_controller_clicked);
+            &OpenRGB3DSpatialTab::exportCustomControllerClicked);
 
     connect(ui->editCustomControllerButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_edit_custom_controller_clicked);
+            &OpenRGB3DSpatialTab::editCustomControllerClicked);
 
     connect(ui->deleteCustomControllerButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_delete_custom_controller_clicked);
+            &OpenRGB3DSpatialTab::deleteCustomControllerClicked);
 
 
 
@@ -194,41 +194,41 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     connect(ui->referencePointsList, &QListWidget::currentRowChanged, tab,
 
-            &OpenRGB3DSpatialTab::on_reference_points_list_selection_changed);
+            &OpenRGB3DSpatialTab::referencePointsListSelectionChanged);
 
     connect(ui->createReferencePointButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_add_ref_point_clicked);
+            &OpenRGB3DSpatialTab::addRefPointClicked);
 
     connect(ui->editReferencePointButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_edit_reference_point_clicked);
+            &OpenRGB3DSpatialTab::editReferencePointClicked);
 
     connect(ui->removeRefPointButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_remove_ref_point_clicked);
+            &OpenRGB3DSpatialTab::removeRefPointClicked);
 
 
 
     connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
 
-            &OpenRGB3DSpatialTab::on_display_plane_selected);
+            &OpenRGB3DSpatialTab::displayPlaneSelected);
 
     connect(ui->displayPlanesList, &QListWidget::currentRowChanged, tab,
 
-            &OpenRGB3DSpatialTab::on_display_planes_list_selection_changed);
+            &OpenRGB3DSpatialTab::displayPlanesListSelectionChanged);
 
     connect(ui->createDisplayPlaneButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_add_display_plane_clicked);
+            &OpenRGB3DSpatialTab::addDisplayPlaneClicked);
 
     connect(ui->editDisplayPlaneButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_edit_display_plane_clicked);
+            &OpenRGB3DSpatialTab::editDisplayPlaneClicked);
 
     connect(ui->removeDisplayPlaneButton, &QPushButton::clicked, tab,
 
-            &OpenRGB3DSpatialTab::on_remove_display_plane_clicked);
+            &OpenRGB3DSpatialTab::removeDisplayPlaneClicked);
 
 
 
@@ -382,7 +382,7 @@ void ObjectCreatorTabPanel::onReferencePointListRowChanged(int list_row)
 
     }
 
-    host_tab_->on_ref_point_selected(host_tab_->ReferencePointIndexFromListRow(list_row));
+    host_tab_->refPointSelected(host_tab_->ReferencePointIndexFromListRow(list_row));
 
 }
 

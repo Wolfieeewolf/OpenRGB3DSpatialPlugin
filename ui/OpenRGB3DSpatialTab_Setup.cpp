@@ -315,7 +315,7 @@ void OpenRGB3DSpatialTab::GetSuggestedSpacingForAvailableRgb(int controller_inde
                                                            float& y_mm,
                                                            float& z_mm) const
 {
-    const float fallback_x = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float fallback_x = SafeGridScaleMm(grid_scale_mm);
     x_mm                   = default_led_spacing_x_;
     y_mm                   = default_led_spacing_y_;
     z_mm                   = default_led_spacing_z_;
@@ -452,10 +452,10 @@ void OpenRGB3DSpatialTab::UpdateCustomControllersList()
         customControllersList()->setCurrentRow(selected_row);
     }
 
-    on_custom_controller_selection_changed(customControllersList()->currentRow());
+    customControllerSelectionChanged(customControllersList()->currentRow());
 }
 
-void OpenRGB3DSpatialTab::on_custom_controller_selection_changed(int row)
+void OpenRGB3DSpatialTab::customControllerSelectionChanged(int row)
 {
     const bool has_selection = (row >= 0);
     if(editCustomControllerButton())   editCustomControllerButton()->setEnabled(has_selection);
@@ -500,11 +500,11 @@ void OpenRGB3DSpatialTab::UpdateDeviceList()
     LoadDevices();
 }
 
-void OpenRGB3DSpatialTab::on_viewport_controller_selected(int transform_index)
+void OpenRGB3DSpatialTab::viewportControllerSelected(int transform_index)
 {
     if(transform_index < 0 || transform_index >= (int)controller_transforms.size())
     {
-        on_controller_selected(-1);
+        controllerSelected(-1);
         return;
     }
 
@@ -514,18 +514,18 @@ void OpenRGB3DSpatialTab::on_viewport_controller_selected(int transform_index)
         return;
     }
 
-    on_scene_controller_cards_selection_changed(list_row);
+    sceneControllerCardsSelectionChanged(list_row);
     ShowSceneObjectEditPanel(list_row, false);
 }
 
-void OpenRGB3DSpatialTab::on_viewport_display_plane_selected(int plane_index)
+void OpenRGB3DSpatialTab::viewportDisplayPlaneSelected(int plane_index)
 {
     if(plane_index >= 0)
     {
         const int scene_row = FindSceneRowForDisplayPlane(plane_index);
         if(scene_row >= 0)
         {
-            on_scene_controller_cards_selection_changed(scene_row);
+            sceneControllerCardsSelectionChanged(scene_row);
             ShowSceneObjectEditPanel(scene_row, false);
             return;
         }
@@ -536,14 +536,14 @@ void OpenRGB3DSpatialTab::on_viewport_display_plane_selected(int plane_index)
     {
         sceneControllerCards()->setSelectedSceneRow(-1, false);
     }
-    on_display_plane_selected(plane_index);
+    displayPlaneSelected(plane_index);
     if(plane_index < 0)
     {
         MaybeHideSceneObjectEditOnDeselect();
     }
 }
 
-void OpenRGB3DSpatialTab::on_controller_selected(int index)
+void OpenRGB3DSpatialTab::controllerSelected(int index)
 {
     if(index >= 0 && index < scene_controllers_.count() && scene_controllers_.hasUserRole(index))
     {
@@ -564,7 +564,7 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
                         referencePointsList()->setCurrentRow(list_row);
                     }
                 }
-                on_ref_point_selected(metadata.second, true);
+                refPointSelected(metadata.second, true);
 
                 if(displayPlanesList())
                 {
@@ -668,11 +668,10 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
             rotYSlider()->blockSignals(true);
             rotZSlider()->blockSignals(true);
 
-            double scale_mm = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-            if(scale_mm < 0.001) scale_mm = 10.0;
-            double pos_x_mm = (double)ctrl->transform.position.x * scale_mm;
-            double pos_y_mm = (double)ctrl->transform.position.y * scale_mm;
-            double pos_z_mm = (double)ctrl->transform.position.z * scale_mm;
+            const float scale_mm = static_cast<float>(EffectiveGridScaleMm());
+            const double pos_x_mm = static_cast<double>(GridUnitsToMM(ctrl->transform.position.x, scale_mm));
+            const double pos_y_mm = static_cast<double>(GridUnitsToMM(ctrl->transform.position.y, scale_mm));
+            const double pos_z_mm = static_cast<double>(GridUnitsToMM(ctrl->transform.position.z, scale_mm));
             SetScenePositionControlsMm(pos_x_mm, pos_y_mm, pos_z_mm);
             rotXSpin()->setValue(ctrl->transform.rotation.x);
             rotYSpin()->setValue(ctrl->transform.rotation.y);
@@ -772,7 +771,7 @@ void OpenRGB3DSpatialTab::on_controller_selected(int index)
     RefreshDisplayPlaneDetails();
 }
 
-void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, float y, float z)
+void OpenRGB3DSpatialTab::controllerPositionChanged(int index, float x, float y, float z)
 {
     if(viewport && viewport->IsGizmoDragging())
     {
@@ -797,11 +796,10 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
         posYSlider()->blockSignals(true);
         posZSlider()->blockSignals(true);
 
-        double scale_mm = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-        if(scale_mm < 0.001) scale_mm = 10.0;
-        double x_mm = (double)x * scale_mm;
-        double y_mm = (double)y * scale_mm;
-        double z_mm = (double)z * scale_mm;
+        const float scale_mm = static_cast<float>(EffectiveGridScaleMm());
+        const double x_mm = static_cast<double>(GridUnitsToMM(x, scale_mm));
+        const double y_mm = static_cast<double>(GridUnitsToMM(y, scale_mm));
+        const double z_mm = static_cast<double>(GridUnitsToMM(z, scale_mm));
         SetScenePositionControlsMm(x_mm, y_mm, z_mm);
 
         posXSpin()->blockSignals(false);
@@ -818,7 +816,7 @@ void OpenRGB3DSpatialTab::on_controller_position_changed(int index, float x, flo
     }
 }
 
-void OpenRGB3DSpatialTab::on_controller_rotation_changed(int index, float x, float y, float z)
+void OpenRGB3DSpatialTab::controllerRotationChanged(int index, float x, float y, float z)
 {
     if(index >= 0 && index < (int)controller_transforms.size())
     {
@@ -1214,7 +1212,7 @@ void OpenRGB3DSpatialTab::RemoveControllerLinkedReferencePoint(int transform_ind
     UpdateReferencePointsList();
 }
 
-void OpenRGB3DSpatialTab::on_available_card_add(SpatialControllerEntryKey key,
+void OpenRGB3DSpatialTab::availableCardAdd(SpatialControllerEntryKey key,
                                                 int                            granularity,
                                                 int                            item_index,
                                                 float                          spacing_x_mm,
@@ -1230,14 +1228,14 @@ void OpenRGB3DSpatialTab::on_available_card_add(SpatialControllerEntryKey key,
     AddControllerEntryToScene(ctrl_idx, granularity, item_row, spacing_x_mm, spacing_y_mm, spacing_z_mm, false);
 }
 
-void OpenRGB3DSpatialTab::on_scene_card_remove(int scene_list_row)
+void OpenRGB3DSpatialTab::sceneCardRemove(int scene_list_row)
 {
     if(scene_list_row < 0 || scene_list_row >= scene_controllers_.count())
     {
         return;
     }
     scene_controllers_.setCurrentRow(scene_list_row);
-    on_remove_controller_clicked();
+    removeControllerClicked();
 }
 
 void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
@@ -1448,7 +1446,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
 
 }
 
-void OpenRGB3DSpatialTab::on_remove_controller_clicked()
+void OpenRGB3DSpatialTab::removeControllerClicked()
 {
     int selected_row = scene_controllers_.currentRow();
     if(selected_row < 0 || selected_row >= scene_controllers_.count())
@@ -1548,7 +1546,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_clicked()
     RefreshHiddenControllerStates();
 }
 
-void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
+void OpenRGB3DSpatialTab::removeControllerFromViewport(int index)
 {
     if(index < 0 || index >= (int)controller_transforms.size())
     {
@@ -1576,7 +1574,7 @@ void OpenRGB3DSpatialTab::on_remove_controller_from_viewport(int index)
     RefreshHiddenControllerStates();
 }
 
-void OpenRGB3DSpatialTab::on_clear_all_clicked()
+void OpenRGB3DSpatialTab::clearAllClicked()
 {
     for(int i = (int)controller_transforms.size() - 1; i >= 0; i--)
     {
@@ -1612,16 +1610,16 @@ void OpenRGB3DSpatialTab::on_clear_all_clicked()
     emit GridLayoutChanged();
     RefreshHiddenControllerStates();
 
-    on_controller_selected(-1);
-    on_ref_point_selected(-1);
-    on_display_plane_selected(-1);
+    controllerSelected(-1);
+    refPointSelected(-1);
+    displayPlaneSelected(-1);
     if(viewport)
     {
         viewport->ClearSelection();
     }
 }
 
-void OpenRGB3DSpatialTab::on_scene_controller_cards_selection_changed(int row)
+void OpenRGB3DSpatialTab::sceneControllerCardsSelectionChanged(int row)
 {
     if(row >= 0 && row < scene_controllers_.count())
     {
@@ -1637,7 +1635,7 @@ void OpenRGB3DSpatialTab::on_scene_controller_cards_selection_changed(int row)
         sceneControllerCards()->setSelectedSceneRow(row);
     }
 
-    on_controller_selected(row);
+    controllerSelected(row);
 
     if(ui->sceneObjectEditHostPanel && IsSceneObjectEditTabActive())
     {

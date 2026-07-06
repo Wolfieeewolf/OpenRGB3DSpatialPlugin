@@ -213,7 +213,7 @@ void OpenRGB3DSpatialTab::ClearLayoutDirty()
     SetLayoutDirty(false);
 }
 
-void OpenRGB3DSpatialTab::on_open_config_folder_clicked()
+void OpenRGB3DSpatialTab::openConfigFolderClicked()
 {
     if(!resource_manager)
     {
@@ -244,7 +244,7 @@ bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
     switch(ret)
     {
         case QMessageBox::Save:
-            on_quick_save_layout_clicked();
+            quickSaveLayoutClicked();
             return !layout_dirty;
             
         case QMessageBox::Discard:
@@ -256,7 +256,7 @@ bool OpenRGB3DSpatialTab::PromptSaveIfDirty()
     }
 }
 
-void OpenRGB3DSpatialTab::on_quick_save_layout_clicked()
+void OpenRGB3DSpatialTab::quickSaveLayoutClicked()
 {
     QComboBox* profiles = layoutProfilesCombo();
     if(!profiles || profiles->currentIndex() < 0)

@@ -541,15 +541,15 @@ void CustomControllerDialog::SetupUI()
     layer_depth_spin  = ui->layerDepthSpin;
     fit_layout_button  = ui->fitLayoutButton;
     reset_view_button_ = ui->resetViewButton;
-    connect(width_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
-    connect(height_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
-    connect(depth_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::on_dimension_changed);
+    connect(width_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);
+    connect(height_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);
+    connect(depth_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &CustomControllerDialog::dimensionChanged);
     connect(leds_per_section_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { syncPreviewLayoutIfVisible(); });
     connect(layer_depth_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
-            &CustomControllerDialog::on_layer_depth_changed);
-    connect(fit_layout_button, &QPushButton::clicked, this, &CustomControllerDialog::on_fit_device_layout_clicked);
-    connect(reset_view_button_, &QPushButton::clicked, this, &CustomControllerDialog::on_reset_grid_view_clicked);
+            &CustomControllerDialog::layerDepthChanged);
+    connect(fit_layout_button, &QPushButton::clicked, this, &CustomControllerDialog::fitDeviceLayoutClicked);
+    connect(reset_view_button_, &QPushButton::clicked, this, &CustomControllerDialog::resetGridViewClicked);
 
     EnsureDialogGridSizeArrays();
 
@@ -557,24 +557,24 @@ void CustomControllerDialog::SetupUI()
     device_list = new CustomControllerDeviceList(ui->leftPanel);
     ui->deviceListLayout->addWidget(device_list, 1);
     connect(device_list, &CustomControllerDeviceList::selectionChanged, this,
-            &CustomControllerDialog::on_source_selection_changed);
+            &CustomControllerDialog::sourceSelectionChanged);
     connect(device_list, &CustomControllerDeviceList::enableToggled, this,
-            &CustomControllerDialog::on_source_enable_toggled);
+            &CustomControllerDialog::sourceEnableToggled);
 
     identify_button = ui->identifyButton;
-    connect(identify_button, &QPushButton::clicked, this, &CustomControllerDialog::on_identify_selection_clicked);
+    connect(identify_button, &QPushButton::clicked, this, &CustomControllerDialog::identifySelectionClicked);
 
     clear_button            = ui->clearButton;
     copy_button             = ui->copyButton;
     cut_button              = ui->cutButton;
     paste_button            = ui->pasteButton;
     remove_from_grid_button = ui->removeFromGridButton;
-    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::on_clear_cell_clicked);
-    connect(copy_button, &QPushButton::clicked, this, &CustomControllerDialog::on_copy_selection_clicked);
-    connect(cut_button, &QPushButton::clicked, this, &CustomControllerDialog::on_cut_selection_clicked);
-    connect(paste_button, &QPushButton::clicked, this, &CustomControllerDialog::on_paste_selection_clicked);
-    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_all_leds_clicked);
-    connect(ui->addLightBlockerButton, &QPushButton::clicked, this, &CustomControllerDialog::on_add_light_blocker_clicked);
+    connect(clear_button, &QPushButton::clicked, this, &CustomControllerDialog::clearCellClicked);
+    connect(copy_button, &QPushButton::clicked, this, &CustomControllerDialog::copySelectionClicked);
+    connect(cut_button, &QPushButton::clicked, this, &CustomControllerDialog::cutSelectionClicked);
+    connect(paste_button, &QPushButton::clicked, this, &CustomControllerDialog::pasteSelectionClicked);
+    connect(remove_from_grid_button, &QPushButton::clicked, this, &CustomControllerDialog::removeAllLedsClicked);
+    connect(ui->addLightBlockerButton, &QPushButton::clicked, this, &CustomControllerDialog::addLightBlockerClicked);
 
     QFrame* left_wrapped = PluginUiWrapInSettingsPanel(ui->leftPanel, 8);
     ui->mainSplitter->insertWidget(0, left_wrapped);
@@ -583,34 +583,34 @@ void CustomControllerDialog::SetupUI()
     PluginUiApplyBoldLabel(ui->depthCaption);
     PluginUiApplyBoldLabel(ui->ledsPerClusterCaption);
     layer_tabs = ui->layerTabs;
-    connect(layer_tabs, QOverload<int>::of(&QTabWidget::currentChanged), this, &CustomControllerDialog::on_layer_tab_changed);
-    connect(layer_tabs->tabBar(), &QTabBar::tabBarDoubleClicked, this, &CustomControllerDialog::on_layer_tab_double_clicked);
+    connect(layer_tabs, QOverload<int>::of(&QTabWidget::currentChanged), this, &CustomControllerDialog::layerTabChanged);
+    connect(layer_tabs->tabBar(), &QTabBar::tabBarDoubleClicked, this, &CustomControllerDialog::layerTabDoubleClicked);
     layer_tabs->setToolTip(tr("Double-click a layer tab to rename it."));
 
     layout_grid = new CustomControllerLayoutGrid();
     layout_grid->setMinimumHeight(280);
     layout_grid->SetSelectionColor(PluginUiGridSelectionColor(layout_grid));
     connect(layout_grid, &CustomControllerLayoutGrid::cellClicked,
-            this, &CustomControllerDialog::on_grid_cell_clicked);
+            this, &CustomControllerDialog::gridCellClicked);
     connect(layout_grid, &CustomControllerLayoutGrid::cellDoubleClicked,
-            this, &CustomControllerDialog::on_grid_cell_double_clicked);
+            this, &CustomControllerDialog::gridCellDoubleClicked);
     connect(layout_grid, &CustomControllerLayoutGrid::selectionChanged,
-            this, &CustomControllerDialog::on_grid_selection_changed);
+            this, &CustomControllerDialog::gridSelectionChanged);
     connect(layout_grid, &CustomControllerLayoutGrid::contextMenuRequested,
-            this, &CustomControllerDialog::on_grid_context_menu_requested);
+            this, &CustomControllerDialog::gridContextMenuRequested);
     connect(layout_grid, &CustomControllerLayoutGrid::columnWidthChanged,
-            this, &CustomControllerDialog::on_grid_column_width_changed);
+            this, &CustomControllerDialog::gridColumnWidthChanged);
     connect(layout_grid, &CustomControllerLayoutGrid::rowHeightChanged,
-            this, &CustomControllerDialog::on_grid_row_height_changed);
+            this, &CustomControllerDialog::gridRowHeightChanged);
     connect(layout_grid, &CustomControllerLayoutGrid::columnHeaderClicked,
-            this, &CustomControllerDialog::on_grid_column_header_clicked);
+            this, &CustomControllerDialog::gridColumnHeaderClicked);
     connect(layout_grid, &CustomControllerLayoutGrid::rowHeaderClicked,
-            this, &CustomControllerDialog::on_grid_row_header_clicked);
+            this, &CustomControllerDialog::gridRowHeaderClicked);
 
     PluginUiApplyBoldLabel(ui->layerDepthCaption);
 
-    connect(ui->addLayerButton, &QPushButton::clicked, this, &CustomControllerDialog::on_add_layer_clicked);
-    connect(ui->removeLayerButton, &QPushButton::clicked, this, &CustomControllerDialog::on_remove_layer_clicked);
+    connect(ui->addLayerButton, &QPushButton::clicked, this, &CustomControllerDialog::addLayerClicked);
+    connect(ui->removeLayerButton, &QPushButton::clicked, this, &CustomControllerDialog::removeLayerClicked);
     RebuildLayerTabs();
     SyncLayerDepthSpinFromCurrentLayer();
 
@@ -624,11 +624,11 @@ void CustomControllerDialog::SetupUI()
     flip_horizontal_button  = ui->flipHorizontalButton;
     flip_vertical_button    = ui->flipVerticalButton;
     PluginUiApplyMutedSecondaryLabel(ui->transformHelp);
-    connect(rotate_90_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_90);
-    connect(rotate_180_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_180);
-    connect(rotate_270_button, &QPushButton::clicked, this, &CustomControllerDialog::on_rotate_grid_270);
-    connect(flip_horizontal_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_horizontal);
-    connect(flip_vertical_button, &QPushButton::clicked, this, &CustomControllerDialog::on_flip_grid_vertical);
+    connect(rotate_90_button, &QPushButton::clicked, this, &CustomControllerDialog::rotateGrid90);
+    connect(rotate_180_button, &QPushButton::clicked, this, &CustomControllerDialog::rotateGrid180);
+    connect(rotate_270_button, &QPushButton::clicked, this, &CustomControllerDialog::rotateGrid270);
+    connect(flip_horizontal_button, &QPushButton::clicked, this, &CustomControllerDialog::flipGridHorizontal);
+    connect(flip_vertical_button, &QPushButton::clicked, this, &CustomControllerDialog::flipGridVertical);
 
     QFrame* center_wrapped = PluginUiWrapInSettingsPanel(ui->centerPanel, 8);
     ui->mainSplitter->insertWidget(1, center_wrapped);
@@ -638,8 +638,8 @@ void CustomControllerDialog::SetupUI()
 
     save_button = ui->saveButton;
     PluginUiApplyPrimaryButton(save_button);
-    connect(ui->previewButton, &QPushButton::clicked, this, &CustomControllerDialog::on_show_preview_3d_clicked);
-    connect(save_button, &QPushButton::clicked, this, &CustomControllerDialog::on_save_clicked);
+    connect(ui->previewButton, &QPushButton::clicked, this, &CustomControllerDialog::showPreview3dClicked);
+    connect(save_button, &QPushButton::clicked, this, &CustomControllerDialog::saveClicked);
     connect(ui->cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
     device_list->rebuild(resource_manager, this);
@@ -650,17 +650,17 @@ void CustomControllerDialog::SetupUI()
     connect(color_refresh_timer, &QTimer::timeout, this, &CustomControllerDialog::refresh_colors);
 
     QShortcut* save_shortcut = new QShortcut(QKeySequence::Save, this);
-    connect(save_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_save_clicked);
+    connect(save_shortcut, &QShortcut::activated, this, &CustomControllerDialog::saveClicked);
     QShortcut* escape_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     connect(escape_shortcut, &QShortcut::activated, this, &QDialog::reject);
     QShortcut* delete_shortcut = new QShortcut(QKeySequence::Delete, this);
-    connect(delete_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_clear_cell_clicked);
+    connect(delete_shortcut, &QShortcut::activated, this, &CustomControllerDialog::clearCellClicked);
     QShortcut* copy_shortcut = new QShortcut(QKeySequence::Copy, this);
-    connect(copy_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_copy_selection_clicked);
+    connect(copy_shortcut, &QShortcut::activated, this, &CustomControllerDialog::copySelectionClicked);
     QShortcut* cut_shortcut = new QShortcut(QKeySequence::Cut, this);
-    connect(cut_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_cut_selection_clicked);
+    connect(cut_shortcut, &QShortcut::activated, this, &CustomControllerDialog::cutSelectionClicked);
     QShortcut* paste_shortcut = new QShortcut(QKeySequence::Paste, this);
-    connect(paste_shortcut, &QShortcut::activated, this, &CustomControllerDialog::on_paste_selection_clicked);
+    connect(paste_shortcut, &QShortcut::activated, this, &CustomControllerDialog::pasteSelectionClicked);
 
     if(paste_button)
     {
@@ -671,13 +671,13 @@ void CustomControllerDialog::SetupUI()
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_source_selection_changed(const CustomControllerSourceRef& source)
+void CustomControllerDialog::sourceSelectionChanged(const CustomControllerSourceRef& source)
 {
     Q_UNUSED(source);
     UpdateCellInfo();
 }
 
-void CustomControllerDialog::on_source_enable_toggled(const CustomControllerSourceRef& source, bool enabled)
+void CustomControllerDialog::sourceEnableToggled(const CustomControllerSourceRef& source, bool enabled)
 {
     if(enabled)
     {
@@ -900,7 +900,7 @@ bool CustomControllerDialog::assignSource(const CustomControllerSourceRef& sourc
     return true;
 }
 
-void CustomControllerDialog::on_grid_cell_clicked(int column, int row)
+void CustomControllerDialog::gridCellClicked(int column, int row)
 {
     selected_col = column;
     selected_row = row;
@@ -908,7 +908,7 @@ void CustomControllerDialog::on_grid_cell_clicked(int column, int row)
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_grid_cell_double_clicked(int column, int row)
+void CustomControllerDialog::gridCellDoubleClicked(int column, int row)
 {
     selected_col = column;
     selected_row = row;
@@ -923,7 +923,7 @@ void CustomControllerDialog::on_grid_cell_double_clicked(int column, int row)
     assignSource(source);
 }
 
-void CustomControllerDialog::on_grid_selection_changed()
+void CustomControllerDialog::gridSelectionChanged()
 {
     if(layout_grid)
     {
@@ -942,7 +942,7 @@ void CustomControllerDialog::on_grid_selection_changed()
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_add_layer_clicked()
+void CustomControllerDialog::addLayerClicked()
 {
     if(!depth_spin)
     {
@@ -955,7 +955,7 @@ void CustomControllerDialog::on_add_layer_clicked()
     }
 }
 
-void CustomControllerDialog::on_remove_layer_clicked()
+void CustomControllerDialog::removeLayerClicked()
 {
     if(!depth_spin || depth_spin->value() <= 1)
     {
@@ -965,7 +965,7 @@ void CustomControllerDialog::on_remove_layer_clicked()
     depth_spin->setValue(depth_spin->value() - 1);
 }
 
-void CustomControllerDialog::on_layer_tab_changed(int index)
+void CustomControllerDialog::layerTabChanged(int index)
 {
     if(index < 0)
     {
@@ -979,7 +979,7 @@ void CustomControllerDialog::on_layer_tab_changed(int index)
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_layer_tab_double_clicked(int index)
+void CustomControllerDialog::layerTabDoubleClicked(int index)
 {
     if(index < 0 || !layer_tabs)
     {
@@ -1016,7 +1016,7 @@ void CustomControllerDialog::on_layer_tab_double_clicked(int index)
     UpdateSummaryLabel();
 }
 
-void CustomControllerDialog::on_dimension_changed()
+void CustomControllerDialog::dimensionChanged()
 {
     const int new_width = width_spin->value();
     const int new_height = height_spin->value();
@@ -1659,7 +1659,7 @@ void CustomControllerDialog::ClearSelectedCellContents()
     }
 }
 
-void CustomControllerDialog::on_copy_selection_clicked()
+void CustomControllerDialog::copySelectionClicked()
 {
     if(!BuildClipboardFromSelection(clipboard_region_))
     {
@@ -1673,7 +1673,7 @@ void CustomControllerDialog::on_copy_selection_clicked()
     }
 }
 
-void CustomControllerDialog::on_cut_selection_clicked()
+void CustomControllerDialog::cutSelectionClicked()
 {
     if(!BuildClipboardFromSelection(clipboard_region_))
     {
@@ -1693,7 +1693,7 @@ void CustomControllerDialog::on_cut_selection_clicked()
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_paste_selection_clicked()
+void CustomControllerDialog::pasteSelectionClicked()
 {
     PasteClipboardRegion(clipboard_region_);
 }
@@ -1731,15 +1731,15 @@ void CustomControllerDialog::ShowGridContextMenu(const QPoint& global_pos)
 
     if(chosen == copy_action)
     {
-        on_copy_selection_clicked();
+        copySelectionClicked();
     }
     else if(chosen == cut_action)
     {
-        on_cut_selection_clicked();
+        cutSelectionClicked();
     }
     else if(chosen == paste_action)
     {
-        on_paste_selection_clicked();
+        pasteSelectionClicked();
     }
     else if(chosen == set_col_sel_action)
     {
@@ -1787,11 +1787,11 @@ void CustomControllerDialog::ShowGridContextMenu(const QPoint& global_pos)
     }
     else if(chosen == clear_action)
     {
-        on_clear_cell_clicked();
+        clearCellClicked();
     }
     else if(chosen == add_blocker_action)
     {
-        on_add_light_blocker_clicked();
+        addLightBlockerClicked();
     }
 }
 
@@ -2038,17 +2038,17 @@ void CustomControllerDialog::PromptAndApplyRowHeight(int row)
     }
 }
 
-void CustomControllerDialog::on_grid_column_header_clicked(int column)
+void CustomControllerDialog::gridColumnHeaderClicked(int column)
 {
     PromptAndApplyColumnWidth(column);
 }
 
-void CustomControllerDialog::on_grid_row_header_clicked(int row)
+void CustomControllerDialog::gridRowHeaderClicked(int row)
 {
     PromptAndApplyRowHeight(row);
 }
 
-void CustomControllerDialog::on_grid_context_menu_requested(const QPoint& global_pos)
+void CustomControllerDialog::gridContextMenuRequested(const QPoint& global_pos)
 {
     if(layout_grid)
     {
@@ -2434,7 +2434,7 @@ bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int g
     return true;
 }
 
-void CustomControllerDialog::on_reset_grid_view_clicked()
+void CustomControllerDialog::resetGridViewClicked()
 {
     if(layout_grid)
     {
@@ -2442,7 +2442,7 @@ void CustomControllerDialog::on_reset_grid_view_clicked()
     }
 }
 
-void CustomControllerDialog::on_fit_device_layout_clicked()
+void CustomControllerDialog::fitDeviceLayoutClicked()
 {
     int min_x = 0;
     int min_y = 0;
@@ -2743,7 +2743,7 @@ void CustomControllerDialog::UpdateIdentifyButtonUi()
     }
 }
 
-void CustomControllerDialog::on_identify_selection_clicked()
+void CustomControllerDialog::identifySelectionClicked()
 {
     const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
     const IdentifyUiState ui_state = EvaluateIdentifyUiState(selected_cells, current_layer, led_mappings, identified_leds);
@@ -2772,7 +2772,7 @@ void CustomControllerDialog::on_identify_selection_clicked()
     SetIdentifyForCells(selected_cells, ui_state == IdentifyUiState::AllOff);
 }
 
-void CustomControllerDialog::on_clear_cell_clicked()
+void CustomControllerDialog::clearCellClicked()
 {
     const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
     if(selected_cells.empty())
@@ -2788,7 +2788,7 @@ void CustomControllerDialog::on_clear_cell_clicked()
     UpdateIdentifyButtonUi();
 }
 
-void CustomControllerDialog::on_remove_all_leds_clicked()
+void CustomControllerDialog::removeAllLedsClicked()
 {
     if(led_mappings.empty() && light_blocker_cells_.empty())
     {
@@ -2825,7 +2825,7 @@ void CustomControllerDialog::on_remove_all_leds_clicked()
     }
 }
 
-void CustomControllerDialog::on_add_light_blocker_clicked()
+void CustomControllerDialog::addLightBlockerClicked()
 {
     const std::set<std::pair<int, int>> selected_cells = SelectedGridCells();
     if(selected_cells.empty())
@@ -2843,7 +2843,7 @@ void CustomControllerDialog::on_add_light_blocker_clicked()
     UpdateCellInfo();
 }
 
-void CustomControllerDialog::on_save_clicked()
+void CustomControllerDialog::saveClicked()
 {
     if(name_edit->text().isEmpty())
     {
@@ -3125,7 +3125,7 @@ void CustomControllerDialog::SyncLayerDepthSpinFromCurrentLayer() const
     layer_depth_spin->setValue(depth);
 }
 
-void CustomControllerDialog::on_layer_depth_changed(double value_mm)
+void CustomControllerDialog::layerDepthChanged(double value_mm)
 {
     EnsureDialogGridSizeArrays();
     if(current_layer < 0 || current_layer >= static_cast<int>(layer_depths_mm_.size()))
@@ -3137,7 +3137,7 @@ void CustomControllerDialog::on_layer_depth_changed(double value_mm)
     syncPreviewLayoutIfVisible();
 }
 
-void CustomControllerDialog::on_grid_column_width_changed(int column, float width_mm)
+void CustomControllerDialog::gridColumnWidthChanged(int column, float width_mm)
 {
     EnsureDialogGridSizeArrays();
     if(column < 0 || column >= static_cast<int>(column_widths_mm_.size()))
@@ -3149,7 +3149,7 @@ void CustomControllerDialog::on_grid_column_width_changed(int column, float widt
     syncPreviewLayoutIfVisible();
 }
 
-void CustomControllerDialog::on_grid_row_height_changed(int row, float height_mm)
+void CustomControllerDialog::gridRowHeightChanged(int row, float height_mm)
 {
     EnsureDialogGridSizeArrays();
     if(row < 0 || row >= static_cast<int>(row_heights_mm_.size()))
@@ -3686,7 +3686,7 @@ void CustomControllerDialog::refresh_colors()
     UpdateGridColors();
 }
 
-void CustomControllerDialog::on_show_preview_3d_clicked()
+void CustomControllerDialog::showPreview3dClicked()
 {
     if(led_mappings.empty())
     {
@@ -3745,7 +3745,7 @@ void CustomControllerDialog::WarnIfMappingCollisions() const
     }
 }
 
-void CustomControllerDialog::on_rotate_grid_90()
+void CustomControllerDialog::rotateGrid90()
 {
     if(led_mappings.empty())
     {
@@ -3805,7 +3805,7 @@ void CustomControllerDialog::on_rotate_grid_90()
     WarnIfMappingCollisions();
 }
 
-void CustomControllerDialog::on_rotate_grid_180()
+void CustomControllerDialog::rotateGrid180()
 {
     if(led_mappings.empty())
     {
@@ -3836,7 +3836,7 @@ void CustomControllerDialog::on_rotate_grid_180()
     WarnIfMappingCollisions();
 }
 
-void CustomControllerDialog::on_rotate_grid_270()
+void CustomControllerDialog::rotateGrid270()
 {
     if(led_mappings.empty())
     {
@@ -3896,7 +3896,7 @@ void CustomControllerDialog::on_rotate_grid_270()
     WarnIfMappingCollisions();
 }
 
-void CustomControllerDialog::on_flip_grid_horizontal()
+void CustomControllerDialog::flipGridHorizontal()
 {
     if(led_mappings.empty())
     {
@@ -3922,7 +3922,7 @@ void CustomControllerDialog::on_flip_grid_horizontal()
     WarnIfMappingCollisions();
 }
 
-void CustomControllerDialog::on_flip_grid_vertical()
+void CustomControllerDialog::flipGridVertical()
 {
     if(led_mappings.empty())
     {

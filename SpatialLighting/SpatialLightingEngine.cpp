@@ -502,7 +502,7 @@ void AppendControllerOccluders(std::vector<OccluderAabb>& out, float grid_scale_
         return;
     }
 
-    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     const float body_pad = MMToGridUnits(22.0f, scale_mm);
 
     for(size_t ctrl_index = 0; ctrl_index < transforms->size(); ++ctrl_index)
@@ -608,7 +608,7 @@ void BuildSpatialOccluders(std::vector<OccluderQuad>& out,
 
 void AppendDisplayPlaneOccluders(std::vector<OccluderQuad>& out, float grid_scale_mm)
 {
-    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     for(DisplayPlane3D* plane : DisplayPlaneManager::instance()->GetDisplayPlanes())
     {
         if(!plane || !plane->IsVisible())

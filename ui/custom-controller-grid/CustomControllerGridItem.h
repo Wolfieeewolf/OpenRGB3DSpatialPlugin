@@ -7,6 +7,7 @@
 #include <utility>
 #include "CustomControllerGridCell.h"
 #include "CustomControllerGridLayoutMath.h"
+#include "GridSpaceUtils.h"
 class CustomControllerGridItem : public QGraphicsItem
 {
 public:
@@ -37,7 +38,7 @@ public:
 private:
     int grid_width_  = 0;
     int grid_height_ = 0;
-    float mm_per_unit_ = CustomControllerGridLayoutMath::kDefaultMmPerUnit;
+    float mm_per_unit_ = DEFAULT_GRID_SCALE_MM;
     QVector<float> column_widths_mm_;
     QVector<float> row_heights_mm_;
     QVector<CustomControllerGridCellVisual> cells_;

@@ -28,12 +28,12 @@ public:
 
     void bindParams(QObject* owner,
                      RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                     const std::function<void()>& on_placement_changed,
-                     const std::function<void()>& on_tune_changed);
+                     const std::function<void()>& placementChanged,
+                     const std::function<void()>& tuneChanged);
 
     void bindRelayTuneParams(QObject* owner,
                              RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                             const std::function<void()>& on_tune_changed);
+                             const std::function<void()>& tuneChanged);
 
     void syncFromParams(const RoomSpatialLightingUi::RoomSpatialLightParams& params);
 
@@ -43,7 +43,7 @@ private:
     void syncRelayTuneFromParams(const RoomSpatialLightingUi::RoomSpatialLightParams& params);
     void bindRelayTuneSliders(QObject* owner,
                               RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                              const std::function<void()>& on_tune_changed);
+                              const std::function<void()>& tuneChanged);
 
     Ui::RoomSpatialLightSettingsPanel* ui = nullptr;
 };

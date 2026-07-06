@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <cstdint>
 
-#define DEFAULT_ROOM_SIZE_MM 1000.0f
-
 namespace
 {
 
@@ -90,14 +88,19 @@ namespace
     }
 }
 
+float SafeGridScaleMm(float grid_scale_mm)
+{
+    return (grid_scale_mm > 0.001f) ? grid_scale_mm : DEFAULT_GRID_SCALE_MM;
+}
+
 float MMToGridUnits(float mm, float grid_scale_mm)
 {
-    return (grid_scale_mm > 0.001f) ? (mm / grid_scale_mm) : mm;
+    return mm / SafeGridScaleMm(grid_scale_mm);
 }
 
 float GridUnitsToMM(float units, float grid_scale_mm)
 {
-    return (grid_scale_mm > 0.001f) ? (units * grid_scale_mm) : units;
+    return units * SafeGridScaleMm(grid_scale_mm);
 }
 
 GridExtents ResolveGridExtents(const ManualRoomSettings& settings,

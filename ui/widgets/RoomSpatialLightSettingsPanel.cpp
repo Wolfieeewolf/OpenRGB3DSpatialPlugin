@@ -106,16 +106,16 @@ void RoomSpatialLightSettingsPanel::syncRelayTuneFromParams(const RoomSpatialLig
 
 void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
                                                          RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                                                         const std::function<void()>& on_tune_changed)
+                                                         const std::function<void()>& tuneChanged)
 {
     ui->glowSizeRow->configure(10, 400, static_cast<int>(params.glow_radius_mm));
     ui->glowSizeRow->bindValueChanged(
         owner,
-        [&params, on_tune_changed](int v) {
+        [&params, tuneChanged](int v) {
             params.glow_radius_mm = static_cast<float>(v);
-            if(on_tune_changed)
+            if(tuneChanged)
             {
-                on_tune_changed();
+                tuneChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral(" mm"); });
@@ -123,11 +123,11 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
     ui->lightReachRow->configure(50, 5000, static_cast<int>(params.light_reach_mm));
     ui->lightReachRow->bindValueChanged(
         owner,
-        [&params, on_tune_changed](int v) {
+        [&params, tuneChanged](int v) {
             params.light_reach_mm = static_cast<float>(v);
-            if(on_tune_changed)
+            if(tuneChanged)
             {
-                on_tune_changed();
+                tuneChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral(" mm"); });
@@ -135,11 +135,11 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
     ui->roomFillRow->configure(0, 100, static_cast<int>(params.room_fill));
     ui->roomFillRow->bindValueChanged(
         owner,
-        [&params, on_tune_changed](int v) {
+        [&params, tuneChanged](int v) {
             params.room_fill = static_cast<float>(v);
-            if(on_tune_changed)
+            if(tuneChanged)
             {
-                on_tune_changed();
+                tuneChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
@@ -147,39 +147,39 @@ void RoomSpatialLightSettingsPanel::bindRelayTuneSliders(QObject* owner,
     ui->ambientOcclusionRow->configure(0, 100, static_cast<int>(params.ao_strength));
     ui->ambientOcclusionRow->bindValueChanged(
         owner,
-        [&params, on_tune_changed](int v) {
+        [&params, tuneChanged](int v) {
             params.ao_strength = static_cast<float>(v);
-            if(on_tune_changed)
+            if(tuneChanged)
             {
-                on_tune_changed();
+                tuneChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
-    ui->roomWallsRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
+    ui->roomWallsRow->bindToggled(owner, [&params, tuneChanged](bool on) {
         params.use_room_walls = on;
-        if(on_tune_changed)
+        if(tuneChanged)
         {
-            on_tune_changed();
+            tuneChanged();
         }
     });
 
-    ui->shadowsRow->bindToggled(owner, [&params, on_tune_changed](bool on) {
+    ui->shadowsRow->bindToggled(owner, [&params, tuneChanged](bool on) {
         params.use_occlusion = on;
         params.use_controller_occlusion = on;
-        if(on_tune_changed)
+        if(tuneChanged)
         {
-            on_tune_changed();
+            tuneChanged();
         }
     });
 }
 
 void RoomSpatialLightSettingsPanel::bindRelayTuneParams(QObject* owner,
                                                         RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                                                        const std::function<void()>& on_tune_changed)
+                                                        const std::function<void()>& tuneChanged)
 {
     syncRelayTuneFromParams(params);
-    bindRelayTuneSliders(owner, params, on_tune_changed);
+    bindRelayTuneSliders(owner, params, tuneChanged);
 }
 
 void RoomSpatialLightSettingsPanel::syncFromParams(const RoomSpatialLightingUi::RoomSpatialLightParams& params)
@@ -199,19 +199,19 @@ void RoomSpatialLightSettingsPanel::syncFromParams(const RoomSpatialLightingUi::
 
 void RoomSpatialLightSettingsPanel::bindParams(QObject* owner,
                                                RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                                               const std::function<void()>& on_placement_changed,
-                                               const std::function<void()>& on_tune_changed)
+                                               const std::function<void()>& placementChanged,
+                                               const std::function<void()>& tuneChanged)
 {
     syncFromParams(params);
 
     QComboBox* place = ui->placementRow->combo();
     setCustomPlacementVisible(params.placement_mode == 3);
-    QObject::connect(place, QOverload<int>::of(&QComboBox::currentIndexChanged), owner, [this, &params, on_placement_changed](int idx) {
+    QObject::connect(place, QOverload<int>::of(&QComboBox::currentIndexChanged), owner, [this, &params, placementChanged](int idx) {
         params.placement_mode = idx;
         setCustomPlacementVisible(idx == 3);
-        if(on_placement_changed)
+        if(placementChanged)
         {
-            on_placement_changed();
+            placementChanged();
         }
     });
 
@@ -221,36 +221,36 @@ void RoomSpatialLightSettingsPanel::bindParams(QObject* owner,
 
     ui->customXRow->bindValueChanged(
         owner,
-        [&params, on_placement_changed](int v) {
+        [&params, placementChanged](int v) {
             params.custom_u = static_cast<float>(v) / 100.0f;
-            if(on_placement_changed)
+            if(placementChanged)
             {
-                on_placement_changed();
+                placementChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     ui->customYRow->bindValueChanged(
         owner,
-        [&params, on_placement_changed](int v) {
+        [&params, placementChanged](int v) {
             params.custom_v = static_cast<float>(v) / 100.0f;
-            if(on_placement_changed)
+            if(placementChanged)
             {
-                on_placement_changed();
+                placementChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
     ui->customZRow->bindValueChanged(
         owner,
-        [&params, on_placement_changed](int v) {
+        [&params, placementChanged](int v) {
             params.custom_w = static_cast<float>(v) / 100.0f;
-            if(on_placement_changed)
+            if(placementChanged)
             {
-                on_placement_changed();
+                placementChanged();
             }
         },
         [](int v) { return QString::number(v) + QStringLiteral("%"); });
 
-    bindRelayTuneSliders(owner, params, on_tune_changed);
+    bindRelayTuneSliders(owner, params, tuneChanged);
 }

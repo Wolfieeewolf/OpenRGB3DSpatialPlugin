@@ -45,7 +45,7 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBController* contro
 
     ui->nameLabel->setWordWrap(false);
     ui->nameLabel->setMinimumWidth(0);
-    connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &CustomControllerDeviceWidget::on_name_clicked);
+    connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &CustomControllerDeviceWidget::nameClicked);
 
     ui->granularityCombo->addItem(tr("Device"));
     ui->granularityCombo->addItem(tr("Zone"));
@@ -53,17 +53,17 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBController* contro
     applyGranularityComboStyle(ui->granularityCombo);
     ui->granularityCombo->setToolTip(tr("What to add: whole device, one zone, or one LED"));
     connect(ui->granularityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &CustomControllerDeviceWidget::on_granularity_changed);
+            &CustomControllerDeviceWidget::granularityChanged);
 
     applyItemComboStyle(ui->itemCombo);
     ui->itemCombo->setItemDelegate(new ColorComboDelegate(host_));
     ui->itemCombo->setToolTip(tr("Zone or LED to place on the grid"));
     connect(ui->itemCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &CustomControllerDeviceWidget::on_item_changed);
+            &CustomControllerDeviceWidget::itemChanged);
 
     ui->enableButton->setFont(OpenRGBPluginsFont::GetFont());
     ui->enableButton->setToolTip(tr("Add to or remove from layout grid at the selected cell"));
-    connect(ui->enableButton, &QToolButton::toggled, this, &CustomControllerDeviceWidget::on_enable_toggled);
+    connect(ui->enableButton, &QToolButton::toggled, this, &CustomControllerDeviceWidget::handleEnableButtonToggled);
 
     rebuildItemCombo();
     updateNameLabelElide();
@@ -264,10 +264,10 @@ void CustomControllerDeviceWidget::updatePlusFromSource()
     }
 
     const CustomControllerSourceRef ref = currentSource();
-    const bool on_grid                  = ref.isValid() && host_->IsSourceItemOnGrid(ref);
+    const bool grid                  = ref.isValid() && host_->IsSourceItemOnGrid(ref);
 
     ui->enableButton->blockSignals(true);
-    ui->enableButton->setChecked(on_grid);
+    ui->enableButton->setChecked(grid);
     updateEnableIcon();
     ui->enableButton->blockSignals(false);
 }
@@ -283,11 +283,11 @@ void CustomControllerDeviceWidget::refreshFromHost()
 
     const CustomControllerSourceRef ref = currentSource();
     const bool grid_ready               = host_->selectedGridCellValid();
-    const bool on_grid                  = ref.isValid() && host_->IsSourceItemOnGrid(ref);
+    const bool grid                  = ref.isValid() && host_->IsSourceItemOnGrid(ref);
     const bool can_add                  = ref.isValid() && host_->CanAddSourceToGrid(ref);
 
     updatePlusFromSource();
-    setPlusEnabled(grid_ready && ref.isValid() && (on_grid || can_add));
+    setPlusEnabled(grid_ready && ref.isValid() && (grid || can_add));
 }
 
 void CustomControllerDeviceWidget::setRowSelected(bool selected)
@@ -321,20 +321,20 @@ void CustomControllerDeviceWidget::setPlusEnabled(bool enabled)
     }
 }
 
-void CustomControllerDeviceWidget::on_name_clicked()
+void CustomControllerDeviceWidget::nameClicked()
 {
     emit deviceActivated(controller_index_);
     notifySourceChanged();
 }
 
-void CustomControllerDeviceWidget::on_granularity_changed(int)
+void CustomControllerDeviceWidget::granularityChanged(int)
 {
     rebuildItemCombo();
     emit deviceActivated(controller_index_);
     notifySourceChanged();
 }
 
-void CustomControllerDeviceWidget::on_item_changed(int index)
+void CustomControllerDeviceWidget::itemChanged(int index)
 {
     Q_UNUSED(index);
     updatePlusFromSource();
@@ -342,7 +342,7 @@ void CustomControllerDeviceWidget::on_item_changed(int index)
     notifySourceChanged();
 }
 
-void CustomControllerDeviceWidget::on_enable_toggled(bool checked)
+void CustomControllerDeviceWidget::handleEnableButtonToggled(bool checked)
 {
     updateEnableIcon();
     const CustomControllerSourceRef ref = currentSource();

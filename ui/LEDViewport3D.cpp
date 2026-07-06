@@ -641,8 +641,8 @@ bool LEDViewport3D::FocusSelectionInView()
             focus_x = t.position.x;
             focus_y = t.position.y;
             focus_z = t.position.z;
-            const float w = plane->GetWidthMM() / std::max(grid_scale_mm, 0.001f);
-            const float h = plane->GetHeightMM() / std::max(grid_scale_mm, 0.001f);
+            const float w = MMToGridUnits(plane->GetWidthMM(), grid_scale_mm);
+            const float h = MMToGridUnits(plane->GetHeightMM(), grid_scale_mm);
             span_units = std::max(w, h) * 1.25f;
         }
     }

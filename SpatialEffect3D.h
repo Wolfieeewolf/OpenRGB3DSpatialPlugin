@@ -24,6 +24,7 @@
 
 #include "LEDPosition3D.h"
 #include "SpatialEffectTypes.h"
+#include "GridSpaceUtils.h"
 #include "SpatialRoom/SpatialRoomTypes.h"
 #include "SpatialLighting/SpatialLightingEngine.h"
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
@@ -64,7 +65,7 @@ struct GridContext3D
                   float maxY,
                   float minZ,
                   float maxZ,
-                  float scale_mm = 10.0f)
+                  float scale_mm = DEFAULT_GRID_SCALE_MM)
         : min_x(minX), max_x(maxX),
           min_y(minY), max_y(maxY),
           min_z(minZ), max_z(maxZ),

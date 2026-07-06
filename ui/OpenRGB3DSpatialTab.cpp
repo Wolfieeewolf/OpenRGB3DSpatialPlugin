@@ -122,7 +122,7 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
 
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::CoarseTimer);
-    connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::on_effect_timer_timeout);
+    connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::effectTimerTimeout);
 
     if(resource_manager)
     {
@@ -247,20 +247,20 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     {
     }
 
-    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::on_viewport_controller_selected);
-    connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::on_controller_position_changed);
-    connect(viewport, &LEDViewport3D::ControllerRotationChanged, this, &OpenRGB3DSpatialTab::on_controller_rotation_changed);
-    connect(viewport, &LEDViewport3D::ControllerDeleteRequested, this, &OpenRGB3DSpatialTab::on_remove_controller_from_viewport);
+    connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::viewportControllerSelected);
+    connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::controllerPositionChanged);
+    connect(viewport, &LEDViewport3D::ControllerRotationChanged, this, &OpenRGB3DSpatialTab::controllerRotationChanged);
+    connect(viewport, &LEDViewport3D::ControllerDeleteRequested, this, &OpenRGB3DSpatialTab::removeControllerFromViewport);
     connect(viewport, &LEDViewport3D::ReferencePointSelected, this, [this](int index) {
-        on_ref_point_selected(index, false);
+        refPointSelected(index, false);
     });
-    connect(viewport, &LEDViewport3D::DisplayPlaneSelected, this, &OpenRGB3DSpatialTab::on_viewport_display_plane_selected);
+    connect(viewport, &LEDViewport3D::DisplayPlaneSelected, this, &OpenRGB3DSpatialTab::viewportDisplayPlaneSelected);
     connect(viewport, &LEDViewport3D::RoomViewportSelected, this, [this](bool) {
         UpdateSelectionInfo();
     });
-    connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::on_ref_point_position_changed);
-    connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::on_display_plane_position_signal);
-    connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::on_display_plane_rotation_signal);
+    connect(viewport, &LEDViewport3D::ReferencePointPositionChanged, this, &OpenRGB3DSpatialTab::refPointPositionChanged);
+    connect(viewport, &LEDViewport3D::DisplayPlanePositionChanged, this, &OpenRGB3DSpatialTab::displayPlanePositionSignal);
+    connect(viewport, &LEDViewport3D::DisplayPlaneRotationChanged, this, &OpenRGB3DSpatialTab::displayPlaneRotationSignal);
 
     viewport->installViewportKeyboardShortcuts(this);
 }
@@ -337,7 +337,7 @@ void OpenRGB3DSpatialTab::bindUiPanels()
         {
             const QSignalBlocker stack_sel_block(effectStackList());
             effectStackList()->setCurrentRow(0);
-            on_effect_stack_selection_changed(0);
+            effectStackSelectionChanged(0);
         }
         UpdateStartStopAllButtons();
     });
@@ -572,7 +572,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     if(!category_data.isValid())
     {
         effectLibraryList()->blockSignals(restore_signals);
-        on_effect_library_selection_changed(-1);
+        effectLibrarySelectionChanged(-1);
         return;
     }
 
@@ -585,7 +585,7 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
     if(cat_it == categorized.end())
     {
         effectLibraryList()->blockSignals(restore_signals);
-        on_effect_library_selection_changed(-1);
+        effectLibrarySelectionChanged(-1);
         return;
     }
 
@@ -677,10 +677,10 @@ void OpenRGB3DSpatialTab::PopulateEffectLibrary()
 
     effectLibraryList()->blockSignals(restore_signals);
     effectLibraryList()->setCurrentRow(-1);
-    on_effect_library_selection_changed(-1);
+    effectLibrarySelectionChanged(-1);
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_search_changed(const QString&)
+void OpenRGB3DSpatialTab::effectLibrarySearchChanged(const QString&)
 {
     PopulateEffectLibrary();
 }
@@ -747,11 +747,11 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
         effectStackList()->setCurrentRow(new_index);
         effectStackList()->blockSignals(restore_stack_list_signals);
     }
-    on_effect_stack_selection_changed(new_index);
+    effectStackSelectionChanged(new_index);
     SaveEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_category_changed(int)
+void OpenRGB3DSpatialTab::effectLibraryCategoryChanged(int)
 {
     UpdateEffectLibraryGameFilterVisibility();
     if(effectCategoryCombo())
@@ -766,12 +766,12 @@ void OpenRGB3DSpatialTab::on_effect_library_category_changed(int)
     PopulateEffectLibrary();
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_game_changed(int)
+void OpenRGB3DSpatialTab::effectLibraryGameChanged(int)
 {
     PopulateEffectLibrary();
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_selection_changed(int row)
+void OpenRGB3DSpatialTab::effectLibrarySelectionChanged(int row)
 {
     const int si = effectStackList() ? effectStackList()->currentRow() : -1;
     if(si >= 0 && si < (int)effect_stack.size())
@@ -795,7 +795,7 @@ void OpenRGB3DSpatialTab::on_effect_library_selection_changed(int row)
     UpdateEffectStackRowSelectorVisibility();
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_add_clicked()
+void OpenRGB3DSpatialTab::effectLibraryAddClicked()
 {
     if(!effectLibraryList())
     {
@@ -823,7 +823,7 @@ void OpenRGB3DSpatialTab::on_effect_library_add_clicked()
     AddEffectInstanceToStack(class_name, ui_name);
 }
 
-void OpenRGB3DSpatialTab::on_effect_library_item_double_clicked(QListWidgetItem* item)
+void OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked(QListWidgetItem* item)
 {
     if(!item)
     {
@@ -903,7 +903,7 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     }
 }
 
-void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
+void OpenRGB3DSpatialTab::gridDimensionsChanged()
 {
     if(gridXSpin()) custom_grid_x = gridXSpin()->value();
     if(gridYSpin()) custom_grid_y = gridYSpin()->value();
@@ -922,7 +922,7 @@ void OpenRGB3DSpatialTab::on_grid_dimensions_changed()
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::on_grid_snap_toggled(bool enabled)
+void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
 {
     if(viewport)
     {
@@ -931,7 +931,7 @@ void OpenRGB3DSpatialTab::on_grid_snap_toggled(bool enabled)
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::on_gpu_labels_toggled(bool enabled)
+void OpenRGB3DSpatialTab::gpuLabelsToggled(bool enabled)
 {
     if(viewport)
     {
@@ -940,7 +940,7 @@ void OpenRGB3DSpatialTab::on_gpu_labels_toggled(bool enabled)
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::on_gpu_scene_toggled(bool enabled)
+void OpenRGB3DSpatialTab::gpuSceneToggled(bool enabled)
 {
     if(viewport)
     {
@@ -949,7 +949,7 @@ void OpenRGB3DSpatialTab::on_gpu_scene_toggled(bool enabled)
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::on_room_guide_labels_toggled(bool enabled)
+void OpenRGB3DSpatialTab::roomGuideLabelsToggled(bool enabled)
 {
     if(viewport)
     {
@@ -958,7 +958,7 @@ void OpenRGB3DSpatialTab::on_room_guide_labels_toggled(bool enabled)
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::on_frame_selection_in_view()
+void OpenRGB3DSpatialTab::frameSelectionInView()
 {
     if(viewport)
     {
@@ -966,7 +966,7 @@ void OpenRGB3DSpatialTab::on_frame_selection_in_view()
     }
 }
 
-void OpenRGB3DSpatialTab::on_reset_viewport_camera()
+void OpenRGB3DSpatialTab::resetViewportCamera()
 {
     if(viewport)
     {
@@ -1008,7 +1008,7 @@ void OpenRGB3DSpatialTab::UpdateSelectionInfo()
     selectionInfoLabel()->setFont(info_font);
 }
 
-void OpenRGB3DSpatialTab::on_effect_changed(int index)
+void OpenRGB3DSpatialTab::effectChanged(int index)
 {
     if(!effectCombo() || !effectStackList())
     {
@@ -1140,7 +1140,7 @@ void OpenRGB3DSpatialTab::UpdateEffectCombo()
     effectCombo()->setCurrentIndex(desired_index);
 }
 
-void OpenRGB3DSpatialTab::on_effect_zone_changed(int index)
+void OpenRGB3DSpatialTab::effectZoneChanged(int index)
 {
     if(!effectZoneCombo())
     {
@@ -1182,7 +1182,7 @@ void OpenRGB3DSpatialTab::on_effect_zone_changed(int index)
     SaveEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
+void OpenRGB3DSpatialTab::effectOriginChanged(int index)
 {
     if(!effectOriginCombo())
     {
@@ -1233,7 +1233,7 @@ void OpenRGB3DSpatialTab::on_effect_origin_changed(int index)
     if(viewport) viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::on_effect_bounds_changed(int index)
+void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
 {
     if(!effectBoundsCombo())
     {
@@ -1440,12 +1440,8 @@ void OpenRGB3DSpatialTab::SyncSpatialLightingSceneForUi()
 
 double OpenRGB3DSpatialTab::EffectiveGridScaleMm() const
 {
-    double scale = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-    if(scale < 0.001)
-    {
-        scale = 10.0;
-    }
-    return scale;
+    const double scale = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
+    return static_cast<double>(SafeGridScaleMm(static_cast<float>(scale)));
 }
 
 void OpenRGB3DSpatialTab::ScenePositionAxisLimitsMm(int axis, double& min_mm, double& max_mm) const
@@ -1567,7 +1563,8 @@ void OpenRGB3DSpatialTab::ApplyScenePositionAbsoluteMm(int axis, double value_mm
     {
         value_mm = 0.0;
     }
-    ApplyPositionComponent(axis, value_mm / EffectiveGridScaleMm());
+    ApplyPositionComponent(axis,
+                           MMToGridUnits(static_cast<float>(value_mm), static_cast<float>(EffectiveGridScaleMm())));
 }
 
 void OpenRGB3DSpatialTab::ApplyPositionComponent(int axis, double value)

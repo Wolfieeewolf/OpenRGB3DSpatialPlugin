@@ -42,17 +42,17 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
            "that volume."));
 
     connect(ui->effectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_changed);
+            &OpenRGB3DSpatialTab::effectChanged);
 
     tab->PopulateZoneTargetCombo(ui->zoneCombo, -1);
-    connect(ui->zoneCombo, SIGNAL(currentIndexChanged(int)), tab, SLOT(on_effect_zone_changed(int)));
+    connect(ui->zoneCombo, SIGNAL(currentIndexChanged(int)), tab, SLOT(effectZoneChanged(int)));
 
     ui->originCombo->addItem(tr("Mapped lights center (recommended)"), QVariant(-4));
     ui->originCombo->addItem(tr("Room box center"), QVariant(-1));
     ui->originCombo->addItem(tr("Target zone center"), QVariant(-2));
     ui->originCombo->addItem(tr("No anchor (world 0,0,0)"), QVariant(-3));
     connect(ui->originCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_origin_changed);
+            &OpenRGB3DSpatialTab::effectOriginChanged);
 
     ui->boundsCombo->addItem(tr("Global bounds"), QVariant((int)SpatialEffect3D::BOUNDS_MODE_GLOBAL));
     ui->boundsCombo->setItemData(
@@ -66,7 +66,7 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
            "only cover part of the room."),
         Qt::ToolTipRole);
     connect(ui->boundsCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_bounds_changed);
+            &OpenRGB3DSpatialTab::effectBoundsChanged);
 
     ui->stackEffectTypeCombo->clear();
     ui->stackEffectTypeCombo->addItem(QStringLiteral("None"), QString());
@@ -77,10 +77,10 @@ void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
                                           QString::fromStdString(reg.class_name));
     }
     connect(ui->stackEffectTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_stack_effect_type_changed);
+            &OpenRGB3DSpatialTab::stackEffectTypeChanged);
 
     connect(ui->stackEffectZoneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_stack_effect_zone_changed);
+            &OpenRGB3DSpatialTab::stackEffectZoneChanged);
 
     tab->UpdateEffectCombo();
     tab->UpdateStackEffectZoneCombo();

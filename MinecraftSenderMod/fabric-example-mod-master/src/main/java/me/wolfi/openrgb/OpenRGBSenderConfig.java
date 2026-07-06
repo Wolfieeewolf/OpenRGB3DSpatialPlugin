@@ -24,6 +24,8 @@ public final class OpenRGBSenderConfig
     public boolean sendRoomSampleFrames = true;
     /** Probe-based ambient cubemap (cheap CPU reconstruction from world_light probes). */
     public boolean sendGpuPanoramaFrames = false;
+    /** Phase 2 spike: read back a center patch from the GPU main render target (see logs). */
+    public boolean experimentalGpuReadback = false;
     /** Use shared-memory files under %ProgramData%/OpenRGB3DSpatial. */
     public boolean useSharedMemory = true;
     /** Client ticks between telemetry batches (1 = 20 Hz at 20 tps; room samples always run every tick). */
@@ -68,6 +70,10 @@ public final class OpenRGBSenderConfig
                 if(raw.contains("\"sendGpuPanoramaFrames\""))
                 {
                     sendGpuPanoramaFrames = loaded.sendGpuPanoramaFrames;
+                }
+                if(raw.contains("\"experimentalGpuReadback\""))
+                {
+                    experimentalGpuReadback = loaded.experimentalGpuReadback;
                 }
                 if(raw.contains("\"useSharedMemory\""))
                 {

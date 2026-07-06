@@ -48,10 +48,10 @@ signals:
     void sourceChanged(const CustomControllerSourceRef& source);
 
 private slots:
-    void on_name_clicked();
-    void on_granularity_changed(int index);
-    void on_item_changed(int index);
-    void on_enable_toggled(bool checked);
+    void nameClicked();
+    void granularityChanged(int index);
+    void itemChanged(int index);
+    void handleEnableButtonToggled(bool checked);
 
 private:
     void applyCompactComboStyle(QComboBox* combo);

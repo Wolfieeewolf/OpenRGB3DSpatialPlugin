@@ -10,6 +10,8 @@
 #include "Game/RoomSampleConfigPublisher.h"
 #include "GpuPanoramaFrameShmReader.h"
 #include "RoomSampleFrameShmReader.h"
+#include "Game/GameTelemetryBridge.h"
+#include "GridSpaceUtils.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -184,7 +186,7 @@ static float ComputeRoomToWorldScale(const GridContext3D& grid, float blocks_per
 {
     const float bpm = std::max(0.05f, blocks_per_m);
     const float mm_per_block = 1000.0f / bpm;
-    const float grid_mm = std::max(0.001f, grid.grid_scale_mm);
+    const float grid_mm = SafeGridScaleMm(grid.grid_scale_mm);
     const float grid_units_per_block = mm_per_block / grid_mm;
     if(grid_units_per_block < 1e-3f)
     {
@@ -614,7 +616,9 @@ static float HealthStripCoord01(float gx, float gy, float gz, const GridContext3
     return u;
 }
 
-QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channels)
+QWidget* CreateSettingsWidget(QWidget* parent,
+                              Settings& s,
+                              std::uint32_t channels)
 {
     QScrollArea* scroll = new QScrollArea(parent);
     scroll->setWidgetResizable(true);
@@ -711,8 +715,9 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         QLabel* hint = new QLabel(
             QStringLiteral(
                 "MineLights-style 3D world color: each LED samples directional biome/light probes "
-                "from world_light (4 height layers × 8 compass sectors). Set the effect 3D origin at "
-                "your standing reference. Room yaw aligns your room layout with in-game look (not player position)."),
+                "from world_light (4 height layers × 8 compass sectors). Place a reference point at "
+                "eye height, set this effect's 3D origin there, then stand at that spot in-game. "
+                "Room yaw aligns your room layout with in-game look (not player position)."),
             panel);
         hint->setWordWrap(true);
         world_layout->addWidget(hint);
@@ -733,10 +738,11 @@ QWidget* CreateSettingsWidget(QWidget* parent, Settings& s, std::uint32_t channe
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "VR-room mode: your physical room maps 1:1 into Minecraft. Stand at your player "
-                "reference and set this effect's 3D origin there. Room yaw rotates the room against "
-                "your in-game look. Player position offsets slide the room origin in fixed grid axes "
-                "(right / up / forward depth) so turning does not undo your calibration."),
+                "VR-room mode: your physical room maps 1:1 into Minecraft. Place a reference point at "
+                "eye height where you stand, set this effect's 3D origin to that reference, then stand "
+                "there in-game. Room colours sample from your character's eyes (not feet) so ceiling "
+                "and wall LEDs line up with what you see. Room yaw fine-tunes heading; block offsets "
+                "trim origin without turning."),
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);

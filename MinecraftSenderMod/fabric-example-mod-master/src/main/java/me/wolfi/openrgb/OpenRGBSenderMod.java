@@ -64,7 +64,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private final RoomSampleConfigReader roomSampleConfigReader = new RoomSampleConfigReader();
     private final RoomSampleFrameShmWriter roomSampleFrameShmWriter = new RoomSampleFrameShmWriter();
     private final GpuPanoramaFrameShmWriter cubemapShmWriter = new GpuPanoramaFrameShmWriter();
-    private boolean loggedRoomShmPath = false;
+    private int lastLoggedRoomConfigId = -1;
+    private int lastLoggedRoomSizeX = -1;
+    private int lastLoggedRoomSizeY = -1;
+    private int lastLoggedRoomSizeZ = -1;
+    private long lastWaitingForConfigLogMs = 0L;
     /** Reused across frames to avoid per-tick allocation. Resized only when grid dimensions change. */
     private byte[] roomSampleRgbaBuffer = new byte[0];
     /** Reused cubemap pixel buffer (16×16×6×4 bytes). */
@@ -82,6 +86,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private int cGndR = 90,  cGndG = 110, cGndB = 70;
     private float cRain = 0f, cThunder = 0f, cIntensity = 1f;
     private float cFwdX = 0f, cFwdZ = 1f;
+    private float cEyeX = 0f, cEyeY = 0f, cEyeZ = 0f;
     private final int[][] cProbe = new int[4 * 9][3];
 
     @Override
@@ -89,6 +94,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
     {
         instance = this;
         OpenRGBSenderConfig.get();
+        GpuFramebufferCapturer.register();
     }
 
     public static void invalidateUdpTarget()
@@ -117,6 +123,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         // Block-raycast cubemap fallback (only when room samples are off).
         GpuPanoramaCapturer.onClientTick(client);
+        GpuFramebufferCapturer.onClientTick(client);
         // Room samples run every tick independently — not gated by telemetryTickDivisor —
         // so LED colours stay in sync with the game world at up to 20 Hz regardless of telemetry rate.
         instance.tickRoomSamples(client);
@@ -139,6 +146,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             // Read config once and share with both interval check and frame send.
             final RoomSampleConfigReader.Config roomCfg = roomSampleConfigReader.readLatest();
+            logRoomConfigState(roomCfg);
             final int roomInterval = effectiveRoomSampleInterval(cfg, roomCfg);
             if(roomTickCounter % roomInterval == 0)
             {
@@ -217,7 +225,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         String json = String.format(Locale.US,
                 "{\"version\":1,\"type\":\"player_pose\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"fx\":%.5f,\"fy\":%.5f,\"fz\":%.5f,\"ux\":0.0,\"uy\":1.0,\"uz\":0.0,\"blocks_per_m\":%.4f}",
                 System.currentTimeMillis(),
-                player.getX(), player.getY(), player.getZ(),
+                player.getX(), player.getEyeY(), player.getZ(),
                 look.x, look.y, look.z,
                 cfg.blocksPerMeter);
         sendJson(socket, address, json);
@@ -500,6 +508,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         cGndR = groundR; cGndG = groundG; cGndB = groundB;
         cRain = rain; cThunder = thunder; cIntensity = smoothWorldIntensity;
         cFwdX = (float)fx; cFwdZ = (float)fz;
+        cEyeX = (float)player.getX();
+        cEyeY = (float)player.getEyeY();
+        cEyeZ = (float)player.getZ();
         for(int i = 0; i < 4 * 9; i++)
         {
             cProbe[i][0] = smoothLayeredProbeRgb[i][0];
@@ -513,7 +524,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         String json = String.format(Locale.US,
                 "{\"version\":1,\"type\":\"world_light\",\"timestamp_ms\":%d,\"source\":\"minecraft-fabric\",\"x\":%.4f,\"y\":%.4f,\"z\":%.4f,\"dir_x\":%.5f,\"dir_y\":%.5f,\"dir_z\":%.5f,\"dir_focus\":%.4f,\"r\":%d,\"g\":%d,\"b\":%d,\"intensity\":%.4f,\"sky_r\":%d,\"sky_g\":%d,\"sky_b\":%d,\"mid_r\":%d,\"mid_g\":%d,\"mid_b\":%d,\"ground_r\":%d,\"ground_g\":%d,\"ground_b\":%d,\"biome_sky_r\":%d,\"biome_sky_g\":%d,\"biome_sky_b\":%d,\"biome_fog_r\":%d,\"biome_fog_g\":%d,\"biome_fog_b\":%d,\"water_fog_r\":%d,\"water_fog_g\":%d,\"water_fog_b\":%d,\"water_submerge\":%.4f,\"env_rain\":%.4f,\"env_thunder\":%.4f,\"dimension\":\"%s\",\"probe_layer_profile\":4,\"probe_layer_count\":4,\"probe_sector_count\":9,\"probe_rgb\":[%s]}",
                 System.currentTimeMillis(),
-                player.getX(), player.getY() + 1.0, player.getZ(),
+                player.getX(), player.getEyeY(), player.getZ(),
                 lightDir.x, lightDir.y, lightDir.z, lightFocus,
                 r, g, bl, smoothWorldIntensity,
                 smoothSkyR, smoothSkyG, smoothSkyB,
@@ -949,13 +960,52 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final int frameId = (int)(now & 0x7FFFFFFFL);
         if(roomSampleFrameShmWriter.writeFrame(frameId, now, cfg.configId, sx, sy, sz, rgba))
         {
-            if(!loggedRoomShmPath)
-            {
-                loggedRoomShmPath = true;
-                LOGGER.info("Room VR samples via shared memory ({}x{}x{} cells)", sx, sy, sz);
-            }
             sendRoomSampleShmNotify(socket, address, frameId, now, cfg.configId);
         }
+    }
+
+    private void logRoomConfigState(RoomSampleConfigReader.Config cfg)
+    {
+        if(cfg == null || !cfg.isEnabled())
+        {
+            final long now = System.currentTimeMillis();
+            if(now - lastWaitingForConfigLogMs >= 15000L)
+            {
+                lastWaitingForConfigLogMs = now;
+                LOGGER.info("Waiting for room config from OpenRGB (select Minecraft effect with Room VR tint, then join world)");
+            }
+            return;
+        }
+
+        final int sx = cfg.sizeX;
+        final int sy = cfg.sizeY;
+        final int sz = cfg.sizeZ;
+        final boolean first = lastLoggedRoomSizeX < 0;
+        final boolean changed = cfg.configId != lastLoggedRoomConfigId
+                || sx != lastLoggedRoomSizeX
+                || sy != lastLoggedRoomSizeY
+                || sz != lastLoggedRoomSizeZ;
+        if(!first && !changed)
+        {
+            return;
+        }
+
+        if(first)
+        {
+            LOGGER.info("Room VR samples via shared memory ({}x{}x{} cells, config id {})", sx, sy, sz, cfg.configId);
+        }
+        else
+        {
+            LOGGER.info("Room VR config updated: {}x{}x{} -> {}x{}x{} (config id {} -> {})",
+                    lastLoggedRoomSizeX, lastLoggedRoomSizeY, lastLoggedRoomSizeZ,
+                    sx, sy, sz,
+                    lastLoggedRoomConfigId, cfg.configId);
+        }
+
+        lastLoggedRoomConfigId = cfg.configId;
+        lastLoggedRoomSizeX = sx;
+        lastLoggedRoomSizeY = sy;
+        lastLoggedRoomSizeZ = sz;
     }
 
 
@@ -1019,9 +1069,15 @@ public class OpenRGBSenderMod implements ClientModInitializer
             }
         }
 
+        final OpenRGBSenderConfig cfg = OpenRGBSenderConfig.get();
+        if(cfg.experimentalGpuReadback)
+        {
+            GpuCubemapCapture.applyToCubemap(cubemapBuffer, W, 6);
+        }
+
         cubemapFrameId++;
         final long now = System.currentTimeMillis();
-        if(cubemapShmWriter.writeFrame(cubemapFrameId, now, 0.0f, 0.0f, 0.0f, W, W, 6, cubemapBuffer))
+        if(cubemapShmWriter.writeFrame(cubemapFrameId, now, cEyeX, cEyeY, cEyeZ, W, W, 6, cubemapBuffer))
         {
             notifyGpuPanoramaShmFrame(cubemapFrameId, now);
         }

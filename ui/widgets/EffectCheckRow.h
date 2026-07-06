@@ -25,7 +25,7 @@ public:
 
     void bindToggled(QObject* owner,
                      const std::function<void(bool)>& apply_value,
-                     const std::function<void()>& on_changed = nullptr);
+                     const std::function<void()>& changed = nullptr);
 
 private:
     Ui::EffectCheckRow* ui = nullptr;

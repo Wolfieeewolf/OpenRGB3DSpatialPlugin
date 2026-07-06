@@ -54,7 +54,7 @@ class CaptureAreaPreviewWidget : public QWidget
 public:
     DisplayPlane3D* display_plane = nullptr;
     std::vector<CaptureZone>* capture_zones = nullptr;
-    std::function<void()> on_value_changed;
+    std::function<void()> valueChangedCallback;
     bool* show_calibration_pattern_ptr = nullptr;
     bool* show_screen_preview_ptr = nullptr;
     float* black_bar_letterbox_percent_ptr = nullptr;
@@ -121,7 +121,7 @@ public:
 
     void SetValueChangedCallback(std::function<void()> callback)
     {
-        on_value_changed = callback;
+        valueChangedCallback = callback;
     }
 
     void AddZone()
@@ -131,7 +131,7 @@ public:
         new_zone.name = "Zone " + std::to_string(capture_zones->size() + 1);
         capture_zones->push_back(new_zone);
         selected_zone_index = (int)capture_zones->size() - 1;
-        if(on_value_changed) on_value_changed();
+        if(valueChangedCallback) valueChangedCallback();
         update();
     }
 
@@ -324,7 +324,7 @@ protected:
                         capture_zones->erase(capture_zones->begin() + i);
                         if(selected_zone_index >= (int)capture_zones->size())
                             selected_zone_index = (int)capture_zones->size() - 1;
-                        if(on_value_changed) on_value_changed();
+                        if(valueChangedCallback) valueChangedCallback();
                         update();
                     }
                     return;
@@ -531,7 +531,7 @@ protected:
             zone.v_max = std::max(0.0f, std::min(1.0f, zone.v_max));
         }
 
-        if(on_value_changed) on_value_changed();
+        if(valueChangedCallback) valueChangedCallback();
         update();
     }
 

@@ -11,6 +11,7 @@
 #include "RoomSampleShmPaths.h"
 #include "Effects3D/Games/Minecraft/MinecraftGameSettings.h"
 #include "SpatialEffect3D.h"
+#include "LogManager.h"
 
 #include <chrono>
 #include <cmath>
@@ -162,6 +163,8 @@ void PublishIfNeeded(const GridContext3D& grid,
         return;
     }
 
+    const bool config_changed = hash != last_hash;
+
     hdr.config_id = hash;
     hdr.sequence = 1;
     if(!WriteConfigFile(hdr))
@@ -173,6 +176,16 @@ void PublishIfNeeded(const GridContext3D& grid,
 
     g_last_config = hdr;
     g_has_last_config = true;
+
+    if(config_changed)
+    {
+        LOG_INFO("[3DSpatial] room config published (%dx%dx%d, config id %u, scale %.4f)",
+                 nx,
+                 ny,
+                 nz,
+                 hdr.config_id,
+                 hdr.room_to_world_scale);
+    }
 
     last_hash = hash;
     last_write_ms = now;

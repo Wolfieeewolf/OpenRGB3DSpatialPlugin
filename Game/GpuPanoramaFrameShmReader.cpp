@@ -226,14 +226,23 @@ bool GpuPanoramaFrameShmReader::TryApplyLatest()
 {
 #ifdef _WIN32
     static thread_local std::uint32_t last_applied_frame_id = 0;
-    static thread_local bool logged_success = false;
+    static thread_local int last_face_w = -1;
+    static thread_local int last_face_h = -1;
+    static thread_local int last_face_count = -1;
     static thread_local ULONGLONG last_file_time = 0;
+    static thread_local unsigned long long last_missing_log_ms = 0;
 
     const std::wstring path = GpuPanoramaShmPaths::FrameFilePathW();
 
     WIN32_FILE_ATTRIBUTE_DATA attrs{};
     if(!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &attrs))
     {
+        const unsigned long long now = NowMs();
+        if(now - last_missing_log_ms > 15000ULL)
+        {
+            last_missing_log_ms = now;
+            LOG_INFO("[3DSpatial] waiting for GPU panorama SHM file from Minecraft mod");
+        }
         return false;
     }
     const ULONGLONG file_time =
@@ -269,16 +278,32 @@ bool GpuPanoramaFrameShmReader::TryApplyLatest()
         return false;
     }
 
-    if(!logged_success)
+    const bool first = last_face_w < 0;
+    const bool layout_changed = (int)hdr.face_w != last_face_w || (int)hdr.face_h != last_face_h ||
+                                (int)hdr.face_count != last_face_count;
+    if(first)
     {
-        logged_success = true;
         LOG_INFO("[3DSpatial] GPU panorama SHM received (id %u, %u faces %ux%u)",
                  hdr.frame_id,
                  hdr.face_count,
                  hdr.face_w,
                  hdr.face_h);
     }
+    else if(layout_changed)
+    {
+        LOG_INFO("[3DSpatial] GPU panorama SHM layout updated: %u faces %dx%d -> %u faces %ux%u (frame id %u)",
+                 (unsigned)last_face_count,
+                 last_face_w,
+                 last_face_h,
+                 hdr.face_count,
+                 hdr.face_w,
+                 hdr.face_h,
+                 hdr.frame_id);
+    }
 
+    last_face_w = hdr.face_w;
+    last_face_h = hdr.face_h;
+    last_face_count = hdr.face_count;
     last_applied_frame_id = hdr.frame_id;
     last_file_time = file_time;
     GameTelemetryBridge::ApplyGpuPanoramaShmFrame(hdr, std::move(rgba));

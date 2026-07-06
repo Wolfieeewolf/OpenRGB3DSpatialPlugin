@@ -71,11 +71,11 @@ void ControllerListPanel::bindTab(OpenRGB3DSpatialTab* tab, Mode mode)
 
     if(mode == Mode::Available)
     {
-        connect(ui->clearAllFromSceneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_clear_all_clicked);
+        connect(ui->clearAllFromSceneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::clearAllClicked);
     }
     else
     {
         connect(card_list_, &SpatialControllerCardList::sceneSelectionChanged, tab,
-                &OpenRGB3DSpatialTab::on_scene_controller_cards_selection_changed);
+                &OpenRGB3DSpatialTab::sceneControllerCardsSelectionChanged);
     }
 }

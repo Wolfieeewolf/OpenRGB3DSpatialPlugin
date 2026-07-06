@@ -470,6 +470,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);
+    // world_grid vs room_grid: dual contexts reserved for future room-aligned bounds;
+    // today room_position equals world_position so both bounds match (PluginSpatialMeasurement.md §4).
     GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
     GridBounds room_bounds  = ComputeRoomAlignedBounds(room_settings, grid_scale_mm, controller_transforms);
 

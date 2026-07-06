@@ -55,6 +55,15 @@ inline GridDimensionDefaults MakeGridDefaults(int grid_x, int grid_y, int grid_z
     return defaults;
 }
 
+/** Default mm per grid unit when layout scale is unset or invalid. */
+constexpr float DEFAULT_GRID_SCALE_MM = 10.0f;
+
+/** Default manual-room axis length when bounds are empty (matches layout fallback). */
+constexpr float DEFAULT_ROOM_SIZE_MM = 1000.0f;
+
+/** Returns a positive grid scale; substitutes DEFAULT_GRID_SCALE_MM when invalid. */
+float SafeGridScaleMm(float grid_scale_mm);
+
 float MMToGridUnits(float mm, float grid_scale_mm);
 float GridUnitsToMM(float units, float grid_scale_mm);
 

@@ -135,7 +135,7 @@ void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
                                   .arg(b + 1)
                                   .arg((int)std::round(hz_lo))
                                   .arg((int)std::round(hz_hi)));
-        connect(eq_slider, &QSlider::valueChanged, this, [this, b]() { on_audio_eq_changed(b); });
+        connect(eq_slider, &QSlider::valueChanged, this, [this, b]() { audioEqChanged(b); });
         audio_eq_sliders.push_back(eq_slider);
         audio_eq_row_layout->addWidget(band_col);
     }
@@ -159,14 +159,14 @@ void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
     audio_eq_rebuilding = false;
 }
 
-void OpenRGB3DSpatialTab::on_audio_start_clicked()
+void OpenRGB3DSpatialTab::audioStartClicked()
 {
     AudioInputManager::instance()->start();
     audioStartButton()->setEnabled(false);
     audioStopButton()->setEnabled(true);
 }
 
-void OpenRGB3DSpatialTab::on_audio_stop_clicked()
+void OpenRGB3DSpatialTab::audioStopClicked()
 {
     AudioInputManager::instance()->stop();
     audioStartButton()->setEnabled(true);
@@ -182,21 +182,21 @@ void OpenRGB3DSpatialTab::on_audio_stop_clicked()
     if(audioHighBar()) audioHighBar()->setValue(0);
 }
 
-void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
+void OpenRGB3DSpatialTab::audioRestoreDefaultsClicked()
 {
     if(audioDeviceCombo() && audioDeviceCombo()->isEnabled() && audioDeviceCombo()->count() > 0)
     {
         bool restore_signals = audioDeviceCombo()->blockSignals(true);
         audioDeviceCombo()->setCurrentIndex(0);
         audioDeviceCombo()->blockSignals(restore_signals);
-        on_audio_device_changed(0);
+        audioDeviceChanged(0);
     }
     if(audioGainSlider())
     {
         bool restore_signals = audioGainSlider()->blockSignals(true);
         audioGainSlider()->setValue(100);
         audioGainSlider()->blockSignals(restore_signals);
-        on_audio_gain_changed(100);
+        audioGainChanged(100);
     }
     if(audioBandsCombo())
     {
@@ -206,7 +206,7 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
             bool restore_signals = audioBandsCombo()->blockSignals(true);
             audioBandsCombo()->setCurrentIndex(idx);
             audioBandsCombo()->blockSignals(restore_signals);
-            on_audio_bands_changed(idx);
+            audioBandsChanged(idx);
         }
     }
     if(audioFftCombo())
@@ -217,7 +217,7 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
             bool restore_signals = audioFftCombo()->blockSignals(true);
             audioFftCombo()->setCurrentIndex(idx);
             audioFftCombo()->blockSignals(restore_signals);
-            on_audio_fft_changed(idx);
+            audioFftChanged(idx);
         }
     }
     AudioInputManager::instance()->resetEq();
@@ -230,21 +230,21 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
     {
         QSignalBlocker block(*audioClaritySlider());
         audioClaritySlider()->setValue(60);
-        on_audio_clarity_changed(60);
+        audioClarityChanged(60);
     }
     settings["AudioBandIsolation"] = 62;
     if(audioIsolationSlider())
     {
         QSignalBlocker block(*audioIsolationSlider());
         audioIsolationSlider()->setValue(62);
-        on_audio_isolation_changed(62);
+        audioIsolationChanged(62);
     }
     settings["AudioEqMixPreset"] = 8;
     if(audioMixPresetCombo())
     {
         QSignalBlocker block(*audioMixPresetCombo());
         audioMixPresetCombo()->setCurrentIndex(8);
-        on_audio_mix_preset_changed(8);
+        audioMixPresetChanged(8);
     }
     settings["AudioBands"] = 16;
     settings["AudioFFTSize"] = 512;
@@ -253,7 +253,7 @@ void OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked()
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_eq_changed(int band_index)
+void OpenRGB3DSpatialTab::audioEqChanged(int band_index)
 {
     if(audio_eq_rebuilding || band_index < 0 || band_index >= static_cast<int>(audio_eq_sliders.size()))
     {
@@ -280,7 +280,7 @@ void OpenRGB3DSpatialTab::on_audio_eq_changed(int band_index)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_level_updated(float level)
+void OpenRGB3DSpatialTab::audioLevelUpdated(float level)
 {
     if(audio_eq_rebuilding)
     {
@@ -353,7 +353,7 @@ void OpenRGB3DSpatialTab::on_audio_level_updated(float level)
     }
 }
 
-void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
+void OpenRGB3DSpatialTab::audioDeviceChanged(int index)
 {
     AudioInputManager::instance()->setDeviceByIndex(index);
 
@@ -362,7 +362,7 @@ void OpenRGB3DSpatialTab::on_audio_device_changed(int index)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
+void OpenRGB3DSpatialTab::audioGainChanged(int value)
 {
     float g = std::max(0.1f, std::min(50.0f, value / 10.0f));
     AudioInputManager::instance()->setGain(g);
@@ -377,7 +377,7 @@ void OpenRGB3DSpatialTab::on_audio_gain_changed(int value)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_clarity_changed(int value)
+void OpenRGB3DSpatialTab::audioClarityChanged(int value)
 {
     value = std::max(0, std::min(100, value));
     AudioInputManager::instance()->setMixClarity(value / 100.0f);
@@ -392,7 +392,7 @@ void OpenRGB3DSpatialTab::on_audio_clarity_changed(int value)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
+void OpenRGB3DSpatialTab::audioBandsChanged(int index)
 {
     if(!audioBandsCombo() || index < 0 || index >= audioBandsCombo()->count())
     {
@@ -412,7 +412,7 @@ void OpenRGB3DSpatialTab::on_audio_bands_changed(int index)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
+void OpenRGB3DSpatialTab::audioFftChanged(int)
 {
     if(!audioFftCombo())
     {
@@ -428,7 +428,7 @@ void OpenRGB3DSpatialTab::on_audio_fft_changed(int)
     SetPluginSettings(settings);
 }
 
-void OpenRGB3DSpatialTab::on_audio_isolation_changed(int value)
+void OpenRGB3DSpatialTab::audioIsolationChanged(int value)
 {
     value = std::max(0, std::min(100, value));
     AudioInputManager::instance()->setBandIsolation(value / 100.0f);
@@ -478,7 +478,7 @@ void OpenRGB3DSpatialTab::sync_audio_eq_sliders_from_manager()
     }
 }
 
-void OpenRGB3DSpatialTab::on_audio_mix_preset_changed(int index)
+void OpenRGB3DSpatialTab::audioMixPresetChanged(int index)
 {
     if(!audioMixPresetCombo() || index < 0 || index >= audioMixPresetCombo()->count())
     {

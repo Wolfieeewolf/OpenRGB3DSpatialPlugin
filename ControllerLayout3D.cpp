@@ -813,6 +813,8 @@ void ControllerLayout3D::UpdateWorldPositions(ControllerTransform* ctrl_transfor
         led_pos->world_position.x = rotated.x + ctrl_transform->transform.position.x;
         led_pos->world_position.y = rotated.y + ctrl_transform->transform.position.y;
         led_pos->world_position.z = rotated.z + ctrl_transform->transform.position.z;
+        // Room-aligned positions are not split yet; both paths share world coords until
+        // per-controller room basis is implemented (see PluginSpatialMeasurement.md §4).
         led_pos->room_position = led_pos->world_position;
     }
 

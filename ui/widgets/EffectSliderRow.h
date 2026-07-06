@@ -34,7 +34,7 @@ public:
     void bindValueChanged(QObject* owner,
                           const std::function<void(int)>& apply_value,
                           const std::function<QString(int)>& format_value,
-                          const std::function<void()>& on_changed = nullptr);
+                          const std::function<void()>& changed = nullptr);
 
     void setEnabled(bool enabled);
 

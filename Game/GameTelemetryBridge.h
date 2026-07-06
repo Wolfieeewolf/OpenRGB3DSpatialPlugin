@@ -20,7 +20,7 @@
 class ResourceManagerInterface;
 
 // UDP telemetry pose contract (type "player_pose"):
-//   x,y,z     — player position in the game's native GameWorld space.
+//   x,y,z     — player eye position in the game's native GameWorld space (not feet).
 //   fx,fy,fz  — unit look / forward vector in the same space.
 //   ux,uy,uz  — unit up vector in the same space (omit only if world Y is always up).
 // Optional: world_convention — see SpatialCoordinateSpaces::GameWorldConvention

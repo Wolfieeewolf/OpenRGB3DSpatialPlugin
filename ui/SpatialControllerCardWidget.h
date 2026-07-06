@@ -71,12 +71,12 @@ signals:
     void editRequested(int scene_list_row);
 
 private slots:
-    void on_name_clicked();
-    void on_granularity_changed(int index);
-    void on_item_changed(int index);
-    void on_action_clicked();
-    void on_edit_clicked();
-    void on_spacing_changed(double value);
+    void nameClicked();
+    void granularityChanged(int index);
+    void itemChanged(int index);
+    void actionClicked();
+    void editClicked();
+    void spacingChanged(double value);
 
 private:
     void applyCompactComboStyle(QComboBox* combo);

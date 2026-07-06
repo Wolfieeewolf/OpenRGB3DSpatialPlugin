@@ -234,9 +234,9 @@ void EffectRoomOutputPanel::appendDeviceCards(QVBoxLayout* layout,
             }
 
             refreshControllerLists();
-            if(on_changed_)
+            if(changed_callback_)
             {
-                on_changed_();
+                changed_callback_();
             }
         });
         layout->addWidget(card);
@@ -345,7 +345,7 @@ void EffectRoomOutputPanel::bind(SpatialEffect3D* effect,
                                  RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
                                  std::vector<int>& emitter_controllers,
                                  std::vector<int>& receiver_controllers,
-                                 const std::function<void()>& on_changed,
+                                 const std::function<void()>& changed,
                                  const std::function<QString(int)>& transform_label)
 {
     if(output_combo_)
@@ -357,16 +357,16 @@ void EffectRoomOutputPanel::bind(SpatialEffect3D* effect,
     bound_role_           = &output_role;
     bound_emitters_       = &emitter_controllers;
     bound_receivers_      = &receiver_controllers;
-    on_changed_           = on_changed;
+    changed_callback_     = changed;
     transform_label_fn_     = transform_label;
     syncFromState(output_role, relay_params, emitter_controllers, receiver_controllers);
 
     connect(output_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [&output_role, on_changed, this](int index) {
+            [&output_role, changed, this](int index) {
                 output_role = (SpatialRoom::SpatialRoomOutputRole)output_combo_->itemData(index).toInt();
                 refreshRolePanels();
-                on_changed();
+                changed();
             });
 
-    relay_panel_->bindRelayTuneParams(effect, relay_params, on_changed);
+    relay_panel_->bindRelayTuneParams(effect, relay_params, changed);
 }

@@ -245,21 +245,23 @@ RGBColor SampleRoomPoint(const GameTelemetryBridge::TelemetrySnapshot& telemetry
     float target_y = 0.0f;
     float target_z = 0.0f;
     SpatialCoordinateSpaces::PlayerLocalBlocksToGameWorld(basis,
-                                                          eff_ox,
-                                                          eff_oy,
-                                                          eff_oz,
+                                                          telemetry.player_x,
+                                                          telemetry.player_y,
+                                                          telemetry.player_z,
                                                           local,
                                                           target_x,
                                                           target_y,
                                                           target_z);
 
-    constexpr float kMcDefaultEyeHeightBlocks = 1.62f;
     float eye_x = telemetry.gpu_panorama.anchor_x;
     float eye_y = telemetry.gpu_panorama.anchor_y;
     float eye_z = telemetry.gpu_panorama.anchor_z;
-    if(eye_y <= telemetry.player_y + 0.05f)
+    const bool anchor_unset = std::fabs(eye_x) < 1e-4f && std::fabs(eye_y) < 1e-4f && std::fabs(eye_z) < 1e-4f;
+    if(anchor_unset)
     {
-        eye_y += kMcDefaultEyeHeightBlocks;
+        eye_x = telemetry.player_x;
+        eye_y = telemetry.player_y;
+        eye_z = telemetry.player_z;
     }
 
     float dir_x = target_x - eye_x;

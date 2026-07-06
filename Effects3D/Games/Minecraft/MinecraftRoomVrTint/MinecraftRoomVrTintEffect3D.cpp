@@ -15,7 +15,7 @@ EffectInfo3D MinecraftRoomVrTintEffect3D::GetEffectInfo() const
     EffectInfo3D info = BaseMinecraftEffectInfo();
     info.effect_description =
         "VR-room mode: map your physical room 1:1 into Minecraft using player pose and GPU cubemap sampling. "
-        "Set the effect 3D origin at your standing reference point.";
+        "Place a reference point at eye height and set this effect's 3D origin there.";
     return info;
 }
 

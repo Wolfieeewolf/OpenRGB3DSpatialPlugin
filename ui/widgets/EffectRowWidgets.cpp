@@ -72,7 +72,7 @@ void EffectSliderRow::syncSliderValue(int value, const std::function<QString(int
 void EffectSliderRow::bindValueChanged(QObject* owner,
                                        const std::function<void(int)>& apply_value,
                                        const std::function<QString(int)>& format_value,
-                                       const std::function<void()>& on_changed)
+                                       const std::function<void()>& changed)
 {
     if(!owner)
     {
@@ -84,7 +84,7 @@ void EffectSliderRow::bindValueChanged(QObject* owner,
         ui->valueLabel->setText(format_value(ui->valueSlider->value()));
     }
 
-    QObject::connect(ui->valueSlider, &QSlider::valueChanged, owner, [this, apply_value, format_value, on_changed](int v) {
+    QObject::connect(ui->valueSlider, &QSlider::valueChanged, owner, [this, apply_value, format_value, changed](int v) {
         if(apply_value)
         {
             apply_value(v);
@@ -93,9 +93,9 @@ void EffectSliderRow::bindValueChanged(QObject* owner,
         {
             ui->valueLabel->setText(format_value(v));
         }
-        if(on_changed)
+        if(changed)
         {
-            on_changed();
+            changed();
         }
     });
 }
@@ -177,7 +177,7 @@ void EffectLabeledSpinRow::configure(int min, int max, int value, const QString&
 
 void EffectLabeledSpinRow::bindValueChanged(QObject* owner,
                                             const std::function<void(int)>& apply_value,
-                                            const std::function<void()>& on_changed)
+                                            const std::function<void()>& changed)
 {
     if(!owner)
     {
@@ -185,14 +185,14 @@ void EffectLabeledSpinRow::bindValueChanged(QObject* owner,
     }
 
     QObject::connect(ui->valueSpin, QOverload<int>::of(&QSpinBox::valueChanged), owner,
-                     [apply_value, on_changed](int v) {
+                     [apply_value, changed](int v) {
                          if(apply_value)
                          {
                              apply_value(v);
                          }
-                         if(on_changed)
+                         if(changed)
                          {
-                             on_changed();
+                             changed();
                          }
                      });
 }
@@ -230,21 +230,21 @@ void EffectCheckRow::configure(const QString& text, bool checked, const QString&
 
 void EffectCheckRow::bindToggled(QObject* owner,
                                const std::function<void(bool)>& apply_value,
-                               const std::function<void()>& on_changed)
+                               const std::function<void()>& changed)
 {
     if(!owner)
     {
         return;
     }
 
-    QObject::connect(ui->optionCheck, &QCheckBox::toggled, owner, [apply_value, on_changed](bool v) {
+    QObject::connect(ui->optionCheck, &QCheckBox::toggled, owner, [apply_value, changed](bool v) {
         if(apply_value)
         {
             apply_value(v);
         }
-        if(on_changed)
+        if(changed)
         {
-            on_changed();
+            changed();
         }
     });
 }

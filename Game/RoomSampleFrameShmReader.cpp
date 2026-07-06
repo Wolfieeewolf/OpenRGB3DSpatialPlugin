@@ -198,13 +198,22 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
 {
 #ifdef _WIN32
     static thread_local std::uint32_t last_applied_frame_id = 0;
+    static thread_local int last_size_x = -1;
+    static thread_local int last_size_y = -1;
+    static thread_local int last_size_z = -1;
     static thread_local unsigned long long last_fail_log_ms = 0;
-    static thread_local bool logged_success = false;
+    static thread_local unsigned long long last_missing_log_ms = 0;
 
     const std::wstring path = RoomSampleShmPaths::FrameFilePathW();
     std::vector<unsigned char> file_bytes;
     if(!ReadFileBytes(path, file_bytes))
     {
+        const unsigned long long now = NowMs();
+        if(now - last_missing_log_ms > 15000ULL)
+        {
+            last_missing_log_ms = now;
+            LOG_INFO("[3DSpatial] waiting for room sample SHM file from Minecraft mod");
+        }
         return false;
     }
 
@@ -226,16 +235,31 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
         return false;
     }
 
-    if(!logged_success)
+    const bool first = last_size_x < 0;
+    const bool grid_changed = hdr.size_x != last_size_x || hdr.size_y != last_size_y || hdr.size_z != last_size_z;
+    if(first)
     {
-        logged_success = true;
         LOG_INFO("[3DSpatial] room sample SHM frame received (id %u, %dx%dx%d)",
                  hdr.frame_id,
                  hdr.size_x,
                  hdr.size_y,
                  hdr.size_z);
     }
+    else if(grid_changed)
+    {
+        LOG_INFO("[3DSpatial] room sample SHM grid updated: %dx%dx%d -> %dx%dx%d (frame id %u)",
+                 last_size_x,
+                 last_size_y,
+                 last_size_z,
+                 hdr.size_x,
+                 hdr.size_y,
+                 hdr.size_z,
+                 hdr.frame_id);
+    }
 
+    last_size_x = hdr.size_x;
+    last_size_y = hdr.size_y;
+    last_size_z = hdr.size_z;
     last_applied_frame_id = hdr.frame_id;
     GameTelemetryBridge::ApplyRoomSampleShmFrame(hdr, std::move(rgba));
     GameTelemetryBridge::NotifyTelemetryDataUpdated();

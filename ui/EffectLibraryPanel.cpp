@@ -33,15 +33,15 @@ void EffectLibraryPanel::bindTab(OpenRGB3DSpatialTab* tab)
     PluginUiApplyMutedSecondaryLabel(ui->gameLabel);
 
     connect(ui->categoryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_library_category_changed);
+            &OpenRGB3DSpatialTab::effectLibraryCategoryChanged);
     connect(ui->gameCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_effect_library_game_changed);
-    connect(ui->searchEdit, &QLineEdit::textChanged, tab, &OpenRGB3DSpatialTab::on_effect_library_search_changed);
+            &OpenRGB3DSpatialTab::effectLibraryGameChanged);
+    connect(ui->searchEdit, &QLineEdit::textChanged, tab, &OpenRGB3DSpatialTab::effectLibrarySearchChanged);
     connect(ui->libraryList, &QListWidget::currentRowChanged, tab,
-            &OpenRGB3DSpatialTab::on_effect_library_selection_changed);
+            &OpenRGB3DSpatialTab::effectLibrarySelectionChanged);
     connect(ui->libraryList, &QListWidget::itemDoubleClicked, tab,
-            &OpenRGB3DSpatialTab::on_effect_library_item_double_clicked);
-    connect(ui->addToStackButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_effect_library_add_clicked);
+            &OpenRGB3DSpatialTab::effectLibraryItemDoubleClicked);
+    connect(ui->addToStackButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::effectLibraryAddClicked);
 
     tab->PopulateEffectLibraryCategories();
     tab->PopulateEffectLibrary();

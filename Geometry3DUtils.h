@@ -271,7 +271,7 @@ namespace Geometry3D
         v = std::clamp(0.5f + s * du + c * dv, 0.0f, 1.0f);
     }
 
-    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = 10.0f)
+    inline PlaneProjection SpatialMapToScreen(const Vector3D& led_position, const DisplayPlane3D& plane, float edge_zone_depth = 0.15f, const Vector3D* user_position = nullptr, float grid_scale_mm = DEFAULT_GRID_SCALE_MM)
     {
         PlaneProjection result;
         result.is_valid = false;

@@ -106,27 +106,27 @@ signals:
     void GridLayoutChanged();
 
 private slots:
-    void on_start_effect_clicked();
-    void on_stop_effect_clicked();
+    void startEffectClicked();
+    void stopEffectClicked();
 
-    void on_controller_selected(int index);
-    void on_viewport_controller_selected(int transform_index);
-    void on_viewport_display_plane_selected(int plane_index);
-    void on_controller_position_changed(int index, float x, float y, float z);
-    void on_controller_rotation_changed(int index, float x, float y, float z);
+    void controllerSelected(int index);
+    void viewportControllerSelected(int transform_index);
+    void viewportDisplayPlaneSelected(int plane_index);
+    void controllerPositionChanged(int index, float x, float y, float z);
+    void controllerRotationChanged(int index, float x, float y, float z);
 
-    void on_available_card_add(SpatialControllerEntryKey key,
+    void availableCardAdd(SpatialControllerEntryKey key,
                              int                            granularity,
                              int                            item_index,
                              float                          spacing_x_mm,
                              float                          spacing_y_mm,
                              float                          spacing_z_mm);
-    void on_scene_card_remove(int scene_list_row);
-    void on_remove_controller_clicked();
-    void on_remove_controller_from_viewport(int index);
-    void on_clear_all_clicked();
-    void on_scene_controller_cards_selection_changed(int scene_list_row);
-    void on_scene_card_edit(int scene_list_row);
+    void sceneCardRemove(int scene_list_row);
+    void removeControllerClicked();
+    void removeControllerFromViewport(int index);
+    void clearAllClicked();
+    void sceneControllerCardsSelectionChanged(int scene_list_row);
+    void sceneCardEdit(int scene_list_row);
 
     void ShowSceneObjectEditPanel(int scene_list_row, bool sync_scene_selection = true);
     void HideSceneObjectEditPanel();
@@ -136,70 +136,70 @@ private slots:
     void EditDisplayPlaneForCurrentSceneSelection();
     void FocusObjectCreatorTab();
 
-    void on_quick_save_layout_clicked();
-    void on_save_layout_clicked();
-    void on_load_layout_clicked();
-    void on_delete_layout_clicked();
-    void on_layout_profile_changed(int index);
-    void on_save_effect_profile_clicked();
-    void on_load_effect_profile_clicked();
-    void on_delete_effect_profile_clicked();
-    void on_effect_profile_changed(int index);
-    void on_open_config_folder_clicked();
-    void on_create_custom_controller_clicked();
-    void on_import_custom_controller_clicked();
-    void on_export_custom_controller_clicked();
-    void on_edit_custom_controller_clicked();
-    void on_delete_custom_controller_clicked();
-    void on_custom_controller_selection_changed(int row);
-    void on_add_ref_point_clicked();
-    void on_edit_reference_point_clicked();
-    void on_remove_ref_point_clicked();
-    void on_reference_points_list_selection_changed(int row);
-    void on_ref_point_selected(int index, bool from_scene_controller_list = false);
-    void on_ref_point_position_changed(int index, float x, float y, float z);
+    void quickSaveLayoutClicked();
+    void saveLayoutClicked();
+    void loadLayoutClicked();
+    void deleteLayoutClicked();
+    void layoutProfileChanged(int index);
+    void saveEffectProfileClicked();
+    void loadEffectProfileClicked();
+    void deleteEffectProfileClicked();
+    void effectProfileChanged(int index);
+    void openConfigFolderClicked();
+    void createCustomControllerClicked();
+    void importCustomControllerClicked();
+    void exportCustomControllerClicked();
+    void editCustomControllerClicked();
+    void deleteCustomControllerClicked();
+    void customControllerSelectionChanged(int row);
+    void addRefPointClicked();
+    void editReferencePointClicked();
+    void removeRefPointClicked();
+    void referencePointsListSelectionChanged(int row);
+    void refPointSelected(int index, bool from_scene_controller_list = false);
+    void refPointPositionChanged(int index, float x, float y, float z);
 
-    void on_create_zone_clicked();
-    void on_edit_zone_clicked();
-    void on_delete_zone_clicked();
-    void on_zone_selected(int index);
+    void createZoneClicked();
+    void editZoneClicked();
+    void deleteZoneClicked();
+    void zoneSelected(int index);
 
-    void on_effect_timer_timeout();
+    void effectTimerTimeout();
     void RenderEffectStack();
-    void on_grid_dimensions_changed();
-    void on_grid_snap_toggled(bool enabled);
-    void on_gpu_labels_toggled(bool enabled);
-    void on_gpu_scene_toggled(bool enabled);
-    void on_room_guide_labels_toggled(bool enabled);
-    void on_frame_selection_in_view();
-    void on_reset_viewport_camera();
-    void on_effect_changed(int index);
-    void on_effect_origin_changed(int index);
-    void on_effect_bounds_changed(int index);
-    void on_effect_zone_changed(int index);
+    void gridDimensionsChanged();
+    void gridSnapToggled(bool enabled);
+    void gpuLabelsToggled(bool enabled);
+    void gpuSceneToggled(bool enabled);
+    void roomGuideLabelsToggled(bool enabled);
+    void frameSelectionInView();
+    void resetViewportCamera();
+    void effectChanged(int index);
+    void effectOriginChanged(int index);
+    void effectBoundsChanged(int index);
+    void effectZoneChanged(int index);
     void UpdateSelectionInfo();
     void UpdateEffectOriginCombo();
 
-    void on_effect_library_category_changed(int index);
-    void on_effect_library_game_changed(int index);
-    void on_effect_library_search_changed(const QString& text);
-    void on_effect_library_add_clicked();
-    void on_effect_library_item_double_clicked(QListWidgetItem* item);
-    void on_effect_library_selection_changed(int row);
+    void effectLibraryCategoryChanged(int index);
+    void effectLibraryGameChanged(int index);
+    void effectLibrarySearchChanged(const QString& text);
+    void effectLibraryAddClicked();
+    void effectLibraryItemDoubleClicked(QListWidgetItem* item);
+    void effectLibrarySelectionChanged(int row);
 
-    void on_start_all_effects_clicked();
-    void on_stop_all_effects_clicked();
+    void startAllEffectsClicked();
+    void stopAllEffectsClicked();
     void UpdateStartStopAllButtons();
-    void on_remove_effect_from_stack_clicked();
-    void on_effect_stack_item_double_clicked(QListWidgetItem* item);
-    void on_effect_stack_selection_changed(int index);
-    void on_stack_effect_type_changed(int index);
-    void on_stack_effect_zone_changed(int index);
-    void on_stack_effect_blend_changed(int index);
+    void removeEffectFromStackClicked();
+    void effectStackItemDoubleClicked(QListWidgetItem* item);
+    void effectStackSelectionChanged(int index);
+    void stackEffectTypeChanged(int index);
+    void stackEffectZoneChanged(int index);
+    void stackEffectBlendChanged(int index);
 
-    void on_save_stack_preset_clicked();
-    void on_load_stack_preset_clicked();
-    void on_delete_stack_preset_clicked();
+    void saveStackPresetClicked();
+    void loadStackPresetClicked();
+    void deleteStackPresetClicked();
 
     void UpdateDeviceList();
 
@@ -537,27 +537,27 @@ private:
     void rebuildAudioEqSliders(bool persist_settings = false);
 
 private slots:
-    void on_audio_device_changed(int index);
-    void on_audio_gain_changed(int value);
-    void on_audio_clarity_changed(int value);
-    void on_audio_isolation_changed(int value);
-    void on_audio_mix_preset_changed(int index);
+    void audioDeviceChanged(int index);
+    void audioGainChanged(int value);
+    void audioClarityChanged(int value);
+    void audioIsolationChanged(int value);
+    void audioMixPresetChanged(int index);
     void sync_audio_eq_sliders_from_manager();
-    void on_audio_start_clicked();
-    void on_audio_stop_clicked();
-    void on_audio_level_updated(float level);
-    void on_audio_bands_changed(int index);
-    void on_audio_fft_changed(int index);
-    void on_audio_restore_defaults_clicked();
-    void on_audio_eq_changed(int band_index);
+    void audioStartClicked();
+    void audioStopClicked();
+    void audioLevelUpdated(float level);
+    void audioBandsChanged(int index);
+    void audioFftChanged(int index);
+    void audioRestoreDefaultsClicked();
+    void audioEqChanged(int band_index);
 
-    void on_display_plane_selected(int index);
-    void on_display_planes_list_selection_changed(int row);
-    void on_add_display_plane_clicked();
-    void on_edit_display_plane_clicked();
-    void on_remove_display_plane_clicked();
-    void on_display_plane_position_signal(int index, float x, float y, float z);
-    void on_display_plane_rotation_signal(int index, float x, float y, float z);
+    void displayPlaneSelected(int index);
+    void displayPlanesListSelectionChanged(int row);
+    void addDisplayPlaneClicked();
+    void editDisplayPlaneClicked();
+    void removeDisplayPlaneClicked();
+    void displayPlanePositionSignal(int index, float x, float y, float z);
+    void displayPlaneRotationSignal(int index, float x, float y, float z);
 
 private:
     std::vector<RGBColor> room_grid_overlay_buffer;

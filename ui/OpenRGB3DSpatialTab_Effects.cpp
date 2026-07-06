@@ -75,7 +75,7 @@ struct DeferEffectPanelMapping
 };
 }
 
-void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
+void OpenRGB3DSpatialTab::removeEffectFromStackClicked()
 {
     if(!effectStackList()) return;
     int current_row = effectStackList()->currentRow();
@@ -94,7 +94,7 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
 
     if(effect_stack.empty())
     {
-        if(effect_running) on_stop_effect_clicked();
+        if(effect_running) stopEffectClicked();
         if(effectConfigGroup()) effectConfigGroup()->setVisible(false);
     }
 
@@ -108,7 +108,7 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     {
         int new_row = std::min(current_row, (int)effect_stack.size() - 1);
         effectStackList()->setCurrentRow(new_row);
-        on_effect_stack_selection_changed(new_row);
+        effectStackSelectionChanged(new_row);
     }
 
     SaveEffectStack();
@@ -116,7 +116,7 @@ void OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked()
     RenderEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
+void OpenRGB3DSpatialTab::effectStackItemDoubleClicked(QListWidgetItem*)
 {
     if(!effectStackList()) return;
     int current_row = effectStackList()->currentRow();
@@ -134,7 +134,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked(QListWidgetItem*)
     SaveEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
+void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
 {
     if(!effectStackList()) return;
     if(index < 0 || index >= (int)effect_stack.size())
@@ -258,7 +258,7 @@ void OpenRGB3DSpatialTab::on_effect_stack_selection_changed(int index)
     UpdateEffectStackRowSelectorVisibility();
 }
 
-void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
+void OpenRGB3DSpatialTab::stackEffectTypeChanged(int)
 {
     if(!effectStackList() || !stackEffectTypeCombo()) return;
     int current_row = effectStackList()->currentRow();
@@ -294,7 +294,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_type_changed(int)
     UpdateAudioPanelVisibility();
 }
 
-void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
+void OpenRGB3DSpatialTab::stackEffectZoneChanged(int)
 {
     if(!effectStackList() || !stackEffectZoneCombo()) return;
     int current_row = effectStackList()->currentRow();
@@ -308,7 +308,7 @@ void OpenRGB3DSpatialTab::on_stack_effect_zone_changed(int)
     SaveEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_stack_effect_blend_changed(int)
+void OpenRGB3DSpatialTab::stackEffectBlendChanged(int)
 {
     if(!stack_effect_blend_combo || !effectStackList()) return;
     int current_row = effectStackList()->currentRow();
@@ -545,11 +545,11 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
 
     if(ui_start)
     {
-        connect(ui_start, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_start_effect_clicked);
+        connect(ui_start, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::startEffectClicked);
     }
     if(ui_stop)
     {
-        connect(ui_stop, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::on_stop_effect_clicked);
+        connect(ui_stop, &QPushButton::clicked, this, &OpenRGB3DSpatialTab::stopEffectClicked);
     }
 
     start_effect_button = ui_start;
@@ -608,7 +608,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
     stack_blend_container = new EffectStackBlendRow(effectControlsWidget());
     stack_effect_blend_combo = static_cast<EffectStackBlendRow*>(stack_blend_container)->blendCombo();
     connect(stack_effect_blend_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &OpenRGB3DSpatialTab::on_stack_effect_blend_changed);
+            &OpenRGB3DSpatialTab::stackEffectBlendChanged);
 
     effectControlsLayout()->addWidget(stack_blend_container);
 
@@ -740,7 +740,7 @@ void OpenRGB3DSpatialTab::RefreshAmbilightReferencePointDropdowns()
     }
 }
 
-void OpenRGB3DSpatialTab::on_start_effect_clicked()
+void OpenRGB3DSpatialTab::startEffectClicked()
 {
     if(controller_transforms.empty())
     {
@@ -858,7 +858,7 @@ void OpenRGB3DSpatialTab::on_start_effect_clicked()
     SyncScreenCaptureSession();
 }
 
-void OpenRGB3DSpatialTab::on_stop_effect_clicked()
+void OpenRGB3DSpatialTab::stopEffectClicked()
 {
     effect_running = false;
     SyncScreenCaptureSession();
@@ -872,14 +872,14 @@ void OpenRGB3DSpatialTab::on_stop_effect_clicked()
     RenderEffectStack();
 }
 
-void OpenRGB3DSpatialTab::on_start_all_effects_clicked()
+void OpenRGB3DSpatialTab::startAllEffectsClicked()
 {
-    on_start_effect_clicked();
+    startEffectClicked();
 }
 
-void OpenRGB3DSpatialTab::on_stop_all_effects_clicked()
+void OpenRGB3DSpatialTab::stopAllEffectsClicked()
 {
-    on_stop_effect_clicked();
+    stopEffectClicked();
 }
 
 void OpenRGB3DSpatialTab::UpdateStartStopAllButtons()
@@ -890,7 +890,7 @@ void OpenRGB3DSpatialTab::UpdateStartStopAllButtons()
         stopAllEffectsButton()->setEnabled(effect_running);
 }
 
-void OpenRGB3DSpatialTab::on_effect_timer_timeout()
+void OpenRGB3DSpatialTab::effectTimerTimeout()
 {
     if(!effect_running)
     {
@@ -1219,7 +1219,7 @@ void OpenRGB3DSpatialTab::UpdateStackPresetsList()
     }
 }
 
-void OpenRGB3DSpatialTab::on_save_stack_preset_clicked()
+void OpenRGB3DSpatialTab::saveStackPresetClicked()
 {
     if(effect_stack.empty())
     {
@@ -1272,7 +1272,7 @@ void OpenRGB3DSpatialTab::on_save_stack_preset_clicked()
                             QString("Stack preset \"%1\" saved successfully!").arg(name));
 }
 
-void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
+void OpenRGB3DSpatialTab::loadStackPresetClicked()
 {
     if(!stackPresetsList()) return;
     int current_row = stackPresetsList()->currentRow();
@@ -1304,7 +1304,7 @@ void OpenRGB3DSpatialTab::on_load_stack_preset_clicked()
                             .arg(QString::fromStdString(preset->name)));
 }
 
-void OpenRGB3DSpatialTab::on_delete_stack_preset_clicked()
+void OpenRGB3DSpatialTab::deleteStackPresetClicked()
 {
     if(!stackPresetsList()) return;
     int current_row = stackPresetsList()->currentRow();

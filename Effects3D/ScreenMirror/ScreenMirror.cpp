@@ -744,7 +744,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
     contributions.reserve(all_planes.size());
     Vector3D grid_anchor_ref = GetReferencePointGrid(grid);
 
-    const float scale_mm = (grid.grid_scale_mm > 0.001f) ? grid.grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid.grid_scale_mm);
     float base_max_distance_mm = ComputeMaxReferenceDistanceMm(grid, grid_anchor_ref, scale_mm);
     if(base_max_distance_mm <= 0.0f)
     {
@@ -1061,7 +1061,7 @@ RGBColor ScreenMirror::CalculateColorGridInternal(float x, float y, float z, flo
 
         float weight = distance_falloff * wave_envelope;
 
-        float ref_max_units = reference_max_distance_mm / std::max(scale_mm, 0.001f);
+        const float ref_max_units = MMToGridUnits(reference_max_distance_mm, scale_mm);
         if(ref_max_units > 0.001f && (std::fabs(mon_settings.front_back_balance) > 0.5f || std::fabs(mon_settings.left_right_balance) > 0.5f || std::fabs(mon_settings.top_bottom_balance) > 0.5f))
         {
             Vector3D ref_to_led = { led_pos.x - falloff_ref->x, led_pos.y - falloff_ref->y, led_pos.z - falloff_ref->z };

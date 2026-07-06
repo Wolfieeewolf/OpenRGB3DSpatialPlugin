@@ -28,7 +28,7 @@
 
 namespace filesystem = std::filesystem;
 
-void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
+void OpenRGB3DSpatialTab::createCustomControllerClicked()
 {
     CustomControllerDialog dialog(resource_manager, this);
     dialog.SetLayoutGridScaleMm(grid_scale_mm);
@@ -135,7 +135,7 @@ void OpenRGB3DSpatialTab::on_create_custom_controller_clicked()
 }
 
 
-void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
+void OpenRGB3DSpatialTab::exportCustomControllerClicked()
 {
     if(virtual_controllers.empty())
     {
@@ -209,7 +209,7 @@ void OpenRGB3DSpatialTab::on_export_custom_controller_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
+void OpenRGB3DSpatialTab::importCustomControllerClicked()
 {
     if(!resource_manager)
     {
@@ -364,7 +364,7 @@ void OpenRGB3DSpatialTab::on_import_custom_controller_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
+void OpenRGB3DSpatialTab::editCustomControllerClicked()
 {
     int list_row = customControllersList()->currentRow();
     if(list_row < 0)
@@ -532,7 +532,7 @@ void OpenRGB3DSpatialTab::on_edit_custom_controller_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_delete_custom_controller_clicked()
+void OpenRGB3DSpatialTab::deleteCustomControllerClicked()
 {
     if(!customControllersList()) return;
     int list_row = customControllersList()->currentRow();

@@ -27,6 +27,10 @@ final class RoomSampleWorldMapper
         return cfg.roomMinZ + (iz + 0.5f) * span / (float)cfg.sizeZ;
     }
 
+    /**
+     * Maps a room-grid sample to a world target. Anchor is the player eye position so room offsets
+     * align with plugin reference points (eye height), not feet.
+     */
     static Vec3 mapRoomToWorldTarget(RoomSampleConfigReader.Config cfg, LocalPlayer player, float roomX, float roomY, float roomZ)
     {
         final float scale = Math.max(0.005f, Math.min(0.80f, cfg.roomToWorldScale));
@@ -42,7 +46,7 @@ final class RoomSampleWorldMapper
 
         final Basis basis = buildHorizontalBasis(player, cfg.headingOffsetDeg);
         final double ax = player.getX();
-        final double ay = player.getY();
+        final double ay = player.getEyeY();
         final double az = player.getZ();
 
         final double wx = ax + rightBlocks * basis.rightX + upBlocks * basis.upX + forwardBlocks * basis.forwardX;

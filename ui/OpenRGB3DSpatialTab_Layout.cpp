@@ -76,7 +76,7 @@ QString LayoutLoadErrorUserMessage(const std::string& filename, const char* deta
 }
 } // namespace
 
-void OpenRGB3DSpatialTab::on_save_layout_clicked()
+void OpenRGB3DSpatialTab::saveLayoutClicked()
 {
     if(gridXSpin()) custom_grid_x = gridXSpin()->value();
     if(gridYSpin()) custom_grid_y = gridYSpin()->value();
@@ -125,7 +125,7 @@ void OpenRGB3DSpatialTab::on_save_layout_clicked()
                             QString("Profile '%1' saved to plugins directory").arg(profile_name));
 }
 
-void OpenRGB3DSpatialTab::on_load_layout_clicked()
+void OpenRGB3DSpatialTab::loadLayoutClicked()
 {
     if(!PromptSaveIfDirty())
     {
@@ -157,7 +157,7 @@ void OpenRGB3DSpatialTab::on_load_layout_clicked()
                             QString("Profile '%1' loaded successfully").arg(profile_name));
 }
 
-void OpenRGB3DSpatialTab::on_delete_layout_clicked()
+void OpenRGB3DSpatialTab::deleteLayoutClicked()
 {
     if(!layoutProfilesCombo()) return;
     QString profile_name = layoutProfilesCombo()->currentText();
@@ -203,7 +203,7 @@ void OpenRGB3DSpatialTab::on_delete_layout_clicked()
     }
 }
 
-void OpenRGB3DSpatialTab::on_layout_profile_changed(int)
+void OpenRGB3DSpatialTab::layoutProfileChanged(int)
 {
     SaveCurrentLayoutName();
 }
@@ -457,7 +457,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
         viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
     }
 
-    on_clear_all_clicked();
+    clearAllClicked();
 
     std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
     std::unordered_map<RGBController*, Vector3D> physical_spacing_by_controller;

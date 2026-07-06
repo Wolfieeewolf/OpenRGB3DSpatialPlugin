@@ -78,7 +78,7 @@ void OpenRGB3DSpatialTab::ShowSceneObjectEditPanel(int scene_list_row, bool sync
 
     if(sync_scene_selection && scene_list_row >= 0)
     {
-        on_scene_controller_cards_selection_changed(scene_list_row);
+        sceneControllerCardsSelectionChanged(scene_list_row);
     }
     else if(scene_list_row < 0)
     {
@@ -270,7 +270,7 @@ void OpenRGB3DSpatialTab::EditCustomControllerForCurrentSceneSelection()
     }
 
     customControllersList()->setCurrentRow(library_row);
-    on_edit_custom_controller_clicked();
+    editCustomControllerClicked();
 }
 
 void OpenRGB3DSpatialTab::EditReferencePointForCurrentSceneSelection()
@@ -327,7 +327,7 @@ void OpenRGB3DSpatialTab::EditDisplayPlaneForCurrentSceneSelection()
     current_display_plane_index = plane_index;
 }
 
-void OpenRGB3DSpatialTab::on_scene_card_edit(int scene_list_row)
+void OpenRGB3DSpatialTab::sceneCardEdit(int scene_list_row)
 {
     ShowSceneObjectEditPanel(scene_list_row);
 }

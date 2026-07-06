@@ -42,11 +42,10 @@ void OpenRGB3DSpatialTab::SyncDisplayPlaneControls(DisplayPlane3D* plane)
     }
 
     const Transform3D& transform = plane->GetTransform();
-    double scale_mm = (gridScaleSpin() != nullptr) ? gridScaleSpin()->value() : (double)grid_scale_mm;
-    if(scale_mm < 0.001) scale_mm = 10.0;
-    double pos_x_mm = (double)transform.position.x * scale_mm;
-    double pos_y_mm = (double)transform.position.y * scale_mm;
-    double pos_z_mm = (double)transform.position.z * scale_mm;
+    const float scale_mm = static_cast<float>(EffectiveGridScaleMm());
+    const double pos_x_mm = static_cast<double>(GridUnitsToMM(transform.position.x, scale_mm));
+    const double pos_y_mm = static_cast<double>(GridUnitsToMM(transform.position.y, scale_mm));
+    const double pos_z_mm = static_cast<double>(GridUnitsToMM(transform.position.z, scale_mm));
 
     SetScenePositionControlsMm(pos_x_mm, pos_y_mm, pos_z_mm);
 
@@ -127,19 +126,19 @@ void OpenRGB3DSpatialTab::UpdateDisplayPlanesList()
     if(desired_index >= 0 && desired_index < (int)display_planes.size())
     {
         current_display_plane_index = desired_index;
-        on_display_plane_selected(desired_index);
+        displayPlaneSelected(desired_index);
     }
     else
     {
         current_display_plane_index = -1;
-        on_display_plane_selected(-1);
+        displayPlaneSelected(-1);
     }
 }
 
 void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
 {
     const int row = displayPlanesList() ? displayPlanesList()->currentRow() : -1;
-    on_display_planes_list_selection_changed(row);
+    displayPlanesListSelectionChanged(row);
 
     DisplayPlane3D* plane = GetSelectedDisplayPlane();
     if(plane)
@@ -148,7 +147,7 @@ void OpenRGB3DSpatialTab::RefreshDisplayPlaneDetails()
     }
 }
 
-void OpenRGB3DSpatialTab::on_display_planes_list_selection_changed(int row)
+void OpenRGB3DSpatialTab::displayPlanesListSelectionChanged(int row)
 {
     const bool has_plane = (row >= 0 && row < (int)display_planes.size());
     if(editDisplayPlaneButton())
@@ -187,7 +186,7 @@ void OpenRGB3DSpatialTab::NotifyDisplayPlaneChanged()
     emit GridLayoutChanged();
 }
 
-void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
+void OpenRGB3DSpatialTab::displayPlaneSelected(int index)
 {
     if(index < 0 || index >= (int)display_planes.size())
     {
@@ -254,7 +253,7 @@ void OpenRGB3DSpatialTab::on_display_plane_selected(int index)
     }
 }
 
-void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
+void OpenRGB3DSpatialTab::addDisplayPlaneClicked()
 {
     const int suffix = (int)display_planes.size() + 1;
     const QString suggested_name = QString("Display Plane %1").arg(suffix);
@@ -279,8 +278,13 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     plane->SetCaptureSourceId(dialog.captureSourceId());
     plane->SetVisible(false);
 
-    float room_height_units = roomHeightSpin() ? MMToGridUnits((float)roomHeightSpin()->value(), grid_scale_mm) : 100.0f;
-    float room_depth_units = roomDepthSpin() ? MMToGridUnits((float)roomDepthSpin()->value(), grid_scale_mm) : 100.0f;
+    const float scale = static_cast<float>(EffectiveGridScaleMm());
+    const float room_height_units = roomHeightSpin()
+                                        ? MMToGridUnits(static_cast<float>(roomHeightSpin()->value()), scale)
+                                        : MMToGridUnits(DEFAULT_ROOM_SIZE_MM, scale);
+    const float room_depth_units = roomDepthSpin()
+                                       ? MMToGridUnits(static_cast<float>(roomDepthSpin()->value()), scale)
+                                       : MMToGridUnits(DEFAULT_ROOM_SIZE_MM, scale);
 
     plane->GetTransform().position.x = 0.0f;
     plane->GetTransform().position.y = -room_height_units * 0.25f;
@@ -343,7 +347,7 @@ void OpenRGB3DSpatialTab::on_add_display_plane_clicked()
     RefreshDisplayPlaneDetails();
 }
 
-void OpenRGB3DSpatialTab::on_edit_display_plane_clicked()
+void OpenRGB3DSpatialTab::editDisplayPlaneClicked()
 {
     int plane_index = current_display_plane_index;
     if(displayPlanesList())
@@ -414,7 +418,7 @@ bool OpenRGB3DSpatialTab::EditDisplayPlaneAtIndex(int plane_index)
     return true;
 }
 
-void OpenRGB3DSpatialTab::on_remove_display_plane_clicked()
+void OpenRGB3DSpatialTab::removeDisplayPlaneClicked()
 {
     int plane_index = current_display_plane_index;
     if(displayPlanesList())
@@ -606,7 +610,7 @@ void OpenRGB3DSpatialTab::SetDisplayPlaneVisibleInScene(DisplayPlane3D* plane, b
     RefreshHiddenControllerStates();
 }
 
-void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, float y, float z)
+void OpenRGB3DSpatialTab::displayPlanePositionSignal(int index, float x, float y, float z)
 {
     if(index < 0)
     {
@@ -659,7 +663,7 @@ void OpenRGB3DSpatialTab::on_display_plane_position_signal(int index, float x, f
     emit GridLayoutChanged();
 }
 
-void OpenRGB3DSpatialTab::on_display_plane_rotation_signal(int index, float x, float y, float z)
+void OpenRGB3DSpatialTab::displayPlaneRotationSignal(int index, float x, float y, float z)
 {
     if(index < 0)
     {

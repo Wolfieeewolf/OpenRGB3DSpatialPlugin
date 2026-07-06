@@ -209,28 +209,28 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     sync_gpu_label_renderer_ui(ui->roomGuideLabelsCheckbox->isChecked());
 
-    connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::on_room_guide_labels_toggled);
+    connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::roomGuideLabelsToggled);
     connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, this, [this, tab, sync_gpu_label_renderer_ui](bool on) {
         sync_gpu_label_renderer_ui(on);
     });
-    connect(ui->gpuLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::on_gpu_labels_toggled);
+    connect(ui->gpuLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gpuLabelsToggled);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    connect(ui->gpuSceneCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::on_gpu_scene_toggled);
+    connect(ui->gpuSceneCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gpuSceneToggled);
 #endif
-    connect(ui->frameSelectionButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_frame_selection_in_view);
-    connect(ui->resetCameraButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_reset_viewport_camera);
+    connect(ui->frameSelectionButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::frameSelectionInView);
+    connect(ui->resetCameraButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::resetViewportCamera);
     connect(ui->roomGridOverlayCheckbox, &QCheckBox::toggled, this, &GridSettingsPanel::onRoomGridOverlayToggled);
     connect(ui->overlayBrightSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayBrightChanged);
     connect(ui->overlayPointSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayPointChanged);
     connect(ui->overlayStepSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
 
     connect(ui->gridXSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+            &OpenRGB3DSpatialTab::gridDimensionsChanged);
     connect(ui->gridYSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
+            &OpenRGB3DSpatialTab::gridDimensionsChanged);
     connect(ui->gridZSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::on_grid_dimensions_changed);
-    connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::on_grid_snap_toggled);
+            &OpenRGB3DSpatialTab::gridDimensionsChanged);
+    connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gridSnapToggled);
 
     connect(ui->useManualRoomSizeCheckbox, &QCheckBox::toggled, this, &GridSettingsPanel::onUseManualRoomSizeToggled);
     connect(ui->roomWidthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,

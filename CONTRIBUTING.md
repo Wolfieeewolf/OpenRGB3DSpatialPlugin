@@ -12,6 +12,10 @@ This project follows the same model as [OpenRGB](https://gitlab.com/CalcProgramm
 
 **Fork on GitLab**, branch from `main`, open a **merge request** on GitLab. Do not expect code review on GitHub pull requests (the mirror posts a redirect comment).
 
+**Spatial layout (plugin):** mm, grid units, RoomGrid, viewport, effects, spacing — [`docs/PluginSpatialMeasurement.md`](../docs/PluginSpatialMeasurement.md). Read this before changing layout math, reference points, or LED placement.
+
+**Game bridge (Minecraft / telemetry):** RoomGrid → game world — [`docs/SpatialMeasurement.md`](../docs/SpatialMeasurement.md). Read after the plugin doc when changing SHM, scale publish, or mod mapping.
+
 ### GitLab CI variables (maintainers)
 
 | Variable | Purpose |

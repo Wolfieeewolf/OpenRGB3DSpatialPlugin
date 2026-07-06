@@ -125,14 +125,14 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "For Spotify/YouTube: try 16 bands, Mix EQ \"Streaming music\", isolation ~55–70%, "
         "effect Preset \"Stream: kick/snare/hat/bass\". Stem meters are heuristic, not AI."));
 
-    connect(ui->startButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_audio_start_clicked);
-    connect(ui->stopButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_audio_stop_clicked);
+    connect(ui->startButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::audioStartClicked);
+    connect(ui->stopButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::audioStopClicked);
     connect(ui->advancedSettingsButton, &QPushButton::clicked, tab, [tab]() {
         AudioAdvancedSettingsDialog::run(tab, tab);
     });
-    connect(ui->restoreDefaultsButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_audio_restore_defaults_clicked);
+    connect(ui->restoreDefaultsButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::audioRestoreDefaultsClicked);
     connect(AudioInputManager::instance(), &AudioInputManager::LevelUpdated, tab,
-            &OpenRGB3DSpatialTab::on_audio_level_updated);
+            &OpenRGB3DSpatialTab::audioLevelUpdated);
 
     const QStringList devs = AudioInputManager::instance()->listInputDevices();
     if(devs.isEmpty())
@@ -144,14 +144,14 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     {
         ui->deviceRow->combo()->addItems(devs);
         connect(ui->deviceRow->combo(), QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-                &OpenRGB3DSpatialTab::on_audio_device_changed);
+                &OpenRGB3DSpatialTab::audioDeviceChanged);
         ui->deviceRow->combo()->setCurrentIndex(0);
-        tab->on_audio_device_changed(0);
+        tab->audioDeviceChanged(0);
     }
 
-    connect(ui->gainRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::on_audio_gain_changed);
-    connect(ui->clarityRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::on_audio_clarity_changed);
-    connect(ui->isolationRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::on_audio_isolation_changed);
+    connect(ui->gainRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::audioGainChanged);
+    connect(ui->clarityRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::audioClarityChanged);
+    connect(ui->isolationRow->slider(), &QSlider::valueChanged, tab, &OpenRGB3DSpatialTab::audioIsolationChanged);
 
     ui->mixPresetRow->combo()->addItem(QStringLiteral("Flat (unity)"), 0);
     ui->mixPresetRow->combo()->addItem(QStringLiteral("Isolate kick"), 1);
@@ -163,12 +163,12 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
     ui->mixPresetRow->combo()->addItem(QStringLiteral("Reduce vocals (experimental)"), 7);
     ui->mixPresetRow->combo()->addItem(QStringLiteral("Streaming music (Spotify/YT)"), 8);
     connect(ui->mixPresetRow->combo(), QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_audio_mix_preset_changed);
+            &OpenRGB3DSpatialTab::audioMixPresetChanged);
 
     ui->bandsRow->combo()->addItems({QStringLiteral("8"), QStringLiteral("16"), QStringLiteral("32")});
     ui->bandsRow->combo()->setCurrentText(QStringLiteral("16"));
     connect(ui->bandsRow->combo(), QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_audio_bands_changed);
+            &OpenRGB3DSpatialTab::audioBandsChanged);
 
     ui->fftRow->combo()->addItems({QStringLiteral("512"), QStringLiteral("1024"), QStringLiteral("2048"),
                                    QStringLiteral("4096"), QStringLiteral("8192")});
@@ -181,7 +181,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         }
     }
     connect(ui->fftRow->combo(), QOverload<int>::of(&QComboBox::currentIndexChanged), tab,
-            &OpenRGB3DSpatialTab::on_audio_fft_changed);
+            &OpenRGB3DSpatialTab::audioFftChanged);
 
     {
         const int bands = ui->bandsRow->combo()->currentText().toInt();
@@ -206,7 +206,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         {
             const QSignalBlocker block(ui->deviceRow->combo());
             ui->deviceRow->combo()->setCurrentIndex(di);
-            tab->on_audio_device_changed(di);
+            tab->audioDeviceChanged(di);
         }
     }
 
@@ -216,11 +216,11 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         gv     = std::max(1, std::min(500, gv));
         const QSignalBlocker block(ui->gainRow->slider());
         ui->gainRow->slider()->setValue(gv);
-        tab->on_audio_gain_changed(gv);
+        tab->audioGainChanged(gv);
     }
     else
     {
-        tab->on_audio_gain_changed(ui->gainRow->slider()->value());
+        tab->audioGainChanged(ui->gainRow->slider()->value());
     }
 
     if(settings.contains("AudioMixClarity"))
@@ -229,11 +229,11 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         cv     = std::max(0, std::min(100, cv));
         const QSignalBlocker block(ui->clarityRow->slider());
         ui->clarityRow->slider()->setValue(cv);
-        tab->on_audio_clarity_changed(cv);
+        tab->audioClarityChanged(cv);
     }
     else
     {
-        tab->on_audio_clarity_changed(ui->clarityRow->slider()->value());
+        tab->audioClarityChanged(ui->clarityRow->slider()->value());
     }
 
     if(settings.contains("AudioBandIsolation"))
@@ -242,11 +242,11 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         iv     = std::max(0, std::min(100, iv));
         const QSignalBlocker block(ui->isolationRow->slider());
         ui->isolationRow->slider()->setValue(iv);
-        tab->on_audio_isolation_changed(iv);
+        tab->audioIsolationChanged(iv);
     }
     else
     {
-        tab->on_audio_isolation_changed(ui->isolationRow->slider()->value());
+        tab->audioIsolationChanged(ui->isolationRow->slider()->value());
     }
 
     if(settings.contains("AudioBands"))
@@ -257,7 +257,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         {
             const QSignalBlocker block(ui->bandsRow->combo());
             ui->bandsRow->combo()->setCurrentIndex(bidx);
-            tab->on_audio_bands_changed(bidx);
+            tab->audioBandsChanged(bidx);
         }
     }
 
@@ -269,7 +269,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         {
             const QSignalBlocker block(ui->fftRow->combo());
             ui->fftRow->combo()->setCurrentIndex(fidx);
-            tab->on_audio_fft_changed(fidx);
+            tab->audioFftChanged(fidx);
         }
     }
 
@@ -279,7 +279,7 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
         pidx     = std::clamp(pidx, 0, ui->mixPresetRow->combo()->count() - 1);
         const QSignalBlocker block(ui->mixPresetRow->combo());
         ui->mixPresetRow->combo()->setCurrentIndex(pidx);
-        tab->on_audio_mix_preset_changed(pidx);
+        tab->audioMixPresetChanged(pidx);
     }
 
     if(settings.contains("AudioEqGain") && settings["AudioEqGain"].is_array())

@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "GridSpaceUtils.h"
+
 namespace CustomControllerGridLayoutMath
 {
 
@@ -16,21 +18,20 @@ constexpr qreal kHeaderSizeMaxScene = 5.0;
 constexpr qreal kHeaderSizeRatio    = 0.32;
 constexpr float  kMinCellSizeMm       = 0.5f;
 constexpr float  kDefaultCellSizeMm   = 10.0f;
-constexpr float  kDefaultMmPerUnit    = 10.0f;
 
 inline float MmPerSceneUnit(float grid_scale_mm)
 {
-    return (grid_scale_mm > 0.001f) ? grid_scale_mm : kDefaultMmPerUnit;
+    return SafeGridScaleMm(grid_scale_mm);
 }
 
 inline qreal MmToScene(float mm, float mm_per_unit)
 {
-    return static_cast<qreal>(mm) / static_cast<qreal>(mm_per_unit);
+    return static_cast<qreal>(MMToGridUnits(mm, mm_per_unit));
 }
 
 inline float SceneToMm(qreal scene, float mm_per_unit)
 {
-    return static_cast<float>(scene) * mm_per_unit;
+    return GridUnitsToMM(static_cast<float>(scene), mm_per_unit);
 }
 
 inline float SumSizes(const QVector<float>& sizes)

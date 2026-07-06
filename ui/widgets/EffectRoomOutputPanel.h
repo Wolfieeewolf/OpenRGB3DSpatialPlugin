@@ -37,7 +37,7 @@ public:
               RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
               std::vector<int>& emitter_controllers,
               std::vector<int>& receiver_controllers,
-              const std::function<void()>& on_changed,
+              const std::function<void()>& changed,
               const std::function<QString(int)>& transform_label = {});
 
     void syncFromState(SpatialRoom::SpatialRoomOutputRole output_role,
@@ -76,7 +76,7 @@ private:
     std::vector<int>* bound_emitters_ = nullptr;
     std::vector<int>* bound_receivers_ = nullptr;
     SpatialEffect3D* bound_effect_ = nullptr;
-    std::function<void()> on_changed_;
+    std::function<void()> changed_callback_;
     std::function<QString(int)> transform_label_fn_;
 };
 

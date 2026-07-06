@@ -164,7 +164,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                     if(di >= 0 && di < audioDeviceCombo()->count())
                     {
                         audioDeviceCombo()->setCurrentIndex(di);
-                        on_audio_device_changed(di);
+                        audioDeviceChanged(di);
                         applied = true;
                     }
                 }
@@ -175,7 +175,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                     if(idx >= 0)
                     {
                         audioDeviceCombo()->setCurrentIndex(idx);
-                        on_audio_device_changed(idx);
+                        audioDeviceChanged(idx);
                     }
                 }
             }
@@ -187,7 +187,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                     QSignalBlocker blocker(audioGainSlider());
                     audioGainSlider()->setValue(gv);
                 }
-                on_audio_gain_changed(gv);
+                audioGainChanged(gv);
             }
 
             if(a.contains("bands_count") && audioBandsCombo())
@@ -199,7 +199,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                     audioBandsCombo()->blockSignals(true);
                     audioBandsCombo()->setCurrentIndex(idx);
                     audioBandsCombo()->blockSignals(false);
-                    on_audio_bands_changed(idx);
+                    audioBandsChanged(idx);
                 }
             }
 
@@ -212,7 +212,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                             QSignalBlocker blocker(audioFftCombo());
                             audioFftCombo()->setCurrentIndex(fi);
                         }
-                        on_audio_fft_changed(fi);
+                        audioFftChanged(fi);
                     }
                     else if(a.contains("fft_value"))
                     {
@@ -224,7 +224,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                                 QSignalBlocker blocker(audioFftCombo());
                                 audioFftCombo()->setCurrentIndex(idx);
                             }
-                            on_audio_fft_changed(idx);
+                            audioFftChanged(idx);
                         }
                     }
             }
@@ -349,7 +349,7 @@ void OpenRGB3DSpatialTab::TryAutoLoadEffectProfile()
     }
 }
 
-void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
+void OpenRGB3DSpatialTab::saveEffectProfileClicked()
 {
     if(effect_stack.empty())
     {
@@ -406,7 +406,7 @@ void OpenRGB3DSpatialTab::on_save_effect_profile_clicked()
                             QString("Effect profile \"%1\" saved successfully!").arg(name));
 }
 
-void OpenRGB3DSpatialTab::on_load_effect_profile_clicked()
+void OpenRGB3DSpatialTab::loadEffectProfileClicked()
 {
     if(!effectProfilesCombo() || effectProfilesCombo()->currentIndex() < 0)
     {
@@ -432,7 +432,7 @@ void OpenRGB3DSpatialTab::on_load_effect_profile_clicked()
                             QString("Effect profile \"%1\" loaded successfully!\n\nClick Start in the Effects tab to begin.").arg(profile_name));
 }
 
-void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
+void OpenRGB3DSpatialTab::deleteEffectProfileClicked()
 {
     if(!effectProfilesCombo() || effectProfilesCombo()->currentIndex() < 0)
     {
@@ -467,7 +467,7 @@ void OpenRGB3DSpatialTab::on_delete_effect_profile_clicked()
                             QString("Effect profile \"%1\" deleted successfully!").arg(profile_name));
 }
 
-void OpenRGB3DSpatialTab::on_effect_profile_changed(int)
+void OpenRGB3DSpatialTab::effectProfileChanged(int)
 {
     SaveCurrentEffectProfileName();
 }

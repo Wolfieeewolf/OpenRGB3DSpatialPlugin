@@ -29,10 +29,10 @@ void ZonesPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     PluginUiApplyMutedSecondaryLabel(ui->helpLabel->label());
 
-    connect(ui->zonesList, &QListWidget::currentRowChanged, tab, &OpenRGB3DSpatialTab::on_zone_selected);
-    connect(ui->createZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_create_zone_clicked);
-    connect(ui->editZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_edit_zone_clicked);
-    connect(ui->deleteZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_delete_zone_clicked);
+    connect(ui->zonesList, &QListWidget::currentRowChanged, tab, &OpenRGB3DSpatialTab::zoneSelected);
+    connect(ui->createZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::createZoneClicked);
+    connect(ui->editZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::editZoneClicked);
+    connect(ui->deleteZoneButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::deleteZoneClicked);
 }
 
 QListWidget* ZonesPanel::zonesList() const { return ui->zonesList; }

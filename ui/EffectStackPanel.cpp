@@ -37,7 +37,7 @@ void EffectStackPanel::bindTab(OpenRGB3DSpatialTab* tab)
     PluginUiApplyMutedSecondaryLabel(ui->layersHintLabel);
 
     connect(ui->stackList, &QListWidget::currentRowChanged, tab,
-            &OpenRGB3DSpatialTab::on_effect_stack_selection_changed);
+            &OpenRGB3DSpatialTab::effectStackSelectionChanged);
     connect(ui->stackList, &QListWidget::itemClicked, tab,
             [tab](QListWidgetItem*)
             {
@@ -48,20 +48,20 @@ void EffectStackPanel::bindTab(OpenRGB3DSpatialTab* tab)
                 const int row = tab->effectStackList()->currentRow();
                 if(row >= 0 && row == tab->last_stack_selection_index)
                 {
-                    tab->on_effect_stack_selection_changed(row);
+                    tab->effectStackSelectionChanged(row);
                 }
             });
     connect(ui->stackList, &QListWidget::itemDoubleClicked, tab,
-            &OpenRGB3DSpatialTab::on_effect_stack_item_double_clicked);
+            &OpenRGB3DSpatialTab::effectStackItemDoubleClicked);
 
-    connect(ui->startAllButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_start_all_effects_clicked);
-    connect(ui->stopAllButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_stop_all_effects_clicked);
+    connect(ui->startAllButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::startAllEffectsClicked);
+    connect(ui->stopAllButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::stopAllEffectsClicked);
     connect(ui->removeLayerButton, &QPushButton::clicked, tab,
-            &OpenRGB3DSpatialTab::on_remove_effect_from_stack_clicked);
+            &OpenRGB3DSpatialTab::removeEffectFromStackClicked);
 
-    connect(ui->savePresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_save_stack_preset_clicked);
-    connect(ui->loadPresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_load_stack_preset_clicked);
-    connect(ui->deletePresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::on_delete_stack_preset_clicked);
+    connect(ui->savePresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::saveStackPresetClicked);
+    connect(ui->loadPresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::loadStackPresetClicked);
+    connect(ui->deletePresetButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::deleteStackPresetClicked);
 
     tab->UpdateStackEffectZoneCombo();
 }

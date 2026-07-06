@@ -575,7 +575,7 @@ void BuildRoomBlockerField(RoomBlockerField& out, float grid_scale_mm, const Gri
         return;
     }
 
-    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     float cell_size = std::max(0.25f, MMToGridUnits(8.0f, scale_mm));
 
     Vector3D bounds_min{std::numeric_limits<float>::max(),
@@ -771,7 +771,7 @@ void BuildBlockerGridOccluders(std::vector<BlockerGridOccluder>& out, float grid
         return;
     }
 
-    const float scale_mm = (grid_scale_mm > 0.001f) ? grid_scale_mm : 10.0f;
+    const float scale_mm = SafeGridScaleMm(grid_scale_mm);
     for(size_t ctrl_index = 0; ctrl_index < transforms->size(); ++ctrl_index)
     {
         ::ControllerTransform* ctrl = (*transforms)[ctrl_index].get();
