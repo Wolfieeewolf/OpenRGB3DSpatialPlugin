@@ -14,7 +14,7 @@ EffectInfo3D MinecraftRoomVrTintEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
     info.effect_description =
-        "VR-room mode: map your physical room 1:1 into Minecraft using player pose and GPU cubemap sampling. "
+        "Ambilight viewport: room LEDs mirror what you see in-game (line-of-sight), not the whole world. "
         "Place a reference point at eye height and set this effect's 3D origin there.";
     return info;
 }

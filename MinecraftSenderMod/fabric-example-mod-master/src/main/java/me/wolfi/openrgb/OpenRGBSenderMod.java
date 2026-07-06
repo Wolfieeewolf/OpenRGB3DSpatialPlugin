@@ -8,6 +8,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.TransparentBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
@@ -829,29 +832,128 @@ public class OpenRGBSenderMod implements ClientModInitializer
         out[3] = alpha;
     }
 
-    /**
-     * Line-of-sight shell: march from the player's eyes toward the cell center and sample the
-     * first solid block hit (walls/floor/ceiling), not the block at the far grid coordinate.
-     */
-    private static BlockPos raycastFirstSolidToward(Level world, LocalPlayer player, Vec3 targetCenter)
-    {
-        final Vec3 start = player.getEyePosition();
-        if(start.distanceToSqr(targetCenter) < 1.0e-4)
-        {
-            return BlockPos.containing(targetCenter);
-        }
+    private static final int MAX_VIEWPORT_SEE_THROUGH_PASSES = 6;
+    private static final double VIEWPORT_RAY_STEP_EPS = 0.05;
+    private static final float VIEWPORT_GLASS_LAYER_WEIGHT = 0.35f;
 
-        final BlockHitResult hit = world.clip(new ClipContext(
-                start,
+    private static void clearRoomSampleRgba(int[] out)
+    {
+        out[0] = 0;
+        out[1] = 0;
+        out[2] = 0;
+        out[3] = 0;
+    }
+
+    /** Glass panes, leaves, bars, etc. — ray continues to the surface behind. */
+    private static boolean isSeeThroughForViewport(BlockState state)
+    {
+        if(state.isAir())
+        {
+            return false;
+        }
+        if(state.is(BlockTags.LEAVES))
+        {
+            return true;
+        }
+        final var block = state.getBlock();
+        return block instanceof TransparentBlock || block instanceof IronBarsBlock;
+    }
+
+    private static void blendSeeThroughOverOpaque(int[] seeThrough, float seeThroughWeight, int[] opaque, int[] out)
+    {
+        final float glassMix = Math.min(0.55f, VIEWPORT_GLASS_LAYER_WEIGHT * seeThroughWeight);
+        out[0] = clamp255(Math.round(opaque[0] * (1.0f - glassMix) + seeThrough[0] * glassMix));
+        out[1] = clamp255(Math.round(opaque[1] * (1.0f - glassMix) + seeThrough[1] * glassMix));
+        out[2] = clamp255(Math.round(opaque[2] * (1.0f - glassMix) + seeThrough[2] * glassMix));
+        out[3] = opaque[3];
+    }
+
+    /**
+     * Viewport / ambilight: march from the player's eyes toward the room-shell target, passing
+     * through see-through blocks (glass, leaves, bars) to the first opaque surface behind.
+     */
+    private static BlockHitResult raycastTowardTarget(Level world, LocalPlayer player, Vec3 rayStart, Vec3 targetCenter)
+    {
+        return world.clip(new ClipContext(
+                rayStart,
                 targetCenter,
                 ClipContext.Block.COLLIDER,
                 ClipContext.Fluid.NONE,
                 player));
-        if(hit.getType() == HitResult.Type.BLOCK)
+    }
+
+    /** Sample only what the player can see along the ray to the shell target (ambilight viewport). */
+    private static void sampleRoomCellAtWorldTarget(Level world, LocalPlayer player, Vec3 target, int[] out)
+    {
+        final Vec3 eye = player.getEyePosition();
+        if(eye.distanceToSqr(target) < 1.0e-4)
         {
-            return hit.getBlockPos();
+            final BlockPos at = BlockPos.containing(target);
+            if(world.isEmptyBlock(at))
+            {
+                clearRoomSampleRgba(out);
+                return;
+            }
+            sampleBlockCellRgba(world, at, out);
+            return;
         }
-        return BlockPos.containing(targetCenter);
+
+        Vec3 rayStart = eye;
+        final int[] seeThroughRgb = new int[4];
+        float seeThroughWeight = 0.0f;
+        final int[] opaqueRgb = new int[4];
+        final Vec3 marchDir = target.subtract(eye).normalize();
+
+        for(int step = 0; step < MAX_VIEWPORT_SEE_THROUGH_PASSES; step++)
+        {
+            final BlockHitResult hit = raycastTowardTarget(world, player, rayStart, target);
+            if(hit.getType() != HitResult.Type.BLOCK)
+            {
+                clearRoomSampleRgba(out);
+                return;
+            }
+
+            final BlockPos pos = hit.getBlockPos();
+            if(world.isEmptyBlock(pos))
+            {
+                clearRoomSampleRgba(out);
+                return;
+            }
+
+            final BlockState state = world.getBlockState(pos);
+            if(!isSeeThroughForViewport(state))
+            {
+                sampleBlockCellRgba(world, pos, opaqueRgb);
+                if(opaqueRgb[3] <= 0)
+                {
+                    clearRoomSampleRgba(out);
+                    return;
+                }
+                if(seeThroughWeight > 0.01f)
+                {
+                    blendSeeThroughOverOpaque(seeThroughRgb, seeThroughWeight, opaqueRgb, out);
+                }
+                else
+                {
+                    out[0] = opaqueRgb[0];
+                    out[1] = opaqueRgb[1];
+                    out[2] = opaqueRgb[2];
+                    out[3] = opaqueRgb[3];
+                }
+                return;
+            }
+
+            sampleBlockCellRgba(world, pos, seeThroughRgb);
+            seeThroughWeight += VIEWPORT_GLASS_LAYER_WEIGHT;
+            rayStart = hit.getLocation().add(marchDir.scale(VIEWPORT_RAY_STEP_EPS));
+            if(rayStart.distanceToSqr(target) >= eye.distanceToSqr(target))
+            {
+                clearRoomSampleRgba(out);
+                return;
+            }
+        }
+
+        clearRoomSampleRgba(out);
     }
 
     private static int resolveBlockDisplayRgb(Level world, BlockPos pos, int fallback)
@@ -889,30 +991,6 @@ public class OpenRGBSenderMod implements ClientModInitializer
         return interval;
     }
 
-    private static void sampleRoomCellAtWorldTarget(Level world, Vec3 target, int[] out)
-    {
-        final BlockPos at = BlockPos.containing(target.x, target.y, target.z);
-        if(!world.getBlockState(at).isAir())
-        {
-            sampleBlockCellRgba(world, at, out);
-            return;
-        }
-        // Air cell: scan downward to find the nearest ground block.
-        // This is much cheaper than a full line-of-sight raycast from the player's eye.
-        // Ceiling/sky cells that find no ground within range return transparent (alpha=0),
-        // which triggers the plugin's sky-colour fallback for those LEDs.
-        for(int dy = 1; dy <= 16; dy++)
-        {
-            final BlockPos below = BlockPos.containing(target.x, target.y - dy, target.z);
-            if(!world.getBlockState(below).isAir())
-            {
-                sampleBlockCellRgba(world, below, out);
-                return;
-            }
-        }
-        out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
-    }
-
     private void sendRoomSampleFrame(DatagramSocket socket, InetAddress address, LocalPlayer player, Level world,
                                      RoomSampleConfigReader.Config cfg) throws Exception
     {
@@ -947,7 +1025,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
                     final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
                     final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                    sampleRoomCellAtWorldTarget(world, target, cell);
+                    sampleRoomCellAtWorldTarget(world, player, target, cell);
                     rgba[rgbaIndex++] = (byte)cell[0];
                     rgba[rgbaIndex++] = (byte)cell[1];
                     rgba[rgbaIndex++] = (byte)cell[2];

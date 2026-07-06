@@ -738,11 +738,10 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "VR-room mode: your physical room maps 1:1 into Minecraft. Place a reference point at "
-                "eye height where you stand, set this effect's 3D origin to that reference, then stand "
-                "there in-game. Room colours sample from your character's eyes (not feet) so ceiling "
-                "and wall LEDs line up with what you see. Room yaw fine-tunes heading; block offsets "
-                "trim origin without turning."),
+                "Ambilight viewport: LEDs show what you can see from your eyes, not the whole world volume. "
+                "Place a reference point at eye height, set this effect's 3D origin there, then stand "
+                "in-game at that spot. Walls and caves show only line-of-sight surfaces (no x-ray). "
+                "Room yaw fine-tunes heading; block offsets trim origin without turning."),
             panel);
         hint->setWordWrap(true);
         room_layout->addWidget(hint);
@@ -1108,8 +1107,8 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
             room_rgb = RoomSampleMapping::SampleAtRoomGrid(t, grid_x, grid_y, grid_z, &got_room_sample);
         }
 
-        // Secondary: GPU panorama cubemap (directional ambient fallback).
-        if(!got_room_sample && t.gpu_panorama.has_frame)
+        // Secondary: GPU panorama cubemap only when room SHM grid is inactive.
+        if(!got_room_sample && !t.room_sample.has_frame && t.gpu_panorama.has_frame)
         {
             room_rgb = GpuPanoramaMapping::SampleRoomPoint(t,
                                                            room_scale,
@@ -1126,28 +1125,7 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
                                                            &got_room_sample);
         }
 
-        // World-layer fallback for transparent/unsampled cells (e.g., outdoor sky/ceiling/walls in air).
-        // Ceiling LEDs → sky colour; floor LEDs → ground colour; mid-height → world ambient.
-        if(!got_room_sample || (room_rgb & 0x00FFFFFFu) == 0u)
-        {
-            const float local_y = grid_y - origin_y;
-            if(local_y > 0.5f && t.has_world_layers)
-            {
-                room_rgb = MakeRgb(t.world_sky_r, t.world_sky_g, t.world_sky_b);
-                got_room_sample = true;
-            }
-            else if(local_y < -0.5f && t.has_world_layers)
-            {
-                room_rgb = MakeRgb(t.world_ground_r, t.world_ground_g, t.world_ground_b);
-                got_room_sample = true;
-            }
-            else if(t.has_world_light)
-            {
-                room_rgb = MakeRgb(t.world_light_r, t.world_light_g, t.world_light_b);
-                got_room_sample = true;
-            }
-        }
-
+        // No sky/ambient fill while room viewport is active — air and open LOS stay dark on LEDs.
         if(got_room_sample)
         {
             room_rgb = EnhanceRoomVrColor(room_rgb, s.room_vr_saturation, s.room_vr_contrast);
