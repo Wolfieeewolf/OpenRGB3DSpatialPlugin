@@ -124,4 +124,19 @@ final class AtmosphereSampler
         }
         return fallback;
     }
+
+    static int sampleFoliageColor(Level world, BlockPos pos, int fallback)
+    {
+        if(world instanceof ClientLevel clientLevel)
+        {
+            try
+            {
+                return BiomeColors.getAverageFoliageColor(clientLevel, pos);
+            }
+            catch(Throwable ignored)
+            {
+            }
+        }
+        return fallback;
+    }
 }

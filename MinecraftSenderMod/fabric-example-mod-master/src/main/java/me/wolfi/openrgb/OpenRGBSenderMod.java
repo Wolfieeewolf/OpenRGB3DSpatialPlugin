@@ -1,16 +1,17 @@
 package me.wolfi.openrgb;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.TransparentBlock;
-import net.minecraft.world.level.block.IronBarsBlock;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
@@ -74,6 +75,10 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private long lastWaitingForConfigLogMs = 0L;
     /** Reused across frames to avoid per-tick allocation. Resized only when grid dimensions change. */
     private byte[] roomSampleRgbaBuffer = new byte[0];
+    /** Rotating slice index for large grids — spreads raycasts over several ticks. */
+    private int roomSampleTemporalSlice = 0;
+    private static final int ROOM_SAMPLE_TEMPORAL_SLICES = 4;
+    private static final int ROOM_SAMPLE_TEMPORAL_THRESHOLD = 4096;
     /** Reused cubemap pixel buffer (16×16×6×4 bytes). */
     private static final int CMAP_W = 16;
     private final byte[] cubemapBuffer = new byte[CMAP_W * CMAP_W * 6 * 4];
@@ -98,6 +103,25 @@ public class OpenRGBSenderMod implements ClientModInitializer
         instance = this;
         OpenRGBSenderConfig.get();
         GpuFramebufferCapturer.register();
+        ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(
+                new SimpleSynchronousResourceReloadListener()
+                {
+                    @Override
+                    public Identifier getFabricId()
+                    {
+                        return Identifier.fromNamespaceAndPath("openrgb-minecraft-sender", "block_texture_precache");
+                    }
+
+                    @Override
+                    public void onResourceManagerReload(net.minecraft.server.packs.resources.ResourceManager resourceManager)
+                    {
+                        final Minecraft client = Minecraft.getInstance();
+                        if(client != null)
+                        {
+                            client.execute(() -> BlockTexturePrecache.onModelsReady(client));
+                        }
+                    }
+                });
     }
 
     public static void invalidateUdpTarget()
@@ -124,6 +148,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
         {
             return;
         }
+        BlockTexturePrecache.tick(client);
         // Block-raycast cubemap fallback (only when room samples are off).
         GpuPanoramaCapturer.onClientTick(client);
         GpuFramebufferCapturer.onClientTick(client);
@@ -832,9 +857,9 @@ public class OpenRGBSenderMod implements ClientModInitializer
         out[3] = alpha;
     }
 
-    private static final int MAX_VIEWPORT_SEE_THROUGH_PASSES = 6;
-    private static final double VIEWPORT_RAY_STEP_EPS = 0.05;
-    private static final float VIEWPORT_GLASS_LAYER_WEIGHT = 0.35f;
+    private static final int MAX_VIEWPORT_BLEND_LAYERS = 6;
+    private static final double VIEWPORT_RAY_EPS = 0.05;
+    private static final int VIEWPORT_WATER_COARSE_SAMPLES = 4;
 
     private static void clearRoomSampleRgba(int[] out)
     {
@@ -844,116 +869,154 @@ public class OpenRGBSenderMod implements ClientModInitializer
         out[3] = 0;
     }
 
-    /** Glass panes, leaves, bars, etc. — ray continues to the surface behind. */
-    private static boolean isSeeThroughForViewport(BlockState state)
+    /** Front-to-back compositing: nearer layer over existing accumulation. */
+    private static void compositeViewportLayer(int[] accum, int[] layer)
     {
-        if(state.isAir())
+        final float la = layer[3] / 255.0f;
+        if(la <= 0.001f)
         {
-            return false;
+            return;
         }
-        if(state.is(BlockTags.LEAVES))
+        final float aa = accum[3] / 255.0f;
+        final float lr = layer[0] * la;
+        final float lg = layer[1] * la;
+        final float lb = layer[2] * la;
+        final float ar = accum[0] * aa;
+        final float ag = accum[1] * aa;
+        final float ab = accum[2] * aa;
+        final float outA = la + aa * (1.0f - la);
+        if(outA <= 0.001f)
         {
-            return true;
+            clearRoomSampleRgba(accum);
+            return;
         }
-        final var block = state.getBlock();
-        return block instanceof TransparentBlock || block instanceof IronBarsBlock;
+        final float invA = 1.0f / outA;
+        accum[0] = clamp255(Math.round((lr + ar * (1.0f - la)) * invA));
+        accum[1] = clamp255(Math.round((lg + ag * (1.0f - la)) * invA));
+        accum[2] = clamp255(Math.round((lb + ab * (1.0f - la)) * invA));
+        accum[3] = clamp255(Math.round(outA * 255.0f));
     }
 
-    private static void blendSeeThroughOverOpaque(int[] seeThrough, float seeThroughWeight, int[] opaque, int[] out)
+    private static void writeAccumToRoomSample(int[] accum, int[] out)
     {
-        final float glassMix = Math.min(0.55f, VIEWPORT_GLASS_LAYER_WEIGHT * seeThroughWeight);
-        out[0] = clamp255(Math.round(opaque[0] * (1.0f - glassMix) + seeThrough[0] * glassMix));
-        out[1] = clamp255(Math.round(opaque[1] * (1.0f - glassMix) + seeThrough[1] * glassMix));
-        out[2] = clamp255(Math.round(opaque[2] * (1.0f - glassMix) + seeThrough[2] * glassMix));
-        out[3] = opaque[3];
+        if(accum[3] <= 0)
+        {
+            clearRoomSampleRgba(out);
+            return;
+        }
+        out[0] = accum[0];
+        out[1] = accum[1];
+        out[2] = accum[2];
+        out[3] = accum[3];
     }
 
-    /**
-     * Viewport / ambilight: march from the player's eyes toward the room-shell target, passing
-     * through see-through blocks (glass, leaves, bars) to the first opaque surface behind.
-     */
-    private static BlockHitResult raycastTowardTarget(Level world, LocalPlayer player, Vec3 rayStart, Vec3 targetCenter)
+    private static BlockHitResult raycastViewport(Level world, LocalPlayer player, Vec3 from, Vec3 to)
     {
         return world.clip(new ClipContext(
-                rayStart,
-                targetCenter,
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
+                from,
+                to,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.SOURCE_ONLY,
                 player));
     }
 
-    /** Sample only what the player can see along the ray to the shell target (ambilight viewport). */
+    private static BlockPos findWaterAlongRay(Level world, Vec3 eye, Vec3 target)
+    {
+        for(int i = 1; i <= VIEWPORT_WATER_COARSE_SAMPLES; i++)
+        {
+            final double t = i / (double)VIEWPORT_WATER_COARSE_SAMPLES;
+            final BlockPos pos = BlockPos.containing(eye.lerp(target, t));
+            if(world.getFluidState(pos).is(Fluids.WATER))
+            {
+                return pos;
+            }
+        }
+        return null;
+    }
+
+    private static Vec3 advanceRayPastBlock(Vec3 hitLocation, Vec3 marchDir)
+    {
+        return hitLocation.add(marchDir.scale(VIEWPORT_RAY_EPS));
+    }
+
+    /**
+     * Viewport ray with layered compositing: semi-transparent water, leaves, glass, light blocks,
+     * and stained glass blend with surfaces behind instead of fully occluding them.
+     */
     private static void sampleRoomCellAtWorldTarget(Level world, LocalPlayer player, Vec3 target, int[] out)
     {
         final Vec3 eye = player.getEyePosition();
         if(eye.distanceToSqr(target) < 1.0e-4)
         {
             final BlockPos at = BlockPos.containing(target);
-            if(world.isEmptyBlock(at))
+            final int[] accum = new int[4];
+            if(world.getFluidState(at).is(Fluids.WATER))
             {
-                clearRoomSampleRgba(out);
-                return;
+                final int[] layer = new int[4];
+                BlockDisplayColorSampler.sampleWaterLayer(world, at, layer);
+                compositeViewportLayer(accum, layer);
             }
-            sampleBlockCellRgba(world, at, out);
+            else if(!world.isEmptyBlock(at))
+            {
+                final int[] layer = new int[4];
+                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), layer);
+                compositeViewportLayer(accum, layer);
+            }
+            writeAccumToRoomSample(accum, out);
             return;
         }
 
         Vec3 rayStart = eye;
-        final int[] seeThroughRgb = new int[4];
-        float seeThroughWeight = 0.0f;
-        final int[] opaqueRgb = new int[4];
+        final int[] accum = new int[4];
+        final int[] layer = new int[4];
         final Vec3 marchDir = target.subtract(eye).normalize();
 
-        for(int step = 0; step < MAX_VIEWPORT_SEE_THROUGH_PASSES; step++)
+        for(int step = 0; step < MAX_VIEWPORT_BLEND_LAYERS; step++)
         {
-            final BlockHitResult hit = raycastTowardTarget(world, player, rayStart, target);
+            final BlockHitResult hit = raycastViewport(world, player, rayStart, target);
             if(hit.getType() != HitResult.Type.BLOCK)
             {
-                clearRoomSampleRgba(out);
+                final BlockPos waterPos = findWaterAlongRay(world, eye, target);
+                if(waterPos != null)
+                {
+                    BlockDisplayColorSampler.sampleWaterLayer(world, waterPos, layer);
+                    compositeViewportLayer(accum, layer);
+                }
+                writeAccumToRoomSample(accum, out);
                 return;
             }
 
             final BlockPos pos = hit.getBlockPos();
-            if(world.isEmptyBlock(pos))
-            {
-                clearRoomSampleRgba(out);
-                return;
-            }
-
             final BlockState state = world.getBlockState(pos);
-            if(!isSeeThroughForViewport(state))
+            final var fluid = world.getFluidState(pos);
+            if(state.isAir() && !fluid.is(Fluids.WATER))
             {
-                sampleBlockCellRgba(world, pos, opaqueRgb);
-                if(opaqueRgb[3] <= 0)
-                {
-                    clearRoomSampleRgba(out);
-                    return;
-                }
-                if(seeThroughWeight > 0.01f)
-                {
-                    blendSeeThroughOverOpaque(seeThroughRgb, seeThroughWeight, opaqueRgb, out);
-                }
-                else
-                {
-                    out[0] = opaqueRgb[0];
-                    out[1] = opaqueRgb[1];
-                    out[2] = opaqueRgb[2];
-                    out[3] = opaqueRgb[3];
-                }
+                writeAccumToRoomSample(accum, out);
                 return;
             }
 
-            sampleBlockCellRgba(world, pos, seeThroughRgb);
-            seeThroughWeight += VIEWPORT_GLASS_LAYER_WEIGHT;
-            rayStart = hit.getLocation().add(marchDir.scale(VIEWPORT_RAY_STEP_EPS));
+            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, layer);
+            if(layer[3] > 0)
+            {
+                compositeViewportLayer(accum, layer);
+            }
+
+            final int coverAlpha = BlockDisplayColorSampler.viewportCoverAlpha(state, fluid);
+            if(!BlockDisplayColorSampler.continuesViewportRay(state, fluid, coverAlpha))
+            {
+                writeAccumToRoomSample(accum, out);
+                return;
+            }
+
+            rayStart = advanceRayPastBlock(hit.getLocation(), marchDir);
             if(rayStart.distanceToSqr(target) >= eye.distanceToSqr(target))
             {
-                clearRoomSampleRgba(out);
+                writeAccumToRoomSample(accum, out);
                 return;
             }
         }
 
-        clearRoomSampleRgba(out);
+        writeAccumToRoomSample(accum, out);
     }
 
     private static int resolveBlockDisplayRgb(Level world, BlockPos pos, int fallback)
@@ -1015,12 +1078,21 @@ public class OpenRGBSenderMod implements ClientModInitializer
         final byte[] rgba = roomSampleRgbaBuffer;
         int rgbaIndex = 0;
         final int[] cell = new int[4];
+        final int cellCount = sx * sy * sz;
+        final boolean temporal = cellCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
+        int flatIndex = 0;
         for(int ix = 0; ix < sx; ix++)
         {
             for(int iy = 0; iy < sy; iy++)
             {
                 for(int iz = 0; iz < sz; iz++)
                 {
+                    if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                    {
+                        rgbaIndex += 4;
+                        flatIndex++;
+                        continue;
+                    }
                     final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
                     final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
                     final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
@@ -1030,8 +1102,13 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     rgba[rgbaIndex++] = (byte)cell[1];
                     rgba[rgbaIndex++] = (byte)cell[2];
                     rgba[rgbaIndex++] = (byte)cell[3];
+                    flatIndex++;
                 }
             }
+        }
+        if(temporal)
+        {
+            roomSampleTemporalSlice = (roomSampleTemporalSlice + 1) % ROOM_SAMPLE_TEMPORAL_SLICES;
         }
 
         final long now = System.currentTimeMillis();
