@@ -9,6 +9,7 @@ import net.minecraft.server.packs.PackType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Blocks;
@@ -109,7 +110,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                     @Override
                     public Identifier getFabricId()
                     {
-                        return Identifier.fromNamespaceAndPath("openrgb-minecraft-sender", "block_texture_precache");
+                        return Identifier.fromNamespaceAndPath("openrgb-minecraft-sender", "block_model_precache");
                     }
 
                     @Override
@@ -118,7 +119,11 @@ public class OpenRGBSenderMod implements ClientModInitializer
                         final Minecraft client = Minecraft.getInstance();
                         if(client != null)
                         {
-                            client.execute(() -> BlockTexturePrecache.onModelsReady(client));
+                            client.execute(() ->
+                            {
+                                BlockTexturePrecache.onModelsReady(client);
+                                BlockFaceColorCache.onModelsReady(client);
+                            });
                         }
                     }
                 });
@@ -149,6 +154,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
             return;
         }
         BlockTexturePrecache.tick(client);
+        BlockFaceColorCache.tick(client);
         // Block-raycast cubemap fallback (only when room samples are off).
         GpuPanoramaCapturer.onClientTick(client);
         GpuFramebufferCapturer.onClientTick(client);
@@ -959,7 +965,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
             else if(!world.isEmptyBlock(at))
             {
                 final int[] layer = new int[4];
-                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), layer);
+                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), null, layer);
                 compositeViewportLayer(accum, layer);
             }
             writeAccumToRoomSample(accum, out);
@@ -995,7 +1001,7 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 return;
             }
 
-            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, layer);
+            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, hit.getDirection(), layer);
             if(layer[3] > 0)
             {
                 compositeViewportLayer(accum, layer);

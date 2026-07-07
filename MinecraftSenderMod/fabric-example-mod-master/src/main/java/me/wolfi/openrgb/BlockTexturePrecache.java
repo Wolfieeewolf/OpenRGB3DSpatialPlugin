@@ -58,6 +58,21 @@ final class BlockTexturePrecache
         return ENTRIES.get(spriteId);
     }
 
+    static BlockDisplayColorSampler.TextureSample getOrLoad(Minecraft client, Identifier spriteId)
+    {
+        final BlockDisplayColorSampler.TextureSample cached = get(spriteId);
+        if(cached != null)
+        {
+            return cached;
+        }
+        final BlockDisplayColorSampler.TextureSample sample = readTextureAverage(client, spriteId);
+        if(sample != null)
+        {
+            ENTRIES.putIfAbsent(spriteId, sample);
+        }
+        return sample;
+    }
+
     static void onModelsReady(Minecraft client)
     {
         if(client == null)

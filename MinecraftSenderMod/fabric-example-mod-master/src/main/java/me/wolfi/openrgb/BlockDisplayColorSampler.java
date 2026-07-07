@@ -3,10 +3,9 @@ package me.wolfi.openrgb;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockTintSource;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.block.BlockStateModelSet;
-import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -22,8 +21,6 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Block display colours from loaded block textures and in-game tint sources (biome foliage,
  * birch/spruce constants, water, etc.). Supports snowy leaves and per-layer opacity for
@@ -34,8 +31,6 @@ final class BlockDisplayColorSampler
     private static final float BLOCK_COLOR_SATURATION = 1.72f;
     private static final int SNOW_BLEND_RGB = 0xFFFFFF;
     private static final float SNOWY_LEAVES_BLEND = 0.72f;
-
-    private static final ConcurrentHashMap<Identifier, TextureSample> RUNTIME_CACHE = new ConcurrentHashMap<>();
 
     /** Average RGB and alpha from a block sprite PNG (shared with {@link BlockTexturePrecache}). */
     record TextureSample(int rgb, int averageAlpha)
@@ -124,7 +119,7 @@ final class BlockDisplayColorSampler
                 world.getFluidState(pos)), out);
     }
 
-    static void sampleViewportLayer(Level world, BlockPos pos, BlockState state, int[] out)
+    static void sampleViewportLayer(Level world, BlockPos pos, BlockState state, Direction face, int[] out)
     {
         final FluidState fluid = world.getFluidState(pos);
         if(fluid.is(Fluids.WATER))
@@ -138,12 +133,12 @@ final class BlockDisplayColorSampler
             return;
         }
 
-        int rgb = resolveDisplayRgb(world, pos, state);
+        int rgb = resolveDisplayRgb(world, pos, state, face);
         final int alpha = viewportCoverAlpha(state, fluid);
         writeLitLayer(world, pos, rgb, alpha, out);
     }
 
-    private static int resolveDisplayRgb(Level world, BlockPos pos, BlockState state)
+    private static int resolveDisplayRgb(Level world, BlockPos pos, BlockState state, Direction face)
     {
         if(state.getBlock() instanceof BeaconBeamBlock beam)
         {
@@ -154,7 +149,7 @@ final class BlockDisplayColorSampler
             return 0xFFFFFF;
         }
 
-        int rgb = sampleTexturedBlockRgb(world, pos, state);
+        int rgb = sampleTexturedBlockRgb(world, pos, state, face);
         if(state.is(BlockTags.LEAVES) && isSnowyLeaves(world, pos, state))
         {
             rgb = blendRgb(rgb, SNOW_BLEND_RGB, SNOWY_LEAVES_BLEND);
@@ -162,26 +157,21 @@ final class BlockDisplayColorSampler
         return rgb;
     }
 
-    private static int sampleTexturedBlockRgb(Level world, BlockPos pos, BlockState state)
+    private static int sampleTexturedBlockRgb(Level world, BlockPos pos, BlockState state, Direction face)
     {
         final Minecraft client = Minecraft.getInstance();
         if(client != null && client.level == world)
         {
             try
             {
-                final BlockStateModelSet modelSet = client.getModelManager().getBlockStateModelSet();
-                final Material.Baked particle = modelSet.getParticleMaterial(state);
-                if(particle != null && particle.sprite() != null)
+                final BlockFaceColorCache.FaceColors faceColors =
+                        BlockFaceColorCache.get(Block.getId(state));
+                if(faceColors != null)
                 {
-                    final Identifier spriteId = particle.sprite().contents().name();
-                    final TextureSample texture = loadTextureAverage(client, spriteId);
-                    if(texture != null)
+                    final int baseRgb = faceColors.rgbFor(face);
+                    if(baseRgb >= 0)
                     {
-                        final int tint = sampleBlockTintRgb(world, pos, state);
-                        int r = mulChannel((texture.rgb() >> 16) & 0xFF, (tint >> 16) & 0xFF);
-                        int g = mulChannel((texture.rgb() >> 8) & 0xFF, (tint >> 8) & 0xFF);
-                        int b = mulChannel(texture.rgb() & 0xFF, tint & 0xFF);
-                        return (r << 16) | (g << 8) | b;
+                        return applyBlockTint(world, pos, state, baseRgb);
                     }
                 }
             }
@@ -190,12 +180,21 @@ final class BlockDisplayColorSampler
             }
         }
 
-        final int tint = sampleBlockTintRgb(world, pos, state);
-        if(tint != 0 && tint != 0xFFFFFF)
+        final int tintOnly = sampleBlockTintRgb(world, pos, state);
+        if(tintOnly != 0 && tintOnly != 0xFFFFFF)
         {
-            return tint & 0xFFFFFF;
+            return tintOnly & 0xFFFFFF;
         }
         return mapColorRgb(world, pos, state, 0x808080);
+    }
+
+    private static int applyBlockTint(Level world, BlockPos pos, BlockState state, int baseRgb)
+    {
+        final int tint = sampleBlockTintRgb(world, pos, state);
+        int r = mulChannel((baseRgb >> 16) & 0xFF, (tint >> 16) & 0xFF);
+        int g = mulChannel((baseRgb >> 8) & 0xFF, (tint >> 8) & 0xFF);
+        int b = mulChannel(baseRgb & 0xFF, tint & 0xFF);
+        return (r << 16) | (g << 8) | b;
     }
 
     private static int sampleBlockTintRgb(Level world, BlockPos pos, BlockState state)
@@ -237,10 +236,6 @@ final class BlockDisplayColorSampler
         catch(Throwable ignored)
         {
         }
-        if(state.is(BlockTags.LEAVES))
-        {
-            return AtmosphereSampler.sampleFoliageColor(world, pos, 0x48B518) & 0xFFFFFF;
-        }
         return 0xFFFFFF;
     }
 
@@ -274,17 +269,6 @@ final class BlockDisplayColorSampler
             }
         }
         return false;
-    }
-
-    private static TextureSample loadTextureAverage(Minecraft client, Identifier spriteId)
-    {
-        final TextureSample precached = BlockTexturePrecache.get(spriteId);
-        if(precached != null)
-        {
-            return precached;
-        }
-        return RUNTIME_CACHE.computeIfAbsent(spriteId,
-                id -> BlockTexturePrecache.readTextureAverage(client, id));
     }
 
     private static void writeLitLayer(Level world, BlockPos pos, int rgb, int alpha, int[] out)
