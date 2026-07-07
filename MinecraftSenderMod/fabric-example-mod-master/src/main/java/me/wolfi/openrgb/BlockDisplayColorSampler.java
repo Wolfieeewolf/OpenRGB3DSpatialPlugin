@@ -24,7 +24,7 @@ import net.minecraft.world.level.material.MapColor;
 /**
  * Block display colours from loaded block textures and in-game tint sources (biome foliage,
  * birch/spruce constants, water, etc.). Supports snowy leaves and per-layer opacity for
- * viewport compositing through semi-transparent surfaces.
+ * viewport compositing through water, glass, and light blocks. Leaves are opaque surfaces.
  */
 final class BlockDisplayColorSampler
 {
@@ -55,10 +55,6 @@ final class BlockDisplayColorSampler
         {
             return false;
         }
-        if(state.is(BlockTags.LEAVES))
-        {
-            return true;
-        }
         if(state.is(Blocks.LIGHT))
         {
             return true;
@@ -79,10 +75,6 @@ final class BlockDisplayColorSampler
         if(state.isAir())
         {
             return 0;
-        }
-        if(state.is(BlockTags.LEAVES))
-        {
-            return 145;
         }
         if(state.is(Blocks.LIGHT))
         {
