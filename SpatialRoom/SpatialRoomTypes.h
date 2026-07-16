@@ -31,14 +31,6 @@ enum class SpatialRoomOutputRole : int
     EmitterRelay = 1,
 };
 
-/** Cost/quality preset for room features (occlusion, AO). */
-enum class SpatialRoomDepthPreset : int
-{
-    Simple = 0,
-    Standard = 1,
-    Quality = 2,
-};
-
 enum SpatialRoomCapability : uint32_t
 {
     CapNone = 0,
@@ -67,8 +59,6 @@ struct SpatialRoomCapabilities
 /** Per-frame flags shared by the effect render pass (tab-owned). */
 struct SpatialRoomFrameContext
 {
-    std::uint64_t render_sequence = 0;
-    SpatialRoomDepthPreset depth_preset = SpatialRoomDepthPreset::Standard;
     bool room_grid_overlay_pass = false;
 };
 

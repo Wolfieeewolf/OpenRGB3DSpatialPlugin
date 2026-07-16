@@ -345,7 +345,6 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         CaptureSourceInfo info;
         info.id = "screen_" + std::to_string(i);
         info.name = screen->name().toStdString();
-        info.device_name = screen->model().toStdString();
 
         QRect geometry = screen->geometry();
         info.width = geometry.width();
@@ -1527,7 +1526,6 @@ void ScreenCaptureManager::EnumerateSourcesPlatform()
         CaptureSourceInfo info;
         info.id = "screen_" + std::to_string(i);
         info.name = screen->name().toStdString();
-        info.device_name = screen->model().toStdString();
 
         QRect geometry = screen->geometry();
         info.width = geometry.width();

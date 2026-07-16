@@ -20,23 +20,22 @@ nlohmann::json StackPreset3D::ToJson() const
 
 std::unique_ptr<StackPreset3D> StackPreset3D::FromJson(const nlohmann::json& j)
 {
-    std::unique_ptr<StackPreset3D> preset = std::make_unique<StackPreset3D>();
-
-    if(j.contains("name"))
+    if(!j.contains("name") || !j["name"].is_string() ||
+       !j.contains("effects") || !j["effects"].is_array())
     {
-        preset->name = j["name"].get<std::string>();
+        return nullptr;
     }
 
-    if(j.contains("effects") && j["effects"].is_array())
+    std::unique_ptr<StackPreset3D> preset = std::make_unique<StackPreset3D>();
+    preset->name = j["name"].get<std::string>();
+
+    const nlohmann::json& effects_array = j["effects"];
+    for(unsigned int i = 0; i < effects_array.size(); i++)
     {
-        const nlohmann::json& effects_array = j["effects"];
-        for(unsigned int i = 0; i < effects_array.size(); i++)
+        std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
+        if(instance && EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
         {
-            std::unique_ptr<EffectInstance3D> instance = EffectInstance3D::FromJson(effects_array[i]);
-            if(instance && EffectListManager3D::get()->IsEffectRegistered(instance->effect_class_name))
-            {
-                preset->effect_instances.push_back(std::move(instance));
-            }
+            preset->effect_instances.push_back(std::move(instance));
         }
     }
 

@@ -372,8 +372,9 @@ void OpenRGB3DSpatialTab::bindUiPanels()
             ui->rightStacked->setCurrentIndex(ui->leftModeTabs->currentIndex());
         }
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore left/right tab sync: %s", e.what());
         if(ui->rightStacked && ui->leftModeTabs)
         {
             ui->rightStacked->setCurrentIndex(ui->leftModeTabs->currentIndex());

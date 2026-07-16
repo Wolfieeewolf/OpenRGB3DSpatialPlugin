@@ -464,7 +464,20 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     static uint64_t s_effect_render_sequence = 0;
     const uint64_t effect_render_sequence = ++s_effect_render_sequence;
 
-    SpatialRoom::BeginEffectRenderFrame(effect_render_sequence, SpatialRoom::SpatialRoomDepthPreset::Standard);
+    struct EffectRenderFrameGuard
+    {
+        EffectRenderFrameGuard()
+        {
+            SpatialRoom::BeginEffectRenderFrame();
+        }
+        ~EffectRenderFrameGuard()
+        {
+            SpatialRoom::EndEffectRenderFrame();
+        }
+        EffectRenderFrameGuard(const EffectRenderFrameGuard&) = delete;
+        EffectRenderFrameGuard& operator=(const EffectRenderFrameGuard&) = delete;
+    };
+    EffectRenderFrameGuard effect_render_frame_guard;
 
     ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
                                                               manual_room_width,
@@ -638,11 +651,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             const size_t grid_count = (size_t)nx * (size_t)ny * (size_t)nz;
             if(grid_count > 0 && grid_count <= 500000u)
             {
-                std::vector<RGBColor> black_grid(grid_count, black);
-                viewport->SetRoomGridColorBuffer(black_grid);
+                viewport->SetRoomGridColorBuffer(std::vector<RGBColor>(grid_count, black));
             }
             else
+            {
                 viewport->SetRoomGridColorBuffer(std::vector<RGBColor>());
+            }
         }
         return;
     }
@@ -933,7 +947,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     }
 
     const float shade_cache_quant = MMToGridUnits(24.0f, room_grid.grid_scale_mm);
-    SpatialLightingSceneProvider::instance()->BeginAmbientShadeCacheFrame(effect_render_sequence, shade_cache_quant);
+    SpatialLightingSceneProvider::instance()->BeginAmbientShadeCacheFrame(shade_cache_quant);
 
     if(viewport && viewport->GetShowRoomGridOverlay() && active_effects.size() > 0)
     {
@@ -962,10 +976,10 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     for(int iz = 0; iz < nz; iz++)
                     {
                         RGBColor final_color = ToRGBColor(0, 0, 0);
-                        float spx = 0.0f;
-                        float spy = 0.0f;
-                        float spz = 0.0f;
-                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, spx, spy, spz);
+                        float sample_x = 0.0f;
+                        float sample_y = 0.0f;
+                        float sample_z = 0.0f;
+                        viewport->GetRoomGridOverlaySamplePosition(ix, iy, iz, sample_x, sample_y, sample_z);
                         for(size_t effect_idx = 0; effect_idx < active_effects.size(); effect_idx++)
                         {
                             const RenderEffectSlot& slot = active_effects[effect_idx];
@@ -983,22 +997,25 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                             const GridContext3D* local_grid =
                                 ResolveActiveSlotGrid(grid_override, use_world_bounds);
                             const GridContext3D& active_grid = local_grid ? *local_grid : global_grid;
+                            float sx = sample_x;
+                            float sy = sample_y;
+                            float sz = sample_z;
                             if(!slot.effect->SkipsSpatialSampleWarp())
                             {
-                                slot.effect->ApplyAxisScale(spx, spy, spz, active_grid);
-                                slot.effect->ApplyEffectRotation(spx, spy, spz, active_grid);
+                                slot.effect->ApplyAxisScale(sx, sy, sz, active_grid);
+                                slot.effect->ApplyEffectRotation(sx, sy, sz, active_grid);
                             }
                             RGBColor effect_color =
-                                slot.effect->EvaluateColorGrid(spx, spy, spz, time_val, active_grid);
-                            if(!slot.effect->IsPointOnActiveSurface(spx, spy, spz, active_grid))
+                                slot.effect->EvaluateColorGrid(sx, sy, sz, time_val, active_grid);
+                            if(!slot.effect->IsPointOnActiveSurface(sx, sy, sz, active_grid))
                                 effect_color = 0x00000000;
                             effect_color = slot.effect->PostProcessColorGrid(effect_color);
                             final_color = BlendColors(final_color, effect_color, slot.blend_mode);
                         }
                         if(overlay_shade_source)
                         {
-                            final_color =
-                                overlay_shade_source->ApplyLayerRoomAmbientShading(spx, spy, spz, final_color, room_grid);
+                            final_color = overlay_shade_source->ApplyLayerRoomAmbientShading(
+                                sample_x, sample_y, sample_z, final_color, room_grid);
                         }
                         room_grid_overlay_buffer[(size_t)ix * (size_t)ny * (size_t)nz + (size_t)iy * (size_t)nz + (size_t)iz] = final_color;
                     }
@@ -1006,9 +1023,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             }
             SpatialRoom::EndRoomGridOverlayPass();
             viewport->SetRoomGridColorCallback(nullptr);
-            viewport->SetRoomGridColorBuffer(room_grid_overlay_buffer);
+            viewport->SwapRoomGridColorBuffer(room_grid_overlay_buffer);
         }
-        viewport->update();
     }
 
     for(unsigned int ctrl_idx = 0; ctrl_idx < controller_transforms.size(); ctrl_idx++)
@@ -1486,8 +1502,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         viewport->UploadDisplayPlaneCaptureTexturesDuringEffectTick();
         viewport->UpdateColors();
     }
-
-    SpatialRoom::EndEffectRenderFrame();
 }
 
 SpatialEffectSettingsLayout OpenRGB3DSpatialTab::settingsLayoutForClass(const std::string& class_name) const

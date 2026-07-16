@@ -16,7 +16,6 @@ struct CaptureSourceInfo
 {
     std::string     id;
     std::string     name;
-    std::string     device_name;
     int             width;
     int             height;
     int             x;

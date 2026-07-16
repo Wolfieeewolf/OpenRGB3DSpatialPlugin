@@ -991,10 +991,12 @@ void OpenRGB3DSpatialTab::LoadEffectStack()
             return;
         }
 
-        if(j.contains("effects") && j["effects"].is_array())
+        if(!j.contains("effects") || !j["effects"].is_array())
         {
-            RebuildEffectStackFromJson(j["effects"]);
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect stack missing effects array: %s", stack_file.c_str());
+            return;
         }
+        RebuildEffectStackFromJson(j["effects"]);
     }
     catch(const std::exception& e)
     {

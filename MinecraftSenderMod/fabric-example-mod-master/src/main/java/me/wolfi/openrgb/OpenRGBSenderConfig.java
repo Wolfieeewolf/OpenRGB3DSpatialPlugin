@@ -3,6 +3,8 @@ package me.wolfi.openrgb;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -13,6 +15,7 @@ import java.nio.file.Path;
 
 public final class OpenRGBSenderConfig
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static OpenRGBSenderConfig instance;
 
@@ -62,8 +65,9 @@ public final class OpenRGBSenderConfig
                 }
             }
         }
-        catch(IOException | RuntimeException ignored)
+        catch(IOException | RuntimeException e)
         {
+            LOGGER.warn("Failed to load OpenRGB sender config from {}: {}", path, e.toString());
         }
         clamp();
     }
@@ -80,8 +84,9 @@ public final class OpenRGBSenderConfig
                 GSON.toJson(this, writer);
             }
         }
-        catch(IOException ignored)
+        catch(IOException e)
         {
+            LOGGER.warn("Failed to save OpenRGB sender config to {}: {}", path, e.toString());
         }
         OpenRGBSenderMod.invalidateUdpTarget();
     }

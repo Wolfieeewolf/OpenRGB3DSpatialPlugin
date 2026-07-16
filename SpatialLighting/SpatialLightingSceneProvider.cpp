@@ -123,9 +123,8 @@ thread_local std::uint64_t g_shade_cache_geometry_epoch = 0;
 
 } // namespace
 
-void SpatialLightingSceneProvider::BeginAmbientShadeCacheFrame(std::uint64_t render_sequence, float quant_size)
+void SpatialLightingSceneProvider::BeginAmbientShadeCacheFrame(float quant_size)
 {
-    (void)render_sequence;
     if(g_shade_cache_geometry_epoch != scene_geometry_epoch_)
     {
         g_shade_position_cache.clear();

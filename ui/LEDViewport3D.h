@@ -86,8 +86,18 @@ public:
     void GetRoomGridOverlaySamplePosition(int ix, int iy, int iz, float& x, float& y, float& z) const;
     void SetRoomGridOverlayBounds(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
     void ClearRoomGridOverlayBounds();
-    void SetRoomGridColorBuffer(const std::vector<RGBColor>& buf);
-    void SetRoomGridColorCallback(std::function<RGBColor(float x, float y, float z)> cb) { room_grid_color_callback = std::move(cb); update(); }
+    void SetRoomGridColorBuffer(std::vector<RGBColor> buf);
+    /** Swap-adopt overlay colors (avoids a full copy; leaves `buf` with the previous buffer). */
+    void SwapRoomGridColorBuffer(std::vector<RGBColor>& buf);
+    void SetRoomGridColorCallback(std::function<RGBColor(float x, float y, float z)> cb)
+    {
+        if(!room_grid_color_callback && !cb)
+        {
+            return;
+        }
+        room_grid_color_callback = std::move(cb);
+        update();
+    }
 
     void SetCamera(float distance, float yaw, float pitch,
                    float target_x, float target_y, float target_z)

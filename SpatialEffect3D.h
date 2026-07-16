@@ -280,7 +280,6 @@ public:
     virtual bool GetRainbowMode() const;
     bool UseSpatialRoomTint() const { return spatial_mapping_mode != SpatialMappingMode::Off; }
 
-    SpatialMappingMode GetSpatialMappingMode() const { return spatial_mapping_mode; }
     void SetSpatialMappingMode(SpatialMappingMode mode);
     virtual void SetFrequency(unsigned int frequency);
     virtual unsigned int GetFrequency() const;
@@ -309,7 +308,6 @@ public:
     QPushButton* GetStopButton() { return stop_effect_button; }
 
     QWidget* GetCustomSettingsHost() const { return custom_effect_settings_host; }
-    QWidget* GetBandModulationHost() const { return band_modulation_settings_host; }
     void AddColorPatternWidget(QWidget* widget);
     void AddBandModulationWidget(QWidget* widget);
 
@@ -347,10 +345,8 @@ public:
     /** When true, stack pre-sample axis scale / effect rotation are skipped (room-fixed patterns, lighting). */
     virtual bool SkipsSpatialSampleWarp() const;
 
-    SpatialRoom::SpatialRoomCoordinateMode GetRoomCoordinateMode() const { return effect_room_coordinate_mode_; }
     SpatialRoom::SpatialRoomOutputRole GetRoomOutputRole() const { return effect_room_output_role_; }
     const std::vector<int>& roomEmitterControllerIndices() const { return effect_emitter_controller_indices_; }
-    const std::vector<int>& roomReceiverControllerIndices() const { return effect_receiver_controller_indices_; }
     void setRoomEmitterControllerIndex(int index, bool enabled);
     void setRoomReceiverControllerIndex(int index, bool enabled);
     bool isRoomEmitterController(int index) const;
@@ -599,7 +595,6 @@ protected:
     float GetNormalizedDetail() const;
     float GetNormalizedSize() const;
     float GetNormalizedScale() const;
-    bool IsScaleInverted() const { return scale_inverted; }
     void SetScaleInverted(bool inverted);
 
     float GetScaledSpeed() const;

@@ -52,9 +52,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     nlohmann::json audio_json;
     int device_index = (audioDeviceCombo() ? audioDeviceCombo()->currentIndex() : -1);
     audio_json["device_index"] = device_index;
-    audio_json["device_name"] = (audioDeviceCombo() && device_index >= 0)
-        ? audioDeviceCombo()->currentText().toStdString()
-        : std::string();
     audio_json["gain_slider"] = (audioGainSlider() ? audioGainSlider()->value() : 10);
     audio_json["bands_count"] = (audioBandsCombo() ? audioBandsCombo()->currentText().toInt() : 16);
     audio_json["fft_index"] = (audioFftCombo() ? audioFftCombo()->currentIndex() : -1);
@@ -115,15 +112,14 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             return;
         }
 
-        bool has_stack_array = profile_json.contains("stack") && profile_json["stack"].is_array();
-        if(has_stack_array)
+        if(!profile_json.contains("stack") || !profile_json["stack"].is_array())
         {
-            RebuildEffectStackFromJson(profile_json["stack"]);
+            QMessageBox::critical(this, "Invalid Profile",
+                "This effect profile is missing a stack array and cannot be loaded.");
+            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile missing stack array: %s", filename.c_str());
+            return;
         }
-        else
-        {
-            RebuildEffectStackFromJson(nlohmann::json::array());
-        }
+        RebuildEffectStackFromJson(profile_json["stack"]);
 
         int desired_index = -1;
         if(profile_json.contains("selected_stack_index"))
@@ -152,28 +148,13 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
         {
             const nlohmann::json& a = profile_json["audio_settings"];
 
-            if(audioDeviceCombo() && audioDeviceCombo()->count() > 0)
+            if(audioDeviceCombo() && audioDeviceCombo()->count() > 0 && a.contains("device_index"))
             {
-                bool applied = false;
-                if(a.contains("device_index"))
+                int di = a["device_index"].get<int>();
+                if(di >= 0 && di < audioDeviceCombo()->count())
                 {
-                    int di = a["device_index"].get<int>();
-                    if(di >= 0 && di < audioDeviceCombo()->count())
-                    {
-                        audioDeviceCombo()->setCurrentIndex(di);
-                        audioDeviceChanged(di);
-                        applied = true;
-                    }
-                }
-                if(!applied && a.contains("device_name"))
-                {
-                    QString device_name = QString::fromStdString(a["device_name"].get<std::string>());
-                    int idx = audioDeviceCombo()->findText(device_name);
-                    if(idx >= 0)
-                    {
-                        audioDeviceCombo()->setCurrentIndex(idx);
-                        audioDeviceChanged(idx);
-                    }
+                    audioDeviceCombo()->setCurrentIndex(di);
+                    audioDeviceChanged(di);
                 }
             }
 

@@ -72,13 +72,12 @@ void SettingsFromJson(const nlohmann::json& j, Settings& s)
     s.damage_flash_decay_s = get_f(j, "damage_flash_decay_s", s.damage_flash_decay_s);
     s.world_light_mix = get_f(j, "world_light_mix", s.world_light_mix);
     s.world_heading_offset_deg = get_f(j, "world_heading_offset_deg", s.world_heading_offset_deg);
-    s.room_vr_mix = get_f(j, "room_vr_mix", get_f(j, "room_world_mix", s.room_vr_mix));
-    s.room_vr_heading_offset_deg =
-        get_f(j, "room_vr_heading_offset_deg", get_f(j, "room_heading_offset_deg", s.room_vr_heading_offset_deg));
+    s.room_vr_mix = get_f(j, "room_vr_mix", s.room_vr_mix);
+    s.room_vr_heading_offset_deg = get_f(j, "room_vr_heading_offset_deg", s.room_vr_heading_offset_deg);
     s.room_vr_pos_offset_forward_blocks = get_f(j, "room_vr_pos_offset_forward_blocks", s.room_vr_pos_offset_forward_blocks);
     s.room_vr_pos_offset_right_blocks = get_f(j, "room_vr_pos_offset_right_blocks", s.room_vr_pos_offset_right_blocks);
     s.room_vr_pos_offset_up_blocks = get_f(j, "room_vr_pos_offset_up_blocks", s.room_vr_pos_offset_up_blocks);
-    s.room_vr_scale_tune = get_f(j, "room_vr_scale_tune", get_f(j, "room_scale_tune", s.room_vr_scale_tune));
+    s.room_vr_scale_tune = get_f(j, "room_vr_scale_tune", s.room_vr_scale_tune);
     s.room_vr_saturation = get_f(j, "room_vr_saturation", s.room_vr_saturation);
     s.room_vr_contrast = get_f(j, "room_vr_contrast", s.room_vr_contrast);
     s.room_vr_sharp_sampling = get_bool(j, "room_vr_sharp_sampling", s.room_vr_sharp_sampling);

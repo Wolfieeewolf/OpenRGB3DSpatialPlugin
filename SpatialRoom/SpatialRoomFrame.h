@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Per-frame room evaluation state (overlay sampling, depth preset).
+// Per-frame room evaluation state (overlay sampling).
 
 #ifndef SPATIALROOMFRAME_H
 #define SPATIALROOMFRAME_H
@@ -9,10 +9,7 @@
 namespace SpatialRoom
 {
 
-const SpatialRoomFrameContext& CurrentFrameContext();
-
-void BeginEffectRenderFrame(std::uint64_t render_sequence,
-                            SpatialRoomDepthPreset preset = SpatialRoomDepthPreset::Standard);
+void BeginEffectRenderFrame();
 void EndEffectRenderFrame();
 
 void BeginRoomGridOverlayPass();

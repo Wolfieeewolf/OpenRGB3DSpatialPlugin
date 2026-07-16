@@ -10,15 +10,8 @@ SpatialRoomFrameContext g_frame{};
 int g_overlay_pass_depth = 0;
 } // namespace
 
-const SpatialRoomFrameContext& CurrentFrameContext()
+void BeginEffectRenderFrame()
 {
-    return g_frame;
-}
-
-void BeginEffectRenderFrame(std::uint64_t render_sequence, SpatialRoomDepthPreset preset)
-{
-    g_frame.render_sequence = render_sequence;
-    g_frame.depth_preset = preset;
     g_frame.room_grid_overlay_pass = false;
     g_overlay_pass_depth = 0;
 }

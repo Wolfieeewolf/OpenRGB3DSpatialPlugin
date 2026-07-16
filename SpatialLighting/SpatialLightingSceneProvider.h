@@ -43,7 +43,7 @@ public:
     const std::vector<SpatialLighting::BlockerGridOccluder>& frameBlockerGrids() const { return frame_blocker_grids_; }
     const SpatialLighting::RoomBlockerField& frameRoomBlockerField() const { return frame_room_blocker_field_; }
 
-    void BeginAmbientShadeCacheFrame(std::uint64_t render_sequence, float quant_size);
+    void BeginAmbientShadeCacheFrame(float quant_size);
     float ComputeAmbientShadeFactorCached(int shade_slot,
                                           float room_x,
                                           float room_y,

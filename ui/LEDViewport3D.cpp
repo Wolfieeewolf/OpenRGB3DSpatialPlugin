@@ -1734,6 +1734,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     {
         dragging_rotate = false;
     }
+    doneCurrent();
     update();
 }
 
@@ -2492,9 +2493,16 @@ void LEDViewport3D::SetRoomGridPointSize(float size)
     update();
 }
 
-void LEDViewport3D::SetRoomGridColorBuffer(const std::vector<RGBColor>& buf)
+void LEDViewport3D::SetRoomGridColorBuffer(std::vector<RGBColor> buf)
 {
-    room_grid_color_buffer = buf;
+    room_grid_color_buffer = std::move(buf);
+    room_grid_overlay_colors_dirty = true;
+    update();
+}
+
+void LEDViewport3D::SwapRoomGridColorBuffer(std::vector<RGBColor>& buf)
+{
+    room_grid_color_buffer.swap(buf);
     room_grid_overlay_colors_dirty = true;
     update();
 }

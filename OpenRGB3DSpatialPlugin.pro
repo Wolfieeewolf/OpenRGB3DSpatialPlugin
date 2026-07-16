@@ -121,6 +121,7 @@ HEADERS += \
     ScreenCaptureManager.h \
     Geometry3DUtils.h \
     MediaTextureEffectUtils.h \
+    Game/StripPatternSurface.h \
     QtCompat.h \
     ui/widgets/GameTelemetryStatusPanel.h \
     Game/GameTelemetryBridge.h \
@@ -171,6 +172,7 @@ HEADERS += \
     ui/OpenRGB3DSpatialTab.h \
     ui/SpatialTabLedHelpers.h \
     ui/ControllerDisplayUtils.h \
+    ui/TooltipProxy.h \
     ui/LEDViewport3D.h \
     ui/ZoneControllerPickerDialog.h \
     ui/CustomControllerTypes.h \
@@ -202,6 +204,9 @@ HEADERS += \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
     Effects3D/EffectStratumBlend.h \
+    Effects3D/EffectHelpers.h \
+    Effects3D/EffectUiSync.h \
+    Effects3D/AudioReactiveCommon.h \
     Effects3D/SpatialKernelColormap.h \
     ui/widgets/StripKernelColormapPanel.h \
     ui/widgets/StratumBandPanel.h \
