@@ -10,6 +10,7 @@
 #include "EffectSliderRow.h"
 #include "PluginUiUtils.h"
 #include "ui_AudioInputPanel.h"
+#include "LogManager.h"
 
 #include <QComboBox>
 #include <QProgressBar>
@@ -293,8 +294,9 @@ void AudioInputPanel::bindTab(OpenRGB3DSpatialTab* tab)
                 AudioInputManager::instance()->setEqGain(b, ResampleSavedEqGain(arr, b, bands));
             }
         }
-        catch(const std::exception&)
+        catch(const std::exception& e)
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore AudioEqGain: %s", e.what());
         }
         tab->sync_audio_eq_sliders_from_manager();
     }

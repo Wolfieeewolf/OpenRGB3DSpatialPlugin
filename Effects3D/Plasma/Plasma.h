@@ -18,12 +18,8 @@ public:
 
     EFFECT_REGISTERER_3D("Plasma", "Plasma", "Spatial", [](){return new Plasma;});
 
-    static std::string const ClassName() { return "Plasma"; }
-    static std::string const UIName() { return "Plasma"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;

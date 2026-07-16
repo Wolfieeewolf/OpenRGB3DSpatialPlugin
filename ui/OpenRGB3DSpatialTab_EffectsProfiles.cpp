@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QTextStream>
 #include <fstream>
 std::string OpenRGB3DSpatialTab::GetEffectProfilePath(const std::string& profile_name)
 {
@@ -30,7 +31,7 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     }
 
     nlohmann::json profile_json;
-    profile_json["version"] = 7;
+    profile_json["version"] = 8;
 
     nlohmann::json stack_json = nlohmann::json::array();
     for(size_t i = 0; i < effect_stack.size(); i++)
@@ -57,9 +58,6 @@ void OpenRGB3DSpatialTab::SaveEffectProfile(const std::string& filename)
     audio_json["gain_slider"] = (audioGainSlider() ? audioGainSlider()->value() : 10);
     audio_json["bands_count"] = (audioBandsCombo() ? audioBandsCombo()->currentText().toInt() : 16);
     audio_json["fft_index"] = (audioFftCombo() ? audioFftCombo()->currentIndex() : -1);
-    audio_json["fft_value"] = (audioFftCombo() && audioFftCombo()->currentIndex() >= 0)
-        ? audioFftCombo()->currentText().toInt()
-        : 1024;
 
     profile_json["audio_settings"] = audio_json;
 
@@ -99,8 +97,7 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
     {
         nlohmann::json profile_json = nlohmann::json::parse(json_str.toStdString());
 
-        const int kSupportedVersionMax = 7;
-        const int kSupportedVersionMin = 7;
+        const int kSupportedVersion = 8;
         if(!profile_json.contains("version") || !profile_json["version"].is_number_integer())
         {
             QMessageBox::critical(this, "Invalid Profile",
@@ -109,11 +106,11 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
             return;
         }
         int version = profile_json["version"].get<int>();
-        if(version < kSupportedVersionMin || version > kSupportedVersionMax)
+        if(version != kSupportedVersion)
         {
             QMessageBox::critical(this, "Unsupported Profile",
-                QString("This effect profile has version %1. This plugin supports versions %2\u2013%3 only.")
-                    .arg(version).arg(kSupportedVersionMin).arg(kSupportedVersionMax));
+                QString("This effect profile has version %1. This plugin supports version %2 only.")
+                    .arg(version).arg(kSupportedVersion));
             LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect profile unsupported version %d: %s", version, filename.c_str());
             return;
         }
@@ -213,19 +210,6 @@ void OpenRGB3DSpatialTab::LoadEffectProfile(const std::string& filename)
                             audioFftCombo()->setCurrentIndex(fi);
                         }
                         audioFftChanged(fi);
-                    }
-                    else if(a.contains("fft_value"))
-                    {
-                        QString value = QString::number(a["fft_value"].get<int>());
-                        int idx = audioFftCombo()->findText(value);
-                        if(idx >= 0)
-                        {
-                            {
-                                QSignalBlocker blocker(audioFftCombo());
-                                audioFftCombo()->setCurrentIndex(idx);
-                            }
-                            audioFftChanged(idx);
-                        }
                     }
             }
         }

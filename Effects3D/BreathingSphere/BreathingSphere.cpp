@@ -108,7 +108,6 @@ BreathingSphere::~BreathingSphere() = default;
 EffectInfo3D BreathingSphere::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 2;
     info.effect_name = "Breathing Sphere";
     info.effect_description = "Breathing shell or whole-room wave; edge softness, pulse depth, and optional center hole (donut)";
     info.category = "Spatial";
@@ -223,11 +222,6 @@ void BreathingSphere::SetupCustomUI(QWidget* parent)
         this, [this](int v) { center_hole_pct = v; }, pct_format, on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void BreathingSphere::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_BREATHING_SPHERE;
 }
 
 RGBColor BreathingSphere::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

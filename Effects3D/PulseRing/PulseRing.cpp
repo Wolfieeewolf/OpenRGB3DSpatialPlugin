@@ -26,7 +26,6 @@ PulseRing::PulseRing(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D PulseRing::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Pulse Ring";
     info.effect_description =
         "Pulsing donut / radial rainbow; optional floor/mid/ceiling band tuning for motion and spatial freq";
@@ -130,8 +129,6 @@ void PulseRing::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-void PulseRing::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 RGBColor PulseRing::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

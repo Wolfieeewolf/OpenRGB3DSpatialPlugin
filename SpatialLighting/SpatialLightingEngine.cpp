@@ -316,37 +316,6 @@ static const OccluderSpatialIndex* ResolveAabbSpatialIndex(const std::vector<Occ
 
 } // namespace
 
-bool LedSegmentOccluded(float ax,
-                        float ay,
-                        float az,
-                        float bx,
-                        float by,
-                        float bz,
-                        const std::vector<OccluderAabb>& aabbs,
-                        const std::vector<OccluderQuad>& quads,
-                        int also_skip_controller)
-{
-    const Vec3 a = {ax, ay, az};
-    const Vec3 b = {bx, by, bz};
-    return SegmentHitsOccluderSet(a, b, aabbs, quads, also_skip_controller, ResolveAabbSpatialIndex(aabbs), nullptr, nullptr);
-}
-
-float ComputeLedAmbientOcclusion(float led_x,
-                                 float led_y,
-                                 float led_z,
-                                 const std::vector<OccluderAabb>& aabbs,
-                                 const std::vector<OccluderQuad>& quads,
-                                 float probe_span,
-                                 const OccluderSpatialIndex* aabb_index)
-{
-    const OccluderSpatialIndex* index = aabb_index;
-    if(!index)
-    {
-        index = ResolveAabbSpatialIndex(aabbs);
-    }
-    return ComputeAmbientOcclusion({led_x, led_y, led_z}, aabbs, quads, probe_span, index, nullptr, nullptr);
-}
-
 float ComputeRoomAmbientShadeFactor(float room_x,
                                     float room_y,
                                     float room_z,

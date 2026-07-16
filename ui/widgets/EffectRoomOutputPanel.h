@@ -41,9 +41,7 @@ public:
               const std::function<QString(int)>& transform_label = {});
 
     void syncFromState(SpatialRoom::SpatialRoomOutputRole output_role,
-                       const RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
-                       const std::vector<int>& emitter_controllers,
-                       const std::vector<int>& receiver_controllers);
+                       const RoomSpatialLightingUi::RoomSpatialLightParams& relay_params);
 
     void refreshControllerLists();
 

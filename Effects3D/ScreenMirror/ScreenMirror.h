@@ -32,14 +32,10 @@ public:
     ~ScreenMirror();
 
     EFFECT_REGISTERER_3D("ScreenMirror", "Screen Mirror", "Ambilight", [](){return new ScreenMirror;});
-
-    static std::string const ClassName() { return "ScreenMirror"; }
-    static std::string const UIName() { return "Screen Mirror"; }
     static void ForceLink() {}
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
     bool RequiresWorldSpaceCoordinates() const override { return true; }

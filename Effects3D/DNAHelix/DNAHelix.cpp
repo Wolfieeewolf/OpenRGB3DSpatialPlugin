@@ -90,7 +90,6 @@ DNAHelix::~DNAHelix() = default;
 EffectInfo3D DNAHelix::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 2;
     info.effect_name = "DNA Helix";
     info.effect_description =
         "Double helix with base pairs; circle, square, or squircle path; optional vertical drift, ring pulse "
@@ -213,11 +212,6 @@ void DNAHelix::SetupCustomUI(QWidget* parent)
         this, [this](int v) { plane_layers = v; }, [](int v) { return QString::number(v); }, on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void DNAHelix::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_DNA_HELIX;
 }
 
 void DNAHelix::OnDNAParameterChanged()

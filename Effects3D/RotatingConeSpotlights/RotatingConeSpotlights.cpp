@@ -124,7 +124,6 @@ RotatingConeSpotlights::~RotatingConeSpotlights() = default;
 EffectInfo3D RotatingConeSpotlights::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Rotating Cone Spotlights";
     info.effect_description =
         "Rotating cone spotlights: time-varying axis-angle rotation in a centered unit volume, "
@@ -210,11 +209,6 @@ void RotatingConeSpotlights::SetupCustomUI(QWidget* parent)
         on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void RotatingConeSpotlights::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS;
 }
 
 RGBColor RotatingConeSpotlights::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

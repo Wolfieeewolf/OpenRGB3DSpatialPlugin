@@ -12,7 +12,6 @@ public class OpenRGBConfigScreen extends Screen
     private final Screen parent;
     private final OpenRGBSenderConfig config;
     private CycleButton<Boolean> enabledButton;
-    private CycleButton<Boolean> gpuPanoramaButton;
     private CycleButton<Boolean> roomSampleButton;
     private EditBox hostField;
     private EditBox portField;
@@ -57,11 +56,6 @@ public class OpenRGBConfigScreen extends Screen
         blocksField.setValue(String.format(java.util.Locale.US, "%.2f", config.blocksPerMeter));
         blocksField.setHint(Component.literal("4.00"));
         addRenderableWidget(blocksField);
-        y += 28;
-
-        gpuPanoramaButton = CycleButton.onOffBuilder(config.sendGpuPanoramaFrames)
-                .create(cx, y, bw, 20, Component.literal("Ambient cubemap (probe fill)"), (btn, val) -> config.sendGpuPanoramaFrames = val);
-        addRenderableWidget(gpuPanoramaButton);
         y += 28;
 
         roomSampleButton = CycleButton.onOffBuilder(config.sendRoomSampleFrames)

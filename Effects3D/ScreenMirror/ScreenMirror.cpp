@@ -6,6 +6,7 @@
 #include "DisplayPlaneManager.h"
 #include "Geometry3DUtils.h"
 #include "GridSpaceUtils.h"
+#include "MediaTextureEffectUtils.h"
 #include "VirtualReferencePoint3D.h"
 #include "PluginUiUtils.h"
 #include "ScreenMirror/ScreenMirrorCalibrationPattern.h"
@@ -170,7 +171,6 @@ ScreenMirror::~ScreenMirror() = default;
 EffectInfo3D ScreenMirror::GetEffectInfo() const
 {
     EffectInfo3D info           = {};
-    info.info_version           = 2;
     info.effect_name            = "Screen Mirror";
     info.effect_description =
         "Maps screen content onto LEDs in 3D space. Output shaping → Sampling coarsens LED color sampling (retro pixel look).";
@@ -425,23 +425,8 @@ void ScreenMirror::SetupCustomUI(QWidget* parent)
     AddWidgetToParent(container, parent);
 }
 
-void ScreenMirror::UpdateParams(SpatialEffectParams& /*params*/)
-{
-}
-
 namespace
 {
-    inline float Smoothstep(float edge0, float edge1, float x)
-    {
-        if(edge0 == edge1)
-        {
-            return (x >= edge1) ? 1.0f : 0.0f;
-        }
-        float t = (x - edge0) / (edge1 - edge0);
-        t = std::clamp(t, 0.0f, 1.0f);
-        return t * t * (3.0f - 2.0f * t);
-    }
-
     inline RGBColor SampleFrameWithCornerBlend(const uint8_t* frame_data,
                                                int frame_w,
                                                int frame_h,
@@ -482,8 +467,8 @@ namespace
         const float v_n = std::clamp((v_s - v_min) / span_v, 0.0f, 1.0f);
         const float edge_u = std::min(u_n, 1.0f - u_n);
         const float edge_v = std::min(v_n, 1.0f - v_n);
-        const float near_u = 1.0f - Smoothstep(0.0f, zone, edge_u);
-        const float near_v = 1.0f - Smoothstep(0.0f, zone, edge_v);
+        const float near_u = 1.0f - MediaTextureEffect::Smoothstep(0.0f, zone, edge_u);
+        const float near_v = 1.0f - MediaTextureEffect::Smoothstep(0.0f, zone, edge_v);
         const float corner_w = std::min(near_u, near_v);
 
         float um = u_s, vm = v_s;
@@ -603,7 +588,7 @@ namespace
         {
             return 1.0f;
         }
-        return Smoothstep(fade_start, fade_end, normalized_distance);
+        return MediaTextureEffect::Smoothstep(fade_start, fade_end, normalized_distance);
     }
 }
 

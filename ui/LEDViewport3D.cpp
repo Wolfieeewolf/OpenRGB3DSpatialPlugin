@@ -33,23 +33,17 @@
 #include "ControllerDisplayUtils.h"
 #include "ControllerLayout3D.h"
 #include "viewport/ViewportGLFormat.h"
+#include "viewport/ViewportGLIncludes.h"
 #include "viewport/ViewportMath.h"
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <GL/gl.h>
 #include <GL/glu.h>
-#else
-#include <GL/gl.h>
-#include <GL/glu.h>
+#ifdef near
+#undef near
+#endif
+#ifdef far
+#undef far
 #endif
 
 static inline Vector3D Subtract(const Vector3D& a, const Vector3D& b)
@@ -325,7 +319,7 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     , cached_floor_grid_max_x(-1.0f)
     , cached_floor_grid_max_z(-1.0f)
 {
-    ViewportGLFormat::ApplyToWidget(this, ViewportGLFormat::Backend::LegacyFixedFunction);
+    ViewportGLFormat::ApplyToWidget(this);
     QSurfaceFormat fmt = format();
     fmt.setSwapInterval(1);
     setFormat(fmt);
@@ -344,7 +338,6 @@ LEDViewport3D::~LEDViewport3D()
     }
     if(ensureGlCurrent())
     {
-        viewport_renderer_.shutdown();
         for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
             it != display_plane_textures.end();
             ++it)
@@ -352,10 +345,6 @@ LEDViewport3D::~LEDViewport3D()
             glDeleteTextures(1, &it->second);
         }
         doneCurrent();
-    }
-    else
-    {
-        viewport_renderer_.shutdown();
     }
     display_plane_textures.clear();
     display_plane_tex_upload_state.clear();
@@ -493,14 +482,12 @@ void LEDViewport3D::SetGridScaleMM(float mm_per_unit)
     if(std::fabs(next_scale - grid_scale_mm) > 0.0001f)
     {
         grid_scale_mm = next_scale;
-        ClearLightBlockerDrawCache();
     }
 }
 
 void LEDViewport3D::SetControllerTransforms(std::vector<std::unique_ptr<ControllerTransform>>* transforms)
 {
     controller_transforms = transforms;
-    ClearLightBlockerDrawCache();
 
     if(!controller_transforms)
     {
@@ -881,46 +868,6 @@ void LEDViewport3D::showEvent(QShowEvent* event)
 {
     QOpenGLWidget::showEvent(event);
     viewport_paint_enabled_ = true;
-    viewport_gl_frame_count_ = 0;
-    viewport_gpu_paint_frames_ = 0;
-    if(!viewport_gpu_session_fallback_)
-    {
-        viewport_gpu_init_attempted_ = false;
-        viewport_gpu_usable_ = false;
-    }
-
-    viewport_gpu_startup_pending_ = false;
-    viewport_gpu_labels_deferred_ = false;
-    viewport_gpu_label_paint_frames_ = 0;
-    warnGpuSceneDisabledOnQt515Once();
-
-    if(viewportUseGpuScenePaint())
-    {
-        viewport_gpu_startup_pending_ = true;
-        QTimer::singleShot(500, this, [this]() {
-            viewport_gpu_startup_pending_ = false;
-            viewport_gl_frame_count_ = 0;
-            viewport_gpu_paint_frames_ = 0;
-            viewport_gpu_label_paint_frames_ = 0;
-            update();
-        });
-    }
-
-    if(viewportGpuLabelsWanted() && !viewport_gpu_session_fallback_)
-    {
-        viewport_gpu_labels_fallback_ = false;
-        viewport_gpu_labels_deferred_ = true;
-        QTimer::singleShot(200, this, [this]() {
-            viewport_gpu_labels_deferred_ = false;
-            viewport_gpu_label_paint_frames_ = 0;
-            update();
-        });
-    }
-    else
-    {
-        viewport_gpu_labels_fallback_ = false;
-    }
-
     update();
 }
 
@@ -942,22 +889,11 @@ void LEDViewport3D::paintGL()
         return;
     }
 
-    if(viewportUseGpuScenePaint())
-    {
-        paintGlGpu();
-        return;
-    }
-
-    if(viewportGpuLabelsWanted() && !viewport_gpu_labels_deferred_ && !viewport_gpu_labels_fallback_)
-    {
-        ++viewport_gpu_label_paint_frames_;
-    }
-
-    paintGlLegacyScene();
+    paintGlScene();
     paintViewportLabelsAfterScene();
 }
 
-void LEDViewport3D::paintGlLegacyScene()
+void LEDViewport3D::paintGlScene()
 {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -977,7 +913,7 @@ void LEDViewport3D::paintGlLegacyScene()
               0.0f, 1.0f, 0.0f);
 
     glPushMatrix();
-    pushRoomTurntableLegacyGl();
+    pushRoomTurntableGl();
 
     DrawGrid();
     DrawAxes();
@@ -1021,35 +957,19 @@ void LEDViewport3D::paintGlLegacyScene()
 
 }
 
-void LEDViewport3D::SetPreferGpuLabelOverlay(bool prefer)
+void LEDViewport3D::paintViewportLabelsAfterScene()
 {
-    if(viewport_gpu_labels_preferred_ == prefer)
+    if(width() < 2 || height() < 2 || !viewport_paint_enabled_)
     {
         return;
     }
-    viewport_gpu_labels_preferred_ = prefer;
-    update();
-}
 
-void LEDViewport3D::SetPreferGpuScene(bool prefer)
-{
-    if(viewport_gpu_scene_preferred_ == prefer)
-    {
-        return;
-    }
-    viewport_gpu_scene_preferred_ = prefer;
-    warnGpuSceneDisabledOnQt515Once();
-    update();
+    paintViewportText2D();
 }
 
 void LEDViewport3D::paintViewportText2D()
 {
     if(width() < 2 || height() < 2)
-    {
-        return;
-    }
-
-    if(!shouldPaintLegacyViewportText())
     {
         return;
     }
@@ -1116,6 +1036,46 @@ void LEDViewport3D::paintViewportText2D()
     }
 }
 
+
+void LEDViewport3D::loadPickMatrices(float modelview[16], float projection[16], int viewport[4])
+{
+    if(ensureGlCurrent())
+    {
+        glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+        glGetFloatv(GL_PROJECTION_MATRIX, projection);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+    }
+}
+
+void LEDViewport3D::prepareForQtPainterInPaintGl()
+{
+    if(!isValid())
+    {
+        return;
+    }
+
+    makeCurrent();
+
+    /* OpenRGB's Qt build does not expose QOpenGLWidget::resetOpenGLState(); mirror the intent manually. */
+    glUseProgram(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+}
+
 int LEDViewport3D::viewportFramebufferWidth(int logical_w) const
 {
     const qreal dpr = devicePixelRatioF();
@@ -1147,7 +1107,6 @@ void LEDViewport3D::resizeGL(int w, int h)
     glMatrixMode(GL_MODELVIEW);
 
     gizmo.SetViewportSize(fb_w, fb_h);
-    viewport_renderer_.setViewportSize(fb_w, fb_h);
 }
 
 bool LEDViewport3D::event(QEvent* event)
@@ -1361,7 +1320,7 @@ void LEDViewport3D::deselectRoomViewport()
     update();
 }
 
-void LEDViewport3D::pushRoomTurntableLegacyGl() const
+void LEDViewport3D::pushRoomTurntableGl() const
 {
     if(!hasRoomPreviewRotation())
     {
@@ -3258,33 +3217,6 @@ void ExpandBoundsForBlockerCell(Vector3D& min_bounds,
     if(y1 > max_bounds.y) max_bounds.y = y1;
     if(z1 > max_bounds.z) max_bounds.z = z1;
 }
-
-void VirtualControllerGridScales(const VirtualController3D* vc,
-                                 float grid_scale_mm,
-                                 float& scale_x,
-                                 float& scale_y,
-                                 float& scale_z)
-{
-    scale_x = 1.0f;
-    scale_y = 1.0f;
-    scale_z = 1.0f;
-    if(!vc)
-    {
-        return;
-    }
-    if(vc->GetSpacingX() > 0.001f)
-    {
-        scale_x = MMToGridUnits(vc->GetSpacingX(), grid_scale_mm);
-    }
-    if(vc->GetSpacingY() > 0.001f)
-    {
-        scale_y = MMToGridUnits(vc->GetSpacingY(), grid_scale_mm);
-    }
-    if(vc->GetSpacingZ() > 0.001f)
-    {
-        scale_z = MMToGridUnits(vc->GetSpacingZ(), grid_scale_mm);
-    }
-}
 } // namespace
 
 void LEDViewport3D::DrawLightBlockerLayers()
@@ -3324,14 +3256,6 @@ void LEDViewport3D::DrawLightBlockerLayers()
         {
             continue;
         }
-
-        float scale_x = 1.0f;
-        float scale_y = 1.0f;
-        float scale_z = 1.0f;
-        VirtualControllerGridScales(layout, grid_scale_mm, scale_x, scale_y, scale_z);
-        (void)scale_x;
-        (void)scale_y;
-        (void)scale_z;
 
         Vector3D min_bounds{};
         Vector3D max_bounds{};
@@ -3593,11 +3517,6 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
 
     if(ctrl && ctrl->virtual_controller)
     {
-        float scale_x = 1.0f;
-        float scale_y = 1.0f;
-        float scale_z = 1.0f;
-        VirtualControllerGridScales(ctrl->virtual_controller, grid_scale_mm, scale_x, scale_y, scale_z);
-
         for(const CustomControllerLightBlocker& blocker : ctrl->virtual_controller->GetLightBlockers())
         {
             Vector3D local_min{};

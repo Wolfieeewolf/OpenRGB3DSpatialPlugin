@@ -236,15 +236,10 @@ void OpenRGB3DSpatialTab::InitLedViewport()
         {
             viewport->SetGridSnapEnabled(startup_settings["Grid"]["SnapEnabled"].get<bool>());
         }
-        if(startup_settings.contains("Viewport"))
-        {
-            const nlohmann::json& vp = startup_settings["Viewport"];
-            viewport->SetPreferGpuLabelOverlay(vp.value("GpuLabels", false));
-            viewport->SetPreferGpuScene(vp.value("GpuScene", false));
-        }
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore camera/grid startup settings: %s", e.what());
     }
 
     connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::viewportControllerSelected);
@@ -313,7 +308,10 @@ void OpenRGB3DSpatialTab::bindUiPanels()
             manual_room_depth  = (float)r.value("DepthMM", manual_room_depth);
         }
     }
-    catch(const std::exception&) {}
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore grid/room startup settings: %s", e.what());
+    }
 
     InitLedViewport();
 
@@ -931,24 +929,6 @@ void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
     SavePluginUiSettings();
 }
 
-void OpenRGB3DSpatialTab::gpuLabelsToggled(bool enabled)
-{
-    if(viewport)
-    {
-        viewport->SetPreferGpuLabelOverlay(enabled);
-    }
-    SavePluginUiSettings();
-}
-
-void OpenRGB3DSpatialTab::gpuSceneToggled(bool enabled)
-{
-    if(viewport)
-    {
-        viewport->SetPreferGpuScene(enabled);
-    }
-    SavePluginUiSettings();
-}
-
 void OpenRGB3DSpatialTab::roomGuideLabelsToggled(bool enabled)
 {
     if(viewport)
@@ -1330,7 +1310,10 @@ void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
         settings["RoomGrid"]["Step"] = viewport->GetRoomGridStep();
         SetPluginSettings(settings);
     }
-    catch(const std::exception&) {}
+    catch(const std::exception& e)
+    {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to persist room grid overlay settings: %s", e.what());
+    }
 }
 
 void OpenRGB3DSpatialTab::RefreshEffectDisplay()
@@ -1399,7 +1382,7 @@ void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
         current_effect_ui->DisconnectStackRoomOutputPanel();
     }
 
-    if(!current_effect_ui || !current_effect_ui->ShowsRoomOutputControl())
+    if(!current_effect_ui || !current_effect_ui->GetEffectInfo().show_room_output_control)
     {
         if(section)
         {

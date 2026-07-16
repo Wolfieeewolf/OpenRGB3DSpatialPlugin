@@ -450,21 +450,11 @@ Vector3D VirtualController3D::CellGridPointMm(int x, int y, int z) const
 
 VirtualController3D::~VirtualController3D() = default;
 
-std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_scale_mm,
-                                                                     float spacing_x_mm,
-                                                                     float spacing_y_mm,
-                                                                     float spacing_z_mm)
+std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_scale_mm)
 {
     EnsureGridSizeArrays();
 
     std::vector<LEDPosition3D> positions;
-
-    const float use_x = spacing_x_mm >= 0.0f ? spacing_x_mm : spacing_mm_x;
-    const float use_y = spacing_y_mm >= 0.0f ? spacing_y_mm : spacing_mm_y;
-    const float use_z = spacing_z_mm >= 0.0f ? spacing_z_mm : spacing_mm_z;
-    (void)use_x;
-    (void)use_y;
-    (void)use_z;
 
     for(unsigned int i = 0; i < led_mappings.size(); i++)
     {
@@ -762,28 +752,4 @@ std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j
                                                std::move(layer_depths),
                                                std::move(layer_names),
                                                leds_per_cluster);
-}
-
-std::vector<GridLEDMapping> VirtualController3D::ImportMappingsFromCoordinateMapJson(
-    const json& map_json,
-    LedLayoutCoordinateMap::NormalizationMode mode,
-    int grid_w,
-    int grid_h,
-    int grid_d,
-    RGBController* controller,
-    unsigned int zone_idx,
-    int granularity,
-    std::string* out_error)
-{
-    LedLayoutCoordinateMap::ImportResult r =
-        LedLayoutCoordinateMap::ImportCoordinateMapForGrid(map_json, mode, grid_w, grid_h, grid_d, controller, zone_idx, granularity);
-    if(r.error)
-    {
-        if(out_error)
-        {
-            *out_error = *r.error;
-        }
-        return {};
-    }
-    return std::move(r.mappings);
 }

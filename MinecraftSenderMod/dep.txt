@@ -9,11 +9,11 @@ Required (runtime)
 1. Fabric Loader >= 0.19.3 (latest stable for 26.2)
    https://fabricmc.net/use/installer/
 
-2. Fabric API 0.154.0+26.2 (latest 26.2 release, Jul 2026)
+2. Fabric API 0.154.2+26.2 (latest 26.2 release, Jul 2026)
    https://modrinth.com/mod/fabric-api
    https://github.com/FabricMC/fabric-api
 
-3. openrgb-minecraft-sender 0.9.1+
+3. openrgb-minecraft-sender 0.9.20+
    Built from this repo: MinecraftSenderMod/fabric-example-mod-master
 
 Optional (in-game config UI)
@@ -33,9 +33,10 @@ Gradle compile dependencies (from gradle.properties)
 ------------------------------------------------------
 minecraft_version=26.2
 loader_version=0.19.3
-fabric_api_version=0.154.0+26.2
+fabric_api_version=0.154.2+26.2
 modmenu_version=20.0.0-beta.4
-mod_version=0.9.1
+mod_version=0.9.20
 loom_version=1.17-SNAPSHOT
+lz4-java: at.yawk.lz4:lz4-java:1.11.0 (room-sample SHM compression)
 
 Verified against Modrinth + meta.fabricmc.net on 2026-07-05.

@@ -82,8 +82,7 @@ HEADERS += \
 
 SOURCES += \
     OpenRGB/RGBController/RGBController.cpp \
-    OpenRGB/LogManager.cpp \
-    OpenRGB/qt/hsv.cpp
+    OpenRGB/LogManager.cpp
 
 RESOURCES += \
     resources/spatial_shaders.qrc \
@@ -94,6 +93,7 @@ INCLUDEPATH += \
     ui/widgets \
     Effects3D \
     Game \
+    Game/lz4 \
     SpatialSamplers \
     SpatialRoom \
     SpatialLighting \
@@ -128,16 +128,9 @@ HEADERS += \
     Game/RoomSampleShmPaths.h \
     Game/RoomSampleFrameShmReader.h \
     Game/RoomSampleConfigPublisher.h \
-    Game/GpuPanoramaFrameProtocol.h \
-    Game/GpuPanoramaShmPaths.h \
-    Game/GpuPanoramaFrameShmReader.h \
-    Game/LedLayoutCoordinateMap.h \
     SpatialSamplers/SpatialBasisUtils.h \
-    SpatialSamplers/SpatialCoordinateSpaces.h \
     SpatialSamplers/SpatialLayerCore.h \
-    SpatialSamplers/RoomMappingCore.h \
     SpatialSamplers/RoomSampleMapping.h \
-    SpatialSamplers/GpuPanoramaMapping.h \
     Effects3D/Games/Minecraft/MinecraftGame.h \
     Effects3D/Games/Minecraft/MinecraftGameSettings.h \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.h \
@@ -158,7 +151,6 @@ HEADERS += \
     SpatialLighting/EmitterRelayMirror.h \
     SpatialLighting/EmitterLocalSampling.h \
     SpatialLighting/SpatialLightingSceneProvider.h \
-    Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.h \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
     ui/PluginSettingsPaths.h \
     ui/ProfilesTabPanel.h \
@@ -205,12 +197,8 @@ HEADERS += \
     ui/PluginClickableLabel.h \
     ui/Gizmo3D.h \
     ui/viewport/ViewportMath.h \
-    ui/viewport/ViewportCamera.h \
     ui/viewport/ViewportGLFormat.h \
-    ui/viewport/ViewportLegacyGL.h \
-    ui/viewport/ViewportRenderer.h \
-    ui/viewport/ViewportPrograms.h \
-    ui/viewport/ViewportGpuMesh.h \
+    ui/viewport/ViewportGLIncludes.h \
     ui/CaptureZonesWidget.h \
     ui/PluginUiUtils.h \
     Effects3D/EffectStratumBlend.h \
@@ -293,11 +281,9 @@ SOURCES += \
     Game/GameTelemetryBridge.cpp \
     Game/RoomSampleFrameShmReader.cpp \
     Game/RoomSampleConfigPublisher.cpp \
-    Game/GpuPanoramaFrameShmReader.cpp \
     Game/lz4/lz4.c \
     SpatialSamplers/SpatialLayerCore.cpp \
     SpatialSamplers/RoomSampleMapping.cpp \
-    SpatialSamplers/GpuPanoramaMapping.cpp \
     Effects3D/Games/Minecraft/MinecraftGame.cpp \
     Effects3D/Games/Minecraft/MinecraftGameSettings.cpp \
     Effects3D/Games/Minecraft/MinecraftSubEffect3D.cpp \
@@ -317,7 +303,6 @@ SOURCES += \
     SpatialLighting/EmitterRelayMirror.cpp \
     SpatialLighting/EmitterLocalSampling.cpp \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
-    Effects3D/SpatialLighting/RoomSpatialLightingEffect3D.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
     ui/PluginSettingsPaths.cpp \
     ui/ProfilesTabPanel.cpp \
@@ -339,6 +324,7 @@ SOURCES += \
     ui/OpenRGB3DSpatialTab.cpp \
     ui/OpenRGB3DSpatialTab_Audio.cpp \
     ui/OpenRGB3DSpatialTab_Setup.cpp \
+    ui/SpatialTabLedHelpers.cpp \
     ui/OpenRGB3DSpatialTab_SetupDisplayPlanes.cpp \
     ui/OpenRGB3DSpatialTab_Layout.cpp \
     ui/OpenRGB3DSpatialTab_LayoutCustomControllers.cpp \
@@ -349,8 +335,6 @@ SOURCES += \
     ui/OpenRGB3DSpatialTab_EffectsRender.cpp \
     ui/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
     ui/LEDViewport3D.cpp \
-    ui/LEDViewport3D_Gpu.cpp \
-    ui/LEDViewport3D_SceneGpu.cpp \
     ui/CustomControllerDialog.cpp \
     ui/CustomControllerMappingUtils.cpp \
     ui/ReferencePointDialog.cpp \
@@ -367,11 +351,7 @@ SOURCES += \
     ui/Gizmo3D.cpp \
     ui/Gizmo3D_Mesh.cpp \
     ui/viewport/ViewportMath.cpp \
-    ui/viewport/ViewportCamera.cpp \
     ui/viewport/ViewportGLFormat.cpp \
-    ui/viewport/ViewportRenderer.cpp \
-    ui/viewport/ViewportPrograms.cpp \
-    ui/viewport/ViewportGpuMesh.cpp \
     ui/CaptureZonesWidget.cpp \
     ui/widgets/StratumBandPanel.cpp \
     ui/widgets/StripKernelColormapPanel.cpp \

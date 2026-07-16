@@ -38,7 +38,6 @@ public:
     QDoubleSpinBox* roomDepthSpin() const;
     QCheckBox*      roomGridOverlayCheckbox() const;
     QCheckBox*      roomGuideLabelsCheckbox() const;
-    QCheckBox*      gpuLabelsCheckbox() const;
 
 private slots:
     void onGridScaleChanged(double value);

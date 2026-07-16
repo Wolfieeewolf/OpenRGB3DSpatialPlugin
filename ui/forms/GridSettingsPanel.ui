@@ -194,55 +194,41 @@
        </widget>
       </item>
       <item row="2" column="0" colspan="2">
-       <widget class="QCheckBox" name="gpuLabelsCheckbox">
-        <property name="text">
-         <string>Alternate label renderer (advanced)</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2">
        <widget class="QPushButton" name="frameSelectionButton">
         <property name="text">
          <string>Frame selection (F)</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="0" colspan="3">
-       <widget class="QCheckBox" name="gpuSceneCheckbox">
-        <property name="text">
-         <string>Shader-based 3D room (Qt 6, experimental)</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0" colspan="2">
+      <item row="2" column="2">
        <widget class="QPushButton" name="resetCameraButton">
         <property name="text">
          <string>Reset camera</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="2">
+      <item row="3" column="0" colspan="2">
        <widget class="QLabel" name="resetCameraHint">
         <property name="text">
          <string>Default orbit (Home)</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="overlayBrightCaption">
         <property name="text">
          <string>Overlay brightness:</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="1">
+      <item row="4" column="1">
        <widget class="QSlider" name="overlayBrightSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="5" column="2">
+      <item row="4" column="2">
        <widget class="QLabel" name="overlayBrightLabel">
         <property name="minimumSize">
          <size>
@@ -255,21 +241,21 @@
         </property>
        </widget>
       </item>
-      <item row="6" column="0">
+      <item row="5" column="0">
        <widget class="QLabel" name="overlayPointCaption">
         <property name="text">
          <string>Point size:</string>
         </property>
        </widget>
       </item>
-      <item row="6" column="1">
+      <item row="5" column="1">
        <widget class="QSlider" name="overlayPointSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="6" column="2">
+      <item row="5" column="2">
        <widget class="QLabel" name="overlayPointLabel">
         <property name="minimumSize">
          <size>
@@ -282,21 +268,21 @@
         </property>
        </widget>
       </item>
-      <item row="7" column="0">
+      <item row="6" column="0">
        <widget class="QLabel" name="overlayStepCaption">
         <property name="text">
          <string>Grid step:</string>
         </property>
        </widget>
       </item>
-      <item row="7" column="1">
+      <item row="6" column="1">
        <widget class="QSlider" name="overlayStepSlider">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
-      <item row="7" column="2">
+      <item row="6" column="2">
        <widget class="QLabel" name="overlayStepLabel">
         <property name="minimumSize">
          <size>
@@ -309,7 +295,7 @@
         </property>
        </widget>
       </item>
-      <item row="8" column="0" colspan="3">
+      <item row="7" column="0" colspan="3">
        <widget class="EffectInfoLabel" name="overlayHintLabel" native="true">
         <property name="text">
          <string>Overlay settings are saved in plugin settings. Turn off room guide labels to hide wall/floor/origin text; gizmo rotate text while dragging is always shown.</string>

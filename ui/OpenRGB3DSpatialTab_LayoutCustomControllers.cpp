@@ -890,8 +890,9 @@ void OpenRGB3DSpatialTab::LoadCustomControllers()
                 }
             }
         }
-        catch(const std::exception&)
+        catch(const std::exception& e)
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed while scanning controllers dir: %s", e.what());
         }
     }
 

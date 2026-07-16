@@ -38,7 +38,6 @@ Plasma::~Plasma() = default;
 EffectInfo3D Plasma::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 3;
     info.effect_name = "Plasma";
     info.effect_description = "Plasma field with optional floor/mid/ceiling band tuning; respects room mapper";
     info.category = "Spatial";
@@ -113,11 +112,6 @@ void Plasma::SetupCustomUI(QWidget* parent)
 
     connect(pattern_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &Plasma::OnPlasmaParameterChanged);
-}
-
-void Plasma::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_PLASMA;
 }
 
 void Plasma::OnPlasmaParameterChanged()

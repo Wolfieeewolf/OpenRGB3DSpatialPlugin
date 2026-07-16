@@ -66,7 +66,6 @@ DepthTone::~DepthTone() = default;
 EffectInfo3D DepthTone::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 2;
     info.effect_name = "Depth Tone";
     info.effect_description =
         "Rotating hues along room depth (Z) with center dimming; choose how many tone steps span front to back, "
@@ -116,11 +115,6 @@ void DepthTone::SetupCustomUI(QWidget* parent)
         [this]() { emit ParametersChanged(); });
 
     AddWidgetToParent(w, parent);
-}
-
-void DepthTone::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_DEPTH_TONE;
 }
 
 RGBColor DepthTone::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

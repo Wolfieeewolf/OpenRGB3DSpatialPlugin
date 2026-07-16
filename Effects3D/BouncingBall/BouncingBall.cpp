@@ -119,7 +119,6 @@ BouncingBall::~BouncingBall() = default;
 EffectInfo3D BouncingBall::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 3;
     info.effect_name = "Bouncing Ball";
     info.effect_description =
         "Independent balls bouncing in the room (no ball–ball physics). Physics runs forward without looping; use Speed for motion rate; optional floor/mid/ceiling band tuning";
@@ -174,11 +173,6 @@ void BouncingBall::SetupCustomUI(QWidget* parent)
         [this]() { emit ParametersChanged(); });
 
     AddWidgetToParent(w, parent);
-}
-
-void BouncingBall::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_BOUNCING_BALL;
 }
 
 void BouncingBall::OnBallParameterChanged()

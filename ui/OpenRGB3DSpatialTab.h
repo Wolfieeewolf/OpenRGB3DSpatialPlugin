@@ -168,8 +168,6 @@ private slots:
     void RenderEffectStack();
     void gridDimensionsChanged();
     void gridSnapToggled(bool enabled);
-    void gpuLabelsToggled(bool enabled);
-    void gpuSceneToggled(bool enabled);
     void roomGuideLabelsToggled(bool enabled);
     void frameSelectionInView();
     void resetViewportCamera();

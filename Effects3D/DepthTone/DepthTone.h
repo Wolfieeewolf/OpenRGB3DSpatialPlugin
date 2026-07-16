@@ -17,12 +17,8 @@ public:
 
     EFFECT_REGISTERER_3D("DepthTone", "Depth Tone", "Spatial", []() { return new DepthTone; });
 
-    static std::string const ClassName() { return "DepthTone"; }
-    static std::string const UIName() { return "Depth Tone"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;

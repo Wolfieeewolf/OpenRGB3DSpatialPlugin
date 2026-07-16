@@ -4,8 +4,7 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "ClientPlayNetworkHandlerMixin",
-    "MinecraftClientMixin",
-    "CameraAccessor"
+    "MinecraftClientMixin"
   ],
   "injectors": {
     "defaultRequire": 1

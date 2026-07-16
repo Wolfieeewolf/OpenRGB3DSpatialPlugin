@@ -121,26 +121,6 @@ Vec3 GridToVec3(float x, float y, float z);
 
 RGBColor ShadeLed(const RoomScene& scene, float led_x, float led_y, float led_z);
 
-/** Line-of-sight test for mirror relay / receiver shading (skips receiver + optional emitter controller). */
-bool LedSegmentOccluded(float ax,
-                        float ay,
-                        float az,
-                        float bx,
-                        float by,
-                        float bz,
-                        const std::vector<OccluderAabb>& aabbs,
-                        const std::vector<OccluderQuad>& quads,
-                        int also_skip_controller = -1);
-
-/** Six-axis openness at a receiver LED (1 = fully open, 0 = fully occluded). */
-float ComputeLedAmbientOcclusion(float led_x,
-                                 float led_y,
-                                 float led_z,
-                                 const std::vector<OccluderAabb>& aabbs,
-                                 const std::vector<OccluderQuad>& quads,
-                                 float probe_span,
-                                 const OccluderSpatialIndex* aabb_index = nullptr);
-
 /** Receiver shading: center shadow + AO, combined into one multiplier in [0,1]. */
 float ComputeRoomAmbientShadeFactor(float room_x,
                                     float room_y,

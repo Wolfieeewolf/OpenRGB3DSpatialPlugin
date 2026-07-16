@@ -53,7 +53,6 @@ ShellPattern::~ShellPattern() = default;
 EffectInfo3D ShellPattern::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Shell Pattern";
     info.effect_description =
         "Map 3D position to a 1D coordinate, run a pattern kernel, then show it as a shell band or a solid extruded fill.";
@@ -145,11 +144,6 @@ void ShellPattern::OnParameterChanged()
     if(display_combo)
         display_mode = std::clamp(display_combo->currentIndex(), 0, DISP_COUNT - 1);
     emit ParametersChanged();
-}
-
-void ShellPattern::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_SHELL_PATTERN;
 }
 
 float ShellPattern::EvaluateKernel(float s01, float phase01, float time_sec, int pattern, float repeats) const

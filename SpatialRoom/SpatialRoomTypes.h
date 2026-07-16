@@ -12,24 +12,9 @@ namespace SpatialRoom
 /** How an effect interprets room coordinates (library / evaluator family). */
 enum class SpatialRoomMode : int
 {
-    /** Distance/angle from effect origin; classic spatial stack behavior. */
     OriginField = 0,
-    /** Fixed lights + occluders via SpatialLighting::ShadeLed. */
-    SpatialLighting = 1,
-    /** Pattern in abstract space projected to room (Color Wheel 3D, disco ball, …). */
-    RoomMappedPattern = 2,
-    /** Volume/SDF/particle aesthetic (future). */
-    HologramVolume = 3,
-    /** Game telemetry / compass layers (SpatialSamplers + game bridge). */
-    RoomMap = 4,
-    /** FFT/beat-driven room placement (future dedicated path). */
-    AudioReactive = 5,
-    /** Display planes / capture-driven surfaces. */
-    SurfaceMedia = 6,
-    /** Strip-order or zone-local (minimal room use). */
-    DeviceStrip = 7,
-    /** Shade receivers from emissive colors on selected controllers (layers below in stack). */
-    EmissiveRelay = 8,
+    RoomMappedPattern = 1,
+    EmissiveRelay = 2,
 };
 
 /** Per-effect coordinate basis (UI on spatial pattern effects). */
@@ -42,14 +27,8 @@ enum class SpatialRoomCoordinateMode : int
 /** Per-effect room output role (UI on spatial pattern effects). */
 enum class SpatialRoomOutputRole : int
 {
-    /** Normal stack blend to LEDs on this layer's zone. */
     Direct = 0,
-    /** Pattern on stack zone feeds relay layers above (obsolete; load as Direct). */
-    Emitter = 1,
-    /** Shade non-emitter LEDs from emitter layers below (obsolete; load as Direct). */
-    RelayShade = 2,
-    /** Pattern on chosen emitters; shaded relay on chosen receivers (single layer). */
-    EmitterRelay = 3,
+    EmitterRelay = 1,
 };
 
 /** Cost/quality preset for room features (occlusion, AO). */
@@ -65,14 +44,6 @@ enum SpatialRoomCapability : uint32_t
     CapNone = 0,
     /** Do not warp sample XYZ with stack anchor/scale (room-fixed emitters). */
     CapSkipSampleWarp = 1u << 0,
-    /** Ray-test against planes / controllers / blockers. */
-    CapUseOcclusion = 1u << 1,
-    /** Six-axis AO probes in SpatialLighting::ShadeLed. */
-    CapUseAmbientOcclusion = 1u << 2,
-    /** Hint: prefer iterating mapped LEDs only (small setups). */
-    CapPreferLedOnlyIteration = 1u << 3,
-    /** Sample in room grid bounds, not world-space LED coords. */
-    CapRoomGridCoordinates = 1u << 4,
 };
 
 struct SpatialRoomCapabilities

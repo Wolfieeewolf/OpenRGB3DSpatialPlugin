@@ -136,9 +136,7 @@ void ObjectCreatorTabPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
         tr("Copy portable preset .json files into the controllers folder (see OpenRGB3DSpatialPresets on GitHub). "
 
-           "Use controller_name = OpenRGB device name and controller_location \"1:1\" — see plugin docs "
-
-           "controller-preset-format.md."));
+           "Use controller_name = OpenRGB device name and controller_location \"1:1\"."));
 
     ui->exportCustomControllerButton->setToolTip(
 

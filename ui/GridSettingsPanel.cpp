@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include "LogManager.h"
 
 GridSettingsPanel::GridSettingsPanel(QWidget* parent)
     : QWidget(parent)
@@ -99,23 +100,10 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     ui->roomGuideLabelsCheckbox->setToolTip(
         "Wall, floor, ceiling, and origin hints in the 3D view. Gizmo rotate text while dragging is always shown.");
-    ui->gpuLabelsCheckbox->setToolTip(
-        "Alternative renderer for room guide labels only (not gizmo rotate text). "
-        "Uses an offscreen image + small GL shader. Leave off unless labels flicker.");
     ui->frameSelectionButton->setToolTip(
         "Re-center the orbit on the current selection, set zoom from its size, and use the default "
         "3/4 view angle (45° yaw, 30° pitch). Right-drag still orbits afterward.");
     ui->resetCameraButton->setToolTip("Restore default orbit distance, angle, and target (0,0,0). Shortcut: Home.");
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    ui->gpuSceneCheckbox->setToolTip(
-        "Draw walls/floor/ceiling with the experimental shader room (Qt 6 OpenRGB only). "
-        "Same as OPENRGB3D_VIEWPORT_GPU_SCENE=1. Ignored on Qt 5.15 hosts.");
-#else
-    if(ui->gpuSceneCheckbox)
-    {
-        ui->gpuSceneCheckbox->setVisible(false);
-    }
-#endif
 
     ui->overlayBrightSlider->setRange(0, 100);
     ui->overlayPointSlider->setRange(1, 12);
@@ -135,8 +123,6 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->gridScaleSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             &GridSettingsPanel::onGridScaleChanged);
 
-    bool gpu_labels = false;
-    bool gpu_scene = false;
     try
     {
         nlohmann::json settings = tab->GetPluginSettings();
@@ -144,20 +130,12 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         if(settings.contains("Viewport"))
         {
             const nlohmann::json& vp = settings["Viewport"];
-            gpu_labels = vp.value("GpuLabels", false);
-            gpu_scene = vp.value("GpuScene", false);
             room_guide_labels = vp.value("ShowRoomGuideLabels", true);
         }
         if(tab->viewport)
         {
-            tab->viewport->SetPreferGpuLabelOverlay(gpu_labels);
-            tab->viewport->SetPreferGpuScene(gpu_scene);
             tab->viewport->SetShowRoomGuideLabels(room_guide_labels);
         }
-        ui->gpuLabelsCheckbox->setChecked(gpu_labels);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        ui->gpuSceneCheckbox->setChecked(gpu_scene);
-#endif
         ui->roomGuideLabelsCheckbox->setChecked(room_guide_labels);
 
         if(settings.contains("RoomGrid"))
@@ -186,37 +164,12 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
             }
         }
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore room grid overlay settings: %s", e.what());
     }
 
-    auto sync_gpu_label_renderer_ui = [this, tab](bool room_labels_on) {
-        if(!ui->gpuLabelsCheckbox)
-        {
-            return;
-        }
-        ui->gpuLabelsCheckbox->setEnabled(room_labels_on);
-        if(!room_labels_on)
-        {
-            const QSignalBlocker block(ui->gpuLabelsCheckbox);
-            ui->gpuLabelsCheckbox->setChecked(false);
-            if(tab && tab->viewport)
-            {
-                tab->viewport->SetPreferGpuLabelOverlay(false);
-            }
-        }
-    };
-
-    sync_gpu_label_renderer_ui(ui->roomGuideLabelsCheckbox->isChecked());
-
     connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::roomGuideLabelsToggled);
-    connect(ui->roomGuideLabelsCheckbox, &QCheckBox::toggled, this, [this, tab, sync_gpu_label_renderer_ui](bool on) {
-        sync_gpu_label_renderer_ui(on);
-    });
-    connect(ui->gpuLabelsCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gpuLabelsToggled);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    connect(ui->gpuSceneCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gpuSceneToggled);
-#endif
     connect(ui->frameSelectionButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::frameSelectionInView);
     connect(ui->resetCameraButton, &QPushButton::clicked, tab, &OpenRGB3DSpatialTab::resetViewportCamera);
     connect(ui->roomGridOverlayCheckbox, &QCheckBox::toggled, this, &GridSettingsPanel::onRoomGridOverlayToggled);
@@ -412,4 +365,3 @@ QDoubleSpinBox* GridSettingsPanel::roomHeightSpin() const { return ui->roomHeigh
 QDoubleSpinBox* GridSettingsPanel::roomDepthSpin() const { return ui->roomDepthSpin; }
 QCheckBox* GridSettingsPanel::roomGridOverlayCheckbox() const { return ui->roomGridOverlayCheckbox; }
 QCheckBox* GridSettingsPanel::roomGuideLabelsCheckbox() const { return ui->roomGuideLabelsCheckbox; }
-QCheckBox* GridSettingsPanel::gpuLabelsCheckbox() const { return ui->gpuLabelsCheckbox; }

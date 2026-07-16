@@ -7,7 +7,7 @@
 namespace ViewportGLFormat
 {
 
-QSurfaceFormat BuildSurfaceFormat(Backend backend)
+QSurfaceFormat BuildSurfaceFormat()
 {
     QSurfaceFormat fmt;
     fmt.setDepthBufferSize(24);
@@ -15,32 +15,19 @@ QSurfaceFormat BuildSurfaceFormat(Backend backend)
     fmt.setSamples(4);
     fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     fmt.setSwapInterval(1);
-
-    switch(backend)
-    {
-        case Backend::ModernCore33:
-            fmt.setRenderableType(QSurfaceFormat::OpenGL);
-            fmt.setProfile(QSurfaceFormat::CoreProfile);
-            fmt.setVersion(3, 3);
-            break;
-        case Backend::LegacyFixedFunction:
-        default:
-            fmt.setRenderableType(QSurfaceFormat::OpenGL);
-            fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
-            fmt.setVersion(2, 1);
-            break;
-    }
-
+    fmt.setRenderableType(QSurfaceFormat::OpenGL);
+    fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
+    fmt.setVersion(2, 1);
     return fmt;
 }
 
-void ApplyToWidget(::QOpenGLWidget* widget, Backend backend)
+void ApplyToWidget(::QOpenGLWidget* widget)
 {
     if(!widget)
     {
         return;
     }
-    widget->setFormat(BuildSurfaceFormat(backend));
+    widget->setFormat(BuildSurfaceFormat());
 }
 
 } // namespace ViewportGLFormat

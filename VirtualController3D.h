@@ -8,7 +8,6 @@
 #include "RGBController.h"
 #include "LEDPosition3D.h"
 #include "ui/CustomControllerTypes.h"
-#include "Game/LedLayoutCoordinateMap.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -75,10 +74,7 @@ public:
     int GetLedsPerCluster() const { return leds_per_cluster; }
     void SetLedsPerCluster(int count) { leds_per_cluster = (count > 1) ? 3 : 1; }
 
-    std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f,
-                                                    float spacing_x_mm = -1.0f,
-                                                    float spacing_y_mm = -1.0f,
-                                                    float spacing_z_mm = -1.0f);
+    std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f);
 
     bool RebindControllerPointers(std::vector<RGBController*>& controllers);
 
@@ -86,17 +82,6 @@ public:
     json ToPortablePresetJson() const;
     static std::string PresetFilenameSlug(const std::string& layout_name);
     static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
-
-    static std::vector<GridLEDMapping> ImportMappingsFromCoordinateMapJson(
-        const json& map_json,
-        LedLayoutCoordinateMap::NormalizationMode mode,
-        int grid_w,
-        int grid_h,
-        int grid_d,
-        RGBController* controller,
-        unsigned int zone_idx,
-        int granularity = 1,
-        std::string* out_error = nullptr);
 
 private:
     void EnsureGridSizeArrays();

@@ -545,11 +545,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 {
                     ctrl_transform->controller         = nullptr;
                     ctrl_transform->virtual_controller = virtual_ctrl;
-                    ctrl_transform->led_positions      = virtual_ctrl->GenerateLEDPositions(
-                        grid_scale_mm,
-                        ctrl_transform->led_spacing_mm_x,
-                        ctrl_transform->led_spacing_mm_y,
-                        ctrl_transform->led_spacing_mm_z);
+                    ctrl_transform->led_positions      = virtual_ctrl->GenerateLEDPositions(grid_scale_mm);
                 }
                 else
                 {
@@ -1082,11 +1078,7 @@ void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)
 
     if(transform->virtual_controller)
     {
-        transform->led_positions = transform->virtual_controller->GenerateLEDPositions(
-            grid_scale_mm,
-            transform->led_spacing_mm_x,
-            transform->led_spacing_mm_y,
-            transform->led_spacing_mm_z);
+        transform->led_positions = transform->virtual_controller->GenerateLEDPositions(grid_scale_mm);
     }
     else if(transform->controller)
     {

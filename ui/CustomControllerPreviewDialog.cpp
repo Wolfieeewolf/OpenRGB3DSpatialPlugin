@@ -275,15 +275,13 @@ CustomControllerPreviewDialog::CustomControllerPreviewDialog(QWidget* parent)
     auto* viewport_layout = new QVBoxLayout(ui->viewportHost);
     viewport_layout->setContentsMargins(0, 0, 0, 0);
     viewport = new LEDViewport3D(ui->viewportHost);
-    ViewportGLFormat::ApplyToWidget(viewport, ViewportGLFormat::Backend::LegacyFixedFunction);
+    ViewportGLFormat::ApplyToWidget(viewport);
     viewport->setFocusPolicy(Qt::StrongFocus);
     viewport->installViewportKeyboardShortcuts(this);
     viewport->SetShowRoomGuideLabels(false);
     viewport->SetShowRoomGridOverlay(false);
     viewport->SetReferencePoints(nullptr);
     viewport->SetDisplayPlanes(nullptr);
-    viewport->SetPreferGpuScene(false);
-    viewport->SetPreferGpuLabelOverlay(false);
     viewport->SetRoomDimensions(0.0f, 0.0f, 0.0f, false);
     viewport_layout->addWidget(viewport);
 

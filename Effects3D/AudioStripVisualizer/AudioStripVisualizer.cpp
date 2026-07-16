@@ -42,7 +42,6 @@ AudioStripVisualizer::AudioStripVisualizer(QWidget* parent)
 EffectInfo3D AudioStripVisualizer::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Audio Strip Visualizer";
     info.effect_description =
         "Strip-first spectrum bars or scrolling spectrogram; use Path axis and zone targeting for floor, wall, or ceiling strips";
@@ -142,11 +141,6 @@ void AudioStripVisualizer::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
 
     AddWidgetToParent(w, parent);
-}
-
-void AudioStripVisualizer::UpdateParams(SpatialEffectParams& /*params*/)
-{
-    RefreshSpectrumColumns();
 }
 
 void AudioStripVisualizer::RefreshSpectrumColumns()

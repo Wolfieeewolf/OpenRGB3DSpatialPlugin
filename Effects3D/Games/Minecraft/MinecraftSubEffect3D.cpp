@@ -16,7 +16,6 @@ MinecraftSubEffect3D::MinecraftSubEffect3D(std::uint32_t channels, const char* e
 EffectInfo3D MinecraftSubEffect3D::BaseMinecraftEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 2;
     info.effect_name = effect_title_;
     info.effect_description = "";
     info.category = "Game";
@@ -57,11 +56,6 @@ void MinecraftSubEffect3D::SetupCustomUI(QWidget* parent)
                                                    this,
                                                    [this]() { emit ParametersChanged(); });
     AddWidgetToParent(w, parent);
-}
-
-void MinecraftSubEffect3D::UpdateParams(SpatialEffectParams& params)
-{
-    (void)params;
 }
 
 nlohmann::json MinecraftSubEffect3D::SaveMinecraftJson() const

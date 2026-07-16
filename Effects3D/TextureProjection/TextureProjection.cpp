@@ -62,7 +62,6 @@ TextureProjection::~TextureProjection()
 EffectInfo3D TextureProjection::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Texture projection";
     info.effect_description =
         "Map an image or GIF onto your 3D layout using planar or spherical UVs. For GIFs, Speed is frames per second: "
@@ -201,11 +200,6 @@ void TextureProjection::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
     connect(browse_button, &QPushButton::clicked, this, &TextureProjection::OnBrowseMedia);
-}
-
-void TextureProjection::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_TEXTURE_PROJECTION;
 }
 
 void TextureProjection::OnProjectionModeChanged(int index)

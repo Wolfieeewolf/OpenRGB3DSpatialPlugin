@@ -68,7 +68,6 @@ TravelingLight::TravelingLight(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D TravelingLight::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Traveling Light";
     info.effect_description =
         "Comet, Chase, Marquee, ZigZag, KITT, Wipe, Moving Panes, Crossing Beams, or Rotating Beam; optional floor/mid/ceiling band tuning";
@@ -168,11 +167,6 @@ void TravelingLight::SetupCustomUI(QWidget* parent)
         this, [this](int v) { glow = v / 100.0f; }, pct_format, on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void TravelingLight::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_COMET;
 }
 
 RGBColor TravelingLight::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

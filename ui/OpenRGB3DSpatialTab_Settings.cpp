@@ -15,6 +15,7 @@
 #include <QUrl>
 #include <algorithm>
 #include <exception>
+#include "LogManager.h"
 
 void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) const
 {
@@ -36,8 +37,6 @@ void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) co
 
         settings["Grid"]["SnapEnabled"] = viewport->IsGridSnapEnabled();
 
-        settings["Viewport"]["GpuLabels"] = viewport->GetPreferGpuLabelOverlay();
-        settings["Viewport"]["GpuScene"] = viewport->GetPreferGpuScene();
         settings["Viewport"]["ShowRoomGuideLabels"] = viewport->GetShowRoomGuideLabels();
     }
 
@@ -133,8 +132,9 @@ void OpenRGB3DSpatialTab::SavePluginUiSettings()
         MergePluginUiIntoSettings(settings);
         SetPluginSettings(settings);
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to save plugin UI settings: %s", e.what());
     }
 }
 
@@ -156,8 +156,9 @@ void OpenRGB3DSpatialTab::RestoreProfileUiFromSettings()
             autoLoadEffectProfileCheckbox()->setChecked(settings["EffectAutoLoadEnabled"].get<bool>());
         }
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore profile UI from settings: %s", e.what());
     }
 }
 

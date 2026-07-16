@@ -679,7 +679,7 @@ void OpenRGB3DSpatialTab::setStackLayerGlobalChromeVisible(bool visible)
     {
         if(QWidget* room_section = global_panel->roomOutputSection())
         {
-            room_section->setVisible(visible && current_effect_ui && current_effect_ui->ShowsRoomOutputControl());
+            room_section->setVisible(visible && current_effect_ui && current_effect_ui->GetEffectInfo().show_room_output_control);
         }
     }
 }
@@ -842,7 +842,7 @@ void OpenRGB3DSpatialTab::startEffectClicked()
 
     if(effect_timer)
     {
-        unsigned int target_fps = current_effect_ui->GetTargetFPSSetting();
+        unsigned int target_fps = current_effect_ui->GetTargetFPS();
         if(target_fps < 1) target_fps = 30;
         if(dynamic_cast<ScreenMirror*>(current_effect_ui) && target_fps < 120u)
         {

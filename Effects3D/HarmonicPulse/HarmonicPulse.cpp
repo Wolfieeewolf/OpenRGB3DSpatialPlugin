@@ -87,7 +87,6 @@ HarmonicPulse::~HarmonicPulse() = default;
 EffectInfo3D HarmonicPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 1;
     info.effect_name = "Harmonic Pulse";
     info.effect_description =
         "Harmonic 3D pulse: interference of sin/cos on normalized x,y,z with optional zoom wobble, "
@@ -185,11 +184,6 @@ void HarmonicPulse::SetupCustomUI(QWidget* parent)
         on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void HarmonicPulse::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_HARMONIC_PULSE;
 }
 
 RGBColor HarmonicPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

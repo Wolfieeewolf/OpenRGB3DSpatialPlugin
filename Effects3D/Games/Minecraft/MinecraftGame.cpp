@@ -6,9 +6,7 @@
 #include "SpatialBasisUtils.h"
 #include "SpatialEffect3D.h"
 #include "RoomSampleMapping.h"
-#include "GpuPanoramaMapping.h"
 #include "Game/RoomSampleConfigPublisher.h"
-#include "GpuPanoramaFrameShmReader.h"
 #include "RoomSampleFrameShmReader.h"
 #include "Game/GameTelemetryBridge.h"
 #include "GridSpaceUtils.h"
@@ -215,7 +213,6 @@ const GameTelemetryBridge::TelemetrySnapshot& PrepareRenderFrame(const GridConte
 
     if(new_frame)
     {
-        GpuPanoramaFrameShmReader::TryApplyLatest();
         RoomSampleFrameShmReader::TryApplyLatest();
         if(!preview_pass)
         {
@@ -714,8 +711,8 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "MineLights-style 3D world color: each LED samples directional biome/light probes "
-                "from world_light (4 height layers × 8 compass sectors). Place a reference point at "
+                "3D world color: each LED samples directional world_light probes "
+                "from Fabric (4 height layers × 8 compass sectors). Place a reference point at "
                 "eye height, set this effect's 3D origin there, then stand at that spot in-game. "
                 "Room yaw aligns your room layout with in-game look (not player position)."),
             panel);
@@ -1096,33 +1093,13 @@ RGBColor RenderColor(const GameTelemetryBridge::TelemetrySnapshot& t,
 
     if(ch(channels, ChRoomVrTint))
     {
-        const float blocks_per_m = t.has_player_blocks_per_m ? t.player_blocks_per_m : 1.0f;
-        const float room_scale = ComputeRoomToWorldScale(grid, blocks_per_m, s.room_vr_scale_tune);
         bool got_room_sample = false;
         RGBColor room_rgb = (RGBColor)0;
 
-        // Primary: room sample grid — true 1:1 per-LED game-world block colours.
+        // Room sample grid — true 1:1 per-LED game-world block colours.
         if(t.room_sample.has_frame)
         {
             room_rgb = RoomSampleMapping::SampleAtRoomGrid(t, grid_x, grid_y, grid_z, &got_room_sample);
-        }
-
-        // Secondary: GPU panorama cubemap only when room SHM grid is inactive.
-        if(!got_room_sample && !t.room_sample.has_frame && t.gpu_panorama.has_frame)
-        {
-            room_rgb = GpuPanoramaMapping::SampleRoomPoint(t,
-                                                           room_scale,
-                                                           s.room_vr_heading_offset_deg,
-                                                           grid_x,
-                                                           grid_y,
-                                                           grid_z,
-                                                           origin_x,
-                                                           origin_y,
-                                                           origin_z,
-                                                           s.room_vr_pos_offset_forward_blocks,
-                                                           s.room_vr_pos_offset_right_blocks,
-                                                           s.room_vr_pos_offset_up_blocks,
-                                                           &got_room_sample);
         }
 
         // No sky/ambient fill while room viewport is active — air and open LOS stay dark on LEDs.

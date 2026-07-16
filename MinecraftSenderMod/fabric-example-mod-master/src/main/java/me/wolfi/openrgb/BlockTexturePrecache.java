@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -47,7 +46,6 @@ final class BlockTexturePrecache
     private static volatile boolean buildScheduled = false;
     private static volatile boolean building = false;
     private static volatile int buildTotal = 0;
-    private static volatile int buildDone = 0;
 
     private BlockTexturePrecache()
     {
@@ -116,7 +114,6 @@ final class BlockTexturePrecache
             {
                 ENTRIES.put(spriteId, sample);
             }
-            buildDone++;
         }
         if(BUILD_QUEUE.isEmpty())
         {
@@ -124,11 +121,6 @@ final class BlockTexturePrecache
             saveToDisk(contentHash);
             LOGGER.info("Block texture pre-cache built ({} textures)", ENTRIES.size());
         }
-    }
-
-    static boolean isWarm()
-    {
-        return diskLoaded && !building && BUILD_QUEUE.isEmpty();
     }
 
     private static void scheduleBuild(Minecraft client, int hash)
@@ -141,7 +133,6 @@ final class BlockTexturePrecache
         contentHash = hash;
         BUILD_QUEUE.clear();
         building = true;
-        buildDone = 0;
 
         final Set<Identifier> unique = collectSpriteIds(client);
         buildTotal = unique.size();

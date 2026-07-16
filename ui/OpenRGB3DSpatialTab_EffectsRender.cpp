@@ -861,6 +861,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
             mirror.room_fill_strength = lp.room_fill / 100.0f;
             mirror.brightness = bright;
 
+            std::vector<EmitterRelayMirror::LedColorSample> led_samples;
             for(const int emitter_ctrl : emitter_set)
             {
                 if(emitter_ctrl < 0 || emitter_ctrl >= (int)controller_transforms.size())
@@ -880,7 +881,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 const float span_x = std::max(max_bounds.x - min_bounds.x, 0.01f);
                 const float span_y = std::max(max_bounds.y - min_bounds.y, 0.01f);
 
-                std::vector<EmitterRelayMirror::LedColorSample> led_samples;
+                led_samples.clear();
                 led_samples.reserve(emitter_transform->led_positions.size());
 
                 const auto push_led_sample = [&](const LEDPosition3D& led_position) {
@@ -1496,7 +1497,6 @@ SpatialEffectSettingsLayout OpenRGB3DSpatialTab::settingsLayoutForClass(const st
         return SpatialEffectSettingsLayout::CustomOnly;
     }
 
-    (void)EffectListManager3D::get()->GetEffectInfo(class_name);
     return SpatialEffectSettingsLayout::FullWithTransport;
 }
 

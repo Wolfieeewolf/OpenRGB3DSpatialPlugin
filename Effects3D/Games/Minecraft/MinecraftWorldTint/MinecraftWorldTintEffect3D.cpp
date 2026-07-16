@@ -14,8 +14,8 @@ EffectInfo3D MinecraftWorldTintEffect3D::GetEffectInfo() const
 {
     EffectInfo3D info = BaseMinecraftEffectInfo();
     info.effect_description =
-        "MineLights-style 3D world tint: directional biome/light probes from Fabric world_light, "
-        "mapped by room position and player heading. Place a reference point at eye height and set 3D origin there.";
+        "3D world tint from Fabric world_light directional probes, mapped by room position and "
+        "player heading. Place a reference point at eye height and set 3D origin there.";
     return info;
 }
 

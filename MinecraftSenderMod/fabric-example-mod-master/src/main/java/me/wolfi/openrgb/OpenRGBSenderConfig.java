@@ -22,18 +22,10 @@ public final class OpenRGBSenderConfig
     public float blocksPerMeter = 4.0f;
     /** Per-LED room sample grid — 1:1 block colours for each physical LED position. */
     public boolean sendRoomSampleFrames = true;
-    /** Probe-based ambient cubemap (cheap CPU reconstruction from world_light probes). */
-    public boolean sendGpuPanoramaFrames = false;
-    /** Phase 2 spike: read back a center patch from the GPU main render target (see logs). */
-    public boolean experimentalGpuReadback = false;
-    /** Use shared-memory files under %ProgramData%/OpenRGB3DSpatial. */
-    public boolean useSharedMemory = true;
     /** Client ticks between telemetry batches (1 = 20 Hz at 20 tps; room samples always run every tick). */
     public int telemetryTickDivisor = 1;
     /** Telemetry batches between room_sample frames (auto-increases for large grids). */
     public int roomSampleSendInterval = 1;
-    /** Target sample count (default 800×600). Plugin publishes actual grid size. */
-    public int roomSampleTargetCells = 480000;
 
     public static OpenRGBSenderConfig get()
     {
@@ -55,42 +47,18 @@ public final class OpenRGBSenderConfig
         }
         try(Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8))
         {
-            final String raw = Files.readString(path, StandardCharsets.UTF_8);
-            OpenRGBSenderConfig loaded = GSON.fromJson(raw, OpenRGBSenderConfig.class);
+            OpenRGBSenderConfig loaded = GSON.fromJson(reader, OpenRGBSenderConfig.class);
             if(loaded != null)
             {
                 enabled = loaded.enabled;
                 host = loaded.host != null ? loaded.host : host;
                 port = loaded.port;
                 blocksPerMeter = loaded.blocksPerMeter;
-                if(raw.contains("\"sendRoomSampleFrames\""))
-                {
-                    sendRoomSampleFrames = loaded.sendRoomSampleFrames;
-                }
-                if(raw.contains("\"sendGpuPanoramaFrames\""))
-                {
-                    sendGpuPanoramaFrames = loaded.sendGpuPanoramaFrames;
-                }
-                if(raw.contains("\"experimentalGpuReadback\""))
-                {
-                    experimentalGpuReadback = loaded.experimentalGpuReadback;
-                }
-                if(raw.contains("\"useSharedMemory\""))
-                {
-                    useSharedMemory = loaded.useSharedMemory;
-                }
-                else
-                {
-                    useSharedMemory = true;
-                }
+                sendRoomSampleFrames = loaded.sendRoomSampleFrames;
                 telemetryTickDivisor = loaded.telemetryTickDivisor > 0 ? loaded.telemetryTickDivisor : 1;
                 if(loaded.roomSampleSendInterval > 0)
                 {
                     roomSampleSendInterval = loaded.roomSampleSendInterval;
-                }
-                if(loaded.roomSampleTargetCells > 0)
-                {
-                    roomSampleTargetCells = loaded.roomSampleTargetCells;
                 }
             }
         }
@@ -129,7 +97,6 @@ public final class OpenRGBSenderConfig
         blocksPerMeter = Math.max(0.25f, Math.min(16.0f, blocksPerMeter));
         telemetryTickDivisor = Math.max(1, Math.min(20, telemetryTickDivisor));
         roomSampleSendInterval = Math.max(1, Math.min(32, roomSampleSendInterval));
-        roomSampleTargetCells = Math.max(4096, Math.min(512000, roomSampleTargetCells));
     }
 
     private static Path configPath()

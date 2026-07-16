@@ -24,14 +24,10 @@ public:
     explicit ShaderField(QWidget* parent = nullptr);
     ~ShaderField() override;
 
-    EFFECT_REGISTERER_3D("ShaderField", "Shader Field", "Audio", []() { return new ShaderField; })
-
-    static std::string const ClassName() { return "ShaderField"; }
-    static std::string const UIName() { return "Shader Field"; }
+    EFFECT_REGISTERER_3D("ShaderField", "Shader Field", "Spatial", []() { return new ShaderField; })
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 

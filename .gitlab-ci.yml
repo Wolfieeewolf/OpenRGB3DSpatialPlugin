@@ -143,9 +143,9 @@ before_script:
   extends: .hidden_windows_saas
   variables:
     QT_MAJOR: "6"
-    QT_AQT_VERSION: "6.10.3"
+    QT_AQT_VERSION: "6.8.3"
     QT_AQT_ARCH: "win64_msvc2022_64"
-    QT_BIN_DIR: "C:\\Qt\\6.10.3\\msvc2022_64\\bin"
+    QT_BIN_DIR: "C:\\Qt\\6.8.3\\msvc2022_64\\bin"
     QT_MSVC_BOOTSTRAP_PACKAGE: "visualstudio2022buildtools"
     DIST_VARIANT: "Windows_64_Qt6"
 

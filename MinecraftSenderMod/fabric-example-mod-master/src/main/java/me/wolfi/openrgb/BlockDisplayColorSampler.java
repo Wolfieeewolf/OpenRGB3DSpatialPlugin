@@ -83,7 +83,7 @@ final class BlockDisplayColorSampler
             {
                 level = state.getValue(LightBlock.LEVEL);
             }
-            return clamp255(35 + level * 4);
+            return ColorMath.clamp255(35 + level * 4);
         }
         if(state.getBlock() instanceof BeaconBeamBlock beam)
         {
@@ -144,7 +144,7 @@ final class BlockDisplayColorSampler
         int rgb = sampleTexturedBlockRgb(world, pos, state, face);
         if(state.is(BlockTags.LEAVES) && isSnowyLeaves(world, pos, state))
         {
-            rgb = blendRgb(rgb, SNOW_BLEND_RGB, SNOWY_LEAVES_BLEND);
+            rgb = ColorMath.blendRgb(rgb, SNOW_BLEND_RGB, SNOWY_LEAVES_BLEND);
         }
         return rgb;
     }
@@ -269,19 +269,19 @@ final class BlockDisplayColorSampler
         int block = world.getBrightness(LightLayer.BLOCK, pos);
         int light = Math.max(sky, block);
         float k = 0.55f + 0.45f * (light / 15.0f);
-        int r = clamp255((int)(((rgb >> 16) & 0xFF) * k));
-        int g = clamp255((int)(((rgb >> 8) & 0xFF) * k));
-        int b = clamp255((int)((rgb & 0xFF) * k));
+        int r = ColorMath.clamp255((int)(((rgb >> 16) & 0xFF) * k));
+        int g = ColorMath.clamp255((int)(((rgb >> 8) & 0xFF) * k));
+        int b = ColorMath.clamp255((int)((rgb & 0xFF) * k));
         boostSaturation(r, g, b, BLOCK_COLOR_SATURATION, alpha, out);
     }
 
     private static void boostSaturation(int r, int g, int b, float saturation, int alpha, int[] out)
     {
         float gray = (r + g + b) / 3.0f;
-        out[0] = clamp255(Math.round(gray + (r - gray) * saturation));
-        out[1] = clamp255(Math.round(gray + (g - gray) * saturation));
-        out[2] = clamp255(Math.round(gray + (b - gray) * saturation));
-        out[3] = clamp255(alpha);
+        out[0] = ColorMath.clamp255(Math.round(gray + (r - gray) * saturation));
+        out[1] = ColorMath.clamp255(Math.round(gray + (g - gray) * saturation));
+        out[2] = ColorMath.clamp255(Math.round(gray + (b - gray) * saturation));
+        out[3] = ColorMath.clamp255(alpha);
     }
 
     private static void clearLayer(int[] out)
@@ -312,24 +312,5 @@ final class BlockDisplayColorSampler
     {
         return (a * b) / 255;
     }
-
-    private static int blendRgb(int rgb, int overlay, float t)
-    {
-        t = Math.max(0.0f, Math.min(1.0f, t));
-        int r1 = (rgb >> 16) & 0xFF;
-        int g1 = (rgb >> 8) & 0xFF;
-        int b1 = rgb & 0xFF;
-        int r2 = (overlay >> 16) & 0xFF;
-        int g2 = (overlay >> 8) & 0xFF;
-        int b2 = overlay & 0xFF;
-        int r = clamp255(Math.round(r1 + (r2 - r1) * t));
-        int g = clamp255(Math.round(g1 + (g2 - g1) * t));
-        int b = clamp255(Math.round(b1 + (b2 - b1) * t));
-        return (r << 16) | (g << 8) | b;
-    }
-
-    private static int clamp255(int v)
-    {
-        return Math.max(0, Math.min(255, v));
-    }
 }
+

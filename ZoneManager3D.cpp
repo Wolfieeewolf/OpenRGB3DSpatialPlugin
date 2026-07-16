@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ZoneManager3D.h"
+#include "LogManager.h"
 
 ZoneManager3D::ZoneManager3D() = default;
 
@@ -68,26 +69,6 @@ Zone3D* ZoneManager3D::GetZoneByName(const std::string& name)
     return nullptr;
 }
 
-std::vector<int> ZoneManager3D::GetControllersInZone(const std::string& zone_name)
-{
-    Zone3D* zone = GetZoneByName(zone_name);
-    if(zone)
-    {
-        return zone->GetControllers();
-    }
-    return {};
-}
-
-std::vector<int> ZoneManager3D::GetControllersInZone(int zone_idx)
-{
-    Zone3D* zone = GetZone(zone_idx);
-    if(zone)
-    {
-        return zone->GetControllers();
-    }
-    return {};
-}
-
 bool ZoneManager3D::ZoneExists(const std::string& name) const
 {
     for(const Zone3D* zone : zones)
@@ -131,8 +112,9 @@ void ZoneManager3D::FromJSON(const nlohmann::json& json)
                     zones.push_back(zone);
                 }
             }
-            catch(const std::exception&)
+            catch(const std::exception& e)
             {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Skipping invalid zone in layout JSON: %s", e.what());
             }
         }
     }

@@ -9,7 +9,7 @@
    <item>
     <widget class="EffectInfoLabel" name="helpLabel" native="true">
      <property name="text">
-      <string>Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. Room VR tint uses the GPU cubemap (SHM) plus player pose; CPU room raycasts are an optional fallback only when GPU cubemap is off in the mod settings (F6).</string>
+      <string>Listens on UDP 127.0.0.1:9876 — the Minecraft Fabric mod sends JSON here directly. Room VR tint samples the room-sample shared-memory grid (per-LED block colours) together with player pose.</string>
      </property>
     </widget>
    </item>

@@ -7,7 +7,6 @@
 #include <set>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QPixmap>
 #include <QImage>
 
 #ifdef _WIN32
@@ -1236,18 +1235,38 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
                         }
                         else if(src_is_bgra)
                         {
-                            QImage wrap((const uchar*)src, (int)dxgi_state.width, (int)dxgi_state.height,
-                                        (int)mapped.RowPitch, QImage::Format_ARGB32);
-                            if(needs_downscale)
+                            const int out_w = needs_downscale ? target_w : (int)dxgi_state.width;
+                            const int out_h = needs_downscale ? target_h : (int)dxgi_state.height;
+                            const size_t out_need = (size_t)out_w * (size_t)out_h * 4;
+                            if(dxgi_rgba_buffer.size() < out_need)
                             {
-                                image = wrap.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation)
-                                            .convertToFormat(QImage::Format_RGBA8888);
+                                dxgi_rgba_buffer.resize(out_need);
                             }
-                            else
+
+                            // One pass: BGRA→RGBA + optional nearest downscale (avoids QImage convertToFormat).
+                            for(int y = 0; y < out_h; y++)
                             {
-                                image = wrap.convertToFormat(QImage::Format_RGBA8888);
+                                const UINT src_y = needs_downscale
+                                    ? (UINT)(((uint64_t)y * dxgi_state.height) / (uint64_t)out_h)
+                                    : (UINT)y;
+                                const uint8_t* row_base = src + (size_t)src_y * mapped.RowPitch;
+                                uint8_t* row_dst = dxgi_rgba_buffer.data() + (size_t)y * out_w * 4;
+                                for(int x = 0; x < out_w; x++)
+                                {
+                                    const UINT src_x = needs_downscale
+                                        ? (UINT)(((uint64_t)x * dxgi_state.width) / (uint64_t)out_w)
+                                        : (UINT)x;
+                                    const uint8_t* px = row_base + (size_t)src_x * 4;
+                                    row_dst[0] = px[2];
+                                    row_dst[1] = px[1];
+                                    row_dst[2] = px[0];
+                                    row_dst[3] = px[3];
+                                    row_dst += 4;
+                                }
                             }
                             dxgi_state.context->Unmap(dxgi_state.staging_texture, 0);
+                            image = QImage(dxgi_rgba_buffer.data(), out_w, out_h, out_w * 4,
+                                           QImage::Format_RGBA8888).copy();
                         }
                         else
                         {
@@ -1553,11 +1572,14 @@ void ScreenCaptureManager::StopCapturePlatform(const std::string& /*source_id*/)
 {
 }
 
-static QPixmap GrabScreenLinux(QScreen* screen)
+static QImage GrabScreenLinux(QScreen* screen)
 {
-    if(!screen) return QPixmap();
+    if(!screen)
+    {
+        return QImage();
+    }
     QRect geometry = screen->geometry();
-    return screen->grabWindow(0, geometry.x(), geometry.y(), geometry.width(), geometry.height());
+    return screen->grabWindow(0, geometry.x(), geometry.y(), geometry.width(), geometry.height()).toImage();
 }
 
 void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
@@ -1612,21 +1634,23 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
             logged_screen_unavailable = false;
         }
 
-        QPixmap pixmap = GrabScreenLinux(screen);
-        if(pixmap.isNull())
+        QImage image = GrabScreenLinux(screen);
+        if(image.isNull())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
 
-        QImage image = pixmap.toImage();
         int target_w = target_width.load();
         int target_h = target_height.load();
         if(image.width() != target_w || image.height() != target_h)
         {
             image = image.scaled(target_w, target_h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
         }
-        image = image.convertToFormat(QImage::Format_RGBA8888);
+        if(image.format() != QImage::Format_RGBA8888)
+        {
+            image = image.convertToFormat(QImage::Format_RGBA8888);
+        }
 
         std::shared_ptr<CapturedFrame> frame = std::make_shared<CapturedFrame>();
         frame->width = image.width();
@@ -1636,11 +1660,18 @@ void ScreenCaptureManager::CaptureThreadFunction(const std::string& source_id)
         const int src_stride = image.bytesPerLine();
         const uint8_t* src = image.constBits();
         uint8_t* dst = frame->data.data();
-        for(int y = 0; y < frame->height; y++)
+        if(src_stride == line_bytes)
         {
-            memcpy(dst, src, (size_t)line_bytes);
-            dst += line_bytes;
-            src += src_stride;
+            memcpy(dst, src, (size_t)line_bytes * (size_t)frame->height);
+        }
+        else
+        {
+            for(int y = 0; y < frame->height; y++)
+            {
+                memcpy(dst, src, (size_t)line_bytes);
+                dst += line_bytes;
+                src += src_stride;
+            }
         }
         frame->frame_id = frame_counter++;
         frame->timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

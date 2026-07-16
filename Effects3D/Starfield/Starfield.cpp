@@ -30,7 +30,6 @@ Starfield::Starfield(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D Starfield::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Starfield";
     info.effect_description =
         "Moving stars (Mega-Cube style): points in 3D, move along Z, wrap, rotate; optional floor/mid/ceiling band tuning";
@@ -140,8 +139,6 @@ void Starfield::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-void Starfield::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 RGBColor Starfield::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

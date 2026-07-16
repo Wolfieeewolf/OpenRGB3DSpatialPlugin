@@ -151,8 +151,9 @@ void OpenRGB3DSpatialTab::rebuildAudioEqSliders(bool persist_settings)
             }
             SetPluginSettings(settings);
         }
-        catch(const std::exception&)
+        catch(const std::exception& e)
         {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to persist audio EQ gains: %s", e.what());
         }
     }
 
@@ -473,8 +474,9 @@ void OpenRGB3DSpatialTab::sync_audio_eq_sliders_from_manager()
         }
         SetPluginSettings(settings);
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore audio EQ gains: %s", e.what());
     }
 }
 

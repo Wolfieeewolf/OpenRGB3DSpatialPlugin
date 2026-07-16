@@ -17,46 +17,6 @@ static inline float Clamp01(float x)
     return std::clamp(x, 0.0f, 1.0f);
 }
 
-static RGBColor LerpColor(RGBColor a, RGBColor b, float t)
-{
-    const float k = Clamp01(t);
-    const int ar = (int)(a & 0xFF);
-    const int ag = (int)((a >> 8) & 0xFF);
-    const int ab = (int)((a >> 16) & 0xFF);
-    const int br = (int)(b & 0xFF);
-    const int bg = (int)((b >> 8) & 0xFF);
-    const int bb = (int)((b >> 16) & 0xFF);
-    const int rr = (int)std::lround(ar + (br - ar) * k);
-    const int rg = (int)std::lround(ag + (bg - ag) * k);
-    const int rb = (int)std::lround(ab + (bb - ab) * k);
-    return (RGBColor)((rb << 16) | (rg << 8) | rr);
-}
-
-static RGBColor WeightedColorFrom(const RGBColor* cols, const float* ws, int n)
-{
-    float wr = 0.0f;
-    float wg = 0.0f;
-    float wb = 0.0f;
-    float wsum = 0.0f;
-    for(int i = 0; i < n; i++)
-    {
-        const float w = std::max(0.0f, ws[i]);
-        wr += w * (float)(cols[i] & 0xFF);
-        wg += w * (float)((cols[i] >> 8) & 0xFF);
-        wb += w * (float)((cols[i] >> 16) & 0xFF);
-        wsum += w;
-    }
-    if(wsum <= 1e-6f)
-    {
-        return (RGBColor)0x00000000;
-    }
-    const float inv = 1.0f / wsum;
-    const int r = std::clamp((int)std::lround(wr * inv), 0, 255);
-    const int g = std::clamp((int)std::lround(wg * inv), 0, 255);
-    const int b = std::clamp((int)std::lround(wb * inv), 0, 255);
-    return (RGBColor)((b << 16) | (g << 8) | r);
-}
-
 static float RampWeight(float x, float lo, float hi, float softness)
 {
     if(hi <= lo + 1e-6f)
@@ -77,23 +37,6 @@ static float RampWeight(float x, float lo, float hi, float softness)
         return Clamp01((x - (lo - s)) / (2.0f * s));
     }
     return Clamp01(((hi + s) - x) / (2.0f * s));
-}
-
-int ResolveLayerCount(const LayeredProbeSet& layered, LayerProfileMode mode)
-{
-    if(layered.has_layered && (layered.layer_count == 3 || layered.layer_count == 4))
-    {
-        return layered.layer_count;
-    }
-    if(mode == LayerProfileMode::ThreeLayer)
-    {
-        return 3;
-    }
-    if(mode == LayerProfileMode::FourLayer)
-    {
-        return 4;
-    }
-    return 4;
 }
 
 void ComputeLayerWeights(float y_norm, const MapperSettings& settings, int layer_count, float* out_w)
@@ -383,78 +326,6 @@ float CompassStratumHueOffsetDegrees(const Basis& basis,
     return h;
 }
 
-RGBColor ComputeProjectedProbeColor(const ProbeInput& probes,
-                                    const Basis& basis,
-                                    const SamplePoint& sample,
-                                    const MapperSettings& settings,
-                                    bool* out_used_layered)
-{
-    if(out_used_layered)
-    {
-        *out_used_layered = false;
-    }
-    if(!basis.valid)
-    {
-        return (RGBColor)0x00000000;
-    }
-
-    const int layer_count = detail::ResolveLayerCount(probes.layered, settings.profile_mode);
-    if(!(probes.layered.has_layered && probes.layered.layer_count >= 3))
-    {
-        return (RGBColor)0x00000000;
-    }
-
-    CompassStratumSample css;
-    if(!MapPositionToCompassStrata(basis, sample, settings, layer_count, css) || !css.valid)
-    {
-        return (RGBColor)0x00000000;
-    }
-
-    const int i0 = css.sector_i0;
-    const int i1 = css.sector_i1;
-    const float w1 = css.sector_t;
-    const float compass_scale = css.directional_blend;
-
-    RGBColor layer_cols[kMaxLayerCount]{};
-    if(settings.discrete_compass_zones && css.discrete)
-    {
-        for(int l = 0; l < layer_count; l++)
-        {
-            const int base = l * kSectorCount;
-            const RGBColor cc = probes.layered.colors[(size_t)(base + 8)];
-            if(compass_scale < 0.5f)
-            {
-                layer_cols[l] = cc;
-            }
-            else
-            {
-                layer_cols[l] = probes.layered.colors[(size_t)(base + i0)];
-            }
-        }
-    }
-    else
-    {
-        for(int l = 0; l < layer_count; l++)
-        {
-            const int base = l * kSectorCount;
-            const RGBColor c0 = probes.layered.colors[(size_t)(base + i0)];
-            const RGBColor c1 = probes.layered.colors[(size_t)(base + i1)];
-            const RGBColor cc = probes.layered.colors[(size_t)(base + 8)];
-            RGBColor az_col = detail::LerpColor(c0, c1, w1);
-            if(compass_scale < 0.999f)
-            {
-                az_col = detail::LerpColor(cc, az_col, compass_scale);
-            }
-            layer_cols[l] = az_col;
-        }
-    }
-
-    RGBColor out = detail::WeightedColorFrom(layer_cols, css.layer_w, layer_count);
-    if(out_used_layered)
-    {
-        *out_used_layered = true;
-    }
-    return out;
 }
 
-}
+

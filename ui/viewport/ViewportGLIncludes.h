@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#ifndef VIEWPORTLEGACYGL_H
-#define VIEWPORTLEGACYGL_H
+#ifndef VIEWPORTGLINCLUDES_H
+#define VIEWPORTGLINCLUDES_H
 
 /** Fixed-function / GL 1.x entry points not exposed on QOpenGLFunctions (Qt 5). */
 #ifdef _WIN32

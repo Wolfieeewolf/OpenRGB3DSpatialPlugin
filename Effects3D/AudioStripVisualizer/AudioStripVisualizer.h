@@ -21,12 +21,8 @@ public:
         return new AudioStripVisualizer;
     })
 
-    static std::string const ClassName() { return "AudioStripVisualizer"; }
-    static std::string const UIName() { return "Audio Strip Visualizer"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 

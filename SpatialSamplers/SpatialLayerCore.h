@@ -3,8 +3,6 @@
 #ifndef SPATIALLAYERCORE_H
 #define SPATIALLAYERCORE_H
 
-#include "RGBController.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -14,25 +12,6 @@ namespace SpatialLayerCore
 
 constexpr int kMaxLayerCount = 4;
 constexpr int kSectorCount = 9;
-
-enum class LayerProfileMode : int
-{
-    Auto = 0,
-    ThreeLayer = 3,
-    FourLayer = 4
-};
-
-struct LayeredProbeSet
-{
-    bool has_layered = false;
-    int layer_count = 0;
-    std::array<RGBColor, kMaxLayerCount * kSectorCount> colors{};
-};
-
-struct ProbeInput
-{
-    LayeredProbeSet layered;
-};
 
 struct Basis
 {
@@ -58,7 +37,6 @@ struct SamplePoint
 
 struct MapperSettings
 {
-    LayerProfileMode profile_mode = LayerProfileMode::Auto;
     float directional_response = 0.5f;
     float directional_sharpness = 1.6f;
     float center_size = 0.14f;
@@ -122,12 +100,6 @@ inline float ShiftGradient01WithCompassHue(float pos01, float compass_hue_deg)
     if(p < 0.0f) p += 1.0f;
     return p;
 }
-
-RGBColor ComputeProjectedProbeColor(const ProbeInput& probes,
-                                    const Basis& basis,
-                                    const SamplePoint& sample,
-                                    const MapperSettings& settings,
-                                    bool* out_used_layered);
 
 }
 

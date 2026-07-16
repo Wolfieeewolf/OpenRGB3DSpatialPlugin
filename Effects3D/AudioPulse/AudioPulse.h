@@ -23,8 +23,6 @@ public:
 
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams&) override;
-
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 

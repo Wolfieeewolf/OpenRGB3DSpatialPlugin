@@ -195,7 +195,6 @@ OmniShapeTexture::~OmniShapeTexture()
 EffectInfo3D OmniShapeTexture::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Omni shape texture";
     info.effect_description =
         "Image or GIF mapped onto a virtual shape at the effect origin; LEDs sample by outward direction (360°). "
@@ -357,11 +356,6 @@ void OmniShapeTexture::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
     connect(browse_button, &QPushButton::clicked, this, &OmniShapeTexture::OnBrowseMedia);
-}
-
-void OmniShapeTexture::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE;
 }
 
 void OmniShapeTexture::OnShapeChanged(int index)

@@ -87,10 +87,7 @@ EffectRoomOutputPanel::EffectRoomOutputPanel(QWidget* parent) : QWidget(parent)
     layout->addWidget(receivers_group_);
 
     relay_panel_ = new RoomSpatialLightSettingsPanel();
-    relay_panel_->setShowPlacement(false);
     relay_panel_->setShowRoomFill(true);
-    relay_panel_->setShowAmbientOcclusion(false);
-    relay_panel_->setShowBlockerControls(false);
     relay_panel_->setHintText(tr(
         "Reach/glow: distance falloff from emitters. "
         "Blockers and ambient occlusion are in Output shaping."));
@@ -315,27 +312,34 @@ void EffectRoomOutputPanel::refreshRolePanels()
 }
 
 void EffectRoomOutputPanel::syncFromState(SpatialRoom::SpatialRoomOutputRole output_role,
-                                          const RoomSpatialLightingUi::RoomSpatialLightParams& relay_params,
-                                          const std::vector<int>& emitter_controllers,
-                                          const std::vector<int>& receiver_controllers)
+                                          const RoomSpatialLightingUi::RoomSpatialLightParams& relay_params)
 {
-    (void)emitter_controllers;
-    (void)receiver_controllers;
+    const SpatialRoom::SpatialRoomOutputRole display_role =
+        (output_role == SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+            ? SpatialRoom::SpatialRoomOutputRole::EmitterRelay
+            : SpatialRoom::SpatialRoomOutputRole::Direct;
 
-    SpatialRoom::SpatialRoomOutputRole display_role = output_role;
-
+    int matched = -1;
     for(int i = 0; i < output_combo_->count(); ++i)
     {
         if(output_combo_->itemData(i).toInt() == (int)display_role)
         {
-            output_combo_->setCurrentIndex(i);
+            matched = i;
             break;
         }
+    }
+    if(matched >= 0)
+    {
+        output_combo_->setCurrentIndex(matched);
+    }
+    else if(output_combo_->count() > 0)
+    {
+        output_combo_->setCurrentIndex(0);
     }
     relay_panel_->syncFromParams(relay_params);
     if(bound_role_)
     {
-        *bound_role_ = output_role;
+        *bound_role_ = display_role;
     }
     refreshRolePanels();
 }
@@ -359,14 +363,18 @@ void EffectRoomOutputPanel::bind(SpatialEffect3D* effect,
     bound_receivers_      = &receiver_controllers;
     changed_callback_     = changed;
     transform_label_fn_     = transform_label;
-    syncFromState(output_role, relay_params, emitter_controllers, receiver_controllers);
+    syncFromState(output_role, relay_params);
 
     connect(output_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [&output_role, changed, this](int index) {
-                output_role = (SpatialRoom::SpatialRoomOutputRole)output_combo_->itemData(index).toInt();
+                const int raw = output_combo_->itemData(index).toInt();
+                output_role = (raw == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+                                  ? SpatialRoom::SpatialRoomOutputRole::EmitterRelay
+                                  : SpatialRoom::SpatialRoomOutputRole::Direct;
                 refreshRolePanels();
                 changed();
             });
 
     relay_panel_->bindRelayTuneParams(effect, relay_params, changed);
 }
+

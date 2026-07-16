@@ -81,7 +81,6 @@ SurfaceAmbient::SurfaceAmbient(QWidget* parent) : SpatialEffect3D(parent) {}
 EffectInfo3D SurfaceAmbient::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Surface Ambient";
     info.effect_description = "Fire, water, slime, lava, ember, ocean, or steam on floor, ceiling, or walls; optional floor/mid/ceiling band tuning";
     info.category = "Spatial";
@@ -163,8 +162,6 @@ void SurfaceAmbient::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-void SurfaceAmbient::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 static void eval_surface(int surf, const GridContext3D& grid, float x, float y, float z,
     float& dist, float& u, float& v, float& extent)

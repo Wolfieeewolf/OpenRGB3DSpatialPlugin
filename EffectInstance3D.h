@@ -61,7 +61,7 @@ struct EffectInstance3D
 
     unsigned int GetEffectiveTargetFPS() const
     {
-        return (effect && enabled) ? effect->GetTargetFPSSetting() : 0;
+        return (effect && enabled) ? effect->GetTargetFPS() : 0;
     }
 
     std::string GetDisplayName() const

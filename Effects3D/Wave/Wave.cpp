@@ -52,7 +52,6 @@ Wave::~Wave() = default;
 EffectInfo3D Wave::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 3;
     info.effect_name = "Wave";
     info.effect_description =
         "Wave line or 3D surface; optional floor/mid/ceiling band tuning";
@@ -245,11 +244,6 @@ void Wave::OnModeChanged()
     if(line_controls) line_controls->setVisible(this->mode == MODE_LINE);
     if(surface_controls) surface_controls->setVisible(this->mode == MODE_SURFACE);
     emit ParametersChanged();
-}
-
-void Wave::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_WAVE;
 }
 
 void Wave::OnWaveParameterChanged()

@@ -79,7 +79,6 @@ HexLattice::~HexLattice() = default;
 EffectInfo3D HexLattice::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 1;
     info.effect_name = "Hex Lattice";
     info.effect_description =
         "Hex lattice 3D field. Blends sin/cos in XYZ with animated zoom and triangular hue shaping.";
@@ -159,11 +158,6 @@ void HexLattice::SetupCustomUI(QWidget* parent)
         on_changed);
 
     AddWidgetToParent(w, parent);
-}
-
-void HexLattice::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_HEX_LATTICE;
 }
 
 RGBColor HexLattice::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

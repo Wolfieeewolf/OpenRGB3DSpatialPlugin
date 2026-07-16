@@ -243,7 +243,6 @@ AudioPulse::AudioPulse(QWidget* parent)
 EffectInfo3D AudioPulse::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 4;
     info.effect_name = "Audio Pulse";
     info.effect_description =
         "Beat-triggered shockwaves from the origin: classic layered pulse (default) or expanding-ring / flash modes; "
@@ -323,10 +322,6 @@ void AudioPulse::SetupCustomUI(QWidget* parent)
     }
 
     AddWidgetToParent(w, parent);
-}
-
-void AudioPulse::UpdateParams(SpatialEffectParams& /*params*/)
-{
 }
 
 RGBColor AudioPulse::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

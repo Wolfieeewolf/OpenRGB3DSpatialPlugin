@@ -19,12 +19,8 @@ public:
         return new RotatingConeSpotlights;
     });
 
-    static std::string const ClassName() { return "RotatingConeSpotlights"; }
-    static std::string const UIName() { return "Rotating Cone Spotlights"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
 
     nlohmann::json SaveSettings() const override;

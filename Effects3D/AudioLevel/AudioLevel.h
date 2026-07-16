@@ -19,12 +19,8 @@ public:
 
     EFFECT_REGISTERER_3D("AudioLevel", "Audio Level", "Audio", [](){ return new AudioLevel; })
 
-    static std::string const ClassName() { return "AudioLevel"; }
-    static std::string const UIName() { return "Audio Level"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool RequiresWorldSpaceCoordinates() const override { return false; }
 

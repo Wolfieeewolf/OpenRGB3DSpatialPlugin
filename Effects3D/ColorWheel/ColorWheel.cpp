@@ -21,7 +21,6 @@ ColorWheel::ColorWheel(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D ColorWheel::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Color Wheel";
     info.effect_description = "Rotating rainbow from center; optional independent floor / mid / ceiling wheels";
     info.category = "Spatial";
@@ -97,8 +96,6 @@ void ColorWheel::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-void ColorWheel::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 RGBColor ColorWheel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

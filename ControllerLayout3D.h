@@ -4,7 +4,6 @@
 #define CONTROLLERLAYOUT3D_H
 
 #include <vector>
-#include <unordered_map>
 #include <memory>
 #include "RGBController.h"
 #include "LEDPosition3D.h"
@@ -34,32 +33,6 @@ public:
     static void BuildViewportStripDrawSamples(const ControllerTransform* ctrl_transform,
                                               float grid_scale_mm,
                                               std::vector<ViewportStripDrawSample>& out_samples);
-
-    struct SpatialCell
-    {
-        std::vector<LEDPosition3D*> leds;
-    };
-
-    class SpatialHash
-    {
-    public:
-        SpatialHash(float cell_size = 1.0f);
-        void Clear();
-        void Insert(LEDPosition3D* led_pos);
-        void Build(const std::vector<std::unique_ptr<ControllerTransform>>& transforms);
-        std::vector<LEDPosition3D*> QueryRadius(float x, float y, float z, float radius);
-        LEDPosition3D* FindNearest(float x, float y, float z);
-
-    private:
-        int64_t HashCell(int x, int y, int z) const;
-        void GetCellCoords(float x, float y, float z, int& cx, int& cy, int& cz) const;
-        float DistanceSquared(float x1, float y1, float z1, float x2, float y2, float z2) const;
-
-        float cell_size;
-        std::unordered_map<int64_t, SpatialCell> grid;
-    };
-
-private:
 };
 
 #endif

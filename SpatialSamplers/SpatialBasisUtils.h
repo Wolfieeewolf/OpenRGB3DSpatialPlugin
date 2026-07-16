@@ -38,63 +38,7 @@ static inline void Normalize3(float& x, float& y, float& z, float fallback_x, fl
     }
 }
 
-/** Yaw-only room basis (pitch stripped). Matches Minecraft mod RoomSampleWorldMapper. */
-static inline BasisVectors BuildHorizontalBasis(float look_x,
-                                                float look_y,
-                                                float look_z,
-                                                float heading_offset_deg)
-{
-    float lx = look_x;
-    float ly = look_y;
-    float lz = look_z;
-    Normalize3(lx, ly, lz, 0.0f, 0.0f, 1.0f);
-
-    constexpr float ux = 0.0f;
-    constexpr float uy = 1.0f;
-    constexpr float uz = 0.0f;
-    const float horiz = lx * ux + ly * uy + lz * uz;
-    float fx = lx - horiz * ux;
-    float fy = ly - horiz * uy;
-    float fz = lz - horiz * uz;
-    Normalize3(fx, fy, fz, 0.0f, 0.0f, 1.0f);
-
-    float rx = fy * uz - fz * uy;
-    float ry = fz * ux - fx * uz;
-    float rz = fx * uy - fy * ux;
-    Normalize3(rx, ry, rz, 1.0f, 0.0f, 0.0f);
-
-    const float yaw = heading_offset_deg * 0.01745329251f;
-    if(std::fabs(yaw) > 1e-5f)
-    {
-        const float c = std::cos(yaw);
-        const float s = std::sin(yaw);
-        const float fx2 = fx * c + rx * s;
-        const float fy2 = fy * c + ry * s;
-        const float fz2 = fz * c + rz * s;
-        const float rx2 = rx * c - fx * s;
-        const float ry2 = ry * c - fy * s;
-        const float rz2 = rz * c - fz * s;
-        fx = fx2;
-        fy = fy2;
-        fz = fz2;
-        rx = rx2;
-        ry = ry2;
-        rz = rz2;
-    }
-
-    BasisVectors out{};
-    out.forward_x = fx;
-    out.forward_y = fy;
-    out.forward_z = fz;
-    out.up_x = ux;
-    out.up_y = uy;
-    out.up_z = uz;
-    out.right_x = rx;
-    out.right_y = ry;
-    out.right_z = rz;
-    return out;
-}
-
+/** Build orthonormal right/up/forward from look + up vectors. */
 static inline BasisVectors BuildOrthonormalBasis(float forward_x,
                                                  float forward_y,
                                                  float forward_z,

@@ -30,12 +30,8 @@ public:
 
     EFFECT_REGISTERER_3D("TextureProjection", "Texture projection", "Media", []() { return new TextureProjection; });
 
-    static std::string const ClassName() { return "TextureProjection"; }
-    static std::string const UIName() { return "Texture projection"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
 

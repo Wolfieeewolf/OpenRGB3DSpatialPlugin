@@ -40,53 +40,6 @@
 
 namespace filesystem = std::filesystem;
 
-bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
-                                      unsigned int zone_idx,
-                                      unsigned int led_idx,
-                                      unsigned int* global_led_idx)
-{
-    if(!controller || !global_led_idx)
-    {
-        return false;
-    }
-    if(zone_idx >= controller->zones.size())
-    {
-        return false;
-    }
-    if(led_idx >= controller->zones[zone_idx].leds_count)
-    {
-        return false;
-    }
-
-    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
-    return (*global_led_idx < controller->leds.size());
-}
-
-bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                                    RGBController* controller,
-                                    float& out_x,
-                                    float& out_y,
-                                    float& out_z)
-{
-    if(!controller)
-    {
-        return false;
-    }
-    for(unsigned int i = 0; i < transforms.size(); i++)
-    {
-        const ControllerTransform* t = transforms[i].get();
-        if(!t || t->controller != controller)
-        {
-            continue;
-        }
-        out_x = t->led_spacing_mm_x;
-        out_y = t->led_spacing_mm_y;
-        out_z = t->led_spacing_mm_z;
-        return true;
-    }
-    return false;
-}
-
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
 {
     if(!objectCreatorStatusLabel())
@@ -290,8 +243,9 @@ void OpenRGB3DSpatialTab::LoadDefaultLedSpacingFromSettings()
             default_led_spacing_z_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("Z", 0.0)));
         }
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to load LED spacing settings: %s", e.what());
     }
 }
 
@@ -305,8 +259,9 @@ void OpenRGB3DSpatialTab::SaveDefaultLedSpacingToSettings()
         settings["LEDSpacing"]["Z"] = default_led_spacing_z_;
         SetPluginSettings(settings);
     }
-    catch(const std::exception&)
+    catch(const std::exception& e)
     {
+        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to save LED spacing settings: %s", e.what());
     }
 }
 

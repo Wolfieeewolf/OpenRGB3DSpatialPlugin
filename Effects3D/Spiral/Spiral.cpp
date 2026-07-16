@@ -40,7 +40,6 @@ Spiral::~Spiral() = default;
 EffectInfo3D Spiral::GetEffectInfo() const
 {
     EffectInfo3D info;
-    info.info_version = 3;
     info.effect_name = "Spiral";
     info.effect_description = "Spiral pattern with arms/gap; optional per-height-band speed, tightness, and phase";
     info.category = "Spatial";
@@ -129,11 +128,6 @@ void Spiral::SetupCustomUI(QWidget* parent)
         nullptr);
 
     AddWidgetToParent(w, parent);
-}
-
-void Spiral::UpdateParams(SpatialEffectParams& params)
-{
-    params.type = SPATIAL_EFFECT_SPIRAL;
 }
 
 void Spiral::OnSpiralParameterChanged()

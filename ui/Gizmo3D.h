@@ -42,7 +42,7 @@ struct Box3D
 
 class QMouseEvent;
 
-/** Line batches + triangles for ViewportRenderer GPU draw (local gizmo space). */
+/** Line batches + triangles for mesh draw helpers (local gizmo space). */
 struct GizmoDrawMesh
 {
     struct LineBatch
@@ -129,7 +129,6 @@ private:
     float SnapToGrid(float value);
     float Dot3(const float a[3], const float b[3]);
     void Cross3(const float a[3], const float b[3], float out[3]);
-    void Normalize3(float v[3]);
     float ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray);
 
 private:

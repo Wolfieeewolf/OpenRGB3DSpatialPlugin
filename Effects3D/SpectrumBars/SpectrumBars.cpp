@@ -38,7 +38,6 @@ SpectrumBars::~SpectrumBars() = default;
 EffectInfo3D SpectrumBars::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Spectrum Bars";
     info.effect_description = "Bar graph of spectrum energy; optional floor/mid/ceiling stratum tuning";
     info.category = "Audio";
@@ -112,11 +111,6 @@ void SpectrumBars::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
 
     AddWidgetToParent(w, parent);
-}
-
-void SpectrumBars::UpdateParams(SpatialEffectParams& /*params*/)
-{
-    RefreshBandRange();
 }
 
 RGBColor SpectrumBars::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
@@ -305,11 +299,6 @@ void SpectrumBars::UpdateSmoothedBands(const std::vector<float>& spectrum, float
     }
 }
 
-static float normalize_linear_sb(float value, float min, float max)
-{
-    return NormalizeGridAxis01(value, min, max);
-}
-
 float SpectrumBars::ResolveCoordinateNormalized(const GridContext3D* grid, float x, float y, float z) const
 {
     (void)y;
@@ -317,7 +306,7 @@ float SpectrumBars::ResolveCoordinateNormalized(const GridContext3D* grid, float
     float normalized = 0.0f;
     if(grid)
     {
-        normalized = normalize_linear_sb(x, grid->min_x, grid->max_x);
+        normalized = NormalizeGridAxis01(x, grid->min_x, grid->max_x);
     }
     else
     {

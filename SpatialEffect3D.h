@@ -184,8 +184,6 @@ inline float EffectGridMedianHalfExtent(const GridContext3D& grid, float normali
 
 struct EffectInfo3D
 {
-    int                 info_version;
-
     const char*         effect_name;
     const char*         effect_description;
     const char*         category;
@@ -251,11 +249,9 @@ public:
 
     explicit SpatialEffect3D(QWidget* parent = nullptr);
     virtual ~SpatialEffect3D();
-    unsigned int GetTargetFPSSetting() const { return GetTargetFPS(); }
 
     virtual EffectInfo3D GetEffectInfo() const = 0;
     virtual void SetupCustomUI(QWidget* parent) = 0;
-    virtual void UpdateParams(SpatialEffectParams& params) = 0;
     virtual RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) = 0;
     RGBColor EvaluateColorGrid(float x, float y, float z, float time, const GridContext3D& grid);
     static const SpatialEffect3D* GetEvaluatingEffect();
@@ -266,7 +262,6 @@ public:
 
     virtual void CreateCommonEffectControls(QWidget* parent, bool include_start_stop = true);
     void MountSettingsUi(QWidget* parent, SpatialEffectSettingsLayout layout);
-    virtual void UpdateCommonEffectParams(SpatialEffectParams& params);
     virtual void ApplyControlVisibility();
 
     virtual void SetEffectEnabled(bool enabled) { effect_enabled = enabled; }
@@ -274,6 +269,7 @@ public:
 
     virtual void SetSpeed(unsigned int speed) { effect_speed = speed; }
     virtual unsigned int GetSpeed() { return effect_speed; }
+    unsigned int GetTargetFPS() const;
 
     virtual void SetBrightness(unsigned int brightness) { effect_brightness = brightness; }
     virtual unsigned int GetBrightness() { return effect_brightness; }
@@ -373,10 +369,8 @@ public:
                                           const GridContext3D& grid,
                                           int shade_slot = -1) const;
 
-    /** Room evaluation family (see SpatialRoom/ and docs/SPATIAL_ROOM.md). */
+    /** Room evaluation family (see SpatialRoom/). */
     virtual SpatialRoom::SpatialRoomMode GetSpatialRoomMode() const;
-    virtual SpatialRoom::SpatialRoomCapabilities GetSpatialRoomCapabilities() const;
-    SpatialRoom::SpatialRoomCapabilities EffectiveSpatialRoomCapabilities() const;
 
     virtual bool RequiresWorldSpaceCoordinates() const;
     virtual bool RequiresWorldSpaceGridBounds() const { return false; }
@@ -395,7 +389,6 @@ public:
     void DisconnectStackRoomOutputPanel();
     void InvalidateRelayShadeCache();
     void SyncRoomCoordinateModeFromReference();
-    bool ShowsRoomOutputControl() const;
 
 signals:
     void ParametersChanged();
@@ -606,7 +599,6 @@ protected:
     float GetNormalizedDetail() const;
     float GetNormalizedSize() const;
     float GetNormalizedScale() const;
-    unsigned int GetTargetFPS() const;
     bool IsScaleInverted() const { return scale_inverted; }
     void SetScaleInverted(bool inverted);
 

@@ -24,8 +24,6 @@ public:
     Zone3D* GetZoneByName(const std::string& name);
     const std::vector<Zone3D*>& GetAllZones() const { return zones; }
 
-    std::vector<int> GetControllersInZone(const std::string& zone_name);
-    std::vector<int> GetControllersInZone(int zone_idx);
     bool ZoneExists(const std::string& name) const;
 
     nlohmann::json ToJSON() const;

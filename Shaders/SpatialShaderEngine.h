@@ -11,6 +11,7 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 class SpatialShaderEngine : public QObject
 {

@@ -895,12 +895,6 @@ void Gizmo3D::Cross3(const float a[3], const float b[3], float out[3])
     out[2] = a[0]*b[1] - a[1]*b[0];
 }
 
-void Gizmo3D::Normalize3(float v[3])
-{
-    float len = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-    if(len > 1e-6f) { v[0]/=len; v[1]/=len; v[2]/=len; }
-}
-
 float Gizmo3D::ClosestAxisParamToRay(const float axis_origin[3], const float axis_dir_unit[3], const Ray3D& ray)
 {
     float a[3] = { axis_dir_unit[0], axis_dir_unit[1], axis_dir_unit[2] };

@@ -2,39 +2,15 @@
 
 #include "RoomSpatialLightingUi.h"
 
-#include "SpatialEffect3D.h"
-
 namespace RoomSpatialLightingUi
 {
-
-SpatialLighting::Vec3 PlacementPosition(const GridContext3D& grid, const RoomSpatialLightParams& params)
-{
-    const float mx = grid.width * kPlacementMarginFrac;
-    const float my = grid.height * kPlacementMarginFrac;
-    const float mz = grid.depth * kPlacementMarginFrac;
-
-    switch(params.placement_mode)
-    {
-    case 1:
-        return {grid.center_x, grid.center_y, grid.center_z};
-    case 2:
-        return {grid.max_x - mx, grid.max_y - my, grid.max_z - mz};
-    case 3:
-        return {grid.min_x + grid.width * params.custom_u,
-                grid.min_y + grid.height * params.custom_v,
-                grid.min_z + grid.depth * params.custom_w};
-    case 0:
-    default:
-        return {grid.min_x + mx, grid.min_y + my, grid.min_z + mz};
-    }
-}
 
 SpatialLighting::OccluderBuildOptions BuildOccluderOptions(const RoomSpatialLightParams& params)
 {
     SpatialLighting::OccluderBuildOptions options{};
     options.display_planes = params.use_occlusion;
     options.room_walls = params.use_occlusion && params.use_room_walls;
-    options.controllers = params.use_occlusion && params.use_controller_occlusion;
+    options.controllers = params.use_occlusion;
     options.light_blockers = params.use_occlusion;
     return options;
 }
@@ -42,12 +18,7 @@ SpatialLighting::OccluderBuildOptions BuildOccluderOptions(const RoomSpatialLigh
 void SaveParamsToJson(nlohmann::json& out_object, const char* key, const RoomSpatialLightParams& params)
 {
     nlohmann::json& o = out_object[key];
-    o["placement"] = params.placement_mode;
-    o["custom_u"] = params.custom_u;
-    o["custom_v"] = params.custom_v;
-    o["custom_w"] = params.custom_w;
     o["occlusion"] = params.use_occlusion;
-    o["controller_occlusion"] = params.use_controller_occlusion;
     o["room_walls"] = params.use_room_walls;
     o["ao"] = params.ao_strength;
     o["glow_mm"] = params.glow_radius_mm;
@@ -65,29 +36,9 @@ void LoadParamsFromJson(const nlohmann::json& settings,
     }
 
     const auto& rc = settings[key];
-    if(rc.contains("placement"))
-    {
-        params.placement_mode = rc["placement"].get<int>();
-    }
-    if(rc.contains("custom_u"))
-    {
-        params.custom_u = rc["custom_u"].get<float>();
-    }
-    if(rc.contains("custom_v"))
-    {
-        params.custom_v = rc["custom_v"].get<float>();
-    }
-    if(rc.contains("custom_w"))
-    {
-        params.custom_w = rc["custom_w"].get<float>();
-    }
     if(rc.contains("occlusion"))
     {
         params.use_occlusion = rc["occlusion"].get<bool>();
-    }
-    if(rc.contains("controller_occlusion"))
-    {
-        params.use_controller_occlusion = rc["controller_occlusion"].get<bool>();
     }
     if(rc.contains("room_walls"))
     {

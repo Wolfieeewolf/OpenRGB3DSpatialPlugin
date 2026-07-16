@@ -26,7 +26,6 @@
 #include "Effects3D/SpatialLighting/RoomSpatialLightingUi.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
-#include "SpatialRoom/SpatialRoomFrame.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
 #include "GridSpaceUtils.h"
 #include <QColorDialog>
@@ -1190,21 +1189,10 @@ void SpatialEffect3D::OnRainbowModeChanged()
 
 
 
-SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::GetSpatialRoomCapabilities() const
-{
-    return SpatialRoom::DefaultCapabilitiesForMode(GetSpatialRoomMode());
-}
-
-SpatialRoom::SpatialRoomCapabilities SpatialEffect3D::EffectiveSpatialRoomCapabilities() const
-{
-    SpatialRoom::SpatialRoomCapabilities caps = GetSpatialRoomCapabilities();
-    SpatialRoom::ApplyDepthPreset(caps, SpatialRoom::CurrentFrameContext().depth_preset);
-    return caps;
-}
-
 bool SpatialEffect3D::SkipsSpatialSampleWarp() const
 {
-    return EffectiveSpatialRoomCapabilities().has(SpatialRoom::CapSkipSampleWarp);
+    return SpatialRoom::DefaultCapabilitiesForMode(GetSpatialRoomMode())
+        .has(SpatialRoom::CapSkipSampleWarp);
 }
 
 void SpatialEffect3D::setRoomEmitterControllerIndex(int index, bool enabled)
@@ -1409,11 +1397,10 @@ void SpatialEffect3D::DisconnectStackRoomOutputPanel()
 
 void SpatialEffect3D::ApplyRelayShadeSettings(const GridContext3D& grid) const
 {
-    SpatialRoom::ApplyDepthPresetToShadeSettings(relay_shade_,
-                                                 SpatialRoom::CurrentFrameContext().depth_preset);
     relay_shade_.ao_strength = effect_room_relay_params_.ao_strength / 100.0f;
-    relay_shade_.use_occlusion = relay_shade_.use_occlusion && effect_room_relay_params_.use_occlusion;
-    relay_shade_.use_ambient_occlusion = relay_shade_.use_occlusion && effect_room_relay_params_.ao_strength > 0.01f;
+    relay_shade_.use_occlusion = effect_room_relay_params_.use_occlusion;
+    relay_shade_.use_ambient_occlusion =
+        effect_room_relay_params_.use_occlusion && effect_room_relay_params_.ao_strength > 0.01f;
     const float reach_u = MMToGridUnits(effect_room_relay_params_.light_reach_mm, grid.grid_scale_mm);
     const float room_diag =
         std::sqrt(grid.width * grid.width + grid.height * grid.height + grid.depth * grid.depth);
@@ -1575,11 +1562,6 @@ void SpatialEffect3D::SyncRoomCoordinateModeFromReference()
     effect_room_coordinate_mode_ =
         (reference_mode == REF_MODE_ROOM_CENTER) ? SpatialRoom::SpatialRoomCoordinateMode::RoomMapped
                                                  : SpatialRoom::SpatialRoomCoordinateMode::EffectOrigin;
-}
-
-bool SpatialEffect3D::ShowsRoomOutputControl() const
-{
-    return GetEffectInfo().show_room_output_control;
 }
 
 ReferenceMode SpatialEffect3D::GetReferenceMode() const
@@ -1918,20 +1900,21 @@ unsigned int SpatialEffect3D::GetTargetFPS() const
     return effect_fps;
 }
 
+static float ScaleEffectParam(float normalized, float default_scale)
+{
+    float scale = (default_scale > 0.0f) ? default_scale : 10.0f;
+    scale = 10.0f + (scale - 10.0f) * 0.6f;
+    return normalized * scale;
+}
+
 float SpatialEffect3D::GetScaledSpeed() const
 {
-    EffectInfo3D info = GetEffectInfo();
-    float speed_scale = (info.default_speed_scale > 0.0f) ? info.default_speed_scale : 10.0f;
-    speed_scale = 10.0f + (speed_scale - 10.0f) * 0.6f;
-    return GetNormalizedSpeed() * speed_scale;
+    return ScaleEffectParam(GetNormalizedSpeed(), GetEffectInfo().default_speed_scale);
 }
 
 float SpatialEffect3D::GetScaledFrequency() const
 {
-    EffectInfo3D info = GetEffectInfo();
-    float freq_scale = (info.default_frequency_scale > 0.0f) ? info.default_frequency_scale : 10.0f;
-    freq_scale = 10.0f + (freq_scale - 10.0f) * 0.6f;
-    return GetNormalizedFrequency() * freq_scale;
+    return ScaleEffectParam(GetNormalizedFrequency(), GetEffectInfo().default_frequency_scale);
 }
 
 bool SpatialEffect3D::RequiresWorldSpaceCoordinates() const
@@ -2181,10 +2164,6 @@ bool SpatialEffect3D::IsPointOnActiveSurface(float x, float y, float z, const Gr
     if(d_wzm < best) { best = d_wzm; surf = SURF_WALL_ZM; }
     if(d_wzp < best) { surf = SURF_WALL_ZP; }
     return (effect_surface_mask & surf) != 0;
-}
-
-void SpatialEffect3D::UpdateCommonEffectParams(SpatialEffectParams& /* params */)
-{
 }
 
 void SpatialEffect3D::SetSurfaceMaskFlag(int flag, bool enabled)
@@ -2575,7 +2554,6 @@ nlohmann::json SpatialEffect3D::SaveSettings() const
     j["custom_ref_z"] = custom_reference_point.z;
     j["use_custom_ref"] = use_custom_reference;
 
-    j["room_coordinate_mode"] = (int)effect_room_coordinate_mode_;
     j["room_output_role"] = (int)effect_room_output_role_;
     RoomSpatialLightingUi::SaveParamsToJson(j, "room_relay_light", effect_room_relay_params_);
     j["room_emitter_controllers"] = effect_emitter_controller_indices_;
@@ -2731,12 +2709,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     {
         SetReferenceMode((ReferenceMode)settings["reference_mode"].get<int>());
     }
-    else if(settings.contains("room_coordinate_mode") && settings["room_coordinate_mode"].is_number_integer()
-            && settings["room_coordinate_mode"].get<int>()
-                   == (int)SpatialRoom::SpatialRoomCoordinateMode::RoomMapped)
-    {
-        SetReferenceMode(REF_MODE_ROOM_CENTER);
-    }
     else
     {
         SyncRoomCoordinateModeFromReference();
@@ -2768,14 +2740,10 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(settings.contains("room_output_role") && settings["room_output_role"].is_number_integer())
     {
         const int raw_role = settings["room_output_role"].get<int>();
-        if(raw_role == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
-        {
-            effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::EmitterRelay;
-        }
-        else
-        {
-            effect_room_output_role_ = SpatialRoom::SpatialRoomOutputRole::Direct;
-        }
+        effect_room_output_role_ =
+            (raw_role == (int)SpatialRoom::SpatialRoomOutputRole::EmitterRelay)
+                ? SpatialRoom::SpatialRoomOutputRole::EmitterRelay
+                : SpatialRoom::SpatialRoomOutputRole::Direct;
     }
     RoomSpatialLightingUi::LoadParamsFromJson(settings, "room_relay_light", effect_room_relay_params_);
     if(room_ao_slider)
@@ -2807,16 +2775,6 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
             }
         }
     }
-    else if(settings.contains("emitter_controllers") && settings["emitter_controllers"].is_array())
-    {
-        for(const auto& v : settings["emitter_controllers"])
-        {
-            if(v.is_number_integer())
-            {
-                effect_emitter_controller_indices_.push_back(v.get<int>());
-            }
-        }
-    }
     effect_receiver_controller_indices_.clear();
     if(settings.contains("room_receiver_controllers") && settings["room_receiver_controllers"].is_array())
     {
@@ -2837,9 +2795,7 @@ void SpatialEffect3D::LoadSettings(const nlohmann::json& settings)
     if(room_output_panel_)
     {
         room_output_panel_->syncFromState(effect_room_output_role_,
-                                          effect_room_relay_params_,
-                                          effect_emitter_controller_indices_,
-                                          effect_receiver_controller_indices_);
+                                          effect_room_relay_params_);
     }
 
     if(settings.contains("path_axis") && settings["path_axis"].is_number_integer())

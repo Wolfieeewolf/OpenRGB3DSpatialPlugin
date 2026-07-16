@@ -24,7 +24,6 @@ Bubbles::Bubbles(QWidget* parent) : SpatialEffect3D(parent)
 EffectInfo3D Bubbles::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Bubbles";
     info.effect_description =
         "Rising expanding spheres (like OpenRGB Bubbles); optional floor/mid/ceiling band tuning for motion and shell detail";
@@ -99,8 +98,6 @@ void Bubbles::SetupCustomUI(QWidget* parent)
 
     AddWidgetToParent(w, parent);
 }
-
-void Bubbles::UpdateParams(SpatialEffectParams& params) { (void)params; }
 
 RGBColor Bubbles::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)
 {

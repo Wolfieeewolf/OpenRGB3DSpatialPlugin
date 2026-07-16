@@ -11,29 +11,24 @@
 enum SpatialEffectType
 {
     SPATIAL_EFFECT_WAVE             = 0,
-    SPATIAL_EFFECT_WIPE             = 1,
+    /* reserved */ /* SPATIAL_EFFECT_WIPE = 1 */
     SPATIAL_EFFECT_PLASMA           = 2,
     SPATIAL_EFFECT_SPIRAL           = 3,
     SPATIAL_EFFECT_DNA_HELIX        = 4,
     SPATIAL_EFFECT_BREATHING_SPHERE = 5,
-    SPATIAL_EFFECT_EXPLOSION        = 6,
-    SPATIAL_EFFECT_RAIN             = 7,
-    SPATIAL_EFFECT_TORNADO          = 8,
-    SPATIAL_EFFECT_LIGHTNING        = 9,
-    SPATIAL_EFFECT_MATRIX           = 10,
+    /* reserved 6–10: explosion, rain, tornado, lightning, matrix */
     SPATIAL_EFFECT_BOUNCING_BALL    = 11,
     SPATIAL_EFFECT_COMET            = 12,
-    SPATIAL_EFFECT_SKY_LIGHTNING    = 13,
+    /* reserved 13: sky_lightning */
     SPATIAL_EFFECT_TEXTURE_PROJECTION = 14,
     SPATIAL_EFFECT_OMNI_SHAPE_TEXTURE = 15,
     SPATIAL_EFFECT_SHELL_PATTERN = 16,
     SPATIAL_EFFECT_ROTATING_CONE_SPOTLIGHTS = 17,
     SPATIAL_EFFECT_HARMONIC_PULSE = 18,
-    SPATIAL_EFFECT_BOUNCER = 19,
+    /* reserved 19: bouncer */
     SPATIAL_EFFECT_HEX_LATTICE = 20,
     SPATIAL_EFFECT_DEPTH_TONE = 23,
-    SPATIAL_EFFECT_SHARP_PULSE = 24,
-    SPATIAL_EFFECT_XOR_FIELD = 25,
+    /* reserved 24–25: sharp_pulse, xor_field */
 };
 
 enum ReferencePointType
@@ -110,35 +105,6 @@ struct MultiPointConfig
     float               point_influence;
 
     MultiPointConfig() : primary_point_id(-1), secondary_point_id(-1), use_all_points(false), point_influence(1.0f) {}
-};
-
-struct SpatialEffectParams
-{
-    SpatialEffectType   type;
-    unsigned int        speed;
-    unsigned int        brightness;
-    RGBColor            color_start;
-    RGBColor            color_end;
-    bool                use_gradient;
-
-    EffectAxis          axis;
-    bool                reverse;
-    Vector3D            direction;
-
-    MultiPointConfig    multi_points;
-
-    Vector3D            scale_3d;
-    Vector3D            origin;
-    Rotation3D          rotation;
-
-    float               thickness;
-    float               intensity;
-    float               falloff;
-    unsigned int        num_arms;
-    unsigned int        frequency;
-    bool                mirror_x;
-    bool                mirror_y;
-    bool                mirror_z;
 };
 
 #endif

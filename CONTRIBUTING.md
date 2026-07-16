@@ -12,9 +12,9 @@ This project follows the same model as [OpenRGB](https://gitlab.com/CalcProgramm
 
 **Fork on GitLab**, branch from `main`, open a **merge request** on GitLab. Do not expect code review on GitHub pull requests (the mirror posts a redirect comment).
 
-**Spatial layout (plugin):** mm, grid units, RoomGrid, viewport, effects, spacing — [`docs/PluginSpatialMeasurement.md`](../docs/PluginSpatialMeasurement.md). Read this before changing layout math, reference points, or LED placement.
+**Spatial layout (plugin):** mm, grid units, RoomGrid, viewport, effects, spacing — see local `docs/PluginSpatialMeasurement.md` if present on your machine (gitignored). Read before changing layout math, reference points, or LED placement.
 
-**Game bridge (Minecraft / telemetry):** RoomGrid → game world — [`docs/SpatialMeasurement.md`](../docs/SpatialMeasurement.md). Read after the plugin doc when changing SHM, scale publish, or mod mapping.
+**Game bridge (Minecraft / telemetry):** RoomGrid → game world — see local `docs/SpatialMeasurement.md` if present. Read when changing SHM, scale publish, or mod mapping.
 
 ### GitLab CI variables (maintainers)
 
@@ -33,7 +33,7 @@ We use **GitLab issue templates** and **merge request templates** under `.gitlab
 | Topic | Open an issue in |
 | ----- | ---------------- |
 | Plugin bugs, effects, UI, screen mirror, game telemetry | **[OpenRGB3DSpatialPlugin on GitLab](https://gitlab.com/OpenRGBDevelopers/OpenRGB3DSpatialPlugin/-/issues)** |
-| Controller layout JSON files | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** — format: [docs/controller-preset-format.md](docs/controller-preset-format.md) |
+| Controller layout JSON files | **[OpenRGB3DSpatialPresets](https://github.com/Wolfieeewolf/OpenRGB3DSpatialPresets/issues)** |
 
 ### Templates on GitLab (plugin)
 
@@ -104,14 +104,14 @@ When changing plugin behavior—especially anything that touches devices, colors
 |------|------------------|-------------|
 | Layout profiles | `OpenRGB3DSpatialLayout` **version 6** — all sections and nested fields required | Defaults for missing `led_spacing_mm`, `granularity`, camera, or grid keys |
 | Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z` required | Alternate spacing key names; `Normalize*` / `TryRead*` import helpers |
-| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings` | Renamed-key migration inside `LoadSettings` unless the user explicitly asks for a one-release bridge |
+| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; effect profiles **version 8 only**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Older profile versions; obsolete room output role ints; renamed-key migration |
 | Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy-only `.ui` trees or duplicate control paths “for old layouts” |
 | Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |
 | Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` or other retired keys |
 
-**Exception — viewport only:** the Qt 5.15 **legacy OpenGL room** (`paintGlLegacyScene`, `ViewportLegacyGL`, GPU label fallbacks) stays until OpenRGB ships Qt 6 as the default host. That is rendering infrastructure, not data-format backward compatibility. See [docs/VIEWPORT.md](docs/VIEWPORT.md) and [docs/VIEWPORT_QT515.md](docs/VIEWPORT_QT515.md).
+**Exception — viewport only:** the Qt **OpenGL room** (`LEDViewport3D` / `QOpenGLWidget`, `ViewportGLIncludes`) is the only viewport path (no GPU shader dual path). That is rendering infrastructure, not data-format backward compatibility.
 
-When you delete legacy paths, note them in [docs/CODEBASE_AUDIT.md](docs/CODEBASE_AUDIT.md) (dead code removed table) so the next pass does not reintroduce them.
+When you delete dead paths, note them in the MR description so the next pass does not reintroduce them.
 - Keep code simple: DRY, KISS, YAGNI, single-responsibility functions.
 - Comments should be minimal and explain non-obvious intent only.
 
@@ -157,7 +157,7 @@ Default rule for every effect: **reuse existing panels and helpers before writin
 
 **Add new UI only when** the control is truly effect-specific or no shared helper exists yet—and if two or more effects need the same custom control, add or extend a shared helper (like `Effects3D/AudioReactiveUi.h`) instead of duplicating code.
 
-Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path ([EFFECTS.md](docs/EFFECTS.md#legacy-ui-and-settings--remove-do-not-preserve)). **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (room VR tint samples the GPU panorama cubemap or optional CPU room raycasts). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
+Effect-specific settings: build with **`ui/widgets/EffectUiRows.h`** (`NewEffectPanel`, `AppendSliderRow`, `AppendComboRow`, …) and stable `objectName`s for `EffectUiSync`. Media layers use **`MediaTextureAmbienceBlock`** (its own small `.ui`). There are no per-effect `*EffectSettings.ui` files anymore — do not add a parallel “legacy” UI path. **Minecraft** game layers use dedicated settings under `Effects3D/Games/Minecraft/` (room VR tint samples room SHM only). Texture / omni media layers use **height motion bands** (`StratumBandPanel`) instead of game telemetry.
 
 ### Effect settings tab order (stack / library)
 
@@ -188,7 +188,7 @@ Optional local notes may live in a gitignored **`docs/`** folder on your machine
 Aligned with **this file**, **`OpenRGB/CONTRIBUTING.md`**, and the OpenRGB docs in **OpenRGB reference documentation** above (minimum: **`RGBControllerAPI.md`** when touching LEDs/zones/colors).
 
 - [ ] **Scope:** changes only under plugin-owned paths; no edits in `OpenRGB/` unless intentional.
-- [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch unless viewport Qt 5.15 GL (see **No legacy or backward-compatibility paths**).
+- [ ] **No legacy paths:** no new migration or old-format fallbacks; remove any you touch unless viewport Qt 5.15 OpenGL (see **No legacy or backward-compatibility paths**).
 - [ ] **Logging:** no `QDebug`, `printf`, or `std::cout`; use `LogManager`.
 - [ ] **UI chrome:** no `setStyleSheet` on structural chrome; no custom theme `QPalette` on panels/`QGroupBox` (card selection exception in **UI** only).
 - [ ] **Headers:** SPDX on new or substantially new `.cpp`/`.h`; match brace/naming style in the file.

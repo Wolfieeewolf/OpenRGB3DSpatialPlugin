@@ -35,7 +35,6 @@ AudioLevel::AudioLevel(QWidget* parent)
 EffectInfo3D AudioLevel::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Audio Level";
     info.effect_description =
         "Level drives a 3D fill surface (like a water level) with optional wave on the boundary; optional stratum band tuning";
@@ -125,10 +124,6 @@ void AudioLevel::SetupCustomUI(QWidget* parent)
     AudioReactiveUi::AppendStandardResponseSection(layout, audio_settings, this, on_changed, response_opts);
 
     AddWidgetToParent(w, parent);
-}
-
-void AudioLevel::UpdateParams(SpatialEffectParams& /*params*/)
-{
 }
 
 RGBColor AudioLevel::CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid)

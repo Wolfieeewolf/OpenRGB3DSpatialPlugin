@@ -65,10 +65,9 @@ void ShaderField::EnsureShaderEngineRunning()
 EffectInfo3D ShaderField::GetEffectInfo() const
 {
     EffectInfo3D info{};
-    info.info_version = 3;
     info.effect_name = "Shader Field";
     info.effect_description = "GPU field presets (spatialMain GLSL) sampled on the 3D layout.";
-    info.category = "Audio";
+    info.category = "Spatial";
     info.is_reversible = false;
     info.supports_random = false;
     info.max_speed = 200;
@@ -216,10 +215,6 @@ void ShaderField::SetSpeed(unsigned int speed)
     {
         shader_engine->setTargetFps(std::clamp((int)speed, 10, 60));
     }
-}
-
-void ShaderField::UpdateParams(SpatialEffectParams& /*params*/)
-{
 }
 
 void ShaderField::SyncUniforms(float time)

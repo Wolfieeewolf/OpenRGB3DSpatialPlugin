@@ -3,7 +3,7 @@
   "id": "openrgb-minecraft-sender",
   "version": "${version}",
   "name": "OpenRGB Minecraft Sender",
-  "description": "Telemetry for OpenRGB 3D Spatial over UDP and shared memory (room samples, ambient cubemap, player_pose, health_state, damage_event). Configure in-game via Mod Menu when installed.",
+  "description": "Telemetry for OpenRGB 3D Spatial over UDP and shared memory (room samples, player_pose, health_state, damage_event). Configure in-game via Mod Menu when installed.",
   "authors": ["wolfi"],
   "license": "MIT",
   "environment": "client",

@@ -21,15 +21,7 @@ public:
     ~RoomSpatialLightSettingsPanel() override;
 
     void setShowRoomFill(bool show);
-    void setShowPlacement(bool show);
-    void setShowAmbientOcclusion(bool show);
-    void setShowBlockerControls(bool show);
     void setHintText(const QString& text);
-
-    void bindParams(QObject* owner,
-                     RoomSpatialLightingUi::RoomSpatialLightParams& params,
-                     const std::function<void()>& placementChanged,
-                     const std::function<void()>& tuneChanged);
 
     void bindRelayTuneParams(QObject* owner,
                              RoomSpatialLightingUi::RoomSpatialLightParams& params,
@@ -39,7 +31,6 @@ public:
 
 private:
     void configureStaticLabels();
-    void setCustomPlacementVisible(bool visible);
     void syncRelayTuneFromParams(const RoomSpatialLightingUi::RoomSpatialLightParams& params);
     void bindRelayTuneSliders(QObject* owner,
                               RoomSpatialLightingUi::RoomSpatialLightParams& params,

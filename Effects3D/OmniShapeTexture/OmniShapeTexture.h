@@ -30,12 +30,8 @@ public:
 
     EFFECT_REGISTERER_3D("OmniShapeTexture", "Omni shape texture", "Media", []() { return new OmniShapeTexture; });
 
-    static std::string const ClassName() { return "OmniShapeTexture"; }
-    static std::string const UIName() { return "Omni shape texture"; }
-
     EffectInfo3D GetEffectInfo() const override;
     void SetupCustomUI(QWidget* parent) override;
-    void UpdateParams(SpatialEffectParams& params) override;
     RGBColor CalculateColorGrid(float x, float y, float z, float time, const GridContext3D& grid) override;
     bool UsesSpatialSamplingQuantization() const override { return false; }
 
