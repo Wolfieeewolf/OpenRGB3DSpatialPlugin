@@ -216,8 +216,9 @@ final class BlockFaceColorCache
             }
             return new FaceColors(rgbByFace);
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block face cache helper failed", t);
             return null;
         }
     }
@@ -243,8 +244,9 @@ final class BlockFaceColorCache
                 sb.append('|').append(packId);
             }
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block face cache helper failed", t);
         }
         return sb.toString().hashCode();
     }

@@ -21,6 +21,9 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Block display colours from loaded block textures and in-game tint sources (biome foliage,
  * birch/spruce constants, water, etc.). Supports snowy leaves and per-layer opacity for
@@ -28,6 +31,7 @@ import net.minecraft.world.level.material.MapColor;
  */
 final class BlockDisplayColorSampler
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final float BLOCK_COLOR_SATURATION = 1.72f;
     private static final int SNOW_BLEND_RGB = 0xFFFFFF;
     private static final float SNOWY_LEAVES_BLEND = 0.72f;
@@ -167,9 +171,10 @@ final class BlockDisplayColorSampler
                     }
                 }
             }
-            catch(Throwable ignored)
-            {
-            }
+            catch(Throwable t)
+        {
+            QuietCatch.debug(LOGGER, "block display sample failed", t);
+        }
         }
 
         final int tintOnly = sampleBlockTintRgb(world, pos, state);
@@ -225,8 +230,9 @@ final class BlockDisplayColorSampler
                 return (tr << 16) | (tg << 8) | tb;
             }
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block display sample failed", t);
         }
         return 0xFFFFFF;
     }
@@ -256,9 +262,10 @@ final class BlockDisplayColorSampler
                     return true;
                 }
             }
-            catch(Throwable ignored)
-            {
-            }
+            catch(Throwable t)
+        {
+            QuietCatch.debug(LOGGER, "block display sample failed", t);
+        }
         }
         return false;
     }
@@ -302,8 +309,9 @@ final class BlockDisplayColorSampler
                 return mapColor.col;
             }
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block display sample failed", t);
         }
         return fallback;
     }

@@ -159,9 +159,10 @@ final class BlockTexturePrecache
                             unique.add(particle.sprite().contents().name());
                         }
                     }
-                    catch(Throwable ignored)
-                    {
-                    }
+                    catch(Throwable t)
+        {
+            QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
+        }
                 }
             }
         }
@@ -193,8 +194,9 @@ final class BlockTexturePrecache
                 sb.append('|').append(packId);
             }
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
         }
         return sb.toString().hashCode();
     }
@@ -331,8 +333,9 @@ final class BlockTexturePrecache
                 return new BlockDisplayColorSampler.TextureSample((r << 16) | (g << 8) | b, avgA);
             }
         }
-        catch(Throwable ignored)
+        catch(Throwable t)
         {
+            QuietCatch.debug(LOGGER, "block texture precache helper failed", t);
             return null;
         }
     }

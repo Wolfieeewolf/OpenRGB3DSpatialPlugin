@@ -457,7 +457,6 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         return;
     }
 
-    SyncDisplayPlaneManager();
     SpatialLightingSceneProvider::instance()->SetControllers(&controller_transforms);
     SpatialLightingSceneProvider::instance()->SetShadingControllerIndex(-1);
 
@@ -483,10 +482,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);
-    // world_grid vs room_grid: dual contexts reserved for future room-aligned bounds;
-    // today room_position equals world_position so both bounds match (PluginSpatialMeasurement.md §4).
+    // room_position equals world_position today (PluginSpatialMeasurement.md §4), so one bounds/centroid pass.
     GridBounds world_bounds = ComputeGridBounds(room_settings, grid_scale_mm, controller_transforms);
-    GridBounds room_bounds  = ComputeRoomAlignedBounds(room_settings, grid_scale_mm, controller_transforms);
+    const GridBounds& room_bounds = world_bounds;
 
     GridContext3D world_grid(world_bounds.min_x, world_bounds.max_x,
                              world_bounds.min_y, world_bounds.max_y,
@@ -499,15 +497,11 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     world_grid.render_sequence = effect_render_sequence;
     room_grid.render_sequence = effect_render_sequence;
 
-    Vector3D led_mu_room{};
-    if(TryComputeLedCentroid(controller_transforms, true, &led_mu_room))
+    Vector3D led_mu{};
+    if(TryComputeLedCentroid(controller_transforms, true, &led_mu))
     {
-        room_grid.SetLedCentroid(led_mu_room.x, led_mu_room.y, led_mu_room.z);
-    }
-    Vector3D led_mu_world{};
-    if(TryComputeLedCentroid(controller_transforms, false, &led_mu_world))
-    {
-        world_grid.SetLedCentroid(led_mu_world.x, led_mu_world.y, led_mu_world.z);
+        room_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
+        world_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
     }
 
     ReferenceMode stack_origin_mode = REF_MODE_USER_POSITION;

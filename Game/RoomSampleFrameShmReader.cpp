@@ -77,6 +77,39 @@ static bool ReadFileBytes(const std::wstring& path, std::vector<unsigned char>& 
     return true;
 }
 
+static bool PeekFrameId(const unsigned char* base, std::size_t view_size, std::uint32_t& frame_id_out)
+{
+    if(base == nullptr || view_size < RoomSampleFrameProtocol::kFrameHeaderBytes)
+    {
+        return false;
+    }
+    RoomSampleFrameProtocol::FrameHeader hdr{};
+    std::uint32_t seq1 = 0;
+    std::uint32_t seq2 = 0;
+    for(int attempt = 0; attempt < 4; ++attempt)
+    {
+        seq1 = *reinterpret_cast<const std::uint32_t*>(base + offsetof(RoomSampleFrameProtocol::FrameHeader, sequence));
+        if(seq1 & 1u)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+        std::memcpy(&hdr, base, sizeof(RoomSampleFrameProtocol::FrameHeader));
+        seq2 = *reinterpret_cast<const std::uint32_t*>(base + offsetof(RoomSampleFrameProtocol::FrameHeader, sequence));
+        if(seq1 == seq2 && !(seq2 & 1u))
+        {
+            if(hdr.magic != RoomSampleFrameProtocol::kFrameMagic)
+            {
+                return false;
+            }
+            frame_id_out = hdr.frame_id;
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return false;
+}
+
 static bool ReadSnapshot(const unsigned char* base,
                          std::size_t view_size,
                          RoomSampleFrameProtocol::FrameHeader& hdr_out,
@@ -205,7 +238,8 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
     static thread_local unsigned long long last_missing_log_ms = 0;
 
     const std::wstring path = RoomSampleShmPaths::FrameFilePathW();
-    std::vector<unsigned char> file_bytes;
+    static thread_local std::vector<unsigned char> file_bytes;
+    static thread_local std::vector<unsigned char> rgba;
     if(!ReadFileBytes(path, file_bytes))
     {
         const unsigned long long now = NowMs();
@@ -217,8 +251,14 @@ bool RoomSampleFrameShmReader::TryApplyLatest()
         return false;
     }
 
+    std::uint32_t peeked_frame_id = 0;
+    if(PeekFrameId(file_bytes.data(), file_bytes.size(), peeked_frame_id) &&
+       peeked_frame_id == last_applied_frame_id)
+    {
+        return false;
+    }
+
     RoomSampleFrameProtocol::FrameHeader hdr{};
-    std::vector<unsigned char> rgba;
     if(!ReadSnapshot(file_bytes.data(), file_bytes.size(), hdr, rgba))
     {
         const unsigned long long now = NowMs();

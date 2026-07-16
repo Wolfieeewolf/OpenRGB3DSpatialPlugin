@@ -120,6 +120,7 @@ HEADERS += \
     DisplayPlaneManager.h \
     ScreenCaptureManager.h \
     Geometry3DUtils.h \
+    TransformJson.h \
     MediaTextureEffectUtils.h \
     Game/StripPatternSurface.h \
     QtCompat.h \
@@ -174,12 +175,14 @@ HEADERS += \
     ui/ControllerDisplayUtils.h \
     ui/TooltipProxy.h \
     ui/LEDViewport3D.h \
+    ui/LEDViewport3D_Internal.h \
     ui/ZoneControllerPickerDialog.h \
     ui/CustomControllerTypes.h \
     ui/CustomControllerMappingUtils.h \
     ui/CustomControllerGridKeys.h \
     ui/CustomControllerClipboard.h \
     ui/CustomControllerDialog.h \
+    ui/CustomControllerDialog_Internal.h \
     ui/ReferencePointDialog.h \
     ui/DisplayPlaneDialog.h \
     ui/custom-controller-grid/CustomControllerGridCell.h \
@@ -256,6 +259,7 @@ HEADERS += \
     Effects3D/Bubbles/Bubbles.h \
     Effects3D/ColorWheel/ColorWheel.h \
     Effects3D/ScreenMirror/ScreenMirror.h \
+    Effects3D/ScreenMirror/ScreenMirror_Internal.h \
     Effects3D/ScreenMirror/ScreenMirrorCalibrationPattern.h \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.h \
     Effects3D/TextureProjection/TextureProjection.h \
@@ -274,6 +278,8 @@ SOURCES += \
     GridSpaceUtils.cpp \
     ZoneGrid3D.cpp \
     SpatialEffect3D.cpp \
+    SpatialEffect3D_Eval.cpp \
+    SpatialEffect3D_Settings.cpp \
     EffectInstance3D.cpp \
     StackPreset3D.cpp \
     VirtualController3D.cpp \
@@ -340,7 +346,13 @@ SOURCES += \
     ui/OpenRGB3DSpatialTab_EffectsRender.cpp \
     ui/OpenRGB3DSpatialTab_EffectsProfiles.cpp \
     ui/LEDViewport3D.cpp \
+    ui/LEDViewport3D_Input.cpp \
+    ui/LEDViewport3D_Draw.cpp \
+    ui/LEDViewport3D_DisplayPlanes.cpp \
     ui/CustomControllerDialog.cpp \
+    ui/CustomControllerDialog_Grid.cpp \
+    ui/CustomControllerDialog_Sources.cpp \
+    ui/CustomControllerDialog_Transform.cpp \
     ui/CustomControllerMappingUtils.cpp \
     ui/ReferencePointDialog.cpp \
     ui/DisplayPlaneDialog.cpp \
@@ -390,6 +402,8 @@ SOURCES += \
     Effects3D/Bubbles/Bubbles.cpp \
     Effects3D/ColorWheel/ColorWheel.cpp \
     Effects3D/ScreenMirror/ScreenMirror.cpp \
+    Effects3D/ScreenMirror/ScreenMirror_Render.cpp \
+    Effects3D/ScreenMirror/ScreenMirror_Settings.cpp \
     Effects3D/ScreenMirror/ScreenMirrorMonitorPanel.cpp \
     Effects3D/TextureProjection/TextureProjection.cpp \
     Effects3D/OmniShapeTexture/OmniShapeTexture.cpp \

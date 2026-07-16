@@ -60,6 +60,8 @@ public:
     void NotifyDisplayPlaneChanged();
     void UploadDisplayPlaneCaptureTexturesDuringEffectTick();
     void SetShowScreenPreview(bool show);
+    /** When true, effect tick uploads plane textures; stop the independent preview timer. */
+    void SetEffectRenderOwnsScreenPreviewUploads(bool owns);
     void SetScreenPreviewTickCallback(std::function<void()> cb) { screen_preview_tick_cb = std::move(cb); }
     bool GetShowScreenPreview() const { return show_screen_preview; }
     bool IsScreenPreviewRefreshActive() const
@@ -271,6 +273,7 @@ private:
     int                                     selected_display_plane_idx;
     int                                     selected_ref_point_idx;
     bool                                    show_screen_preview;
+    bool                                    effect_render_owns_preview_uploads_ = false;
     bool                                    show_calibration_pattern;
     bool                                    show_room_guide_labels_ = true;
     bool                                    show_room_grid_overlay;

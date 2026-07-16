@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "VirtualReferencePoint3D.h"
+#include "TransformJson.h"
 
 int VirtualReferencePoint3D::next_id = 1;
 
@@ -85,15 +86,7 @@ json VirtualReferencePoint3D::ToJson() const
     j["visible"] = visible;
     j["display_color"] = (unsigned int)display_color;
 
-    j["transform"]["position"]["x"] = transform.position.x;
-    j["transform"]["position"]["y"] = transform.position.y;
-    j["transform"]["position"]["z"] = transform.position.z;
-    j["transform"]["rotation"]["x"] = transform.rotation.x;
-    j["transform"]["rotation"]["y"] = transform.rotation.y;
-    j["transform"]["rotation"]["z"] = transform.rotation.z;
-    j["transform"]["scale"]["x"] = transform.scale.x;
-    j["transform"]["scale"]["y"] = transform.scale.y;
-    j["transform"]["scale"]["z"] = transform.scale.z;
+    TransformJson::WriteTransform(j, transform);
 
     return j;
 }
@@ -108,23 +101,26 @@ std::unique_ptr<VirtualReferencePoint3D> VirtualReferencePoint3D::FromJson(const
     std::string name = j["name"];
     ReferencePointType type = (ReferencePointType)j["type"];
 
-    nlohmann::json pos = j["transform"]["position"];
-    std::unique_ptr<VirtualReferencePoint3D> ref_point = std::make_unique<VirtualReferencePoint3D>(name, type, pos["x"], pos["y"], pos["z"]);
+    Vector3D pos{0.0f, 0.0f, 0.0f};
+    if(!TransformJson::ReadVec3(j["transform"], "position", pos))
+    {
+        return nullptr;
+    }
+    std::unique_ptr<VirtualReferencePoint3D> ref_point =
+        std::make_unique<VirtualReferencePoint3D>(name, type, pos.x, pos.y, pos.z);
 
     if(j.contains("id")) ref_point->id = j["id"];
     if(j.contains("visible")) ref_point->visible = j["visible"];
     if(j.contains("display_color")) ref_point->display_color = j["display_color"];
 
-    if(j["transform"].contains("rotation"))
-    {
-        nlohmann::json rot = j["transform"]["rotation"];
-        ref_point->transform.rotation = {rot["x"], rot["y"], rot["z"]};
-    }
-    if(j["transform"].contains("scale"))
-    {
-        nlohmann::json scale = j["transform"]["scale"];
-        ref_point->transform.scale = {scale["x"], scale["y"], scale["z"]};
-    }
+    TransformJson::ReadVec3(j["transform"], "rotation",
+                            ref_point->transform.rotation.x,
+                            ref_point->transform.rotation.y,
+                            ref_point->transform.rotation.z);
+    TransformJson::ReadVec3(j["transform"], "scale",
+                            ref_point->transform.scale.x,
+                            ref_point->transform.scale.y,
+                            ref_point->transform.scale.z);
 
     return ref_point;
 }

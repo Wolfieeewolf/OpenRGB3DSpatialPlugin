@@ -780,6 +780,10 @@ void OpenRGB3DSpatialTab::startEffectClicked()
         effect_running = true;
         effect_time = 0.0f;
         effect_elapsed.restart();
+        if(viewport)
+        {
+            viewport->SetEffectRenderOwnsScreenPreviewUploads(true);
+        }
 
         if(effect_timer)
         {
@@ -839,6 +843,10 @@ void OpenRGB3DSpatialTab::startEffectClicked()
     effect_running = true;
     effect_time = 0.0f;
     effect_elapsed.restart();
+    if(viewport)
+    {
+        viewport->SetEffectRenderOwnsScreenPreviewUploads(true);
+    }
 
     if(effect_timer)
     {
@@ -861,6 +869,10 @@ void OpenRGB3DSpatialTab::startEffectClicked()
 void OpenRGB3DSpatialTab::stopEffectClicked()
 {
     effect_running = false;
+    if(viewport)
+    {
+        viewport->SetEffectRenderOwnsScreenPreviewUploads(false);
+    }
     SyncScreenCaptureSession();
     if(effect_timer && effect_timer->isActive())
     {

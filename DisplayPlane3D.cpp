@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "DisplayPlane3D.h"
+#include "TransformJson.h"
 
 int DisplayPlane3D::next_id = 1;
 
@@ -32,11 +33,7 @@ nlohmann::json DisplayPlane3D::ToJson() const
         j["reference_point_index"] = reference_point_index;
     }
 
-    nlohmann::json t;
-    t["position"] = { transform.position.x, transform.position.y, transform.position.z };
-    t["rotation"] = { transform.rotation.x, transform.rotation.y, transform.rotation.z };
-    t["scale"]    = { transform.scale.x, transform.scale.y, transform.scale.z };
-    j["transform"] = t;
+    TransformJson::WriteTransform(j, transform);
 
     return j;
 }
@@ -67,28 +64,7 @@ std::unique_ptr<DisplayPlane3D> DisplayPlane3D::FromJson(const nlohmann::json& j
     plane->capture_label     = j.value("capture_label", std::string());
     plane->reference_point_index = j.value("reference_point_index", -1);
 
-    if(j.contains("transform"))
-    {
-        const nlohmann::json& t = j["transform"];
-        if(t.contains("position") && t["position"].is_array() && t["position"].size() == 3)
-        {
-            plane->transform.position.x = t["position"][0].get<float>();
-            plane->transform.position.y = t["position"][1].get<float>();
-            plane->transform.position.z = t["position"][2].get<float>();
-        }
-        if(t.contains("rotation") && t["rotation"].is_array() && t["rotation"].size() == 3)
-        {
-            plane->transform.rotation.x = t["rotation"][0].get<float>();
-            plane->transform.rotation.y = t["rotation"][1].get<float>();
-            plane->transform.rotation.z = t["rotation"][2].get<float>();
-        }
-        if(t.contains("scale") && t["scale"].is_array() && t["scale"].size() == 3)
-        {
-            plane->transform.scale.x = t["scale"][0].get<float>();
-            plane->transform.scale.y = t["scale"][1].get<float>();
-            plane->transform.scale.z = t["scale"][2].get<float>();
-        }
-    }
+    TransformJson::ReadTransform(j, plane->transform);
 
     return plane;
 }

@@ -9,6 +9,7 @@
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "LogManager.h"
+#include "TransformJson.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
 #include "PluginUiUtils.h"
@@ -272,17 +273,7 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
             controller_json["led_mappings"].push_back(led_mapping);
         }
 
-        controller_json["transform"]["position"]["x"] = ct->transform.position.x;
-        controller_json["transform"]["position"]["y"] = ct->transform.position.y;
-        controller_json["transform"]["position"]["z"] = ct->transform.position.z;
-
-        controller_json["transform"]["rotation"]["x"] = ct->transform.rotation.x;
-        controller_json["transform"]["rotation"]["y"] = ct->transform.rotation.y;
-        controller_json["transform"]["rotation"]["z"] = ct->transform.rotation.z;
-
-        controller_json["transform"]["scale"]["x"] = ct->transform.scale.x;
-        controller_json["transform"]["scale"]["y"] = ct->transform.scale.y;
-        controller_json["transform"]["scale"]["z"] = ct->transform.scale.z;
+        TransformJson::WriteTransform(controller_json, ct->transform);
 
         controller_json["led_spacing_mm"]["x"] = ct->led_spacing_mm_x;
         controller_json["led_spacing_mm"]["y"] = ct->led_spacing_mm_y;
@@ -647,17 +638,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
             }
 
-            ctrl_transform->transform.position.x = controller_json["transform"]["position"]["x"].get<float>();
-            ctrl_transform->transform.position.y = controller_json["transform"]["position"]["y"].get<float>();
-            ctrl_transform->transform.position.z = controller_json["transform"]["position"]["z"].get<float>();
-
-            ctrl_transform->transform.rotation.x = controller_json["transform"]["rotation"]["x"].get<float>();
-            ctrl_transform->transform.rotation.y = controller_json["transform"]["rotation"]["y"].get<float>();
-            ctrl_transform->transform.rotation.z = controller_json["transform"]["rotation"]["z"].get<float>();
-
-            ctrl_transform->transform.scale.x = controller_json["transform"]["scale"]["x"].get<float>();
-            ctrl_transform->transform.scale.y = controller_json["transform"]["scale"]["y"].get<float>();
-            ctrl_transform->transform.scale.z = controller_json["transform"]["scale"]["z"].get<float>();
+            TransformJson::ReadTransform(controller_json, ctrl_transform->transform);
 
             ctrl_transform->display_color = controller_json["display_color"].get<unsigned int>();
             ctrl_transform->linked_reference_point_index =
