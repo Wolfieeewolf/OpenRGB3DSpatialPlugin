@@ -11,7 +11,6 @@
 #include "PluginLog.h"
 #include "CustomControllerDialog.h"
 #include "CustomControllerMappingUtils.h"
-#include "SettingsManager.h"
 #include "PluginUiUtils.h"
 #include <QDialog>
 #include <QMetaObject>
@@ -780,14 +779,6 @@ bool OpenRGB3DSpatialTab::LoadControllerFromJsonFile(const filesystem::path& jso
     {
         LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load controller %s: %s", filename.c_str(), e.what());
         return false;
-    }
-}
-
-void OpenRGB3DSpatialTab::SaveCustomControllers()
-{
-    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
-    {
-        SaveCustomController(i);
     }
 }
 

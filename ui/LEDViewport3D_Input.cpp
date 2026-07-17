@@ -382,6 +382,14 @@ void LEDViewport3D::ResetCameraToDefault()
     camera_target_x = extents.width_units * 0.5f;
     camera_target_y = extents.height_units * 0.5f;
     camera_target_z = extents.depth_units * 0.5f;
+
+    /* Fit the whole room in view instead of a fixed close-up distance. */
+    const float span_units = std::max(1.5f,
+        std::max(extents.width_units, std::max(extents.height_units, extents.depth_units)) * 1.15f);
+    const float fov_rad = 45.0f * (float)M_PI / 180.0f;
+    float distance = (span_units * 0.55f) / tanf(fov_rad * 0.5f);
+    camera_distance = std::max(2.0f, std::min(50000.0f, distance));
+
     resetRoomPreviewSpin();
     deselectRoomViewport();
     pick_matrices_valid_ = false;

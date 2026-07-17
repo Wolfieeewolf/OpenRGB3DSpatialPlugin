@@ -102,9 +102,10 @@ When changing plugin behavior—especially anything that touches devices, colors
 
 | Area | Current contract | Do not keep |
 |------|------------------|-------------|
-| Layout profiles | `OpenRGB3DSpatialLayout` **version 6** — all sections and nested fields required | Defaults for missing `led_spacing_mm`, `granularity`, camera, or grid keys |
+| OpenRGB profile payload | Plugin payload **version 1** with required `layout` and `effects` objects | Standalone layout/effect profiles, auto-load, quick-save, or parallel session files |
+| Layout data | Write `OpenRGB3DSpatialLayout` **version 7**; load **6–7**. Camera is not written and is ignored if present | Defaults for missing required sections/fields; standalone file profiles |
 | Custom controllers | `OpenRGB3DSpatialCustomController` **version 1** — `spacing_mm_x/y/z` required | Alternate spacing key names; `Normalize*` / `TryRead*` import helpers |
-| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; effect profiles **version 8 only**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Older profile versions; obsolete room output role ints; renamed-key migration |
+| Effect settings | Keys defined by each effect’s `SaveSettings` / `LoadSettings`; write embedded effects **version 9**, load **8–9**. Room output role is `Direct` (0) or `EmitterRelay` (1) | Versions outside 8–9; obsolete room output role ints; renamed-key migration |
 | Effect UI | `EffectUiRows` + shared `ui/forms/Effect*.ui` panels | Per-effect legacy-only `.ui` trees or duplicate control paths “for old layouts” |
 | Presets / scripts | Export/import uses current schema only | One-off `convert_*.py` migration tools in the repo |
 | Plugin settings | `LEDSpacing` X/Y/Z in host settings JSON | `legacy_grid_pitch_mm` or other retired keys |

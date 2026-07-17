@@ -5,7 +5,6 @@
 #include "ui_OpenRGB3DSpatialTab.h"
 #include "ControllerDisplayUtils.h"
 #include "SpatialTabLedHelpers.h"
-#include "PluginSettingsPaths.h"
 #include "SpatialControllerCardList.h"
 #include "SpatialControllerEntryKey.h"
 #include "DisplayPlaneManager.h"
@@ -23,22 +22,15 @@
 #include <QListWidget>
 #include <QVector3D>
 #include <limits>
-#include <QDesktopServices>
-#include <QDialog>
-#include <QFileDialog>
 #include <QMessageBox>
 #include <QPalette>
 #include <QSignalBlocker>
-#include <QUrl>
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-namespace filesystem = std::filesystem;
 
 void OpenRGB3DSpatialTab::SetObjectCreatorStatus(const QString& message, bool is_error)
 {

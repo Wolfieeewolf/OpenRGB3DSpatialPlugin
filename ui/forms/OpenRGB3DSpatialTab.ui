@@ -309,21 +309,6 @@
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <widget class="QScrollArea" name="profilesTabScroll">
-        <property name="widgetResizable">
-         <bool>true</bool>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="horizontalScrollBarPolicy">
-         <enum>Qt::ScrollBarAsNeeded</enum>
-        </property>
-        <widget class="ProfilesTabPanel" name="profilesTabPanel"/>
-        <attribute name="title">
-         <string>Profiles</string>
-        </attribute>
-       </widget>
        <widget class="QScrollArea" name="gridSettingsTabScroll">
         <property name="widgetResizable">
          <bool>true</bool>
@@ -413,11 +398,6 @@
    <class>ControllerListPanel</class>
    <extends>QGroupBox</extends>
    <header>ControllerListPanel.h</header>
-  </customwidget>
-  <customwidget>
-   <class>ProfilesTabPanel</class>
-   <extends>QWidget</extends>
-   <header>ProfilesTabPanel.h</header>
   </customwidget>
   <customwidget>
    <class>SceneTransformPanel</class>

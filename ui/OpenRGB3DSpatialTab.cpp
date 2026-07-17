@@ -9,7 +9,6 @@
 #include "EffectStackPanel.h"
 #include "GridSettingsPanel.h"
 #include "ObjectCreatorTabPanel.h"
-#include "ProfilesTabPanel.h"
 #include "SceneTransformPanel.h"
 #include "ui/widgets/EffectRoomOutputPanel.h"
 #include "ZonesPanel.h"
@@ -47,6 +46,7 @@
 #include <algorithm>
 #include <map>
 #include <QList>
+#include <QMessageBox>
 #include <QSignalBlocker>
 #include <QColor>
 #include <QFont>
@@ -69,11 +69,9 @@
 #include <QVariant>
 #include <QInputDialog>
 #include <set>
-#include <QFileDialog>
 #include <cstring>
 #include <filesystem>
 #include <cmath>
-#include "SettingsManager.h"
 #include "Audio/AudioInputManager.h"
 #include "Zone3D.h"
 #include "TooltipProxy.h"
@@ -114,12 +112,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(OpenRGBPluginAPIInterface* rm, QWidget 
 
     QTimer::singleShot(0, this, [this]() { RunDeferredStartupTasks(); });
 
-    const int kStartupDelayMs = 2000;
-    auto_load_timer = new QTimer(this);
-    auto_load_timer->setSingleShot(true);
-    connect(auto_load_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::TryAutoLoadLayout);
-    auto_load_timer->start(kStartupDelayMs);
-
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::CoarseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::effectTimerTimeout);
@@ -148,14 +140,7 @@ OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
         disconnect(audio, nullptr, this, nullptr);
     }
 
-    SaveEffectStack();
     SavePluginUiSettings();
-
-    if(auto_load_timer)
-    {
-        auto_load_timer->stop();
-        delete auto_load_timer;
-    }
 
     if(effect_timer)
     {
@@ -206,31 +191,7 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     viewport->SetGridScaleMM(grid_scale_mm);
     viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
     viewport->SetScreenPreviewTickCallback({});
-
-    const nlohmann::json startup_settings = GetPluginSettings();
-
-    try
-    {
-        if(startup_settings.contains("Camera"))
-        {
-            const nlohmann::json& cam = startup_settings["Camera"];
-            const float dist  = cam.value("Distance", 20.0f);
-            const float yaw   = cam.value("Yaw", 45.0f);
-            const float pitch = cam.value("Pitch", 30.0f);
-            const float tx    = cam.value("TargetX", 0.0f);
-            const float ty    = cam.value("TargetY", 0.0f);
-            const float tz    = cam.value("TargetZ", 0.0f);
-            viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
-        }
-        if(startup_settings.contains("Grid") && startup_settings["Grid"].contains("SnapEnabled"))
-        {
-            viewport->SetGridSnapEnabled(startup_settings["Grid"]["SnapEnabled"].get<bool>());
-        }
-    }
-    catch(const std::exception& e)
-    {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore camera/grid startup settings: %s", e.what());
-    }
+    viewport->ResetCameraToDefault();
 
     connect(viewport, &LEDViewport3D::ControllerSelected, this, &OpenRGB3DSpatialTab::viewportControllerSelected);
     connect(viewport, &LEDViewport3D::ControllerPositionChanged, this, &OpenRGB3DSpatialTab::controllerPositionChanged);
@@ -279,30 +240,6 @@ void OpenRGB3DSpatialTab::bindUiPanels()
 
     const nlohmann::json startup_settings = GetPluginSettings();
 
-    try
-    {
-        if(startup_settings.contains("Grid"))
-        {
-            const nlohmann::json& g = startup_settings["Grid"];
-            custom_grid_x = std::max(1, std::min(100, (int)g.value("X", custom_grid_x)));
-            custom_grid_y = std::max(1, std::min(100, (int)g.value("Y", custom_grid_y)));
-            custom_grid_z = std::max(1, std::min(100, (int)g.value("Z", custom_grid_z)));
-            grid_scale_mm = (float)std::max(0.1, std::min(1000.0, (double)g.value("ScaleMM", grid_scale_mm)));
-        }
-        if(startup_settings.contains("Room"))
-        {
-            const nlohmann::json& r = startup_settings["Room"];
-            use_manual_room_size = r.value("UseManual", use_manual_room_size);
-            manual_room_width  = (float)r.value("WidthMM", manual_room_width);
-            manual_room_height = (float)r.value("HeightMM", manual_room_height);
-            manual_room_depth  = (float)r.value("DepthMM", manual_room_depth);
-        }
-    }
-    catch(const std::exception& e)
-    {
-        LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to restore grid/room startup settings: %s", e.what());
-    }
-
     InitLedViewport();
 
     if(viewport)
@@ -318,17 +255,8 @@ void OpenRGB3DSpatialTab::bindUiPanels()
     ui->audioInputPanel->bindTab(this);
 
     LoadStackPresets();
-    QTimer::singleShot(0, this, [this]() {
-        LoadEffectStack();
-        UpdateEffectStackList();
-        if(!effect_stack.empty() && effectStackList())
-        {
-            const QSignalBlocker stack_sel_block(effectStackList());
-            effectStackList()->setCurrentRow(0);
-            effectStackSelectionChanged(0);
-        }
-        UpdateStartStopAllButtons();
-    });
+    UpdateEffectStackList();
+    UpdateStartStopAllButtons();
 
     ui->effectControlsHostPanel->updateGeometry();
 
@@ -737,7 +665,7 @@ void OpenRGB3DSpatialTab::AddEffectInstanceToStack(const QString& class_name,
         effectStackList()->blockSignals(restore_stack_list_signals);
     }
     effectStackSelectionChanged(new_index);
-    SaveEffectStack();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::effectLibraryCategoryChanged(int)
@@ -908,7 +836,7 @@ void OpenRGB3DSpatialTab::gridDimensionsChanged()
         viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
         viewport->update();
     }
-    SavePluginUiSettings();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
@@ -917,7 +845,7 @@ void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
     {
         viewport->SetGridSnapEnabled(enabled);
     }
-    SavePluginUiSettings();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::roomGuideLabelsToggled(bool enabled)
@@ -943,7 +871,6 @@ void OpenRGB3DSpatialTab::resetViewportCamera()
     {
         viewport->ResetCameraToDefault();
     }
-    SavePluginUiSettings();
 }
 
 void OpenRGB3DSpatialTab::UpdateSelectionInfo()
@@ -1150,7 +1077,7 @@ void OpenRGB3DSpatialTab::effectZoneChanged(int index)
         }
         stackEffectZoneCombo()->blockSignals(false);
     }
-    SaveEffectStack();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::effectOriginChanged(int index)
@@ -1202,6 +1129,7 @@ void OpenRGB3DSpatialTab::effectOriginChanged(int index)
     }
 
     if(viewport) viewport->UpdateColors();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
@@ -1244,7 +1172,7 @@ void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
                 {
                     nlohmann::json current_settings = settings_source->SaveSettings();
                     instance->saved_settings = std::make_unique<nlohmann::json>(current_settings);
-                    SaveEffectStack();
+                    SetLayoutDirty();
                 }
             }
         }
@@ -1270,21 +1198,104 @@ nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
     return resource_manager->GetSettings("3DSpatialPlugin");
 }
 
-void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& /*profile_data*/)
+void OpenRGB3DSpatialTab::OnProfileAboutToLoad()
 {
-    /*-----------------------------------------------------*\
-    | TODO(apiv5): restore plugin scene/effects state from  |
-    | the OpenRGB profile payload.                           |
-    \*-----------------------------------------------------*/
+    if(layout_dirty)
+    {
+        QMessageBox::warning(
+            this,
+            tr("Unsaved Spatial Changes"),
+            tr("Loading an OpenRGB profile will replace your current Spatial layout and effects.\n\n"
+               "Save the current OpenRGB profile first if you want to keep these changes."));
+    }
+
+    if(effect_running)
+    {
+        stopEffectClicked();
+    }
+    SavePluginUiSettings();
+}
+
+void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& profile_data)
+{
+    try
+    {
+        if(profile_data.is_null() || (profile_data.is_object() && profile_data.empty()))
+        {
+            LOG_INFO("[OpenRGB3DSpatialPlugin] OpenRGB profile had no spatial plugin data");
+            return;
+        }
+        if(!profile_data.is_object())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Ignoring non-object OpenRGB profile payload");
+            return;
+        }
+
+        constexpr int kSupportedProfileVersion = 1;
+        if(!profile_data.contains("profile_version") || !profile_data["profile_version"].is_number_integer())
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] OpenRGB profile missing profile_version");
+            return;
+        }
+        const int version = profile_data["profile_version"].get<int>();
+        if(version != kSupportedProfileVersion)
+        {
+            LOG_WARNING("[OpenRGB3DSpatialPlugin] Unsupported OpenRGB profile_version %d (need %d)",
+                        version, kSupportedProfileVersion);
+            return;
+        }
+
+        if(effect_running)
+        {
+            stopEffectClicked();
+        }
+
+        /* Layout virtual entries resolve against virtual_controllers. OpenRGB may
+           deliver the profile before deferred startup, so load custom controllers
+           synchronously before applying the layout. */
+        LoadCustomControllers();
+
+        if(profile_data.contains("layout") && profile_data["layout"].is_object())
+        {
+            LoadLayoutFromJSON(profile_data["layout"]);
+        }
+
+        if(profile_data.contains("effects") && profile_data["effects"].is_object())
+        {
+            if(!ApplyEffectProfileJson(profile_data["effects"]))
+            {
+                LOG_WARNING("[OpenRGB3DSpatialPlugin] Failed to apply effects from OpenRGB profile");
+            }
+        }
+
+        ClearLayoutDirty();
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileLoad failed: %s", e.what());
+    }
 }
 
 nlohmann::json OpenRGB3DSpatialTab::OnProfileSave() const
 {
-    /*-----------------------------------------------------*\
-    | TODO(apiv5): serialize plugin scene/effects state     |
-    | into the OpenRGB profile payload.                     |
-    \*-----------------------------------------------------*/
-    return nlohmann::json::object();
+    try
+    {
+        nlohmann::json payload;
+        payload["profile_version"] = 1;
+        payload["layout"] = BuildLayoutJson();
+        payload["effects"] = BuildEffectProfileJson();
+        return payload;
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("[OpenRGB3DSpatialPlugin] OnProfileSave failed: %s", e.what());
+        return nlohmann::json::object();
+    }
+}
+
+void OpenRGB3DSpatialTab::MarkProfileSyncedWithOpenRgb()
+{
+    ClearLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::SetPluginSettings(const nlohmann::json& settings)
@@ -1292,12 +1303,6 @@ void OpenRGB3DSpatialTab::SetPluginSettings(const nlohmann::json& settings)
     if(!resource_manager) return;
     resource_manager->SetSettings("3DSpatialPlugin", settings);
     resource_manager->SaveSettings();
-}
-
-void OpenRGB3DSpatialTab::SetPluginSettingsNoSave(const nlohmann::json& settings)
-{
-    if(!resource_manager) return;
-    resource_manager->SetSettings("3DSpatialPlugin", settings);
 }
 
 void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()
@@ -1886,31 +1891,6 @@ QComboBox* OpenRGB3DSpatialTab::stackEffectTypeCombo() const
 QComboBox* OpenRGB3DSpatialTab::stackEffectZoneCombo() const
 {
     return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->stackEffectZoneCombo() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::layoutProfilesCombo() const
-{
-    return ui && ui->profilesTabPanel ? ui->profilesTabPanel->layoutProfilesCombo() : nullptr;
-}
-
-QPushButton* OpenRGB3DSpatialTab::saveLayoutButton() const
-{
-    return ui && ui->profilesTabPanel ? ui->profilesTabPanel->saveLayoutButton() : nullptr;
-}
-
-QCheckBox* OpenRGB3DSpatialTab::autoLoadLayoutCheckbox() const
-{
-    return ui && ui->profilesTabPanel ? ui->profilesTabPanel->autoLoadLayoutCheckbox() : nullptr;
-}
-
-QComboBox* OpenRGB3DSpatialTab::effectProfilesCombo() const
-{
-    return ui && ui->profilesTabPanel ? ui->profilesTabPanel->effectProfilesCombo() : nullptr;
-}
-
-QCheckBox* OpenRGB3DSpatialTab::autoLoadEffectProfileCheckbox() const
-{
-    return ui && ui->profilesTabPanel ? ui->profilesTabPanel->autoLoadEffectProfileCheckbox() : nullptr;
 }
 
 QSpinBox* OpenRGB3DSpatialTab::gridXSpin() const

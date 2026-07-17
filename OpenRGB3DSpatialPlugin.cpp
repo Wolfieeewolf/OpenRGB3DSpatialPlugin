@@ -5,6 +5,11 @@
 #include "Game/GameTelemetryBridge.h"
 #include "ResourceManagerCallback.h"
 
+#include <QMetaObject>
+#include <QSizePolicy>
+#include <QThread>
+#include <QTimer>
+
 OpenRGBPluginAPIInterface* OpenRGB3DSpatialPlugin::APIPointer = nullptr;
 
 /*-------------------------------------------------------------*\
@@ -60,6 +65,22 @@ QWidget* OpenRGB3DSpatialPlugin::GetWidget()
 
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
+    if(has_pending_profile)
+    {
+        /* Defer until after the tab's singleShot(0) deferred startup so custom
+           controllers are on disk→memory before the layout is applied. */
+        const nlohmann::json pending = std::move(pending_profile_data);
+        pending_profile_data = nlohmann::json();
+        has_pending_profile = false;
+        QTimer::singleShot(0, ui, [this, pending]()
+        {
+            if(ui)
+            {
+                ui->OnProfileLoad(pending);
+            }
+        });
+    }
+
     return ui;
 }
 
@@ -86,23 +107,82 @@ void OpenRGB3DSpatialPlugin::Unload()
 
 void OpenRGB3DSpatialPlugin::OnProfileAboutToLoad()
 {
+    if(!ui)
+    {
+        return;
+    }
+
+    auto run = [this]()
+    {
+        if(ui)
+        {
+            ui->OnProfileAboutToLoad();
+        }
+    };
+
+    if(QThread::currentThread() == ui->thread())
+    {
+        run();
+    }
+    else
+    {
+        QMetaObject::invokeMethod(ui, run, Qt::BlockingQueuedConnection);
+    }
 }
 
 void OpenRGB3DSpatialPlugin::OnProfileLoad(nlohmann::json profile_data)
 {
-    if(ui != nullptr)
+    if(!ui)
     {
-        ui->OnProfileLoad(profile_data);
+        pending_profile_data = std::move(profile_data);
+        has_pending_profile = true;
+        return;
+    }
+
+    auto run = [this, data = std::move(profile_data)]() mutable
+    {
+        if(ui)
+        {
+            ui->OnProfileLoad(data);
+        }
+    };
+
+    if(QThread::currentThread() == ui->thread())
+    {
+        run();
+    }
+    else
+    {
+        QMetaObject::invokeMethod(ui, run, Qt::BlockingQueuedConnection);
     }
 }
 
 nlohmann::json OpenRGB3DSpatialPlugin::OnProfileSave()
 {
-    if(ui != nullptr)
+    if(!ui)
     {
-        return ui->OnProfileSave();
+        return nlohmann::json::object();
     }
-    return nlohmann::json::object();
+
+    nlohmann::json result = nlohmann::json::object();
+    auto run = [this, &result]()
+    {
+        if(ui)
+        {
+            result = ui->OnProfileSave();
+            ui->MarkProfileSyncedWithOpenRgb();
+        }
+    };
+
+    if(QThread::currentThread() == ui->thread())
+    {
+        run();
+    }
+    else
+    {
+        QMetaObject::invokeMethod(ui, run, Qt::BlockingQueuedConnection);
+    }
+    return result;
 }
 
 unsigned char* OpenRGB3DSpatialPlugin::OnSDKCommand(unsigned int /*pkt_id*/, unsigned char* /*pkt_data*/, unsigned int* /*pkt_size*/)

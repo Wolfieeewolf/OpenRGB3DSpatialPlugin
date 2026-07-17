@@ -11,7 +11,6 @@
 #include "PluginLog.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
-#include "SettingsManager.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QAbstractItemView>
 #include <QFont>
@@ -111,7 +110,7 @@ void OpenRGB3DSpatialTab::removeEffectFromStackClicked()
         effectStackSelectionChanged(new_row);
     }
 
-    SaveEffectStack();
+    SetLayoutDirty();
 
     RenderEffectStack();
 }
@@ -131,7 +130,7 @@ void OpenRGB3DSpatialTab::effectStackItemDoubleClicked(QListWidgetItem*)
 
     UpdateEffectStackList();
     effectStackList()->setCurrentRow(current_row);
-    SaveEffectStack();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::effectStackSelectionChanged(int index)
@@ -278,7 +277,7 @@ void OpenRGB3DSpatialTab::stackEffectTypeChanged(int)
 
         UpdateEffectStackList();
         LoadStackEffectControls(instance);
-        SaveEffectStack();
+        SetLayoutDirty();
         UpdateAudioPanelVisibility();
         return;
     }
@@ -290,7 +289,7 @@ void OpenRGB3DSpatialTab::stackEffectTypeChanged(int)
 
     UpdateEffectStackList();
     LoadStackEffectControls(instance);
-    SaveEffectStack();
+    SetLayoutDirty();
     UpdateAudioPanelVisibility();
 }
 
@@ -305,7 +304,7 @@ void OpenRGB3DSpatialTab::stackEffectZoneChanged(int)
     instance->zone_index = stackEffectZoneCombo()->currentData().toInt();
 
     UpdateEffectStackList();
-    SaveEffectStack();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::stackEffectBlendChanged(int)
@@ -321,7 +320,7 @@ void OpenRGB3DSpatialTab::stackEffectBlendChanged(int)
     instance->blend_mode = (BlendMode)stack_effect_blend_combo->currentData().toInt();
 
     UpdateEffectStackList();
-    SaveEffectStack();
+    SetLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::UpdateEffectStackList()
@@ -599,7 +598,7 @@ void OpenRGB3DSpatialTab::DisplayEffectInstanceDetails(EffectInstance3D* instanc
                 {
                     instance->effect->LoadSettings(updated);
                 }
-                SaveEffectStack();
+                SetLayoutDirty();
                 RefreshEffectDisplay();
 
                 stack_settings_updating = false;
@@ -918,105 +917,6 @@ void OpenRGB3DSpatialTab::effectTimerTimeout()
     RenderEffectStack();
 }
 
-std::string OpenRGB3DSpatialTab::GetEffectStackPath()
-{
-    if(!resource_manager) return std::string();
-    PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
-    const filesystem::path stack_file = PluginSettingsPaths::EffectStackFile(resource_manager);
-
-    return stack_file.string();
-}
-
-void OpenRGB3DSpatialTab::SaveEffectStack()
-{
-    std::string stack_file = GetEffectStackPath();
-    if(stack_file.empty()) return;
-
-    nlohmann::json j;
-    j["version"] = 1;
-    j["effects"] = nlohmann::json::array();
-
-    for(unsigned int i = 0; i < effect_stack.size(); i++)
-    {
-        if(!effect_stack[i]) continue;
-        try
-        {
-            j["effects"].push_back(effect_stack[i]->ToJson());
-        }
-        catch(const std::exception& e)
-        {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to serialize effect %u: %s", (unsigned)i, e.what());
-        }
-    }
-
-    std::ofstream file(stack_file);
-    if(file.is_open())
-    {
-        try
-        {
-            file << j.dump(4);
-            if(file.fail() || file.bad())
-            {
-                LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write effect stack to file: %s", stack_file.c_str());
-            }
-            file.close();
-        }
-        catch(const std::exception& e)
-        {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Exception while saving effect stack: %s - %s", stack_file.c_str(), e.what());
-            file.close();
-        }
-    }
-    else
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open effect stack file for writing: %s", stack_file.c_str());
-    }
-}
-
-void OpenRGB3DSpatialTab::LoadEffectStack()
-{
-    std::string stack_file = GetEffectStackPath();
-    if(stack_file.empty()) return;
-    filesystem::path stack_path(stack_file);
-
-    if(!filesystem::exists(stack_path))
-    {
-        return;
-    }
-
-    std::ifstream file(stack_path.string());
-    if(!file.is_open())
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open effect stack file: %s", stack_file.c_str());
-        return;
-    }
-
-    try
-    {
-        nlohmann::json j;
-        file >> j;
-        file.close();
-
-        if(!j.contains("version") || !j["version"].is_number_integer() || j["version"].get<int>() != 1)
-        {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Unsupported effect stack version in file: %s", stack_file.c_str());
-            return;
-        }
-
-        if(!j.contains("effects") || !j["effects"].is_array())
-        {
-            LOG_ERROR("[OpenRGB3DSpatialPlugin] Effect stack missing effects array: %s", stack_file.c_str());
-            return;
-        }
-        RebuildEffectStackFromJson(j["effects"]);
-    }
-    catch(const std::exception& e)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load effect stack: %s - %s",
-                 stack_file.c_str(), e.what());
-    }
-}
-
 bool OpenRGB3DSpatialTab::RebuildEffectStackFromJson(const nlohmann::json& effects_array)
 {
     LoadStackEffectControls(nullptr);
@@ -1311,7 +1211,7 @@ void OpenRGB3DSpatialTab::loadStackPresetClicked()
     RebuildEffectStackFromJson(effects_array);
     ApplyLoadedStackSelection(0);
 
-    SaveEffectStack();
+    SetLayoutDirty();
 
     QMessageBox::information(this, "Success",
                             QString("Stack preset \"%1\" loaded successfully!")

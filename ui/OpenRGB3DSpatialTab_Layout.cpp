@@ -3,34 +3,19 @@
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerDisplayUtils.h"
 #include "SpatialTabLedHelpers.h"
-#include "PluginSettingsPaths.h"
 #include "SpatialControllerCardList.h"
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
 #include "PluginLog.h"
 #include "TransformJson.h"
-#include "CustomControllerDialog.h"
-#include "SettingsManager.h"
-#include "PluginUiUtils.h"
-#include <QDialog>
-#include <QFile>
-#include <QFileDialog>
-#include <QFileInfo>
-#include <QInputDialog>
-#include <QLineEdit>
-#include <QMessageBox>
-#include <QTextStream>
-#include <fstream>
-#include <filesystem>
 #include <algorithm>
 #include <stdexcept>
 
-namespace filesystem = std::filesystem;
-
 namespace
 {
-constexpr int kLayoutVersion = 6;
+constexpr int kLayoutVersion = 7;
+constexpr int kMinSupportedLayoutVersion = 6;
 
 std::string ValidateLayoutDocument(const nlohmann::json& j)
 {
@@ -42,13 +27,19 @@ std::string ValidateLayoutDocument(const nlohmann::json& j)
     {
         return "layout format must be OpenRGB3DSpatialLayout";
     }
-    if(!j.contains("version") || !j["version"].is_number_integer() || j["version"].get<int>() != kLayoutVersion)
+    if(!j.contains("version") || !j["version"].is_number_integer())
     {
-        return "layout version must be 6";
+        return "layout missing version";
+    }
+    const int version = j["version"].get<int>();
+    if(version < kMinSupportedLayoutVersion || version > kLayoutVersion)
+    {
+        return "layout version must be 6 or 7";
     }
 
+    /* Camera may still appear in older saves; it is ignored and no longer required. */
     static const char* kSections[] = {
-        "grid", "room", "camera", "controllers", "reference_points", "display_planes", "zones"};
+        "grid", "room", "controllers", "reference_points", "display_planes", "zones"};
     for(const char* section : kSections)
     {
         if(!j.contains(section))
@@ -58,164 +49,14 @@ std::string ValidateLayoutDocument(const nlohmann::json& j)
     }
     return {};
 }
-
-QString LayoutLoadErrorUserMessage(const std::string& filename, const char* detail)
-{
-    const QString path = QString::fromStdString(filename);
-    const QString err  = QString::fromUtf8(detail);
-    QString       msg  = QStringLiteral("Could not load layout profile:\n%1\n\n%2").arg(path, err);
-
-    if(err.contains(QStringLiteral("version"), Qt::CaseInsensitive)
-       || err.contains(QStringLiteral("format"), Qt::CaseInsensitive)
-       || err.contains(QStringLiteral("missing section"), Qt::CaseInsensitive))
-    {
-        msg += QStringLiteral(
-            "\n\nThis file is not a current layout (format OpenRGB3DSpatialLayout, version 6). "
-            "Open the plugin, set up your scene, and use Save layout to write a new profile.");
-    }
-    return msg;
-}
 } // namespace
 
-void OpenRGB3DSpatialTab::saveLayoutClicked()
+nlohmann::json OpenRGB3DSpatialTab::BuildLayoutJson() const
 {
-    if(gridXSpin()) custom_grid_x = gridXSpin()->value();
-    if(gridYSpin()) custom_grid_y = gridYSpin()->value();
-    if(gridZSpin()) custom_grid_z = gridZSpin()->value();
-
-    if(!layoutProfilesCombo()) return;
-    bool ok;
-    QString profile_name = QInputDialog::getText(this, "Save Layout Profile",
-                                                 "Profile name:", QLineEdit::Normal,
-                                                 layoutProfilesCombo()->currentText(), &ok);
-
-    if(!ok || profile_name.isEmpty())
-    {
-        return;
-    }
-
-    std::string layout_path = GetLayoutPath(profile_name.toStdString());
-    if(layout_path.empty()) return;
-
-    if(filesystem::exists(layout_path))
-    {
-        QMessageBox::StandardButton reply = QMessageBox::question(this, "Overwrite Profile",
-            QString("Layout profile \"%1\" already exists. Overwrite?").arg(profile_name),
-            QMessageBox::Yes | QMessageBox::No);
-
-        if(reply != QMessageBox::Yes)
-        {
-            return;
-        }
-    }
-
-    SaveLayout(layout_path);
-    ClearLayoutDirty();
-
-    PopulateLayoutDropdown();
-
-    int index = layoutProfilesCombo()->findText(profile_name);
-    if(index >= 0)
-    {
-        layoutProfilesCombo()->setCurrentIndex(index);
-    }
-
-    SaveCurrentLayoutName();
-
-    QMessageBox::information(this, "Layout Saved",
-                            QString("Profile '%1' saved to plugins directory").arg(profile_name));
-}
-
-void OpenRGB3DSpatialTab::loadLayoutClicked()
-{
-    if(!PromptSaveIfDirty())
-    {
-        return;
-    }
-    
-    if(!layoutProfilesCombo()) return;
-    QString profile_name = layoutProfilesCombo()->currentText();
-
-    if(profile_name.isEmpty())
-    {
-        QMessageBox::warning(this, "No Profile Selected", "Please select a profile to load");
-        return;
-    }
-
-    std::string layout_path = GetLayoutPath(profile_name.toStdString());
-    if(layout_path.empty()) return;
-    QFileInfo check_file(QString::fromStdString(layout_path));
-
-    if(!check_file.exists())
-    {
-        QMessageBox::warning(this, "Profile Not Found", "Selected profile file not found");
-        return;
-    }
-
-    LoadLayout(layout_path);
-    ClearLayoutDirty();
-    QMessageBox::information(this, "Layout Loaded",
-                            QString("Profile '%1' loaded successfully").arg(profile_name));
-}
-
-void OpenRGB3DSpatialTab::deleteLayoutClicked()
-{
-    if(!layoutProfilesCombo()) return;
-    QString profile_name = layoutProfilesCombo()->currentText();
-
-    if(profile_name.isEmpty())
-    {
-        QMessageBox::warning(this, "No Profile Selected", "Please select a profile to delete");
-        return;
-    }
-
-    QMessageBox::StandardButton reply = QMessageBox::question(this, "Delete Profile",
-                                        QString("Are you sure you want to delete profile '%1'?").arg(profile_name),
-                                        QMessageBox::Yes | QMessageBox::No);
-
-    if(reply == QMessageBox::Yes)
-    {
-        std::string layout_path = GetLayoutPath(profile_name.toStdString());
-        if(layout_path.empty()) return;
-        QFile file(QString::fromStdString(layout_path));
-
-        if(file.remove())
-        {
-            PopulateLayoutDropdown();
-            if(layoutProfilesCombo())
-            {
-                if(layoutProfilesCombo()->count() > 0)
-                {
-                    layoutProfilesCombo()->setCurrentIndex(0);
-                }
-                else
-                {
-                    layoutProfilesCombo()->setCurrentIndex(-1);
-                }
-            }
-            SaveCurrentLayoutName();
-            QMessageBox::information(this, "Profile Deleted",
-                                    QString("Profile '%1' deleted successfully").arg(profile_name));
-        }
-        else
-        {
-            QMessageBox::warning(this, "Delete Failed", "Failed to delete profile file");
-        }
-    }
-}
-
-void OpenRGB3DSpatialTab::layoutProfileChanged(int)
-{
-    SaveCurrentLayoutName();
-}
-
-void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
-{
-
     nlohmann::json layout_json;
 
     layout_json["format"] = "OpenRGB3DSpatialLayout";
-    layout_json["version"] = 6;
+    layout_json["version"] = kLayoutVersion;
 
     layout_json["grid"]["dimensions"]["x"] = custom_grid_x;
     layout_json["grid"]["dimensions"]["y"] = custom_grid_y;
@@ -228,32 +69,29 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     layout_json["room"]["depth"] = manual_room_depth;
     layout_json["room"]["height"] = manual_room_height;
 
-    if(viewport)
-    {
-        float dist, yaw, pitch, tx, ty, tz;
-        viewport->GetCamera(dist, yaw, pitch, tx, ty, tz);
-        layout_json["camera"]["distance"] = dist;
-        layout_json["camera"]["yaw"] = yaw;
-        layout_json["camera"]["pitch"] = pitch;
-        layout_json["camera"]["target"]["x"] = tx;
-        layout_json["camera"]["target"]["y"] = ty;
-        layout_json["camera"]["target"]["z"] = tz;
-    }
-
     layout_json["controllers"] = nlohmann::json::array();
 
     for(unsigned int i = 0; i < controller_transforms.size(); i++)
     {
         ControllerTransform* ct = controller_transforms[i].get();
+        if(!ct)
+        {
+            continue;
+        }
+
         nlohmann::json controller_json;
 
         if(ct->controller == nullptr)
         {
-            const int list_row = TransformIndexToControllerListRow(static_cast<int>(i));
-            QString     display_name =
-                list_row >= 0 ? scene_controllers_.textAt(list_row) : QStringLiteral("Unknown Custom Controller");
-
-            controller_json["name"] = display_name.toStdString();
+            if(ct->virtual_controller)
+            {
+                controller_json["name"] =
+                    std::string("[Custom] ") + ct->virtual_controller->GetName();
+            }
+            else
+            {
+                controller_json["name"] = "Unknown Custom Controller";
+            }
             controller_json["type"] = "virtual";
             controller_json["location"] = "VIRTUAL_CONTROLLER";
         }
@@ -307,33 +145,12 @@ void OpenRGB3DSpatialTab::SaveLayout(const std::string& filename)
     {
         layout_json["zones"] = zone_manager->ToJSON();
     }
-
-    QFile file(QString::fromStdString(filename));
-    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    else
     {
-        QString error_msg = QString("Failed to save layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Save Failed", error_msg);
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for writing: %s - %s",
-                  filename.c_str(), file.errorString().toStdString().c_str());
-        return;
+        layout_json["zones"] = nlohmann::json::object();
     }
 
-    QTextStream out(&file);
-    out << QString::fromStdString(layout_json.dump(4));
-    file.close();
-
-    if(file.error() != QFile::NoError)
-    {
-        QString error_msg = QString("Failed to write layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Write Failed", error_msg);
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to write file: %s - %s",
-                  filename.c_str(), file.errorString().toStdString().c_str());
-        return;
-    }
-
-    
+    return layout_json;
 }
 
 void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
@@ -435,19 +252,6 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
     emit GridLayoutChanged();
 
-    if(viewport)
-    {
-        const nlohmann::json& cam = layout_json["camera"];
-        const float           dist  = cam["distance"].get<float>();
-        const float           yaw   = cam["yaw"].get<float>();
-        const float           pitch = cam["pitch"].get<float>();
-        const nlohmann::json& tgt   = cam["target"];
-        const float           tx    = tgt["x"].get<float>();
-        const float           ty    = tgt["y"].get<float>();
-        const float           tz    = tgt["z"].get<float>();
-        viewport->SetCamera(dist, yaw, pitch, tx, ty, tz);
-    }
-
     clearAllClicked();
 
     std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
@@ -540,6 +344,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 }
                 else
                 {
+                    LOG_WARNING("[OpenRGB3DSpatialPlugin] Layout skipped missing custom controller '%s'",
+                                virtual_name.toUtf8().constData());
                     continue;
                 }
             }
@@ -856,201 +662,11 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     UpdateAvailableItemCombo();
     RebindCustomControllerDeviceMappings();
     SyncSpatialLightingSceneForUi();
-}
-
-void OpenRGB3DSpatialTab::LoadLayout(const std::string& filename)
-{
-
-    QFile file(QString::fromStdString(filename));
-
-    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if(viewport)
     {
-        QString error_msg = QString("Failed to open layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Load Failed", error_msg);
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to open file for reading: %s - %s",
-                  filename.c_str(), file.errorString().toStdString().c_str());
-        return;
+        viewport->ResetCameraToDefault();
     }
-
-    QString content = QString::fromUtf8(file.readAll());
-    file.close();
-
-    if(file.error() != QFile::NoError)
-    {
-        QString error_msg = QString("Failed to read layout file:\n%1\n\nError: %2")
-            .arg(QString::fromStdString(filename), file.errorString());
-        QMessageBox::critical(this, "Read Failed", error_msg);
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to read file: %s - %s",
-                  filename.c_str(), file.errorString().toStdString().c_str());
-        return;
-    }
-
-    try
-    {
-        nlohmann::json layout_json = nlohmann::json::parse(content.toStdString());
-        LoadLayoutFromJSON(layout_json);
-        
-        return;
-    }
-    catch(const nlohmann::json::parse_error& e)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to parse layout JSON: %s - %s", filename.c_str(), e.what());
-        QMessageBox::critical(this, tr("Invalid Layout File"),
-                              tr("Could not parse layout JSON:\n%1\n\n%2\n\nSave a new profile from the plugin if this file is corrupt.")
-                                  .arg(QString::fromStdString(filename), QString::fromUtf8(e.what())));
-        return;
-    }
-    catch(const std::exception& e)
-    {
-        LOG_ERROR("[OpenRGB3DSpatialPlugin] Failed to load layout: %s - %s", filename.c_str(), e.what());
-        QMessageBox::critical(this, tr("Layout Not Loaded"), LayoutLoadErrorUserMessage(filename, e.what()));
-        return;
-    }
-}
-
-std::string OpenRGB3DSpatialTab::GetLayoutPath(const std::string& layout_name)
-{
-    if(!resource_manager) return std::string();
-    PluginSettingsPaths::EnsurePluginDataLayout(resource_manager);
-    filesystem::path plugins_dir = PluginSettingsPaths::LayoutsDir(resource_manager);
-
-    QDir dir;
-    dir.mkpath(QString::fromStdString(plugins_dir.string()));
-
-    std::string filename = layout_name + ".json";
-    filesystem::path layout_file = plugins_dir / filename;
-
-    return layout_file.string();
-}
-
-void OpenRGB3DSpatialTab::PopulateLayoutDropdown()
-{
-    if(!resource_manager || !layoutProfilesCombo()) return;
-    QString current_text = layoutProfilesCombo()->currentText();
-
-    layoutProfilesCombo()->blockSignals(true);
-    layoutProfilesCombo()->clear();
-
-    filesystem::path layouts_dir = PluginSettingsPaths::LayoutsDir(resource_manager);
-
-    QDir dir(QString::fromStdString(layouts_dir.string()));
-    QStringList filters;
-    filters << "*.json";
-    QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
-
-    for(int i = 0; i < files.size(); i++)
-    {
-        QString base_name = files[i].baseName();
-        layoutProfilesCombo()->addItem(base_name);
-    }
-
-    nlohmann::json settings = GetPluginSettings();
-    QString saved_profile = "";
-    if(settings.contains("SelectedProfile"))
-    {
-        saved_profile = QString::fromStdString(settings["SelectedProfile"].get<std::string>());
-    }
-    else
-    {
-    }
-
-    if(!saved_profile.isEmpty())
-    {
-        int index = layoutProfilesCombo()->findText(saved_profile);
-        if(index >= 0)
-        {
-            layoutProfilesCombo()->setCurrentIndex(index);
-        }
-        else
-        {
-        }
-    }
-    else if(!current_text.isEmpty())
-    {
-        int index = layoutProfilesCombo()->findText(current_text);
-        if(index >= 0)
-        {
-            layoutProfilesCombo()->setCurrentIndex(index);
-        }
-    }
-
-    layoutProfilesCombo()->blockSignals(false);
-}
-
-void OpenRGB3DSpatialTab::SaveCurrentLayoutName()
-{
-    if(!layoutProfilesCombo() || !autoLoadLayoutCheckbox())
-    {
-        return;
-    }
-
-    std::string profile_name = layoutProfilesCombo()->currentText().toStdString();
-    bool auto_load_enabled = autoLoadLayoutCheckbox()->isChecked();
-
-    nlohmann::json settings = GetPluginSettings();
-    settings["SelectedProfile"] = profile_name;
-    settings["AutoLoadEnabled"] = auto_load_enabled;
-    SetPluginSettings(settings);
-}
-
-void OpenRGB3DSpatialTab::TryAutoLoadLayout()
-{
-    if(!first_load)
-    {
-        return;
-    }
-
-    first_load = false;
-
-    if(!autoLoadLayoutCheckbox() || !layoutProfilesCombo())
-    {
-        return;
-    }
-
-    nlohmann::json settings = GetPluginSettings();
-
-    bool auto_load_enabled = false;
-    std::string saved_profile;
-
-    if(settings.contains("AutoLoadEnabled"))
-    {
-        auto_load_enabled = settings["AutoLoadEnabled"].get<bool>();
-    }
-
-    if(settings.contains("SelectedProfile"))
-    {
-        saved_profile = settings["SelectedProfile"].get<std::string>();
-    }
-
-    bool restore_auto_load_signals = autoLoadLayoutCheckbox()->blockSignals(true);
-    autoLoadLayoutCheckbox()->setChecked(auto_load_enabled);
-    autoLoadLayoutCheckbox()->blockSignals(restore_auto_load_signals);
-
-    if(!saved_profile.empty())
-    {
-        int index = layoutProfilesCombo()->findText(QString::fromStdString(saved_profile));
-        if(index >= 0)
-        {
-            bool restore_layout_combo_signals = layoutProfilesCombo()->blockSignals(true);
-            layoutProfilesCombo()->setCurrentIndex(index);
-            layoutProfilesCombo()->blockSignals(restore_layout_combo_signals);
-        }
-    }
-
-    if(auto_load_enabled && !saved_profile.empty())
-    {
-        std::string layout_path = GetLayoutPath(saved_profile);
-        if(layout_path.empty()) return;
-        QFileInfo check_file(QString::fromStdString(layout_path));
-
-        if(check_file.exists())
-        {
-            LoadLayout(layout_path);
-        }
-    }
-
-    TryAutoLoadEffectProfile();
+    ClearLayoutDirty();
 }
 
 void OpenRGB3DSpatialTab::RegenerateLEDPositions(ControllerTransform* transform)

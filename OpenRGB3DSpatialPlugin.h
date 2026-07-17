@@ -6,6 +6,7 @@
 
 #include <QObject>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include "OpenRGBPluginInterface.h"
 
 class GameTelemetryBridge;
@@ -46,6 +47,8 @@ public:
 private:
     OpenRGB3DSpatialTab*        ui = nullptr;
     std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
+    nlohmann::json              pending_profile_data;
+    bool                        has_pending_profile = false;
 };
 
 #endif

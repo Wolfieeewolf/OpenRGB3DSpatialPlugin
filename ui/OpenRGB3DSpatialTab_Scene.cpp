@@ -129,7 +129,6 @@ void OpenRGB3DSpatialTab::createZoneClicked()
         }
 
         UpdateZonesList();
-        SaveZones();
         SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Created",
@@ -168,7 +167,6 @@ void OpenRGB3DSpatialTab::editZoneClicked()
                                zone))
     {
         UpdateZonesList();
-        SaveZones();
         SetLayoutDirty();
 
         QMessageBox::information(this, "Zone Updated",
@@ -205,7 +203,6 @@ void OpenRGB3DSpatialTab::deleteZoneClicked()
     {
         zone_manager->DeleteZone(selected_idx);
         UpdateZonesList();
-        SaveZones();
         SetLayoutDirty();
     }
 }
@@ -341,11 +338,6 @@ void OpenRGB3DSpatialTab::UpdateEffectZoneCombo()
     PopulateZoneTargetCombo(effectZoneCombo(), ResolveZoneTargetSelection(effectZoneCombo()));
 }
 
-void OpenRGB3DSpatialTab::SaveZones()
-{
-    SetLayoutDirty();
-}
-
 void OpenRGB3DSpatialTab::addRefPointClicked()
 {
     if(!referencePointsList())
@@ -380,7 +372,7 @@ void OpenRGB3DSpatialTab::addRefPointClicked()
     UpdateAvailableControllersList();
     SelectAvailableControllerEntry(-2, ref_index);
     UpdateReferencePointsList();
-    SaveReferencePoints();
+    SetLayoutDirty();
 
     const int list_row = FindReferencePointListRow(ref_index);
     if(list_row >= 0)
@@ -451,7 +443,6 @@ bool OpenRGB3DSpatialTab::EditReferencePointAtIndex(int ref_index)
 
     SetLayoutDirty();
     UpdateReferencePointsList();
-    SaveReferencePoints();
     UpdateAvailableControllersList();
     if(viewport)
     {
@@ -494,7 +485,7 @@ void OpenRGB3DSpatialTab::removeRefPointClicked()
 
     reference_points.erase(reference_points.begin() + index);
     UpdateReferencePointsList();
-    SaveReferencePoints();
+    SetLayoutDirty();
     if(viewport) viewport->update();
     UpdateAvailableControllersList();
 }
@@ -724,9 +715,4 @@ void OpenRGB3DSpatialTab::UpdateReferencePointsList()
     UpdateEffectOriginCombo();
 
     RefreshAmbilightReferencePointDropdowns();
-}
-
-void OpenRGB3DSpatialTab::SaveReferencePoints()
-{
-    SetLayoutDirty();
 }

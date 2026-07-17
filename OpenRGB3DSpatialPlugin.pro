@@ -176,7 +176,6 @@ HEADERS += \
     SpatialLighting/SpatialLightingSceneProvider.h \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.h \
     ui/PluginSettingsPaths.h \
-    ui/ProfilesTabPanel.h \
     ui/GridSettingsPanel.h \
     ui/SceneTransformPanel.h \
     ui/SceneObjectSpacingPanel.h \
@@ -337,7 +336,6 @@ SOURCES += \
     SpatialLighting/SpatialLightingSceneProvider.cpp \
     Effects3D/SpatialLighting/RoomSpatialLightingUi.cpp \
     ui/PluginSettingsPaths.cpp \
-    ui/ProfilesTabPanel.cpp \
     ui/GridSettingsPanel.cpp \
     ui/SceneTransformPanel.cpp \
     ui/SceneObjectSpacingPanel.cpp \
@@ -459,7 +457,6 @@ win32:DEFINES += \
 
 FORMS += \
     ui/forms/OpenRGB3DSpatialTab.ui \
-    ui/forms/ProfilesTabPanel.ui \
     ui/forms/GridSettingsPanel.ui \
     ui/forms/SceneTransformPanel.ui \
     ui/forms/SceneObjectSpacingPanel.ui \

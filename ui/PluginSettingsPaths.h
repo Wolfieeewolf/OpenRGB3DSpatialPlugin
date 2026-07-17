@@ -27,27 +27,10 @@ inline filesystem::path SpatialShadersDir(OpenRGBPluginAPIInterface* rm)
     return PluginRoot(rm) / "spatial-shaders";
 }
 
-inline filesystem::path LayoutsDir(OpenRGBPluginAPIInterface* rm)
-{
-    return PluginRoot(rm) / "layouts";
-}
-
-inline filesystem::path EffectStackFile(OpenRGBPluginAPIInterface* rm)
-{
-    return PluginRoot(rm) / "effect_stack.json";
-}
-
-inline filesystem::path EffectProfileFile(OpenRGBPluginAPIInterface* rm, const std::string& profile_name)
-{
-    return PluginRoot(rm) / (profile_name + ".effectprofile.json");
-}
-
 inline filesystem::path StackPresetFile(OpenRGBPluginAPIInterface* rm, const std::string& preset_name)
 {
     return PluginRoot(rm) / (preset_name + ".stack.json");
 }
-
-bool IsEffectProfileFile(const filesystem::path& path);
 
 bool IsStackPresetFile(const filesystem::path& path);
 

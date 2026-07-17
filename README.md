@@ -17,7 +17,8 @@ If you expect plug-and-play with zero reading, this will probably frustrate youâ
 - Add detected devices to a **3D viewport**, move and rotate them, snap to grid.
 - Use **reference points**, **display planes**, and **capture zones** (e.g. for **Screen Mirror**).
 - Stack **spatial effects** (wave, plasma, textures, audio-reactive bands, game bridges, etc.).
-- Save and load layout / effect **profiles** where supported.
+- Save and load the complete spatial layout and effect stack through **OpenRGB profiles**.
+- Reuse global custom-controller definitions, stack presets, and shader assets across profiles.
 
 ## What to expect (honest status)
 

@@ -6,7 +6,6 @@
 #include "ui_OpenRGB3DSpatialTab.h"
 #include "Audio/AudioInputManager.h"
 #include "PluginUiUtils.h"
-#include "SettingsManager.h"
 #include "PluginLog.h"
 #include <QToolTip>
 #include <QPainter>

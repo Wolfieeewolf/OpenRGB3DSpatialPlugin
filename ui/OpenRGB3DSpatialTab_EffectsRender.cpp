@@ -18,9 +18,7 @@
 #include "GridSpaceUtils.h"
 #include "ZoneManager3D.h"
 #include "SpatialTabLedHelpers.h"
-#include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
-#include "SettingsManager.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <cmath>
 #include <algorithm>

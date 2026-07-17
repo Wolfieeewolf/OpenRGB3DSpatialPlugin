@@ -207,7 +207,7 @@ void GridSettingsPanel::onGridScaleChanged(double value)
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
                                              host_tab_->manual_room_height, host_tab_->use_manual_room_size);
     }
-    host_tab_->SavePluginUiSettings();
+    host_tab_->SetLayoutDirty();
     if(host_tab_->current_effect_ui)
     {
         ScreenMirror* sm = qobject_cast<ScreenMirror*>(host_tab_->current_effect_ui);
@@ -302,7 +302,7 @@ void GridSettingsPanel::onUseManualRoomSizeToggled(bool checked)
                                              host_tab_->manual_room_height, host_tab_->use_manual_room_size);
     }
     emit host_tab_->GridLayoutChanged();
-    host_tab_->SavePluginUiSettings();
+    host_tab_->SetLayoutDirty();
 }
 
 void GridSettingsPanel::onRoomWidthChanged(double value)
@@ -318,7 +318,7 @@ void GridSettingsPanel::onRoomWidthChanged(double value)
                                              host_tab_->manual_room_height, host_tab_->use_manual_room_size);
     }
     emit host_tab_->GridLayoutChanged();
-    host_tab_->SavePluginUiSettings();
+    host_tab_->SetLayoutDirty();
 }
 
 void GridSettingsPanel::onRoomHeightChanged(double value)
@@ -334,7 +334,7 @@ void GridSettingsPanel::onRoomHeightChanged(double value)
                                              host_tab_->manual_room_height, host_tab_->use_manual_room_size);
     }
     emit host_tab_->GridLayoutChanged();
-    host_tab_->SavePluginUiSettings();
+    host_tab_->SetLayoutDirty();
 }
 
 void GridSettingsPanel::onRoomDepthChanged(double value)
@@ -350,7 +350,7 @@ void GridSettingsPanel::onRoomDepthChanged(double value)
                                              host_tab_->manual_room_height, host_tab_->use_manual_room_size);
     }
     emit host_tab_->GridLayoutChanged();
-    host_tab_->SavePluginUiSettings();
+    host_tab_->SetLayoutDirty();
 }
 
 QSpinBox* GridSettingsPanel::gridXSpin() const { return ui->gridXSpin; }

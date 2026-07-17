@@ -68,7 +68,6 @@ class OpenRGB3DSpatialTab : public QWidget
 {
     Q_OBJECT
 
-    friend class ProfilesTabPanel;
     friend class GridSettingsPanel;
     friend class SceneTransformPanel;
     friend class ObjectCreatorTabPanel;
@@ -96,8 +95,10 @@ public:
     /*-----------------------------------------------------*\
     | OpenRGB profile integration (Plugin API v5+)          |
     \*-----------------------------------------------------*/
+    void OnProfileAboutToLoad();
     void OnProfileLoad(const nlohmann::json& profile_data);
     nlohmann::json OnProfileSave() const;
+    void MarkProfileSyncedWithOpenRgb();
 
     double EffectiveGridScaleMm() const;
     void SetScenePositionControlsMm(double x_mm, double y_mm, double z_mm);
@@ -142,16 +143,6 @@ private slots:
     void EditDisplayPlaneForCurrentSceneSelection();
     void FocusObjectCreatorTab();
 
-    void quickSaveLayoutClicked();
-    void saveLayoutClicked();
-    void loadLayoutClicked();
-    void deleteLayoutClicked();
-    void layoutProfileChanged(int index);
-    void saveEffectProfileClicked();
-    void loadEffectProfileClicked();
-    void deleteEffectProfileClicked();
-    void effectProfileChanged(int index);
-    void openConfigFolderClicked();
     void createCustomControllerClicked();
     void importCustomControllerClicked();
     void exportCustomControllerClicked();
@@ -229,19 +220,13 @@ private:
     void bindUiPanels();
     void RunDeferredStartupTasks();
     void LoadDevices();
-    void SaveLayout(const std::string& filename);
-    void LoadLayout(const std::string& filename);
+    nlohmann::json BuildLayoutJson() const;
     void LoadLayoutFromJSON(const nlohmann::json& layout_json);
-    std::string GetLayoutPath(const std::string& layout_name);
-    void TryAutoLoadLayout();
-    void PopulateLayoutDropdown();
-    void SaveCurrentLayoutName();
-    
+
     void SetLayoutDirty(bool dirty = true);
     void ClearLayoutDirty();
     bool IsLayoutDirty() const { return layout_dirty; }
-    bool PromptSaveIfDirty();
-    void SaveCustomControllers();
+    void UpdateProfileDirtyBanner();
     bool SaveCustomController(unsigned int index);
     int  IndexOfVirtualController(const VirtualController3D* controller) const;
     void LoadCustomControllers();
@@ -285,14 +270,12 @@ private:
     int  TransformIndexToControllerListRow(int transform_index) const;
     void SetObjectCreatorStatus(const QString& message, bool is_error = false);
     void UpdateReferencePointsList();
-    void SaveReferencePoints();
     void UpdateZonesList();
     void UpdateEffectZoneCombo();
     void PopulateZoneTargetCombo(QComboBox* combo, int saved_value);
     void RefreshHiddenControllerStates();
     int ResolveZoneTargetSelection(const QComboBox* combo) const;
     void UpdateEffectCombo();
-    void SaveZones();
     bool IsItemInScene(RGBControllerInterface* controller, int granularity, int item_idx) const;
     int GetUnassignedZoneCount(RGBControllerInterface* controller) const;
     int GetUnassignedLEDCount(RGBControllerInterface* controller) const;
@@ -327,28 +310,19 @@ private:
 
     nlohmann::json GetPluginSettings() const;
     void SetPluginSettings(const nlohmann::json& settings);
-    void SetPluginSettingsNoSave(const nlohmann::json& settings);
     void PersistRoomGridOverlayToSettings();
     void MergePluginUiIntoSettings(nlohmann::json& settings) const;
-    void RestoreProfileUiFromSettings();
     void RefreshEffectDisplay();
     void SyncSpatialLightingSceneForUi();
     void SetupStackRoomOutputPanel();
     void SyncStackRoomOutputPanel();
     QString sceneLabelForTransformIndex(int transform_index) const;
 
-    void SaveEffectStack();
-    void LoadEffectStack();
-    std::string GetEffectStackPath();
     bool RebuildEffectStackFromJson(const nlohmann::json& effects_array);
     void ApplyLoadedStackSelection(int desired_index);
 
-    void SaveEffectProfile(const std::string& filename);
-    void LoadEffectProfile(const std::string& filename);
-    std::string GetEffectProfilePath(const std::string& profile_name);
-    void PopulateEffectProfileDropdown();
-    void SaveCurrentEffectProfileName();
-    void TryAutoLoadEffectProfile();
+    nlohmann::json BuildEffectProfileJson() const;
+    bool ApplyEffectProfileJson(const nlohmann::json& profile_json);
 
     void BindSettingsPanels();
     void InitSceneObjectEditTab();
@@ -400,12 +374,6 @@ private:
     QComboBox*   effectBoundsCombo() const;
     QComboBox*   stackEffectTypeCombo() const;
     QComboBox*   stackEffectZoneCombo() const;
-
-    QComboBox*   layoutProfilesCombo() const;
-    QPushButton* saveLayoutButton() const;
-    QCheckBox*   autoLoadLayoutCheckbox() const;
-    QComboBox*   effectProfilesCombo() const;
-    QCheckBox*   autoLoadEffectProfileCheckbox() const;
 
     QSpinBox*    gridXSpin() const;
     QSpinBox*    gridYSpin() const;
@@ -493,10 +461,8 @@ private:
     QPushButton*                stop_effect_button = nullptr;
     SpatialEffect3D*            current_effect_ui = nullptr;
     class EffectRoomOutputPanel* stack_room_output_panel_ = nullptr;
-    QTimer*                     auto_load_timer = nullptr;
     QTimer*                     effect_timer = nullptr;
     bool                        deferred_startup_done_ = false;
-    bool                        first_load = true;
     bool                        effect_running = false;
     float                       effect_time = 0.0f;
     QElapsedTimer               effect_elapsed;
@@ -567,6 +533,7 @@ private:
     std::vector<RGBColor> room_grid_overlay_buffer;
 
     bool layout_dirty = false;
+    QLabel* profile_unsaved_banner_ = nullptr;
 
     int                       scene_object_edit_tab_index_ = -1;
     int                       settings_tab_before_edit_  = -1;
