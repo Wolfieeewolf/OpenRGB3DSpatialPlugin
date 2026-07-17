@@ -242,8 +242,10 @@ bool UnprojectWindow(const ViewportMat4& modelview,
         return false;
     }
 
-    QMatrix4x4 mv(modelview.m);
-    QMatrix4x4 proj(projection.m);
+    QMatrix4x4 mv;
+    QMatrix4x4 proj;
+    std::memcpy(mv.data(), modelview.m, sizeof(float) * 16);
+    std::memcpy(proj.data(), projection.m, sizeof(float) * 16);
     bool invertible = false;
     const QMatrix4x4 inv = (proj * mv).inverted(&invertible);
     if(!invertible)

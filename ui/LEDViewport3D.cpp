@@ -349,6 +349,7 @@ void LEDViewport3D::SelectController(int index)
             return;
         }
 
+        deselectRoomViewport();
         selected_display_plane_idx = -1;
         selected_ref_point_idx = -1;
         selected_controller_idx = index;
@@ -378,6 +379,7 @@ void LEDViewport3D::SelectReferencePoint(int index)
 
     if(reference_points && index >= 0 && index < (int)reference_points->size())
     {
+        deselectRoomViewport();
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_display_plane_idx = -1;
@@ -988,6 +990,7 @@ void LEDViewport3D::SelectDisplayPlane(int index)
 {
     if(display_planes && index >= 0 && index < (int)display_planes->size())
     {
+        deselectRoomViewport();
         selected_controller_indices.clear();
         selected_controller_idx = -1;
         selected_ref_point_idx = -1;

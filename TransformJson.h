@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Shared JSON helpers for Transform3D vectors (object {x,y,z}; array [x,y,z] accepted on load).
+// Shared JSON helpers for Transform3D vectors (object {x,y,z} only).
 
 #ifndef TRANSFORMJSON_H
 #define TRANSFORMJSON_H
@@ -24,26 +24,19 @@ inline void WriteVec3(nlohmann::json& parent, const char* key, const Vector3D& v
 
 inline bool ReadVec3(const nlohmann::json& parent, const char* key, float& x, float& y, float& z)
 {
-    if(!parent.contains(key))
+    if(!parent.contains(key) || !parent[key].is_object())
     {
         return false;
     }
     const nlohmann::json& v = parent[key];
-    if(v.is_array() && v.size() == 3)
+    if(!v.contains("x") || !v.contains("y") || !v.contains("z"))
     {
-        x = v[0].get<float>();
-        y = v[1].get<float>();
-        z = v[2].get<float>();
-        return true;
+        return false;
     }
-    if(v.is_object() && v.contains("x") && v.contains("y") && v.contains("z"))
-    {
-        x = v["x"].get<float>();
-        y = v["y"].get<float>();
-        z = v["z"].get<float>();
-        return true;
-    }
-    return false;
+    x = v["x"].get<float>();
+    y = v["y"].get<float>();
+    z = v["z"].get<float>();
+    return true;
 }
 
 inline bool ReadVec3(const nlohmann::json& parent, const char* key, Vector3D& out)

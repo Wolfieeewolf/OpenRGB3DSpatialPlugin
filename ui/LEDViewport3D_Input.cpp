@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cfloat>
+#include <cstring>
 #include <algorithm>
 
 #include "QtCompat.h"
@@ -136,7 +137,9 @@ void LEDViewport3D::transformPickRay(float ray_origin[3], float ray_direction[3]
         return;
     }
 
-    QMatrix4x4 matrix(roomTurntableMatrix().m);
+    // ViewportMat4 is column-major (OpenGL). QMatrix4x4(float*) is row-major — use data().
+    QMatrix4x4 matrix;
+    std::memcpy(matrix.data(), roomTurntableMatrix().m, sizeof(float) * 16);
     bool invertible = false;
     const QMatrix4x4 inverse = matrix.inverted(&invertible);
     if(!invertible)
@@ -337,6 +340,15 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         return;
     }
 
+    const int picked_ref = PickReferencePoint(gl_win_x, gl_win_y);
+    if(picked_ref >= 0)
+    {
+        ClearSelection();
+        SelectReferencePoint(picked_ref);
+        emit ReferencePointSelected(picked_ref);
+        return;
+    }
+
     const int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
     if(picked_plane >= 0)
     {
@@ -353,7 +365,6 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
     }
 
     ClearSelection();
-    SelectDisplayPlane(-1);
     emit ControllerSelected(-1);
     emit ReferencePointSelected(-1);
     emit DisplayPlaneSelected(-1);
@@ -415,20 +426,8 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         int picked_ref_point = PickReferencePoint(gl_win_x, gl_win_y);
         if(picked_ref_point >= 0)
         {
-            selected_controller_indices.clear();
-            selected_controller_idx = -1;
-            selected_display_plane_idx = -1;
-
-            selected_ref_point_idx = picked_ref_point;
-
-            if(reference_points && picked_ref_point < (int)reference_points->size())
-            {
-                VirtualReferencePoint3D* ref_point = (*reference_points)[picked_ref_point].get();
-                gizmo.SetTarget(ref_point);
-                gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
-                UpdateGizmoPosition();
-            }
-
+            ClearSelection();
+            SelectReferencePoint(picked_ref_point);
             emit ReferencePointSelected(picked_ref_point);
             update();
             return;
@@ -437,13 +436,26 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         int picked_controller = PickController(gl_win_x, gl_win_y);
         if(picked_controller >= 0)
         {
-            selected_ref_point_idx = -1;
-            selected_display_plane_idx = -1;
             if(event->modifiers() & Qt::ControlModifier)
             {
+                deselectRoomViewport();
+                selected_ref_point_idx = -1;
+                selected_display_plane_idx = -1;
                 if(IsControllerSelected(picked_controller))
                 {
                     RemoveControllerFromSelection(picked_controller);
+                    if(selected_controller_idx >= 0 && controller_transforms &&
+                       selected_controller_idx < (int)controller_transforms->size())
+                    {
+                        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+                        gizmo.SetTarget(ctrl);
+                        gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
+                        UpdateGizmoPosition();
+                    }
+                    else
+                    {
+                        gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
+                    }
                 }
                 else
                 {
@@ -460,15 +472,13 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
                 update();
                 return;
             }
-            else
-            {
-                ClearSelection();
-                AddControllerToSelection(picked_controller);
-                SelectController(picked_controller);
-                emit ControllerSelected(picked_controller);
-                update();
-                return;
-            }
+
+            ClearSelection();
+            AddControllerToSelection(picked_controller);
+            SelectController(picked_controller);
+            emit ControllerSelected(picked_controller);
+            update();
+            return;
         }
 
         dragging_grab = false;
@@ -476,7 +486,16 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         dragging_rotate = false;
         if(room_viewport_selected_)
         {
-            dragging_room_turntable = true;
+            // Only spin when the click is on the room volume; otherwise treat as grab so
+            // release can still click-pick controllers/planes consistently.
+            if(pickRoomVolume(gl_win_x, gl_win_y))
+            {
+                dragging_room_turntable = true;
+            }
+            else
+            {
+                dragging_grab = true;
+            }
             return;
         }
         if(pickRoomVolume(gl_win_x, gl_win_y))
@@ -647,15 +666,7 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
             applyViewportClickPick(gl_win_x, gl_win_y);
         }
     }
-    else if(event->button() == Qt::MiddleButton)
-    {
-        const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
-        const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
-        if(distance < kViewportClickSlopGlPx)
-        {
-            applyViewportClickPick(gl_win_x, gl_win_y);
-        }
-    }
+    // Middle button is pan-only (no click-pick); left click owns selection.
 
     const bool gizmo_was_dragging = gizmo.IsDragging();
     gizmo.HandleMouseRelease(event);
@@ -667,9 +678,10 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     {
         const QPoint delta = MOUSE_EVENT_POS(event) - click_start_pos;
         const float distance = ViewportQtDragDistanceGl(this, reinterpret_cast<const GLint*>(viewport), delta);
-        if(distance < kViewportClickSlopGlPx && !pickRoomVolume(gl_win_x, gl_win_y))
+        if(distance < kViewportClickSlopGlPx)
         {
-            deselectRoomViewport();
+            // Click (not drag): full pick so controllers inside the spun room still win.
+            applyViewportClickPick(gl_win_x, gl_win_y);
         }
     }
     if(event->button() == Qt::LeftButton)
@@ -819,51 +831,11 @@ void LEDViewport3D::resetCameraFromKeyboard()
 
 void LEDViewport3D::keyPressEvent(QKeyEvent *event)
 {
-    if(event->key() == Qt::Key_W)
-    {
-        applyGizmoMoveMode();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_E)
-    {
-        applyGizmoRotateMode();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_R)
-    {
-        applyGizmoFreeroamMode();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_Q)
-    {
-        toggleGridSnapFromKeyboard();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_F)
-    {
-        focusSelectionFromKeyboard();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_Home)
-    {
-        resetCameraFromKeyboard();
-        event->accept();
-        return;
-    }
+    // W/E/R/Q/F/Home/Delete/Backspace are handled by installViewportKeyboardShortcuts
+    // (WidgetWithChildrenShortcut) — do not duplicate them here.
     if(event->key() == Qt::Key_Escape)
     {
         ClearSelection();
-        event->accept();
-        return;
-    }
-    if(event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
-    {
-        tryDeleteSelectedFromKeyboard();
         event->accept();
         return;
     }
