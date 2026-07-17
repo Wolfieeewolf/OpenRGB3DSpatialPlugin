@@ -55,12 +55,35 @@ GIT_COMMIT_ID   = $$system(git --git-dir $$_PRO_FILE_PWD_/.git --work-tree $$_PR
 GIT_COMMIT_DATE = $$system(git --git-dir $$_PRO_FILE_PWD_/.git --work-tree $$_PRO_FILE_PWD_ show -s --format=%ci HEAD)
 GIT_BRANCH      = $$system(git --git-dir $$_PRO_FILE_PWD_/.git --work-tree $$_PRO_FILE_PWD_ rev-parse --abbrev-ref HEAD)
 
+PROJECT_DESC = "Organize and control RGB devices in a 3D grid with spatial effects"
+PROJECT_NAME = "OpenRGB 3D Spatial LED Control"
+PROJECT_URL  = "https://gitlab.com/wolfieeewolf1/OpenRGB3DSpatialPlugin"
+
 DEFINES += \
     VERSION_STRING=\\"\"\"$$VERSION_STR\\"\"\" \
     BUILDDATE_STRING=\\"\"\"$$BUILDDATE\\"\"\" \
     GIT_COMMIT_ID=\\"\"\"$$GIT_COMMIT_ID\\"\"\" \
     GIT_COMMIT_DATE=\\"\"\"$$GIT_COMMIT_DATE\\"\"\" \
     GIT_BRANCH=\\"\"\"$$GIT_BRANCH\\"\"\"
+
+#-----------------------------------------------------------------------------------------------#
+# Generate OpenRGB plugin metadata JSON (required by PluginManager API v5)                      #
+#-----------------------------------------------------------------------------------------------#
+JSON_FILE_IN           = $$PWD/OpenRGB3DSpatialPlugin.json.in
+JSON_FILE_OUT          = $$PWD/OpenRGB3DSpatialPlugin.json
+
+prebuild_json.target   = prebuild_json_target
+prebuild_json.depends  = FORCE
+prebuild_json.commands = $$QMAKE_STREAM_EDITOR -e \"s|VERSION_NUM|$$VERSION_NUM|g\" \
+                                               -e \"s|VERSION_STR|$$VERSION_STR|g\" \
+                                               -e \"s|GIT_COMMIT_ID|$$GIT_COMMIT_ID|g\" \
+                                               -e \"s|PROJECT_DESC|$$PROJECT_DESC|g\" \
+                                               -e \"s|PROJECT_NAME|$$PROJECT_NAME|g\" \
+                                               -e \"s|PROJECT_URL|$$PROJECT_URL|g\" \
+                                               $$JSON_FILE_IN > $$JSON_FILE_OUT
+
+QMAKE_EXTRA_TARGETS   += prebuild_json
+PRE_TARGETDEPS        += prebuild_json_target
 
 INCLUDEPATH += \
     OpenRGB/ \

@@ -16,7 +16,7 @@ class QWidget;
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID OpenRGBPluginInterface_IID)
+    Q_PLUGIN_METADATA(IID OpenRGBPluginInterface_IID FILE "OpenRGB3DSpatialPlugin.json")
     Q_INTERFACES(OpenRGBPluginInterface)
 
 public:

@@ -17,6 +17,9 @@ _intermediate_release/
 /Makefile.*
 /.qmake.stash
 
+# Generated OpenRGB plugin metadata (from OpenRGB3DSpatialPlugin.json.in)
+/OpenRGB3DSpatialPlugin.json
+
 # Qt files
 *.pro.user
 *.pro.user.*
