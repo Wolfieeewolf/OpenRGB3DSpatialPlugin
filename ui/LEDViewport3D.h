@@ -190,8 +190,6 @@ private:
     void getRoomVolumeAabb(Vector3D& box_min, Vector3D& box_max) const;
     void getRoomTurntablePivot(float& pivot_x, float& pivot_y, float& pivot_z) const;
     ViewportMat4 roomTurntableMatrix() const;
-    void transformPickRay(float ray_origin[3], float ray_direction[3]) const;
-    void multiplyModelviewByRoomTurntable(float modelview[16]) const;
     bool buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3]);
     bool pickRoomVolume(int win_x, int win_y);
     void pushRoomTurntableGl() const;

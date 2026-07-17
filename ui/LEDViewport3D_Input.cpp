@@ -184,14 +184,6 @@ ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
                              Multiply(RotationX(room_turntable_pitch_deg), Translation(-pivot_x, -pivot_y, -pivot_z))));
 }
 
-void LEDViewport3D::transformPickRay(float ray_origin[3], float ray_direction[3]) const
-{
-    (void)ray_origin;
-    (void)ray_direction;
-    // Picking unprojects with view*turntable (same as draw), so the ray is already
-    // in layout space. Kept as a no-op for ABI/call-site stability.
-}
-
 bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3])
 {
     float modelview[16];
@@ -317,19 +309,6 @@ void LEDViewport3D::pushRoomTurntableGl() const
     glRotatef(room_turntable_yaw_deg, 0.0f, 1.0f, 0.0f);
     glRotatef(room_turntable_pitch_deg, 1.0f, 0.0f, 0.0f);
     glTranslatef(-pivot_x, -pivot_y, -pivot_z);
-}
-
-void LEDViewport3D::multiplyModelviewByRoomTurntable(float modelview[16]) const
-{
-    if(!hasRoomPreviewRotation())
-    {
-        return;
-    }
-
-    ViewportMat4 view{};
-    std::memcpy(view.m, modelview, sizeof(view.m));
-    const ViewportMat4 combined = ViewportMath::Multiply(view, roomTurntableMatrix());
-    std::memcpy(modelview, combined.m, sizeof(combined.m));
 }
 
 void LEDViewport3D::resetRoomPreviewSpin()
