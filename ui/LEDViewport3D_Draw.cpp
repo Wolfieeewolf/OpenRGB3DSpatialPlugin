@@ -87,7 +87,7 @@ void ProjectPointToScreen(float x,
     screen_y = viewport[3] - winY;
 }
 
-bool TryGetViewportGlobalLedIndex(RGBController* controller,
+bool TryGetViewportGlobalLedIndex(RGBControllerInterface* controller,
                                          unsigned int zone_idx,
                                          unsigned int led_idx,
                                          unsigned int* global_led_idx)
@@ -96,17 +96,17 @@ bool TryGetViewportGlobalLedIndex(RGBController* controller,
     {
         return false;
     }
-    if(zone_idx >= controller->zones.size())
+    if(zone_idx >= controller->GetZoneCount())
     {
         return false;
     }
-    if(led_idx >= controller->zones[zone_idx].leds_count)
+    if(led_idx >= controller->GetZoneLEDsCount(zone_idx))
     {
         return false;
     }
 
-    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
-    return (*global_led_idx < controller->colors.size());
+    *global_led_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
+    return (*global_led_idx < controller->GetLEDCount());
 }
 
 void GlWindowPointToQtLogical(const QWidget* widget, const GLint vp[4], double gl_x, double gl_y, double& qt_x, double& qt_y)
@@ -962,7 +962,7 @@ size_t LEDViewport3D::populateLedDrawBuffers(ControllerTransform* ctrl)
             return color;
         }
 
-        const RGBColor live_color = led_pos.controller->colors[global_led_idx];
+        const RGBColor live_color = led_pos.controller->GetColor(global_led_idx);
         if(color == 0x00FFFFFF)
         {
             return live_color;

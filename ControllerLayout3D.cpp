@@ -19,7 +19,7 @@ constexpr unsigned int MATRIX_MAP_NA = 0xFFFFFFFFu;
 constexpr unsigned int DEVICE_VIEW_MAX_COLS = 20;
 constexpr float ZONE_STACK_PAD = 1.0f;
 
-static LEDPosition3D MakeLedPosition(RGBController* controller, unsigned int zone_idx, unsigned int led_idx, float x, float y, float z)
+static LEDPosition3D MakeLedPosition(RGBControllerInterface* controller, unsigned int zone_idx, unsigned int led_idx, float x, float y, float z)
 {
     LEDPosition3D led_pos;
     led_pos.controller = controller;
@@ -69,7 +69,7 @@ static bool ResolveZoneLedIndex(const zone* current_zone, unsigned int map_val, 
 }
 
 static void AppendLinearWrappedZone(
-    RGBController* controller,
+    RGBControllerInterface* controller,
     unsigned int zone_idx,
     unsigned int led_count,
     unsigned int segment_start_led,
@@ -91,7 +91,7 @@ static void AppendLinearWrappedZone(
 }
 
 static void AppendHeuristicBucketZone(
-    RGBController* controller,
+    RGBControllerInterface* controller,
     unsigned int zone_idx,
     const zone* current_zone,
     int grid_x,
@@ -122,7 +122,7 @@ static void AppendHeuristicBucketZone(
 }
 } // namespace
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y, bool center_layout)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBControllerInterface* controller, int grid_x, int grid_y, bool center_layout)
 {
     std::vector<LEDPosition3D> positions;
     if(!controller) return positions;
@@ -130,16 +130,17 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     unsigned int fallback_global_idx = 0;
     float zone_stack_y = 0.0f;
 
-    for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
+    for(unsigned int zone_idx = 0; zone_idx < controller->GetZoneCount(); zone_idx++)
     {
-        zone* current_zone = &controller->zones[zone_idx];
+        zone current_zone_data = controller->GetZone(zone_idx);
+        const zone* current_zone = &current_zone_data;
         std::vector<LEDPosition3D> zone_positions;
         float zone_max_y = zone_stack_y;
         bool zone_layout_applied = false;
 
-        if(current_zone->type == ZONE_TYPE_MATRIX && current_zone->matrix_map != nullptr)
+        if(current_zone->type == ZONE_TYPE_MATRIX && current_zone->matrix_map.map.size() > 0)
         {
-            matrix_map_type* map = current_zone->matrix_map;
+            const matrix_map_type* map = &current_zone->matrix_map;
             std::vector<bool> placed(current_zone->leds_count, false);
             std::vector<float> coord_x(current_zone->leds_count, 0.0f);
             std::vector<float> coord_y(current_zone->leds_count, 0.0f);
@@ -307,7 +308,7 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
     return positions;
 }
 
-std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBController* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout)
+std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout)
 {
     std::vector<LEDPosition3D> positions = GenerateCustomGridLayout(controller, grid_x, grid_y, center_layout);
 

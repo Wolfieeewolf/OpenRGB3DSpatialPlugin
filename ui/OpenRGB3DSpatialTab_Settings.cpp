@@ -15,7 +15,7 @@
 #include <QUrl>
 #include <algorithm>
 #include <exception>
-#include "LogManager.h"
+#include "PluginLog.h"
 
 void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) const
 {

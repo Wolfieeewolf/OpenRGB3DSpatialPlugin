@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectGlobalSettingsPanel.h"
@@ -8,7 +8,7 @@
 #include "ZoneGrid3D.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "PluginSettingsPaths.h"
 #include "PluginUiUtils.h"
 #include "SettingsManager.h"

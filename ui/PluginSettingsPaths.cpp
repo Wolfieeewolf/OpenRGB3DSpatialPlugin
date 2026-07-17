@@ -27,7 +27,7 @@ bool IsStackPresetFile(const filesystem::path& path)
     return stem.length() > 6 && stem.compare(stem.length() - 6, 6, ".stack") == 0;
 }
 
-void EnsureSpatialShadersFolder(ResourceManagerInterface* rm)
+void EnsureSpatialShadersFolder(OpenRGBPluginAPIInterface* rm)
 {
     if(!rm)
     {
@@ -38,7 +38,7 @@ void EnsureSpatialShadersFolder(ResourceManagerInterface* rm)
     filesystem::create_directories(SpatialShadersDir(rm), ec);
 }
 
-void EnsurePluginDataLayout(ResourceManagerInterface* rm)
+void EnsurePluginDataLayout(OpenRGBPluginAPIInterface* rm)
 {
     if(!rm)
     {

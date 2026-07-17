@@ -70,10 +70,10 @@ ZoneTargetSelection ResolveZoneTarget(ZoneManager3D* zone_manager,
     return selection;
 }
 
-const std::unordered_set<RGBController*>* ResolveSkipPhysicalControllers(
+const std::unordered_set<RGBControllerInterface*>* ResolveSkipPhysicalControllers(
     const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
-    const std::unordered_set<RGBController*>* skip_physical_controllers,
-    std::unordered_set<RGBController*>& owned_local)
+    const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
+    std::unordered_set<RGBControllerInterface*>& owned_local)
 {
     if(skip_physical_controllers)
     {
@@ -130,7 +130,7 @@ struct ZoneLedAggregate
 bool TryAggregateZoneTargetLeds(ZoneManager3D* zone_manager,
                                 const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                 int zone_index,
-                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                 bool skip_hidden_by_virtual,
                                 ZoneLedAggregate& out)
 {
@@ -141,8 +141,8 @@ bool TryAggregateZoneTargetLeds(ZoneManager3D* zone_manager,
         return false;
     }
 
-    std::unordered_set<RGBController*> owned_local;
-    const std::unordered_set<RGBController*>* skip_phys =
+    std::unordered_set<RGBControllerInterface*> owned_local;
+    const std::unordered_set<RGBControllerInterface*>* skip_phys =
         ResolveSkipPhysicalControllers(controller_transforms, skip_physical_controllers, owned_local);
 
     float room_min_x = std::numeric_limits<float>::max();
@@ -219,7 +219,7 @@ bool TryAggregateZoneTargetLeds(ZoneManager3D* zone_manager,
 bool TryComputeZoneGridBounds(ZoneManager3D* zone_manager,
                               const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                               int zone_index,
-                              const std::unordered_set<RGBController*>* skip_physical_controllers,
+                              const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                               bool skip_hidden_by_virtual,
                               ZoneGridBounds& out_bounds)
 {
@@ -242,7 +242,7 @@ bool TryComputeZoneGridBounds(ZoneManager3D* zone_manager,
 bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
                                const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                int zone_index,
-                               const std::unordered_set<RGBController*>* skip_physical_controllers,
+                               const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                bool skip_hidden_by_virtual,
                                bool room_aligned,
                                Vector3D* out_centroid)
@@ -281,7 +281,7 @@ bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
 bool TryComputeZoneAnchorCenter(ZoneManager3D* zone_manager,
                                 const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                 int zone_index,
-                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                 bool skip_hidden_by_virtual,
                                 bool room_aligned,
                                 Vector3D* out_center)
@@ -310,7 +310,7 @@ bool TryComputeZoneAnchorCenter(ZoneManager3D* zone_manager,
 bool TryMakeZoneGridContextPair(ZoneManager3D* zone_manager,
                                 const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                 int zone_index,
-                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                 bool skip_hidden_by_virtual,
                                 float room_grid_scale_mm,
                                 float world_grid_scale_mm,

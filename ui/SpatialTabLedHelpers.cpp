@@ -2,7 +2,7 @@
 
 #include "SpatialTabLedHelpers.h"
 
-bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
+bool TryGetObjectCreatorGlobalLedIndex(RGBControllerInterface* controller,
                                       unsigned int zone_idx,
                                       unsigned int led_idx,
                                       unsigned int* global_led_idx)
@@ -11,21 +11,21 @@ bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
     {
         return false;
     }
-    if(zone_idx >= controller->zones.size())
+    if(zone_idx >= controller->GetZoneCount())
     {
         return false;
     }
-    if(led_idx >= controller->zones[zone_idx].leds_count)
+    if(led_idx >= controller->GetZoneLEDsCount(zone_idx))
     {
         return false;
     }
 
-    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
-    return (*global_led_idx < controller->leds.size());
+    *global_led_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
+    return (*global_led_idx < controller->GetLEDCount());
 }
 
 bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                                    RGBController* controller,
+                                    RGBControllerInterface* controller,
                                     float& out_x,
                                     float& out_y,
                                     float& out_z)

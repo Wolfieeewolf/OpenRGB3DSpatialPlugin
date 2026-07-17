@@ -4,7 +4,7 @@
 #include "CustomControllerDeviceList.h"
 #include "CustomControllerDialog.h"
 #include "ControllerDisplayUtils.h"
-#include "ResourceManagerInterface.h"
+#include "OpenRGBPluginInterface.h"
 #include "RGBController.h"
 #include "OpenRGBPluginsFont.h"
 #include "PluginClickableLabel.h"
@@ -21,7 +21,7 @@
 #include <QToolButton>
 #include <algorithm>
 
-CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBController* controller,
+CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBControllerInterface* controller,
                                                              int controller_index,
                                                              CustomControllerDialog* host,
                                                              QWidget* parent)
@@ -419,7 +419,7 @@ CustomControllerDeviceWidget* CustomControllerDeviceList::widgetForController(in
     return nullptr;
 }
 
-void CustomControllerDeviceList::rebuild(ResourceManagerInterface* resource_manager, CustomControllerDialog* host)
+void CustomControllerDeviceList::rebuild(OpenRGBPluginAPIInterface* resource_manager, CustomControllerDialog* host)
 {
     const int previous_controller = selected_controller_index_;
     clearWidgets();
@@ -430,12 +430,12 @@ void CustomControllerDeviceList::rebuild(ResourceManagerInterface* resource_mana
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     device_widgets_.reserve(controllers.size());
 
     for(unsigned int controller_index = 0; controller_index < controllers.size(); controller_index++)
     {
-        RGBController* controller = controllers[controller_index];
+        RGBControllerInterface* controller = controllers[controller_index];
         if(!controller)
         {
             continue;

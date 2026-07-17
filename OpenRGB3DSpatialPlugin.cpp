@@ -3,9 +3,14 @@
 #include "OpenRGB3DSpatialPlugin.h"
 #include "OpenRGB3DSpatialTab.h"
 #include "Game/GameTelemetryBridge.h"
-#include "ResourceManagerInterface.h"
+#include "ResourceManagerCallback.h"
 
-ResourceManagerInterface* OpenRGB3DSpatialPlugin::RMPointer = nullptr;
+OpenRGBPluginAPIInterface* OpenRGB3DSpatialPlugin::APIPointer = nullptr;
+
+/*-------------------------------------------------------------*\
+| Global used by PluginLog.h to route LOG_* through the host.   |
+\*-------------------------------------------------------------*/
+OpenRGBPluginAPIInterface* g_3dspatial_plugin_api = nullptr;
 
 OpenRGB3DSpatialPlugin::OpenRGB3DSpatialPlugin() = default;
 
@@ -32,30 +37,28 @@ unsigned int OpenRGB3DSpatialPlugin::GetPluginAPIVersion()
     return OPENRGB_PLUGIN_API_VERSION;
 }
 
-void OpenRGB3DSpatialPlugin::Load(ResourceManagerInterface* RM)
+void OpenRGB3DSpatialPlugin::Load(OpenRGBPluginAPIInterface* plugin_api_ptr)
 {
-    RMPointer = RM;
-    ui        = nullptr;
+    APIPointer            = plugin_api_ptr;
+    g_3dspatial_plugin_api = plugin_api_ptr;
+    ui                    = nullptr;
     if(!game_telemetry_bridge)
     {
         game_telemetry_bridge = std::make_unique<GameTelemetryBridge>();
     }
-    game_telemetry_bridge->Register(RMPointer);
+    game_telemetry_bridge->Register(APIPointer);
 }
 
 QWidget* OpenRGB3DSpatialPlugin::GetWidget()
 {
-    if(!RMPointer)
+    if(!APIPointer)
     {
         return nullptr;
     }
 
-    ui = new OpenRGB3DSpatialTab(RMPointer);
+    ui = new OpenRGB3DSpatialTab(APIPointer);
 
     ui->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
-    RMPointer->RegisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
-    RMPointer->RegisterDetectionProgressCallback(DetectionProgressCallback, ui);
 
     return ui;
 }
@@ -69,46 +72,63 @@ void OpenRGB3DSpatialPlugin::Unload()
 {
     if(game_telemetry_bridge)
     {
-        game_telemetry_bridge->Unregister(RMPointer);
+        game_telemetry_bridge->Unregister(APIPointer);
         game_telemetry_bridge.reset();
     }
 
-    if(RMPointer && ui != nullptr)
+    if(APIPointer && ui != nullptr)
     {
-        RMPointer->UnregisterDeviceListChangeCallback(DeviceListChangedCallback, ui);
-        RMPointer->UnregisterDetectionProgressCallback(DetectionProgressCallback, ui);
         ui->SavePluginUiSettings();
     }
 
     ui = nullptr;
 }
 
-void OpenRGB3DSpatialPlugin::DeviceListChangedCallback(void* o)
+void OpenRGB3DSpatialPlugin::OnProfileAboutToLoad()
 {
-    if(!o || !RMPointer)
-    {
-        return;
-    }
-
-    if(RMPointer->GetDetectionPercent() != 100)
-    {
-        return;
-    }
-
-    QMetaObject::invokeMethod(static_cast<OpenRGB3DSpatialTab*>(o), "UpdateDeviceList", Qt::QueuedConnection);
 }
 
-void OpenRGB3DSpatialPlugin::DetectionProgressCallback(void* o)
+void OpenRGB3DSpatialPlugin::OnProfileLoad(nlohmann::json profile_data)
 {
-    if(!o || !RMPointer)
+    if(ui != nullptr)
+    {
+        ui->OnProfileLoad(profile_data);
+    }
+}
+
+nlohmann::json OpenRGB3DSpatialPlugin::OnProfileSave()
+{
+    if(ui != nullptr)
+    {
+        return ui->OnProfileSave();
+    }
+    return nlohmann::json::object();
+}
+
+unsigned char* OpenRGB3DSpatialPlugin::OnSDKCommand(unsigned int /*pkt_id*/, unsigned char* /*pkt_data*/, unsigned int* /*pkt_size*/)
+{
+    return nullptr;
+}
+
+void OpenRGB3DSpatialPlugin::ProfileManagerUpdated(unsigned int /*update_reason*/)
+{
+}
+
+void OpenRGB3DSpatialPlugin::ResourceManagerUpdated(unsigned int update_reason)
+{
+    if(!APIPointer || ui == nullptr)
     {
         return;
     }
 
-    if(RMPointer->GetDetectionPercent() != 100)
+    if(update_reason == RESOURCEMANAGER_UPDATE_REASON_DEVICE_LIST_UPDATED
+    || update_reason == RESOURCEMANAGER_UPDATE_REASON_DETECTION_COMPLETE)
     {
-        return;
+        QMetaObject::invokeMethod(ui, "UpdateDeviceList", Qt::QueuedConnection);
+        OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded(ui);
     }
+}
 
-    QMetaObject::invokeMethod(static_cast<OpenRGB3DSpatialTab*>(o), "UpdateDeviceList", Qt::QueuedConnection);
+void OpenRGB3DSpatialPlugin::SettingsManagerUpdated(unsigned int /*update_reason*/)
+{
 }

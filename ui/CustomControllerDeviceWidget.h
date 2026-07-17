@@ -11,7 +11,7 @@ class QResizeEvent;
 class QComboBox;
 class PluginClickableLabel;
 class QToolButton;
-class RGBController;
+class RGBControllerInterface;
 class CustomControllerDialog;
 
 namespace Ui {
@@ -23,13 +23,13 @@ class CustomControllerDeviceWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit CustomControllerDeviceWidget(RGBController* controller,
+    explicit CustomControllerDeviceWidget(RGBControllerInterface* controller,
                                           int controller_index,
                                           CustomControllerDialog* host,
                                           QWidget* parent = nullptr);
     ~CustomControllerDeviceWidget() override;
 
-    RGBController* controller() const { return controller_; }
+    RGBControllerInterface* controller() const { return controller_; }
     int            controllerIndex() const { return controller_index_; }
 
     CustomControllerSourceRef currentSource() const;
@@ -66,7 +66,7 @@ private:
     static constexpr int kActionColumn = 2;
 
     QString                   device_name_text_;
-    RGBController*            controller_;
+    RGBControllerInterface*            controller_;
     int                       controller_index_;
     CustomControllerDialog*   host_;
     bool                      row_selected_;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ZoneManager3D.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 
 ZoneManager3D::ZoneManager3D() = default;
 

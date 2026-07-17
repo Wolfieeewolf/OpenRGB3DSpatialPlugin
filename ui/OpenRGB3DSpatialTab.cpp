@@ -36,7 +36,7 @@
 #include "LEDViewport3D.h"
 #include "PluginUiUtils.h"
 #include "ControllerLayout3D.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "CustomControllerDialog.h"
 #include "DisplayPlaneManager.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
@@ -93,7 +93,7 @@ void ResolveEffectLibraryItem(QListWidgetItem* item, QString& out_class, QString
 }
 }
 
-OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent) :
+OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(OpenRGBPluginAPIInterface* rm, QWidget *parent) :
     QWidget(parent),
     resource_manager(rm)
 {
@@ -123,11 +123,6 @@ OpenRGB3DSpatialTab::OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *
     effect_timer = new QTimer(this);
     effect_timer->setTimerType(Qt::CoarseTimer);
     connect(effect_timer, &QTimer::timeout, this, &OpenRGB3DSpatialTab::effectTimerTimeout);
-
-    if(resource_manager)
-    {
-        resource_manager->RegisterDetectionEndCallback(&OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded, this);
-    }
 }
 
 void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
@@ -147,11 +142,6 @@ void OpenRGB3DSpatialTab::RunDeferredStartupTasks()
 
 OpenRGB3DSpatialTab::~OpenRGB3DSpatialTab()
 {
-    if(resource_manager)
-    {
-        resource_manager->UnregisterDetectionEndCallback(&OpenRGB3DSpatialTab::OnOpenRgbDetectionEnded, this);
-    }
-
     if(AudioInputManager* audio = AudioInputManager::instance())
     {
         audio->stop();
@@ -522,7 +512,7 @@ void OpenRGB3DSpatialTab::SetControllersToCustomMode(bool& has_valid_controller)
         {
             VirtualController3D* virtual_ctrl = transform->virtual_controller;
             const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
-            std::set<RGBController*> controllers_to_set;
+            std::set<RGBControllerInterface*> controllers_to_set;
             for(unsigned int i = 0; i < mappings.size(); i++)
             {
                 if(mappings[i].controller)
@@ -531,7 +521,7 @@ void OpenRGB3DSpatialTab::SetControllersToCustomMode(bool& has_valid_controller)
                 }
             }
 
-            for(std::set<RGBController*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
+            for(std::set<RGBControllerInterface*>::iterator it = controllers_to_set.begin(); it != controllers_to_set.end(); ++it)
             {
                 (*it)->SetCustomMode();
                 has_valid_controller = true;
@@ -539,7 +529,7 @@ void OpenRGB3DSpatialTab::SetControllersToCustomMode(bool& has_valid_controller)
             continue;
         }
 
-        RGBController* controller = transform->controller;
+        RGBControllerInterface* controller = transform->controller;
         if(!controller)
         {
             continue;
@@ -1277,26 +1267,37 @@ void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_m
 nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
 {
     if(!resource_manager) return nlohmann::json::object();
-    SettingsManager* mgr = resource_manager->GetSettingsManager();
-    return mgr ? mgr->GetSettings("3DSpatialPlugin") : nlohmann::json::object();
+    return resource_manager->GetSettings("3DSpatialPlugin");
+}
+
+void OpenRGB3DSpatialTab::OnProfileLoad(const nlohmann::json& /*profile_data*/)
+{
+    /*-----------------------------------------------------*\
+    | TODO(apiv5): restore plugin scene/effects state from  |
+    | the OpenRGB profile payload.                           |
+    \*-----------------------------------------------------*/
+}
+
+nlohmann::json OpenRGB3DSpatialTab::OnProfileSave() const
+{
+    /*-----------------------------------------------------*\
+    | TODO(apiv5): serialize plugin scene/effects state     |
+    | into the OpenRGB profile payload.                     |
+    \*-----------------------------------------------------*/
+    return nlohmann::json::object();
 }
 
 void OpenRGB3DSpatialTab::SetPluginSettings(const nlohmann::json& settings)
 {
     if(!resource_manager) return;
-    SettingsManager* mgr = resource_manager->GetSettingsManager();
-    if(mgr)
-    {
-        mgr->SetSettings("3DSpatialPlugin", settings);
-        mgr->SaveSettings();
-    }
+    resource_manager->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->SaveSettings();
 }
 
 void OpenRGB3DSpatialTab::SetPluginSettingsNoSave(const nlohmann::json& settings)
 {
     if(!resource_manager) return;
-    SettingsManager* mgr = resource_manager->GetSettingsManager();
-    if(mgr) mgr->SetSettings("3DSpatialPlugin", settings);
+    resource_manager->SetSettings("3DSpatialPlugin", settings);
 }
 
 void OpenRGB3DSpatialTab::PersistRoomGridOverlayToSettings()

@@ -1,11 +1,11 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "EffectListManager3D.h"
 #include "EffectStackBlendRow.h"
 #include "PluginSettingsPaths.h"
 #include "SettingsManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <QFile>
 #include <QMessageBox>

@@ -6,7 +6,7 @@
 #include "CustomControllerTypes.h"
 #include "CustomControllerMappingUtils.h"
 #include "LEDPosition3D.h"
-#include "ResourceManagerInterface.h"
+#include "OpenRGBPluginInterface.h"
 #include "RGBController.h"
 
 #include <algorithm>
@@ -54,7 +54,7 @@ inline bool ComputeSelectionBounds(const std::set<std::pair<int, int>>& cells,
     return true;
 }
 
-inline bool TryGetDialogGlobalLedIndex(RGBController* controller,
+inline bool TryGetDialogGlobalLedIndex(RGBControllerInterface* controller,
                                        unsigned int zone_idx,
                                        unsigned int led_idx,
                                        unsigned int* global_led_idx)
@@ -63,26 +63,26 @@ inline bool TryGetDialogGlobalLedIndex(RGBController* controller,
     {
         return false;
     }
-    if(zone_idx >= controller->zones.size())
+    if(zone_idx >= controller->GetZoneCount())
     {
         return false;
     }
-    if(led_idx >= controller->zones[zone_idx].leds_count)
+    if(led_idx >= controller->GetZoneLEDsCount(zone_idx))
     {
         return false;
     }
 
-    *global_led_idx = controller->zones[zone_idx].start_idx + led_idx;
+    *global_led_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
     return true;
 }
 
-inline RGBController* GetControllerByRow(ResourceManagerInterface* resource_manager, int row)
+inline RGBControllerInterface* GetControllerByRow(OpenRGBPluginAPIInterface* resource_manager, int row)
 {
     if(!resource_manager || row < 0)
     {
         return nullptr;
     }
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     if(row < 0 || row >= (int)controllers.size())
     {
         return nullptr;
@@ -150,11 +150,11 @@ inline std::vector<LEDPosition3D> PositionsForLayoutBounds(const std::vector<LED
 }
 
 inline bool IsLedMappedOnLayer(const std::vector<GridLEDMapping>& mappings,
-                              RGBController*              controller,
+                              RGBControllerInterface*              controller,
                               unsigned int                zone_idx,
                               unsigned int                led_idx,
                               int                         layer,
-                              const std::vector<RGBController*>& controllers)
+                              const std::vector<RGBControllerInterface*>& controllers)
 {
     for(const GridLEDMapping& mapping : mappings)
     {
@@ -291,7 +291,7 @@ inline CellIdentifyState GetCellIdentifyState(int x,
                                              int y,
                                              int layer,
                                              const std::vector<GridLEDMapping>& mappings,
-                                             const std::map<std::pair<RGBController*, unsigned int>, RGBColor>& identified)
+                                             const std::map<std::pair<RGBControllerInterface*, unsigned int>, RGBColor>& identified)
 {
     unsigned int mapped_count = 0;
     unsigned int identified_count = 0;
@@ -334,7 +334,7 @@ inline CellIdentifyState GetCellIdentifyState(int x,
 inline IdentifyUiState EvaluateIdentifyUiState(const std::set<std::pair<int, int>>& cells,
                                                int layer,
                                                const std::vector<GridLEDMapping>& mappings,
-                                               const std::map<std::pair<RGBController*, unsigned int>, RGBColor>& identified)
+                                               const std::map<std::pair<RGBControllerInterface*, unsigned int>, RGBColor>& identified)
 {
     if(cells.empty())
     {
@@ -384,12 +384,12 @@ inline IdentifyUiState EvaluateIdentifyUiState(const std::set<std::pair<int, int
 
 inline bool MappingHasZoneLed(const GridLEDMapping& mapping)
 {
-    if(!mapping.controller || mapping.zone_idx >= mapping.controller->zones.size())
+    if(!mapping.controller || mapping.zone_idx >= mapping.controller->GetZoneCount())
     {
         return false;
     }
 
-    return mapping.led_idx < mapping.controller->zones[mapping.zone_idx].leds_count;
+    return mapping.led_idx < mapping.controller->GetZoneLEDsCount(mapping.zone_idx);
 }
 
 inline unsigned int MappingDisplayLedNumber(const GridLEDMapping& mapping)

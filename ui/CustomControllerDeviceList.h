@@ -11,7 +11,7 @@ class QScrollArea;
 class QVBoxLayout;
 class CustomControllerDeviceWidget;
 class CustomControllerDialog;
-class ResourceManagerInterface;
+class OpenRGBPluginAPIInterface;
 
 namespace Ui {
 class CustomControllerDeviceList;
@@ -25,7 +25,7 @@ public:
     explicit CustomControllerDeviceList(QWidget* parent = nullptr);
     ~CustomControllerDeviceList() override;
 
-    void rebuild(ResourceManagerInterface* resource_manager, CustomControllerDialog* host);
+    void rebuild(OpenRGBPluginAPIInterface* resource_manager, CustomControllerDialog* host);
     void refreshFromHost(int only_controller_index = -1);
 
     CustomControllerSourceRef selectedSource() const;

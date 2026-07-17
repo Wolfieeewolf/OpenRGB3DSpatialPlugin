@@ -34,7 +34,7 @@ class QHideEvent;
 class QShowEvent;
 class QStackedWidget;
 
-#include "ResourceManagerInterface.h"
+#include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
 #include "LEDViewport3D.h"
 #include "VirtualController3D.h"
@@ -86,12 +86,18 @@ class OpenRGB3DSpatialTab : public QWidget
     friend class DisplayPlaneDialog;
 
 public:
-    explicit OpenRGB3DSpatialTab(ResourceManagerInterface* rm, QWidget *parent = nullptr);
+    explicit OpenRGB3DSpatialTab(OpenRGBPluginAPIInterface* rm, QWidget *parent = nullptr);
     ~OpenRGB3DSpatialTab();
 
     float GetGridScaleMM() const { return grid_scale_mm; }
 
     void SavePluginUiSettings();
+
+    /*-----------------------------------------------------*\
+    | OpenRGB profile integration (Plugin API v5+)          |
+    \*-----------------------------------------------------*/
+    void OnProfileLoad(const nlohmann::json& profile_data);
+    nlohmann::json OnProfileSave() const;
 
     double EffectiveGridScaleMm() const;
     void SetScenePositionControlsMm(double x_mm, double y_mm, double z_mm);
@@ -287,9 +293,9 @@ private:
     int ResolveZoneTargetSelection(const QComboBox* combo) const;
     void UpdateEffectCombo();
     void SaveZones();
-    bool IsItemInScene(RGBController* controller, int granularity, int item_idx) const;
-    int GetUnassignedZoneCount(RGBController* controller) const;
-    int GetUnassignedLEDCount(RGBController* controller) const;
+    bool IsItemInScene(RGBControllerInterface* controller, int granularity, int item_idx) const;
+    int GetUnassignedZoneCount(RGBControllerInterface* controller) const;
+    int GetUnassignedLEDCount(RGBControllerInterface* controller) const;
     struct EffectSettingsUiMount
     {
         QWidget* container = nullptr;
@@ -474,7 +480,7 @@ private:
     SpatialControllerCardList* sceneControllerCards() const;
 
     Ui::OpenRGB3DSpatialTab*    ui = nullptr;
-    ResourceManagerInterface*   resource_manager;
+    OpenRGBPluginAPIInterface*   resource_manager;
 
     LEDViewport3D*              viewport = nullptr;
 
@@ -585,6 +591,7 @@ private:
     void SelectAvailableControllerEntry(int type_code, int object_index);
     bool AddCustomControllerToScene(int virtual_controller_index);
 
+public:
     static void OnOpenRgbDetectionEnded(void* context);
 };
 

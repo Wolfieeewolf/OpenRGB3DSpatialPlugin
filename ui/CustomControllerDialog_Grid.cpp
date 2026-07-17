@@ -1068,7 +1068,7 @@ bool CustomControllerDialog::IsMatrixHoleCell(int x, int y) const
     return matrix_hole_cells.find(GridCellKey(x, y)) != matrix_hole_cells.end();
 }
 
-void CustomControllerDialog::RebuildMatrixHoleMask(RGBController* controller, int anchor_x, int anchor_y)
+void CustomControllerDialog::RebuildMatrixHoleMask(RGBControllerInterface* controller, int anchor_x, int anchor_y)
 {
     matrix_hole_cells.clear();
     if(!controller)
@@ -1079,15 +1079,20 @@ void CustomControllerDialog::RebuildMatrixHoleMask(RGBController* controller, in
     const int grid_w = width_spin->value();
     const int grid_h = height_spin->value();
 
-    for(unsigned int zone_idx = 0; zone_idx < controller->zones.size(); zone_idx++)
+    for(unsigned int zone_idx = 0; zone_idx < controller->GetZoneCount(); zone_idx++)
     {
-        zone* current_zone = &controller->zones[zone_idx];
-        if(current_zone->type != ZONE_TYPE_MATRIX || current_zone->matrix_map == nullptr)
+        if(controller->GetZoneType(zone_idx) != ZONE_TYPE_MATRIX)
         {
             continue;
         }
 
-        matrix_map_type* map = current_zone->matrix_map;
+        matrix_map_type map_data = controller->GetZoneMatrixMap(zone_idx);
+        if(map_data.map.empty())
+        {
+            continue;
+        }
+
+        const matrix_map_type* map = &map_data;
         for(unsigned int led_y = 0; led_y < map->height; led_y++)
         {
             for(unsigned int led_x = 0; led_x < map->width; led_x++)

@@ -13,7 +13,7 @@
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "CustomControllerDialog.h"
 #include "PluginUiUtils.h"
 #include "RGBController/RGBController.h"
@@ -83,7 +83,7 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
     available_controllers_.clear();
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
 
     std::unordered_set<const VirtualController3D*> virtuals_in_scene;
     for(size_t transform_index = 0; transform_index < controller_transforms.size(); transform_index++)
@@ -293,7 +293,7 @@ void OpenRGB3DSpatialTab::GetSuggestedSpacingForAvailableRgb(int controller_inde
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     if(controller_index >= (int)controllers.size() || !controllers[controller_index])
     {
         return;
@@ -858,13 +858,13 @@ void OpenRGB3DSpatialTab::PopulateAvailableItemCombo(const SpatialControllerEntr
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     if(type_code >= (int)controllers.size() || !controllers[type_code])
     {
         return;
     }
 
-    RGBController* controller = controllers[type_code];
+    RGBControllerInterface* controller = controllers[type_code];
     if(granularity == 0)
     {
         if(!IsItemInScene(controller, granularity, 0))
@@ -875,7 +875,7 @@ void OpenRGB3DSpatialTab::PopulateAvailableItemCombo(const SpatialControllerEntr
     }
     else if(granularity == 1)
     {
-        for(unsigned int i = 0; i < controller->zones.size(); i++)
+        for(unsigned int i = 0; i < controller->GetZoneCount(); i++)
         {
             if(!IsItemInScene(controller, granularity, (int)i))
             {
@@ -886,7 +886,7 @@ void OpenRGB3DSpatialTab::PopulateAvailableItemCombo(const SpatialControllerEntr
     }
     else if(granularity == 2)
     {
-        for(unsigned int i = 0; i < controller->leds.size(); i++)
+        for(unsigned int i = 0; i < controller->GetLEDCount(); i++)
         {
             if(!IsItemInScene(controller, granularity, (int)i))
             {
@@ -1201,7 +1201,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
                                                     float spacing_z_mm,
                                                     bool  show_messages)
 {
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
 
     if(ctrl_idx == -1)
     {
@@ -1294,7 +1294,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
         return;
     }
 
-    RGBController* controller = controllers[ctrl_idx];
+    RGBControllerInterface* controller = controllers[ctrl_idx];
 
     std::unique_ptr<ControllerTransform> ctrl_transform = std::make_unique<ControllerTransform>();
     ctrl_transform->controller = controller;
@@ -1323,7 +1323,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
     }
     else if(granularity == 1)
     {
-        if(item_row < 0 || item_row >= (int)controller->zones.size())
+        if(item_row < 0 || item_row >= (int)controller->GetZoneCount())
         {
             return;
         }
@@ -1346,7 +1346,7 @@ void OpenRGB3DSpatialTab::AddControllerEntryToScene(int  ctrl_idx,
     }
     else if(granularity == 2)
     {
-        if(item_row < 0 || item_row >= (int)controller->leds.size())
+        if(item_row < 0 || item_row >= (int)controller->GetLEDCount())
         {
             return;
         }

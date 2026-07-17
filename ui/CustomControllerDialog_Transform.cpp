@@ -112,7 +112,8 @@ void CustomControllerDialog::refresh_colors()
     if(resource_manager)
     {
         const int unresolved_before = CustomControllerMapping::UnresolvedCount(led_mappings);
-        CustomControllerMapping::RebindAll(led_mappings, resource_manager->GetRGBControllers());
+        std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
+        CustomControllerMapping::RebindAll(led_mappings, controllers);
         const int unresolved_after = CustomControllerMapping::UnresolvedCount(led_mappings);
         if(unresolved_before != unresolved_after)
         {

@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
 #include "ControllerDisplayUtils.h"
@@ -8,7 +8,7 @@
 #include "GridSpaceUtils.h"
 #include "ControllerLayout3D.h"
 #include "DisplayPlaneManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "TransformJson.h"
 #include "CustomControllerDialog.h"
 #include "SettingsManager.h"
@@ -450,8 +450,8 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
     clearAllClicked();
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
-    std::unordered_map<RGBController*, Vector3D> physical_spacing_by_controller;
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
+    std::unordered_map<RGBControllerInterface*, Vector3D> physical_spacing_by_controller;
 
     {
         const nlohmann::json& controllers_array = layout_json["controllers"];
@@ -462,7 +462,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
             std::string ctrl_location = controller_json["location"].get<std::string>();
             std::string ctrl_type = controller_json["type"].get<std::string>();
 
-            RGBController* controller = nullptr;
+            RGBControllerInterface* controller = nullptr;
             bool is_virtual = (ctrl_type == "virtual");
 
             if(!is_virtual)
@@ -494,7 +494,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
 
             if(!is_virtual && controller)
             {
-                std::unordered_map<RGBController*, Vector3D>::iterator it = physical_spacing_by_controller.find(controller);
+                std::unordered_map<RGBControllerInterface*, Vector3D>::iterator it = physical_spacing_by_controller.find(controller);
                 if(it != physical_spacing_by_controller.end())
                 {
                     ctrl_transform->led_spacing_mm_x = it->second.x;
@@ -675,7 +675,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 else if(granularity == 1)
                 {
                     name = QString("[Zone] ") + ControllerDisplay::FormatRgbControllerTitle(controller);
-                    if(item_idx >= 0 && item_idx < (int)controller->zones.size())
+                    if(item_idx >= 0 && item_idx < (int)controller->GetZoneCount())
                     {
                         name += " - " + QString::fromStdString(controller->GetZoneName((unsigned int)item_idx));
                     }
@@ -683,7 +683,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 else if(granularity == 2)
                 {
                     name = QString("[LED] ") + ControllerDisplay::FormatRgbControllerTitle(controller);
-                    if(item_idx >= 0 && item_idx < (int)controller->leds.size())
+                    if(item_idx >= 0 && item_idx < (int)controller->GetLEDCount())
                     {
                         name += " - " + QString::fromStdString(controller->GetLEDName((unsigned int)item_idx));
                     }
@@ -691,7 +691,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                 else
                 {
                     name = ControllerDisplay::FormatRgbControllerTitle(controller);
-                    if(led_positions_size < controller->leds.size())
+                    if(led_positions_size < controller->GetLEDCount())
                     {
                         if(led_positions_size == 1)
                         {
@@ -707,7 +707,7 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
                         }
                         else
                         {
-                            if(first_zone_idx < controller->zones.size())
+                            if(first_zone_idx < controller->GetZoneCount())
                             {
                                 name = QString("[Zone] ") + name + " - " + QString::fromStdString(controller->GetZoneName(first_zone_idx));
                             }

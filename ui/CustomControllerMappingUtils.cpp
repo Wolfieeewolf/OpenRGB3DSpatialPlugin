@@ -46,12 +46,12 @@ bool LooksLikeNetworkLocation(const std::string& location)
     return location.find('.') != std::string::npos || location.find(':') != std::string::npos;
 }
 
-void CollectNameMatches(const std::vector<RGBController*>& controllers,
+void CollectNameMatches(const std::vector<RGBControllerInterface*>& controllers,
                         const std::string& controller_name,
-                        std::vector<RGBController*>& out)
+                        std::vector<RGBControllerInterface*>& out)
 {
     out.clear();
-    for(RGBController* controller : controllers)
+    for(RGBControllerInterface* controller : controllers)
     {
         if(controller && StringsEqualCaseInsensitive(controller_name, controller->GetName()))
         {
@@ -60,7 +60,7 @@ void CollectNameMatches(const std::vector<RGBController*>& controllers,
     }
 }
 
-bool MappingStructureValid(const GridLEDMapping& mapping, RGBController* controller)
+bool MappingStructureValid(const GridLEDMapping& mapping, RGBControllerInterface* controller)
 {
     if(!controller)
     {
@@ -70,11 +70,11 @@ bool MappingStructureValid(const GridLEDMapping& mapping, RGBController* control
     {
         return true;
     }
-    if(mapping.zone_idx >= controller->zones.size())
+    if(mapping.zone_idx >= controller->GetZoneCount())
     {
         return false;
     }
-    const zone& z = controller->zones[mapping.zone_idx];
+    const zone z = controller->GetZone(mapping.zone_idx);
     if(mapping.granularity == 1)
     {
         return true;
@@ -82,7 +82,7 @@ bool MappingStructureValid(const GridLEDMapping& mapping, RGBController* control
     return mapping.led_idx < z.leds_count;
 }
 
-bool ControllerSupportsMappings(RGBController* controller,
+bool ControllerSupportsMappings(RGBControllerInterface* controller,
                                 const std::vector<const GridLEDMapping*>& mappings)
 {
     if(!controller)
@@ -99,7 +99,7 @@ bool ControllerSupportsMappings(RGBController* controller,
     return true;
 }
 
-unsigned int MappingMaxGlobalLedIndex(const GridLEDMapping& mapping, RGBController* controller)
+unsigned int MappingMaxGlobalLedIndex(const GridLEDMapping& mapping, RGBControllerInterface* controller)
 {
     if(!MappingStructureValid(mapping, controller))
     {
@@ -107,13 +107,13 @@ unsigned int MappingMaxGlobalLedIndex(const GridLEDMapping& mapping, RGBControll
     }
     if(mapping.granularity == 0)
     {
-        return controller->leds.empty() ? 0U : static_cast<unsigned int>(controller->leds.size() - 1);
+        return (controller->GetLEDCount() == 0) ? 0U : (controller->GetLEDCount() - 1);
     }
-    const zone& z = controller->zones[mapping.zone_idx];
+    const zone z = controller->GetZone(mapping.zone_idx);
     return z.start_idx + mapping.led_idx;
 }
 
-unsigned int GroupMaxGlobalLedIndex(RGBController* controller,
+unsigned int GroupMaxGlobalLedIndex(RGBControllerInterface* controller,
                                     const std::vector<const GridLEDMapping*>& mappings)
 {
     unsigned int max_idx = 0;
@@ -128,12 +128,12 @@ unsigned int GroupMaxGlobalLedIndex(RGBController* controller,
     return max_idx;
 }
 
-RGBController* PickBestStructureMatch(const std::vector<RGBController*>& candidates,
+RGBControllerInterface* PickBestStructureMatch(const std::vector<RGBControllerInterface*>& candidates,
                                       const std::vector<const GridLEDMapping*>& mappings)
 {
-    std::vector<RGBController*> viable;
+    std::vector<RGBControllerInterface*> viable;
     viable.reserve(candidates.size());
-    for(RGBController* controller : candidates)
+    for(RGBControllerInterface* controller : candidates)
     {
         if(ControllerSupportsMappings(controller, mappings))
         {
@@ -150,13 +150,13 @@ RGBController* PickBestStructureMatch(const std::vector<RGBController*>& candida
         return viable.front();
     }
 
-    RGBController* best         = nullptr;
+    RGBControllerInterface* best         = nullptr;
     int            best_distance = -1;
-    for(RGBController* controller : viable)
+    for(RGBControllerInterface* controller : viable)
     {
         const unsigned int max_used = GroupMaxGlobalLedIndex(controller, mappings);
         const int distance =
-            std::abs(static_cast<int>(controller->leds.size()) - static_cast<int>(max_used + 1));
+            std::abs(static_cast<int>(controller->GetLEDCount()) - static_cast<int>(max_used + 1));
         if(best == nullptr || distance < best_distance)
         {
             best          = controller;
@@ -165,11 +165,11 @@ RGBController* PickBestStructureMatch(const std::vector<RGBController*>& candida
     }
 
     int tie_count = 0;
-    for(RGBController* controller : viable)
+    for(RGBControllerInterface* controller : viable)
     {
         const unsigned int max_used = GroupMaxGlobalLedIndex(controller, mappings);
         const int distance =
-            std::abs(static_cast<int>(controller->leds.size()) - static_cast<int>(max_used + 1));
+            std::abs(static_cast<int>(controller->GetLEDCount()) - static_cast<int>(max_used + 1));
         if(distance == best_distance)
         {
             ++tie_count;
@@ -179,7 +179,7 @@ RGBController* PickBestStructureMatch(const std::vector<RGBController*>& candida
     return tie_count == 1 ? best : nullptr;
 }
 
-RGBController* UniqueNetworkNameMatch(const std::vector<RGBController*>& name_matches,
+RGBControllerInterface* UniqueNetworkNameMatch(const std::vector<RGBControllerInterface*>& name_matches,
                                       const std::string& stored_location)
 {
     if(!LooksLikeNetworkLocation(stored_location))
@@ -187,8 +187,8 @@ RGBController* UniqueNetworkNameMatch(const std::vector<RGBController*>& name_ma
         return nullptr;
     }
 
-    RGBController* network_match = nullptr;
-    for(RGBController* controller : name_matches)
+    RGBControllerInterface* network_match = nullptr;
+    for(RGBControllerInterface* controller : name_matches)
     {
         if(!controller || !LooksLikeNetworkLocation(controller->GetLocation()))
         {
@@ -226,13 +226,13 @@ std::string GroupStoredLocation(const std::vector<const GridLEDMapping*>& mappin
 
 } // namespace
 
-bool IsControllerRegistered(RGBController* controller, const std::vector<RGBController*>& controllers)
+bool IsControllerRegistered(RGBControllerInterface* controller, const std::vector<RGBControllerInterface*>& controllers)
 {
     if(!controller)
     {
         return false;
     }
-    for(RGBController* candidate : controllers)
+    for(RGBControllerInterface* candidate : controllers)
     {
         if(candidate == controller)
         {
@@ -242,7 +242,7 @@ bool IsControllerRegistered(RGBController* controller, const std::vector<RGBCont
     return false;
 }
 
-RGBController* FindControllerForMappings(const std::vector<RGBController*>& controllers,
+RGBControllerInterface* FindControllerForMappings(const std::vector<RGBControllerInterface*>& controllers,
                                            const std::string& controller_name,
                                            const std::string& controller_location,
                                            const std::vector<const GridLEDMapping*>& mappings)
@@ -254,7 +254,7 @@ RGBController* FindControllerForMappings(const std::vector<RGBController*>& cont
 
     const bool portable = IsPortableLocation(controller_location);
 
-    std::vector<RGBController*> name_matches;
+    std::vector<RGBControllerInterface*> name_matches;
     CollectNameMatches(controllers, controller_name, name_matches);
     if(name_matches.empty())
     {
@@ -263,7 +263,7 @@ RGBController* FindControllerForMappings(const std::vector<RGBController*>& cont
 
     if(!portable)
     {
-        for(RGBController* controller : name_matches)
+        for(RGBControllerInterface* controller : name_matches)
         {
             if(controller->GetLocation() == controller_location)
             {
@@ -277,7 +277,7 @@ RGBController* FindControllerForMappings(const std::vector<RGBController*>& cont
 
     if(!mappings.empty())
     {
-        if(RGBController* structure_match = PickBestStructureMatch(name_matches, mappings))
+        if(RGBControllerInterface* structure_match = PickBestStructureMatch(name_matches, mappings))
         {
             return structure_match;
         }
@@ -289,7 +289,7 @@ RGBController* FindControllerForMappings(const std::vector<RGBController*>& cont
 
     if(!portable)
     {
-        if(RGBController* network_match = UniqueNetworkNameMatch(name_matches, controller_location))
+        if(RGBControllerInterface* network_match = UniqueNetworkNameMatch(name_matches, controller_location))
         {
             if(mappings.empty() || ControllerSupportsMappings(network_match, mappings))
             {
@@ -306,7 +306,7 @@ RGBController* FindControllerForMappings(const std::vector<RGBController*>& cont
     return nullptr;
 }
 
-RGBController* FindByStoredIdentity(const std::vector<RGBController*>& controllers,
+RGBControllerInterface* FindByStoredIdentity(const std::vector<RGBControllerInterface*>& controllers,
                                     const std::string& controller_name,
                                     const std::string& controller_location)
 {
@@ -314,8 +314,8 @@ RGBController* FindByStoredIdentity(const std::vector<RGBController*>& controlle
 }
 
 bool MappingOwnedByController(const GridLEDMapping& mapping,
-                              RGBController* controller,
-                              const std::vector<RGBController*>& controllers)
+                              RGBControllerInterface* controller,
+                              const std::vector<RGBControllerInterface*>& controllers)
 {
     if(!controller)
     {
@@ -350,7 +350,7 @@ void FinalizeMapping(GridLEDMapping& mapping)
     SyncIdentity(mapping);
 }
 
-bool RebindAll(std::vector<GridLEDMapping>& mappings, std::vector<RGBController*>& controllers)
+bool RebindAll(std::vector<GridLEDMapping>& mappings, std::vector<RGBControllerInterface*>& controllers)
 {
     bool changed = false;
 
@@ -396,7 +396,7 @@ bool RebindAll(std::vector<GridLEDMapping>& mappings, std::vector<RGBController*
         }
 
         const GridLEDMapping& anchor = mappings[entry.second.front()];
-        RGBController* resolved =
+        RGBControllerInterface* resolved =
             FindControllerForMappings(controllers,
                                     anchor.controller_name,
                                     GroupStoredLocation(group_ptrs),

@@ -28,7 +28,7 @@ struct Transform3D
 
 struct LEDPosition3D
 {
-    RGBController*  controller;
+    RGBControllerInterface*  controller;
     unsigned int    zone_idx;
     unsigned int    led_idx;
     Vector3D        local_position;
@@ -41,7 +41,7 @@ class VirtualController3D;
 
 struct ControllerTransform
 {
-    RGBController*      controller;
+    RGBControllerInterface*      controller;
     VirtualController3D* virtual_controller;
     Transform3D         transform;
     std::vector<LEDPosition3D> led_positions;

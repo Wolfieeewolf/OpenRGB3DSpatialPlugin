@@ -11,7 +11,6 @@
 class GameTelemetryBridge;
 class OpenRGB3DSpatialTab;
 class QMenu;
-class ResourceManagerInterface;
 class QWidget;
 
 class OpenRGB3DSpatialPlugin : public QObject, public OpenRGBPluginInterface
@@ -28,17 +27,23 @@ public:
     OpenRGBPluginInfo   GetPluginInfo()                                                     override;
     unsigned int        GetPluginAPIVersion()                                               override;
 
-    void                Load(ResourceManagerInterface* resource_manager_ptr)                override;
+    void                Load(OpenRGBPluginAPIInterface* plugin_api_ptr)                     override;
     QWidget*            GetWidget()                                                         override;
     QMenu*              GetTrayMenu()                                                       override;
     void                Unload()                                                            override;
 
-    static ResourceManagerInterface* RMPointer;
+    void                OnProfileAboutToLoad()                                              override;
+    void                OnProfileLoad(nlohmann::json profile_data)                          override;
+    nlohmann::json      OnProfileSave()                                                     override;
+    unsigned char*      OnSDKCommand(unsigned int pkt_id, unsigned char* pkt_data, unsigned int* pkt_size) override;
+
+    void                ProfileManagerUpdated(unsigned int update_reason)                   override;
+    void                ResourceManagerUpdated(unsigned int update_reason)                  override;
+    void                SettingsManagerUpdated(unsigned int update_reason)                  override;
+
+    static OpenRGBPluginAPIInterface* APIPointer;
 
 private:
-    static void                 DeviceListChangedCallback(void* ptr);
-    static void                 DetectionProgressCallback(void* ptr);
-
     OpenRGB3DSpatialTab*        ui = nullptr;
     std::unique_ptr<GameTelemetryBridge> game_telemetry_bridge;
 };

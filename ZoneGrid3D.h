@@ -11,7 +11,7 @@
 
 #include "LEDPosition3D.h"
 
-class RGBController;
+class RGBControllerInterface;
 class ZoneManager3D;
 
 struct GridContext3D;
@@ -19,7 +19,7 @@ struct GridContext3D;
 bool TryMakeZoneGridContextPair(ZoneManager3D* zone_manager,
                                 const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                 int zone_index,
-                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                 bool skip_hidden_by_virtual,
                                 float room_grid_scale_mm,
                                 float world_grid_scale_mm,
@@ -29,7 +29,7 @@ bool TryMakeZoneGridContextPair(ZoneManager3D* zone_manager,
 bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
                                const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                int zone_index,
-                               const std::unordered_set<RGBController*>* skip_physical_controllers,
+                               const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                bool skip_hidden_by_virtual,
                                bool room_aligned,
                                Vector3D* out_centroid);
@@ -37,7 +37,7 @@ bool TryComputeZoneLedCentroid(ZoneManager3D* zone_manager,
 bool TryComputeZoneAnchorCenter(ZoneManager3D* zone_manager,
                                 const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                                 int zone_index,
-                                const std::unordered_set<RGBController*>* skip_physical_controllers,
+                                const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                                 bool skip_hidden_by_virtual,
                                 bool room_aligned,
                                 Vector3D* out_center);

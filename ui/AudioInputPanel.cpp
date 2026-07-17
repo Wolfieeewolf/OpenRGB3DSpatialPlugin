@@ -10,7 +10,7 @@
 #include "EffectSliderRow.h"
 #include "PluginUiUtils.h"
 #include "ui_AudioInputPanel.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 
 #include <QComboBox>
 #include <QProgressBar>

@@ -76,12 +76,12 @@ public:
 
     std::vector<LEDPosition3D> GenerateLEDPositions(float grid_scale_mm = 10.0f);
 
-    bool RebindControllerPointers(std::vector<RGBController*>& controllers);
+    bool RebindControllerPointers(std::vector<RGBControllerInterface*>& controllers);
 
     json ToJson() const;
     json ToPortablePresetJson() const;
     static std::string PresetFilenameSlug(const std::string& layout_name);
-    static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBController*>& controllers);
+    static std::unique_ptr<VirtualController3D> FromJson(const json& j, std::vector<RGBControllerInterface*>& controllers);
 
 private:
     void EnsureGridSizeArrays();

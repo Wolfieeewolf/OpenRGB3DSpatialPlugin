@@ -10,7 +10,7 @@
 #include "RoomSampleFrameProtocol.h"
 #include "RoomSampleShmPaths.h"
 #include "GameTelemetryBridge.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 
 #include "lz4/lz4.h"
 

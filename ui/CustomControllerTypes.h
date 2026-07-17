@@ -12,7 +12,7 @@ struct GridLEDMapping
     int x;
     int y;
     int z;
-    RGBController* controller = nullptr;
+    RGBControllerInterface* controller = nullptr;
     unsigned int zone_idx = 0;
     unsigned int led_idx = 0;
     int granularity = 0;

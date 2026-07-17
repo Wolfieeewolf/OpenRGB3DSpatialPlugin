@@ -4,6 +4,7 @@
 
 #include "CustomControllerMappingUtils.h"
 #include "GridSpaceUtils.h"
+#include "DeviceTypeUtils.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -102,7 +103,7 @@ std::string DeviceTypeToPresetCategory(device_type type)
         break;
     }
 
-    std::string slug = device_type_to_str(type);
+    std::string slug = PluginDeviceTypeToString(type);
     for(char& c : slug)
     {
         if(c == ' ')
@@ -117,7 +118,7 @@ std::string DeviceTypeToPresetCategory(device_type type)
     return slug;
 }
 
-std::string InferPresetModel(RGBController* controller)
+std::string InferPresetModel(RGBControllerInterface* controller)
 {
     if(!controller)
     {
@@ -149,9 +150,9 @@ std::string InferPresetModel(RGBController* controller)
     return name;
 }
 
-RGBController* PrimaryMappedController(const std::vector<GridLEDMapping>& mappings)
+RGBControllerInterface* PrimaryMappedController(const std::vector<GridLEDMapping>& mappings)
 {
-    RGBController* primary = nullptr;
+    RGBControllerInterface* primary = nullptr;
     for(const GridLEDMapping& mapping : mappings)
     {
         if(!mapping.controller)
@@ -468,7 +469,7 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
         pos.zone_idx = led_mappings[i].zone_idx;
         pos.led_idx = led_mappings[i].led_idx;
 
-        if(pos.zone_idx >= pos.controller->zones.size())
+        if(pos.zone_idx >= pos.controller->GetZoneCount())
         {
             continue;
         }
@@ -486,7 +487,7 @@ std::vector<LEDPosition3D> VirtualController3D::GenerateLEDPositions(float grid_
     return positions;
 }
 
-bool VirtualController3D::RebindControllerPointers(std::vector<RGBController*>& controllers)
+bool VirtualController3D::RebindControllerPointers(std::vector<RGBControllerInterface*>& controllers)
 {
     return CustomControllerMapping::RebindAll(led_mappings, controllers);
 }
@@ -593,7 +594,7 @@ json VirtualController3D::ToPortablePresetJson() const
         }
     }
 
-    if(RGBController* primary = PrimaryMappedController(led_mappings))
+    if(RGBControllerInterface* primary = PrimaryMappedController(led_mappings))
     {
         const std::string vendor = TrimCopy(primary->GetVendor());
         const std::string model  = InferPresetModel(primary);
@@ -605,7 +606,7 @@ json VirtualController3D::ToPortablePresetJson() const
         {
             j["model"] = model;
         }
-        j["category"] = DeviceTypeToPresetCategory(primary->type);
+        j["category"] = DeviceTypeToPresetCategory(primary->GetDeviceType());
     }
 
     return j;
@@ -642,7 +643,7 @@ std::string VirtualController3D::PresetFilenameSlug(const std::string& layout_na
     return slug.empty() ? std::string("custom_controller") : slug;
 }
 
-std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j, std::vector<RGBController*>& controllers)
+std::unique_ptr<VirtualController3D> VirtualController3D::FromJson(const json& j, std::vector<RGBControllerInterface*>& controllers)
 {
     ValidateCustomControllerDocument(j);
 

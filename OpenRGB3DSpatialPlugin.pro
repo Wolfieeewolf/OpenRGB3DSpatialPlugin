@@ -76,13 +76,11 @@ INCLUDEPATH += \
 HEADERS += \
     OpenRGB/Colors.h \
     OpenRGB/OpenRGBPluginInterface.h \
-    OpenRGB/ResourceManagerInterface.h \
+    OpenRGB/ResourceManagerCallback.h \
+    OpenRGB/RGBController/RGBControllerInterface.h \
     OpenRGB/RGBController/RGBController.h \
-    OpenRGB/LogManager.h
-
-SOURCES += \
-    OpenRGB/RGBController/RGBController.cpp \
-    OpenRGB/LogManager.cpp
+    OpenRGB/LogManager.h \
+    PluginLog.h
 
 RESOURCES += \
     resources/spatial_shaders.qrc \

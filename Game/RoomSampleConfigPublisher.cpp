@@ -11,7 +11,7 @@
 #include "RoomSampleShmPaths.h"
 #include "Effects3D/Games/Minecraft/MinecraftGameSettings.h"
 #include "SpatialEffect3D.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 
 #include <chrono>
 #include <cmath>

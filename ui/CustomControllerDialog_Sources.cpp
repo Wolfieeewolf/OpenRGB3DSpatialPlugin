@@ -69,7 +69,7 @@ CustomControllerSourceRef CustomControllerDialog::currentSourceSelection() const
     return {};
 }
 
-RGBController* CustomControllerDialog::controllerForSource(const CustomControllerSourceRef& source) const
+RGBControllerInterface* CustomControllerDialog::controllerForSource(const CustomControllerSourceRef& source) const
 {
     if(!source.isValid() || !resource_manager)
     {
@@ -80,7 +80,7 @@ RGBController* CustomControllerDialog::controllerForSource(const CustomControlle
 
 bool CustomControllerDialog::IsSourceItemAvailable(const CustomControllerSourceRef& source) const
 {
-    RGBController* controller = controllerForSource(source);
+    RGBControllerInterface* controller = controllerForSource(source);
     if(!controller)
     {
         return false;
@@ -96,7 +96,7 @@ bool CustomControllerDialog::CanAddSourceToGrid(const CustomControllerSourceRef&
 
 bool CustomControllerDialog::IsSourceItemOnGrid(const CustomControllerSourceRef& source) const
 {
-    RGBController* controller = controllerForSource(source);
+    RGBControllerInterface* controller = controllerForSource(source);
     if(!controller)
     {
         return false;
@@ -106,7 +106,7 @@ bool CustomControllerDialog::IsSourceItemOnGrid(const CustomControllerSourceRef&
 
 QColor CustomControllerDialog::SourceItemColor(const CustomControllerSourceRef& source) const
 {
-    RGBController* controller = controllerForSource(source);
+    RGBControllerInterface* controller = controllerForSource(source);
     if(!controller)
     {
         return QColor();
@@ -129,7 +129,7 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
         return;
     }
 
-    RGBController* controller = GetControllerByRow(resource_manager, controller_index);
+    RGBControllerInterface* controller = GetControllerByRow(resource_manager, controller_index);
     if(!controller)
     {
         return;
@@ -137,7 +137,7 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
 
     if(granularity == 1)
     {
-        for(unsigned int i = 0; i < controller->zones.size(); i++)
+        for(unsigned int i = 0; i < controller->GetZoneCount(); i++)
         {
             if(!IsItemAssigned(controller, granularity, static_cast<int>(i)))
             {
@@ -151,7 +151,7 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
     }
     else if(granularity == 2)
     {
-        for(unsigned int i = 0; i < controller->leds.size(); i++)
+        for(unsigned int i = 0; i < controller->GetLEDCount(); i++)
         {
             if(!IsItemAssigned(controller, granularity, static_cast<int>(i)))
             {
@@ -166,13 +166,13 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
 
 void CustomControllerDialog::removeSourceFromGrid(const CustomControllerSourceRef& source)
 {
-    RGBController* controller = controllerForSource(source);
+    RGBControllerInterface* controller = controllerForSource(source);
     if(!controller || !resource_manager)
     {
         return;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
     std::vector<GridLEDMapping> removed_mappings;
     for(auto it = led_mappings.begin(); it != led_mappings.end();)
     {
@@ -230,7 +230,7 @@ bool CustomControllerDialog::assignSource(const CustomControllerSourceRef& sourc
         return false;
     }
 
-    RGBController* controller = controllerForSource(source);
+    RGBControllerInterface* controller = controllerForSource(source);
     if(!controller)
     {
         return false;
@@ -258,14 +258,14 @@ bool CustomControllerDialog::assignSource(const CustomControllerSourceRef& sourc
     return true;
 }
 
-bool CustomControllerDialog::PlaceProfileLayout(RGBController* controller, int granularity, int item_idx, int start_x, int start_y)
+bool CustomControllerDialog::PlaceProfileLayout(RGBControllerInterface* controller, int granularity, int item_idx, int start_x, int start_y)
 {
     if(!controller || !resource_manager)
     {
         return false;
     }
 
-    std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+    std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
 
     int grid_w = width_spin->value();
     int grid_h = height_spin->value();
@@ -564,22 +564,22 @@ void CustomControllerDialog::RestoreAllIdentifiedLeds()
         return;
     }
 
-    std::set<RGBController*> updated_controllers;
-    for(const std::pair<const std::pair<RGBController*, unsigned int>, RGBColor>& entry : identified_leds)
+    std::set<RGBControllerInterface*> updated_controllers;
+    for(const std::pair<const std::pair<RGBControllerInterface*, unsigned int>, RGBColor>& entry : identified_leds)
     {
-        RGBController* controller = entry.first.first;
+        RGBControllerInterface* controller = entry.first.first;
         if(!controller)
         {
             continue;
         }
 
-        controller->SetLED(entry.first.second, entry.second);
+        controller->SetColor(entry.first.second, entry.second);
         updated_controllers.insert(controller);
     }
 
     identified_leds.clear();
 
-    for(RGBController* controller : updated_controllers)
+    for(RGBControllerInterface* controller : updated_controllers)
     {
         controller->UpdateLEDs();
     }
@@ -592,7 +592,7 @@ void CustomControllerDialog::RestoreIdentifyForMappings(const std::vector<GridLE
         return;
     }
 
-    std::set<RGBController*> updated_controllers;
+    std::set<RGBControllerInterface*> updated_controllers;
     for(const GridLEDMapping& mapping : mappings)
     {
         if(!mapping.controller)
@@ -613,12 +613,12 @@ void CustomControllerDialog::RestoreIdentifyForMappings(const std::vector<GridLE
             continue;
         }
 
-        mapping.controller->SetLED(global_led_idx, it->second);
+        mapping.controller->SetColor(global_led_idx, it->second);
         identified_leds.erase(it);
         updated_controllers.insert(mapping.controller);
     }
 
-    for(RGBController* controller : updated_controllers)
+    for(RGBControllerInterface* controller : updated_controllers)
     {
         controller->UpdateLEDs();
     }
@@ -638,8 +638,8 @@ void CustomControllerDialog::SetIdentifyForCells(const std::set<std::pair<int, i
         return;
     }
 
-    std::set<RGBController*> updated_controllers;
-    std::set<std::pair<RGBController*, unsigned int>> seen_leds;
+    std::set<RGBControllerInterface*> updated_controllers;
+    std::set<std::pair<RGBControllerInterface*, unsigned int>> seen_leds;
 
     for(const GridLEDMapping& mapping : cell_mappings)
     {
@@ -662,8 +662,8 @@ void CustomControllerDialog::SetIdentifyForCells(const std::set<std::pair<int, i
                 continue;
             }
 
-            identified_leds[led_key] = mapping.controller->GetLED(global_led_idx);
-            mapping.controller->SetLED(global_led_idx, ToRGBColor(0, 255, 0));
+            identified_leds[led_key] = mapping.controller->GetColor(global_led_idx);
+            mapping.controller->SetColor(global_led_idx, ToRGBColor(0, 255, 0));
             updated_controllers.insert(mapping.controller);
         }
         else
@@ -674,13 +674,13 @@ void CustomControllerDialog::SetIdentifyForCells(const std::set<std::pair<int, i
                 continue;
             }
 
-            mapping.controller->SetLED(global_led_idx, it->second);
+            mapping.controller->SetColor(global_led_idx, it->second);
             identified_leds.erase(it);
             updated_controllers.insert(mapping.controller);
         }
     }
 
-    for(RGBController* controller : updated_controllers)
+    for(RGBControllerInterface* controller : updated_controllers)
     {
         controller->UpdateLEDs();
     }
@@ -900,7 +900,7 @@ void CustomControllerDialog::saveClicked()
     accept();
 }
 
-bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granularity, int item_idx) const
+bool CustomControllerDialog::IsItemAssigned(RGBControllerInterface* controller, int granularity, int item_idx) const
 {
     if(!controller)
     {
@@ -908,7 +908,7 @@ bool CustomControllerDialog::IsItemAssigned(RGBController* controller, int granu
     }
 
     const std::vector<GridLEDMapping>& mappings = led_mappings;
-    std::vector<RGBController*> controllers;
+    std::vector<RGBControllerInterface*> controllers;
     if(resource_manager)
     {
         controllers = resource_manager->GetRGBControllers();
@@ -996,7 +996,7 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     led_mappings = mappings;
     if(resource_manager)
     {
-        std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+        std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
         CustomControllerMapping::RebindAll(led_mappings, controllers);
     }
     light_blocker_cells_.clear();
@@ -1019,7 +1019,7 @@ void CustomControllerDialog::LoadExistingController(const std::string& name,
     refreshDeviceList();
 }
 
-QColor CustomControllerDialog::GetItemColor(RGBController* controller, int granularity, int item_idx) const
+QColor CustomControllerDialog::GetItemColor(RGBControllerInterface* controller, int granularity, int item_idx) const
 {
     if(!controller) return QColor(128, 128, 128);
 
@@ -1029,34 +1029,34 @@ QColor CustomControllerDialog::GetItemColor(RGBController* controller, int granu
     }
     else if(granularity == 1)
     {
-        if(item_idx >= 0 && item_idx < (int)controller->zones.size())
+        if(item_idx >= 0 && item_idx < (int)controller->GetZoneCount())
         {
             return GetAverageZoneColor(controller, item_idx);
         }
     }
     else if(granularity == 2)
     {
-        if(item_idx >= 0 && item_idx < (int)controller->colors.size())
+        if(item_idx >= 0 && item_idx < (int)controller->GetLEDCount())
         {
-            return RGBToQColor(controller->colors[item_idx]);
+            return RGBToQColor(controller->GetColor(item_idx));
         }
     }
     return QColor(128, 128, 128);
 }
 
-QColor CustomControllerDialog::GetAverageZoneColor(RGBController* controller, unsigned int zone_idx) const
+QColor CustomControllerDialog::GetAverageZoneColor(RGBControllerInterface* controller, unsigned int zone_idx) const
 {
-    if(zone_idx >= controller->zones.size()) return QColor(128, 128, 128);
+    if(zone_idx >= controller->GetZoneCount()) return QColor(128, 128, 128);
 
-    const zone& z = controller->zones[zone_idx];
+    const zone z = controller->GetZone(zone_idx);
     if(z.leds_count == 0) return QColor(128, 128, 128);
 
     unsigned int total_r = 0, total_g = 0, total_b = 0;
     unsigned int led_count = 0;
 
-    for(unsigned int i = 0; i < z.leds_count && (z.start_idx + i) < controller->colors.size(); i++)
+    for(unsigned int i = 0; i < z.leds_count && (z.start_idx + i) < controller->GetLEDCount(); i++)
     {
-        unsigned int color = controller->colors[z.start_idx + i];
+        unsigned int color = controller->GetColor(z.start_idx + i);
         total_r += (color >> 0) & 0xFF;
         total_g += (color >> 8) & 0xFF;
         total_b += (color >> 16) & 0xFF;
@@ -1068,20 +1068,21 @@ QColor CustomControllerDialog::GetAverageZoneColor(RGBController* controller, un
     return QColor(static_cast<int>(total_r / led_count), static_cast<int>(total_g / led_count), static_cast<int>(total_b / led_count));
 }
 
-QColor CustomControllerDialog::GetAverageDeviceColor(RGBController* controller) const
+QColor CustomControllerDialog::GetAverageDeviceColor(RGBControllerInterface* controller) const
 {
-    if(!controller || controller->colors.empty()) return QColor(128, 128, 128);
+    if(!controller || controller->GetLEDCount() == 0) return QColor(128, 128, 128);
 
     unsigned long long total_r = 0, total_g = 0, total_b = 0;
 
-    for(unsigned int i = 0; i < controller->colors.size(); i++)
+    for(unsigned int i = 0; i < controller->GetLEDCount(); i++)
     {
-        total_r += (controller->colors[i] >> 0) & 0xFF;
-        total_g += (controller->colors[i] >> 8) & 0xFF;
-        total_b += (controller->colors[i] >> 16) & 0xFF;
+        const RGBColor c = controller->GetColor(i);
+        total_r += (c >> 0) & 0xFF;
+        total_g += (c >> 8) & 0xFF;
+        total_b += (c >> 16) & 0xFF;
     }
 
-    size_t count = controller->colors.size();
+    size_t count = controller->GetLEDCount();
     if(count == 0)
     {
         return QColor(0, 0, 0);
@@ -1094,16 +1095,16 @@ QColor CustomControllerDialog::GetMappingColor(const GridLEDMapping& mapping) co
     if(!mapping.controller)
         return QColor(128, 128, 128);
 
-    if(mapping.zone_idx >= mapping.controller->zones.size())
+    if(mapping.zone_idx >= mapping.controller->GetZoneCount())
         return QColor(128, 128, 128);
 
-    const zone& z = mapping.controller->zones[mapping.zone_idx];
+    const zone z = mapping.controller->GetZone(mapping.zone_idx);
     unsigned int global_led_idx = z.start_idx + mapping.led_idx;
 
-    if(global_led_idx >= mapping.controller->colors.size())
+    if(global_led_idx >= mapping.controller->GetLEDCount())
         return QColor(128, 128, 128);
 
-    return RGBToQColor(mapping.controller->colors[global_led_idx]);
+    return RGBToQColor(mapping.controller->GetColor(global_led_idx));
 }
 
 QString CustomControllerDialog::GetMappingCellLabel(const std::vector<GridLEDMapping>& cell_mappings) const
@@ -1167,7 +1168,7 @@ QString CustomControllerDialog::GetMappingTooltip(const GridLEDMapping& mapping)
         }
         if(mapping.granularity == 1)
         {
-            const QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
+            const QString zone_name = mapping.zone_idx < mapping.controller->GetZoneCount()
                 ? QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx))
                 : tr("Unknown zone");
             return tr("%1\nZone: %2\n%3").arg(device_name, zone_name, grid_pos);
@@ -1178,13 +1179,13 @@ QString CustomControllerDialog::GetMappingTooltip(const GridLEDMapping& mapping)
     QString led_name = tr("Unknown LED");
     unsigned int global_led_idx = 0;
     const bool has_global = TryGetDialogGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &global_led_idx)
-                            && global_led_idx < mapping.controller->leds.size();
+                            && global_led_idx < mapping.controller->GetLEDCount();
     if(has_global)
     {
         led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
     }
 
-    const QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
+    const QString zone_name = mapping.zone_idx < mapping.controller->GetZoneCount()
         ? QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx))
         : tr("Unknown zone");
     const unsigned int display_led = MappingDisplayLedNumber(mapping);
@@ -1217,7 +1218,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
         QString led_name = tr("Unknown LED");
         unsigned int global_led_idx = 0;
         if(TryGetDialogGlobalLedIndex(mapping.controller, mapping.zone_idx, mapping.led_idx, &global_led_idx) &&
-           global_led_idx < mapping.controller->leds.size())
+           global_led_idx < mapping.controller->GetLEDCount())
         {
             led_name = QString::fromStdString(mapping.controller->GetLEDName(global_led_idx));
         }
@@ -1240,7 +1241,7 @@ QString CustomControllerDialog::GetMappingDescription(const GridLEDMapping& mapp
     }
     if(mapping.granularity == 1)
     {
-        const QString zone_name = mapping.zone_idx < mapping.controller->zones.size()
+        const QString zone_name = mapping.zone_idx < mapping.controller->GetZoneCount()
             ? QString::fromStdString(mapping.controller->GetZoneName(mapping.zone_idx))
             : tr("Unknown Zone");
         return tr("Assigned: %1, Zone: %2").arg(name, zone_name);

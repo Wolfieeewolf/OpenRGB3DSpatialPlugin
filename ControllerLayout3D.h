@@ -13,8 +13,8 @@ struct ControllerTransform;
 class ControllerLayout3D
 {
 public:
-    static std::vector<LEDPosition3D> GenerateCustomGridLayout(RGBController* controller, int grid_x, int grid_y, bool center_layout = true);
-    static std::vector<LEDPosition3D> GenerateCustomGridLayoutWithSpacing(RGBController* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout = true);
+    static std::vector<LEDPosition3D> GenerateCustomGridLayout(RGBControllerInterface* controller, int grid_x, int grid_y, bool center_layout = true);
+    static std::vector<LEDPosition3D> GenerateCustomGridLayoutWithSpacing(RGBControllerInterface* controller, int grid_x, int grid_y, float spacing_mm_x, float spacing_mm_y, float spacing_mm_z, float grid_scale_mm, bool center_layout = true);
     static Vector3D CalculateWorldPosition(Vector3D local_pos, Transform3D transform);
     static Vector3D GetControllerCenterWorld(const ControllerTransform* ctrl_transform);
     static void UpdateWorldPositions(ControllerTransform* ctrl_transform);

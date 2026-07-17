@@ -6,7 +6,7 @@
 #include "Effects3D/Games/Minecraft/MinecraftGame.h"
 #include "Effects3D/ScreenMirror/ScreenMirror.h"
 #include "ScreenCaptureManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include "ControllerLayout3D.h"
 #include "SpatialLighting/SpatialLightingSceneProvider.h"
 #include "SpatialLighting/EmitterRelayMirror.h"
@@ -41,7 +41,7 @@ void ApplyZoneAnchorMetadata(GridContext3D& grid,
                              ZoneManager3D* zone_manager,
                              const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
                              int zone_index,
-                             const std::unordered_set<RGBController*>* skip_physical_controllers,
+                             const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                              bool room_aligned)
 {
     if(zone_index == -1)
@@ -84,7 +84,7 @@ void PopulateEffectSlotGrids(EffectSlotGridOverride& slot_override,
                              ReferenceMode stack_origin_mode,
                              ZoneManager3D* zone_manager,
                              const std::vector<std::unique_ptr<ControllerTransform>>& controller_transforms,
-                             const std::unordered_set<RGBController*>* skip_physical_controllers,
+                             const std::unordered_set<RGBControllerInterface*>* skip_physical_controllers,
                              const GridContext3D& room_grid,
                              const GridContext3D& world_grid,
                              uint64_t render_sequence)
@@ -426,7 +426,7 @@ bool IsRelayEmitter(const SpatialEffect3D* relay_effect, int ctrl_idx)
 
 } // namespace
 
-static bool TryGetGlobalLedIndex(RGBController* controller,
+static bool TryGetGlobalLedIndex(RGBControllerInterface* controller,
                                  unsigned int zone_idx,
                                  unsigned int led_idx,
                                  unsigned int* global_idx)
@@ -435,17 +435,17 @@ static bool TryGetGlobalLedIndex(RGBController* controller,
     {
         return false;
     }
-    if(zone_idx >= controller->zones.size())
+    if(zone_idx >= controller->GetZoneCount())
     {
         return false;
     }
-    if(led_idx >= controller->zones[zone_idx].leds_count)
+    if(led_idx >= controller->GetZoneLEDsCount(zone_idx))
     {
         return false;
     }
 
-    *global_idx = controller->zones[zone_idx].start_idx + led_idx;
-    return (*global_idx < controller->colors.size());
+    *global_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
+    return (*global_idx < controller->GetLEDCount());
 }
 
 void OpenRGB3DSpatialTab::RenderEffectStack()
@@ -569,8 +569,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     if(active_effects.empty())
     {
         const RGBColor black = 0x00000000;
-        std::unordered_set<RGBController*> controllers_to_update;
-        std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+        std::unordered_set<RGBControllerInterface*> controllers_to_update;
+        std::unordered_set<RGBControllerInterface*> controllers_managed_by_virtuals;
         for(const std::unique_ptr<ControllerTransform>& t : controller_transforms)
         {
             if(!t || !t->virtual_controller) continue;
@@ -595,12 +595,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 {
                     LEDPosition3D& led_position = transform->led_positions[led_pos_idx];
                     led_position.preview_color = black;
-                    RGBController* mapping_controller = led_position.controller;
-                    if(!mapping_controller || mapping_controller->zones.empty() || mapping_controller->colors.empty())
+                    RGBControllerInterface* mapping_controller = led_position.controller;
+                    if(!mapping_controller || mapping_controller->GetZoneCount() == 0 || mapping_controller->GetLEDCount() == 0)
                     {
                         continue;
                     }
-                    if(led_position.zone_idx < mapping_controller->zones.size())
+                    if(led_position.zone_idx < mapping_controller->GetZoneCount())
                     {
                         unsigned int led_global_idx = 0;
                         if(TryGetGlobalLedIndex(mapping_controller,
@@ -608,7 +608,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                 led_position.led_idx,
                                                 &led_global_idx))
                         {
-                            mapping_controller->colors[led_global_idx] = black;
+                            mapping_controller->SetColor(led_global_idx, black);
                             controllers_to_update.insert(mapping_controller);
                         }
                     }
@@ -616,8 +616,8 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 continue;
             }
 
-            RGBController* controller = transform->controller;
-            if(!controller || controller->zones.empty() || controller->colors.empty()) continue;
+            RGBControllerInterface* controller = transform->controller;
+            if(!controller || controller->GetZoneCount() == 0 || controller->GetLEDCount() == 0) continue;
 
             for(unsigned int led_pos_idx = 0; led_pos_idx < transform->led_positions.size(); led_pos_idx++)
             {
@@ -625,12 +625,12 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 led_position.preview_color = black;
                 unsigned int led_global_idx = 0;
                 if(TryGetGlobalLedIndex(controller, led_position.zone_idx, led_position.led_idx, &led_global_idx))
-                    controller->colors[led_global_idx] = black;
+                    controller->SetColor(led_global_idx, black);
             }
             controllers_to_update.insert(controller);
         }
 
-        for(RGBController* ctrl : controllers_to_update)
+        for(RGBControllerInterface* ctrl : controllers_to_update)
         {
             if(ctrl) ctrl->UpdateLEDs();
         }
@@ -681,7 +681,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         }
     }
 
-    std::unordered_set<RGBController*> controllers_managed_by_virtuals;
+    std::unordered_set<RGBControllerInterface*> controllers_managed_by_virtuals;
     for(const std::unique_ptr<ControllerTransform>& transform_ptr : controller_transforms)
     {
         ControllerTransform* transform = transform_ptr.get();
@@ -1069,9 +1069,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     final_color = relay_layer_effect->PostProcessColorGrid(final_color);
                     transform->led_positions[led_pos_idx].preview_color = final_color;
 
-                    RGBController* mapping_controller = led_position.controller;
-                    if(mapping_controller && !mapping_controller->zones.empty() && !mapping_controller->colors.empty() &&
-                       led_position.zone_idx < mapping_controller->zones.size())
+                    RGBControllerInterface* mapping_controller = led_position.controller;
+                    if(mapping_controller && mapping_controller->GetZoneCount() != 0 && mapping_controller->GetLEDCount() != 0 &&
+                       led_position.zone_idx < mapping_controller->GetZoneCount())
                     {
                         unsigned int led_global_idx = 0;
                         if(TryGetGlobalLedIndex(mapping_controller,
@@ -1079,7 +1079,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                 led_position.led_idx,
                                                 &led_global_idx))
                         {
-                            mapping_controller->colors[led_global_idx] = final_color;
+                            mapping_controller->SetColor(led_global_idx, final_color);
                         }
                     }
                     continue;
@@ -1138,9 +1138,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
 
-                    RGBController* mapping_controller = led_position.controller;
-                    if(mapping_controller && !mapping_controller->zones.empty() && !mapping_controller->colors.empty() &&
-                       led_position.zone_idx < mapping_controller->zones.size())
+                    RGBControllerInterface* mapping_controller = led_position.controller;
+                    if(mapping_controller && mapping_controller->GetZoneCount() != 0 && mapping_controller->GetLEDCount() != 0 &&
+                       led_position.zone_idx < mapping_controller->GetZoneCount())
                     {
                         unsigned int led_global_idx = 0;
                         if(TryGetGlobalLedIndex(mapping_controller,
@@ -1148,7 +1148,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                 led_position.led_idx,
                                                 &led_global_idx))
                         {
-                            mapping_controller->colors[led_global_idx] = final_color;
+                            mapping_controller->SetColor(led_global_idx, final_color);
                         }
                     }
                     continue;
@@ -1228,13 +1228,13 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 transform->led_positions[led_pos_idx].preview_color = final_color;
 
-                RGBController* mapping_controller = led_position.controller;
-                if(!mapping_controller || mapping_controller->zones.empty() || mapping_controller->colors.empty())
+                RGBControllerInterface* mapping_controller = led_position.controller;
+                if(!mapping_controller || mapping_controller->GetZoneCount() == 0 || mapping_controller->GetLEDCount() == 0)
                 {
                     continue;
                 }
 
-                if(led_position.zone_idx < mapping_controller->zones.size())
+                if(led_position.zone_idx < mapping_controller->GetZoneCount())
                 {
                     unsigned int led_global_idx = 0;
                     if(TryGetGlobalLedIndex(mapping_controller,
@@ -1242,15 +1242,15 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                             led_position.led_idx,
                                             &led_global_idx))
                     {
-                        mapping_controller->colors[led_global_idx] = final_color;
+                        mapping_controller->SetColor(led_global_idx, final_color);
                     }
                 }
             }
         }
         else
         {
-            RGBController* controller = transform->controller;
-            if(!controller || controller->zones.empty() || controller->colors.empty())
+            RGBControllerInterface* controller = transform->controller;
+            if(!controller || controller->GetZoneCount() == 0 || controller->GetLEDCount() == 0)
             {
                 continue;
             }
@@ -1267,7 +1267,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                 float world_y = world_pos.y;
                 float world_z = world_pos.z;
 
-                if(led_position.zone_idx >= controller->zones.size())
+                if(led_position.zone_idx >= controller->GetZoneCount())
                 {
                     continue;
                 }
@@ -1289,9 +1289,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                         relay_layer_effect->SampleRelayShadeAt(sample_x, sample_y, sample_z, relay_grid);
                     final_color = relay_layer_effect->PostProcessColorGrid(final_color);
                     transform->led_positions[led_pos_idx].preview_color = final_color;
-                    if(led_global_idx < controller->colors.size())
+                    if(led_global_idx < controller->GetLEDCount())
                     {
-                        controller->colors[led_global_idx] = final_color;
+                        controller->SetColor(led_global_idx, final_color);
                     }
                     continue;
                 }
@@ -1348,9 +1348,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
                                                                                                         static_cast<int>(led_pos_idx)));
                     }
                     transform->led_positions[led_pos_idx].preview_color = final_color;
-                    if(led_global_idx < controller->colors.size())
+                    if(led_global_idx < controller->GetLEDCount())
                     {
-                        controller->colors[led_global_idx] = final_color;
+                        controller->SetColor(led_global_idx, final_color);
                     }
                     continue;
                 }
@@ -1430,9 +1430,9 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
 
                 transform->led_positions[led_pos_idx].preview_color = final_color;
 
-                if(led_global_idx < controller->colors.size())
+                if(led_global_idx < controller->GetLEDCount())
                 {
-                    controller->colors[led_global_idx] = final_color;
+                    controller->SetColor(led_global_idx, final_color);
                 }
             }
         }
@@ -1455,7 +1455,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
         return a.first < b.first;
     });
 
-    std::set<RGBController*> updated_physical_controllers;
+    std::set<RGBControllerInterface*> updated_physical_controllers;
 
     for(unsigned int i = 0; i < sorted_controllers.size(); i++)
     {

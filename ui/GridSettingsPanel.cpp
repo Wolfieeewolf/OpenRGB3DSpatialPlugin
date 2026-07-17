@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
-#include "LogManager.h"
+#include "PluginLog.h"
 
 GridSettingsPanel::GridSettingsPanel(QWidget* parent)
     : QWidget(parent)

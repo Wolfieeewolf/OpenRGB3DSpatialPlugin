@@ -7,7 +7,7 @@
 #include "Audio/AudioInputManager.h"
 #include "PluginUiUtils.h"
 #include "SettingsManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include <QToolTip>
 #include <QPainter>
 #include <QFrame>

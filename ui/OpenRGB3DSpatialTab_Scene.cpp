@@ -28,7 +28,7 @@ QString BuildZoneDialogControllerName(const ControllerTransform* ctrl, size_t in
     if(ctrl->controller)
     {
         QString name = ControllerDisplay::FormatRgbControllerTitle(ctrl->controller);
-        if(ctrl->granularity == 1 && ctrl->item_idx >= 0 && ctrl->item_idx < (int)ctrl->controller->zones.size())
+        if(ctrl->granularity == 1 && ctrl->item_idx >= 0 && ctrl->item_idx < (int)ctrl->controller->GetZoneCount())
         {
             name += " - " + QString::fromStdString(ctrl->controller->GetZoneName((unsigned int)ctrl->item_idx));
         }

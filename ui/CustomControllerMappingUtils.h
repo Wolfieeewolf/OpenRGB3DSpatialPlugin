@@ -7,33 +7,33 @@
 
 #include <vector>
 
-class RGBController;
+class RGBControllerInterface;
 
 namespace CustomControllerMapping
 {
 
-bool IsControllerRegistered(RGBController* controller, const std::vector<RGBController*>& controllers);
+bool IsControllerRegistered(RGBControllerInterface* controller, const std::vector<RGBControllerInterface*>& controllers);
 
 void SyncIdentity(GridLEDMapping& mapping);
 
 void FinalizeMapping(GridLEDMapping& mapping);
 
-bool RebindAll(std::vector<GridLEDMapping>& mappings, std::vector<RGBController*>& controllers);
+bool RebindAll(std::vector<GridLEDMapping>& mappings, std::vector<RGBControllerInterface*>& controllers);
 
 int UnresolvedCount(const std::vector<GridLEDMapping>& mappings);
 
-RGBController* FindControllerForMappings(const std::vector<RGBController*>& controllers,
+RGBControllerInterface* FindControllerForMappings(const std::vector<RGBControllerInterface*>& controllers,
                                            const std::string& controller_name,
                                            const std::string& controller_location,
                                            const std::vector<const GridLEDMapping*>& mappings);
 
-RGBController* FindByStoredIdentity(const std::vector<RGBController*>& controllers,
+RGBControllerInterface* FindByStoredIdentity(const std::vector<RGBControllerInterface*>& controllers,
                                     const std::string& controller_name,
                                     const std::string& controller_location);
 
 bool MappingOwnedByController(const GridLEDMapping& mapping,
-                              RGBController* controller,
-                              const std::vector<RGBController*>& controllers);
+                              RGBControllerInterface* controller,
+                              const std::vector<RGBControllerInterface*>& controllers);
 
 } // namespace CustomControllerMapping
 

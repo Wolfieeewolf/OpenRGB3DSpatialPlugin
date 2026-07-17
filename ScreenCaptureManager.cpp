@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "ScreenCaptureManager.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include <chrono>
 #include <algorithm>
 #include <set>

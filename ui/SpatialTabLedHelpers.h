@@ -7,13 +7,13 @@
 #include <memory>
 #include <vector>
 
-bool TryGetObjectCreatorGlobalLedIndex(RGBController* controller,
+bool TryGetObjectCreatorGlobalLedIndex(RGBControllerInterface* controller,
                                       unsigned int zone_idx,
                                       unsigned int led_idx,
                                       unsigned int* global_led_idx);
 
 bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
-                                    RGBController* controller,
+                                    RGBControllerInterface* controller,
                                     float& out_x,
                                     float& out_y,
                                     float& out_z);

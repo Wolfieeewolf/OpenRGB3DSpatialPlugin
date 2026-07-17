@@ -5,6 +5,7 @@
 #include "LEDPosition3D.h"
 #include "RGBController/RGBController.h"
 #include "VirtualController3D.h"
+#include "DeviceTypeUtils.h"
 
 namespace ControllerDisplay
 {
@@ -21,7 +22,7 @@ bool IsGenericDeviceName(const QString& name, device_type type)
         return true;
     }
 
-    const QString type_label = QString::fromStdString(device_type_to_str(type));
+    const QString type_label = QString::fromStdString(PluginDeviceTypeToString(type));
     if(name.compare(type_label, Qt::CaseInsensitive) == 0)
     {
         return true;
@@ -56,7 +57,7 @@ bool IsGenericDeviceName(const QString& name, device_type type)
     return false;
 }
 
-QString FormatRgbControllerTitle(RGBController* controller)
+QString FormatRgbControllerTitle(RGBControllerInterface* controller)
 {
     if(!controller)
     {
@@ -64,7 +65,7 @@ QString FormatRgbControllerTitle(RGBController* controller)
     }
 
     const QString name = FromStd(controller->GetName());
-    if(name.isEmpty() || !IsGenericDeviceName(name, controller->type))
+    if(name.isEmpty() || !IsGenericDeviceName(name, controller->GetDeviceType()))
     {
         return name;
     }
@@ -104,7 +105,7 @@ QString FormatControllerTransformLabel(const ControllerTransform* ctrl, int inde
     {
         QString name = FormatRgbControllerTitle(ctrl->controller);
         if(ctrl->granularity == 1 && ctrl->item_idx >= 0 &&
-           ctrl->item_idx < static_cast<int>(ctrl->controller->zones.size()))
+           ctrl->item_idx < static_cast<int>(ctrl->controller->GetZoneCount()))
         {
             name += QStringLiteral(" — ") + FromStd(ctrl->controller->GetZoneName(static_cast<unsigned int>(ctrl->item_idx)));
         }

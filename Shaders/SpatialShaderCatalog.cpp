@@ -15,22 +15,22 @@ namespace SpatialShaderCatalog
 
 QString UserShadersFolderPath()
 {
-    if(!OpenRGB3DSpatialPlugin::RMPointer)
+    if(!OpenRGB3DSpatialPlugin::APIPointer)
     {
         return QString();
     }
-    PluginSettingsPaths::EnsureSpatialShadersFolder(OpenRGB3DSpatialPlugin::RMPointer);
+    PluginSettingsPaths::EnsureSpatialShadersFolder(OpenRGB3DSpatialPlugin::APIPointer);
     return QString::fromStdString(
-        PluginSettingsPaths::SpatialShadersDir(OpenRGB3DSpatialPlugin::RMPointer).string());
+        PluginSettingsPaths::SpatialShadersDir(OpenRGB3DSpatialPlugin::APIPointer).string());
 }
 
 bool EnsureUserShadersFolder()
 {
-    if(!OpenRGB3DSpatialPlugin::RMPointer)
+    if(!OpenRGB3DSpatialPlugin::APIPointer)
     {
         return false;
     }
-    PluginSettingsPaths::EnsureSpatialShadersFolder(OpenRGB3DSpatialPlugin::RMPointer);
+    PluginSettingsPaths::EnsureSpatialShadersFolder(OpenRGB3DSpatialPlugin::APIPointer);
     return true;
 }
 

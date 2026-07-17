@@ -16,7 +16,7 @@
 #include <QVector>
 #include <vector>
 #include "CustomControllerSourceRef.h"
-#include "ResourceManagerInterface.h"
+#include "OpenRGBPluginInterface.h"
 #include "LEDPosition3D.h"
 #include "CustomControllerClipboard.h"
 #include "CustomControllerTypes.h"
@@ -62,7 +62,7 @@ class CustomControllerDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent = nullptr);
+    explicit CustomControllerDialog(OpenRGBPluginAPIInterface* rm, QWidget *parent = nullptr);
     ~CustomControllerDialog() override;
 
 protected:
@@ -148,7 +148,7 @@ private slots:
 
 private:
     void SetupUI();
-    void RebuildMatrixHoleMask(RGBController* controller, int anchor_x, int anchor_y);
+    void RebuildMatrixHoleMask(RGBControllerInterface* controller, int anchor_x, int anchor_y);
     void RefreshLayoutGridVisuals();
     void RefreshSelectionFillTints();
     void ShowGridContextMenu(const QPoint& global_pos);
@@ -190,13 +190,13 @@ private:
     void SyncLayerDepthSpinFromCurrentLayer() const;
     QVector<float> ColumnWidthsQVector() const;
     QVector<float> RowHeightsQVector() const;
-    bool PlaceProfileLayout(RGBController* controller, int granularity, int item_idx, int start_x, int start_y);
+    bool PlaceProfileLayout(RGBControllerInterface* controller, int granularity, int item_idx, int start_x, int start_y);
     void UpdateGridDisplay();
     void refreshDeviceList(int controller_index = -1);
     bool assignSource(const CustomControllerSourceRef& source);
     void removeSourceFromGrid(const CustomControllerSourceRef& source);
     CustomControllerSourceRef currentSourceSelection() const;
-    RGBController* controllerForSource(const CustomControllerSourceRef& source) const;
+    RGBControllerInterface* controllerForSource(const CustomControllerSourceRef& source) const;
     void UpdateSummaryLabel();
     void UpdateGridColors();
     void UpdateCellInfo();
@@ -207,10 +207,10 @@ private:
     void RebuildLayerTabs();
     void AttachLayoutGridToLayerTab(int layer_index);
     void UpdateLayerTabControls();
-    bool IsItemAssigned(RGBController* controller, int granularity, int item_idx) const;
-    QColor GetItemColor(RGBController* controller, int granularity, int item_idx) const;
-    QColor GetAverageZoneColor(RGBController* controller, unsigned int zone_idx) const;
-    QColor GetAverageDeviceColor(RGBController* controller) const;
+    bool IsItemAssigned(RGBControllerInterface* controller, int granularity, int item_idx) const;
+    QColor GetItemColor(RGBControllerInterface* controller, int granularity, int item_idx) const;
+    QColor GetAverageZoneColor(RGBControllerInterface* controller, unsigned int zone_idx) const;
+    QColor GetAverageDeviceColor(RGBControllerInterface* controller) const;
     QColor GetMappingColor(const GridLEDMapping& mapping) const;
     QString GetMappingDescription(const GridLEDMapping& mapping) const;
     QString GetMappingTooltip(const GridLEDMapping& mapping) const;
@@ -219,7 +219,7 @@ private:
     void InferMappingGranularity();
     void WarnIfMappingCollisions() const;
 
-    ResourceManagerInterface* resource_manager;
+    OpenRGBPluginAPIInterface* resource_manager;
     Ui::CustomControllerDialog* ui = nullptr;
 
     QLineEdit*      name_edit;
@@ -266,7 +266,7 @@ private:
     CustomControllerPreviewDialog* preview_dialog;
 
     std::vector<GridLEDMapping> led_mappings;
-    std::map<std::pair<RGBController*, unsigned int>, RGBColor> identified_leds;
+    std::map<std::pair<RGBControllerInterface*, unsigned int>, RGBColor> identified_leds;
     float layout_grid_scale_mm;
     int current_layer;
     int selected_row;

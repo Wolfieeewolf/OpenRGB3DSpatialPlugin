@@ -65,7 +65,7 @@ QVBoxLayout* NewCustomControllerLayerTabLayout(QWidget* tab)
 
 } // namespace
 
-CustomControllerDialog::CustomControllerDialog(ResourceManagerInterface* rm, QWidget *parent)
+CustomControllerDialog::CustomControllerDialog(OpenRGBPluginAPIInterface* rm, QWidget *parent)
     : QDialog(parent),
       resource_manager(rm),
       layout_grid(nullptr),
@@ -116,7 +116,7 @@ void CustomControllerDialog::showEvent(QShowEvent* event)
 
     if(resource_manager)
     {
-        std::vector<RGBController*>& controllers = resource_manager->GetRGBControllers();
+        std::vector<RGBControllerInterface*> controllers = resource_manager->GetRGBControllers();
         CustomControllerMapping::RebindAll(led_mappings, controllers);
         UpdateGridDisplay();
         UpdateCellInfo();

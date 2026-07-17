@@ -15,7 +15,7 @@
 
 #include <memory>
 
-class ResourceManagerInterface;
+class OpenRGBPluginAPIInterface;
 
 // UDP telemetry pose contract (type "player_pose"):
 //   x,y,z     — player eye position in the game's native GameWorld space (not feet).
@@ -115,8 +115,8 @@ public:
     GameTelemetryBridge();
     ~GameTelemetryBridge();
 
-    bool Register(ResourceManagerInterface* rm);
-    void Unregister(ResourceManagerInterface* rm);
+    bool Register(OpenRGBPluginAPIInterface* rm);
+    void Unregister(OpenRGBPluginAPIInterface* rm);
 
     static void GetStats(unsigned int& packets_total,
                          unsigned int& packets_valid,

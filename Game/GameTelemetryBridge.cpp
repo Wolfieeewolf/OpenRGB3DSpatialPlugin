@@ -10,7 +10,7 @@
 #include "RoomSampleFrameShmReader.h"
 #include "RoomSampleConfigPublisher.h"
 #include "RoomSampleFrameProtocol.h"
-#include "LogManager.h"
+#include "PluginLog.h"
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -157,7 +157,7 @@ GameTelemetryBridge::~GameTelemetryBridge()
     StopUdpListener();
 }
 
-bool GameTelemetryBridge::Register(ResourceManagerInterface* rm)
+bool GameTelemetryBridge::Register(OpenRGBPluginAPIInterface* rm)
 {
     (void)rm;
     StartUdpListener();
@@ -165,7 +165,7 @@ bool GameTelemetryBridge::Register(ResourceManagerInterface* rm)
     return true;
 }
 
-void GameTelemetryBridge::Unregister(ResourceManagerInterface* rm)
+void GameTelemetryBridge::Unregister(OpenRGBPluginAPIInterface* rm)
 {
     (void)rm;
     g_room_sample_shm_reader.Stop();
