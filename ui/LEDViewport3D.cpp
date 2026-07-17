@@ -132,13 +132,13 @@ LEDViewport3D::~LEDViewport3D()
     }
     if(ensureGlCurrent())
     {
-        for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
-            it != display_plane_textures.end();
-            ++it)
-        {
-            glDeleteTextures(1, &it->second);
-        }
-        doneCurrent();
+    for(std::map<std::string, GLuint>::iterator it = display_plane_textures.begin();
+        it != display_plane_textures.end();
+        ++it)
+    {
+        glDeleteTextures(1, &it->second);
+    }
+    doneCurrent();
     }
     display_plane_textures.clear();
     display_plane_tex_upload_state.clear();
@@ -259,7 +259,7 @@ void LEDViewport3D::SyncScreenPreviewTimer()
         if(screen_preview_refresh_timer)
         {
             screen_preview_refresh_timer->stop();
-        }
+    }
         if(!display_plane_textures.empty())
         {
             makeCurrent();
@@ -399,13 +399,13 @@ void LEDViewport3D::SetViewportPaintingEnabled(bool enabled)
     if(viewport_paint_enabled_ == enabled)
     {
         return;
-    }
+}
     viewport_paint_enabled_ = enabled;
     SyncScreenPreviewTimer();
     if(enabled)
-    {
-        update();
-    }
+{
+    update();
+}
 }
 
 void LEDViewport3D::UpdateColors()
@@ -440,7 +440,7 @@ bool LEDViewport3D::FocusSelectionInView()
         }
     }
     else if(reference_points && selected_ref_point_idx >= 0 &&
-            selected_ref_point_idx < (int)reference_points->size())
+       selected_ref_point_idx < (int)reference_points->size())
     {
         VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
         if(ref_point)
@@ -453,7 +453,7 @@ bool LEDViewport3D::FocusSelectionInView()
         }
     }
     else if(controller_transforms && selected_controller_idx >= 0 &&
-            selected_controller_idx < (int)controller_transforms->size())
+       selected_controller_idx < (int)controller_transforms->size())
     {
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl && !ctrl->hidden_by_virtual)
@@ -552,9 +552,9 @@ void LEDViewport3D::UpdateGizmoPosition()
             gizmo.SetPosition(transform.position.x,
                               transform.position.y,
                               transform.position.z);
-            return;
+                return;
+            }
         }
-    }
 
     if(reference_points && selected_ref_point_idx >= 0 &&
        selected_ref_point_idx < (int)reference_points->size())
@@ -563,7 +563,7 @@ void LEDViewport3D::UpdateGizmoPosition()
         if(ref_point)
         {
             Vector3D pos = ref_point->GetPosition();
-            gizmo.SetTarget(ref_point);
+                gizmo.SetTarget(ref_point);
             gizmo.SetPosition(pos.x, pos.y, pos.z);
             return;
         }
@@ -575,13 +575,13 @@ void LEDViewport3D::UpdateGizmoPosition()
         ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl && !ctrl->hidden_by_virtual)
         {
-            gizmo.SetTarget(ctrl);
+                        gizmo.SetTarget(ctrl);
             gizmo.SetPosition(ctrl->transform.position.x,
                               ctrl->transform.position.y,
                               ctrl->transform.position.z);
-            return;
+                return;
+            }
         }
-    }
 
     gizmo.SetTarget(static_cast<DisplayPlane3D*>(nullptr));
 }
@@ -592,58 +592,58 @@ bool LEDViewport3D::IsGizmoDragging() const
 }
 
 void LEDViewport3D::emitGizmoDragCompleted()
-{
-    if(selected_controller_idx >= 0 && controller_transforms &&
-       selected_controller_idx < (int)controller_transforms->size())
     {
-        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
-        if(ctrl)
+        if(selected_controller_idx >= 0 && controller_transforms &&
+            selected_controller_idx < (int)controller_transforms->size())
         {
-            emit ControllerPositionChanged(selected_controller_idx,
+            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+            if(ctrl)
+            {
+                emit ControllerPositionChanged(selected_controller_idx,
                                              ctrl->transform.position.x,
                                              ctrl->transform.position.y,
                                              ctrl->transform.position.z);
-            emit ControllerRotationChanged(selected_controller_idx,
-                                           ctrl->transform.rotation.x,
-                                           ctrl->transform.rotation.y,
-                                           ctrl->transform.rotation.z);
+                emit ControllerRotationChanged(selected_controller_idx,
+                                             ctrl->transform.rotation.x,
+                                             ctrl->transform.rotation.y,
+                                             ctrl->transform.rotation.z);
+            }
         }
-    }
-    else if(selected_ref_point_idx >= 0 && reference_points &&
-            selected_ref_point_idx < (int)reference_points->size())
-    {
-        VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
-        if(ref_point)
+        else if(selected_ref_point_idx >= 0 && reference_points &&
+                selected_ref_point_idx < (int)reference_points->size())
         {
+            VirtualReferencePoint3D* ref_point = (*reference_points)[selected_ref_point_idx].get();
+        if(ref_point)
+            {
             const Vector3D pos = ref_point->GetPosition();
             emit ReferencePointPositionChanged(selected_ref_point_idx, pos.x, pos.y, pos.z);
+            }
         }
-    }
-    else if(display_planes && selected_display_plane_idx >= 0 &&
-            selected_display_plane_idx < (int)display_planes->size())
-    {
-        DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
-        if(plane)
+        else if(display_planes && selected_display_plane_idx >= 0 &&
+                selected_display_plane_idx < (int)display_planes->size())
         {
+            DisplayPlane3D* plane = (*display_planes)[selected_display_plane_idx].get();
+            if(plane)
+            {
             const Transform3D& transform = plane->GetTransform();
-            emit DisplayPlanePositionChanged(selected_display_plane_idx,
-                                             transform.position.x,
-                                             transform.position.y,
-                                             transform.position.z);
-            emit DisplayPlaneRotationChanged(selected_display_plane_idx,
-                                             transform.rotation.x,
-                                             transform.rotation.y,
-                                             transform.rotation.z);
+                emit DisplayPlanePositionChanged(selected_display_plane_idx,
+                                                 transform.position.x,
+                                                 transform.position.y,
+                                                 transform.position.z);
+                emit DisplayPlaneRotationChanged(selected_display_plane_idx,
+                                                 transform.rotation.x,
+                                                 transform.rotation.y,
+                                                 transform.rotation.z);
+            }
         }
-    }
 }
 
 void LEDViewport3D::NotifyControllerTransformChanged()
 {
     if(!controller_transforms) return;
     if(selected_controller_idx >= 0 && selected_controller_idx < (int)controller_transforms->size())
-    {
-        ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
+        {
+            ControllerTransform* ctrl = (*controller_transforms)[selected_controller_idx].get();
         if(ctrl && !ctrl->hidden_by_virtual)
         {
             ControllerLayout3D::MarkWorldPositionsDirty(ctrl);
@@ -783,9 +783,9 @@ void LEDViewport3D::CalculateControllerBounds(ControllerTransform* ctrl, Vector3
                 min_bounds = {x0, y0, z0};
                 max_bounds = {x1, y1, z1};
                 have_bounds = true;
-            }
-            else
-            {
+        }
+        else
+        {
                 ExpandBoundsForBlockerCell(min_bounds, max_bounds, x0, y0, z0, x1, y1, z1);
             }
         }

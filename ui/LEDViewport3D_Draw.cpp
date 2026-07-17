@@ -148,8 +148,13 @@ void LEDViewport3D::paintGlScene()
               camera_target_x, camera_target_y, camera_target_z,
               0.0f, 1.0f, 0.0f);
 
+    glGetFloatv(GL_MODELVIEW_MATRIX, pick_view_modelview_);
+
     glPushMatrix();
     pushRoomTurntableGl();
+
+    // Capture V*T (+ proj/viewport) while GL still matches what controllers/planes see.
+    capturePickMatricesFromGl();
 
     DrawGrid();
     DrawAxes();
@@ -178,15 +183,8 @@ void LEDViewport3D::paintGlScene()
 
     if(has_controller_selected || has_ref_point_selected || has_display_plane_selected)
     {
-        float modelview[16];
-        float projection[16];
-        int viewport[4];
-        glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-        glGetFloatv(GL_PROJECTION_MATRIX, projection);
-        glGetIntegerv(GL_VIEWPORT, viewport);
-
         gizmo.SetCameraDistance(camera_distance);
-        gizmo.Render(modelview, projection, viewport);
+        gizmo.Render(pick_scene_modelview_, pick_projection_, pick_viewport_);
     }
 
     glPopMatrix();
@@ -215,9 +213,7 @@ void LEDViewport3D::paintViewportText2D()
     float modelview[16];
     float projection[16];
     int viewport[4];
-    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-    glGetFloatv(GL_PROJECTION_MATRIX, projection);
-    glGetIntegerv(GL_VIEWPORT, viewport);
+    loadScenePickMatrices(modelview, projection, viewport);
 
     DrawAxisLabels(modelview, projection, viewport);
 

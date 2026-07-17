@@ -6,7 +6,6 @@
 #include <QFocusEvent>
 #include <QEvent>
 #include <QShortcut>
-#include <QMatrix4x4>
 #include <QMessageBox>
 
 #include <cmath>
@@ -68,14 +67,69 @@ float ViewportQtDragDistanceGl(const QWidget* widget, const GLint vp[4], const Q
 }
 } // namespace
 
+void LEDViewport3D::capturePickMatricesFromGl()
+{
+    glGetFloatv(GL_MODELVIEW_MATRIX, pick_scene_modelview_);
+    glGetFloatv(GL_PROJECTION_MATRIX, pick_projection_);
+    glGetIntegerv(GL_VIEWPORT, pick_viewport_);
+    pick_matrices_valid_ = (pick_viewport_[2] > 0 && pick_viewport_[3] > 0);
+}
+
+void LEDViewport3D::computePickMatricesFallback()
+{
+    const int fb_w = viewportFramebufferWidth(width());
+    const int fb_h = viewportFramebufferHeight(height());
+    pick_viewport_[0] = 0;
+    pick_viewport_[1] = 0;
+    pick_viewport_[2] = fb_w;
+    pick_viewport_[3] = fb_h;
+
+    const float aspect = (float)fb_w / (float)std::max(1, fb_h);
+    const ViewportMat4 proj = ViewportMath::Perspective(45.0f, aspect, 0.1f, 100000.0f);
+    std::memcpy(pick_projection_, proj.m, sizeof(float) * 16);
+
+    const float pitch_rad = camera_pitch * (float)M_PI / 180.0f;
+    const float yaw_rad = camera_yaw * (float)M_PI / 180.0f;
+    const float cos_pitch = std::cos(pitch_rad);
+    const ViewportVec3 eye = {
+        camera_target_x + camera_distance * cos_pitch * std::cos(yaw_rad),
+        camera_target_y + camera_distance * std::sin(pitch_rad),
+        camera_target_z + camera_distance * cos_pitch * std::sin(yaw_rad),
+    };
+    const ViewportVec3 center = {camera_target_x, camera_target_y, camera_target_z};
+    const ViewportVec3 up = {0.0f, 1.0f, 0.0f};
+    const ViewportMat4 view = ViewportMath::LookAt(eye, center, up);
+    std::memcpy(pick_view_modelview_, view.m, sizeof(float) * 16);
+
+    ViewportMat4 scene = view;
+    if(hasRoomPreviewRotation())
+    {
+        scene = ViewportMath::Multiply(view, roomTurntableMatrix());
+    }
+    std::memcpy(pick_scene_modelview_, scene.m, sizeof(float) * 16);
+    pick_matrices_valid_ = true;
+}
+
 void LEDViewport3D::loadPickMatrices(float modelview[16], float projection[16], int viewport[4])
 {
-    if(ensureGlCurrent())
+    if(!pick_matrices_valid_)
     {
-        glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-        glGetFloatv(GL_PROJECTION_MATRIX, projection);
-        glGetIntegerv(GL_VIEWPORT, viewport);
+        computePickMatricesFallback();
     }
+    std::memcpy(modelview, pick_view_modelview_, sizeof(float) * 16);
+    std::memcpy(projection, pick_projection_, sizeof(float) * 16);
+    std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
+}
+
+void LEDViewport3D::loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4])
+{
+    if(!pick_matrices_valid_)
+    {
+        computePickMatricesFallback();
+    }
+    std::memcpy(modelview, pick_scene_modelview_, sizeof(float) * 16);
+    std::memcpy(projection, pick_projection_, sizeof(float) * 16);
+    std::memcpy(viewport, pick_viewport_, sizeof(int) * 4);
 }
 
 void LEDViewport3D::DefaultCamera(float& distance, float& yaw, float& pitch,
@@ -132,42 +186,10 @@ ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
 
 void LEDViewport3D::transformPickRay(float ray_origin[3], float ray_direction[3]) const
 {
-    if(!hasRoomPreviewRotation())
-    {
-        return;
-    }
-
-    // ViewportMat4 is column-major (OpenGL). QMatrix4x4(float*) is row-major — use data().
-    QMatrix4x4 matrix;
-    std::memcpy(matrix.data(), roomTurntableMatrix().m, sizeof(float) * 16);
-    bool invertible = false;
-    const QMatrix4x4 inverse = matrix.inverted(&invertible);
-    if(!invertible)
-    {
-        return;
-    }
-
-    const QVector4D origin(ray_origin[0], ray_origin[1], ray_origin[2], 1.0f);
-    const QVector4D direction(ray_direction[0], ray_direction[1], ray_direction[2], 0.0f);
-    const QVector4D local_origin = inverse * origin;
-    const QVector4D local_direction = inverse * direction;
-
-    ray_origin[0] = local_origin.x();
-    ray_origin[1] = local_origin.y();
-    ray_origin[2] = local_origin.z();
-
-    ray_direction[0] = local_direction.x();
-    ray_direction[1] = local_direction.y();
-    ray_direction[2] = local_direction.z();
-
-    const float length = std::sqrt(ray_direction[0] * ray_direction[0] + ray_direction[1] * ray_direction[1] +
-                                   ray_direction[2] * ray_direction[2]);
-    if(length > 1e-6f)
-    {
-        ray_direction[0] /= length;
-        ray_direction[1] /= length;
-        ray_direction[2] /= length;
-    }
+    (void)ray_origin;
+    (void)ray_direction;
+    // Picking unprojects with view*turntable (same as draw), so the ray is already
+    // in layout space. Kept as a no-op for ABI/call-site stability.
 }
 
 bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3])
@@ -175,7 +197,8 @@ bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], floa
     float modelview[16];
     float projection[16];
     int viewport[4];
-    loadPickMatrices(modelview, projection, viewport);
+    // Unproject with the same V*T used to draw controllers/planes — ray is in layout space.
+    loadScenePickMatrices(modelview, projection, viewport);
 
     GLdouble near_x = 0.0;
     GLdouble near_y = 0.0;
@@ -223,7 +246,6 @@ bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], floa
     ray_direction[0] /= length;
     ray_direction[1] /= length;
     ray_direction[2] /= length;
-    transformPickRay(ray_origin, ray_direction);
     return true;
 }
 
@@ -374,8 +396,13 @@ void LEDViewport3D::ResetCameraToDefault()
 {
     DefaultCamera(camera_distance, camera_yaw, camera_pitch,
                   camera_target_x, camera_target_y, camera_target_z);
+    const GridExtents extents = GetRoomExtents();
+    camera_target_x = extents.width_units * 0.5f;
+    camera_target_y = extents.height_units * 0.5f;
+    camera_target_z = extents.depth_units * 0.5f;
     resetRoomPreviewSpin();
     deselectRoomViewport();
+    pick_matrices_valid_ = false;
     update();
 }
 
@@ -387,6 +414,29 @@ void LEDViewport3D::clearCameraDragState()
     dragging_room_turntable = false;
 }
 
+void LEDViewport3D::retargetOrbitToRoomCenterPreservingEye()
+{
+    const float pitch_rad = camera_pitch * (float)M_PI / 180.0f;
+    const float yaw_rad = camera_yaw * (float)M_PI / 180.0f;
+    const float cos_pitch = std::cos(pitch_rad);
+    const float eye_x = camera_target_x + camera_distance * cos_pitch * std::cos(yaw_rad);
+    const float eye_y = camera_target_y + camera_distance * std::sin(pitch_rad);
+    const float eye_z = camera_target_z + camera_distance * cos_pitch * std::sin(yaw_rad);
+
+    const GridExtents extents = GetRoomExtents();
+    camera_target_x = extents.width_units * 0.5f;
+    camera_target_y = extents.height_units * 0.5f;
+    camera_target_z = extents.depth_units * 0.5f;
+
+    const float dx = eye_x - camera_target_x;
+    const float dy = eye_y - camera_target_y;
+    const float dz = eye_z - camera_target_z;
+    camera_distance = std::max(1.0f, std::sqrt(dx * dx + dy * dy + dz * dz));
+    camera_pitch = std::asin(std::clamp(dy / camera_distance, -1.0f, 1.0f)) * 180.0f / (float)M_PI;
+    camera_yaw = std::atan2(dz, dx) * 180.0f / (float)M_PI;
+    pick_matrices_valid_ = false;
+}
+
 void LEDViewport3D::mousePressEvent(QMouseEvent *event)
 {
     setFocus(Qt::MouseFocusReason);
@@ -396,7 +446,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     float modelview[16];
     float projection[16];
     int viewport[4];
-    loadPickMatrices(modelview, projection, viewport);
+    loadScenePickMatrices(modelview, projection, viewport);
 
     int gl_win_x = 0;
     int gl_win_y = 0;
@@ -415,7 +465,6 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             gizmo.SetGridSnap(grid_snap_enabled, 1.0f);
             gizmo.SetCameraDistance(camera_distance);
-            multiplyModelviewByRoomTurntable(modelview);
             if(gizmo.HandleMousePress(event, gl_win_x, gl_win_y, modelview, projection, viewport))
             {
                 update();
@@ -481,6 +530,18 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             return;
         }
 
+        // Display planes must be picked on press (same as controllers). Otherwise a miss on the
+        // thin gizmo falls through to the room AABB, clears the plane, and starts turntable spin.
+        const int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
+        if(picked_plane >= 0)
+        {
+            ClearSelection();
+            SelectDisplayPlane(picked_plane);
+            emit DisplayPlaneSelected(picked_plane);
+            update();
+            return;
+        }
+
         dragging_grab = false;
         dragging_pan = false;
         dragging_rotate = false;
@@ -516,6 +577,9 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
     }
     else if(event->button() == Qt::RightButton)
     {
+        // Orbit around the live room center. Preserve the current eye position so
+        // beginning a right-drag does not cause a visible camera jump.
+        retargetOrbitToRoomCenterPreservingEye();
         dragging_grab = false;
         dragging_pan = false;
         dragging_rotate = true;
@@ -530,6 +594,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     float modelview[16];
     float projection[16];
     int viewport[4];
+    // Camera view for pan axes; scene (V*T) for gizmo hover/drag.
     loadPickMatrices(modelview, projection, viewport);
 
     const float delta_x_gl = (float)delta.x() * ViewportQtToGlScaleX(this, reinterpret_cast<const GLint*>(viewport));
@@ -543,11 +608,11 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
     gizmo.SetCameraDistance(camera_distance);
 
     const bool left_held = (event->buttons() & Qt::LeftButton) != 0;
-    if(left_held)
-    {
-        multiplyModelviewByRoomTurntable(modelview);
-    }
-    if(left_held && gizmo.HandleMouseMove(event, gl_win_x, gl_win_y, modelview, projection, viewport))
+    float gizmo_modelview[16];
+    float gizmo_projection[16];
+    int gizmo_viewport[4];
+    loadScenePickMatrices(gizmo_modelview, gizmo_projection, gizmo_viewport);
+    if(gizmo.IsActive() && gizmo.HandleMouseMove(event, gl_win_x, gl_win_y, gizmo_modelview, gizmo_projection, gizmo_viewport))
     {
         if(gizmo.IsDragging())
         {
@@ -569,7 +634,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if(left_held && gizmo.IsActive())
+    if(gizmo.IsActive())
     {
         const GizmoAxis hover = gizmo.GetHoverAxis();
         if(hover != last_gizmo_hover_axis)
@@ -586,6 +651,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         room_turntable_yaw_deg += delta_x_gl * kRoomTurntableSpinSensitivity;
         room_turntable_pitch_deg += delta_y_gl * kRoomTurntableSpinSensitivity;
         clampRoomTurntablePitch();
+        pick_matrices_valid_ = false;
         update();
     }
     else if(dragging_grab && left_held)
@@ -606,6 +672,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         camera_target_x += forward_x * delta_y_gl * grab_sensitivity;
         camera_target_z += forward_z * delta_y_gl * grab_sensitivity;
 
+        pick_matrices_valid_ = false;
         update();
     }
     else if(dragging_rotate && (event->buttons() & Qt::RightButton))
@@ -617,6 +684,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         if(camera_pitch > 89.0f) camera_pitch = 89.0f;
         if(camera_pitch < -89.0f) camera_pitch = -89.0f;
 
+        pick_matrices_valid_ = false;
         update();
     }
     else if(dragging_pan && (event->buttons() & Qt::MiddleButton))
@@ -637,6 +705,7 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
         camera_target_y += up_y * delta_y_gl * pan_sensitivity;
         camera_target_z += up_z * delta_y_gl * pan_sensitivity;
 
+        pick_matrices_valid_ = false;
         update();
     }
     else
@@ -649,9 +718,12 @@ void LEDViewport3D::mouseMoveEvent(QMouseEvent *event)
 
 void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
 {
+    float modelview[16];
+    float projection[16];
     int viewport[4];
-    makeCurrent();
-    glGetIntegerv(GL_VIEWPORT, viewport);
+    loadScenePickMatrices(modelview, projection, viewport);
+    (void)modelview;
+    (void)projection;
     int gl_win_x = 0;
     int gl_win_y = 0;
     MapQtMouseToGluWindow(this, event, reinterpret_cast<const GLint*>(viewport), gl_win_x, gl_win_y);
@@ -697,7 +769,6 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     {
         dragging_rotate = false;
     }
-    doneCurrent();
     update();
 }
 
@@ -727,6 +798,7 @@ void LEDViewport3D::wheelEvent(QWheelEvent *event)
     if(camera_distance < 1.0f) camera_distance = 1.0f;
     if(camera_distance > 50000.0f) camera_distance = 50000.0f;
 
+    pick_matrices_valid_ = false;
     update();
 }
 
@@ -836,6 +908,9 @@ void LEDViewport3D::keyPressEvent(QKeyEvent *event)
     if(event->key() == Qt::Key_Escape)
     {
         ClearSelection();
+        emit ControllerSelected(-1);
+        emit ReferencePointSelected(-1);
+        emit DisplayPlaneSelected(-1);
         event->accept();
         return;
     }
@@ -923,7 +998,7 @@ bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
                                    const Vector3D& box_min, const Vector3D& box_max, float& distance)
 {
     float tmin = 0.0f;
-    float tmax = 1000.0f;
+    float tmax = FLT_MAX;
 
     for(int i = 0; i < 3; i++)
     {

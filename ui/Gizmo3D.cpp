@@ -538,7 +538,7 @@ Ray3D Gizmo3D::GenerateRay(int mouse_x, int mouse_y, const float* modelview, con
 bool Gizmo3D::RayBoxIntersect(const Ray3D& ray, const Box3D& box, float& distance)
 {
     float tmin = 0.0f;
-    float tmax = 1000.0f;
+    float tmax = 1.0e30f;
 
     for(int i = 0; i < 3; i++)
     {

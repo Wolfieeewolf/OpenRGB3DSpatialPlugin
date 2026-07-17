@@ -179,6 +179,7 @@ private:
     void focusSelectionFromKeyboard();
     void resetCameraFromKeyboard();
     void clearCameraDragState();
+    void retargetOrbitToRoomCenterPreservingEye();
     void clearSceneObjectSelection();
     void resetRoomPreviewSpin();
     void clampRoomTurntablePitch();
@@ -215,7 +216,12 @@ private:
     void paintViewportText2D();
     void paintViewportLabelsAfterScene();
     bool ensureGlCurrent() const;
+    void capturePickMatricesFromGl();
+    void computePickMatricesFallback();
+    /** Camera view only (no room turntable) — pan/orbit axes. */
     void loadPickMatrices(float modelview[16], float projection[16], int viewport[4]);
+    /** Same modelview used to draw controllers/planes/gizmo (view * turntable). */
+    void loadScenePickMatrices(float modelview[16], float projection[16], int viewport[4]);
     void paintGlScene();
     void prepareForQtPainterInPaintGl();
     size_t populateLedDrawBuffers(ControllerTransform* ctrl);
@@ -322,6 +328,12 @@ private:
     bool    room_viewport_selected_;
     float   room_turntable_yaw_deg;
     float   room_turntable_pitch_deg;
+    /** Captured during paintGlScene before QPainter — pick must match drawn pixels. */
+    bool    pick_matrices_valid_ = false;
+    float   pick_view_modelview_[16] = {};
+    float   pick_scene_modelview_[16] = {};
+    float   pick_projection_[16] = {};
+    int     pick_viewport_[4] = {0, 0, 1, 1};
     QPoint  last_mouse_pos;
     QPoint  click_start_pos;
 
