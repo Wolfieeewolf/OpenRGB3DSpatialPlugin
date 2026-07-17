@@ -1,0 +1,68 @@
+# Normalize text files to LF in the repository.
+# Checkout uses LF as well so Windows/Linux stay consistent and
+# LF↔CRLF phantom diffs stop showing up in git status.
+* text=auto eol=lf
+
+# Explicit source / project text types (safety net)
+*.c text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.cxx text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.hh text eol=lf
+*.inl text eol=lf
+*.java text eol=lf
+*.kt text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+*.pro text eol=lf
+*.pri text eol=lf
+*.qml text eol=lf
+*.qrc text eol=lf
+*.ui text eol=lf
+*.cmake text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=lf
+*.glsl text eol=lf
+*.vert text eol=lf
+*.frag text eol=lf
+*.comp text eol=lf
+
+# Binary assets / build products
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.dll binary
+*.exe binary
+*.lib binary
+*.a binary
+*.so binary
+*.dylib binary
+*.obj binary
+*.o binary
+*.pdb binary
+*.exp binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.tar binary
+*.bin binary
+*.dat binary
+*.qrc.depends binary
