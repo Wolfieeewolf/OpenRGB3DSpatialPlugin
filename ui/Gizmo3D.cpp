@@ -2,24 +2,10 @@
 
 #include "Gizmo3D.h"
 #include "QtCompat.h"
+#include "viewport/ViewportGLIncludes.h"
 
 #include <cmath>
 #include <QMouseEvent>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#else
-#include <GL/gl.h>
-#include <GL/glu.h>
-#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

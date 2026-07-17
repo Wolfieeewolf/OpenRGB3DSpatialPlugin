@@ -16,7 +16,6 @@
 #include "viewport/ViewportGLIncludes.h"
 #include "VirtualReferencePoint3D.h"
 
-#include <GL/glu.h>
 #ifdef near
 #undef near
 #endif

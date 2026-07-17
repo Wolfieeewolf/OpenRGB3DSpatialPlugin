@@ -14,7 +14,13 @@
 #include <windows.h>
 #endif
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#else
 #include <GL/gl.h>
+#include <GL/glu.h>
+#endif
 
 #ifndef GL_PROGRAM_POINT_SIZE
 #define GL_PROGRAM_POINT_SIZE 0x8642

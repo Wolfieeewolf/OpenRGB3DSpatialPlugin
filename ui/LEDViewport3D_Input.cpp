@@ -21,7 +21,6 @@
 #include "viewport/ViewportMath.h"
 #include "VirtualReferencePoint3D.h"
 
-#include <GL/glu.h>
 #ifdef near
 #undef near
 #endif

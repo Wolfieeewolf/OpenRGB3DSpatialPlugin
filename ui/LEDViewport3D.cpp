@@ -20,7 +20,6 @@
 #include "VirtualReferencePoint3D.h"
 #include "ScreenCaptureManager.h"
 
-#include <GL/glu.h>
 #ifdef near
 #undef near
 #endif
