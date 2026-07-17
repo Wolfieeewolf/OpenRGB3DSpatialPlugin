@@ -184,14 +184,15 @@ private:
     void resetRoomPreviewSpin();
     void clampRoomTurntablePitch();
     void applyViewportClickPick(int gl_win_x, int gl_win_y);
+    void showGizmoModeFeedback();
     void selectRoomViewport();
     void deselectRoomViewport();
     bool hasRoomPreviewRotation() const;
     void getRoomVolumeAabb(Vector3D& box_min, Vector3D& box_max) const;
     void getRoomTurntablePivot(float& pivot_x, float& pivot_y, float& pivot_z) const;
     ViewportMat4 roomTurntableMatrix() const;
-    bool buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3]);
-    bool pickRoomVolume(int win_x, int win_y);
+    bool buildPickRay(int win_x, int win_y, Ray3D& ray);
+    bool pickRoomVolume(const Ray3D& ray);
     void pushRoomTurntableGl() const;
     void DrawRoomViewportSelection();
     void fillRoomViewportSelectionLineBuffers(std::vector<float>& positions, std::vector<float>& colors) const;
@@ -239,13 +240,12 @@ private:
     bool PlaneWantsScreenPreview(DisplayPlane3D* plane) const;
     bool PlaneWantsCalibrationPattern(DisplayPlane3D* plane) const;
 
-    /* mouse_x/mouse_y are OpenGL window coordinates (see MapQtMouseToGluWindow in .cpp), not raw Qt widget Y. */
-    int PickController(int mouse_x, int mouse_y);
-    int PickReferencePoint(int mouse_x, int mouse_y);
-    int PickDisplayPlane(int mouse_x, int mouse_y);
-    bool RayBoxIntersect(float ray_origin[3], float ray_direction[3],
+    int PickController(const Ray3D& ray);
+    int PickReferencePoint(const Ray3D& ray);
+    int PickDisplayPlane(const Ray3D& ray);
+    bool RayBoxIntersect(const Ray3D& ray,
                         const Vector3D& box_min, const Vector3D& box_max, float& distance);
-    bool RaySphereIntersect(float ray_origin[3], float ray_direction[3],
+    bool RaySphereIntersect(const Ray3D& ray,
                            const Vector3D& sphere_center, float sphere_radius, float& distance);
 
     void CalculateControllerBounds(ControllerTransform* ctrl, Vector3D& min_bounds, Vector3D& max_bounds);
@@ -337,6 +337,7 @@ private:
 
     Gizmo3D gizmo;
     GizmoAxis last_gizmo_hover_axis;
+    QTimer  gizmo_mode_feedback_timer_;
     bool    viewport_keyboard_shortcuts_installed_ = false;
     bool    viewport_paint_enabled_ = false;
 

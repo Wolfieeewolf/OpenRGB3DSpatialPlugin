@@ -114,6 +114,17 @@ void GlWindowPointToQtLogical(const QWidget* widget, const GLint vp[4], double g
     qt_x = (gl_x - (double)vp[0]) * (double)std::max(1, widget->width()) / (double)std::max(1, vp[2]);
     qt_y = (gl_y - (double)vp[1]) * (double)std::max(1, widget->height()) / (double)std::max(1, vp[3]);
 }
+
+const char* GizmoModeLabel(GizmoMode mode)
+{
+    switch(mode)
+    {
+        case GIZMO_MODE_MOVE:     return "Move";
+        case GIZMO_MODE_ROTATE:   return "Rotate";
+        case GIZMO_MODE_FREEROAM: return "Freeroam";
+    }
+    return "Unknown";
+}
 } // namespace
 
 void LEDViewport3D::paintGL()
@@ -264,6 +275,27 @@ void LEDViewport3D::paintViewportText2D()
                                     QString::number(gizmo.GetRotateAccumDegrees(), 'f', 1),
                                     snap_text);
         painter.drawText(QPointF(label_x + 12.0, label_y - 12.0), text);
+        painter.end();
+    }
+
+    if(gizmo_mode_feedback_timer_.isActive())
+    {
+        prepareForQtPainterInPaintGl();
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+
+        const QString text = QString("Gizmo: %1").arg(QString::fromLatin1(GizmoModeLabel(gizmo.GetMode())));
+        const QFont font("Arial", 10, QFont::Bold);
+        painter.setFont(font);
+        const QRect text_bounds = QFontMetrics(font).boundingRect(text);
+        const QRectF panel(12.0, 12.0, text_bounds.width() + 24.0, text_bounds.height() + 14.0);
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(20, 24, 30, 205));
+        painter.drawRoundedRect(panel, 5.0, 5.0);
+        painter.setPen(QColor(245, 245, 245));
+        painter.drawText(panel, Qt::AlignCenter, text);
         painter.end();
     }
 }

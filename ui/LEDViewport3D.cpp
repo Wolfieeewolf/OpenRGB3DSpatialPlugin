@@ -120,6 +120,12 @@ LEDViewport3D::LEDViewport3D(QWidget *parent)
     setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+
+    gizmo_mode_feedback_timer_.setSingleShot(true);
+    connect(&gizmo_mode_feedback_timer_, &QTimer::timeout, this, [this]()
+    {
+        update();
+    });
 }
 
 LEDViewport3D::~LEDViewport3D()

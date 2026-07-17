@@ -262,11 +262,13 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
 
     if(selected_axis == GIZMO_AXIS_CENTER)
     {
+        // All modes cycle only on release after a stationary center click.
+        // This prevents a slightly imprecise press/drag from changing modes.
+        center_press_pending = true;
+        dragging = false;
+
         if(mode == GIZMO_MODE_FREEROAM)
         {
-            center_press_pending = true;
-            dragging = false;
-
             float right[3] = { modelview[0], modelview[4], modelview[8] };
             float up[3]    = { modelview[1], modelview[5], modelview[9] };
             drag_plane_normal[0] = right[1]*up[2] - right[2]*up[1];
@@ -300,9 +302,7 @@ bool Gizmo3D::HandleMousePress(QMouseEvent* event, int gl_win_x, int gl_win_y,
                     drag_grab_offset[2] = hitz - gizmo_z;
                 }
             }
-            return true;
         }
-        CycleMode();
         return true;
     }
     else if(selected_axis != GIZMO_AXIS_NONE)
@@ -382,6 +382,15 @@ bool Gizmo3D::HandleMouseMove(QMouseEvent* event, int gl_win_x, int gl_win_y,
         const float dist_gl = sqrtf(dx * dx + dy * dy);
         if(dist_gl >= GIZMO_DRAG_SLOP_GL_PX)
         {
+            if(mode != GIZMO_MODE_FREEROAM)
+            {
+                // Move/rotate center has no drag action: consume the gesture without
+                // cycling. A deliberate click still cycles on release.
+                center_press_pending = false;
+                selected_axis = GIZMO_AXIS_NONE;
+                hover_axis = GIZMO_AXIS_NONE;
+                return true;
+            }
             dragging = true;
             last_mouse_pos = cur;
             last_gl_mouse_pos = QPoint(gl_win_x, gl_win_y);

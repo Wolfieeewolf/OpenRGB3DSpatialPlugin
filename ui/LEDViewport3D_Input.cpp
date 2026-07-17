@@ -184,7 +184,7 @@ ViewportMat4 LEDViewport3D::roomTurntableMatrix() const
                              Multiply(RotationX(room_turntable_pitch_deg), Translation(-pivot_x, -pivot_y, -pivot_z))));
 }
 
-bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], float ray_direction[3])
+bool LEDViewport3D::buildPickRay(int win_x, int win_y, Ray3D& ray)
 {
     float modelview[16];
     float projection[16];
@@ -221,41 +221,34 @@ bool LEDViewport3D::buildPickRay(int win_x, int win_y, float ray_origin[3], floa
         return false;
     }
 
-    ray_origin[0] = (float)near_x;
-    ray_origin[1] = (float)near_y;
-    ray_origin[2] = (float)near_z;
-    ray_direction[0] = (float)(far_x - near_x);
-    ray_direction[1] = (float)(far_y - near_y);
-    ray_direction[2] = (float)(far_z - near_z);
+    ray.origin[0] = (float)near_x;
+    ray.origin[1] = (float)near_y;
+    ray.origin[2] = (float)near_z;
+    ray.direction[0] = (float)(far_x - near_x);
+    ray.direction[1] = (float)(far_y - near_y);
+    ray.direction[2] = (float)(far_z - near_z);
 
-    const float length = std::sqrt(ray_direction[0] * ray_direction[0] + ray_direction[1] * ray_direction[1] +
-                                   ray_direction[2] * ray_direction[2]);
+    const float length = std::sqrt(ray.direction[0] * ray.direction[0] + ray.direction[1] * ray.direction[1] +
+                                   ray.direction[2] * ray.direction[2]);
     if(length <= 1e-6f)
     {
         return false;
     }
 
-    ray_direction[0] /= length;
-    ray_direction[1] /= length;
-    ray_direction[2] /= length;
+    ray.direction[0] /= length;
+    ray.direction[1] /= length;
+    ray.direction[2] /= length;
     return true;
 }
 
-bool LEDViewport3D::pickRoomVolume(int win_x, int win_y)
+bool LEDViewport3D::pickRoomVolume(const Ray3D& ray)
 {
-    float ray_origin[3]{};
-    float ray_direction[3]{};
-    if(!buildPickRay(win_x, win_y, ray_origin, ray_direction))
-    {
-        return false;
-    }
-
     Vector3D box_min{};
     Vector3D box_max{};
     getRoomVolumeAabb(box_min, box_max);
 
     float distance = 0.0f;
-    return RayBoxIntersect(ray_origin, ray_direction, box_min, box_max, distance);
+    return RayBoxIntersect(ray, box_min, box_max, distance);
 }
 
 void LEDViewport3D::clearSceneObjectSelection()
@@ -331,7 +324,17 @@ void LEDViewport3D::clampRoomTurntablePitch()
 
 void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
 {
-    const int picked_controller = PickController(gl_win_x, gl_win_y);
+    Ray3D ray{};
+    if(!buildPickRay(gl_win_x, gl_win_y, ray))
+    {
+        ClearSelection();
+        emit ControllerSelected(-1);
+        emit ReferencePointSelected(-1);
+        emit DisplayPlaneSelected(-1);
+        return;
+    }
+
+    const int picked_controller = PickController(ray);
     if(picked_controller >= 0)
     {
         ClearSelection();
@@ -341,7 +344,7 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         return;
     }
 
-    const int picked_ref = PickReferencePoint(gl_win_x, gl_win_y);
+    const int picked_ref = PickReferencePoint(ray);
     if(picked_ref >= 0)
     {
         ClearSelection();
@@ -350,7 +353,7 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         return;
     }
 
-    const int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
+    const int picked_plane = PickDisplayPlane(ray);
     if(picked_plane >= 0)
     {
         ClearSelection();
@@ -359,7 +362,7 @@ void LEDViewport3D::applyViewportClickPick(int gl_win_x, int gl_win_y)
         return;
     }
 
-    if(pickRoomVolume(gl_win_x, gl_win_y))
+    if(pickRoomVolume(ray))
     {
         selectRoomViewport();
         return;
@@ -391,6 +394,12 @@ void LEDViewport3D::clearCameraDragState()
     dragging_pan = false;
     dragging_grab = false;
     dragging_room_turntable = false;
+}
+
+void LEDViewport3D::showGizmoModeFeedback()
+{
+    gizmo_mode_feedback_timer_.start(1200);
+    update();
 }
 
 void LEDViewport3D::retargetOrbitToRoomCenterPreservingEye()
@@ -451,17 +460,15 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
         }
 
-        int picked_ref_point = PickReferencePoint(gl_win_x, gl_win_y);
-        if(picked_ref_point >= 0)
+        Ray3D ray{};
+        if(!buildPickRay(gl_win_x, gl_win_y, ray))
         {
-            ClearSelection();
-            SelectReferencePoint(picked_ref_point);
-            emit ReferencePointSelected(picked_ref_point);
-            update();
+            clearCameraDragState();
+            dragging_grab = true;
             return;
         }
 
-        int picked_controller = PickController(gl_win_x, gl_win_y);
+        const int picked_controller = PickController(ray);
         if(picked_controller >= 0)
         {
             if(event->modifiers() & Qt::ControlModifier)
@@ -509,9 +516,19 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             return;
         }
 
+        const int picked_ref_point = PickReferencePoint(ray);
+        if(picked_ref_point >= 0)
+        {
+            ClearSelection();
+            SelectReferencePoint(picked_ref_point);
+            emit ReferencePointSelected(picked_ref_point);
+            update();
+            return;
+        }
+
         // Display planes must be picked on press (same as controllers). Otherwise a miss on the
         // thin gizmo falls through to the room AABB, clears the plane, and starts turntable spin.
-        const int picked_plane = PickDisplayPlane(gl_win_x, gl_win_y);
+        const int picked_plane = PickDisplayPlane(ray);
         if(picked_plane >= 0)
         {
             ClearSelection();
@@ -528,7 +545,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
         {
             // Only spin when the click is on the room volume; otherwise treat as grab so
             // release can still click-pick controllers/planes consistently.
-            if(pickRoomVolume(gl_win_x, gl_win_y))
+            if(pickRoomVolume(ray))
             {
                 dragging_room_turntable = true;
             }
@@ -538,7 +555,7 @@ void LEDViewport3D::mousePressEvent(QMouseEvent *event)
             }
             return;
         }
-        if(pickRoomVolume(gl_win_x, gl_win_y))
+        if(pickRoomVolume(ray))
         {
             selectRoomViewport();
             dragging_room_turntable = true;
@@ -720,7 +737,12 @@ void LEDViewport3D::mouseReleaseEvent(QMouseEvent *event)
     // Middle button is pan-only (no click-pick); left click owns selection.
 
     const bool gizmo_was_dragging = gizmo.IsDragging();
+    const GizmoMode gizmo_mode_before_release = gizmo.GetMode();
     gizmo.HandleMouseRelease(event);
+    if(gizmo.GetMode() != gizmo_mode_before_release)
+    {
+        showGizmoModeFeedback();
+    }
     if(gizmo_was_dragging)
     {
         emitGizmoDragCompleted();
@@ -784,19 +806,19 @@ void LEDViewport3D::wheelEvent(QWheelEvent *event)
 void LEDViewport3D::applyGizmoMoveMode()
 {
     gizmo.SetMode(GIZMO_MODE_MOVE);
-    update();
+    showGizmoModeFeedback();
 }
 
 void LEDViewport3D::applyGizmoRotateMode()
 {
     gizmo.SetMode(GIZMO_MODE_ROTATE);
-    update();
+    showGizmoModeFeedback();
 }
 
 void LEDViewport3D::applyGizmoFreeroamMode()
 {
     gizmo.SetMode(GIZMO_MODE_FREEROAM);
-    update();
+    showGizmoModeFeedback();
 }
 
 void LEDViewport3D::toggleGridSnapFromKeyboard()
@@ -902,16 +924,9 @@ void LEDViewport3D::focusInEvent(QFocusEvent *event)
     QOpenGLWidget::focusInEvent(event);
 }
 
-int LEDViewport3D::PickController(int win_x, int win_y)
+int LEDViewport3D::PickController(const Ray3D& ray)
 {
     if(!controller_transforms) return -1;
-
-    float ray_origin[3]{};
-    float ray_direction[3]{};
-    if(!buildPickRay(win_x, win_y, ray_origin, ray_direction))
-    {
-        return -1;
-    }
 
     float closest_distance = FLT_MAX;
     int closest_controller = -1;
@@ -960,7 +975,7 @@ int LEDViewport3D::PickController(int win_x, int win_y)
         if(world_min.z > world_max.z) { float temp = world_min.z; world_min.z = world_max.z; world_max.z = temp; }
 
         float distance;
-        if(RayBoxIntersect(ray_origin, ray_direction, world_min, world_max, distance))
+        if(RayBoxIntersect(ray, world_min, world_max, distance))
         {
             if(distance < closest_distance)
             {
@@ -973,7 +988,7 @@ int LEDViewport3D::PickController(int win_x, int win_y)
     return closest_controller;
 }
 
-bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
+bool LEDViewport3D::RayBoxIntersect(const Ray3D& ray,
                                    const Vector3D& box_min, const Vector3D& box_max, float& distance)
 {
     float tmin = 0.0f;
@@ -984,15 +999,15 @@ bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
         float box_min_val = (i == 0) ? box_min.x : (i == 1) ? box_min.y : box_min.z;
         float box_max_val = (i == 0) ? box_max.x : (i == 1) ? box_max.y : box_max.z;
 
-        if(fabsf(ray_direction[i]) < 1e-6f)
+        if(fabsf(ray.direction[i]) < 1e-6f)
         {
-            if(ray_origin[i] < box_min_val || ray_origin[i] > box_max_val)
+            if(ray.origin[i] < box_min_val || ray.origin[i] > box_max_val)
                 return false;
         }
         else
         {
-            float t1 = (box_min_val - ray_origin[i]) / ray_direction[i];
-            float t2 = (box_max_val - ray_origin[i]) / ray_direction[i];
+            float t1 = (box_min_val - ray.origin[i]) / ray.direction[i];
+            float t2 = (box_max_val - ray.origin[i]) / ray.direction[i];
 
             if(t1 > t2) { float temp = t1; t1 = t2; t2 = temp; }
 
@@ -1008,22 +1023,22 @@ bool LEDViewport3D::RayBoxIntersect(float ray_origin[3], float ray_direction[3],
     return true;
 }
 
-bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[3],
+bool LEDViewport3D::RaySphereIntersect(const Ray3D& ray,
                                        const Vector3D& sphere_center, float sphere_radius, float& distance)
 {
     float oc[3] = {
-        ray_origin[0] - sphere_center.x,
-        ray_origin[1] - sphere_center.y,
-        ray_origin[2] - sphere_center.z
+        ray.origin[0] - sphere_center.x,
+        ray.origin[1] - sphere_center.y,
+        ray.origin[2] - sphere_center.z
     };
 
-    float a = ray_direction[0] * ray_direction[0] +
-              ray_direction[1] * ray_direction[1] +
-              ray_direction[2] * ray_direction[2];
+    float a = ray.direction[0] * ray.direction[0] +
+              ray.direction[1] * ray.direction[1] +
+              ray.direction[2] * ray.direction[2];
 
-    float b = 2.0f * (oc[0] * ray_direction[0] +
-                      oc[1] * ray_direction[1] +
-                      oc[2] * ray_direction[2]);
+    float b = 2.0f * (oc[0] * ray.direction[0] +
+                      oc[1] * ray.direction[1] +
+                      oc[2] * ray.direction[2]);
 
     float c = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - sphere_radius * sphere_radius;
 
@@ -1052,16 +1067,9 @@ bool LEDViewport3D::RaySphereIntersect(float ray_origin[3], float ray_direction[
     return false;
 }
 
-int LEDViewport3D::PickReferencePoint(int win_x, int win_y)
+int LEDViewport3D::PickReferencePoint(const Ray3D& ray)
 {
     if(!reference_points) return -1;
-
-    float ray_origin[3]{};
-    float ray_direction[3]{};
-    if(!buildPickRay(win_x, win_y, ray_origin, ray_direction))
-    {
-        return -1;
-    }
 
     int closest_ref_point = -1;
     float closest_distance = FLT_MAX;
@@ -1075,7 +1083,7 @@ int LEDViewport3D::PickReferencePoint(int win_x, int win_y)
         Vector3D pos = ref_point->GetPosition();
         float distance;
 
-        if(RaySphereIntersect(ray_origin, ray_direction, pos, sphere_radius, distance))
+        if(RaySphereIntersect(ray, pos, sphere_radius, distance))
         {
             if(distance < closest_distance)
             {
@@ -1088,16 +1096,9 @@ int LEDViewport3D::PickReferencePoint(int win_x, int win_y)
     return closest_ref_point;
 }
 
-int LEDViewport3D::PickDisplayPlane(int win_x, int win_y)
+int LEDViewport3D::PickDisplayPlane(const Ray3D& ray)
 {
     if(!display_planes) return -1;
-
-    float ray_origin[3]{};
-    float ray_direction[3]{};
-    if(!buildPickRay(win_x, win_y, ray_origin, ray_direction))
-    {
-        return -1;
-    }
 
     float closest_distance = FLT_MAX;
     int closest_plane = -1;
@@ -1139,24 +1140,24 @@ int LEDViewport3D::PickDisplayPlane(int win_x, int win_y)
         normal.y /= normal_len;
         normal.z /= normal_len;
 
-        float denom = normal.x * ray_direction[0] + normal.y * ray_direction[1] + normal.z * ray_direction[2];
+        float denom = normal.x * ray.direction[0] + normal.y * ray.direction[1] + normal.z * ray.direction[2];
         if(fabsf(denom) < 1e-6f)
         {
             continue;
         }
 
-        Vector3D diff0 = { world_corners[0].x - ray_origin[0],
-                           world_corners[0].y - ray_origin[1],
-                           world_corners[0].z - ray_origin[2] };
+        Vector3D diff0 = { world_corners[0].x - ray.origin[0],
+                           world_corners[0].y - ray.origin[1],
+                           world_corners[0].z - ray.origin[2] };
         float t = (diff0.x * normal.x + diff0.y * normal.y + diff0.z * normal.z) / denom;
         if(t < 0.0f)
         {
             continue;
         }
 
-        Vector3D hit = { ray_origin[0] + ray_direction[0] * t,
-                         ray_origin[1] + ray_direction[1] * t,
-                         ray_origin[2] + ray_direction[2] * t };
+        Vector3D hit = { ray.origin[0] + ray.direction[0] * t,
+                         ray.origin[1] + ray.direction[1] * t,
+                         ray.origin[2] + ray.direction[2] * t };
 
         Vector3D hit_vec = Subtract(hit, world_corners[0]);
         float dot00 = DotVec(edge_u, edge_u);
