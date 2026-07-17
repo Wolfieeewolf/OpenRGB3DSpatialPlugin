@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Package macOS plugin dylib as a zip under dist/.
-# Usage: package-macos.sh <5|6> [arm64|x86_64]
+# Usage: package-macos.sh [6] [arm64|x86_64]
 # Env: DIST_VARIANT (optional override)
 set -euo pipefail
 
-QT_MAJOR="${1:?Qt major version required (5 or 6)}"
+QT_MAJOR="${1:-6}"
 ARCH="${2:-$(uname -m)}"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -36,29 +36,22 @@ install_name_tool -id "@rpath/${DYLIB}" "$DYLIB" || true
 
 if [ -n "${DIST_VARIANT:-}" ]; then
   VARIANT="$DIST_VARIANT"
-elif [ "$QT_MAJOR" = "6" ]; then
-  VARIANT="macOS_${ARCH}_Qt6"
 else
   VARIANT="macOS_${ARCH}"
 fi
 
-OUT_NAME="$DYLIB"
-if [ "$QT_MAJOR" = "6" ]; then
-  OUT_NAME="libOpenRGB3DSpatialPlugin-qt6.dylib"
-fi
-
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-cp "$DYLIB" "$STAGE/$OUT_NAME"
+cp "$DYLIB" "$STAGE/$DYLIB"
 
 cat >"$STAGE/INSTALL.txt" <<EOF
 OpenRGB 3D Spatial Plugin — macOS install
 =========================================
-Copy ${OUT_NAME} into the plugins folder next to OpenRGB
+Copy ${DYLIB} into the plugins folder next to OpenRGB
 (OpenRGB.app/Contents/MacOS/plugins/ or the path shown in
 OpenRGB Settings → Plugins).
 
-Use the Qt5 build with Qt5 OpenRGB; use the Qt6 (-qt6) build with Qt6 OpenRGB.
+Requires a Qt6 build of OpenRGB.
 Restart OpenRGB after installing the plugin.
 EOF
 

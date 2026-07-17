@@ -1,6 +1,6 @@
 name: Release builds
 
-# Multi-platform plugin builds for Windows, Linux, and macOS.
+# Multi-platform Qt6 plugin builds for Windows, Linux, and macOS.
 # Primary release path while GitLab CI compute is unavailable.
 on:
   push:
@@ -22,20 +22,8 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Windows Qt${{ matrix.qt_major }}
+    name: Windows
     runs-on: windows-2022
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - qt_major: '5'
-            qt_version: '5.15.2'
-            qt_arch: win64_msvc2019_64
-            variant: Windows_64
-          - qt_major: '6'
-            qt_version: '6.8.3'
-            qt_arch: win64_msvc2022_64
-            variant: Windows_64_Qt6
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,8 +34,8 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ matrix.qt_version }}
-          arch: ${{ matrix.qt_arch }}
+          version: '6.8.3'
+          arch: win64_msvc2022_64
           cache: true
           modules: ''
 
@@ -66,27 +54,23 @@ jobs:
       - name: Package
         shell: pwsh
         env:
-          QT_MAJOR: ${{ matrix.qt_major }}
-          DIST_VARIANT: ${{ matrix.variant }}
+          QT_MAJOR: '6'
+          DIST_VARIANT: Windows_64
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/package-windows.ps1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.variant }}
+          name: Windows_64
           path: |
             dist/*.zip
             release/OpenRGB3DSpatialPlugin.dll
           if-no-files-found: error
 
   build-linux:
-    name: Linux Qt${{ matrix.qt_major }}
+    name: Linux
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        qt_major: ['5', '6']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,30 +81,26 @@ jobs:
       - name: Install dependencies
         run: |
           chmod +x scripts/ci/*.sh
-          sudo bash scripts/ci/install-linux-deps.sh ${{ matrix.qt_major }}
+          sudo bash scripts/ci/install-linux-deps.sh 6
 
       - name: Build
-        run: bash scripts/ci/build-linux.sh ${{ matrix.qt_major }} release
+        run: bash scripts/ci/build-linux.sh 6 release
 
       - name: Package
-        run: bash scripts/ci/package-linux.sh ${{ matrix.qt_major }} amd64
+        run: bash scripts/ci/package-linux.sh 6 amd64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Linux_amd64${{ matrix.qt_major == '6' && '_Qt6' || '' }}
+          name: Linux_amd64
           path: |
             dist/*
             libOpenRGB3DSpatialPlugin.so
           if-no-files-found: error
 
   build-macos:
-    name: macOS Qt${{ matrix.qt_major }}
+    name: macOS
     runs-on: macos-14
-    strategy:
-      fail-fast: false
-      matrix:
-        qt_major: ['5', '6']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,17 +111,17 @@ jobs:
       - name: Build
         run: |
           chmod +x scripts/ci/*.sh
-          bash scripts/ci/build-macos.sh ${{ matrix.qt_major }} release
+          bash scripts/ci/build-macos.sh 6 release
 
       - name: Package
         env:
-          DIST_VARIANT: macOS_arm64${{ matrix.qt_major == '6' && '_Qt6' || '' }}
-        run: bash scripts/ci/package-macos.sh ${{ matrix.qt_major }} arm64
+          DIST_VARIANT: macOS_arm64
+        run: bash scripts/ci/package-macos.sh 6 arm64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macOS_arm64${{ matrix.qt_major == '6' && '_Qt6' || '' }}
+          name: macOS_arm64
           path: |
             dist/*.zip
             libOpenRGB3DSpatialPlugin.dylib
@@ -203,14 +183,14 @@ jobs:
           NOTES="$(cat <<EOF
           ## OpenRGB 3D Spatial Plugin ${TAG}
 
-          Pre-built plugins for **Windows**, **Linux**, and **macOS** (Qt5 and Qt6 where available).
+          Pre-built **Qt6** plugins for **Windows**, **Linux**, and **macOS**.
 
           ### Install
           - **Windows:** unzip and copy the \`.dll\` into OpenRGB's \`plugins\` folder.
           - **Linux:** install the \`.deb\`, or extract the \`.tar.gz\` into \`/usr/lib/openrgb/plugins/\`.
           - **macOS:** unzip and copy the \`.dylib\` into \`OpenRGB.app/Contents/MacOS/plugins/\`.
 
-          Match Qt5 vs Qt6 (\`-qt6\` / \`_Qt6\`) to your OpenRGB build.
+          Requires a Qt6 build of OpenRGB.
           EOF
           )"
           if gh release view "$TAG" >/dev/null 2>&1; then

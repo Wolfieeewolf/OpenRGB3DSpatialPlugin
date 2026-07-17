@@ -1,16 +1,14 @@
 # Package Windows plugin DLL as a zip under dist/.
-# Env: QT_MAJOR (5 or 6), optional DIST_VARIANT (e.g. Windows_64, Windows_64_Qt6)
+# Env: QT_MAJOR (default 6), optional DIST_VARIANT (e.g. Windows_64)
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Set-Location $Root
 
-$QtMajor = if ($env:QT_MAJOR) { $env:QT_MAJOR } else { '5' }
-$Variant = if ($env:DIST_VARIANT) { $env:DIST_VARIANT } else {
-    if ($QtMajor -eq '6') { 'Windows_64_Qt6' } else { 'Windows_64' }
-}
+$QtMajor = if ($env:QT_MAJOR) { $env:QT_MAJOR } else { '6' }
+$Variant = if ($env:DIST_VARIANT) { $env:DIST_VARIANT } else { 'Windows_64' }
 
-$DllName = if ($QtMajor -eq '6') { 'OpenRGB3DSpatialPlugin-qt6.dll' } else { 'OpenRGB3DSpatialPlugin.dll' }
+$DllName = 'OpenRGB3DSpatialPlugin.dll'
 $SrcDll = Join-Path $Root 'release\OpenRGB3DSpatialPlugin.dll'
 if (-not (Test-Path $SrcDll)) {
     throw "Build output not found: $SrcDll"
@@ -26,7 +24,7 @@ OpenRGB 3D Spatial Plugin — Windows install
 Copy $($DllName) into the plugins folder next to OpenRGB.exe
 (typically OpenRGB\plugins\ or the path shown in OpenRGB Settings → Plugins).
 
-Use the Qt5 build with Qt5 OpenRGB; use the Qt6 (-qt6) build with Qt6 OpenRGB.
+Requires a Qt6 build of OpenRGB.
 Restart OpenRGB after installing the plugin.
 "@ | Set-Content -Path (Join-Path $Stage 'INSTALL.txt') -Encoding UTF8
 

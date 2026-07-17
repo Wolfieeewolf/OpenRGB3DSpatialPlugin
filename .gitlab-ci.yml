@@ -41,7 +41,7 @@ before_script:
   - echo "started by ${GITLAB_USER_NAME}"
 
 #-----------------------------------------------------------------------------
-# Linux — SaaS (ubuntu + apt) for personal fork
+# Linux — SaaS (ubuntu + apt) for personal fork — Qt6 only
 #-----------------------------------------------------------------------------
 .hidden_linux_saas:
   stage: build
@@ -62,16 +62,10 @@ before_script:
 "Linux amd64":
   extends: .hidden_linux_saas
   variables:
-    QT_MAJOR: "5"
+    QT_MAJOR: "6"
     DIST_VARIANT: Linux_amd64
 
-"Linux amd64 Qt6":
-  extends: .hidden_linux_saas
-  variables:
-    QT_MAJOR: "6"
-    DIST_VARIANT: Linux_amd64_Qt6
-
-# OpenRGB org: bookworm image on private linux runners (optional extra arch jobs)
+# OpenRGB org: bookworm image on private linux runners
 .ccache_init: &ccache_init
   before_script:
     - export APPIMAGE_EXTRACT_AND_RUN=1
@@ -97,19 +91,12 @@ before_script:
 "Linux amd64 (org runners)":
   extends: .hidden_linux_org
   variables:
-    TGT_QT: ""
-    QT_MAJOR: "5"
-    DIST_VARIANT: Linux_amd64_org
-
-"Linux amd64 Qt6 (org runners)":
-  extends: .hidden_linux_org
-  variables:
     TGT_QT: qt6
     QT_MAJOR: "6"
-    DIST_VARIANT: Linux_amd64_Qt6_org
+    DIST_VARIANT: Linux_amd64_org
 
 #-----------------------------------------------------------------------------
-# Windows 64 — GitLab SaaS
+# Windows 64 — GitLab SaaS — Qt6 only
 #-----------------------------------------------------------------------------
 .hidden_windows_saas:
   stage: build
@@ -132,22 +119,12 @@ before_script:
 "Windows 64":
   extends: .hidden_windows_saas
   variables:
-    QT_MAJOR: "5"
-    QT_AQT_VERSION: "5.15.2"
-    QT_AQT_ARCH: "win64_msvc2019_64"
-    QT_BIN_DIR: "C:\\Qt\\5.15.2\\msvc2019_64\\bin"
-    QT_MSVC_BOOTSTRAP_PACKAGE: "visualstudio2019buildtools"
-    DIST_VARIANT: "Windows_64"
-
-"Windows 64 Qt6":
-  extends: .hidden_windows_saas
-  variables:
     QT_MAJOR: "6"
     QT_AQT_VERSION: "6.8.3"
     QT_AQT_ARCH: "win64_msvc2022_64"
     QT_BIN_DIR: "C:\\Qt\\6.8.3\\msvc2022_64\\bin"
     QT_MSVC_BOOTSTRAP_PACKAGE: "visualstudio2022buildtools"
-    DIST_VARIANT: "Windows_64_Qt6"
+    DIST_VARIANT: "Windows_64"
 
 #-----------------------------------------------------------------------------
 # GitHub mirror (sync stage — does not wait for builds)
@@ -174,13 +151,7 @@ release:
     - job: "Windows 64"
       artifacts: true
       optional: true
-    - job: "Windows 64 Qt6"
-      artifacts: true
-      optional: true
     - job: "Linux amd64"
-      artifacts: true
-      optional: true
-    - job: "Linux amd64 Qt6"
       artifacts: true
       optional: true
   script:
@@ -190,7 +161,7 @@ release:
       release-cli create \
         --name "${CI_COMMIT_TAG}" \
         --tag-name "${CI_COMMIT_TAG}" \
-        --description "OpenRGB 3D Spatial Plugin ${CI_COMMIT_TAG}. Windows: unzip the .dll into OpenRGB plugins. Linux: install the .deb or extract the .tar.gz to /usr/lib/openrgb/plugins/. Match Qt5 vs Qt6 to your OpenRGB build." \
+        --description "OpenRGB 3D Spatial Plugin ${CI_COMMIT_TAG} (Qt6). Windows: unzip the .dll into OpenRGB plugins. Linux: install the .deb or extract the .tar.gz to /usr/lib/openrgb/plugins/. Requires Qt6 OpenRGB." \
         --assets-path dist/
   rules:
     - if: $CI_COMMIT_TAG

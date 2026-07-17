@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build OpenRGB3DSpatialPlugin on macOS (Qt 5 or 6 via Homebrew).
-# Usage: build-macos.sh <5|6> [release|debug]
+# Build OpenRGB3DSpatialPlugin on macOS (Qt 6 via Homebrew).
+# Usage: build-macos.sh [6] [release|debug]
 set -euo pipefail
 
-QT_MAJOR="${1:?Qt major version required (5 or 6)}"
+QT_MAJOR="${1:-6}"
 BUILD_TYPE="${2:-release}"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -16,19 +16,19 @@ fi
 
 eval "$(brew shellenv)"
 
-if [ "$QT_MAJOR" = "6" ]; then
-  brew list qt >/dev/null 2>&1 || brew list qt@6 >/dev/null 2>&1 || brew install qt
-  QM="$(brew --prefix qt 2>/dev/null)/bin/qmake"
-  if [ ! -x "$QM" ]; then
-    QM="$(brew --prefix qt@6 2>/dev/null)/bin/qmake"
-  fi
-else
-  brew list qt@5 >/dev/null 2>&1 || brew install qt@5
-  QM="$(brew --prefix qt@5)/bin/qmake"
+if [ "$QT_MAJOR" != "6" ]; then
+  echo "Only Qt6 builds are supported (got Qt${QT_MAJOR})"
+  exit 1
+fi
+
+brew list qt >/dev/null 2>&1 || brew list qt@6 >/dev/null 2>&1 || brew install qt
+QM="$(brew --prefix qt 2>/dev/null)/bin/qmake"
+if [ ! -x "$QM" ]; then
+  QM="$(brew --prefix qt@6 2>/dev/null)/bin/qmake"
 fi
 
 if [ ! -x "$QM" ]; then
-  echo "qmake not found for Qt${QT_MAJOR} (looked for: $QM)"
+  echo "qmake not found for Qt6 (looked for: $QM)"
   exit 1
 fi
 

@@ -87,6 +87,6 @@ cmd /c $batchFile
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Remove-Item $batchFile -Force -ErrorAction SilentlyContinue
 
-$qtMajor = if ($env:QT_MAJOR) { $env:QT_MAJOR } else { '5' }
+$qtMajor = if ($env:QT_MAJOR) { $env:QT_MAJOR } else { '6' }
 $env:QT_MAJOR = $qtMajor
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'package-windows.ps1')
