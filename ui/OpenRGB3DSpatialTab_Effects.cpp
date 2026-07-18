@@ -676,10 +676,8 @@ void OpenRGB3DSpatialTab::setStackLayerGlobalChromeVisible(bool visible)
     }
     if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
     {
-        if(QWidget* room_section = global_panel->roomOutputSection())
-        {
-            room_section->setVisible(visible && current_effect_ui && current_effect_ui->GetEffectInfo().show_room_output_control);
-        }
+        global_panel->setRoomOutputSectionVisible(
+            visible && current_effect_ui && current_effect_ui->GetEffectInfo().show_room_output_control);
     }
 }
 

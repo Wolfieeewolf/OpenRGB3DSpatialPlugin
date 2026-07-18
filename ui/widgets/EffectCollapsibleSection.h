@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class QShowEvent;
 class QVBoxLayout;
 
 namespace Ui {
@@ -27,8 +28,12 @@ public:
     void setExpanded(bool expanded);
     bool isExpanded() const;
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private:
     void refreshToggleText();
+    void applyHeaderChrome();
 
     Ui::EffectCollapsibleSection* ui = nullptr;
     QString                       title_;

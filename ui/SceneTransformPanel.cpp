@@ -6,8 +6,47 @@
 #include "PositionAxisDragController.h"
 #include "ui_SceneTransformPanel.h"
 
+#include <QDoubleSpinBox>
+#include <QGridLayout>
 #include <QSignalBlocker>
+#include <QSizePolicy>
+#include <QSlider>
 #include <cmath>
+
+namespace
+{
+
+void ConfigureTransformAxisGrid(QGridLayout* layout, int spin_min_width)
+{
+    if(!layout)
+    {
+        return;
+    }
+
+    layout->setContentsMargins(6, 6, 6, 6);
+    layout->setHorizontalSpacing(10);
+    layout->setVerticalSpacing(6);
+    layout->setColumnStretch(0, 0);
+    layout->setColumnStretch(1, 1);
+    layout->setColumnStretch(2, 0);
+    layout->setColumnMinimumWidth(2, spin_min_width);
+}
+
+void ConfigureTransformAxisRow(QSlider* slider, QDoubleSpinBox* spin, int spin_min_width)
+{
+    if(slider)
+    {
+        slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        slider->setMinimumWidth(48);
+    }
+    if(spin)
+    {
+        spin->setMinimumWidth(spin_min_width);
+        spin->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    }
+}
+
+} // namespace
 
 void SceneTransformPanel::wireRotationRow(OpenRGB3DSpatialTab* tab, QSlider* sl, QDoubleSpinBox* sp, int axis)
 {
@@ -52,8 +91,20 @@ SceneTransformPanel::SceneTransformPanel(QWidget* parent)
     ui->rotationGroup->setToolTip(
         "Orientation of the selected controller, reference point, or display plane in the room. Not the camera view.");
 
-    ui->positionLayout->setColumnStretch(1, 1);
-    ui->rotationLayout->setColumnStretch(1, 1);
+    // Position spins carry a " mm" suffix; rotation carries " °". Reserve enough width
+    // so the slider column cannot collide with the spin boxes on narrow Setup panels.
+    constexpr int kPosSpinMinWidth = 110;
+    constexpr int kRotSpinMinWidth = 90;
+
+    ConfigureTransformAxisGrid(ui->positionLayout, kPosSpinMinWidth);
+    ConfigureTransformAxisGrid(ui->rotationLayout, kRotSpinMinWidth);
+
+    ConfigureTransformAxisRow(ui->posXSlider, ui->posXSpin, kPosSpinMinWidth);
+    ConfigureTransformAxisRow(ui->posYSlider, ui->posYSpin, kPosSpinMinWidth);
+    ConfigureTransformAxisRow(ui->posZSlider, ui->posZSpin, kPosSpinMinWidth);
+    ConfigureTransformAxisRow(ui->rotXSlider, ui->rotXSpin, kRotSpinMinWidth);
+    ConfigureTransformAxisRow(ui->rotYSlider, ui->rotYSpin, kRotSpinMinWidth);
+    ConfigureTransformAxisRow(ui->rotZSlider, ui->rotZSpin, kRotSpinMinWidth);
 }
 
 SceneTransformPanel::~SceneTransformPanel() = default;

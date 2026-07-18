@@ -39,20 +39,23 @@
         <string>Scene object position (mm)</string>
        </property>
        <layout class="QGridLayout" name="positionLayout">
-        <property name="spacing">
-         <number>3</number>
+        <property name="horizontalSpacing">
+         <number>10</number>
+        </property>
+        <property name="verticalSpacing">
+         <number>6</number>
         </property>
         <property name="leftMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="topMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="rightMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="bottomMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <item row="0" column="0">
          <widget class="QLabel" name="posXCaption">
@@ -72,9 +75,15 @@
          <widget class="QDoubleSpinBox" name="posXSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>110</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>
@@ -96,9 +105,15 @@
          <widget class="QDoubleSpinBox" name="posYSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>110</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>
@@ -120,9 +135,15 @@
          <widget class="QDoubleSpinBox" name="posZSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>110</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>
@@ -135,20 +156,23 @@
         <string>Scene object rotation (°)</string>
        </property>
        <layout class="QGridLayout" name="rotationLayout">
-        <property name="spacing">
-         <number>3</number>
+        <property name="horizontalSpacing">
+         <number>10</number>
+        </property>
+        <property name="verticalSpacing">
+         <number>6</number>
         </property>
         <property name="leftMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="topMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="rightMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="bottomMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <item row="0" column="0">
          <widget class="QLabel" name="rotXCaption">
@@ -168,9 +192,15 @@
          <widget class="QDoubleSpinBox" name="rotXSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>90</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>
@@ -192,9 +222,15 @@
          <widget class="QDoubleSpinBox" name="rotYSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>90</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>
@@ -216,9 +252,15 @@
          <widget class="QDoubleSpinBox" name="rotZSpin">
           <property name="minimumSize">
            <size>
-            <width>72</width>
+            <width>90</width>
             <height>0</height>
            </size>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>

@@ -7,17 +7,77 @@
 #include "ui_EffectGlobalSettingsPanel.h"
 
 #include <QComboBox>
+#include <QGridLayout>
+#include <QLabel>
+#include <QSizePolicy>
+#include <algorithm>
 
 EffectGlobalSettingsPanel::EffectGlobalSettingsPanel(QWidget* parent)
     : QGroupBox(parent)
     , ui(new Ui::EffectGlobalSettingsPanel)
 {
     ui->setupUi(this);
+
+    if(ui->settingsGrid)
+    {
+        ui->settingsGrid->setColumnStretch(0, 0);
+        ui->settingsGrid->setColumnStretch(1, 1);
+    }
+
+    alignSettingsLabelColumn();
 }
 
 EffectGlobalSettingsPanel::~EffectGlobalSettingsPanel()
 {
     delete ui;
+}
+
+void EffectGlobalSettingsPanel::alignSettingsLabelColumn()
+{
+    QLabel* labels[] = {
+        ui->effectRowLabel,
+        ui->zoneLabel,
+        ui->originLabel,
+        ui->boundsLabel,
+        ui->roomOutputSectionLabel,
+    };
+
+    int max_width = 0;
+    for(QLabel* label : labels)
+    {
+        if(!label)
+        {
+            continue;
+        }
+        max_width = std::max(max_width, label->sizeHint().width());
+    }
+
+    if(max_width <= 0)
+    {
+        return;
+    }
+
+    for(QLabel* label : labels)
+    {
+        if(!label)
+        {
+            continue;
+        }
+        label->setMinimumWidth(max_width);
+        label->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    }
+}
+
+void EffectGlobalSettingsPanel::setRoomOutputSectionVisible(bool visible)
+{
+    if(ui->roomOutputSectionLabel)
+    {
+        ui->roomOutputSectionLabel->setVisible(visible);
+    }
+    if(ui->roomOutputHost)
+    {
+        ui->roomOutputHost->setVisible(visible);
+    }
 }
 
 void EffectGlobalSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
@@ -96,5 +156,5 @@ QLabel* EffectGlobalSettingsPanel::boundsLabel() const { return ui->boundsLabel;
 QComboBox* EffectGlobalSettingsPanel::boundsCombo() const { return ui->boundsCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectTypeCombo() const { return ui->stackEffectTypeCombo; }
 QComboBox* EffectGlobalSettingsPanel::stackEffectZoneCombo() const { return ui->stackEffectZoneCombo; }
-QWidget* EffectGlobalSettingsPanel::roomOutputSection() const { return ui->roomOutputSection; }
+QLabel* EffectGlobalSettingsPanel::roomOutputSectionLabel() const { return ui->roomOutputSectionLabel; }
 QWidget* EffectGlobalSettingsPanel::roomOutputHost() const { return ui->roomOutputHost; }

@@ -925,10 +925,7 @@ void OpenRGB3DSpatialTab::effectChanged(int index)
         if(effectOriginCombo()) effectOriginCombo()->setVisible(false);
         if(EffectGlobalSettingsPanel* global_panel = effectGlobalSettingsPanel())
         {
-            if(QWidget* room_section = global_panel->roomOutputSection())
-            {
-                room_section->setVisible(false);
-            }
+            global_panel->setRoomOutputSectionVisible(false);
         }
     }
     else
@@ -1336,10 +1333,7 @@ void OpenRGB3DSpatialTab::SetupStackRoomOutputPanel()
     stack_room_output_panel_ = new EffectRoomOutputPanel(host);
     layout->addWidget(stack_room_output_panel_);
 
-    if(QWidget* section = global_panel->roomOutputSection())
-    {
-        section->setVisible(false);
-    }
+    global_panel->setRoomOutputSectionVisible(false);
 }
 
 QString OpenRGB3DSpatialTab::sceneLabelForTransformIndex(int transform_index) const
@@ -1365,7 +1359,6 @@ void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
         return;
     }
 
-    QWidget* section = global_panel->roomOutputSection();
     if(current_effect_ui)
     {
         current_effect_ui->DisconnectStackRoomOutputPanel();
@@ -1373,17 +1366,11 @@ void OpenRGB3DSpatialTab::SyncStackRoomOutputPanel()
 
     if(!current_effect_ui || !current_effect_ui->GetEffectInfo().show_room_output_control)
     {
-        if(section)
-        {
-            section->setVisible(false);
-        }
+        global_panel->setRoomOutputSectionVisible(false);
         return;
     }
 
-    if(section)
-    {
-        section->setVisible(true);
-    }
+    global_panel->setRoomOutputSectionVisible(true);
 
     QPointer<SpatialEffect3D> captured_ui(current_effect_ui);
     current_effect_ui->ConnectStackRoomOutputPanel(

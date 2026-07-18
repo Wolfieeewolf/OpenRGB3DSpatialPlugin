@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QColor>
 #include <QFont>
@@ -181,6 +182,76 @@ inline void PluginUiApplyBoldLabel(QWidget* w)
     QFont f = w->font();
     f.setBold(true);
     w->setFont(f);
+}
+
+/** Collapsible section header: Setup-tab charcoal (Button/Window), not Mid/light checked chrome. */
+inline void PluginUiApplyCollapsibleSectionHeader(QToolButton* btn)
+{
+    if(!btn)
+    {
+        return;
+    }
+
+    btn->setAutoRaise(false);
+    btn->setAutoFillBackground(false);
+    btn->setCursor(Qt::PointingHandCursor);
+
+    const QWidget* palette_source = btn->window() ? btn->window() : btn;
+    const QPalette pal            = palette_source->palette();
+    const QColor window           = pal.color(QPalette::Window);
+    const QColor base             = pal.color(QPalette::Base);
+    QColor bg                     = pal.color(QPalette::Button);
+
+    // Prefer the same dark surface family as the selected Setup tab (Button / Window).
+    if(!bg.isValid() || bg.lightness() > 140)
+    {
+        bg = window.isValid() ? window : base;
+    }
+    if(bg.lightness() > 140)
+    {
+        bg = PluginUiBlendColors(base, QColor(0, 0, 0), 0.45f);
+    }
+
+    QColor fg = pal.color(QPalette::ButtonText);
+    if(!fg.isValid() || fg == bg)
+    {
+        fg = pal.color(QPalette::WindowText);
+    }
+    if(fg.lightness() < 80 && bg.lightness() < 120)
+    {
+        fg = PluginUiBlendColors(fg, QColor(255, 255, 255), 0.85f);
+    }
+
+    QColor border = pal.color(QPalette::Dark);
+    if(!border.isValid() || border == bg)
+    {
+        border = PluginUiBlendColors(bg, QColor(255, 255, 255), 0.12f);
+    }
+    const QColor hover = PluginUiBlendColors(bg, QColor(255, 255, 255), 0.08f);
+
+    btn->setStyleSheet(QStringLiteral(
+                           "QToolButton {"
+                           "  background-color: %1;"
+                           "  color: %2;"
+                           "  border: 1px solid %3;"
+                           "  border-radius: 3px;"
+                           "  padding: 5px 8px;"
+                           "  text-align: left;"
+                           "}"
+                           "QToolButton:hover {"
+                           "  background-color: %4;"
+                           "  color: %2;"
+                           "}"
+                           "QToolButton:checked,"
+                           "QToolButton:pressed {"
+                           "  background-color: %1;"
+                           "  color: %2;"
+                           "  border: 1px solid %3;"
+                           "}")
+                           .arg(PluginUiColorCss(bg),
+                                PluginUiColorCss(fg),
+                                PluginUiColorCss(border),
+                                PluginUiColorCss(hover)));
 }
 
 inline void PluginUiApplyPrimaryButton(QPushButton* btn)

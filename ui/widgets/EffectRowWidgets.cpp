@@ -313,9 +313,11 @@ void EffectSectionHeading::setTitle(const QString& title)
 }
 
 #include "EffectCollapsibleSection.h"
+#include "PluginUiUtils.h"
 #include "ui_EffectCollapsibleSection.h"
 
 #include <QFont>
+#include <QShowEvent>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -331,16 +333,30 @@ EffectCollapsibleSection::EffectCollapsibleSection(const QString& title,
     QFont font = ui->toggleButton->font();
     font.setBold(true);
     ui->toggleButton->setFont(font);
+    ui->toggleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     if(!tooltip.isEmpty())
     {
         ui->toggleButton->setToolTip(tooltip);
     }
 
+    applyHeaderChrome();
     refreshToggleText();
     connect(ui->toggleButton, &QToolButton::toggled, this, [this](bool expanded) {
         ui->bodyWidget->setVisible(expanded);
         refreshToggleText();
     });
+}
+
+void EffectCollapsibleSection::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    // Re-apply after parenting into OpenRGB so we pick up the host palette (Setup-tab charcoal).
+    applyHeaderChrome();
+}
+
+void EffectCollapsibleSection::applyHeaderChrome()
+{
+    PluginUiApplyCollapsibleSectionHeader(ui->toggleButton);
 }
 
 EffectCollapsibleSection::~EffectCollapsibleSection()

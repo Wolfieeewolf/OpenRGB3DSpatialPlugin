@@ -55,21 +55,30 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
 
     PluginUiApplyControllerCardChrome(ui->cardFrame, false);
 
+    // Ignored horizontal policy lets the name shrink below its text sizeHint so the
+    // +/− action button is not clipped when the list is narrow or a scrollbar appears.
     ui->nameLabel->setMinimumWidth(0);
+    ui->nameLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &SpatialControllerCardWidget::nameClicked);
 
     if(ui->subtitleLabel)
     {
+        ui->subtitleLabel->setMinimumWidth(0);
+        ui->subtitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         PluginUiApplyMutedSecondaryLabel(ui->subtitleLabel);
     }
 
     ui->actionButton->setFont(OpenRGBPluginsFont::GetFont());
     ui->actionButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    ui->actionButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    ui->actionButton->setFixedSize(30, 28);
     ui->actionButton->setToolTip(mode_ == Mode::Available ? tr("Add to 3D scene") : tr("Remove from 3D scene"));
     connect(ui->actionButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::actionClicked);
 
     ui->editButton->setVisible(mode_ == Mode::InScene);
     ui->editButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    ui->editButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    ui->editButton->setFixedHeight(28);
     ui->editButton->setToolTip(tr("Edit position, rotation, and spacing in the settings panel"));
     connect(ui->editButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::editClicked);
 
@@ -142,12 +151,15 @@ void SpatialControllerCardWidget::applyColumnStretches()
     for(int col = 0; col <= kActionColumn; col++)
     {
         ui->innerLayout->setColumnStretch(col, 0);
+        ui->innerLayout->setColumnMinimumWidth(col, 0);
     }
 
-    // Same stretch rules for Available and In-Scene so both lists share one card look.
-    for(int col = 0; col <= kLastContentColumn; col++)
+    // Only the name column absorbs leftover width; Edit / +/− stay at fixed size.
+    ui->innerLayout->setColumnStretch(0, 1);
+    ui->innerLayout->setColumnMinimumWidth(kActionColumn, 30);
+    if(mode_ == Mode::InScene)
     {
-        ui->innerLayout->setColumnStretch(col, 1);
+        ui->innerLayout->setColumnMinimumWidth(kLastContentColumn, 44);
     }
 }
 
@@ -160,16 +172,16 @@ int SpatialControllerCardWidget::nameLabelContentWidth() const
     }
 
     const QMargins margins = ui->innerLayout->contentsMargins();
-    int width = frame->width() - margins.left() - margins.right();
+    int width              = frame->width() - margins.left() - margins.right();
 
     const int spacing = ui->innerLayout->horizontalSpacing();
     if(ui->editButton->isVisible())
     {
-        width -= ui->editButton->sizeHint().width() + spacing;
+        width -= ui->editButton->width() + spacing;
     }
     if(ui->actionButton->isVisible())
     {
-        width -= ui->actionButton->sizeHint().width() + spacing;
+        width -= ui->actionButton->width() + spacing;
     }
 
     return std::max(0, width);
@@ -482,6 +494,16 @@ SpatialControllerCardList::SpatialControllerCardList(SpatialControllerCardWidget
     scroll_area_     = ui->scrollArea;
     content_widget_  = ui->contentWidget;
     content_layout_  = ui->contentLayout;
+
+    // Keep a stable gutter so appearing scrollbars do not cover the +/− buttons.
+    if(scroll_area_)
+    {
+        scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    }
+    if(content_layout_)
+    {
+        content_layout_->setContentsMargins(0, 0, 2, 0);
+    }
 }
 
 SpatialControllerCardList::~SpatialControllerCardList()

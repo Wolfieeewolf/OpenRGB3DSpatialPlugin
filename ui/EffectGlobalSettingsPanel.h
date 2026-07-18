@@ -34,10 +34,15 @@ public:
     QComboBox* boundsCombo() const;
     QComboBox* stackEffectTypeCombo() const;
     QComboBox* stackEffectZoneCombo() const;
-    QWidget*   roomOutputSection() const;
+    QLabel*    roomOutputSectionLabel() const;
     QWidget*   roomOutputHost() const;
 
+    /** Show/hide the Room output label and host together (grid row). */
+    void setRoomOutputSectionVisible(bool visible);
+
 private:
+    void alignSettingsLabelColumn();
+
     Ui::EffectGlobalSettingsPanel* ui = nullptr;
 };
 
