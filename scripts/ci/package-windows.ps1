@@ -30,9 +30,10 @@ Restart OpenRGB after installing the plugin.
 
 $DistDir = Join-Path $Root 'dist'
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
+# Plain Windows_* zip = portable .dll (OpenRGB marks the installer zip with _msi instead).
 $ZipPath = Join-Path $DistDir "OpenRGB3DSpatialPlugin_${Variant}.zip"
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $ZipPath
 
 Remove-Item $Stage -Recurse -Force
-Write-Host "Packaged: $ZipPath"
+Write-Host "Packaged: $ZipPath (portable .dll)"

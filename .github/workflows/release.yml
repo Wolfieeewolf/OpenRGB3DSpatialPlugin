@@ -214,31 +214,36 @@ jobs:
           NOTES="$(cat <<EOF
           ## OpenRGB 3D Spatial Plugin ${TAG}
 
-          Pre-built **Qt6** plugins. Same plugin in each pair — the extension is the install method.
+          Pre-built **Qt6** plugins. Filenames follow OpenRGB-style suffixes so the package type is obvious.
 
           ### Which file do I want?
 
           | You have… | Download |
           | --- | --- |
-          | **Windows** PC | \`OpenRGB_3D_Spatial_Plugin_Windows_64.zip\` — unzip, run the \`.msi\` (recommended) |
-          | **Windows** (manual .dll copy) | \`OpenRGB3DSpatialPlugin_Windows_64.zip\` — unzip, copy \`.dll\` into OpenRGB \`plugins\` |
-          | **Linux** desktop (Ubuntu/Debian, x86_64) | \`openrgb-3d-spatial-plugin_*_amd64.deb\` — \`sudo apt install ./…deb\` |
-          | **Linux** portable / non-Debian (x86_64) | \`OpenRGB3DSpatialPlugin_Linux_amd64.tar.gz\` — extract \`.so\` into plugins dir |
-          | **Linux** ARM64 (e.g. Pi) | \`…_arm64.deb\` or \`…_Linux_arm64.tar.gz\` (same choice as above) |
+          | **Windows** installer (recommended) | \`OpenRGB_3D_Spatial_Plugin_Windows_64_msi.zip\` — unzip, run the \`.msi\` |
+          | **Windows** portable \`.dll\` | \`OpenRGB3DSpatialPlugin_Windows_64.zip\` — unzip, copy \`.dll\` into OpenRGB \`plugins\` |
+          | **Linux** Ubuntu/Debian x86_64 | \`openrgb-3d-spatial-plugin_*_amd64.deb\` — \`sudo apt install ./…deb\` |
+          | **Linux** portable \`.so\` (x86_64) | \`OpenRGB3DSpatialPlugin_Linux_amd64_plugin.tar.gz\` |
+          | **Linux** ARM64 (e.g. Pi) | \`…_arm64.deb\` or \`…_Linux_arm64_plugin.tar.gz\` |
           | **macOS** Apple Silicon | \`OpenRGB3DSpatialPlugin_macOS_arm64.zip\` |
           | **macOS** Intel | \`OpenRGB3DSpatialPlugin_macOS_intel.zip\` |
 
-          **\`.deb\` vs \`.tar.gz\`:** both are the Linux plugin. \`.deb\` is the installer package; \`.tar.gz\` is a portable archive of the \`.so\` for manual copy.
+          **Name tips:** \`_msi\` = Windows installer zip · \`_plugin.tar.gz\` = Linux portable library · \`.deb\` = Debian/Ubuntu package.
 
           Requires a Qt6 build of OpenRGB. Restart OpenRGB after installing.
           EOF
           )"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Drop legacy bare .msi if a previous release published one.
+            # Drop legacy asset names from earlier v0.1.0 uploads.
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
-              if [[ "$name" == *.msi ]]; then
-                gh release delete-asset "$TAG" "$name" --yes || true
-              fi
+              case "$name" in
+                *.msi|\
+                OpenRGB_3D_Spatial_Plugin_Windows_64.zip|\
+                OpenRGB3DSpatialPlugin_Linux_amd64.tar.gz|\
+                OpenRGB3DSpatialPlugin_Linux_arm64.tar.gz)
+                  gh release delete-asset "$TAG" "$name" --yes || true
+                  ;;
+              esac
             done
             gh release edit "$TAG" --notes "$NOTES"
             gh release upload "$TAG" release-assets/* --clobber

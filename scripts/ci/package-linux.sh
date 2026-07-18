@@ -52,7 +52,9 @@ Requires a Qt6 build of OpenRGB.
 Restart OpenRGB after installing the plugin.
 EOF
 
-TAR_FILE="dist/OpenRGB3DSpatialPlugin_Linux_${VARIANT}.tar.gz"
+# OpenRGB CI uses *_deb* for .deb jobs and a plain Linux_* name for the .so artifact.
+# Name the portable archive with _plugin so it is not mistaken for the .deb.
+TAR_FILE="dist/OpenRGB3DSpatialPlugin_Linux_${VARIANT}_plugin.tar.gz"
 tar -czf "$TAR_FILE" -C "$TAR_ROOT" .
 
 echo "Packaged: $DEB_FILE"
