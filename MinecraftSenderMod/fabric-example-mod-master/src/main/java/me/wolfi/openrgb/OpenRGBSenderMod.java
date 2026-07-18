@@ -81,6 +81,8 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
     private static final ThreadLocal<int[]> ROOM_LAYER_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
+    /** When LED-first config changes, wipe the volume so unused cells cannot keep stale sky blue. */
+    private int roomSampleClearedForConfigId = -1;
 
     @Override
     public void onInitializeClient()
@@ -938,47 +940,95 @@ public class OpenRGBSenderMod implements ClientModInitializer
         if(roomSampleRgbaBuffer.length != rgbaCount)
         {
             roomSampleRgbaBuffer = new byte[rgbaCount];
+            roomSampleClearedForConfigId = -1;
         }
         final byte[] rgba = roomSampleRgbaBuffer;
-        int rgbaIndex = 0;
         final int[] cell = ROOM_CELL_SCRATCH.get();
         final int cellCount = sx * sy * sz;
-        final boolean temporal = cellCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
+        final boolean useImportant = cfg.hasImportantCells();
+        final int workCount = useImportant ? cfg.importantFlatIndices.length : cellCount;
+        final boolean temporal = workCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
         final long budgetStart = System.nanoTime();
         final double maxRange = 16.0 + Math.max(sx, Math.max(sy, sz)) * Math.max(0.5, cfg.roomToWorldScale);
         EntityDisplayColorSampler.beginFrame(world, player, Math.max(24.0, Math.min(80.0, maxRange)));
         try
         {
-            int flatIndex = 0;
             boolean budgetHit = false;
-            for(int ix = 0; ix < sx && !budgetHit; ix++)
+            if(useImportant)
             {
-                for(int iy = 0; iy < sy && !budgetHit; iy++)
+                // Empty volume must stay transparent — otherwise old sky/water samples bleed through
+                // trilinear onto LEDs that have no neighbours on that side of the room.
+                if(roomSampleClearedForConfigId != cfg.configId)
                 {
-                    for(int iz = 0; iz < sz; iz++)
+                    java.util.Arrays.fill(rgba, (byte)0);
+                    roomSampleClearedForConfigId = cfg.configId;
+                }
+                final int[] important = cfg.importantFlatIndices;
+                for(int i = 0; i < important.length; i++)
+                {
+                    if(temporal && (i % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
                     {
-                        if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                        continue;
+                    }
+                    if((i & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
+                    {
+                        budgetHit = true;
+                        break;
+                    }
+                    final int flat = important[i];
+                    if(flat < 0 || flat >= cellCount)
+                    {
+                        continue;
+                    }
+                    final int iz = flat % sz;
+                    final int t = flat / sz;
+                    final int iy = t % sy;
+                    final int ix = t / sy;
+                    final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
+                    final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
+                    final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
+                    final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
+                    sampleRoomCellAtWorldTarget(world, player, target, cell);
+                    final int rgbaIndex = flat * 4;
+                    rgba[rgbaIndex] = (byte)cell[0];
+                    rgba[rgbaIndex + 1] = (byte)cell[1];
+                    rgba[rgbaIndex + 2] = (byte)cell[2];
+                    rgba[rgbaIndex + 3] = (byte)cell[3];
+                }
+            }
+            else
+            {
+                roomSampleClearedForConfigId = -1;
+                int rgbaIndex = 0;
+                int flatIndex = 0;
+                for(int ix = 0; ix < sx && !budgetHit; ix++)
+                {
+                    for(int iy = 0; iy < sy && !budgetHit; iy++)
+                    {
+                        for(int iz = 0; iz < sz; iz++)
                         {
-                            rgbaIndex += 4;
+                            if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                            {
+                                rgbaIndex += 4;
+                                flatIndex++;
+                                continue;
+                            }
+                            if((flatIndex & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
+                            {
+                                budgetHit = true;
+                                break;
+                            }
+                            final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
+                            final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
+                            final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
+                            final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
+                            sampleRoomCellAtWorldTarget(world, player, target, cell);
+                            rgba[rgbaIndex++] = (byte)cell[0];
+                            rgba[rgbaIndex++] = (byte)cell[1];
+                            rgba[rgbaIndex++] = (byte)cell[2];
+                            rgba[rgbaIndex++] = (byte)cell[3];
                             flatIndex++;
-                            continue;
                         }
-                        if((flatIndex & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
-                        {
-                            // Keep prior RGBA for remaining cells this tick — resume via temporal slices.
-                            budgetHit = true;
-                            break;
-                        }
-                        final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
-                        final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
-                        final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
-                        final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                        sampleRoomCellAtWorldTarget(world, player, target, cell);
-                        rgba[rgbaIndex++] = (byte)cell[0];
-                        rgba[rgbaIndex++] = (byte)cell[1];
-                        rgba[rgbaIndex++] = (byte)cell[2];
-                        rgba[rgbaIndex++] = (byte)cell[3];
-                        flatIndex++;
                     }
                 }
             }

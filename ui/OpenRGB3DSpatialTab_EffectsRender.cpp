@@ -19,10 +19,13 @@
 #include "ZoneManager3D.h"
 #include "SpatialTabLedHelpers.h"
 #include "PluginUiUtils.h"
+#include "Game/RoomSampleConfigPublisher.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <cmath>
 #include <algorithm>
 #include <set>
+#include <vector>
+#include <memory>
 
 namespace
 {
@@ -500,6 +503,31 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     {
         room_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
         world_grid.SetLedCentroid(led_mu.x, led_mu.y, led_mu.z);
+    }
+
+    // LED-first Room VR: publish against the global room grid + all layout LED room positions.
+    // (Effect-local zone grids must not be used for voxel bounds — that mapped LEDs to the wrong side.)
+    {
+        RoomSampleConfigPublisher::SetPublishRoomGrid(room_grid);
+        std::vector<float> led_xyz;
+        led_xyz.reserve(4096);
+        for(const std::unique_ptr<ControllerTransform>& transform : controller_transforms)
+        {
+            if(!transform || transform->hidden_by_virtual)
+            {
+                continue;
+            }
+            ControllerLayout3D::UpdateWorldPositions(transform.get());
+            for(const LEDPosition3D& led : transform->led_positions)
+            {
+                led_xyz.push_back(led.room_position.x);
+                led_xyz.push_back(led.room_position.y);
+                led_xyz.push_back(led.room_position.z);
+            }
+        }
+        RoomSampleConfigPublisher::SetFrameLedRoomPositions(
+            led_xyz.empty() ? nullptr : led_xyz.data(),
+            led_xyz.size() / 3u);
     }
 
     ReferenceMode stack_origin_mode = REF_MODE_USER_POSITION;

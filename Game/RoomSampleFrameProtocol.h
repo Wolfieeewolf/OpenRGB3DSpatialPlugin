@@ -21,8 +21,11 @@ constexpr std::uint32_t kFrameHeaderBytes = 64;
 constexpr std::uint32_t kShmTotalBytes = 4194304u; // 4 MiB (480k RGBA compresses via LZ4)
 constexpr std::uint32_t kFlagLz4 = 1u << 0;
 constexpr std::uint32_t kFlagEnabled = 1u << 1;
+/** Config file has important_cell_count in reserved[0..3] and that many uint32 flat indices after the header. */
+constexpr std::uint32_t kFlagImportantCells = 1u << 2;
 constexpr std::size_t kDefaultTargetCells = 800u * 600u;
 constexpr std::size_t kMaxCells = 512000u;
+constexpr std::uint32_t kMaxImportantCells = 16384u;
 
 #pragma pack(push, 1)
 struct ConfigHeader
