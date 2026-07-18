@@ -1,7 +1,7 @@
 # Build a WiX MSI installer for the Windows plugin DLL, matching the
 # OpenRGB Effects Plugin installer layout (installs to Program Files\OpenRGB\plugins).
 # Requires WiX 3.x (candle/light) — preinstalled on GitHub windows-2022 runners.
-# Output: dist/OpenRGB_3D_Spatial_Plugin_Windows_64.msi
+# Output: dist/OpenRGB_3D_Spatial_Plugin_Windows_64.zip (contains the .msi)
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -109,8 +109,16 @@ Get-Content $WxsFile | Write-Host
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 New-Item -ItemType Directory -Path (Join-Path $Root 'dist') -Force | Out-Null
-$MsiPath = "dist\${PnSansWs}_Windows_64.msi"
+$MsiName = "${PnSansWs}_Windows_64.msi"
+$MsiPath = Join-Path $Root "dist\$MsiName"
 & light -sval -ext WixUIExtension "$PnSansWs.wixobj" -out $MsiPath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Packaged: $MsiPath"
+# GitLab/OpenRGB plugin downloads ship the MSI inside a zip (artifact archive).
+# Mirror that on GitHub Releases so users download-and-extract like other plugins.
+$MsiZipPath = Join-Path $Root "dist\${PnSansWs}_Windows_64.zip"
+if (Test-Path $MsiZipPath) { Remove-Item $MsiZipPath -Force }
+Compress-Archive -Path $MsiPath -DestinationPath $MsiZipPath
+Remove-Item $MsiPath -Force
+
+Write-Host "Packaged: $MsiZipPath (contains $MsiName)"
