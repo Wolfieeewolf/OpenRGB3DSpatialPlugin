@@ -68,12 +68,18 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/package-windows.ps1
 
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/build-msi.ps1
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Windows_64
           path: |
             dist/*.zip
+            dist/*.msi
             release/OpenRGB3DSpatialPlugin.dll
           if-no-files-found: error
 
@@ -177,7 +183,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' \) -print0 \
+          find artifacts -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.tar.gz' -o -name '*.msi' \) -print0 \
             | while IFS= read -r -d '' f; do
                 cp -v "$f" "release-assets/$(basename "$f")"
               done
@@ -212,14 +218,14 @@ jobs:
 
           | OS | CPU | File |
           | --- | --- | --- |
-          | Windows | x64 | \`..._Windows_64.zip\` (.dll) |
+          | Windows | x64 | \`..._Windows_64.msi\` (installer) or \`..._Windows_64.zip\` (.dll) |
           | Linux | x86_64 (amd64) | \`..._amd64.deb\` or \`..._Linux_amd64.tar.gz\` (.so) |
           | Linux | ARM64 (Pi 4/5 etc.) | \`..._arm64.deb\` or \`..._Linux_arm64.tar.gz\` (.so) |
           | macOS | Apple Silicon | \`..._macOS_arm64.zip\` (.dylib) |
           | macOS | Intel | \`..._macOS_intel.zip\` (.dylib) |
 
           ### Install
-          - **Windows:** unzip and copy the \`.dll\` into OpenRGB's \`plugins\` folder.
+          - **Windows:** run the \`.msi\` installer (installs into \`Program Files\OpenRGB\plugins\`), or unzip and copy the \`.dll\` into OpenRGB's \`plugins\` folder.
           - **Linux:** install the \`.deb\`, or extract the \`.tar.gz\` into \`/usr/lib/openrgb/plugins/\`.
           - **macOS:** unzip and copy the \`.dylib\` into \`OpenRGB.app/Contents/MacOS/plugins/\`.
 

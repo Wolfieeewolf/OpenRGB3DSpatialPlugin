@@ -5,6 +5,12 @@ docs/
 build/
 debug/
 release/
+dist/
+
+# WiX MSI intermediates (scripts/ci/build-msi.ps1)
+*.wxs
+*.wixobj
+*.wixpdb
 
 # aqtinstall (local Qt install / CI)
 aqtinstall.log
