@@ -44,6 +44,7 @@
 #include <QStackedWidget>
 #include <fstream>
 #include <algorithm>
+#include <exception>
 #include <map>
 #include <QList>
 #include <QMessageBox>
@@ -189,7 +190,8 @@ void OpenRGB3DSpatialTab::InitLedViewport()
     viewport->SetReferencePoints(&reference_points);
     viewport->SetDisplayPlanes(&display_planes);
     viewport->SetGridScaleMM(grid_scale_mm);
-    viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+    use_manual_room_size = true;
+    viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, true);
     viewport->SetScreenPreviewTickCallback({});
     viewport->ResetCameraToDefault();
 
@@ -227,18 +229,28 @@ void OpenRGB3DSpatialTab::bindUiPanels()
 
     ui->availableControllersPanel->bindTab(this, ControllerListPanel::Mode::Available);
     ui->controllersInScenePanel->bindTab(this, ControllerListPanel::Mode::InScene);
+    // Equal stretch so Available Controllers is not squeezed under Controllers in Scene.
     ui->setupContentLayout->setStretch(0, 1);
-    ui->setupContentLayout->setStretch(1, 2);
+    ui->setupContentLayout->setStretch(1, 1);
     ui->middlePanelLayout->setStretch(0, 0);
     ui->middlePanelLayout->setStretch(1, 1);
-    connect(ui->setupLeftTabs, &QTabWidget::currentChanged, this, [this](int) {
-        if(ui->setupLeftTabs && ui->setupLeftTabs->currentWidget() == ui->availableControllersPanel)
-        {
-            UpdateDeviceList();
-        }
-    });
 
     const nlohmann::json startup_settings = GetPluginSettings();
+    try
+    {
+        if(startup_settings.contains("Ui") &&
+           startup_settings["Ui"].contains("ShowUndetectedAvailableControllers") &&
+           ui->availableControllersPanel)
+        {
+            ui->availableControllersPanel->setShowUndetectedControllers(
+                startup_settings["Ui"]["ShowUndetectedAvailableControllers"].get<bool>());
+        }
+    }
+    catch(const std::exception&)
+    {
+    }
+
+    UpdateDeviceList();
 
     InitLedViewport();
 
@@ -820,25 +832,6 @@ void OpenRGB3DSpatialTab::ClearCustomEffectUI()
     }
 }
 
-void OpenRGB3DSpatialTab::gridDimensionsChanged()
-{
-    if(gridXSpin()) custom_grid_x = gridXSpin()->value();
-    if(gridYSpin()) custom_grid_y = gridYSpin()->value();
-    if(gridZSpin()) custom_grid_z = gridZSpin()->value();
-
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        RegenerateLEDPositions(controller_transforms[i].get());
-    }
-
-    if(viewport)
-    {
-        viewport->SetGridDimensions(custom_grid_x, custom_grid_y, custom_grid_z);
-        viewport->update();
-    }
-    SetLayoutDirty();
-}
-
 void OpenRGB3DSpatialTab::gridSnapToggled(bool enabled)
 {
     if(viewport)
@@ -1181,17 +1174,6 @@ void OpenRGB3DSpatialTab::effectBoundsChanged(int index)
     if(viewport) viewport->UpdateColors();
 }
 
-void OpenRGB3DSpatialTab::ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const
-{
-    ManualRoomSettings auto_room = MakeManualRoomSettings(false, 0.0f, 0.0f, 0.0f);
-    GridBounds bounds = ComputeGridBounds(auto_room, grid_scale_mm, controller_transforms);
-    GridExtents extents = BoundsToExtents(bounds);
-
-    width_mm  = GridUnitsToMM(extents.width_units, grid_scale_mm);
-    depth_mm  = GridUnitsToMM(extents.depth_units, grid_scale_mm);
-    height_mm = GridUnitsToMM(extents.height_units, grid_scale_mm);
-}
-
 nlohmann::json OpenRGB3DSpatialTab::GetPluginSettings() const
 {
     if(!resource_manager) return nlohmann::json::object();
@@ -1436,106 +1418,48 @@ double OpenRGB3DSpatialTab::EffectiveGridScaleMm() const
 
 void OpenRGB3DSpatialTab::ScenePositionAxisLimitsMm(int axis, double& min_mm, double& max_mm) const
 {
-    const double scale = EffectiveGridScaleMm();
-
-    if(use_manual_room_size)
+    double width_mm  = manual_room_width;
+    double height_mm = manual_room_height;
+    double depth_mm  = manual_room_depth;
+    if(roomWidthSpin())
     {
-        double width_mm  = manual_room_width;
-        double height_mm = manual_room_height;
-        double depth_mm  = manual_room_depth;
-        if(roomWidthSpin())
-        {
-            width_mm = roomWidthSpin()->value();
-        }
-        if(roomHeightSpin())
-        {
-            height_mm = roomHeightSpin()->value();
-        }
-        if(roomDepthSpin())
-        {
-            depth_mm = roomDepthSpin()->value();
-        }
-        if(width_mm < 100.0)
-        {
-            width_mm = 100.0;
-        }
-        if(height_mm < 100.0)
-        {
-            height_mm = 100.0;
-        }
-        if(depth_mm < 100.0)
-        {
-            depth_mm = 100.0;
-        }
-
-        if(axis == 0)
-        {
-            min_mm = 0.0;
-            max_mm = width_mm;
-        }
-        else if(axis == 1)
-        {
-            min_mm = 0.0;
-            max_mm = height_mm;
-        }
-        else
-        {
-            min_mm = 0.0;
-            max_mm = depth_mm;
-        }
-        return;
+        width_mm = roomWidthSpin()->value();
     }
-
-    ManualRoomSettings auto_room = MakeManualRoomSettings(false, 0.0f, 0.0f, 0.0f);
-    GridBounds         bounds    = ComputeGridBounds(auto_room, (float)scale, controller_transforms);
+    if(roomHeightSpin())
+    {
+        height_mm = roomHeightSpin()->value();
+    }
+    if(roomDepthSpin())
+    {
+        depth_mm = roomDepthSpin()->value();
+    }
+    if(width_mm < 100.0)
+    {
+        width_mm = 100.0;
+    }
+    if(height_mm < 100.0)
+    {
+        height_mm = 100.0;
+    }
+    if(depth_mm < 100.0)
+    {
+        depth_mm = 100.0;
+    }
 
     if(axis == 0)
     {
-        min_mm = (double)GridUnitsToMM(bounds.min_x, (float)scale);
-        max_mm = (double)GridUnitsToMM(bounds.max_x, (float)scale);
+        min_mm = 0.0;
+        max_mm = width_mm;
     }
     else if(axis == 1)
     {
-        min_mm = (double)GridUnitsToMM(bounds.min_y, (float)scale);
-        max_mm = (double)GridUnitsToMM(bounds.max_y, (float)scale);
+        min_mm = 0.0;
+        max_mm = height_mm;
     }
     else
     {
-        min_mm = (double)GridUnitsToMM(bounds.min_z, (float)scale);
-        max_mm = (double)GridUnitsToMM(bounds.max_z, (float)scale);
-    }
-
-    double span = max_mm - min_mm;
-    if(span < 100.0)
-    {
-        float auto_w = 0.0f;
-        float auto_d = 0.0f;
-        float auto_h = 0.0f;
-        ComputeAutoRoomExtents(auto_w, auto_d, auto_h);
-        if(axis == 0)
-        {
-            min_mm = 0.0;
-            max_mm = std::max(100.0, (double)auto_w);
-        }
-        else if(axis == 1)
-        {
-            min_mm = 0.0;
-            max_mm = std::max(100.0, (double)auto_h);
-        }
-        else
-        {
-            min_mm = 0.0;
-            max_mm = std::max(100.0, (double)auto_d);
-        }
-        span = max_mm - min_mm;
-    }
-
-    const double pad = std::max(50.0, span * 0.05);
-    min_mm -= pad;
-    max_mm += pad;
-    if(axis == 1 && min_mm < 0.0)
-    {
         min_mm = 0.0;
+        max_mm = depth_mm;
     }
 }
 
@@ -1893,21 +1817,6 @@ QComboBox* OpenRGB3DSpatialTab::stackEffectZoneCombo() const
     return ui && ui->effectGlobalSettingsPanel ? ui->effectGlobalSettingsPanel->stackEffectZoneCombo() : nullptr;
 }
 
-QSpinBox* OpenRGB3DSpatialTab::gridXSpin() const
-{
-    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridXSpin() : nullptr;
-}
-
-QSpinBox* OpenRGB3DSpatialTab::gridYSpin() const
-{
-    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridYSpin() : nullptr;
-}
-
-QSpinBox* OpenRGB3DSpatialTab::gridZSpin() const
-{
-    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridZSpin() : nullptr;
-}
-
 QCheckBox* OpenRGB3DSpatialTab::gridSnapCheckbox() const
 {
     return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->gridSnapCheckbox() : nullptr;
@@ -1941,11 +1850,6 @@ QDoubleSpinBox* OpenRGB3DSpatialTab::roomDepthSpin() const
 QDoubleSpinBox* OpenRGB3DSpatialTab::roomHeightSpin() const
 {
     return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->roomHeightSpin() : nullptr;
-}
-
-QCheckBox* OpenRGB3DSpatialTab::useManualRoomSizeCheckbox() const
-{
-    return ui && ui->gridSettingsPanel ? ui->gridSettingsPanel->useManualRoomSizeCheckbox() : nullptr;
 }
 
 QDoubleSpinBox* OpenRGB3DSpatialTab::posXSpin() const

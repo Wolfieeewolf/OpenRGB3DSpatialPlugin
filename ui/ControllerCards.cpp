@@ -16,7 +16,9 @@
 #include <QLabel>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QToolButton>
 #include <algorithm>
 #include <limits>
@@ -32,7 +34,8 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
                                                            OpenRGB3DSpatialTab* host,
                                                            int scene_list_row,
                                                            int transform_index,
-                                                           QWidget* parent)
+                                                           QWidget* parent,
+                                                           const QString& subtitle)
     : QWidget(parent),
       ui(new Ui::SpatialControllerCardWidget),
       mode_(mode),
@@ -45,18 +48,28 @@ SpatialControllerCardWidget::SpatialControllerCardWidget(Mode mode,
       row_selected_(false)
 {
     ui->setupUi(this);
-    title_text_ = title;
+    title_text_    = title;
+    subtitle_text_ = subtitle;
 
     applyColumnStretches();
+
+    PluginUiApplyControllerCardChrome(ui->cardFrame, false);
 
     ui->nameLabel->setMinimumWidth(0);
     connect(ui->nameLabel, &PluginClickableLabel::clicked, this, &SpatialControllerCardWidget::nameClicked);
 
+    if(ui->subtitleLabel)
+    {
+        PluginUiApplyMutedSecondaryLabel(ui->subtitleLabel);
+    }
+
     ui->actionButton->setFont(OpenRGBPluginsFont::GetFont());
+    ui->actionButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     ui->actionButton->setToolTip(mode_ == Mode::Available ? tr("Add to 3D scene") : tr("Remove from 3D scene"));
     connect(ui->actionButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::actionClicked);
 
     ui->editButton->setVisible(mode_ == Mode::InScene);
+    ui->editButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     ui->editButton->setToolTip(tr("Edit position, rotation, and spacing in the settings panel"));
     connect(ui->editButton, &QToolButton::clicked, this, &SpatialControllerCardWidget::editClicked);
 
@@ -118,6 +131,12 @@ void SpatialControllerCardWidget::resizeEvent(QResizeEvent* event)
     updateNameLabelLayout();
 }
 
+void SpatialControllerCardWidget::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    PluginUiApplyControllerCardChrome(ui->cardFrame, row_selected_);
+}
+
 void SpatialControllerCardWidget::applyColumnStretches()
 {
     for(int col = 0; col <= kActionColumn; col++)
@@ -125,16 +144,10 @@ void SpatialControllerCardWidget::applyColumnStretches()
         ui->innerLayout->setColumnStretch(col, 0);
     }
 
-    if(mode_ == Mode::InScene)
+    // Same stretch rules for Available and In-Scene so both lists share one card look.
+    for(int col = 0; col <= kLastContentColumn; col++)
     {
-        ui->innerLayout->setColumnStretch(0, 1);
-    }
-    else
-    {
-        for(int col = 0; col <= kLastContentColumn; col++)
-        {
-            ui->innerLayout->setColumnStretch(col, 1);
-        }
+        ui->innerLayout->setColumnStretch(col, 1);
     }
 }
 
@@ -164,28 +177,8 @@ int SpatialControllerCardWidget::nameLabelContentWidth() const
 
 void SpatialControllerCardWidget::updateNameLabelLayout()
 {
-    if(!ui->nameLabel || title_text_.isEmpty())
+    if(!ui->nameLabel)
     {
-        return;
-    }
-
-    if(mode_ == Mode::InScene)
-    {
-        ui->nameLabel->setWordWrap(true);
-        ui->nameLabel->setText(title_text_);
-        ui->nameLabel->setToolTip(QString());
-
-        const int wrap_width = std::max(ui->nameLabel->width(), nameLabelContentWidth());
-        if(wrap_width > 0)
-        {
-            const int wrapped_height = ui->nameLabel->heightForWidth(wrap_width);
-            if(wrapped_height > 0)
-            {
-                ui->nameLabel->setMinimumHeight(wrapped_height);
-            }
-        }
-
-        updateGeometry();
         return;
     }
 
@@ -193,17 +186,32 @@ void SpatialControllerCardWidget::updateNameLabelLayout()
     ui->nameLabel->setMinimumHeight(0);
 
     const int available_width = std::max(ui->nameLabel->width(), nameLabelContentWidth());
-    if(available_width <= 0)
+    if(available_width <= 0 || title_text_.isEmpty())
     {
         ui->nameLabel->setText(title_text_);
-        ui->nameLabel->setToolTip(QString());
-        return;
+        ui->nameLabel->setToolTip(title_text_);
+    }
+    else
+    {
+        const QFontMetrics metrics(ui->nameLabel->font());
+        const QString elided = metrics.elidedText(title_text_, Qt::ElideRight, available_width);
+        ui->nameLabel->setText(elided);
+        ui->nameLabel->setToolTip(elided != title_text_ ? title_text_ : QString());
     }
 
-    const QFontMetrics metrics(ui->nameLabel->font());
-    const QString elided = metrics.elidedText(title_text_, Qt::ElideRight, available_width);
-    ui->nameLabel->setText(elided);
-    ui->nameLabel->setToolTip(elided != title_text_ ? title_text_ : QString());
+    if(ui->subtitleLabel)
+    {
+        const bool show_subtitle = !subtitle_text_.isEmpty();
+        ui->subtitleLabel->setVisible(show_subtitle);
+        if(show_subtitle)
+        {
+            ui->subtitleLabel->setWordWrap(false);
+            ui->subtitleLabel->setText(subtitle_text_);
+            ui->subtitleLabel->setToolTip(subtitle_text_);
+        }
+    }
+
+    updateGeometry();
 }
 
 void SpatialControllerCardWidget::applyCompactComboStyle(QComboBox* combo)
@@ -213,11 +221,9 @@ void SpatialControllerCardWidget::applyCompactComboStyle(QComboBox* combo)
         return;
     }
 
-    QFont font = combo->font();
-    const int target = std::max(7, font.pointSize() - 1);
-    font.setPointSize(target);
-    combo->setFont(font);
-    combo->setMaximumHeight(22);
+    // Follow host font size (OpenRGB Qt6 native theme); do not force tiny max heights.
+    combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    combo->setMaximumHeight(QWIDGETSIZE_MAX);
 }
 
 void SpatialControllerCardWidget::applyGranularityComboStyle(QComboBox* combo)
@@ -228,7 +234,7 @@ void SpatialControllerCardWidget::applyGranularityComboStyle(QComboBox* combo)
         return;
     }
 
-    combo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    combo->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
 
     const QFontMetrics metrics(combo->font());
     int text_width = 0;
@@ -236,8 +242,8 @@ void SpatialControllerCardWidget::applyGranularityComboStyle(QComboBox* combo)
     {
         text_width = std::max(text_width, metrics.horizontalAdvance(combo->itemText(i)));
     }
-    combo->setMinimumWidth(text_width + 36);
-    combo->setMaximumWidth(text_width + 36);
+    combo->setMinimumWidth(text_width + 40);
+    combo->setMaximumWidth(QWIDGETSIZE_MAX);
 }
 
 void SpatialControllerCardWidget::applyItemComboStyle(QComboBox* combo)
@@ -256,16 +262,14 @@ void SpatialControllerCardWidget::applySpacingSpinStyle(QDoubleSpinBox* spin)
         return;
     }
 
-    QFont font = spin->font();
-    const int target = std::max(7, font.pointSize() - 1);
-    font.setPointSize(target);
-    spin->setFont(font);
-    spin->setMaximumHeight(22);
+    spin->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+    spin->setMaximumHeight(QWIDGETSIZE_MAX);
     spin->setRange(0.0, 1000.0);
     spin->setSingleStep(1.0);
     spin->setDecimals(1);
     spin->setSuffix(tr(" mm"));
     spin->setAlignment(Qt::AlignRight);
+    spin->setMinimumWidth(64);
 }
 
 void SpatialControllerCardWidget::spacingMm(float* x_mm, float* y_mm, float* z_mm) const
@@ -345,20 +349,7 @@ void SpatialControllerCardWidget::updateActionEnabled()
 void SpatialControllerCardWidget::setRowSelected(bool selected)
 {
     row_selected_ = selected;
-
-    if(selected)
-    {
-        ui->cardFrame->setAutoFillBackground(true);
-        QPalette pal = ui->cardFrame->palette();
-        const QColor highlight = PluginUiPaletteColor(this, QPalette::Highlight);
-        pal.setColor(QPalette::Window, PluginUiBlendColors(PluginUiPaletteColor(this, QPalette::Base), highlight, 0.35f));
-        ui->cardFrame->setPalette(pal);
-    }
-    else
-    {
-        ui->cardFrame->setAutoFillBackground(false);
-        ui->cardFrame->setPalette(parentWidget() ? parentWidget()->palette() : palette());
-    }
+    PluginUiApplyControllerCardChrome(ui->cardFrame, selected);
 }
 
 void SpatialControllerCardWidget::refreshFromHost()
@@ -577,7 +568,8 @@ void SpatialControllerCardList::rebuildAvailable(OpenRGB3DSpatialTab* host)
     }
 
     const QList<SpatialControllerEntryKey> keys       = host->GetAvailableControllerKeys();
-    const QList<QString>                   titles       = host->GetAvailableControllerTitles();
+    const QList<QString>                   titles     = host->GetAvailableControllerTitles();
+    const QList<QString>                   subtitles  = host->GetAvailableControllerSubtitles();
     const QList<bool> granularity_flags = host->GetAvailableControllerGranularityFlags();
 
     const int count = keys.size();
@@ -587,7 +579,8 @@ void SpatialControllerCardList::rebuildAvailable(OpenRGB3DSpatialTab* host)
     {
         const bool show_granularity_controls =
             (i < granularity_flags.size()) ? granularity_flags[i] : false;
-        const QString title = (i < titles.size()) ? titles[i] : QString();
+        const QString title    = (i < titles.size()) ? titles[i] : QString();
+        const QString subtitle = (i < subtitles.size()) ? subtitles[i] : QString();
         float spacing_x = 10.0f;
         float spacing_y = 0.0f;
         float spacing_z = 0.0f;
@@ -606,7 +599,8 @@ void SpatialControllerCardList::rebuildAvailable(OpenRGB3DSpatialTab* host)
                                                      host,
                                                      -1,
                                                      -1,
-                                                     content_widget_);
+                                                     content_widget_,
+                                                     subtitle);
 
         connect(card, &SpatialControllerCardWidget::cardActivated, this,
                 [this](const SpatialControllerEntryKey& key)

@@ -10,8 +10,9 @@
 
 struct SpatialControllerListRow
 {
-    QString                 text;
-    bool                    has_user_role = false;
+    QString                   text;
+    QString                   subtitle;
+    bool                      has_user_role = false;
     SpatialControllerEntryKey user_role;
 };
 
@@ -34,11 +35,11 @@ public:
 
     bool blockSignals(bool) { return false; }
 
-    void append(const QString& text) { entries_.push_back({text, false, {}}); }
+    void append(const QString& text) { entries_.push_back({text, QString(), false, {}}); }
 
     void append(const QString& text, const SpatialControllerEntryKey& key)
     {
-        entries_.push_back({text, true, key});
+        entries_.push_back({text, QString(), true, key});
     }
 
     void removeAt(int index)
@@ -126,9 +127,9 @@ public:
 
     bool blockSignals(bool) { return false; }
 
-    void append(const QString& text, const SpatialControllerEntryKey& key)
+    void append(const QString& text, const SpatialControllerEntryKey& key, const QString& subtitle = QString())
     {
-        entries_.push_back({text, true, key});
+        entries_.push_back({text, subtitle, true, key});
     }
 
     QString textAt(int row) const
@@ -138,6 +139,15 @@ public:
             return QString();
         }
         return entries_[static_cast<size_t>(row)].text;
+    }
+
+    QString subtitleAt(int row) const
+    {
+        if(row < 0 || row >= count())
+        {
+            return QString();
+        }
+        return entries_[static_cast<size_t>(row)].subtitle;
     }
 
     SpatialControllerEntryKey userRoleAt(int row) const

@@ -8,6 +8,7 @@
 #include "ControllerDisplayUtils.h"
 #include "CustomControllerDeviceList.h"
 #include "ControllerLayout3D.h"
+#include "SpatialTabLedHelpers.h"
 #include "custom-controller-grid/CustomControllerLayoutGrid.h"
 #include "custom-controller-grid/CustomControllerGridLayoutMath.h"
 
@@ -153,6 +154,10 @@ void CustomControllerDialog::PopulateDeviceItemCombo(int controller_index, int g
     {
         for(unsigned int i = 0; i < controller->GetLEDCount(); i++)
         {
+            if(!IsAssignableControllerLed(controller, i))
+            {
+                continue;
+            }
             if(!IsItemAssigned(controller, granularity, static_cast<int>(i)))
             {
                 const QColor color = GetItemColor(controller, granularity, static_cast<int>(i));
@@ -949,6 +954,10 @@ bool CustomControllerDialog::IsItemAssigned(RGBControllerInterface* controller, 
     }
     else if(granularity == 2)
     {
+        if(!IsAssignableControllerLed(controller, (unsigned int)item_idx))
+        {
+            return true;
+        }
         for(unsigned int i = 0; i < mappings.size(); i++)
         {
             if(!mapping_owned_by_controller(mappings[i]))

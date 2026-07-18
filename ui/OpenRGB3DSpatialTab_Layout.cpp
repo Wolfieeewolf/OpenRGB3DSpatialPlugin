@@ -64,7 +64,7 @@ nlohmann::json OpenRGB3DSpatialTab::BuildLayoutJson() const
     layout_json["grid"]["snap_enabled"] = (viewport && viewport->IsGridSnapEnabled());
     layout_json["grid"]["scale_mm"] = grid_scale_mm;
 
-    layout_json["room"]["use_manual_size"] = use_manual_room_size;
+    layout_json["room"]["use_manual_size"] = true;
     layout_json["room"]["width"] = manual_room_width;
     layout_json["room"]["depth"] = manual_room_depth;
     layout_json["room"]["height"] = manual_room_height;
@@ -162,28 +162,10 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
 
     const nlohmann::json& grid_json = layout_json["grid"];
+    // Internal packing defaults for newly added physical devices (not shown in Grid Settings).
     custom_grid_x                 = grid_json["dimensions"]["x"].get<int>();
     custom_grid_y                 = grid_json["dimensions"]["y"].get<int>();
     custom_grid_z                 = grid_json["dimensions"]["z"].get<int>();
-
-    if(gridXSpin())
-    {
-        gridXSpin()->blockSignals(true);
-        gridXSpin()->setValue(custom_grid_x);
-        gridXSpin()->blockSignals(false);
-    }
-    if(gridYSpin())
-    {
-        gridYSpin()->blockSignals(true);
-        gridYSpin()->setValue(custom_grid_y);
-        gridYSpin()->blockSignals(false);
-    }
-    if(gridZSpin())
-    {
-        gridZSpin()->blockSignals(true);
-        gridZSpin()->setValue(custom_grid_z);
-        gridZSpin()->blockSignals(false);
-    }
 
     if(viewport)
     {
@@ -213,42 +195,33 @@ void OpenRGB3DSpatialTab::LoadLayoutFromJSON(const nlohmann::json& layout_json)
     }
 
     const nlohmann::json& room_json = layout_json["room"];
-    use_manual_room_size            = room_json["use_manual_size"].get<bool>();
+    use_manual_room_size            = true;
     manual_room_width               = room_json["width"].get<float>();
     manual_room_depth               = room_json["depth"].get<float>();
     manual_room_height              = room_json["height"].get<float>();
 
-    if(useManualRoomSizeCheckbox())
-    {
-        useManualRoomSizeCheckbox()->blockSignals(true);
-        useManualRoomSizeCheckbox()->setChecked(use_manual_room_size);
-        useManualRoomSizeCheckbox()->blockSignals(false);
-    }
     if(roomWidthSpin())
     {
         roomWidthSpin()->blockSignals(true);
         roomWidthSpin()->setValue(manual_room_width);
-        roomWidthSpin()->setEnabled(use_manual_room_size);
         roomWidthSpin()->blockSignals(false);
     }
     if(roomDepthSpin())
     {
         roomDepthSpin()->blockSignals(true);
         roomDepthSpin()->setValue(manual_room_depth);
-        roomDepthSpin()->setEnabled(use_manual_room_size);
         roomDepthSpin()->blockSignals(false);
     }
     if(roomHeightSpin())
     {
         roomHeightSpin()->blockSignals(true);
         roomHeightSpin()->setValue(manual_room_height);
-        roomHeightSpin()->setEnabled(use_manual_room_size);
         roomHeightSpin()->blockSignals(false);
     }
 
     if(viewport)
     {
-        viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, use_manual_room_size);
+        viewport->SetRoomDimensions(manual_room_width, manual_room_depth, manual_room_height, true);
     }
     emit GridLayoutChanged();
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include "OpenRGB3DSpatialTab.h"
+#include "PluginUiUtils.h"
 #include "ui_OpenRGB3DSpatialTab.h"
 #include <exception>
 #include "PluginLog.h"
@@ -24,6 +25,12 @@ void OpenRGB3DSpatialTab::MergePluginUiIntoSettings(nlohmann::json& settings) co
     if(ui && ui->leftModeTabs)
     {
         settings["Ui"]["LeftModeTab"] = ui->leftModeTabs->currentIndex();
+    }
+
+    if(ui && ui->availableControllersPanel)
+    {
+        settings["Ui"]["ShowUndetectedAvailableControllers"] =
+            ui->availableControllersPanel->showUndetectedControllers();
     }
 }
 
@@ -63,14 +70,18 @@ void OpenRGB3DSpatialTab::BindSettingsPanels()
         profile_unsaved_banner_->setToolTip(
             tr("Save in OpenRGB using File → Profiles, or layout and effect changes will be lost."));
         profile_unsaved_banner_->setVisible(false);
-        profile_unsaved_banner_->setStyleSheet(
-            QStringLiteral("QLabel#profileUnsavedBanner {"
-                           " background-color: #5c4a12;"
-                           " color: #ffe9a8;"
-                           " font-size: 11px;"
-                           " padding: 2px 6px;"
-                           " border-bottom: 1px solid #8a7020;"
-                           "}"));
+        profile_unsaved_banner_->setAutoFillBackground(true);
+        profile_unsaved_banner_->setMargin(6);
+        {
+            // Theme-aware warning strip (follows OpenRGB/Qt palette instead of hard-coded dark amber).
+            const QColor base = PluginUiPaletteColor(this, QPalette::Base);
+            const QColor mid  = PluginUiPaletteColor(this, QPalette::Mid);
+            const QColor warn = PluginUiBlendColors(base, mid, 0.55f);
+            QPalette pal      = profile_unsaved_banner_->palette();
+            pal.setColor(QPalette::Window, warn);
+            pal.setColor(QPalette::WindowText, PluginUiReadableTextOn(warn, this));
+            profile_unsaved_banner_->setPalette(pal);
+        }
         ui->rootVerticalLayout->insertWidget(0, profile_unsaved_banner_);
     }
 

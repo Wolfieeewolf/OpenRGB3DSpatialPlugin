@@ -12,6 +12,9 @@ bool TryGetObjectCreatorGlobalLedIndex(RGBControllerInterface* controller,
                                       unsigned int led_idx,
                                       unsigned int* global_led_idx);
 
+/** Real assignable LED (not KEY_EN_UNUSED / empty-name keyboard matrix filler). */
+bool IsAssignableControllerLed(RGBControllerInterface* controller, unsigned int global_led_idx);
+
 bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
                                     RGBControllerInterface* controller,
                                     float& out_x,

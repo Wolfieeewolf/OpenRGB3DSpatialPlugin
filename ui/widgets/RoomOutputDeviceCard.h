@@ -8,6 +8,7 @@
 class QFrame;
 class QLabel;
 class QResizeEvent;
+class QShowEvent;
 class QToolButton;
 
 class RoomOutputDeviceCard : public QWidget
@@ -26,6 +27,7 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void updateActionIcon();

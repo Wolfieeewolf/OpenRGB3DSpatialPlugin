@@ -29,9 +29,9 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="transformRow">
+    <layout class="QVBoxLayout" name="transformRow">
      <property name="spacing">
-      <number>6</number>
+      <number>8</number>
      </property>
      <item>
       <widget class="QGroupBox" name="positionGroup">
@@ -70,10 +70,10 @@
         </item>
         <item row="0" column="2">
          <widget class="QDoubleSpinBox" name="posXSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>
@@ -94,10 +94,10 @@
         </item>
         <item row="1" column="2">
          <widget class="QDoubleSpinBox" name="posYSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>
@@ -118,10 +118,10 @@
         </item>
         <item row="2" column="2">
          <widget class="QDoubleSpinBox" name="posZSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>
@@ -166,10 +166,10 @@
         </item>
         <item row="0" column="2">
          <widget class="QDoubleSpinBox" name="rotXSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>
@@ -190,10 +190,10 @@
         </item>
         <item row="1" column="2">
          <widget class="QDoubleSpinBox" name="rotYSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>
@@ -214,10 +214,10 @@
         </item>
         <item row="2" column="2">
          <widget class="QDoubleSpinBox" name="rotZSpin">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>80</width>
-            <height>16777215</height>
+            <width>72</width>
+            <height>0</height>
            </size>
           </property>
          </widget>

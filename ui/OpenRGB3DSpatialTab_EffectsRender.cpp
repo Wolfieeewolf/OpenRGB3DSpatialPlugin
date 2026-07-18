@@ -476,7 +476,7 @@ void OpenRGB3DSpatialTab::RenderEffectStack()
     };
     EffectRenderFrameGuard effect_render_frame_guard;
 
-    ManualRoomSettings room_settings = MakeManualRoomSettings(use_manual_room_size,
+    ManualRoomSettings room_settings = MakeManualRoomSettings(true,
                                                               manual_room_width,
                                                               manual_room_height,
                                                               manual_room_depth);

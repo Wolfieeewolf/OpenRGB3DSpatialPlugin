@@ -24,6 +24,17 @@ bool TryGetObjectCreatorGlobalLedIndex(RGBControllerInterface* controller,
     return (*global_led_idx < controller->GetLEDCount());
 }
 
+bool IsAssignableControllerLed(RGBControllerInterface* controller, unsigned int global_led_idx)
+{
+    if(!controller || global_led_idx >= controller->GetLEDCount())
+    {
+        return false;
+    }
+
+    // OpenRGB keyboard layouts use KEY_EN_UNUSED ("") for blank matrix filler slots.
+    return !controller->GetLEDName(global_led_idx).empty();
+}
+
 bool TryGetCanonicalPhysicalSpacing(const std::vector<std::unique_ptr<ControllerTransform>>& transforms,
                                     RGBControllerInterface* controller,
                                     float& out_x,

@@ -53,6 +53,92 @@ inline QColor PluginUiBlendColors(const QColor& base, const QColor& overlay, flo
         static_cast<int>(overlay.blue() * overlay_weight + base.blue() * keep));
 }
 
+inline QString PluginUiColorCss(const QColor& c)
+{
+    return c.name(QColor::HexRgb);
+}
+
+/** Visual Map–like controller card: raised panel fill, subtle border, raised toolbuttons. */
+inline void PluginUiApplyControllerCardChrome(QFrame* frame, bool selected = false)
+{
+    if(!frame)
+    {
+        return;
+    }
+
+    frame->setFrameShape(QFrame::NoFrame);
+    frame->setFrameShadow(QFrame::Plain);
+    frame->setAutoFillBackground(false);
+
+    // Prefer the host window palette so cards match once parented into OpenRGB.
+    const QWidget* palette_source = frame->window() ? frame->window() : frame;
+    const QPalette pal            = palette_source->palette();
+    const QColor window           = pal.color(QPalette::Window);
+    const QColor base             = pal.color(QPalette::Base);
+    QColor card_bg                = pal.color(QPalette::Button);
+
+    // Some host themes make Button identical to Window/Base; lift AlternateBase instead.
+    if(!card_bg.isValid() || card_bg == window || card_bg == base)
+    {
+        card_bg = PluginUiBlendColors(base, pal.color(QPalette::AlternateBase), 0.65f);
+    }
+    if(selected)
+    {
+        card_bg = PluginUiBlendColors(card_bg, pal.color(QPalette::Highlight), 0.35f);
+    }
+
+    QColor border = pal.color(QPalette::Dark);
+    if(!border.isValid() || border == card_bg)
+    {
+        border = PluginUiBlendColors(card_bg, QColor(0, 0, 0), 0.35f);
+    }
+
+    QColor btn_bg = pal.color(QPalette::Light);
+    if(!btn_bg.isValid() || btn_bg == card_bg || btn_bg == window)
+    {
+        btn_bg = PluginUiBlendColors(card_bg, QColor(255, 255, 255), 0.14f);
+    }
+    QColor btn_border = pal.color(QPalette::Mid);
+    if(!btn_border.isValid() || btn_border == btn_bg)
+    {
+        btn_border = PluginUiBlendColors(btn_bg, QColor(0, 0, 0), 0.28f);
+    }
+    const QColor btn_hover   = PluginUiBlendColors(btn_bg, QColor(255, 255, 255), 0.10f);
+    const QColor btn_pressed = PluginUiBlendColors(btn_bg, pal.color(QPalette::Highlight), 0.22f);
+
+    // Stylesheet is set on the card frame itself (no shared objectName) so Available,
+    // In-Scene, and room-output cards all get the same chrome reliably.
+    frame->setStyleSheet(QStringLiteral(
+        "QFrame {"
+        "  background-color: %1;"
+        "  border: 1px solid %2;"
+        "  border-radius: 5px;"
+        "}"
+        "QToolButton {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 4px;"
+        "  padding: 2px 4px;"
+        "}"
+        "QToolButton:hover {"
+        "  background-color: %5;"
+        "}"
+        "QToolButton:pressed,"
+        "QToolButton:checked {"
+        "  background-color: %6;"
+        "}"
+        "QToolButton:disabled {"
+        "  background-color: %1;"
+        "  border-color: %2;"
+        "}")
+                             .arg(PluginUiColorCss(card_bg),
+                                  PluginUiColorCss(border),
+                                  PluginUiColorCss(btn_bg),
+                                  PluginUiColorCss(btn_border),
+                                  PluginUiColorCss(btn_hover),
+                                  PluginUiColorCss(btn_pressed)));
+}
+
 inline QColor PluginUiReadableTextOn(const QColor& background, const QWidget* w)
 {
     if(!w)

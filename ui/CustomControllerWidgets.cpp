@@ -18,6 +18,7 @@
 #include <QGridLayout>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QToolButton>
 #include <algorithm>
 
@@ -38,6 +39,8 @@ CustomControllerDeviceWidget::CustomControllerDeviceWidget(RGBControllerInterfac
     {
         device_name_text_ = ControllerDisplay::FormatRgbControllerTitle(controller_);
     }
+
+    PluginUiApplyControllerCardChrome(ui->cardFrame, false);
 
     ui->innerLayout->setColumnStretch(0, 1);
     ui->innerLayout->setColumnStretch(1, 1);
@@ -110,11 +113,8 @@ void CustomControllerDeviceWidget::applyCompactComboStyle(QComboBox* combo)
         return;
     }
 
-    QFont font = combo->font();
-    const int target = std::max(7, font.pointSize() - 1);
-    font.setPointSize(target);
-    combo->setFont(font);
-    combo->setMaximumHeight(22);
+    combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    combo->setMaximumHeight(QWIDGETSIZE_MAX);
 }
 
 void CustomControllerDeviceWidget::applyGranularityComboStyle(QComboBox* combo)
@@ -293,24 +293,7 @@ void CustomControllerDeviceWidget::refreshFromHost()
 void CustomControllerDeviceWidget::setRowSelected(bool selected)
 {
     row_selected_ = selected;
-    if(!ui->cardFrame)
-    {
-        return;
-    }
-
-    if(selected)
-    {
-        ui->cardFrame->setAutoFillBackground(true);
-        QPalette pal = ui->cardFrame->palette();
-        const QColor highlight = PluginUiPaletteColor(this, QPalette::Highlight);
-        pal.setColor(QPalette::Window, PluginUiBlendColors(PluginUiPaletteColor(this, QPalette::Base), highlight, 0.35f));
-        ui->cardFrame->setPalette(pal);
-    }
-    else
-    {
-        ui->cardFrame->setAutoFillBackground(false);
-        ui->cardFrame->setPalette(parentWidget() ? parentWidget()->palette() : palette());
-    }
+    PluginUiApplyControllerCardChrome(ui->cardFrame, selected);
 }
 
 void CustomControllerDeviceWidget::setPlusEnabled(bool enabled)

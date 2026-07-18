@@ -89,17 +89,19 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
 
     for(unsigned int i = 0; i < controllers.size(); i++)
     {
-        int unassigned_zones = GetUnassignedZoneCount(controllers[i]);
-        int unassigned_leds = GetUnassignedLEDCount(controllers[i]);
+        const int unassigned_zones = GetUnassignedZoneCount(controllers[i]);
+        const int unassigned_leds  = GetUnassignedLEDCount(controllers[i]);
 
         if(unassigned_leds > 0)
         {
-            QString display_text = ControllerDisplay::FormatRgbControllerTitle(controllers[i]) +
-                                   QString(" [%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
-            available_controllers_.append(display_text, qMakePair(static_cast<int>(i), -1));
+            const QString title = ControllerDisplay::FormatRgbControllerTitle(controllers[i]);
+            const QString subtitle =
+                QString("[%1 zones, %2 LEDs available]").arg(unassigned_zones).arg(unassigned_leds);
+            available_controllers_.append(title, qMakePair(static_cast<int>(i), -1), subtitle);
         }
     }
 
+    const bool show_undetected = ShowUndetectedAvailableControllers();
     for(unsigned int i = 0; i < virtual_controllers.size(); i++)
     {
         VirtualController3D* virtual_ctrl = virtual_controllers[i].get();
@@ -113,8 +115,16 @@ void OpenRGB3DSpatialTab::UpdateAvailableControllersList()
             continue;
         }
 
-        available_controllers_.append(QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName()),
-                                    qMakePair(-1, static_cast<int>(i)));
+        const bool undetected = CustomControllerHasUndetectedDevices(virtual_ctrl);
+        if(undetected && !show_undetected)
+        {
+            continue;
+        }
+
+        const QString title = QString("[Custom] ") + QString::fromStdString(virtual_ctrl->GetName());
+        const QString subtitle =
+            undetected ? QStringLiteral("[devices not detected]") : QString();
+        available_controllers_.append(title, qMakePair(-1, static_cast<int>(i)), subtitle);
     }
 
     for(unsigned int i = 0; i < reference_points.size(); i++)
@@ -208,6 +218,22 @@ QList<QString> OpenRGB3DSpatialTab::GetAvailableControllerTitles() const
     return titles;
 }
 
+QList<QString> OpenRGB3DSpatialTab::GetAvailableControllerSubtitles() const
+{
+    QList<QString> subtitles;
+    subtitles.reserve(available_controllers_.count());
+    for(int row = 0; row < available_controllers_.count(); row++)
+    {
+        subtitles.append(available_controllers_.subtitleAt(row));
+    }
+    return subtitles;
+}
+
+bool OpenRGB3DSpatialTab::ShowUndetectedAvailableControllers() const
+{
+    return ui && ui->availableControllersPanel && ui->availableControllersPanel->showUndetectedControllers();
+}
+
 QList<bool> OpenRGB3DSpatialTab::GetAvailableControllerGranularityFlags() const
 {
     QList<bool> flags;
@@ -221,8 +247,8 @@ QList<bool> OpenRGB3DSpatialTab::GetAvailableControllerGranularityFlags() const
 void OpenRGB3DSpatialTab::LoadDefaultLedSpacingFromSettings()
 {
     default_led_spacing_x_ = 10.0f;
-    default_led_spacing_y_ = 0.0f;
-    default_led_spacing_z_ = 0.0f;
+    default_led_spacing_y_ = 10.0f;
+    default_led_spacing_z_ = 10.0f;
 
     try
     {
@@ -231,8 +257,8 @@ void OpenRGB3DSpatialTab::LoadDefaultLedSpacingFromSettings()
         {
             const nlohmann::json& s = settings["LEDSpacing"];
             default_led_spacing_x_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("X", 10.0)));
-            default_led_spacing_y_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("Y", 0.0)));
-            default_led_spacing_z_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("Z", 0.0)));
+            default_led_spacing_y_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("Y", 10.0)));
+            default_led_spacing_z_ = (float)std::max(0.0, std::min(1000.0, (double)s.value("Z", 10.0)));
         }
     }
     catch(const std::exception& e)
@@ -880,6 +906,10 @@ void OpenRGB3DSpatialTab::PopulateAvailableItemCombo(const SpatialControllerEntr
     {
         for(unsigned int i = 0; i < controller->GetLEDCount(); i++)
         {
+            if(!IsAssignableControllerLed(controller, i))
+            {
+                continue;
+            }
             if(!IsItemInScene(controller, granularity, (int)i))
             {
                 combo->addItem(QString::fromStdString(controller->GetLEDName(i)),

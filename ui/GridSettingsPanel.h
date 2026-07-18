@@ -8,7 +8,6 @@
 class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
-class QSpinBox;
 
 namespace Ui {
 class GridSettingsPanel;
@@ -26,13 +25,9 @@ public:
 
     void bindTab(OpenRGB3DSpatialTab* tab);
 
-    QSpinBox*       gridXSpin() const;
-    QSpinBox*       gridYSpin() const;
-    QSpinBox*       gridZSpin() const;
     QDoubleSpinBox* gridScaleSpin() const;
     QCheckBox*      gridSnapCheckbox() const;
     QLabel*         selectionInfoLabel() const;
-    QCheckBox*      useManualRoomSizeCheckbox() const;
     QDoubleSpinBox* roomWidthSpin() const;
     QDoubleSpinBox* roomHeightSpin() const;
     QDoubleSpinBox* roomDepthSpin() const;
@@ -45,14 +40,13 @@ private slots:
     void onOverlayBrightChanged(int v);
     void onOverlayPointChanged(int v);
     void onOverlayStepChanged(int v);
-    void onUseManualRoomSizeToggled(bool checked);
     void onRoomWidthChanged(double value);
     void onRoomHeightChanged(double value);
     void onRoomDepthChanged(double value);
 
 private:
-    Ui::GridSettingsPanel*   ui;
-    OpenRGB3DSpatialTab*     host_tab_ = nullptr;
+    Ui::GridSettingsPanel* ui;
+    OpenRGB3DSpatialTab*   host_tab_ = nullptr;
 };
 
 #endif

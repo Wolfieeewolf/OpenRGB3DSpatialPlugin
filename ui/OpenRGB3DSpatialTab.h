@@ -163,7 +163,6 @@ private slots:
 
     void effectTimerTimeout();
     void RenderEffectStack();
-    void gridDimensionsChanged();
     void gridSnapToggled(bool enabled);
     void roomGuideLabelsToggled(bool enabled);
     void frameSelectionInView();
@@ -201,7 +200,9 @@ private slots:
     void PopulateAvailableItemCombo(const SpatialControllerEntryKey& key, int granularity, QComboBox* combo);
     QList<SpatialControllerEntryKey> GetAvailableControllerKeys() const;
     QList<QString>                   GetAvailableControllerTitles() const;
+    QList<QString>                   GetAvailableControllerSubtitles() const;
     QList<bool>                      GetAvailableControllerGranularityFlags() const;
+    bool                             ShowUndetectedAvailableControllers() const;
     void GetSuggestedSpacingForAvailableRgb(int controller_index, float& x_mm, float& y_mm, float& z_mm) const;
     void RememberAvailableRgbSpacingDraft(int controller_index, float x_mm, float y_mm, float z_mm);
     bool GetTransformLedSpacing(int transform_index, float& x_mm, float& y_mm, float& z_mm) const;
@@ -279,6 +280,8 @@ private:
     bool IsItemInScene(RGBControllerInterface* controller, int granularity, int item_idx) const;
     int GetUnassignedZoneCount(RGBControllerInterface* controller) const;
     int GetUnassignedLEDCount(RGBControllerInterface* controller) const;
+    void MarkControllerLedsUsed(RGBControllerInterface* controller, std::vector<bool>& used_leds) const;
+    bool CustomControllerHasUndetectedDevices(const VirtualController3D* virtual_ctrl) const;
     struct EffectSettingsUiMount
     {
         QWidget* container = nullptr;
@@ -375,9 +378,6 @@ private:
     QComboBox*   stackEffectTypeCombo() const;
     QComboBox*   stackEffectZoneCombo() const;
 
-    QSpinBox*    gridXSpin() const;
-    QSpinBox*    gridYSpin() const;
-    QSpinBox*    gridZSpin() const;
     QCheckBox*   gridSnapCheckbox() const;
     QDoubleSpinBox* gridScaleSpin() const;
     QLabel*      selectionInfoLabel() const;
@@ -385,7 +385,6 @@ private:
     QDoubleSpinBox* roomWidthSpin() const;
     QDoubleSpinBox* roomDepthSpin() const;
     QDoubleSpinBox* roomHeightSpin() const;
-    QCheckBox*   useManualRoomSizeCheckbox() const;
 
     QDoubleSpinBox* posXSpin() const;
     QDoubleSpinBox* posYSpin() const;
@@ -468,6 +467,7 @@ private:
     QElapsedTimer               effect_elapsed;
     bool                        stack_settings_updating = false;
 
+    /** Internal packing wrap when adding physical devices (not shown in Grid Settings). */
     int                         custom_grid_x = 10;
     int                         custom_grid_y = 10;
     int                         custom_grid_z = 10;
@@ -476,11 +476,12 @@ private:
     float                       manual_room_width = 1000.0f;
     float                       manual_room_depth = 1000.0f;
     float                       manual_room_height = 1000.0f;
-    bool                        use_manual_room_size = false;
+    bool                        use_manual_room_size = true;
 
+    /** Default LED spacing (mm) applied when a physical device is first added; edit per object after. */
     float                       default_led_spacing_x_ = 10.0f;
-    float                       default_led_spacing_y_ = 0.0f;
-    float                       default_led_spacing_z_ = 0.0f;
+    float                       default_led_spacing_y_ = 10.0f;
+    float                       default_led_spacing_z_ = 10.0f;
     QHash<int, QVector3D>       available_rgb_spacing_draft_;
 
     std::vector<std::unique_ptr<VirtualController3D>> virtual_controllers;
@@ -496,8 +497,6 @@ private:
     int next_effect_instance_id = 1;
 
     std::vector<std::unique_ptr<StackPreset3D>> stack_presets;
-
-    void ComputeAutoRoomExtents(float& width_mm, float& depth_mm, float& height_mm) const;
 
     QWidget*        audio_eq_container = nullptr;
     QHBoxLayout*    audio_eq_row_layout = nullptr;

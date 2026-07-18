@@ -943,15 +943,33 @@ void OpenRGB3DSpatialTab::RebindCustomControllerDeviceMappings()
     }
 }
 
-bool OpenRGB3DSpatialTab::IsItemInScene(RGBControllerInterface* controller, int granularity, int item_idx) const
+bool OpenRGB3DSpatialTab::CustomControllerHasUndetectedDevices(const VirtualController3D* virtual_ctrl) const
 {
-    if(!controller)
+    if(!virtual_ctrl)
     {
-        return false;
+        return true;
     }
 
-    std::vector<bool> used_leds(controller->GetLEDCount(), false);
-    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
+    const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+    for(const GridLEDMapping& mapping : mappings)
+    {
+        if(!mapping.controller_name.empty() && !mapping.controller)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void OpenRGB3DSpatialTab::MarkControllerLedsUsed(RGBControllerInterface* controller,
+                                                 std::vector<bool>& used_leds) const
+{
+    if(!controller || used_leds.empty())
+    {
+        return;
+    }
+
+    auto mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
     {
         unsigned int global_led_idx = 0;
         if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
@@ -990,16 +1008,54 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBControllerInterface* controller, int 
         }
     }
 
+    // LEDs claimed by custom controller definitions (even when not yet placed in the scene)
+    // are unavailable for direct device/zone/LED add — only the custom entry remains.
+    for(unsigned int i = 0; i < virtual_controllers.size(); i++)
+    {
+        const VirtualController3D* virtual_ctrl = virtual_controllers[i].get();
+        if(!virtual_ctrl)
+        {
+            continue;
+        }
+
+        const std::vector<GridLEDMapping>& mappings = virtual_ctrl->GetMappings();
+        for(unsigned int j = 0; j < mappings.size(); j++)
+        {
+            if(mappings[j].controller != controller)
+            {
+                continue;
+            }
+            mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
+        }
+    }
+}
+
+bool OpenRGB3DSpatialTab::IsItemInScene(RGBControllerInterface* controller, int granularity, int item_idx) const
+{
+    if(!controller)
+    {
+        return false;
+    }
+
+    std::vector<bool> used_leds(controller->GetLEDCount(), false);
+    MarkControllerLedsUsed(controller, used_leds);
+
     if(granularity == 0)
     {
+        bool has_assignable = false;
         for(unsigned int i = 0; i < used_leds.size(); i++)
         {
+            if(!IsAssignableControllerLed(controller, i))
+            {
+                continue;
+            }
+            has_assignable = true;
             if(!used_leds[i])
             {
                 return false;
             }
         }
-        return !used_leds.empty();
+        return has_assignable;
     }
     else if(granularity == 1)
     {
@@ -1011,11 +1067,16 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBControllerInterface* controller, int 
         for(unsigned int led_idx = 0; led_idx < selected_zone.leds_count; led_idx++)
         {
             unsigned int global_led_idx = selected_zone.start_idx + led_idx;
+            if(!IsAssignableControllerLed(controller, global_led_idx))
+            {
+                continue;
+            }
             if(global_led_idx < used_leds.size() && !used_leds[global_led_idx])
             {
                 return false;
             }
         }
+        // Zones with only blank filler slots (or fully assigned) are not available to add.
         return true;
     }
     else if(granularity == 2)
@@ -1025,6 +1086,10 @@ bool OpenRGB3DSpatialTab::IsItemInScene(RGBControllerInterface* controller, int 
             return true;
         }
         unsigned int led_idx = (unsigned int)item_idx;
+        if(!IsAssignableControllerLed(controller, led_idx))
+        {
+            return true;
+        }
         return (led_idx >= used_leds.size()) ? true : used_leds[led_idx];
     }
 
@@ -1039,44 +1104,7 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBControllerInterface* controll
     }
 
     std::vector<bool> used_leds(controller->GetLEDCount(), false);
-    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
-    {
-        unsigned int global_led_idx = 0;
-        if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
-           global_led_idx < used_leds.size())
-        {
-            used_leds[global_led_idx] = true;
-        }
-    };
-
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        ControllerTransform* ct = controller_transforms[i].get();
-        if(!ct)
-        {
-            continue;
-        }
-
-        if(ct->controller == controller)
-        {
-            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
-            {
-                mark_led_used(ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx);
-            }
-        }
-        else if(ct->virtual_controller)
-        {
-            const std::vector<GridLEDMapping>& mappings = ct->virtual_controller->GetMappings();
-            for(unsigned int j = 0; j < mappings.size(); j++)
-            {
-                if(mappings[j].controller != controller)
-                {
-                    continue;
-                }
-                mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
-            }
-        }
-    }
+    MarkControllerLedsUsed(controller, used_leds);
 
     int unassigned_count = 0;
     for(unsigned int zone_idx = 0; zone_idx < controller->GetZoneCount(); zone_idx++)
@@ -1086,6 +1114,10 @@ int OpenRGB3DSpatialTab::GetUnassignedZoneCount(RGBControllerInterface* controll
         for(unsigned int led_idx = 0; led_idx < z.leds_count; led_idx++)
         {
             unsigned int global_led_idx = z.start_idx + led_idx;
+            if(!IsAssignableControllerLed(controller, global_led_idx))
+            {
+                continue;
+            }
             if(global_led_idx < used_leds.size() && !used_leds[global_led_idx])
             {
                 zone_has_free_led = true;
@@ -1108,55 +1140,16 @@ int OpenRGB3DSpatialTab::GetUnassignedLEDCount(RGBControllerInterface* controlle
     }
 
     std::vector<bool> used_leds(controller->GetLEDCount(), false);
-    std::function<void(unsigned int, unsigned int)> mark_led_used = [&](unsigned int zone_idx, unsigned int led_idx)
-    {
-        unsigned int global_led_idx = 0;
-        if(TryGetObjectCreatorGlobalLedIndex(controller, zone_idx, led_idx, &global_led_idx) &&
-           global_led_idx < used_leds.size())
-        {
-            used_leds[global_led_idx] = true;
-        }
-    };
+    MarkControllerLedsUsed(controller, used_leds);
 
-    for(unsigned int i = 0; i < controller_transforms.size(); i++)
-    {
-        ControllerTransform* ct = controller_transforms[i].get();
-        if(!ct)
-        {
-            continue;
-        }
-
-        if(ct->controller == controller)
-        {
-            for(unsigned int j = 0; j < ct->led_positions.size(); j++)
-            {
-                mark_led_used(ct->led_positions[j].zone_idx, ct->led_positions[j].led_idx);
-            }
-        }
-        else if(ct->virtual_controller)
-        {
-            const std::vector<GridLEDMapping>& mappings = ct->virtual_controller->GetMappings();
-            for(unsigned int j = 0; j < mappings.size(); j++)
-            {
-                if(mappings[j].controller != controller)
-                {
-                    continue;
-                }
-                mark_led_used(mappings[j].zone_idx, mappings[j].led_idx);
-            }
-        }
-    }
-
-    int used_count = 0;
+    int free_count = 0;
     for(unsigned int i = 0; i < used_leds.size(); i++)
     {
-        if(used_leds[i])
+        if(IsAssignableControllerLed(controller, i) && !used_leds[i])
         {
-            used_count++;
+            free_count++;
         }
     }
-
-    int total_leds = (int)controller->GetLEDCount();
-    return std::max(0, total_leds - used_count);
+    return free_count;
 }
 

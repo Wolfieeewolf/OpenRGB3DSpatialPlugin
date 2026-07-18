@@ -31,9 +31,12 @@ public:
 
     SpatialControllerCardList* cardList() const { return card_list_; }
 
+    bool showUndetectedControllers() const;
+    void setShowUndetectedControllers(bool checked);
+
 private:
-    Ui::ControllerListPanel*     ui = nullptr;
-    SpatialControllerCardList*   card_list_ = nullptr;
+    Ui::ControllerListPanel*   ui         = nullptr;
+    SpatialControllerCardList* card_list_ = nullptr;
 };
 
 #endif

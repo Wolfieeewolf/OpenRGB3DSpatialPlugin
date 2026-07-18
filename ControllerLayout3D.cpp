@@ -34,6 +34,21 @@ static LEDPosition3D MakeLedPosition(RGBControllerInterface* controller, unsigne
     return led_pos;
 }
 
+/** Skip OpenRGB KEY_EN_UNUSED ("") keyboard matrix filler slots. */
+static bool ZoneLedIsAssignable(RGBControllerInterface* controller, unsigned int zone_idx, unsigned int led_idx)
+{
+    if(!controller || zone_idx >= controller->GetZoneCount())
+    {
+        return false;
+    }
+    const unsigned int global_led_idx = controller->GetZoneStartIndex(zone_idx) + led_idx;
+    if(global_led_idx >= controller->GetLEDCount())
+    {
+        return false;
+    }
+    return !controller->GetLEDName(global_led_idx).empty();
+}
+
 static unsigned int LinearWrapColumns(unsigned int led_count, int grid_x)
 {
     unsigned int cols = (grid_x > 0) ? (unsigned int)grid_x : DEVICE_VIEW_MAX_COLS;
@@ -78,15 +93,22 @@ static void AppendLinearWrappedZone(
     std::vector<LEDPosition3D>& zone_positions,
     float& zone_max_y)
 {
+    unsigned int placed = 0;
     for(unsigned int led_idx = 0; led_idx < led_count; led_idx++)
     {
-        float x = (float)(led_idx % wrap_cols);
-        float y = base_y + (float)(led_idx / wrap_cols);
-        zone_positions.push_back(MakeLedPosition(controller, zone_idx, segment_start_led + led_idx, x, y, 0.0f));
+        const unsigned int zone_led_idx = segment_start_led + led_idx;
+        if(!ZoneLedIsAssignable(controller, zone_idx, zone_led_idx))
+        {
+            continue;
+        }
+        float x = (float)(placed % wrap_cols);
+        float y = base_y + (float)(placed / wrap_cols);
+        zone_positions.push_back(MakeLedPosition(controller, zone_idx, zone_led_idx, x, y, 0.0f));
         if(y > zone_max_y)
         {
             zone_max_y = y;
         }
+        placed++;
     }
 }
 
@@ -107,6 +129,10 @@ static void AppendHeuristicBucketZone(
 
     for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
     {
+        if(!ZoneLedIsAssignable(controller, zone_idx, led_idx))
+        {
+            continue;
+        }
         const unsigned int mapping_idx = fallback_global_idx;
         const int x_pos = mapping_idx % safe_grid_x;
         const int y_pos = (mapping_idx / safe_grid_x) % safe_grid_y;
@@ -164,8 +190,14 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
 
             const unsigned int wrap_cols = LinearWrapColumns(current_zone->leds_count, grid_x);
             const float orphan_y = zone_stack_y + (float)map->height;
+            unsigned int orphan_placed = 0;
             for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
             {
+                if(!ZoneLedIsAssignable(controller, zone_idx, led_idx))
+                {
+                    continue;
+                }
+
                 float x;
                 float y;
                 if(placed[led_idx])
@@ -175,8 +207,9 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
                 }
                 else
                 {
-                    x = (float)(led_idx % wrap_cols);
-                    y = orphan_y + (float)(led_idx / wrap_cols);
+                    x = (float)(orphan_placed % wrap_cols);
+                    y = orphan_y + (float)(orphan_placed / wrap_cols);
+                    orphan_placed++;
                 }
 
                 zone_positions.push_back(MakeLedPosition(controller, zone_idx, led_idx, x, y, 0.0f));
@@ -215,6 +248,10 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
         {
             for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
             {
+                if(!ZoneLedIsAssignable(controller, zone_idx, led_idx))
+                {
+                    continue;
+                }
                 zone_positions.push_back(MakeLedPosition(controller, zone_idx, led_idx, 0.0f, zone_stack_y, 0.0f));
                 zone_max_y = zone_stack_y;
             }
@@ -227,11 +264,17 @@ std::vector<LEDPosition3D> ControllerLayout3D::GenerateCustomGridLayout(RGBContr
 
             if(current_zone->type == ZONE_TYPE_LINEAR && current_zone->leds_count <= wrap_cols)
             {
+                unsigned int placed = 0;
                 for(unsigned int led_idx = 0; led_idx < current_zone->leds_count; led_idx++)
                 {
+                    if(!ZoneLedIsAssignable(controller, zone_idx, led_idx))
+                    {
+                        continue;
+                    }
                     const float y = zone_stack_y;
-                    zone_positions.push_back(MakeLedPosition(controller, zone_idx, led_idx, (float)led_idx, y, 0.0f));
+                    zone_positions.push_back(MakeLedPosition(controller, zone_idx, led_idx, (float)placed, y, 0.0f));
                     zone_max_y = y;
+                    placed++;
                 }
             }
             else

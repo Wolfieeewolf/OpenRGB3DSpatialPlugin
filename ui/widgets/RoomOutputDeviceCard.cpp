@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QToolButton>
 
 RoomOutputDeviceCard::RoomOutputDeviceCard(const QString& title, QWidget* parent)
@@ -22,13 +23,11 @@ RoomOutputDeviceCard::RoomOutputDeviceCard(const QString& title, QWidget* parent
     outer->setSpacing(0);
 
     card_frame_ = new QFrame(this);
-    card_frame_->setFrameShape(QFrame::StyledPanel);
-    card_frame_->setFrameShadow(QFrame::Sunken);
     card_frame_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     auto* inner = new QHBoxLayout(card_frame_);
-    inner->setContentsMargins(6, 5, 6, 5);
-    inner->setSpacing(4);
+    inner->setContentsMargins(8, 6, 8, 6);
+    inner->setSpacing(6);
 
     name_label_ = new QLabel(title_text_, card_frame_);
     name_label_->setWordWrap(false);
@@ -38,8 +37,9 @@ RoomOutputDeviceCard::RoomOutputDeviceCard(const QString& title, QWidget* parent
 
     action_button_ = new QToolButton(card_frame_);
     action_button_->setFont(OpenRGBPluginsFont::GetFont());
-    action_button_->setMinimumSize(26, 0);
-    action_button_->setMaximumSize(26, 16777215);
+    action_button_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    action_button_->setMinimumSize(28, 28);
+    action_button_->setMaximumSize(32, 16777215);
     action_button_->setToolTip(tr("Add or remove from this role"));
     connect(action_button_, &QToolButton::clicked, this, [this]() {
         if(!action_button_->isEnabled())
@@ -52,6 +52,7 @@ RoomOutputDeviceCard::RoomOutputDeviceCard(const QString& title, QWidget* parent
 
     outer->addWidget(card_frame_, 0, 0);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    PluginUiApplyControllerCardChrome(card_frame_, false);
     updateActionIcon();
     updateNameLabelLayout();
 }
@@ -80,6 +81,12 @@ void RoomOutputDeviceCard::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     updateNameLabelLayout();
+}
+
+void RoomOutputDeviceCard::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    PluginUiApplyControllerCardChrome(card_frame_, false);
 }
 
 void RoomOutputDeviceCard::updateActionIcon()

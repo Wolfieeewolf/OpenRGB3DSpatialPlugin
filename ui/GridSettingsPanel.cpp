@@ -8,7 +8,6 @@
 #include "ui_GridSettingsPanel.h"
 
 #include <QFont>
-#include <QSignalBlocker>
 #include <QSlider>
 #include <algorithm>
 #include <cmath>
@@ -21,13 +20,9 @@ GridSettingsPanel::GridSettingsPanel(QWidget* parent)
 {
     ui->setupUi(this);
 
-    PluginUiApplyMutedSecondaryLabel(ui->gridScaleHelpLabel->label());
     PluginUiApplyMutedSecondaryLabel(ui->roomHelpLabel->label());
     PluginUiApplyMutedSecondaryLabel(ui->overlayHintLabel->label());
-
-    ui->layoutSizeLabel->setToolTip(
-        QStringLiteral("New controller LED grids: X = width count, Y = vertical layers, Z = depth count. "
-                       "Matches scene axes (X left/right, Y up, Z front/back)."));
+    PluginUiApplyBoldLabel(ui->overlaySectionLabel);
 }
 
 GridSettingsPanel::~GridSettingsPanel()
@@ -44,24 +39,13 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
 
     host_tab_ = tab;
 
-    ui->gridXSpin->setRange(1, 100);
-    ui->gridXSpin->setValue(tab->custom_grid_x);
-    ui->gridXSpin->setToolTip("LED layout width (grid units) for new controllers");
-
-    ui->gridYSpin->setRange(1, 100);
-    ui->gridYSpin->setValue(tab->custom_grid_y);
-    ui->gridYSpin->setToolTip("LED layout height (grid units) for new controllers");
-
-    ui->gridZSpin->setRange(1, 100);
-    ui->gridZSpin->setValue(tab->custom_grid_z);
-    ui->gridZSpin->setToolTip("LED layout depth (grid units) for new controllers");
-
     ui->gridScaleSpin->setRange(0.1, 1000.0);
     ui->gridScaleSpin->setSingleStep(1.0);
     ui->gridScaleSpin->setValue(tab->grid_scale_mm);
     ui->gridScaleSpin->setSuffix(" mm/unit");
     ui->gridScaleSpin->setToolTip(
-        "Size of one grid unit in mm. Position in grid units × scale = real size in mm (e.g. scale 10 → 10 mm per unit).");
+        "One grid unit = this many mm. Positions × scale = real size "
+        "(e.g. scale 10 → 10 mm per unit).");
 
     ui->gridSnapCheckbox->setToolTip("When moving controllers, snap to grid intersections.");
     if(tab->viewport)
@@ -73,9 +57,7 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     selection_font.setBold(true);
     ui->selectionInfoLabel->setFont(selection_font);
 
-    ui->useManualRoomSizeCheckbox->setChecked(tab->use_manual_room_size);
-    ui->useManualRoomSizeCheckbox->setToolTip(
-        "Off: room size is derived from LED positions. On: set width, height, depth below.");
+    tab->use_manual_room_size = true;
 
     auto setup_room_spin = [](QDoubleSpinBox* spin, double value, const QString& tooltip) {
         spin->setRange(100.0, 50000.0);
@@ -88,11 +70,6 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     setup_room_spin(ui->roomWidthSpin, tab->manual_room_width, "Left to right, in mm");
     setup_room_spin(ui->roomHeightSpin, tab->manual_room_height, "Floor to ceiling, in mm");
     setup_room_spin(ui->roomDepthSpin, tab->manual_room_depth, "Front to back, in mm");
-
-    const bool manual_room = tab->use_manual_room_size;
-    ui->roomWidthSpin->setEnabled(manual_room);
-    ui->roomHeightSpin->setEnabled(manual_room);
-    ui->roomDepthSpin->setEnabled(manual_room);
 
     ui->roomGridOverlayCheckbox->setToolTip(
         "Sample the effect stack at room grid points using the same shading as real LEDs "
@@ -113,8 +90,9 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
         "Display gain for overlay points only (100% matches computed LED/light levels).");
     ui->overlayPointSlider->setToolTip("OpenGL point size for each overlay dot (1–12).");
     ui->overlayStepSlider->setToolTip(
-        "Sample from the room origin (0) along each axis every N grid cells, through to the far wall. "
-        "Smaller N = denser points; very large rooms may thin points for performance but still span the full room.");
+        "Overlay sample step: sample from the room origin (0) along each axis every N grid cells, "
+        "through to the far wall. Smaller N = denser preview dots; does not change room or LED layout size. "
+        "Very large rooms may thin points for performance but still span the full room.");
 
     int overlay_bright_pct = 100;
     int overlay_point_size = 3;
@@ -177,15 +155,8 @@ void GridSettingsPanel::bindTab(OpenRGB3DSpatialTab* tab)
     connect(ui->overlayPointSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayPointChanged);
     connect(ui->overlayStepSlider, &QSlider::valueChanged, this, &GridSettingsPanel::onOverlayStepChanged);
 
-    connect(ui->gridXSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::gridDimensionsChanged);
-    connect(ui->gridYSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::gridDimensionsChanged);
-    connect(ui->gridZSpin, QOverload<int>::of(&QSpinBox::valueChanged), tab,
-            &OpenRGB3DSpatialTab::gridDimensionsChanged);
     connect(ui->gridSnapCheckbox, &QCheckBox::toggled, tab, &OpenRGB3DSpatialTab::gridSnapToggled);
 
-    connect(ui->useManualRoomSizeCheckbox, &QCheckBox::toggled, this, &GridSettingsPanel::onUseManualRoomSizeToggled);
     connect(ui->roomWidthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             &GridSettingsPanel::onRoomWidthChanged);
     connect(ui->roomHeightSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
@@ -205,7 +176,7 @@ void GridSettingsPanel::onGridScaleChanged(double value)
     {
         host_tab_->viewport->SetGridScaleMM(host_tab_->grid_scale_mm);
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
-                                             host_tab_->manual_room_height, host_tab_->use_manual_room_size);
+                                             host_tab_->manual_room_height, true);
     }
     host_tab_->SetLayoutDirty();
     if(host_tab_->current_effect_ui)
@@ -286,36 +257,18 @@ void GridSettingsPanel::onOverlayStepChanged(int v)
     host_tab_->PersistRoomGridOverlayToSettings();
 }
 
-void GridSettingsPanel::onUseManualRoomSizeToggled(bool checked)
-{
-    if(!host_tab_)
-    {
-        return;
-    }
-    host_tab_->use_manual_room_size = checked;
-    ui->roomWidthSpin->setEnabled(checked);
-    ui->roomHeightSpin->setEnabled(checked);
-    ui->roomDepthSpin->setEnabled(checked);
-    if(host_tab_->viewport)
-    {
-        host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
-                                             host_tab_->manual_room_height, host_tab_->use_manual_room_size);
-    }
-    emit host_tab_->GridLayoutChanged();
-    host_tab_->SetLayoutDirty();
-}
-
 void GridSettingsPanel::onRoomWidthChanged(double value)
 {
     if(!host_tab_)
     {
         return;
     }
-    host_tab_->manual_room_width = value;
+    host_tab_->use_manual_room_size = true;
+    host_tab_->manual_room_width    = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
-                                             host_tab_->manual_room_height, host_tab_->use_manual_room_size);
+                                             host_tab_->manual_room_height, true);
     }
     emit host_tab_->GridLayoutChanged();
     host_tab_->SetLayoutDirty();
@@ -327,11 +280,12 @@ void GridSettingsPanel::onRoomHeightChanged(double value)
     {
         return;
     }
-    host_tab_->manual_room_height = value;
+    host_tab_->use_manual_room_size = true;
+    host_tab_->manual_room_height   = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
-                                             host_tab_->manual_room_height, host_tab_->use_manual_room_size);
+                                             host_tab_->manual_room_height, true);
     }
     emit host_tab_->GridLayoutChanged();
     host_tab_->SetLayoutDirty();
@@ -343,23 +297,20 @@ void GridSettingsPanel::onRoomDepthChanged(double value)
     {
         return;
     }
-    host_tab_->manual_room_depth = value;
+    host_tab_->use_manual_room_size = true;
+    host_tab_->manual_room_depth    = value;
     if(host_tab_->viewport)
     {
         host_tab_->viewport->SetRoomDimensions(host_tab_->manual_room_width, host_tab_->manual_room_depth,
-                                             host_tab_->manual_room_height, host_tab_->use_manual_room_size);
+                                             host_tab_->manual_room_height, true);
     }
     emit host_tab_->GridLayoutChanged();
     host_tab_->SetLayoutDirty();
 }
 
-QSpinBox* GridSettingsPanel::gridXSpin() const { return ui->gridXSpin; }
-QSpinBox* GridSettingsPanel::gridYSpin() const { return ui->gridYSpin; }
-QSpinBox* GridSettingsPanel::gridZSpin() const { return ui->gridZSpin; }
 QDoubleSpinBox* GridSettingsPanel::gridScaleSpin() const { return ui->gridScaleSpin; }
 QCheckBox* GridSettingsPanel::gridSnapCheckbox() const { return ui->gridSnapCheckbox; }
 QLabel* GridSettingsPanel::selectionInfoLabel() const { return ui->selectionInfoLabel; }
-QCheckBox* GridSettingsPanel::useManualRoomSizeCheckbox() const { return ui->useManualRoomSizeCheckbox; }
 QDoubleSpinBox* GridSettingsPanel::roomWidthSpin() const { return ui->roomWidthSpin; }
 QDoubleSpinBox* GridSettingsPanel::roomHeightSpin() const { return ui->roomHeightSpin; }
 QDoubleSpinBox* GridSettingsPanel::roomDepthSpin() const { return ui->roomDepthSpin; }

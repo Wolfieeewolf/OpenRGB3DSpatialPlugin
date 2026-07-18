@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QResizeEvent;
+class QShowEvent;
 class QComboBox;
 class QDoubleSpinBox;
 class QFrame;
@@ -42,7 +43,8 @@ public:
                                          OpenRGB3DSpatialTab* host,
                                          int scene_list_row,
                                          int transform_index,
-                                         QWidget* parent = nullptr);
+                                         QWidget* parent = nullptr,
+                                         const QString& subtitle = QString());
     ~SpatialControllerCardWidget() override;
 
     Mode                       mode() const { return mode_; }
@@ -58,6 +60,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 signals:
     void cardActivated(const SpatialControllerEntryKey& key);
@@ -99,6 +102,7 @@ private:
 
     Mode                      mode_;
     QString                   title_text_;
+    QString                   subtitle_text_;
     SpatialControllerEntryKey key_;
     bool                      show_granularity_controls_;
     bool                      show_spacing_controls_;
