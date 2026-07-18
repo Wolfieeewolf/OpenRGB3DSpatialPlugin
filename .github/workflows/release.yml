@@ -2,6 +2,15 @@ name: Release builds
 
 # Multi-platform Qt6 plugin builds for Windows, Linux, and macOS.
 # Primary release path while GitLab CI compute is unavailable.
+#
+# Architecture coverage vs OpenRGB org CI (Effects / Visual Map plugins):
+#   Windows 64      -> windows-2022 (x64)          [.dll]
+#   Linux amd64     -> ubuntu-22.04                [.so, .deb, .tar.gz]
+#   Linux arm64     -> ubuntu-22.04-arm            [.so, .deb, .tar.gz]
+#   macOS ARM64     -> macos-14 (Apple Silicon)    [.dylib]
+#   macOS Intel     -> macos-15-intel (x86_64)     [.dylib]
+# Not built here: Windows 32 / Linux i386 / Linux armhf — Qt6 has no public
+# 32-bit binaries; OpenRGB org builds those on its own runner images.
 on:
   push:
     tags:
@@ -22,7 +31,7 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Windows
+    name: Windows 64
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -69,8 +78,16 @@ jobs:
           if-no-files-found: error
 
   build-linux:
-    name: Linux
-    runs-on: ubuntu-22.04
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,20 +104,28 @@ jobs:
         run: bash scripts/ci/build-linux.sh 6 release
 
       - name: Package
-        run: bash scripts/ci/package-linux.sh 6 amd64
+        run: bash scripts/ci/package-linux.sh 6 ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Linux_amd64
+          name: Linux_${{ matrix.arch }}
           path: |
             dist/*
             libOpenRGB3DSpatialPlugin.so
           if-no-files-found: error
 
   build-macos:
-    name: macOS
-    runs-on: macos-14
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: intel
+            runner: macos-15-intel
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,13 +140,13 @@ jobs:
 
       - name: Package
         env:
-          DIST_VARIANT: macOS_arm64
-        run: bash scripts/ci/package-macos.sh 6 arm64
+          DIST_VARIANT: macOS_${{ matrix.arch }}
+        run: bash scripts/ci/package-macos.sh 6 ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macOS_arm64
+          name: macOS_${{ matrix.arch }}
           path: |
             dist/*.zip
             libOpenRGB3DSpatialPlugin.dylib
@@ -183,14 +208,22 @@ jobs:
           NOTES="$(cat <<EOF
           ## OpenRGB 3D Spatial Plugin ${TAG}
 
-          Pre-built **Qt6** plugins for **Windows**, **Linux**, and **macOS**.
+          Pre-built **Qt6** plugins. Pick the file for your OS and CPU:
+
+          | OS | CPU | File |
+          | --- | --- | --- |
+          | Windows | x64 | \`..._Windows_64.zip\` (.dll) |
+          | Linux | x86_64 (amd64) | \`..._amd64.deb\` or \`..._Linux_amd64.tar.gz\` (.so) |
+          | Linux | ARM64 (Pi 4/5 etc.) | \`..._arm64.deb\` or \`..._Linux_arm64.tar.gz\` (.so) |
+          | macOS | Apple Silicon | \`..._macOS_arm64.zip\` (.dylib) |
+          | macOS | Intel | \`..._macOS_intel.zip\` (.dylib) |
 
           ### Install
           - **Windows:** unzip and copy the \`.dll\` into OpenRGB's \`plugins\` folder.
           - **Linux:** install the \`.deb\`, or extract the \`.tar.gz\` into \`/usr/lib/openrgb/plugins/\`.
           - **macOS:** unzip and copy the \`.dylib\` into \`OpenRGB.app/Contents/MacOS/plugins/\`.
 
-          Requires a Qt6 build of OpenRGB.
+          Requires a Qt6 build of OpenRGB. Restart OpenRGB after installing.
           EOF
           )"
           if gh release view "$TAG" >/dev/null 2>&1; then

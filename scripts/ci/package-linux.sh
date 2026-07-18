@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Package Linux plugin as .deb and .tar.gz under dist/.
-# Usage: package-linux.sh [6] [amd64|arm64|...]
+# Usage: package-linux.sh [6] [amd64|arm64|...] — arch names the artifacts.
 set -euo pipefail
 
 QT_MAJOR="${1:-6}"
@@ -12,7 +12,7 @@ cd "$ROOT"
 VERSION="$("$ROOT/scripts/ci/plugin-version.sh")"
 PKG_BASE="openrgb-3d-spatial-plugin"
 PKG_NAME="$PKG_BASE"
-VARIANT="amd64"
+VARIANT="$DEB_ARCH"
 
 mkdir -p dist
 
