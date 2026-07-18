@@ -26,20 +26,20 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Steam-style disk pre-cache for block texture average colours. Built once per MC / resource-pack
- * fingerprint, loaded instantly on later launches; missing entries are filled incrementally on the
- * client thread without blocking gameplay.
+ * Steam-style disk pre-cache for block texture average colours, plus in-memory full sprite pixel
+ * buffers for UV point sampling. Averages load from disk; pixels fill on demand / during build.
  */
 final class BlockTexturePrecache
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("openrgb-sender");
     private static final byte[] MAGIC = {'O', 'R', 'G', 'B', 'T', 'P', 'C', '1'};
     private static final int FORMAT_VERSION = 1;
-    private static final int BUILD_BATCH_PER_TICK = 48;
+    private static final int BUILD_BATCH_PER_TICK = 96;
     private static final String CACHE_FILE = "block_texture_precache.bin";
 
     private static final ConcurrentHashMap<Identifier, BlockDisplayColorSampler.TextureSample> ENTRIES =
             new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Identifier, SpritePixels> PIXEL_ENTRIES = new ConcurrentHashMap<>();
     private static final ArrayDeque<Identifier> BUILD_QUEUE = new ArrayDeque<>();
     private static volatile int contentHash = 0;
     private static volatile boolean diskLoaded = false;
@@ -56,6 +56,11 @@ final class BlockTexturePrecache
         return ENTRIES.get(spriteId);
     }
 
+    static SpritePixels getPixels(Identifier spriteId)
+    {
+        return PIXEL_ENTRIES.get(spriteId);
+    }
+
     static BlockDisplayColorSampler.TextureSample getOrLoad(Minecraft client, Identifier spriteId)
     {
         final BlockDisplayColorSampler.TextureSample cached = get(spriteId);
@@ -63,12 +68,30 @@ final class BlockTexturePrecache
         {
             return cached;
         }
-        final BlockDisplayColorSampler.TextureSample sample = readTextureAverage(client, spriteId);
-        if(sample != null)
+        final SpritePixels pixels = readSpritePixels(client, spriteId);
+        if(pixels != null)
         {
-            ENTRIES.putIfAbsent(spriteId, sample);
+            PIXEL_ENTRIES.putIfAbsent(spriteId, pixels);
+            ENTRIES.putIfAbsent(spriteId, pixels.average());
+            return pixels.average();
         }
-        return sample;
+        return null;
+    }
+
+    static SpritePixels getOrLoadPixels(Minecraft client, Identifier spriteId)
+    {
+        final SpritePixels cached = getPixels(spriteId);
+        if(cached != null)
+        {
+            return cached;
+        }
+        final SpritePixels pixels = readSpritePixels(client, spriteId);
+        if(pixels != null)
+        {
+            PIXEL_ENTRIES.putIfAbsent(spriteId, pixels);
+            ENTRIES.putIfAbsent(spriteId, pixels.average());
+        }
+        return pixels;
     }
 
     static void onModelsReady(Minecraft client)
@@ -85,6 +108,7 @@ final class BlockTexturePrecache
         if(!diskLoaded || hash != contentHash)
         {
             ENTRIES.clear();
+            PIXEL_ENTRIES.clear();
             contentHash = hash;
             if(loadFromDisk(hash))
             {
@@ -105,14 +129,15 @@ final class BlockTexturePrecache
         while(batch-- > 0 && !BUILD_QUEUE.isEmpty())
         {
             final Identifier spriteId = BUILD_QUEUE.pollFirst();
-            if(spriteId == null || ENTRIES.containsKey(spriteId))
+            if(spriteId == null || (ENTRIES.containsKey(spriteId) && PIXEL_ENTRIES.containsKey(spriteId)))
             {
                 continue;
             }
-            final BlockDisplayColorSampler.TextureSample sample = readTextureAverage(client, spriteId);
-            if(sample != null)
+            final SpritePixels pixels = readSpritePixels(client, spriteId);
+            if(pixels != null)
             {
-                ENTRIES.put(spriteId, sample);
+                PIXEL_ENTRIES.put(spriteId, pixels);
+                ENTRIES.put(spriteId, pixels.average());
             }
         }
         if(BUILD_QUEUE.isEmpty())
@@ -291,6 +316,16 @@ final class BlockTexturePrecache
 
     static BlockDisplayColorSampler.TextureSample readTextureAverage(Minecraft client, Identifier spriteId)
     {
+        final SpritePixels pixels = readSpritePixels(client, spriteId);
+        return pixels != null ? pixels.average() : null;
+    }
+
+    static SpritePixels readSpritePixels(Minecraft client, Identifier spriteId)
+    {
+        if(client == null || spriteId == null)
+        {
+            return null;
+        }
         final Identifier resourceId = spriteId.withPrefix("textures/").withSuffix(".png");
         try
         {
@@ -305,19 +340,25 @@ final class BlockTexturePrecache
                 int count = 0;
                 final int w = image.getWidth();
                 final int h = image.getHeight();
+                if(w <= 0 || h <= 0 || w > 4096 || h > 4096)
+                {
+                    return null;
+                }
+                final int[] argb = new int[w * h];
                 for(int y = 0; y < h; y++)
                 {
                     for(int x = 0; x < w; x++)
                     {
-                        final int argb = image.getPixel(x, y);
-                        final int a = (argb >> 24) & 0xFF;
+                        final int px = image.getPixel(x, y);
+                        argb[y * w + x] = px;
+                        final int a = (px >>> 24) & 0xFF;
                         if(a < 24)
                         {
                             continue;
                         }
-                        sumR += (argb >> 16) & 0xFF;
-                        sumG += (argb >> 8) & 0xFF;
-                        sumB += argb & 0xFF;
+                        sumR += (px >> 16) & 0xFF;
+                        sumG += (px >> 8) & 0xFF;
+                        sumB += px & 0xFF;
                         sumA += a;
                         count++;
                     }
@@ -330,7 +371,7 @@ final class BlockTexturePrecache
                 final int g = (int)(sumG / count);
                 final int b = (int)(sumB / count);
                 final int avgA = (int)(sumA / count);
-                return new BlockDisplayColorSampler.TextureSample((r << 16) | (g << 8) | b, avgA);
+                return new SpritePixels(w, h, argb, (r << 16) | (g << 8) | b, avgA);
             }
         }
         catch(Throwable t)

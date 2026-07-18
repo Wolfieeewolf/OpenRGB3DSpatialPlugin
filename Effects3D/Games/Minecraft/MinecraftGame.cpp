@@ -735,7 +735,8 @@ QWidget* CreateSettingsWidget(QWidget* parent,
         }
         QLabel* hint = new QLabel(
             QStringLiteral(
-                "Ambilight viewport: LEDs show what you can see from your eyes, not the whole world volume. "
+                "Ambilight viewport: each LED samples composited world content along a ray "
+                "(block textures, plants, fire, glass, mobs, drops) — not a flat face average. "
                 "Place a reference point at eye height, set this effect's 3D origin there, then stand "
                 "in-game at that spot. Walls and caves show only line-of-sight surfaces (no x-ray). "
                 "Room yaw fine-tunes heading; block offsets trim origin without turning."),
@@ -783,10 +784,14 @@ QWidget* CreateSettingsWidget(QWidget* parent,
                                     "100% = 1:1 with blocks-per-metre setting. Try 200-400% for good block-level variety."));
         AddSliderRow(room_layout, panel, QStringLiteral("Color saturation"), 80, 250, (int)std::lround(std::clamp(s.room_vr_saturation, 0.8f, 2.5f) * 100.0f),
                      [&s](int x) { s.room_vr_saturation = std::clamp(x / 100.0f, 0.8f, 2.5f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
+                     QStringLiteral("Boost for Room VR colours. Samples are composited world texels "
+                                    "(blocks, plants, fire, mobs, drops) along each ray — keep near 100-120% "
+                                    "so detail stays readable."));
         AddSliderRow(room_layout, panel, QStringLiteral("Color contrast"), 80, 200, (int)std::lround(std::clamp(s.room_vr_contrast, 0.8f, 2.0f) * 100.0f),
                      [&s](int x) { s.room_vr_contrast = std::clamp(x / 100.0f, 0.8f, 2.0f); },
-                     [](int x) { return QString::number(x) + QStringLiteral("%"); });
+                     [](int x) { return QString::number(x) + QStringLiteral("%"); },
+                     QStringLiteral("Contrast for Room VR texel samples. Lower preserves grass/dirt/flower detail."));
         AddCheckRow(room_layout, panel, QStringLiteral("Sharp block sampling (less blur)"), s.room_vr_sharp_sampling,
                     [&s](bool v) { s.room_vr_sharp_sampling = v; });
     }

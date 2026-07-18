@@ -31,8 +31,8 @@ struct Settings
     float room_vr_pos_offset_right_blocks = 0.0f;
     float room_vr_pos_offset_up_blocks = 0.0f;
     float room_vr_scale_tune = 1.0f;
-    float room_vr_saturation = 1.65f;
-    float room_vr_contrast = 1.18f;
+    float room_vr_saturation = 1.35f;
+    float room_vr_contrast = 1.08f;
     bool room_vr_sharp_sampling = false;
     /** Maximum sample cells the mod may compute per frame. The actual grid is auto-sized to match
      *  Minecraft block resolution at the current scale (one cell per MC block per axis), so most

@@ -24,6 +24,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
 
 import org.slf4j.Logger;
@@ -72,8 +73,14 @@ public class OpenRGBSenderMod implements ClientModInitializer
     private byte[] roomSampleRgbaBuffer = new byte[0];
     /** Rotating slice index for large grids — spreads raycasts over several ticks. */
     private int roomSampleTemporalSlice = 0;
-    private static final int ROOM_SAMPLE_TEMPORAL_SLICES = 4;
-    private static final int ROOM_SAMPLE_TEMPORAL_THRESHOLD = 4096;
+    /** Spread expensive UV/entity samples across ticks to avoid hitching. */
+    private static final int ROOM_SAMPLE_TEMPORAL_SLICES = 8;
+    private static final int ROOM_SAMPLE_TEMPORAL_THRESHOLD = 1024;
+    /** Soft cap per tick so Room VR never stalls a client frame. */
+    private static final long ROOM_SAMPLE_BUDGET_NS = 6_500_000L;
+    private static final ThreadLocal<int[]> ROOM_CELL_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
+    private static final ThreadLocal<int[]> ROOM_ACCUM_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
+    private static final ThreadLocal<int[]> ROOM_LAYER_SCRATCH = ThreadLocal.withInitial(() -> new int[4]);
 
     @Override
     public void onInitializeClient()
@@ -727,17 +734,18 @@ public class OpenRGBSenderMod implements ClientModInitializer
                 from,
                 to,
                 ClipContext.Block.OUTLINE,
-                ClipContext.Fluid.SOURCE_ONLY,
+                ClipContext.Fluid.ANY,
                 player));
     }
 
-    private static BlockPos findWaterAlongRay(Level world, Vec3 eye, Vec3 target)
+    private static BlockPos findFluidAlongRay(Level world, Vec3 eye, Vec3 target, boolean lava)
     {
         for(int i = 1; i <= VIEWPORT_WATER_COARSE_SAMPLES; i++)
         {
             final double t = i / (double)VIEWPORT_WATER_COARSE_SAMPLES;
             final BlockPos pos = BlockPos.containing(eye.lerp(target, t));
-            if(world.getFluidState(pos).is(Fluids.WATER))
+            final var fluid = world.getFluidState(pos);
+            if(lava ? fluid.is(Fluids.LAVA) : fluid.is(Fluids.WATER))
             {
                 return pos;
             }
@@ -751,26 +759,32 @@ public class OpenRGBSenderMod implements ClientModInitializer
     }
 
     /**
-     * Viewport ray with layered compositing: semi-transparent water, leaves, glass, light blocks,
-     * and stained glass blend with surfaces behind instead of fully occluding them.
+     * Viewport ray with layered compositing: UV block texels, cutouts (plants/fire/glass),
+     * entities (mobs/drops), water, and light blocks blend front-to-back.
      */
     private static void sampleRoomCellAtWorldTarget(Level world, LocalPlayer player, Vec3 target, int[] out)
     {
         final Vec3 eye = player.getEyePosition();
+        final int[] accum = ROOM_ACCUM_SCRATCH.get();
+        final int[] layer = ROOM_LAYER_SCRATCH.get();
+        clearRoomSampleRgba(accum);
         if(eye.distanceToSqr(target) < 1.0e-4)
         {
             final BlockPos at = BlockPos.containing(target);
-            final int[] accum = new int[4];
-            if(world.getFluidState(at).is(Fluids.WATER))
+            final var fluid = world.getFluidState(at);
+            if(fluid.is(Fluids.LAVA))
             {
-                final int[] layer = new int[4];
+                BlockDisplayColorSampler.sampleLavaLayer(world, at, layer);
+                compositeViewportLayer(accum, layer);
+            }
+            else if(fluid.is(Fluids.WATER))
+            {
                 BlockDisplayColorSampler.sampleWaterLayer(world, at, layer);
                 compositeViewportLayer(accum, layer);
             }
             else if(!world.isEmptyBlock(at))
             {
-                final int[] layer = new int[4];
-                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), null, layer);
+                BlockDisplayColorSampler.sampleViewportLayer(world, at, world.getBlockState(at), null, target, layer);
                 compositeViewportLayer(accum, layer);
             }
             writeAccumToRoomSample(accum, out);
@@ -778,19 +792,59 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
 
         Vec3 rayStart = eye;
-        final int[] accum = new int[4];
-        final int[] layer = new int[4];
         final Vec3 marchDir = target.subtract(eye).normalize();
+        final List<EntityDisplayColorSampler.EntityHit> entityHits =
+                EntityDisplayColorSampler.collectHits(world, player, eye, target);
+        int entityIndex = 0;
+        double lastDistSq = 0.0;
 
         for(int step = 0; step < MAX_VIEWPORT_BLEND_LAYERS; step++)
         {
             final BlockHitResult hit = raycastViewport(world, player, rayStart, target);
+            final double blockDistSq = hit.getType() == HitResult.Type.BLOCK
+                    ? eye.distanceToSqr(hit.getLocation())
+                    : Double.POSITIVE_INFINITY;
+
+            while(entityIndex < entityHits.size() && entityHits.get(entityIndex).distanceSq() <= blockDistSq
+                    && entityHits.get(entityIndex).distanceSq() >= lastDistSq - 1.0e-6)
+            {
+                final EntityDisplayColorSampler.EntityHit eh = entityHits.get(entityIndex++);
+                layer[0] = eh.r();
+                layer[1] = eh.g();
+                layer[2] = eh.b();
+                layer[3] = eh.a();
+                compositeViewportLayer(accum, layer);
+                if(accum[3] >= 250)
+                {
+                    writeAccumToRoomSample(accum, out);
+                    return;
+                }
+            }
+
             if(hit.getType() != HitResult.Type.BLOCK)
             {
-                final BlockPos waterPos = findWaterAlongRay(world, eye, target);
-                if(waterPos != null)
+                final BlockPos lavaPos = findFluidAlongRay(world, eye, target, true);
+                if(lavaPos != null)
                 {
-                    BlockDisplayColorSampler.sampleWaterLayer(world, waterPos, layer);
+                    BlockDisplayColorSampler.sampleLavaLayer(world, lavaPos, layer);
+                    compositeViewportLayer(accum, layer);
+                }
+                else
+                {
+                    final BlockPos waterPos = findFluidAlongRay(world, eye, target, false);
+                    if(waterPos != null)
+                    {
+                        BlockDisplayColorSampler.sampleWaterLayer(world, waterPos, layer);
+                        compositeViewportLayer(accum, layer);
+                    }
+                }
+                while(entityIndex < entityHits.size())
+                {
+                    final EntityDisplayColorSampler.EntityHit eh = entityHits.get(entityIndex++);
+                    layer[0] = eh.r();
+                    layer[1] = eh.g();
+                    layer[2] = eh.b();
+                    layer[3] = eh.a();
                     compositeViewportLayer(accum, layer);
                 }
                 writeAccumToRoomSample(accum, out);
@@ -800,25 +854,29 @@ public class OpenRGBSenderMod implements ClientModInitializer
             final BlockPos pos = hit.getBlockPos();
             final BlockState state = world.getBlockState(pos);
             final var fluid = world.getFluidState(pos);
-            if(state.isAir() && !fluid.is(Fluids.WATER))
+            if(state.isAir() && fluid.isEmpty())
             {
                 writeAccumToRoomSample(accum, out);
                 return;
             }
 
-            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, hit.getDirection(), layer);
+            BlockDisplayColorSampler.sampleViewportLayer(world, pos, state, hit.getDirection(), hit.getLocation(),
+                    layer);
             if(layer[3] > 0)
             {
                 compositeViewportLayer(accum, layer);
             }
 
-            final int coverAlpha = BlockDisplayColorSampler.viewportCoverAlpha(state, fluid);
+            final int coverAlpha = layer[3] > 0
+                    ? layer[3]
+                    : BlockDisplayColorSampler.viewportCoverAlpha(state, fluid);
             if(!BlockDisplayColorSampler.continuesViewportRay(state, fluid, coverAlpha))
             {
                 writeAccumToRoomSample(accum, out);
                 return;
             }
 
+            lastDistSq = blockDistSq;
             rayStart = advanceRayPastBlock(hit.getLocation(), marchDir);
             if(rayStart.distanceToSqr(target) >= eye.distanceToSqr(target))
             {
@@ -883,38 +941,55 @@ public class OpenRGBSenderMod implements ClientModInitializer
         }
         final byte[] rgba = roomSampleRgbaBuffer;
         int rgbaIndex = 0;
-        final int[] cell = new int[4];
+        final int[] cell = ROOM_CELL_SCRATCH.get();
         final int cellCount = sx * sy * sz;
         final boolean temporal = cellCount > ROOM_SAMPLE_TEMPORAL_THRESHOLD;
-        int flatIndex = 0;
-        for(int ix = 0; ix < sx; ix++)
+        final long budgetStart = System.nanoTime();
+        final double maxRange = 16.0 + Math.max(sx, Math.max(sy, sz)) * Math.max(0.5, cfg.roomToWorldScale);
+        EntityDisplayColorSampler.beginFrame(world, player, Math.max(24.0, Math.min(80.0, maxRange)));
+        try
         {
-            for(int iy = 0; iy < sy; iy++)
+            int flatIndex = 0;
+            boolean budgetHit = false;
+            for(int ix = 0; ix < sx && !budgetHit; ix++)
             {
-                for(int iz = 0; iz < sz; iz++)
+                for(int iy = 0; iy < sy && !budgetHit; iy++)
                 {
-                    if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                    for(int iz = 0; iz < sz; iz++)
                     {
-                        rgbaIndex += 4;
+                        if(temporal && (flatIndex % ROOM_SAMPLE_TEMPORAL_SLICES) != roomSampleTemporalSlice)
+                        {
+                            rgbaIndex += 4;
+                            flatIndex++;
+                            continue;
+                        }
+                        if((flatIndex & 31) == 0 && (System.nanoTime() - budgetStart) > ROOM_SAMPLE_BUDGET_NS)
+                        {
+                            // Keep prior RGBA for remaining cells this tick — resume via temporal slices.
+                            budgetHit = true;
+                            break;
+                        }
+                        final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
+                        final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
+                        final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
+                        final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
+                        sampleRoomCellAtWorldTarget(world, player, target, cell);
+                        rgba[rgbaIndex++] = (byte)cell[0];
+                        rgba[rgbaIndex++] = (byte)cell[1];
+                        rgba[rgbaIndex++] = (byte)cell[2];
+                        rgba[rgbaIndex++] = (byte)cell[3];
                         flatIndex++;
-                        continue;
                     }
-                    final float roomX = RoomSampleWorldMapper.roomCellCenterX(cfg, ix);
-                    final float roomY = RoomSampleWorldMapper.roomCellCenterY(cfg, iy);
-                    final float roomZ = RoomSampleWorldMapper.roomCellCenterZ(cfg, iz);
-                    final Vec3 target = RoomSampleWorldMapper.mapRoomToWorldTarget(cfg, player, roomX, roomY, roomZ);
-                    sampleRoomCellAtWorldTarget(world, player, target, cell);
-                    rgba[rgbaIndex++] = (byte)cell[0];
-                    rgba[rgbaIndex++] = (byte)cell[1];
-                    rgba[rgbaIndex++] = (byte)cell[2];
-                    rgba[rgbaIndex++] = (byte)cell[3];
-                    flatIndex++;
                 }
             }
+            if(temporal || budgetHit)
+            {
+                roomSampleTemporalSlice = (roomSampleTemporalSlice + 1) % ROOM_SAMPLE_TEMPORAL_SLICES;
+            }
         }
-        if(temporal)
+        finally
         {
-            roomSampleTemporalSlice = (roomSampleTemporalSlice + 1) % ROOM_SAMPLE_TEMPORAL_SLICES;
+            EntityDisplayColorSampler.endFrame();
         }
 
         final long now = System.currentTimeMillis();

@@ -165,34 +165,11 @@ final class BlockFaceColorCache
             {
                 for(Direction direction : Direction.values())
                 {
-                    final List<BakedQuad> quads = part.getQuads(direction);
-                    if(quads == null || quads.isEmpty())
-                    {
-                        continue;
-                    }
-                    for(BakedQuad quad : quads)
-                    {
-                        if(quad.materialInfo() == null || quad.materialInfo().sprite() == null)
-                        {
-                            continue;
-                        }
-                        final BlockDisplayColorSampler.TextureSample texture = BlockTexturePrecache.getOrLoad(
-                                client, quad.materialInfo().sprite().contents().name());
-                        if(texture == null)
-                        {
-                            continue;
-                        }
-                        final int faceIdx = direction.get3DDataValue();
-                        sumR[faceIdx] += (texture.rgb() >> 16) & 0xFF;
-                        sumG[faceIdx] += (texture.rgb() >> 8) & 0xFF;
-                        sumB[faceIdx] += texture.rgb() & 0xFF;
-                        count[faceIdx]++;
-                        sumR[FACE_COUNT] += (texture.rgb() >> 16) & 0xFF;
-                        sumG[FACE_COUNT] += (texture.rgb() >> 8) & 0xFF;
-                        sumB[FACE_COUNT] += texture.rgb() & 0xFF;
-                        count[FACE_COUNT]++;
-                    }
+                    accumulateFaceQuads(client, part.getQuads(direction), direction.get3DDataValue(),
+                            sumR, sumG, sumB, count);
                 }
+                // Cross/plant models store cutout quads with null cull face
+                accumulateFaceQuads(client, part.getQuads(null), FACE_COUNT, sumR, sumG, sumB, count);
             }
 
             final int[] rgbByFace = new int[FACE_COUNT + 1];
@@ -220,6 +197,39 @@ final class BlockFaceColorCache
         {
             QuietCatch.debug(LOGGER, "block face cache helper failed", t);
             return null;
+        }
+    }
+
+    private static void accumulateFaceQuads(Minecraft client, List<BakedQuad> quads, int faceIdx,
+                                            long[] sumR, long[] sumG, long[] sumB, int[] count)
+    {
+        if(quads == null || quads.isEmpty())
+        {
+            return;
+        }
+        for(BakedQuad quad : quads)
+        {
+            if(quad.materialInfo() == null || quad.materialInfo().sprite() == null)
+            {
+                continue;
+            }
+            final BlockDisplayColorSampler.TextureSample texture = BlockTexturePrecache.getOrLoad(
+                    client, quad.materialInfo().sprite().contents().name());
+            if(texture == null)
+            {
+                continue;
+            }
+            if(faceIdx >= 0 && faceIdx < FACE_COUNT)
+            {
+                sumR[faceIdx] += (texture.rgb() >> 16) & 0xFF;
+                sumG[faceIdx] += (texture.rgb() >> 8) & 0xFF;
+                sumB[faceIdx] += texture.rgb() & 0xFF;
+                count[faceIdx]++;
+            }
+            sumR[FACE_COUNT] += (texture.rgb() >> 16) & 0xFF;
+            sumG[FACE_COUNT] += (texture.rgb() >> 8) & 0xFF;
+            sumB[FACE_COUNT] += texture.rgb() & 0xFF;
+            count[FACE_COUNT]++;
         }
     }
 
