@@ -3,6 +3,7 @@ docs/
 
 # Build directories
 build/
+build_apiv5/
 debug/
 release/
 dist/
